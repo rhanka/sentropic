@@ -738,6 +738,14 @@ Open decision items for BR-03 restart:
           - `2026-02-28` pass signature: `svelte-check found 0 errors and 0 warnings`.
         - [x] `make lint-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
           - `2026-02-28` pass signature: `> top-ai-ideas-ui@0.1.0 lint` then `eslint .` (exit `0`).
+    - [x] `L4-S12b` TEST - E2E scoped validation for TODO panel header actions (chevron + trash).
+      - E2E files impacted:
+        - `e2e/tests/09-todo-runtime-panel-actions.spec.ts` (new)
+      - Scoped make commands:
+        - [x] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: API/UI production images built successfully (`top-ai-ideas-api:d0098e`, `top-ai-ideas-ui:ccbdee`) on the scoped e2e lane.
+        - [x] `make test-e2e E2E_SPEC=tests/09-todo-runtime-panel-actions.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `✓ tests/09-todo-runtime-panel-actions.spec.ts` ; `1 passed (9.3s)`, command exit `0`.
   - [x] **Lot 4 UAT checklist**
     - [x] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):
