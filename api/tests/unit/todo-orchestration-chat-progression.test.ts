@@ -72,4 +72,27 @@ describe('TodoOrchestrationService chat progression', () => {
     expect(storedTask?.startedAt).toBeTruthy();
     expect(storedTask?.completedAt).toBeTruthy();
   });
+
+  it('returns active_todo_exists conflict without user-facing message', async () => {
+    const actor = { userId, role: 'editor', workspaceId };
+    const sessionId = `session-${createId()}`;
+
+    const first = await todoOrchestrationService.createTodoFromChat(actor, {
+      title: 'First TODO',
+      sessionId,
+      tasks: [{ title: 'First task' }],
+    });
+    expect(first.status).toBe('completed');
+
+    const second = await todoOrchestrationService.createTodoFromChat(actor, {
+      title: 'Second TODO',
+      sessionId,
+      tasks: [{ title: 'Second task' }],
+    });
+
+    expect(second.status).toBe('conflict');
+    expect(second.code).toBe('active_todo_exists');
+    expect('message' in second).toBe(false);
+    expect(second.activeTodo).toBeDefined();
+  });
 });

@@ -615,4 +615,214 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
     expect(names).toContain('todo_create');
     expect(calls[0]?.toolChoice).toBe('auto');
   });
+
+  it('should inject strict TODO orchestration rules in system prompt when an active session TODO exists', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    let systemPrompt = '';
+
+    mock.mockImplementation((opts: any) => {
+      const messages = Array.isArray(opts?.messages) ? opts.messages : [];
+      systemPrompt =
+        typeof messages[0]?.content === 'string' ? messages[0].content : '';
+      return stream([
+        { type: 'content_delta', data: { delta: 'Progress applied.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Continue TODO execution',
+      model: 'gpt-4.1-nano'
+    });
+
+    const created = await todoOrchestrationService.createTodoFromChat(
+      { userId, role: 'editor', workspaceId },
+      {
+        title: 'Runtime TODO',
+        sessionId: msg.sessionId,
+        tasks: [{ title: 'Task one' }, { title: 'Task two' }],
+      },
+    );
+    expect(created.status).toBe('completed');
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['todo_create']
+    });
+
+    expect(systemPrompt).toContain(
+      'Prioritize progression of the active TODO before starting unrelated planning.',
+    );
+    expect(systemPrompt).toContain(
+      'Ask blocker questions upfront in one batch, then continue autonomously until a real blocker appears.',
+    );
+    expect(systemPrompt).toContain(
+      'Structural mutations (add/remove/reorder/replace tasks, or rewrite TODO/task content) require explicit user intent.',
+    );
+  });
+
+  it('should block structural todo_update mutation without explicit user intent in active TODO mode', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Continue TODO progression now',
+      model: 'gpt-4.1-nano'
+    });
+
+    const created = await todoOrchestrationService.createTodoFromChat(
+      { userId, role: 'editor', workspaceId },
+      {
+        title: 'Current TODO title',
+        sessionId: msg.sessionId,
+        tasks: [{ title: 'A task' }],
+      },
+    );
+    expect(created.status).toBe('completed');
+    const todoId =
+      created.status === 'completed' && typeof created.todoId === 'string'
+        ? created.todoId
+        : '';
+    expect(todoId).not.toBe('');
+
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      if (calls.length === 1) {
+        return stream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: 'call_todo_update_structural_1',
+              name: 'todo_update',
+              args: JSON.stringify({
+                todoId,
+                title: 'Renamed without explicit intent',
+                status: 'in_progress'
+              })
+            }
+          },
+          { type: 'done', data: {} }
+        ]);
+      }
+      return stream([
+        { type: 'content_delta', data: { delta: 'Handled.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['todo_create']
+    });
+
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, msg.assistantMessageId));
+    const resultEvent = events.find(
+      (e) =>
+        e.eventType === 'tool_call_result' &&
+        (e.data as any)?.tool_call_id === 'call_todo_update_structural_1'
+    );
+    expect(resultEvent).toBeDefined();
+    expect((resultEvent as any).data?.result?.status).toBe('error');
+    expect(String((resultEvent as any).data?.result?.error ?? '')).toContain(
+      'structural mutation requires explicit user intent',
+    );
+
+    const [storedTodo] = await db
+      .select({ title: todos.title })
+      .from(todos)
+      .where(eq(todos.id, todoId))
+      .limit(1);
+    expect(storedTodo?.title).toBe('Current TODO title');
+  });
+
+  it('should allow structural todo_update mutation when user intent is explicit', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Renomme la TODO actuelle en TODO finale',
+      model: 'gpt-4.1-nano'
+    });
+
+    const created = await todoOrchestrationService.createTodoFromChat(
+      { userId, role: 'editor', workspaceId },
+      {
+        title: 'TODO to rename',
+        sessionId: msg.sessionId,
+        tasks: [{ title: 'A task' }],
+      },
+    );
+    expect(created.status).toBe('completed');
+    const todoId =
+      created.status === 'completed' && typeof created.todoId === 'string'
+        ? created.todoId
+        : '';
+    expect(todoId).not.toBe('');
+
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      if (calls.length === 1) {
+        return stream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: 'call_todo_update_structural_2',
+              name: 'todo_update',
+              args: JSON.stringify({
+                todoId,
+                title: 'TODO finale',
+              })
+            }
+          },
+          { type: 'done', data: {} }
+        ]);
+      }
+      return stream([
+        { type: 'content_delta', data: { delta: 'Renamed.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['todo_create']
+    });
+
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, msg.assistantMessageId));
+    const resultEvent = events.find(
+      (e) =>
+        e.eventType === 'tool_call_result' &&
+        (e.data as any)?.tool_call_id === 'call_todo_update_structural_2'
+    );
+    expect(resultEvent).toBeDefined();
+    expect((resultEvent as any).data?.result?.status).toBe('completed');
+
+    const [storedTodo] = await db
+      .select({ title: todos.title })
+      .from(todos)
+      .where(eq(todos.id, todoId))
+      .limit(1);
+    expect(storedTodo?.title).toBe('TODO finale');
+  });
 });
