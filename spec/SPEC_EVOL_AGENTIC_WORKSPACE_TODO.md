@@ -183,12 +183,25 @@ Context rule:
   - `todo_update` for TODO-level progression,
   - `task_update` for task-level progression.
 - Progression must be incremental and stateful (checklist updates during execution, not bulk end-state only).
+- Autonomous progression scope after `go`:
+  - allowed without extra user confirmation: status/progression updates on existing TODO/tasks (`todo_update` / `task_update`, including checking tasks as done),
+  - forbidden without explicit user intent in the conversation: structural list mutations (adding, removing, reordering, or replacing tasks/TODO content).
+- Structural mutations are intent-driven operations:
+  - if the user explicitly asks to change plan content, assistant applies requested mutations directly,
+  - assistant must not perform silent plan reshaping while executing the current list.
 
 ### 9.1.4 LLM context injection for active TODO (Lot 4 target)
 - Do not overload `chat_reasoning_effort_eval` with TODO payloads.
 - If a session has an active TODO, inject a compact TODO summary directly in the main chat system prompt context block (`chat_system_base` path).
 - The summary is always provided to the generation model for each turn while the TODO remains active (no explicit re-fetch request required from the model).
 - `chat_conversation_auto` must explicitly nudge TODO usage for long/iterative workloads (for example: processing many URLs, folders, or object batches), so the assistant structures execution with `todo_create` + progression tools instead of ad-hoc free-text steps.
+- Runtime orchestration rules (normative):
+  - If a session TODO is active, prioritize its progression before any new plan creation.
+  - For long or iterative workloads (URLs, folders, object batches), structure execution through the active TODO.
+  - Progress deterministically task by task, and persist task/TODO updates during execution (not only at end state).
+  - Ask blocking questions upfront (batched), then execute autonomously until a real blocker appears.
+  - Structural mutations are forbidden without explicit user intent: do not add/remove/reorder/replace TODO content silently.
+  - Do not call `todo_create` when an active TODO exists, except on explicit user request for replacement/new list.
 - Summary format stays compact (about 6 lines), for example:
   - active TODO title,
   - global progression (`done/total`),
