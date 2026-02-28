@@ -156,7 +156,7 @@ Context rule:
   - collapsible panel,
   - reduced max-height with internal scroll (about 70% of previous opened height),
   - panel title label is simply `TODO` (no technical runtime wording in the primary title),
-  - technical metadata (`status`, `plan id`, `todo id`, `run id`, `run status`, `run task id`) is hidden by default and exposed on-demand via an info (`i`) menu in expanded mode.
+  - technical metadata (`status`, `plan id`, `todo id`, `run id`, `run status`, `run task id`) is not displayed in the panel UI.
 - Typography contract:
   - checklist item font size aligns with the panel subtitle scale (no oversized task rows),
   - completed tasks remain rendered as checked + struck-through.
@@ -183,6 +183,18 @@ Context rule:
   - `todo_update` for TODO-level progression,
   - `task_update` for task-level progression.
 - Progression must be incremental and stateful (checklist updates during execution, not bulk end-state only).
+
+### 9.1.4 LLM context injection for active TODO (Lot 4 target)
+- Do not overload `chat_reasoning_effort_eval` with TODO payloads.
+- If a session has an active TODO, inject a compact TODO summary directly in the main chat system prompt context block (`chat_system_base` path).
+- The summary is always provided to the generation model for each turn while the TODO remains active (no explicit re-fetch request required from the model).
+- `chat_conversation_auto` must explicitly nudge TODO usage for long/iterative workloads (for example: processing many URLs, folders, or object batches), so the assistant structures execution with `todo_create` + progression tools instead of ad-hoc free-text steps.
+- Summary format stays compact (about 6 lines), for example:
+  - active TODO title,
+  - global progression (`done/total`),
+  - next actionable tasks (ordered),
+  - orchestration rule reminder (continue current TODO unless explicit replacement request).
+- User-facing conflict banners for "active TODO already exists" are not required; this signal is meant for tool orchestration/model behavior.
 
 ### 9.2 Basic Agent Configuration section
 - Configure generation agents (currently prompt-backed).
