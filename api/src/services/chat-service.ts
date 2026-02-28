@@ -159,6 +159,11 @@ const TODO_GO_SIGNAL_PATTERNS = [
   /\b(go ahead|on y va|vas y|vas-y)\b/i,
 ];
 
+const TODO_STRUCTURAL_MUTATION_PATTERNS = [
+  /\b(add|append|insert|remove|delete|drop|replace|rewrite|rename|reorder|re organise|reorganize|split|merge)\b.*\b(todo|checklist|list|task|tasks|item|items|step|steps|plan)\b/,
+  /\b(ajoute|ajouter|ajout|retire|retirer|supprime|supprimer|suppression|remplace|remplacer|renomme|renommer|reordonne|reordonner|reorganise|reorganiser|scinde|scinder|fusionne|fusionner)\b.*\b(todo|liste|checklist|tache|taches|item|items|etape|etapes|plan)\b/,
+];
+
 const isExplicitTodoReplacementRequest = (message: string): boolean => {
   const normalized = normalizeIntentText(message);
   if (!normalized) return false;
@@ -175,6 +180,15 @@ const isTodoGoSignal = (message: string): boolean => {
   const normalized = normalizeIntentText(message);
   if (!normalized) return false;
   return matchesAnyPattern(normalized, TODO_GO_SIGNAL_PATTERNS);
+};
+
+const isExplicitTodoStructuralMutationRequest = (message: string): boolean => {
+  const normalized = normalizeIntentText(message);
+  if (!normalized) return false;
+  return (
+    isExplicitTodoReplacementRequest(message) ||
+    matchesAnyPattern(normalized, TODO_STRUCTURAL_MUTATION_PATTERNS)
+  );
 };
 
 const toSessionTodoRuntimeSnapshot = (value: unknown): SessionTodoRuntimeSnapshot | null => {
@@ -1379,6 +1393,8 @@ export class ChatService {
       hasActiveSessionTodo && isExplicitTodoReplacementRequest(lastUserMessage);
     const enforceTodoUpdateMode =
       todoToolRequested && hasActiveSessionTodo && !explicitTodoReplacementRequest;
+    const todoStructuralMutationIntent =
+      enforceTodoUpdateMode && isExplicitTodoStructuralMutationRequest(lastUserMessage);
     const todoProgressionIntent =
       enforceTodoUpdateMode && isTodoProgressionIntent(lastUserMessage);
     const todoGoSignal = enforceTodoUpdateMode && isTodoGoSignal(lastUserMessage);
@@ -1696,12 +1712,29 @@ Règles :
         todoLines.push(
           '- A session TODO is already active: do NOT call `todo_create` unless the user explicitly asks for a replacement/new list.',
         );
+        todoLines.push(
+          '- Prioritize progression of the active TODO before starting unrelated planning.',
+        );
         todoLines.push('- Use `task_update` and `todo_update` to progress the existing TODO.');
+        todoLines.push(
+          '- Progress task-by-task and persist each update while executing (no end-of-run bulk update only).',
+        );
+        todoLines.push(
+          '- Ask blocker questions upfront in one batch, then continue autonomously until a real blocker appears.',
+        );
+        todoLines.push(
+          '- Structural mutations (add/remove/reorder/replace tasks, or rewrite TODO/task content) require explicit user intent.',
+        );
       } else {
         todoLines.push('- Use `todo_create` only when the user explicitly asks to create a TODO list.');
       }
       if (explicitTodoReplacementRequest) {
         todoLines.push('- The user explicitly asked for a replacement/new list: `todo_create` is allowed.');
+      }
+      if (todoStructuralMutationIntent) {
+        todoLines.push(
+          '- Explicit structural mutation intent detected: content/list changes are allowed in this turn.',
+        );
       }
       if (todoProgressionFocusMode) {
         todoLines.push(
@@ -2492,7 +2525,22 @@ Règles :
                 ? args.status.trim()
                 : undefined;
             const closed = typeof args.closed === 'boolean' ? args.closed : undefined;
-            const metadata = asRecord(args.metadata) ?? undefined;
+            const metadataRecord = asRecord(args.metadata);
+            const metadata =
+              metadataRecord && Object.keys(metadataRecord).length > 0
+                ? metadataRecord
+                : undefined;
+            const hasStructuralTodoMutationArgs =
+              title !== undefined || description !== undefined || metadata !== undefined;
+            if (
+              enforceTodoUpdateMode &&
+              hasStructuralTodoMutationArgs &&
+              !todoStructuralMutationIntent
+            ) {
+              throw new Error(
+                'todo_update: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)',
+              );
+            }
 
             const updateResult = await todoOrchestrationService.updateTodoFromChat(
               {
@@ -2551,7 +2599,22 @@ Règles :
               typeof args.status === 'string' && args.status.trim().length > 0
                 ? args.status.trim()
                 : undefined;
-            const metadata = asRecord(args.metadata) ?? undefined;
+            const metadataRecord = asRecord(args.metadata);
+            const metadata =
+              metadataRecord && Object.keys(metadataRecord).length > 0
+                ? metadataRecord
+                : undefined;
+            const hasStructuralTaskMutationArgs =
+              title !== undefined || description !== undefined || metadata !== undefined;
+            if (
+              enforceTodoUpdateMode &&
+              hasStructuralTaskMutationArgs &&
+              !todoStructuralMutationIntent
+            ) {
+              throw new Error(
+                'task_update: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)',
+              );
+            }
 
             const updateResult = await todoOrchestrationService.updateTaskFromChat(
               {

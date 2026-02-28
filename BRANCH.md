@@ -594,6 +594,22 @@ Open decision items for BR-03 restart:
           - `2026-02-28` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
         - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
           - `2026-02-28` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+    - [x] `L4-S12b` DEV - TODO runtime panel header actions parity (trash + chevron button styling).
+      - Scope:
+        - Add a dedicated `trash` action button in TODO panel header to let the user remove/close the active session TODO.
+        - Keep collapse/expand chevron control but restyle it with standard header action button visuals (`hover` background, rounded shape, icon button affordance).
+        - Preserve panel body behavior and checklist rendering.
+      - Files expected:
+        - `ui/src/lib/components/ChatPanel.svelte`
+        - `ui/src/locales/en.json`
+        - `ui/src/locales/fr.json`
+      - Scoped make commands:
+        - [x] `make typecheck-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `svelte-check found 0 errors and 0 warnings`.
+        - [x] `make lint-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `> top-ai-ideas-ui@0.1.0 lint` then `eslint .` (exit `0`).
+        - [x] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
     - [ ] `L4-S13` DEV - In-flight steer acknowledgment and conversation continuity semantics.
       - Scope:
         - On steer submit, reasoning/tool strip shows immediate acknowledgment message.
@@ -715,9 +731,9 @@ Open decision items for BR-03 restart:
         - [x] `make lint-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
           - `2026-02-28` pass signature: `> top-ai-ideas-api@0.1.0 lint` then `eslint "src/**/*.ts"` (exit `0`).
         - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-          - `2026-02-28` pass signature: `✓ tests/unit/chat-service-tools.test.ts (9 tests)`; `Test Files 1 passed`, `Tests 9 passed`.
+          - `2026-02-28` pass signature: `✓ tests/unit/chat-service-tools.test.ts (12 tests)`; `Test Files 1 passed`, `Tests 12 passed`.
         - [x] `make test-api-unit SCOPE=tests/unit/todo-orchestration-chat-progression.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-          - `2026-02-28` pass signature: `✓ tests/unit/todo-orchestration-chat-progression.test.ts (1 test)`; `Test Files 1 passed`, `Tests 1 passed`.
+          - `2026-02-28` pass signature: `✓ tests/unit/todo-orchestration-chat-progression.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
         - [x] `make typecheck-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
           - `2026-02-28` pass signature: `svelte-check found 0 errors and 0 warnings`.
         - [x] `make lint-ui API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
@@ -730,7 +746,7 @@ Open decision items for BR-03 restart:
 - [ ] **Lot N-2 — UAT (post-Lot4 only; single source of truth)**
   - [ ] Web app
     - [x] UAT setup:
-      - [x] Execute only after `L4-S1` to `L4-S11` are completed.
+      - [x] Execute only after `L4-S1` to `L4-S12b` are completed.
       - [x] Use root workspace `~/src/top-ai-ideas-fullstack` on `ENV=dev` and open `/folders`.
       - [x] Open chat widget in a fresh session with TODO tooling enabled.
     - [ ] Scenario UAT-1: one TODO max per session.
@@ -739,10 +755,13 @@ Open decision items for BR-03 restart:
     - [ ] Scenario UAT-2: sticky bottom panel UX + readability polish.
       - [ ] Verify TODO panel is sticky at bottom of conversation and spans full available width.
       - [ ] Verify panel can collapse/expand and keeps state during ongoing chat interaction.
+      - [ ] Verify collapse/expand chevron button uses the standard header icon-button style (hover background + rounded control).
+      - [ ] Verify a `trash` button is visible next to chevron and uses standard destructive header icon-button style.
       - [ ] Verify max-height constraint and internal scroll when task list exceeds visible space.
       - [ ] Verify title is `TODO` and no technical runtime label remains in the main header.
       - [ ] Verify runtime metadata is not visible in panel body (no info menu entry for metadata in this branch).
       - [ ] Verify checklist item typography is reduced to subtitle-equivalent size.
+      - [ ] Click `trash` and verify active TODO is removed/closed for the session and panel disappears.
     - [ ] Scenario UAT-3: progression via AI.
       - [!] Ask AI to mark one task as done, then another task in progress, then TODO done when all tasks are complete.
         Feedback: once created the chat says he has no access to the list
