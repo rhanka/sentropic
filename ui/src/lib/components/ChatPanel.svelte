@@ -2372,6 +2372,12 @@
       next.tasks = mergeTodoRuntimeTask(next.tasks, normalizedTask);
     }
 
+    const conflictCode =
+      typeof runtime.code === 'string'
+        ? runtime.code.trim().toLowerCase()
+        : typeof result.code === 'string'
+          ? result.code.trim().toLowerCase()
+          : '';
     const conflictMessage =
       typeof runtime.message === 'string'
         ? runtime.message
@@ -2379,7 +2385,8 @@
           ? result.message
           : null;
     next.conflictMessage =
-      normalizeRuntimeStatus(runtime.status ?? result.status, '') === 'conflict'
+      normalizeRuntimeStatus(runtime.status ?? result.status, '') === 'conflict' &&
+      conflictCode !== 'active_todo_exists'
         ? conflictMessage
         : null;
     const nextRunState = normalizeTodoRuntimeRunState(runtime, previousRunState);
@@ -3693,12 +3700,12 @@
           </div>
           <ChevronDown
             class={`w-4 h-4 text-slate-500 transition-transform duration-150 ${
-              todoRuntimeCollapsed ? '' : 'rotate-180'
+              todoRuntimeCollapsed ? 'rotate-180' : ''
             }`}
           />
         </button>
         {#if !todoRuntimeCollapsed}
-          <div class="mt-2 max-h-52 overflow-y-auto slim-scroll space-y-2 text-xs text-slate-700">
+          <div class="mt-2 max-h-28 overflow-y-auto slim-scroll space-y-2 text-[11px] text-slate-700">
             {#if todoRuntimePanel.conflictMessage}
               <div class="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
                 {todoRuntimePanel.conflictMessage}
@@ -3718,7 +3725,7 @@
                     {@const done = isRuntimeTaskDone(task.status)}
                     <li class="flex items-center gap-2">
                       <span
-                        class={`inline-flex h-4 w-4 items-center justify-center rounded border text-[10px] leading-none ${
+                        class={`inline-flex h-3.5 w-3.5 items-center justify-center rounded border text-[9px] leading-none ${
                           done
                             ? 'border-emerald-500 bg-emerald-500 text-white'
                             : 'border-slate-400 text-transparent'
