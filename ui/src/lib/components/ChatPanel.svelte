@@ -640,17 +640,24 @@
   const getMessageStatus = (m: LocalMessage) =>
     m._localStatus ?? (m.content ? 'completed' : 'processing');
   let activeAssistantMessage: LocalMessage | null = null;
-  let composerSteerMode = false;
+  let composerSteerStreamId: string | null = null;
+  let composerSteerReady = false;
+  let composerRunInFlight = false;
+  const isAssistantMessageInProgress = (message: LocalMessage): boolean => {
+    if (message.role !== 'assistant') return false;
+    if (message._localStatus === 'processing') return true;
+    if (!message._localStatus && !message.content) return true;
+    return false;
+  };
   $: activeAssistantMessage =
-    mode === 'ai'
-      ? ([...messages]
-          .reverse()
-          .find(
-            (m) =>
-              m.role === 'assistant' && getMessageStatus(m) === 'processing',
-          ) ?? null)
-      : null;
-  $: composerSteerMode = mode === 'ai' && Boolean(activeAssistantMessage);
+    [...messages].reverse().find((m) => isAssistantMessageInProgress(m)) ?? null;
+  $: composerSteerStreamId = activeAssistantMessage
+    ? (activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null)
+    : null;
+  $: composerSteerReady =
+    typeof composerSteerStreamId === 'string' &&
+    composerSteerStreamId.trim().length > 0;
+  $: composerRunInFlight = sending || composerSteerReady;
 
   const hasAssistantContent = (message: LocalMessage): boolean =>
     typeof message.content === 'string' && message.content.trim().length > 0;
@@ -1585,7 +1592,7 @@
         void sendCommentMessage();
         return;
       }
-      if (isComposerSteerMode()) {
+      if (composerSteerReady) {
         void sendComposerSteer();
       } else {
         void sendMessage();
@@ -2312,12 +2319,20 @@
   };
 
   const getActiveAssistantStreamId = (): string | null => {
-    if (!activeAssistantMessage) return null;
-    return activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null;
+    return composerSteerStreamId;
   };
 
-  const isComposerSteerMode = (): boolean =>
-    composerSteerMode;
+  const handleComposerPrimaryAction = () => {
+    if (mode === 'comments') {
+      void sendCommentMessage();
+      return;
+    }
+    if (composerRunInFlight) {
+      if (composerSteerReady) void sendComposerSteer();
+      return;
+    }
+    void sendMessage();
+  };
 
   const handleDeleteTodoRuntime = async () => {
     if (!todoRuntimePanel?.todoId || todoRuntimeDeleteInFlight) return;
@@ -2827,7 +2842,7 @@
 
   const sendMessage = async () => {
     const text = input.trim();
-    if (!text || (sending && !isComposerSteerMode())) return;
+    if (!text || (sending && !composerSteerReady)) return;
 
     sending = true;
     errorMsg = null;
@@ -4148,7 +4163,7 @@
           </select>
         {/if}
         <div class="ml-auto flex items-center gap-2">
-        {#if composerSteerMode && activeAssistantMessage}
+        {#if composerSteerReady && activeAssistantMessage}
           <button
             class="rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-60"
             on:click={stopAssistantMessage}
@@ -4162,33 +4177,30 @@
         {/if}
         <button
           class="rounded bg-primary hover:bg-primary/90 text-white w-8 h-8 flex items-center justify-center disabled:opacity-60"
-          on:click={() =>
-            mode === 'comments'
-              ? void sendCommentMessage()
-              : isComposerSteerMode()
-                ? void sendComposerSteer()
-                : void sendMessage()}
+          on:click={handleComposerPrimaryAction}
           disabled={mode === 'comments'
             ? commentInput.trim().length === 0 ||
               !commentContextType ||
               !commentContextId ||
               !$workspaceCanComment ||
               commentThreadResolved
-            : isComposerSteerMode()
-              ? composerSteerInFlight || input.trim().length === 0
+            : composerRunInFlight
+              ? !composerSteerReady ||
+                composerSteerInFlight ||
+                input.trim().length === 0
               : sending || input.trim().length === 0}
           type="button"
-          aria-label={isComposerSteerMode()
+          aria-label={composerRunInFlight
             ? $_('chat.steer.submit')
             : $_('common.send')}
-          title={isComposerSteerMode()
+          title={composerRunInFlight
             ? $_('chat.steer.submit')
             : $_('common.send')}
-          data-testid={isComposerSteerMode()
+          data-testid={composerRunInFlight
             ? 'chat-composer-steer-button'
             : 'chat-composer-send-button'}
         >
-          {#if isComposerSteerMode()}
+          {#if composerRunInFlight}
             <ShipWheel class="w-4 h-4" />
           {:else}
             <Send class="w-4 h-4" />
