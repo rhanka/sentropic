@@ -176,6 +176,18 @@ Context rule:
   - if the assistant already started a final response, an additional assistant continuation bubble may be produced (additive behavior, no cancellation).
 - Dedicated standalone steer input block inside the TODO runtime panel is out of scope for this target behavior.
 
+### 9.1.2.1 Run-bound steering transport and continuity (Lot 4 target)
+- Steering transport must be run-bound:
+  - while in steer mode, composer submit must call only `POST /api/v1/runs/:runId/steer`,
+  - steer mode must not create a new assistant placeholder/message via `POST /api/v1/chat/messages`.
+- Active run binding:
+  - each active assistant generation has one steerable run identity,
+  - UI must resolve steer target from active run state (not from creating a new chat turn).
+- Continuity contract:
+  - steer content is consumed by the current run execution path,
+  - no second reasoning/tool stream is created solely because of steering,
+  - if the model cannot ingest steer mid-token, steer is buffered and applied at the next safe orchestration boundary (tool boundary / next inference pass) without run cancellation.
+
 ### 9.1.3 Execution handshake for TODO progression (Lot 4 target)
 - TODO in chat is an executable AI plan, not a static checklist.
 - After `todo_create`, assistant asks for explicit user confirmation (`go`) before autonomous progression actions.
@@ -345,6 +357,16 @@ Chat tool contract (BR-03):
   - legacy `/prompts` endpoints may remain temporarily for admin compatibility,
   - generation runtime must not depend on legacy prompt endpoints or `default-prompts` business entries.
 
+### 12.3 Steering run-binding contract (Lot 4 target)
+- Runtime steering API remains `POST /api/v1/runs/:runId/steer`.
+- Chat steering mode contract:
+  - no chat-message creation endpoint is used to represent steer transport,
+  - steer payload is attached to active run events and consumed in the same execution lineage.
+- Observability contract:
+  - steer submissions are visible as user messages in timeline,
+  - run/event traces show steer events attached to the same run ID,
+  - no orphan assistant placeholder is left because of a steer submission.
+
 ### 12.1 AI use-case generation workflow runtime migration (Lot 4 mandatory)
 
 Goal:
@@ -422,6 +444,7 @@ UI tests:
 - agent prompt editor behavior in Agent Configuration (dedicated prompt field persistence).
 - workflow task I/O contract editor behavior (`inputSchema`/`outputSchema` persistence + validation).
 - source split coverage: settings uses agent/workflow objects as editable runtime source (no hidden generation prompt dependency).
+- steering mode transport coverage: steer submit path uses run endpoint and does not enqueue new chat placeholder.
 
 E2E tests:
 - create TODO in chat and execute first tasks,
@@ -429,6 +452,7 @@ E2E tests:
 - full-auto progression path with contract-compliant output.
 - settings operator flow for agent prompt edit + workflow task I/O edit/save/reload.
 - generation regression under object-driven runtime (workflow + agent linkage remains authoritative after edits).
+- steering continuity regression: active-run steer keeps same run lineage and does not spawn a second assistant stream.
 
 ## 16) Open Questions to Resolve Before BR-03 Branch Recreation
 
@@ -449,6 +473,7 @@ This spec iteration is ready to instantiate BR-03 only when:
 - agent prompt editing parity is explicit on Agent Configuration surface,
 - workflow task I/O contract editing is explicit on Workflow Configuration surface,
 - generation runtime prompt/config source is migrated to agent/workflow objects (chat prompts remain isolated),
+- steering transport is run-bound (`/runs/:runId/steer`) with single-thread continuity behavior,
 - BR-03/BR-04/BR-05/BR-14 boundaries are accepted.
 
 ## 18) Future To-Be (outside BR-03)

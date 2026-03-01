@@ -810,6 +810,27 @@ Open decision items for BR-03 restart:
         - `ui/src/lib/components/TodoRuntimeConfigPanel.svelte` (labels/help text if required)
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
+    - [ ] `L4-S24` DEV - B2 migration: run-bound steering continuity (single thread, no side-stream).
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 + §9.1.2.1 + §12.3 + §17.
+      - Scope:
+        - Steer mode submit must target active run endpoint (`POST /runs/:runId/steer`) and must not create a new assistant placeholder through `/chat/messages`.
+        - Keep timeline behavior: user steer appears as normal user bubble in same conversation.
+        - Keep execution continuity: same run lineage continues; no duplicate reasoning/tool stream created by steer action.
+      - Implementation TODO (detailed):
+        - Wire composer steer action to active run state (`runId`) and run steer transport.
+        - Ensure active run availability is derived from runtime state and gracefully degrades when no steerable run exists.
+        - Consume steer events in current run path (buffer/apply at safe boundary when model/tool step is non-interruptible).
+        - Remove/replace test assumptions expecting steer via `/chat/messages`.
+      - Files expected:
+        - `ui/src/lib/components/ChatPanel.svelte`
+        - `ui/src/lib/components/StreamMessage.svelte` (if acknowledgement/render timing needs adjustment)
+        - `ui/src/lib/utils/todo-runtime-steer.ts`
+        - `api/src/routes/api/runs.ts`
+        - `api/src/services/todo-orchestration.ts`
+        - `api/src/services/chat-service.ts` (if run-binding projection glue is required)
+        - `ui/src/locales/en.json`
+        - `ui/src/locales/fr.json`
   - [ ] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
@@ -1081,6 +1102,22 @@ Open decision items for BR-03 restart:
         - [ ] `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
         - [ ] `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
         - [ ] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+    - [ ] `L4-S24` TEST - B2 steering run-binding regression (transport + continuity).
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 + §9.1.2.1 + §12.3.
+      - Test evolution required:
+        - `ui/tests/utils/todo-runtime-steer.test.ts`
+        - `ui/tests/utils/todo-chat-rendering.test.ts`
+        - `api/tests/api/runs-steer.test.ts`
+        - `api/tests/unit/chat-service-tools.test.ts` (steer orchestration expectations)
+        - `e2e/tests/09-todo-steering-core.spec.ts`
+      - Scoped make commands:
+        - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-api-endpoints SCOPE=tests/api/runs-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+        - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
   - [ ] **Lot 4 UAT checklist**
     - [ ] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):
