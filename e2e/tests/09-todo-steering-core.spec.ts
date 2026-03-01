@@ -121,8 +121,19 @@ test.describe.serial('TODO steering core', () => {
       const createTaskBody = (await createTaskRes.json()) as {
         task?: { id?: string; status?: string };
       };
-      expect(String(createTaskBody.task?.id ?? '')).toBeTruthy();
+      const taskId = String(createTaskBody.task?.id ?? '');
+      expect(taskId).toBeTruthy();
       expect(createTaskBody.task?.status).toBe('planned');
+
+      const startRunRes = await api.post(
+        `/api/v1/tasks/${encodeURIComponent(taskId)}/start?workspace_id=${encodeURIComponent(workspaceId)}`,
+        { data: {} },
+      );
+      expect(startRunRes.status()).toBe(200);
+      const startRunBody = (await startRunRes.json()) as { runId?: string };
+      const runId = String(startRunBody.runId ?? '');
+      expect(runId).toBeTruthy();
+
       await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
 
@@ -146,18 +157,6 @@ test.describe.serial('TODO steering core', () => {
 
       const runtimePanel = page.getByTestId('todo-runtime-panel');
       await expect(runtimePanel).toBeVisible();
-
-      // Keep plan/todo/task coverage from API setup, but close the TODO before
-      // steering assertions to avoid forced TODO-progression short responses.
-      const closeTodoRes = await api.patch(
-        `/api/v1/todos/${encodeURIComponent(todoId)}?workspace_id=${encodeURIComponent(workspaceId)}`,
-        {
-          data: {
-            closed: true,
-          },
-        },
-      );
-      expect(closeTodoRes.status()).toBe(200);
 
       const aiSettingsRes = await api.put('/api/v1/ai-settings', {
         data: {
@@ -211,14 +210,13 @@ test.describe.serial('TODO steering core', () => {
       const stopButton = page.locator('button[aria-label="Stopper"]');
       await expect(stopButton).toBeVisible({ timeout: 12_000 });
 
-      let legacyRunSteerCalled = false;
+      let secondChatMessageCallDetected = false;
       const onRequest = (req: { method(): string; url(): string }) => {
         if (
           req.method() === 'POST' &&
-          req.url().includes('/api/v1/runs/') &&
-          req.url().includes('/steer')
+          req.url().includes('/api/v1/chat/messages')
         ) {
-          legacyRunSteerCalled = true;
+          secondChatMessageCallDetected = true;
         }
       };
       page.on('request', onRequest);
@@ -235,23 +233,28 @@ test.describe.serial('TODO steering core', () => {
       await expect(composerSubmit).toBeVisible();
       const [steerReq, steerRes] = await Promise.all([
         page.waitForRequest((req) => {
-          return isChatMessageRequestFor(req, steerMessage);
+          return (
+            req.method() === 'POST' &&
+            req.url().includes(`/api/v1/runs/${encodeURIComponent(runId)}/steer`)
+          );
         }),
         page.waitForResponse((res) => {
           const req = res.request();
-          return isChatMessageRequestFor(req, steerMessage);
+          return (
+            req.method() === 'POST' &&
+            req.url().includes(`/api/v1/runs/${encodeURIComponent(runId)}/steer`)
+          );
         }),
         composerSubmit.click(),
       ]);
       page.off('request', onRequest);
       const steerBody = steerReq.postDataJSON() as {
         content?: string;
-        sessionId?: string;
+        message?: string;
       };
-      expect(steerBody.content).toBe(steerMessage);
-      expect(steerBody.sessionId).toBe(sessionId);
+      expect(steerBody.message).toBe(steerMessage);
       expect(steerRes.status()).toBe(200);
-      expect(legacyRunSteerCalled).toBe(false);
+      expect(secondChatMessageCallDetected).toBe(false);
       await expect(page.locator('#chat-widget-dialog')).toContainText(
         /Prise en compte d'un nouveau message utilisateur|Acknowledged new user steering message/i,
       );
