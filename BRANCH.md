@@ -678,6 +678,18 @@ Open decision items for BR-03 restart:
         - `ui/src/lib/utils/todo-runtime-steer.ts` (remove or replace TODO-specific coupling)
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
+    - [ ] `L4-S22` DEV - Steering composer UX finalization (`volant`) + runtime behavior contract.
+      - Scope:
+        - Replace composer send icon by a dedicated steering icon/button (`volant`) when assistant run is active and steerable.
+        - Preserve primary button style contract and accessibility labels/tooltips in FR/EN.
+        - On steering submit, append user steer as normal user bubble in same timeline and emit immediate reasoning/tool-strip acknowledgment (`Prise en compte d’un nouveau message utilisateur`).
+        - Keep behavior non-interrupting for in-flight tools and additive for already-started final response (second assistant continuation bubble allowed).
+      - Files expected:
+        - `ui/src/lib/components/ChatPanel.svelte`
+        - `ui/src/lib/components/StreamMessage.svelte`
+        - `ui/src/locales/en.json`
+        - `ui/src/locales/fr.json`
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (if wording alignment is required for icon/UX precision)
     - [ ] `L4-S19` DEV - Complete generation cutover to workflow-only execution (remove residual legacy chain).
       - Scope:
         - Remove remaining legacy queue orchestration coupling in generation path (`matrix_generate`/`usecase_list` legacy chain behavior).
@@ -875,6 +887,16 @@ Open decision items for BR-03 restart:
       - Scoped make commands:
         - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
         - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+    - [ ] `L4-S22` TEST - Steering composer icon/behavior regression matrix.
+      - Test evolution required:
+        - `ui/tests/utils/todo-runtime-steer.test.ts` (mode switch + icon/label assertion in steer mode)
+        - `ui/tests/utils/todo-chat-rendering.test.ts` (timeline insertion for steer user bubble)
+        - `e2e/tests/09-todo-steering-core.spec.ts` (active-run steering from composer with acknowledgment + non-interruptive additive continuation)
+      - Scoped make commands:
+        - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+        - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
     - [ ] `L4-S19` TEST - Workflow-only generation cutover regression matrix.
       - Test evolution required:
         - `api/tests/api/use-cases.test.ts`
@@ -966,6 +988,10 @@ Open decision items for BR-03 restart:
     - [ ] Scenario UAT-12: settings IA surface is agent/workflow-centric.
       - [ ] In `/settings`, verify legacy prompts management section is removed/de-emphasized per BR03 scope decision.
       - [ ] Verify agent IDs and workflow task-agent linkage are visible and understandable for admin operators.
+    - [ ] Scenario UAT-13: steering composer UX (`volant`) and additive continuity.
+      - [ ] During active assistant run, verify send control switches to steering `volant` button in main composer.
+      - [ ] Submit one steering message and verify user bubble is appended in same conversation timeline and acknowledgment text appears immediately in reasoning/tool strip.
+      - [ ] Verify no run interruption occurs and, when final answer emission has already started, an additive assistant continuation bubble is produced.
 
 - [ ] **Lot N-1 — Docs consolidation** (blocked until `Lot N-2` UAT sign-off)
   - [ ] Apply `BR03-EX1` if docs paths are touched.
