@@ -24,6 +24,7 @@ import {
   type GuardrailCategory,
   type TaskStatus,
 } from "./todo-runtime";
+import { queueManager } from "./queue-manager";
 
 export interface TodoActor {
   userId: string;
@@ -224,6 +225,11 @@ export interface UseCaseGenerationWorkflowRuntime {
   workflowRunId: string;
   workflowDefinitionId: string;
   taskAssignments: UseCaseGenerationWorkflowTaskAssignments;
+}
+
+export interface StartUseCaseGenerationWorkflowDispatchResult extends UseCaseGenerationWorkflowRuntime {
+  jobId: string;
+  matrixJobId?: string;
 }
 
 export interface StartUseCaseGenerationWorkflowInput {
@@ -1822,6 +1828,63 @@ export class TodoOrchestrationService {
       workflowRunId,
       workflowDefinitionId,
       taskAssignments,
+    };
+  }
+
+  async startAndDispatchUseCaseGenerationWorkflow(
+    actor: TodoActor,
+    input: StartUseCaseGenerationWorkflowInput,
+  ): Promise<StartUseCaseGenerationWorkflowDispatchResult> {
+    const workflowRuntime = await this.startUseCaseGenerationWorkflow(actor, input);
+
+    let matrixJobId: string | undefined;
+    if (input.matrixMode === "generate" && input.organizationId) {
+      matrixJobId = await queueManager.addJob(
+        "matrix_generate",
+        {
+          folderId: input.folderId,
+          organizationId: input.organizationId,
+          model: input.model,
+          initiatedByUserId: actor.userId,
+          locale: input.locale,
+          workflow: {
+            workflowRunId: workflowRuntime.workflowRunId,
+            workflowDefinitionId: workflowRuntime.workflowDefinitionId,
+            taskKey: "generation_matrix_prepare",
+            agentDefinitionId: workflowRuntime.taskAssignments.matrixPrepareAgentId,
+            taskAssignments: workflowRuntime.taskAssignments,
+          },
+        },
+        { workspaceId: actor.workspaceId, maxRetries: 1 },
+      );
+    }
+
+    const jobId = await queueManager.addJob(
+      "usecase_list",
+      {
+        folderId: input.folderId,
+        input: input.input,
+        organizationId: input.organizationId,
+        matrixMode: input.matrixMode,
+        model: input.model,
+        useCaseCount: input.useCaseCount,
+        initiatedByUserId: actor.userId,
+        locale: input.locale,
+        workflow: {
+          workflowRunId: workflowRuntime.workflowRunId,
+          workflowDefinitionId: workflowRuntime.workflowDefinitionId,
+          taskKey: "generation_usecase_list",
+          agentDefinitionId: workflowRuntime.taskAssignments.usecaseListAgentId,
+          taskAssignments: workflowRuntime.taskAssignments,
+        },
+      },
+      { workspaceId: actor.workspaceId, maxRetries: 1 },
+    );
+
+    return {
+      ...workflowRuntime,
+      jobId,
+      matrixJobId,
     };
   }
 
