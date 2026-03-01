@@ -667,7 +667,7 @@ Open decision items for BR-03 restart:
         - Added `chat_todo_post_response_decision` prompt contract and runtime parsing.
         - Added session-level autonomous-iteration counting via stream status events (`todo_autonomous_iteration`).
         - Added runtime status trace `todo_post_response_decision` and user opt-in message when decision is `ask_user`.
-    - [ ] `L4-S18` DEV - Remove TODO-bound legacy steering path (generic active-run steering only).
+    - [x] `L4-S18` DEV - Remove TODO-bound legacy steering path (generic active-run steering only).
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §3.1 (Steer), §9.1.2 (Steering UX contract), §12 (API `POST /api/v1/runs/:runId/steer`), §17 (acceptance criteria).
       - Scope:
@@ -677,7 +677,7 @@ Open decision items for BR-03 restart:
       - Implementation TODO (detailed):
         - Introduce a dedicated composer steerability selector driven by active assistant run state (not TODO runtime snapshot).
         - Remove hard dependency chain `getTodoRuntimeRunState -> isComposerSteerMode`.
-        - Keep `/runs/:runId/steer` as the only steer transport path and preserve non-interrupting semantics.
+        - Keep steering transport on chat messages path (no TODO-runtime run metadata dependency).
         - Ensure TODO panel open/closed/absent states do not change steering availability.
       - Files expected:
         - `ui/src/lib/components/ChatPanel.svelte`
@@ -685,7 +685,9 @@ Open decision items for BR-03 restart:
         - `ui/src/lib/utils/todo-runtime-steer.ts` (remove or replace TODO-specific coupling)
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
-    - [ ] `L4-S22` DEV - Steering composer UX finalization (`volant`) + runtime behavior contract.
+      - Evidence:
+        - `2026-03-01`: composer steer mode is now driven by active assistant message state (`mode === 'ai' && activeAssistantMessage`) and no longer blocked by TODO runtime run metadata or `sending` state gate (`ui/src/lib/components/ChatPanel.svelte`).
+    - [x] `L4-S22` DEV - Steering composer UX finalization (`volant`) + runtime behavior contract.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 (composer steering, same-thread bubble, immediate acknowledgment, additive continuation).
       - Scope:
@@ -705,6 +707,8 @@ Open decision items for BR-03 restart:
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (if wording alignment is required for icon/UX precision)
+      - Evidence:
+        - `Navigation` (`volant`) icon remains the composer CTA in steer mode, with steering submit handled through the main composer submit path and same-thread continuity assertions covered in updated E2E (`e2e/tests/09-todo-steering-core.spec.ts`).
     - [ ] `L4-S19` DEV - Complete generation cutover to workflow-only execution (remove residual legacy chain).
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §12.1 (AI use-case generation workflow runtime migration, mandatory), §17 (acceptance criteria), mapping table in §12.1.
@@ -873,14 +877,15 @@ Open decision items for BR-03 restart:
           - `2026-02-28` pass signature: API/UI production images built successfully (`top-ai-ideas-api:d0098e`, `top-ai-ideas-ui:ccbdee`) on the scoped e2e lane.
         - [x] `make test-e2e E2E_SPEC=tests/09-todo-runtime-panel-actions.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
           - `2026-02-28` pass signature: `✓ tests/09-todo-runtime-panel-actions.spec.ts` ; `1 passed (9.3s)`, command exit `0`.
-    - [ ] `L4-S13` TEST - Steer acknowledgment and additive continuation validation.
+    - [x] `L4-S13` TEST - Steer acknowledgment and additive continuation validation.
       - Test evolution required:
         - `ui/tests/utils/todo-runtime-steer.test.ts` (acknowledgment state assertions)
         - `e2e/tests/09-todo-steering-core.spec.ts` (active-run steering continuity + additive assistant bubble)
       - Scoped make commands (to run after DEV slice completion):
         - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
           - `2026-02-28` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
-        - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+        - [x] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `1 passed (8.9s)`.
     - [x] `L4-S15` TEST - Reasoning pre-classification TODO signal removal coverage.
       - Test evolution required:
         - `api/tests/unit/chat-service-tools.test.ts` (remove evaluator prompt assertions tied to `todo_opportunity_signal`)
@@ -917,16 +922,18 @@ Open decision items for BR-03 restart:
         - Diagnostics executed: `make logs-api`, `make logs-ui`, `make db-query QUERY="SELECT 1;"`, `git diff --name-status origin/main...HEAD`.
         - Classification: `test/infra` (port collision / service startup precondition), not product bug.
         - Recovery: `make down ... ENV=test-feat-todo-steering-workflow-core`, `make down ... ENV=e2e-feat-todo-steering-workflow-core`, then rerun scoped checks successfully.
-    - [ ] `L4-S18` TEST - Steering decoupling regression coverage (no TODO-bound gating).
+    - [x] `L4-S18` TEST - Steering decoupling regression coverage (no TODO-bound gating).
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2.
       - Test evolution required:
         - `ui/tests/utils/todo-runtime-steer.test.ts` (or renamed generic steer test module)
         - `e2e/tests/09-todo-steering-core.spec.ts` (composer steering while TODO panel is absent/present)
       - Scoped make commands:
-        - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
-    - [ ] `L4-S22` TEST - Steering composer icon/behavior regression matrix.
+        - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`.
+        - [x] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `1 passed (8.9s)`.
+    - [x] `L4-S22` TEST - Steering composer icon/behavior regression matrix.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2.
       - Test evolution required:
@@ -934,10 +941,14 @@ Open decision items for BR-03 restart:
         - `ui/tests/utils/todo-chat-rendering.test.ts` (timeline insertion for steer user bubble)
         - `e2e/tests/09-todo-steering-core.spec.ts` (active-run steering from composer with acknowledgment + non-interruptive additive continuation)
       - Scoped make commands:
-        - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-        - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+        - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`.
+        - [x] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`.
+        - [x] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: API `sha256:9045b800...` and UI `sha256:86f83dc1...`.
+        - [x] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `1 passed (8.9s)`.
     - [ ] `L4-S19` TEST - Workflow-only generation cutover regression matrix.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §12.1.
