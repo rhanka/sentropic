@@ -785,7 +785,7 @@ Open decision items for BR-03 restart:
         - `api/src/routes/api/agent-config.ts` (if payload contract extension needed)
         - `api/src/routes/api/workflow-config.ts` (if payload contract extension needed)
         - `api/src/services/todo-orchestration.ts` (if schema persistence mapping update is required)
-    - [ ] `L4-S23` DEV - A2 migration: agent/workflow objects as generation runtime source-of-truth.
+    - [x] `L4-S23` DEV - A2 migration: agent/workflow objects as generation runtime source-of-truth.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2.1, §9.3.1, §12.2, §17.
       - Scope:
@@ -810,7 +810,9 @@ Open decision items for BR-03 restart:
         - `ui/src/lib/components/TodoRuntimeConfigPanel.svelte` (labels/help text if required)
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
-    - [ ] `L4-S24` DEV - B2 migration: run-bound steering continuity (single thread, no side-stream).
+      - Evidence:
+        - Code baselines are now split into `default-agents.ts` and `default-workflows.ts`, synchronized to `source_level=code`, and generation workers resolve runtime prompt/config from `agentDefinitionId` task assignments (no hard dependency on legacy business entries in `default-prompts`).
+    - [x] `L4-S24` DEV - B2 migration: run-bound steering continuity (single thread, no side-stream).
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 + §9.1.2.1 + §12.3 + §17.
       - Scope:
@@ -831,6 +833,8 @@ Open decision items for BR-03 restart:
         - `api/src/services/chat-service.ts` (if run-binding projection glue is required)
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
+      - Evidence:
+        - Composer steer submit now targets `POST /runs/:runId/steer` via active run state and no longer sends steer payload through `/chat/messages`; steer input remains in the same conversation timeline as a regular user bubble.
   - [ ] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
@@ -1093,15 +1097,21 @@ Open decision items for BR-03 restart:
         - `e2e/tests/05-executive-summary.spec.ts`
         - `e2e/tests/06-settings.spec.ts`
       - Scoped make commands:
-        - [ ] `make test-api-unit SCOPE=tests/unit/queue-manager-contract.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-api-endpoints SCOPE=tests/api/use-cases.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-api-endpoints SCOPE=tests/api/use-cases-generate-matrix.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-ui SCOPE=tests/utils/agent-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-ui SCOPE=tests/utils/workflow-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-        - [ ] `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-        - [ ] `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-        - [ ] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+        - [x] `make test-api-unit SCOPE=tests/unit/queue-manager-contract.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/unit/queue-manager-contract.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/use-cases.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/api/use-cases.test.ts (18 tests)`; `Test Files 1 passed`, `Tests 18 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/use-cases-generate-matrix.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/api/use-cases-generate-matrix.test.ts (8 tests)`; `Test Files 1 passed`, `Tests 8 passed`.
+        - [x] `make test-ui SCOPE=tests/utils/agent-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/utils/agent-config-api.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [x] `make test-ui SCOPE=tests/utils/workflow-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/utils/workflow-config-api.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [!] E2E build/spec validations are postponed to the UAT window per operator request (`2026-03-01`) and will be re-run there as scoped checks.
+          - `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
     - [ ] `L4-S24` TEST - B2 steering run-binding regression (transport + continuity).
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 + §9.1.2.1 + §12.3.
@@ -1112,12 +1122,17 @@ Open decision items for BR-03 restart:
         - `api/tests/unit/chat-service-tools.test.ts` (steer orchestration expectations)
         - `e2e/tests/09-todo-steering-core.spec.ts`
       - Scoped make commands:
-        - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-api-endpoints SCOPE=tests/api/runs-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-        - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+        - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [x] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/runs-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/api/runs-steer.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
+        - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/unit/chat-service-tools.test.ts (13 tests)`; `Test Files 1 passed`, `Tests 13 passed`.
+        - [!] E2E build/spec validation is postponed to the UAT window per operator request (`2026-03-01`) and will be re-run there as scoped checks.
+          - `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
   - [ ] **Lot 4 UAT checklist**
     - [ ] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):
