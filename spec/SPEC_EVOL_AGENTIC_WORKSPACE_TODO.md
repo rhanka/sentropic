@@ -164,12 +164,12 @@ Context rule:
 - Collaborative manual edition of TODO content is out of scope for BR-03 and deferred.
 
 ### 9.1.2 Steering UX contract (Lot 4 target)
-- Steering is in-flight guidance on the active execution run; it is not a second chat thread.
-- Steering input is performed from the main chat composer when the assistant is actively running and a steerable run is available.
+- Steering is in-flight guidance on the active assistant generation; it is not a second chat thread.
+- Steering input is performed from the main chat composer when an assistant message is actively running.
 - Steering availability is independent from TODO runtime panel visibility/state and independent from active TODO existence.
 - Composer behavior:
-  - send action switches to steering mode while run execution is active,
-  - steering submission uses `POST /api/v1/runs/:runId/steer`,
+  - send action switches to steering mode while assistant generation is active,
+  - steering submission uses `POST /api/v1/chat/messages/:assistantMessageId/steer`,
   - steering does not interrupt currently running tools/execution.
 - Message behavior:
   - steering message is appended as a normal user bubble in the conversation timeline (same session, no side-thread),
@@ -177,18 +177,18 @@ Context rule:
   - if the assistant already started a final response, an additional assistant continuation bubble may be produced (additive behavior, no cancellation).
 - Dedicated standalone steer input block inside the TODO runtime panel is out of scope for this target behavior.
 
-### 9.1.2.1 Run-bound steering transport and continuity (Lot 4 target)
-- Steering transport must be run-bound:
-  - while in steer mode, composer submit must call only `POST /api/v1/runs/:runId/steer`,
+### 9.1.2.1 Chat-bound steering transport and continuity (Lot 4 target)
+- Steering transport must be chat-message-bound:
+  - while in steer mode, composer submit must call only `POST /api/v1/chat/messages/:assistantMessageId/steer`,
   - steer mode must not create a new assistant placeholder/message via `POST /api/v1/chat/messages`.
-- Active run binding:
-  - each active assistant generation has one steerable run identity,
-  - UI must resolve steer target from active run state (not from creating a new chat turn),
+- Active assistant binding:
+  - each active assistant generation has one steerable assistant message identity,
+  - UI must resolve steer target from active assistant message state (not from creating a new chat turn),
   - steer target resolution must not depend on TODO runtime panel state (`todoRuntimePanel`) or TODO-specific runtime projection.
 - Continuity contract:
-  - steer content is consumed by the current run execution path,
+  - steer content is consumed by the current assistant execution path,
   - no second reasoning/tool stream is created solely because of steering,
-  - if the model cannot ingest steer mid-token, steer is buffered and applied at the next safe orchestration boundary (tool boundary / next inference pass) without run cancellation.
+  - if the model cannot ingest steer mid-token, steer is buffered and applied at the next safe orchestration boundary (tool boundary / next inference pass) without assistant-run cancellation.
 
 ### 9.1.3 Execution handshake for TODO progression (Lot 4 target)
 - TODO in chat is an executable AI plan, not a static checklist.
@@ -331,9 +331,11 @@ Core TODO/plan APIs:
 Execution APIs:
 - `POST /api/v1/tasks/:taskId/start`
 - `POST /api/v1/tasks/:taskId/complete`
-- `POST /api/v1/runs/:runId/steer`
 - `POST /api/v1/runs/:runId/pause`
 - `POST /api/v1/runs/:runId/resume`
+
+Chat steering API:
+- `POST /api/v1/chat/messages/:assistantMessageId/steer`
 
 Configuration APIs:
 - `GET|PUT /api/v1/agent-config`
@@ -346,7 +348,7 @@ Configuration APIs:
 Chat tool contract (BR-03):
 - `todo_create` is required for AI-created TODO bootstrap from chat.
 - TODO progression updates from chat (task/todo status mutation) are required in Lot 4 (`todo_update` / `task_update`) and must be operational in normal assistant turns.
-- Steering must stay on the same run path (`POST /api/v1/runs/:runId/steer`) and remain non-interrupting for in-flight tool execution.
+- Steering must stay on the same assistant message path (`POST /api/v1/chat/messages/:assistantMessageId/steer`) and remain non-interrupting for in-flight tool execution.
 - Execution handshake requires explicit user confirmation before automatic TODO progression (`go` semantics).
 
 ### 12.2 Prompt source split contract (Lot 4 target)
@@ -359,15 +361,15 @@ Chat tool contract (BR-03):
   - legacy `/prompts` endpoints may remain temporarily for admin compatibility,
   - generation runtime must not depend on legacy prompt endpoints or `default-prompts` business entries.
 
-### 12.3 Steering run-binding contract (Lot 4 target)
-- Runtime steering API remains `POST /api/v1/runs/:runId/steer`.
+### 12.3 Steering chat-binding contract (Lot 4 target)
+- Runtime steering API remains `POST /api/v1/chat/messages/:assistantMessageId/steer`.
 - Chat steering mode contract:
   - no chat-message creation endpoint is used to represent steer transport,
-  - steer payload is attached to active run events and consumed in the same execution lineage.
-  - steer mode enablement and run targeting are TODO-agnostic (must work with no active TODO and with TODO panel hidden).
+  - steer payload is attached to active assistant stream events and consumed in the same execution lineage.
+  - steer mode enablement and assistant-target resolution are TODO-agnostic (must work with no active TODO and with TODO panel hidden).
 - Observability contract:
   - steer submissions are visible as user messages in timeline,
-  - run/event traces show steer events attached to the same run ID,
+  - chat stream traces show `steer_received` status events attached to the same assistant message stream,
   - no orphan assistant placeholder is left because of a steer submission.
 
 ### 12.4 Current implementation limits for workflow generalization (B-track snapshot)
@@ -496,7 +498,7 @@ This spec iteration is ready to instantiate BR-03 only when:
 - agent prompt editing parity is explicit on Agent Configuration surface,
 - workflow task I/O contract editing is explicit on Workflow Configuration surface,
 - generation runtime prompt/config source is migrated to agent/workflow objects (chat prompts remain isolated),
-- steering transport is run-bound (`/runs/:runId/steer`) with single-thread continuity behavior,
+- steering transport is chat-message-bound (`/chat/messages/:assistantMessageId/steer`) with single-thread continuity behavior,
 - BR-03/BR-04/BR-05/BR-14 boundaries are accepted.
 
 ## 18) Future To-Be (outside BR-03)

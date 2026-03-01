@@ -4,7 +4,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
-import { readStreamEvents } from '../../services/stream-service';
+import { getNextSequence, readStreamEvents, writeStreamEvent } from '../../services/stream-service';
 import { db } from '../../db/client';
 import { extensionToolPermissions } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
@@ -65,6 +65,11 @@ const createSessionInput = z.object({
 const toolResultInput = z.object({
   toolCallId: z.string().min(1),
   result: z.unknown()
+});
+
+const steerInput = z.object({
+  message: z.string().min(1),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 const extensionToolPermissionInput = z.object({
@@ -380,6 +385,47 @@ chatRouter.post('/messages/:id/stop', requireWorkspaceAccessRole(), async (c) =>
   }
 
   return c.json({ ok: true, jobId: jobId ?? null });
+});
+
+/**
+ * POST /api/v1/chat/messages/:id/steer
+ * Push an in-flight steering message to the active assistant stream.
+ */
+chatRouter.post('/messages/:id/steer', requireWorkspaceAccessRole(), zValidator('json', steerInput), async (c) => {
+  const user = c.get('user');
+  const assistantMessageId = c.req.param('id');
+  const body = c.req.valid('json');
+
+  const msg = await chatService.getMessageForUser(assistantMessageId, user.userId);
+  if (!msg) return c.json({ error: 'Message not found' }, 404);
+  if (msg.role !== 'assistant') {
+    return c.json({ error: 'Only assistant messages can be steered' }, 400);
+  }
+
+  const streamId = assistantMessageId;
+  const sequence = await getNextSequence(streamId);
+  await writeStreamEvent(
+    streamId,
+    'status',
+    {
+      state: 'steer_received',
+      message: body.message,
+      metadata: body.metadata ?? {},
+      actor: 'user',
+      actorId: user.userId,
+    },
+    sequence,
+    streamId,
+  );
+
+  return c.json({
+    assistantMessageId,
+    status: 'accepted',
+    steer: {
+      message: body.message,
+      metadata: body.metadata ?? {},
+    },
+  });
 });
 
 /**
