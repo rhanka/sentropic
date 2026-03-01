@@ -2378,7 +2378,7 @@
       createdAt: nowIso,
       _localStatus: 'completed',
     };
-    const activeAssistantId = activeAssistantMessage?.id ?? null;
+    const activeAssistantId = activeAssistantMessage?.id ?? targetStreamId;
     messages = insertSteerMessageInTimeline(
       messages,
       localSteerMessage,

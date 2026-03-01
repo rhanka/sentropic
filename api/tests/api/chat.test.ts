@@ -453,6 +453,16 @@ describe('Chat API Endpoints', () => {
           message?.content === 'Concentre la réponse sur les trois priorités.',
       );
       expect(steerTimelineMessage).toBeTruthy();
+      const steerIndex = timeline.findIndex(
+        (message: any) => message?.id === steerTimelineMessage.id,
+      );
+      const assistantIndex = timeline.findIndex(
+        (message: any) => message?.id === assistantMessageId,
+      );
+      expect(steerIndex).toBeGreaterThan(-1);
+      expect(assistantIndex).toBeGreaterThan(-1);
+      expect(steerIndex).toBe(assistantIndex - 1);
+      expect(timeline[steerIndex - 1]?.role).toBe('user');
     });
 
     it('rejects steering on user message', async () => {
