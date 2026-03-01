@@ -66,6 +66,7 @@
     Brain,
     MessageCircle,
     Square,
+    ShipWheel,
     Clapperboard,
     ChevronsLeftRightEllipsis,
     List,
@@ -75,11 +76,11 @@
     Trash2,
     ChevronLeft,
     ChevronRight,
-    ChevronDown,
-    Navigation
+    ChevronDown
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import {
+    insertSteerMessageInTimeline,
     postChatSteer,
   } from '$lib/utils/chat-steer';
   import {
@@ -639,6 +640,7 @@
   const getMessageStatus = (m: LocalMessage) =>
     m._localStatus ?? (m.content ? 'completed' : 'processing');
   let activeAssistantMessage: LocalMessage | null = null;
+  let composerSteerMode = false;
   $: activeAssistantMessage =
     mode === 'ai'
       ? ([...messages]
@@ -648,6 +650,7 @@
               m.role === 'assistant' && getMessageStatus(m) === 'processing',
           ) ?? null)
       : null;
+  $: composerSteerMode = mode === 'ai' && Boolean(activeAssistantMessage);
 
   const hasAssistantContent = (message: LocalMessage): boolean =>
     typeof message.content === 'string' && message.content.trim().length > 0;
@@ -2314,7 +2317,7 @@
   };
 
   const isComposerSteerMode = (): boolean =>
-    Boolean(mode === 'ai' && activeAssistantMessage);
+    composerSteerMode;
 
   const handleDeleteTodoRuntime = async () => {
     if (!todoRuntimePanel?.todoId || todoRuntimeDeleteInFlight) return;
@@ -2360,7 +2363,12 @@
       createdAt: nowIso,
       _localStatus: 'completed',
     };
-    messages = [...messages, localSteerMessage];
+    const activeAssistantId = activeAssistantMessage?.id ?? null;
+    messages = insertSteerMessageInTimeline(
+      messages,
+      localSteerMessage,
+      activeAssistantId,
+    );
     followBottom = true;
     scheduleScrollToBottom({ force: true });
     input = '';
@@ -4140,7 +4148,7 @@
           </select>
         {/if}
         <div class="ml-auto flex items-center gap-2">
-        {#if mode === 'ai' && activeAssistantMessage}
+        {#if composerSteerMode && activeAssistantMessage}
           <button
             class="rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-60"
             on:click={stopAssistantMessage}
@@ -4181,7 +4189,7 @@
             : 'chat-composer-send-button'}
         >
           {#if isComposerSteerMode()}
-            <Navigation class="w-4 h-4 -rotate-45" />
+            <ShipWheel class="w-4 h-4" />
           {:else}
             <Send class="w-4 h-4" />
           {/if}
