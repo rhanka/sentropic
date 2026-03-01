@@ -80,6 +80,8 @@
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import {
+    isTodoRuntimeRunSteerable,
+    postTodoRuntimeSteer,
     normalizeTodoRuntimeRunState,
     type TodoRuntimeRunState,
   } from '$lib/utils/todo-runtime-steer';
@@ -2314,8 +2316,18 @@
     return activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null;
   };
 
+  const getActiveRunForComposer = (): TodoRuntimeRunState => ({
+    runId: todoRuntimePanel?.runId ?? null,
+    runStatus: todoRuntimePanel?.runStatus ?? null,
+    runTaskId: todoRuntimePanel?.runTaskId ?? null,
+  });
+
   const isComposerSteerMode = (): boolean =>
-    Boolean(mode === 'ai' && activeAssistantMessage);
+    Boolean(
+      mode === 'ai' &&
+        activeAssistantMessage &&
+        isTodoRuntimeRunSteerable(getActiveRunForComposer()),
+    );
 
   const handleDeleteTodoRuntime = async () => {
     if (!todoRuntimePanel?.todoId || todoRuntimeDeleteInFlight) return;
@@ -2338,6 +2350,12 @@
     if (!steerText) return;
     if (composerSteerInFlight) return;
 
+    const runState = getActiveRunForComposer();
+    if (!isTodoRuntimeRunSteerable(runState) || !runState.runId) {
+      errorMsg = $_('chat.todoRuntimePanel.steer.unavailable');
+      return;
+    }
+
     const targetStreamId = getActiveAssistantStreamId();
     if (!targetStreamId) {
       errorMsg = $_('chat.todoRuntimePanel.steer.unavailable');
@@ -2352,8 +2370,26 @@
       createdAtMs: Date.now(),
     };
 
+    const nowIso = new Date().toISOString();
+    const localSteerMessage: LocalMessage = {
+      id: `local_steer_${Date.now()}`,
+      sessionId: sessionId ?? '',
+      role: 'user',
+      content: steerText,
+      createdAt: nowIso,
+      _localStatus: 'completed',
+    };
+    messages = [...messages, localSteerMessage];
+    followBottom = true;
+    scheduleScrollToBottom({ force: true });
+    input = '';
+    composerIsMultiline = false;
+    updateComposerHeight();
+
     try {
-      await sendMessage();
+      await postTodoRuntimeSteer(apiPost, runState.runId, steerText);
+    } catch (e) {
+      errorMsg = formatApiError(e, $_('chat.todoRuntimePanel.steer.error'));
     } finally {
       composerSteerInFlight = false;
       const expectedAck = composerSteerAck?.createdAtMs;
