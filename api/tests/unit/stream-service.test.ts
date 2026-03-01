@@ -4,6 +4,7 @@ import {
   writeStreamEvent,
   getNextSequence,
   readStreamEvents,
+  writeStreamEventWithSequenceRetry,
 } from '../../src/services/stream-service';
 import { db } from '../../src/db/client';
 import { chatStreamEvents, chatMessages, chatSessions, users } from '../../src/db/schema';
@@ -225,6 +226,65 @@ describe('Stream Service', () => {
     });
   });
 
+  describe('writeStreamEventWithSequenceRetry', () => {
+    it('retries once on sequence conflict and then succeeds', async () => {
+      let attempts = 0;
+
+      const sequence = await writeStreamEventWithSequenceRetry(
+        testStreamId,
+        'status',
+        { state: 'steer_received' },
+        {
+          maxAttempts: 3,
+          deps: {
+            getNextSequenceFn: async () => 12,
+            writeStreamEventFn: async () => {
+              attempts += 1;
+              if (attempts === 1) {
+                const err = new Error('duplicate key value violates unique constraint');
+                (err as Error & { code?: string; constraint?: string }).code = '23505';
+                (err as Error & { code?: string; constraint?: string }).constraint =
+                  'chat_stream_events_stream_id_sequence_unique';
+                throw err;
+              }
+            },
+          },
+        },
+      );
+
+      expect(sequence).toBe(12);
+      expect(attempts).toBe(2);
+    });
+
+    it('throws when sequence conflict persists beyond max attempts', async () => {
+      let attempts = 0;
+
+      await expect(
+        writeStreamEventWithSequenceRetry(
+          testStreamId,
+          'status',
+          { state: 'steer_received' },
+          {
+            maxAttempts: 2,
+            deps: {
+              getNextSequenceFn: async () => 4,
+              writeStreamEventFn: async () => {
+                attempts += 1;
+                const err = new Error('duplicate key value violates unique constraint');
+                (err as Error & { code?: string; constraint?: string }).code = '23505';
+                (err as Error & { code?: string; constraint?: string }).constraint =
+                  'chat_stream_events_stream_id_sequence_unique';
+                throw err;
+              },
+            },
+          },
+        ),
+      ).rejects.toThrow('duplicate key value violates unique constraint');
+
+      expect(attempts).toBe(2);
+    });
+  });
+
   describe('readStreamEvents', () => {
     beforeEach(async () => {
       // Créer quelques événements de test
@@ -326,4 +386,3 @@ describe('Stream Service', () => {
     });
   });
 });
-
