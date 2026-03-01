@@ -211,6 +211,10 @@ Context rule:
 
 ### 9.2 Basic Agent Configuration section
 - Configure generation agents (currently prompt-backed).
+- BR-03 operator parity requirement (Lot 4 completion target):
+  - agent prompt must be directly editable in the Agent Configuration UI (dedicated prompt field, not JSON-only),
+  - the legacy prompts section stays removed from settings, but prompt editing capability is preserved on the agent surface,
+  - advanced agent JSON config remains available for non-prompt parameters.
 - Fork lineage model:
   - code baseline -> admin reference -> user fork.
 - Inheritance behavior:
@@ -224,6 +228,10 @@ Context rule:
 - Display workflow as ordered tasks with assigned agents.
 - Display workflow purpose/description and task labels.
 - Display objects and data format definitions as expandable sections.
+- BR-03 minimal workflow task I/O editing requirement (Lot 4 completion target):
+  - per-task `inputSchema` and `outputSchema` must be visible in settings,
+  - per-task I/O contracts must be editable with JSON validation and persisted through `workflow-config`,
+  - edits stay scoped to runtime contracts (no full visual studio required).
 
 Placeholder extraction behavior:
 - Prompt placeholders like `{{object_name}}` create/update object references in workflow metadata.
@@ -382,11 +390,14 @@ UI tests:
 - in-chat TODO rendering,
 - TODO creation from chat flow,
 - agent/workflow config fork, detach, inheritance drift indicators.
+- agent prompt editor behavior in Agent Configuration (dedicated prompt field persistence).
+- workflow task I/O contract editor behavior (`inputSchema`/`outputSchema` persistence + validation).
 
 E2E tests:
 - create TODO in chat and execute first tasks,
 - sub-agentic conductor validation path,
 - full-auto progression path with contract-compliant output.
+- settings operator flow for agent prompt edit + workflow task I/O edit/save/reload.
 
 ## 16) Open Questions to Resolve Before BR-03 Branch Recreation
 
@@ -404,6 +415,8 @@ This spec iteration is ready to instantiate BR-03 only when:
 - execution mode semantics are accepted,
 - API surface v1 is accepted,
 - migration scope v1 is accepted,
+- agent prompt editing parity is explicit on Agent Configuration surface,
+- workflow task I/O contract editing is explicit on Workflow Configuration surface,
 - BR-03/BR-04/BR-05/BR-14 boundaries are accepted.
 
 ## 18) Future To-Be (outside BR-03)
