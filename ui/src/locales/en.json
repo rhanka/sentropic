@@ -644,17 +644,17 @@
       }
     },
     "runtime": {
-      "title": "TODO runtime configuration",
-      "description": "Manage Agent and Workflow configuration lineage used by TODO orchestration.",
-      "loading": "Loading TODO runtime configuration…",
-      "refresh": "Refresh runtime config",
+      "title": "AI agents and workflows configuration",
+      "description": "Manage AI agent definitions and workflow task mappings used by the generation runtime.",
+      "loading": "Loading AI agents/workflows configuration…",
+      "refresh": "Refresh agents/workflows configuration",
       "refreshing": "Refreshing…",
       "readonlyHint": "Read-only scope: viewer/commenter roles can inspect runtime configuration but cannot edit, fork, or detach.",
       "scopeBoundary": {
         "title": "BR-03 scope boundary",
         "description": "This page only covers Agent and Workflow configuration. Full Plan/Comments/Chat/Jobs operations and a visual workflow designer are intentionally deferred."
       },
-      "empty": "No runtime configuration item found.",
+      "empty": "No agent/workflow configuration item found.",
       "source": "Source",
       "parent": "Parent",
       "root": "Lineage root",
@@ -679,10 +679,12 @@
         "title": "Workflow Configuration",
         "description": "Configure workflow definitions and keep placeholder extraction metadata up to date on save.",
         "tasksLabel": "Workflow tasks",
-        "agentLinkLabel": "Agent",
+        "executionMapHint": "The task list below is the authoritative executable mapping for this workflow.",
+        "agentLinkLabel": "Agent ID",
         "placeholdersLabel": "Extracted placeholders",
         "placeholdersNone": "No placeholder detected in workflow metadata.",
-        "configJsonReadonlyHint": "JSON config is read-only for this workflow: this metadata is not the executable task logic."
+        "metadataOnlyTitle": "Workflow metadata (read-only)",
+        "configJsonReadonlyHint": "In BR03, this workflow JSON is informational only. Execution logic is driven by the workflow task list and agent linkage."
       },
       "toasts": {
         "agentSaved": "Agent configuration updated.",
@@ -693,7 +695,7 @@
         "workflowDetached": "Workflow configuration detached from parent."
       },
       "errors": {
-        "load": "Failed to load TODO runtime configuration",
+        "load": "Failed to load AI agents/workflows configuration",
         "missingName": "Name is required",
         "invalidAgentConfigJson": "Agent configuration JSON must be a valid object",
         "invalidWorkflowConfigJson": "Workflow configuration JSON must be a valid object",

@@ -560,7 +560,7 @@
         {:else}
           <div class="space-y-3">
             {#each agentConfigs as item (item.id)}
-              <div class="rounded border border-slate-200 p-3">
+              <div class="rounded border border-slate-200 p-3" data-testid={`workflow-config-card-${item.key}`}>
                 <div class="flex flex-wrap items-start justify-between gap-2">
                   <div class="space-y-1">
                     <div class="font-medium text-slate-900">{item.name}</div>
@@ -761,6 +761,9 @@
 
                 <div class="mt-2 text-xs text-slate-700">
                   <div class="font-medium">{$_('settings.runtime.workflow.tasksLabel')}</div>
+                  <p class="mt-1 text-[11px] text-slate-500">
+                    {$_('settings.runtime.workflow.executionMapHint')}
+                  </p>
                   {#if item.tasks.length === 0}
                     <div class="text-slate-500">—</div>
                   {:else}
@@ -800,6 +803,7 @@
                       type="button"
                       class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
                       on:click={() => openWorkflowEditor(item)}
+                      data-testid={`workflow-config-edit-${item.key}`}
                     >
                       {$_('settings.runtime.edit')}
                     </button>
@@ -853,30 +857,35 @@
                         bind:value={workflowDraftById[item.id].description}
                       ></textarea>
                     </div>
-                    <div>
-                      <label
-                        class="mb-1 block text-xs font-medium text-slate-700"
-                        for={`workflow-config-json-${item.id}`}
+                    {#if isWorkflowConfigJsonEditable(item)}
+                      <div>
+                        <label
+                          class="mb-1 block text-xs font-medium text-slate-700"
+                          for={`workflow-config-json-${item.id}`}
+                        >
+                          {$_('settings.runtime.configJsonLabel')}
+                        </label>
+                        <textarea
+                          id={`workflow-config-json-${item.id}`}
+                          data-testid={`workflow-config-json-editor-${item.key}`}
+                          class="w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-xs"
+                          rows={8}
+                          bind:value={workflowDraftById[item.id].configText}
+                        ></textarea>
+                      </div>
+                    {:else}
+                      <div
+                        class="rounded border border-slate-200 bg-slate-100 p-2 text-xs text-slate-600"
+                        data-testid={`workflow-config-metadata-only-hint-${item.key}`}
                       >
-                        {$_('settings.runtime.configJsonLabel')}
-                      </label>
-                      {#if !isWorkflowConfigJsonEditable(item)}
-                        <p class="mb-1 text-[11px] text-slate-500">
+                        <div class="font-medium text-slate-700">
+                          {$_('settings.runtime.workflow.metadataOnlyTitle')}
+                        </div>
+                        <p class="mt-1">
                           {$_('settings.runtime.workflow.configJsonReadonlyHint')}
                         </p>
-                      {/if}
-                      <textarea
-                        id={`workflow-config-json-${item.id}`}
-                        class={`w-full rounded border px-2 py-1.5 font-mono text-xs ${
-                          isWorkflowConfigJsonEditable(item)
-                            ? 'border-slate-300'
-                            : 'border-slate-200 bg-slate-100 text-slate-500'
-                        }`}
-                        rows={8}
-                        readonly={!isWorkflowConfigJsonEditable(item)}
-                        bind:value={workflowDraftById[item.id].configText}
-                      ></textarea>
-                    </div>
+                      </div>
+                    {/if}
                     <div class="flex flex-wrap gap-2">
                       <button
                         type="button"
