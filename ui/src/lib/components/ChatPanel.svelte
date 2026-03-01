@@ -2315,7 +2315,7 @@
   };
 
   const isComposerSteerMode = (): boolean =>
-    Boolean(mode === 'ai' && activeAssistantMessage && !sending);
+    Boolean(mode === 'ai' && activeAssistantMessage);
 
   const handleDeleteTodoRuntime = async () => {
     if (!todoRuntimePanel?.todoId || todoRuntimeDeleteInFlight) return;
@@ -2337,7 +2337,6 @@
     const steerText = input.trim();
     if (!steerText) return;
     if (composerSteerInFlight) return;
-    if (sending) return;
 
     const targetStreamId = getActiveAssistantStreamId();
     if (!targetStreamId) {
@@ -2814,7 +2813,7 @@
 
   const sendMessage = async () => {
     const text = input.trim();
-    if (!text || sending) return;
+    if (!text || (sending && !isComposerSteerMode())) return;
 
     sending = true;
     errorMsg = null;
