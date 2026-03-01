@@ -153,6 +153,32 @@ test.describe('Page Paramètres', () => {
     }
   });
 
+  test('devrait exposer la surface agents/workflows sans legacy prompts', async ({ browser }) => {
+    const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
+    try {
+      await page.goto('/settings');
+      await page.waitForLoadState('domcontentloaded');
+
+      const body = page.locator('body');
+      await expect(body).toContainText(/Agent Configuration|agents and workflows configuration|agents et workflows/i);
+      await expect(body).toContainText(/Workflow Configuration/i);
+      await expect(body).not.toContainText(/Gestion des Prompts IA|AI prompts management/i);
+
+      const editWorkflowButton = page.getByTestId('workflow-config-edit-ai_usecase_generation_v1');
+      if ((await editWorkflowButton.count()) > 0) {
+        await editWorkflowButton.first().click();
+        await expect(
+          page.getByTestId('workflow-config-metadata-only-hint-ai_usecase_generation_v1')
+        ).toBeVisible();
+        await expect(
+          page.getByTestId('workflow-config-json-editor-ai_usecase_generation_v1')
+        ).toHaveCount(0);
+      }
+    } finally {
+      await context.close();
+    }
+  });
+
   test('devrait permettre de modifier les paramètres', async ({ browser }) => {
     const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
     try {

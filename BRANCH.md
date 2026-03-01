@@ -709,7 +709,7 @@ Open decision items for BR-03 restart:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (if wording alignment is required for icon/UX precision)
       - Evidence:
         - `Navigation` (`volant`) icon remains the composer CTA in steer mode, with steering submit handled through the main composer submit path and same-thread continuity assertions covered in updated E2E (`e2e/tests/09-todo-steering-core.spec.ts`).
-    - [ ] `L4-S19` DEV - Complete generation cutover to workflow-only execution (remove residual legacy chain).
+    - [x] `L4-S19` DEV - Complete generation cutover to workflow-only execution (remove residual legacy chain).
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §12.1 (AI use-case generation workflow runtime migration, mandatory), §17 (acceptance criteria), mapping table in §12.1.
       - Scope:
@@ -725,7 +725,9 @@ Open decision items for BR-03 restart:
         - `api/src/routes/api/use-cases.ts`
         - `api/src/services/queue-manager.ts`
         - `api/src/services/todo-orchestration.ts`
-    - [ ] `L4-S20` DEV - Workflow config JSON UX alignment (no misleading editable metadata block).
+      - Evidence:
+        - Route-level generation dispatch now delegates to `todoOrchestrationService.startAndDispatchUseCaseGenerationWorkflow(...)` (no direct `queueManager.addJob(...)` fanout in `POST /api/v1/use-cases/generate`), and `queueManager.processUseCaseList` now fails fast when workflow runtime metadata is missing.
+    - [x] `L4-S20` DEV - Workflow config JSON UX alignment (no misleading editable metadata block).
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.3 (Basic Workflow Configuration section), §3.6 (Workflow terminology), §17 (acceptance criteria).
       - Scope:
@@ -743,7 +745,9 @@ Open decision items for BR-03 restart:
         - `ui/src/lib/components/TodoRuntimeConfigPanel.svelte`
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
-    - [ ] `L4-S21` DEV - Finalize settings migration from legacy prompt management to agent/workflow configuration.
+      - Evidence:
+        - Metadata-only workflow JSON no longer renders an editable/read-only textarea for `ai_usecase_generation_v1`; the editor now shows an explicit metadata-only hint and keeps workflow task list as authoritative execution map.
+    - [x] `L4-S21` DEV - Finalize settings migration from legacy prompt management to agent/workflow configuration.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2 (Basic Agent Configuration), §9.3 (Basic Workflow Configuration), §12.1 (generation agents/workflow linkage), §17.
       - Scope:
@@ -761,6 +765,8 @@ Open decision items for BR-03 restart:
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
         - `api/src/routes/api/prompts.ts` (if deprecation or access narrowing is required)
+      - Evidence:
+        - Settings runtime surface wording is now agent/workflow-centric (`settings.runtime.*` i18n update), workflow task rows expose `Agent ID`, and E2E settings coverage now asserts absence of legacy prompts management section in the page surface.
   - [ ] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
@@ -949,7 +955,7 @@ Open decision items for BR-03 restart:
           - `2026-03-01` pass signature: API `sha256:9045b800...` and UI `sha256:86f83dc1...`.
         - [x] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
           - `2026-03-01` pass signature: `1 passed (8.9s)`.
-    - [ ] `L4-S19` TEST - Workflow-only generation cutover regression matrix.
+    - [x] `L4-S19` TEST - Workflow-only generation cutover regression matrix.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §12.1.
       - Test evolution required:
@@ -959,22 +965,33 @@ Open decision items for BR-03 restart:
         - `e2e/tests/00-ai-generation.spec.ts`
         - `e2e/tests/05-executive-summary.spec.ts`
       - Scoped make commands:
-        - [ ] `make test-api-endpoints SCOPE=tests/api/use-cases.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-api-endpoints SCOPE=tests/api/use-cases-generate-matrix.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-api-unit SCOPE=tests/unit/queue-manager-contract.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-        - [ ] `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
-        - [ ] `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
-    - [ ] `L4-S20` TEST - Workflow config JSON policy validation.
+        - [x] `make test-api-endpoints SCOPE=tests/api/use-cases-generate-matrix.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `Test Files 1 passed (1)`; `Tests 8 passed (8)`.
+        - [x] `make test-api-unit SCOPE=tests/unit/queue-manager-contract.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `Test Files 1 passed (1)`; `Tests 2 passed (2)`.
+        - [x] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: images built successfully (`local/top-ai-ideas-api:b17617`, `local/top-ai-ideas-ui:d5831b`).
+        - [x] `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `2 passed (1.1m)`.
+        - [x] `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `2 passed (12.0s)`.
+      - Failure protocol trace (before final green):
+        - Signature: `Bind for 0.0.0.0:1003 failed: port is already allocated` / `Bind for 0.0.0.0:5103 failed: port is already allocated`.
+        - Diagnostics executed: `make logs-api`, `make logs-ui`, `make db-query QUERY="SELECT 1;"`, `git diff --name-status origin/main...HEAD`, `make docker-stats ALL=1`.
+        - Classification: `test/infra` (port collision), not product/test logic.
+        - Recovery: `make down ... ENV=test-feat-todo-steering-workflow-core` and `make down ... ENV=e2e-feat-todo-steering-workflow-core`, then rerun on isolated ports.
+    - [x] `L4-S20` TEST - Workflow config JSON policy validation.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.3.
       - Test evolution required:
         - `ui/tests/utils/workflow-config-api.test.ts`
         - `e2e/tests/06-settings.spec.ts`
       - Scoped make commands:
-        - [ ] `make test-ui SCOPE=tests/utils/workflow-config-api.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
-    - [ ] `L4-S21` TEST - Settings IA migration to agent/workflow surface.
+        - [x] `make test-ui SCOPE=tests/utils/workflow-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `Test Files 1 passed (1)`; `Tests 3 passed (3)`.
+        - [x] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `17 passed, 3 skipped (19.7s)`.
+    - [x] `L4-S21` TEST - Settings IA migration to agent/workflow surface.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2 + §9.3.
       - Test evolution required:
@@ -982,9 +999,12 @@ Open decision items for BR-03 restart:
         - `ui/tests/utils/api.test.ts` (settings panel requests)
         - `e2e/tests/06-settings.spec.ts`
       - Scoped make commands:
-        - [ ] `make test-ui SCOPE=tests/utils/agent-config-api.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-ui SCOPE=tests/utils/api.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+        - [x] `make test-ui SCOPE=tests/utils/agent-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `Test Files 1 passed (1)`; `Tests 3 passed (3)`.
+        - [x] `make test-ui SCOPE=tests/utils/api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `Test Files 1 passed (1)`; `Tests 11 passed (11)`.
+        - [x] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `17 passed, 3 skipped (19.7s)`.
   - [ ] **Lot 4 UAT checklist**
     - [ ] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):

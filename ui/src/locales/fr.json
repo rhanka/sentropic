@@ -644,17 +644,17 @@
       }
     },
     "runtime": {
-      "title": "Configuration runtime TODO",
-      "description": "Gérez la lignée des configurations Agent et Workflow utilisées par l’orchestration TODO.",
-      "loading": "Chargement de la configuration runtime TODO…",
-      "refresh": "Actualiser la config runtime",
+      "title": "Configuration des agents et workflows IA",
+      "description": "Gérez les définitions d’agents IA et la cartographie des tâches workflow utilisées par le runtime de génération.",
+      "loading": "Chargement de la configuration agents/workflows IA…",
+      "refresh": "Actualiser la configuration agents/workflows",
       "refreshing": "Actualisation…",
       "readonlyHint": "Mode lecture seule : les rôles viewer/commenter peuvent consulter la configuration runtime mais ne peuvent pas éditer, forker ou détacher.",
       "scopeBoundary": {
         "title": "Limite de périmètre BR-03",
         "description": "Cette page couvre uniquement la configuration Agent et Workflow. Le panneau opérationnel complet Plan/Comments/Chat/Jobs et un designer visuel de workflow sont volontairement reportés."
       },
-      "empty": "Aucun élément de configuration runtime trouvé.",
+      "empty": "Aucun élément de configuration agent/workflow trouvé.",
       "source": "Source",
       "parent": "Parent",
       "root": "Racine de lignée",
@@ -679,10 +679,12 @@
         "title": "Workflow Configuration",
         "description": "Configurez les définitions de workflow et mettez à jour les métadonnées d’extraction de placeholders à la sauvegarde.",
         "tasksLabel": "Tâches du workflow",
-        "agentLinkLabel": "Agent",
+        "executionMapHint": "La liste des tâches ci-dessous est la cartographie exécutable de référence pour ce workflow.",
+        "agentLinkLabel": "ID agent",
         "placeholdersLabel": "Placeholders extraits",
         "placeholdersNone": "Aucun placeholder détecté dans les métadonnées workflow.",
-        "configJsonReadonlyHint": "Configuration JSON en lecture seule pour ce workflow : ces métadonnées ne constituent pas la logique exécutable des tâches."
+        "metadataOnlyTitle": "Métadonnées workflow (lecture seule)",
+        "configJsonReadonlyHint": "La configuration JSON de ce workflow est informative uniquement dans BR03. La logique d’exécution est portée par la liste des tâches et leurs liaisons d’agent."
       },
       "toasts": {
         "agentSaved": "Configuration agent mise à jour.",
@@ -693,7 +695,7 @@
         "workflowDetached": "Configuration workflow détachée du parent."
       },
       "errors": {
-        "load": "Échec du chargement de la configuration runtime TODO",
+        "load": "Échec du chargement de la configuration agents/workflows IA",
         "missingName": "Le nom est obligatoire",
         "invalidAgentConfigJson": "Le JSON de configuration agent doit être un objet valide",
         "invalidWorkflowConfigJson": "Le JSON de configuration workflow doit être un objet valide",
