@@ -458,6 +458,7 @@ chatRouter.post('/messages/:id/steer', requireWorkspaceAccessRole(), zValidator(
   return c.json({
     assistantMessageId,
     status: 'accepted',
+    action: 'interrupt_relaunch',
     steer: {
       messageId: steerMessageId,
       message: body.message,
