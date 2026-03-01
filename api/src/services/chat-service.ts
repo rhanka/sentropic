@@ -1801,16 +1801,30 @@ Règles :
       AUTOMATION_BLOCK: automationBlock
     }).trim();
     const STEER_PROMPT_MAX_MESSAGES = 8;
+    const STEER_REASONING_REPLAY_MAX_CHARS = 6000;
+    const STEER_REASONING_EXCERPT_MAX_CHARS = 1800;
     const normalizeSteerMessage = (value: string): string =>
       value
         .replace(/\s+/g, ' ')
         .trim();
-    const buildSteerInterruptionPrompt = (messages: readonly string[]): string => {
+    const normalizeReasoningExcerpt = (value: string): string => {
+      const normalized = value.replace(/\s+/g, ' ').trim();
+      if (!normalized) return '';
+      if (normalized.length <= STEER_REASONING_EXCERPT_MAX_CHARS) {
+        return normalized;
+      }
+      return normalized.slice(-STEER_REASONING_EXCERPT_MAX_CHARS);
+    };
+    const buildSteerInterruptionPrompt = (
+      messages: readonly string[],
+      reasoningReplay: string,
+    ): string => {
       if (messages.length === 0) return systemPrompt;
       const lastDirective = messages[messages.length - 1] ?? '';
       const lines = messages
         .slice(-STEER_PROMPT_MAX_MESSAGES)
         .map((message, index) => `${index + 1}. ${message}`);
+      const reasoningExcerpt = normalizeReasoningExcerpt(reasoningReplay);
       const steerContext = [
         'SYSTEM NOTE - STEER INTERRUPTION',
         '- Previous reasoning was interrupted to integrate one or more user steering messages.',
@@ -1823,7 +1837,17 @@ Règles :
         '',
         `Latest directive to prioritize: ${lastDirective}`,
       ].join('\n');
-      return `${systemPrompt}\n\n${steerContext}`.trim();
+      if (!reasoningExcerpt) {
+        return `${systemPrompt}\n\n${steerContext}`.trim();
+      }
+      return [
+        systemPrompt,
+        '',
+        steerContext,
+        '',
+        'Reasoning excerpt already emitted before interruption (for continuity only):',
+        reasoningExcerpt,
+      ].join('\n').trim();
     };
     const isPreviousResponseNotFoundError = (message: string): boolean => {
       const normalized = message.toLowerCase();
@@ -1838,6 +1862,7 @@ Règles :
         | { role: 'tool'; content: string; tool_call_id: string }
       >,
       steerMessages: readonly string[],
+      reasoningReplay: string,
     ): Array<
       | { role: 'system' | 'user' | 'assistant'; content: string }
       | { role: 'tool'; content: string; tool_call_id: string }
@@ -1849,7 +1874,7 @@ Règles :
       return [
         {
           role: 'system' as const,
-          content: buildSteerInterruptionPrompt(steerMessages),
+          content: buildSteerInterruptionPrompt(steerMessages, reasoningReplay),
         },
         ...withoutSystem,
       ];
@@ -1891,6 +1916,7 @@ Règles :
         }))
       : null;
     const steerHistoryMessages: string[] = [];
+    let steerReasoningReplay = '';
 
     const [aiSettings, catalog] = await Promise.all([
       settingsService.getAISettings({ userId: options.userId }),
@@ -2072,6 +2098,7 @@ Règles :
       currentMessages = applySteerInterruptionPrompt(
         currentMessages,
         steerHistoryMessages,
+        steerReasoningReplay,
       );
       let steerInterruptionRequested = false;
       let steerInterruptionBatch: string[] = [];
@@ -2164,7 +2191,22 @@ Règles :
             }
           } else if (eventType === 'reasoning_delta') {
             const delta = typeof data.delta === 'string' ? data.delta : '';
-            if (delta) reasoningParts.push(delta);
+            if (delta) {
+              reasoningParts.push(delta);
+              if (steerReasoningReplay.length < STEER_REASONING_REPLAY_MAX_CHARS) {
+                steerReasoningReplay += delta;
+                if (steerReasoningReplay.length > STEER_REASONING_REPLAY_MAX_CHARS) {
+                  steerReasoningReplay = steerReasoningReplay.slice(
+                    -STEER_REASONING_REPLAY_MAX_CHARS,
+                  );
+                }
+              } else {
+                steerReasoningReplay =
+                  `${steerReasoningReplay}${delta}`.slice(
+                    -STEER_REASONING_REPLAY_MAX_CHARS,
+                  );
+              }
+            }
           } else if (eventType === 'tool_call_start') {
             const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
             const existingIndex = toolCalls.findIndex(tc => tc.id === toolCallId);
