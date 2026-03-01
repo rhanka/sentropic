@@ -166,6 +166,7 @@ Context rule:
 ### 9.1.2 Steering UX contract (Lot 4 target)
 - Steering is in-flight guidance on the active execution run; it is not a second chat thread.
 - Steering input is performed from the main chat composer when the assistant is actively running and a steerable run is available.
+- Steering availability is independent from TODO runtime panel visibility/state and independent from active TODO existence.
 - Composer behavior:
   - send action switches to steering mode while run execution is active,
   - steering submission uses `POST /api/v1/runs/:runId/steer`,
@@ -182,7 +183,8 @@ Context rule:
   - steer mode must not create a new assistant placeholder/message via `POST /api/v1/chat/messages`.
 - Active run binding:
   - each active assistant generation has one steerable run identity,
-  - UI must resolve steer target from active run state (not from creating a new chat turn).
+  - UI must resolve steer target from active run state (not from creating a new chat turn),
+  - steer target resolution must not depend on TODO runtime panel state (`todoRuntimePanel`) or TODO-specific runtime projection.
 - Continuity contract:
   - steer content is consumed by the current run execution path,
   - no second reasoning/tool stream is created solely because of steering,
@@ -362,10 +364,31 @@ Chat tool contract (BR-03):
 - Chat steering mode contract:
   - no chat-message creation endpoint is used to represent steer transport,
   - steer payload is attached to active run events and consumed in the same execution lineage.
+  - steer mode enablement and run targeting are TODO-agnostic (must work with no active TODO and with TODO panel hidden).
 - Observability contract:
   - steer submissions are visible as user messages in timeline,
   - run/event traces show steer events attached to the same run ID,
   - no orphan assistant placeholder is left because of a steer submission.
+
+### 12.4 Current implementation limits for workflow generalization (B-track snapshot)
+This section records explicit known limits of the current BR-03 implementation so they are treated as intentional temporary constraints, not target architecture.
+
+Current limits (observed):
+- Task identity is currently constrained by a closed compile-time set of task keys (generation chain only), not an open runtime task taxonomy.
+- Runtime parsing/routing of workflow task context is still switch/enum-based for generation task keys in queue orchestration.
+- Runtime task assignments still use a fixed field model (`contextPrepareAgentId`, `matrixPrepareAgentId`, etc.), not a generic `taskKey -> agentId` map.
+- Workflow `config` currently carries metadata (e.g. route/migration labels) and is not yet the executable graph definition (no generic DAG/edges/conditions runtime).
+- Fanout/chaining logic for generation remains partially encoded in worker orchestration paths (for example detail fanout and executive-summary enqueue conditions), even when run metadata is workflow-bound.
+- Baseline generation agent seeds still bootstrap prompt templates from legacy prompt defaults for initialization compatibility.
+- The code path currently assumes one canonical generation workflow key (`ai_usecase_generation_v1`) for end-to-end generation.
+
+Future branch targeting:
+- As of `2026-03-01`, the current `PLAN.md` does not define a dedicated branch for generic multi-workflow engine/library capability.
+- This capability is explicitly deferred to a future branch (post BR-03 scope), with expected objective:
+  - open workflow runtime model (multi-workflow, reusable library/catalog),
+  - runtime task registry/capabilities instead of closed task-key enum routing,
+  - executable workflow graph semantics (edges/conditions/fanout) driven by workflow objects,
+  - generic assignment map and orchestration contracts decoupled from generation-specific hardcoded fields.
 
 ### 12.1 AI use-case generation workflow runtime migration (Lot 4 mandatory)
 
