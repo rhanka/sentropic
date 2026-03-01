@@ -75,13 +75,12 @@
     Trash2,
     ChevronLeft,
     ChevronRight,
-    ChevronDown
+    ChevronDown,
+    Navigation
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import {
-    isTodoRuntimeRunSteerable,
     normalizeTodoRuntimeRunState,
-    postTodoRuntimeSteer,
     type TodoRuntimeRunState,
   } from '$lib/utils/todo-runtime-steer';
   import {
@@ -2310,17 +2309,13 @@
     composerSteerAck = null;
   };
 
-  const getTodoRuntimeRunState = (): TodoRuntimeRunState => ({
-    runId: todoRuntimePanel?.runId ?? null,
-    runStatus: todoRuntimePanel?.runStatus ?? null,
-    runTaskId: todoRuntimePanel?.runTaskId ?? null,
-  });
+  const getActiveAssistantStreamId = (): string | null => {
+    if (!activeAssistantMessage) return null;
+    return activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null;
+  };
 
   const isComposerSteerMode = (): boolean =>
-    Boolean(
-      mode === 'ai' &&
-        isTodoRuntimeRunSteerable(getTodoRuntimeRunState()),
-    );
+    Boolean(mode === 'ai' && activeAssistantMessage && !sending);
 
   const handleDeleteTodoRuntime = async () => {
     if (!todoRuntimePanel?.todoId || todoRuntimeDeleteInFlight) return;
@@ -2342,62 +2337,24 @@
     const steerText = input.trim();
     if (!steerText) return;
     if (composerSteerInFlight) return;
-    const runState = getTodoRuntimeRunState();
-    if (!isTodoRuntimeRunSteerable(runState) || !runState.runId) {
+    if (sending) return;
+
+    const targetStreamId = getActiveAssistantStreamId();
+    if (!targetStreamId) {
       errorMsg = $_('chat.todoRuntimePanel.steer.unavailable');
       return;
     }
 
     composerSteerInFlight = true;
     errorMsg = null;
-    const activeOrLastAssistant =
-      activeAssistantMessage ??
-      [...messages]
-        .reverse()
-        .find((message) => message.role === 'assistant') ??
-      null;
-    const activeStreamId =
-      activeOrLastAssistant &&
-      (activeOrLastAssistant._streamId ?? activeOrLastAssistant.id);
-    const nowIso = new Date().toISOString();
-    const localSteerMessageId = `steer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-    messages = [
-      ...messages,
-      {
-        id: localSteerMessageId,
-        sessionId: sessionId ?? activeOrLastAssistant?.sessionId ?? '',
-        role: 'user',
-        content: steerText,
-        createdAt: nowIso,
-        _localStatus: 'completed',
-      },
-    ];
-    input = '';
-    if (activeStreamId) {
-      composerSteerAck = {
-        streamId: activeStreamId,
-        message: $_('chat.todoRuntimePanel.steer.acknowledgement'),
-        createdAtMs: Date.now(),
-      };
-    } else {
-      composerSteerAck = null;
-    }
-    updateComposerHeight();
-    followBottom = true;
-    scheduleScrollToBottom({ force: true });
+    composerSteerAck = {
+      streamId: targetStreamId,
+      message: $_('chat.todoRuntimePanel.steer.acknowledgement'),
+      createdAtMs: Date.now(),
+    };
 
     try {
-      const feedback = await postTodoRuntimeSteer(apiPost, runState.runId, steerText);
-      if (todoRuntimePanel?.runId === feedback.runId) {
-        todoRuntimePanel = {
-          ...todoRuntimePanel,
-          runStatus: feedback.status || todoRuntimePanel.runStatus,
-          updatedAtMs: Date.now(),
-        };
-      }
-    } catch (e) {
-      errorMsg = formatApiError(e, $_('chat.todoRuntimePanel.steer.error'));
+      await sendMessage();
     } finally {
       composerSteerInFlight = false;
       const expectedAck = composerSteerAck?.createdAtMs;
@@ -4218,7 +4175,11 @@
             ? 'chat-composer-steer-button'
             : 'chat-composer-send-button'}
         >
-          <Send class="w-4 h-4" />
+          {#if isComposerSteerMode()}
+            <Navigation class="w-4 h-4 -rotate-45" />
+          {:else}
+            <Send class="w-4 h-4" />
+          {/if}
         </button>
         </div>
       </div>
