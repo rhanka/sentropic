@@ -1976,8 +1976,7 @@ export class QueueManager {
     await this.notifyFolderEvent(folderId);
 
     if (!workflow) {
-      console.log(`ℹ️ Generated ${draftUseCases.length} use cases (no workflow runtime metadata, no auto-detail enqueue)`);
-      return;
+      throw new Error('Workflow runtime metadata is required for usecase_list generation jobs');
     }
 
     // Workflow runtime chain: detail fanout is triggered from workflow metadata only.

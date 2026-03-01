@@ -146,6 +146,16 @@ describe('Use Cases Generate - Matrix Mode', () => {
     const matrixJob = jobs.find((job) => job.id === data.matrixJobId);
     expect(useCaseListJob?.type).toBe('usecase_list');
     expect(matrixJob?.type).toBe('matrix_generate');
+    const useCaseListPayload = useCaseListJob ? (JSON.parse(String(useCaseListJob.data)) as Record<string, unknown>) : null;
+    const matrixPayload = matrixJob ? (JSON.parse(String(matrixJob.data)) as Record<string, unknown>) : null;
+    const useCaseListWorkflow = useCaseListPayload?.workflow as Record<string, unknown> | undefined;
+    const matrixWorkflow = matrixPayload?.workflow as Record<string, unknown> | undefined;
+    expect(typeof useCaseListWorkflow?.workflowRunId).toBe('string');
+    expect(typeof useCaseListWorkflow?.workflowDefinitionId).toBe('string');
+    expect(useCaseListWorkflow?.taskKey).toBe('generation_usecase_list');
+    expect(typeof matrixWorkflow?.workflowRunId).toBe('string');
+    expect(typeof matrixWorkflow?.workflowDefinitionId).toBe('string');
+    expect(matrixWorkflow?.taskKey).toBe('generation_matrix_prepare');
   });
 
   it('rejects explicit matrix_mode=organization when organization has no template', async () => {
@@ -251,8 +261,20 @@ describe('Use Cases Generate - Matrix Mode', () => {
       .select()
       .from(jobQueue)
       .where(eq(jobQueue.workspaceId, user.workspaceId));
+    const useCaseListJob = jobs.find((job) => job.id === data.jobId);
     const matrixJob = jobs.find((job) => job.id === data.matrixJobId);
+    expect(useCaseListJob?.type).toBe('usecase_list');
     expect(matrixJob?.type).toBe('matrix_generate');
+    const useCaseListPayload = useCaseListJob ? (JSON.parse(String(useCaseListJob.data)) as Record<string, unknown>) : null;
+    const matrixPayload = matrixJob ? (JSON.parse(String(matrixJob.data)) as Record<string, unknown>) : null;
+    const useCaseListWorkflow = useCaseListPayload?.workflow as Record<string, unknown> | undefined;
+    const matrixWorkflow = matrixPayload?.workflow as Record<string, unknown> | undefined;
+    expect(typeof useCaseListWorkflow?.workflowRunId).toBe('string');
+    expect(typeof useCaseListWorkflow?.workflowDefinitionId).toBe('string');
+    expect(useCaseListWorkflow?.taskKey).toBe('generation_usecase_list');
+    expect(typeof matrixWorkflow?.workflowRunId).toBe('string');
+    expect(typeof matrixWorkflow?.workflowDefinitionId).toBe('string');
+    expect(matrixWorkflow?.taskKey).toBe('generation_matrix_prepare');
   });
 
   it('falls back to matrix_mode=default when explicit generate is sent without organization', async () => {
