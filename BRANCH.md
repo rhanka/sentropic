@@ -785,6 +785,31 @@ Open decision items for BR-03 restart:
         - `api/src/routes/api/agent-config.ts` (if payload contract extension needed)
         - `api/src/routes/api/workflow-config.ts` (if payload contract extension needed)
         - `api/src/services/todo-orchestration.ts` (if schema persistence mapping update is required)
+    - [ ] `L4-S23` DEV - A2 migration: agent/workflow objects as generation runtime source-of-truth.
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2.1, §9.3.1, §12.2, §17.
+      - Scope:
+        - Introduce code baseline registries (`default-agents`, `default-workflows`) and sync them to `source_level=code` definitions.
+        - Enforce split of responsibilities:
+          - chat prompts remain on chat prompt registry path,
+          - generation execution prompts/config resolve via `agent_definitions` linked from workflow tasks.
+        - Remove generation runtime dependency on legacy business entries in `default-prompts`.
+      - Implementation TODO (detailed):
+        - Add agent/workflow baseline seeds with stable keys for generation chain tasks.
+        - Add resolver path in generation workers/services to load prompt/config by `agentDefinitionId`.
+        - Keep lineage semantics (`code -> admin -> user`, fork/detach) intact after baseline sync.
+        - Keep `/prompts` compatibility isolated from generation runtime (no hard dependency).
+      - Files expected:
+        - `api/src/config/default-agents.ts` (new)
+        - `api/src/config/default-workflows.ts` (new)
+        - `api/src/services/todo-orchestration.ts`
+        - `api/src/services/queue-manager.ts`
+        - `api/src/services/context-usecase.ts`
+        - `api/src/services/executive-summary.ts`
+        - `api/src/services/context-organization.ts`
+        - `ui/src/lib/components/TodoRuntimeConfigPanel.svelte` (labels/help text if required)
+        - `ui/src/locales/en.json`
+        - `ui/src/locales/fr.json`
   - [ ] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
@@ -1034,6 +1059,28 @@ Open decision items for BR-03 restart:
         - [ ] `make test-ui SCOPE=tests/utils/agent-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
         - [ ] `make test-ui SCOPE=tests/utils/workflow-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
         - [ ] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+    - [ ] `L4-S23` TEST - A2 source split regression (agent/workflow-driven generation runtime).
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2.1 + §9.3.1 + §12.2.
+      - Test evolution required:
+        - `api/tests/unit/queue-manager-contract.test.ts`
+        - `api/tests/api/use-cases-generate-matrix.test.ts`
+        - `api/tests/api/use-cases.test.ts`
+        - `ui/tests/utils/agent-config-api.test.ts`
+        - `ui/tests/utils/workflow-config-api.test.ts`
+        - `e2e/tests/00-ai-generation.spec.ts`
+        - `e2e/tests/05-executive-summary.spec.ts`
+        - `e2e/tests/06-settings.spec.ts`
+      - Scoped make commands:
+        - [ ] `make test-api-unit SCOPE=tests/unit/queue-manager-contract.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-api-endpoints SCOPE=tests/api/use-cases.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-api-endpoints SCOPE=tests/api/use-cases-generate-matrix.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-ui SCOPE=tests/utils/agent-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-ui SCOPE=tests/utils/workflow-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+        - [ ] `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+        - [ ] `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+        - [ ] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
   - [ ] **Lot 4 UAT checklist**
     - [ ] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):
