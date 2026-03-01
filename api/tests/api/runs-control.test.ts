@@ -70,14 +70,8 @@ describe("Runs API", () => {
     return { runId: start.runId as string };
   }
 
-  it("persists steer/pause/resume events", async () => {
+  it("persists pause/resume events", async () => {
     const { runId } = await createRunFixture();
-
-    const steerRes = await authenticatedRequest(app, "POST", `/api/v1/runs/${runId}/steer`, editor.sessionToken, {
-      message: "Shift focus to API contracts",
-      metadata: { lot: 2 },
-    });
-    expect(steerRes.status).toBe(200);
 
     const pauseRes = await authenticatedRequest(app, "POST", `/api/v1/runs/${runId}/pause`, editor.sessionToken, {});
     expect(pauseRes.status).toBe(200);
@@ -98,7 +92,6 @@ describe("Runs API", () => {
       .where(eq(executionEvents.runId, runId));
 
     const eventTypes = events.map((event) => event.eventType);
-    expect(eventTypes).toContain("steer");
     expect(eventTypes).toContain("run_paused");
     expect(eventTypes).toContain("run_resumed");
   });
@@ -109,11 +102,9 @@ describe("Runs API", () => {
     const response = await authenticatedRequest(
       app,
       "POST",
-      `/api/v1/runs/${runId}/steer?workspace_id=${editor.workspaceId}`,
+      `/api/v1/runs/${runId}/pause?workspace_id=${editor.workspaceId}`,
       viewer.sessionToken,
-      {
-        message: "Viewer cannot steer",
-      },
+      {},
     );
 
     expect(response.status).toBe(403);

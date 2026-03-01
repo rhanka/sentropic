@@ -1,6 +1,4 @@
 import { Hono, type Context } from "hono";
-import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
 import { requireWorkspaceEditorRole } from "../../middleware/workspace-rbac";
 import {
   TodoOrchestrationError,
@@ -9,13 +7,6 @@ import {
 } from "../../services/todo-orchestration";
 
 export const runsRouter = new Hono();
-
-const metadataSchema = z.record(z.string(), z.unknown());
-
-const steerSchema = z.object({
-  message: z.string().min(1),
-  metadata: metadataSchema.optional(),
-});
 
 const actorFromContext = (c: Context): TodoActor => {
   const user = c.get("user") as { userId: string; role: string; workspaceId: string };
@@ -40,17 +31,6 @@ const handleTodoError = (c: Context, error: unknown) => {
   console.error("runs route error", error);
   return c.json({ error: "Internal server error" }, 500);
 };
-
-runsRouter.post("/:runId/steer", requireWorkspaceEditorRole(), zValidator("json", steerSchema), async (c) => {
-  try {
-    const actor = actorFromContext(c);
-    const body = c.req.valid("json");
-    const result = await todoOrchestrationService.steerRun(actor, c.req.param("runId"), body);
-    return c.json(result);
-  } catch (error) {
-    return handleTodoError(c, error);
-  }
-});
 
 runsRouter.post("/:runId/pause", requireWorkspaceEditorRole(), async (c) => {
   try {

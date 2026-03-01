@@ -1029,19 +1029,7 @@
       "tasksLabel": "Checklist des tâches",
       "noTasks": "Aucune tâche dans ce TODO pour le moment.",
       "completedTaskLabel": "Tâche terminée",
-      "pendingTaskLabel": "Tâche en attente",
-      "steer": {
-        "title": "Steer du run actif",
-        "placeholder": "Recentrer ce run sur...",
-        "submit": "Envoyer steer",
-        "acknowledgement": "Prise en compte d'un nouveau message utilisateur",
-        "submitting": "Envoi...",
-        "unavailable": "Aucun run actif disponible pour steer.",
-        "inactive": "Ce run n'est plus steerable dans son statut actuel.",
-        "lastMessageLabel": "Dernier steer",
-        "lastStatusLabel": "Statut du run",
-        "error": "Impossible d'envoyer le message de steer"
-      }
+      "pendingTaskLabel": "Tâche en attente"
     },
     "comments": {
       "chooseThread": "Liste des commentaires",
@@ -1077,6 +1065,12 @@
     },
     "chat": {
       "empty": "Aucun message. Écris un message pour démarrer."
+    },
+    "steer": {
+      "submit": "Envoyer le steer",
+      "acknowledgement": "Prise en compte d'un nouveau message utilisateur",
+      "unavailable": "Aucun message assistant actif disponible pour steer.",
+      "error": "Impossible d'envoyer le message de steer"
     },
     "edit": {
       "placeholder": "Modifier le message…"
