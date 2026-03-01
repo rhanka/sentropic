@@ -222,6 +222,16 @@ Context rule:
   - user may detach from parent,
   - if user edits while attached, UI shows drift notification.
 
+### 9.2.1 Agent lifecycle and source-of-truth split (Lot 4 target)
+- Introduce a code baseline registry for agents (`default-agents`) as the authoritative bootstrap source for `source_level=code`.
+- Agent definitions become first-class runtime objects for generation orchestration:
+  - each generation-capable agent carries prompt payload and execution config in `agent_definitions`,
+  - workflow tasks reference agents by stable ID/key linkage.
+- Legacy prompt catalog remains only for chat/system prompts (conversation layer), not for generation task execution prompts.
+- Runtime contract:
+  - generation services must resolve prompts/config through agent resolution (DB-backed `agent_definitions` lineage),
+  - direct business-generation lookups from `default-prompts` are disallowed after this migration slice.
+
 ### 9.3 Basic Workflow Configuration section
 - Start with one workflow: AI use-case generation.
 - Same fork lineage model as agents (code -> admin -> user).
@@ -232,6 +242,15 @@ Context rule:
   - per-task `inputSchema` and `outputSchema` must be visible in settings,
   - per-task I/O contracts must be editable with JSON validation and persisted through `workflow-config`,
   - edits stay scoped to runtime contracts (no full visual studio required).
+
+### 9.3.1 Workflow lifecycle and baseline registry (Lot 4 target)
+- Introduce a code baseline registry for workflows (`default-workflows`) as the authoritative bootstrap source for `source_level=code`.
+- Workflow definitions and tasks become the sole orchestration map for generation sequencing:
+  - task ordering, agent bindings, and I/O contracts are persisted in `workflow_definitions` + `workflow_definition_tasks`,
+  - settings UI exposes/edits these objects directly (within BR-03 boundary).
+- Migration objective:
+  - no hidden legacy generation chain driven by ad-hoc prompt constants,
+  - one explicit object model: workflow definition + task-agent linkage + task I/O contracts.
 
 Placeholder extraction behavior:
 - Prompt placeholders like `{{object_name}}` create/update object references in workflow metadata.
@@ -316,6 +335,16 @@ Chat tool contract (BR-03):
 - Steering must stay on the same run path (`POST /api/v1/runs/:runId/steer`) and remain non-interrupting for in-flight tool execution.
 - Execution handshake requires explicit user confirmation before automatic TODO progression (`go` semantics).
 
+### 12.2 Prompt source split contract (Lot 4 target)
+- Chat/system prompt contract:
+  - `chat_reasoning_effort_eval`, `chat_system_base`, and `chat_conversation_auto` remain in the chat prompt registry path.
+- Generation/workflow prompt contract:
+  - workflow tasks resolve execution prompt/config through `agent_definitions` (linked by `agentDefinitionId`),
+  - workflow baseline definitions are synchronized from `default-workflows` and agent baselines from `default-agents`.
+- Backward compatibility policy:
+  - legacy `/prompts` endpoints may remain temporarily for admin compatibility,
+  - generation runtime must not depend on legacy prompt endpoints or `default-prompts` business entries.
+
 ### 12.1 AI use-case generation workflow runtime migration (Lot 4 mandatory)
 
 Goal:
@@ -392,12 +421,14 @@ UI tests:
 - agent/workflow config fork, detach, inheritance drift indicators.
 - agent prompt editor behavior in Agent Configuration (dedicated prompt field persistence).
 - workflow task I/O contract editor behavior (`inputSchema`/`outputSchema` persistence + validation).
+- source split coverage: settings uses agent/workflow objects as editable runtime source (no hidden generation prompt dependency).
 
 E2E tests:
 - create TODO in chat and execute first tasks,
 - sub-agentic conductor validation path,
 - full-auto progression path with contract-compliant output.
 - settings operator flow for agent prompt edit + workflow task I/O edit/save/reload.
+- generation regression under object-driven runtime (workflow + agent linkage remains authoritative after edits).
 
 ## 16) Open Questions to Resolve Before BR-03 Branch Recreation
 
@@ -417,6 +448,7 @@ This spec iteration is ready to instantiate BR-03 only when:
 - migration scope v1 is accepted,
 - agent prompt editing parity is explicit on Agent Configuration surface,
 - workflow task I/O contract editing is explicit on Workflow Configuration surface,
+- generation runtime prompt/config source is migrated to agent/workflow objects (chat prompts remain isolated),
 - BR-03/BR-04/BR-05/BR-14 boundaries are accepted.
 
 ## 18) Future To-Be (outside BR-03)
