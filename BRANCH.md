@@ -687,7 +687,7 @@ Open decision items for BR-03 restart:
         - `ui/src/locales/fr.json`
       - Evidence:
         - `2026-03-01`: composer steer mode is now driven by active assistant message state (`mode === 'ai' && activeAssistantMessage`) and no longer blocked by TODO runtime run metadata or `sending` state gate (`ui/src/lib/components/ChatPanel.svelte`).
-    - [x] `L4-S22` DEV - Steering composer UX finalization (`volant`) + runtime behavior contract.
+    - [ ] `L4-S22` DEV - Steering composer UX finalization (`volant`) + runtime behavior contract.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 (composer steering, same-thread bubble, immediate acknowledgment, additive continuation).
       - Scope:
@@ -812,7 +812,7 @@ Open decision items for BR-03 restart:
         - `ui/src/locales/fr.json`
       - Evidence:
         - Code baselines are now split into `default-agents.ts` and `default-workflows.ts`, synchronized to `source_level=code`, and generation workers resolve runtime prompt/config from `agentDefinitionId` task assignments (no hard dependency on legacy business entries in `default-prompts`).
-    - [x] `L4-S24` DEV - B2 migration: run-bound steering continuity (single thread, no side-stream).
+    - [ ] `L4-S24` DEV - B2 migration: run-bound steering continuity (single thread, no side-stream).
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 + §9.1.2.1 + §12.3 + §17.
       - Scope:
@@ -845,7 +845,7 @@ Open decision items for BR-03 restart:
         - `ui/src/lib/components/ChatPanel.svelte`
       - Evidence:
         - `getActiveRunForComposer` now resolves from dedicated `composerSteerRunState` instead of `todoRuntimePanel`, and session lifecycle resets this steer state independently from TODO panel state.
-    - [ ] `L4-S26` DEV - A1 steering `volant` composer control visual contract.
+    - [x] `L4-S26` DEV - A1 steering `volant` composer control visual contract.
       - Scope:
         - Replace steer-mode send icon with explicit steering-wheel visual (`volant`) while run is active.
     - [ ] `L4-S27` DEV - A2 steer availability on any active assistant run (TODO-agnostic).
