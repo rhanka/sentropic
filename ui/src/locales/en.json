@@ -1030,6 +1030,7 @@
         "title": "Steer active run",
         "placeholder": "Refocus this run on...",
         "submit": "Send steer",
+        "acknowledgement": "Acknowledged new user steering message",
         "submitting": "Sending...",
         "unavailable": "No active run available for steer yet.",
         "inactive": "This run is no longer steerable in its current status.",

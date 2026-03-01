@@ -143,6 +143,12 @@ test.describe.serial('TODO steering core', () => {
 
       const composer = page.locator('[role="textbox"][aria-label="Composer"]');
       await expect(composer).toBeVisible();
+      const composerEditable = page
+        .locator(
+          '[role="textbox"][aria-label="Composer"][contenteditable="true"]:visible, [role="textbox"][aria-label="Composer"]:visible [contenteditable="true"]:visible',
+        )
+        .first();
+      await expect(composerEditable).toBeVisible();
 
       const sessionHeader = page
         .locator('#chat-widget-dialog div.border-b div.min-w-0.text-xs.text-slate-500.truncate')
@@ -151,12 +157,11 @@ test.describe.serial('TODO steering core', () => {
 
       const runtimePanel = page.getByTestId('todo-runtime-panel');
       await expect(runtimePanel).toBeVisible();
-
-      const steerInput = page.getByTestId('todo-runtime-steer-input');
-      const steerSubmit = page.getByTestId('todo-runtime-steer-submit');
-
-      await expect(steerInput).toBeVisible();
-      await steerInput.fill(steerMessage);
+      await composerEditable.focus();
+      await page.keyboard.press('Control+A');
+      await page.keyboard.press('Backspace');
+      await page.keyboard.type(steerMessage);
+      const steerSubmit = page.getByTestId('chat-composer-steer-button');
       await expect(steerSubmit).toBeEnabled({ timeout: 15_000 });
 
       const [steerReq, steerRes] = await Promise.all([
@@ -186,10 +191,10 @@ test.describe.serial('TODO steering core', () => {
       expect(steerBody.message).toBe(steerMessage);
       expect(steeredRunId).toBeTruthy();
       expect(steerRes.status()).toBe(200);
-
-      const steerFeedback = page.getByTestId('todo-runtime-steer-feedback');
-      await expect(steerFeedback).toContainText(steerMessage);
-      await expect(steerFeedback).toContainText('in_progress');
+      await expect(page.locator('#chat-widget-dialog')).toContainText(
+        /Prise en compte d'un nouveau message utilisateur|Acknowledged new user steering message/i,
+      );
+      await expect(page.locator('#chat-widget-dialog')).toContainText(steerMessage);
 
       const completeRes = await api.post(
         `/api/v1/tasks/${encodeURIComponent(taskId)}/complete?workspace_id=${encodeURIComponent(workspaceId)}`,
