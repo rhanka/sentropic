@@ -34,9 +34,7 @@ import {
   matrixUpdateTool,
   documentsTool,
   commentAssistantTool,
-  todoCreateTool,
-  todoUpdateTool,
-  taskUpdateTool
+  todoTool
 } from './tools';
 import { toolService } from './tool-service';
 import { todoOrchestrationService } from './todo-orchestration';
@@ -110,7 +108,8 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
 
 const isValidToolName = (value: string): boolean => /^[a-zA-Z0-9_-]{1,64}$/.test(value);
 
-type TodoRuntimeToolName = 'todo_create' | 'todo_update' | 'task_update';
+type TodoRuntimeToolName = 'todo' | 'todo_create' | 'todo_update' | 'task_update';
+type TodoRuntimeToolOperation = 'create' | 'update_todo' | 'update_task';
 
 const TODO_TERMINAL_STATUSES = new Set(['done', 'cancelled']);
 
@@ -228,20 +227,36 @@ const toSessionTodoRuntimeSnapshot = (value: unknown): SessionTodoRuntimeSnapsho
   };
 };
 
+const resolveTodoRuntimeOperation = (
+  toolName: TodoRuntimeToolName,
+  operationHint?: TodoRuntimeToolOperation | null,
+): TodoRuntimeToolOperation =>
+  operationHint ??
+  (toolName === 'todo_create'
+    ? 'create'
+    : toolName === 'todo_update'
+      ? 'update_todo'
+      : toolName === 'task_update'
+        ? 'update_task'
+        : 'update_todo');
+
 const normalizeTodoRuntimeToolResult = (
   toolName: TodoRuntimeToolName,
   toolCallId: string,
   rawResult: unknown,
+  operationHint?: TodoRuntimeToolOperation | null,
 ): Record<string, unknown> => {
+  const operation = resolveTodoRuntimeOperation(toolName, operationHint);
   const base = asRecord(rawResult) ?? {};
   const normalized: Record<string, unknown> = { ...base };
   const todoRuntime: Record<string, unknown> = {
     tool: toolName,
+    operation,
     toolCallId,
     status: typeof base.status === 'string' ? base.status : 'completed',
   };
 
-  if (toolName === 'todo_create') {
+  if (operation === 'create') {
     if (typeof base.todoId === 'string' && base.todoId.trim().length > 0) {
       todoRuntime.todoId = base.todoId;
     }
@@ -275,7 +290,7 @@ const normalizeTodoRuntimeToolResult = (
         todoRuntime.todoStatus = activeTodo.derivedStatus;
       }
     }
-  } else if (toolName === 'todo_update') {
+  } else if (operation === 'update_todo') {
     const todo = asRecord(base.todo);
     if (todo) {
       todoRuntime.todo = todo;
@@ -291,7 +306,7 @@ const normalizeTodoRuntimeToolResult = (
         todoRuntime.todoStatus = todo.derivedStatus;
       }
     }
-  } else if (toolName === 'task_update') {
+  } else if (operation === 'update_task') {
     const task = asRecord(base.task);
     if (task) {
       todoRuntime.task = task;
@@ -1370,6 +1385,7 @@ export class ChatService {
 
     const requestedTools = new Set(Array.isArray(options.tools) ? options.tools : []);
     const todoToolRequested =
+      requestedTools.has('todo') ||
       requestedTools.has('todo_create') ||
       requestedTools.has('todo_update') ||
       requestedTools.has('task_update');
@@ -1464,10 +1480,14 @@ export class ChatService {
       ]);
     }
     const effectiveRequestedTools = new Set(requestedTools);
-    if (enforceTodoUpdateMode) {
+    if (todoToolRequested) {
+      effectiveRequestedTools.add('todo');
       effectiveRequestedTools.delete('todo_create');
-      effectiveRequestedTools.add('todo_update');
-      effectiveRequestedTools.add('task_update');
+      effectiveRequestedTools.delete('todo_update');
+      effectiveRequestedTools.delete('task_update');
+    }
+    if (enforceTodoUpdateMode) {
+      effectiveRequestedTools.add('todo');
     }
     if (todoProgressionFocusMode) {
       effectiveRequestedTools.delete('web_search');
@@ -1479,14 +1499,8 @@ export class ChatService {
     if (effectiveRequestedTools.has('web_extract')) {
       addTools([webExtractTool]);
     }
-    if (effectiveRequestedTools.has('todo_create') && !enforceTodoUpdateMode) {
-      addTools([todoCreateTool]);
-    }
-    if (effectiveRequestedTools.has('todo_update') || enforceTodoUpdateMode) {
-      addTools([todoUpdateTool]);
-    }
-    if (effectiveRequestedTools.has('task_update') || enforceTodoUpdateMode) {
-      addTools([taskUpdateTool]);
+    if (effectiveRequestedTools.has('todo') || enforceTodoUpdateMode) {
+      addTools([todoTool]);
     }
     if (hasDocuments) {
       addTools([documentsTool]);
@@ -1710,12 +1724,14 @@ Règles :
       todoLines.push('Mandatory TODO orchestration rules:');
       if (enforceTodoUpdateMode) {
         todoLines.push(
-          '- A session TODO is already active: do NOT call `todo_create` unless the user explicitly asks for a replacement/new list.',
+          '- A session TODO is already active: do NOT call `todo` with `action="create"` unless the user explicitly asks for a replacement/new list.',
         );
         todoLines.push(
           '- Prioritize progression of the active TODO before starting unrelated planning.',
         );
-        todoLines.push('- Use `task_update` and `todo_update` to progress the existing TODO.');
+        todoLines.push(
+          '- Use `todo` with `action="update_task"` and `action="update_todo"` to progress the existing TODO.',
+        );
         todoLines.push(
           '- Progress task-by-task and persist each update while executing (no end-of-run bulk update only).',
         );
@@ -1726,10 +1742,14 @@ Règles :
           '- Structural mutations (add/remove/reorder/replace tasks, or rewrite TODO/task content) require explicit user intent.',
         );
       } else {
-        todoLines.push('- Use `todo_create` only when the user explicitly asks to create a TODO list.');
+        todoLines.push(
+          '- Use `todo` with `action="create"` only when the user explicitly asks to create a TODO list.',
+        );
       }
       if (explicitTodoReplacementRequest) {
-        todoLines.push('- The user explicitly asked for a replacement/new list: `todo_create` is allowed.');
+        todoLines.push(
+          '- The user explicitly asked for a replacement/new list: `todo` with `action="create"` is allowed.',
+        );
       }
       if (todoStructuralMutationIntent) {
         todoLines.push(
@@ -1750,7 +1770,7 @@ Règles :
         }
       }
       todoLines.push(
-        '- When all tasks are terminal (`done`/`cancelled`), finalize the TODO with `todo_update` (`status: "done"` or `closed: true`).',
+        '- When all tasks are terminal (`done`/`cancelled`), finalize the TODO with `todo` and `action="update_todo"` (`status: "done"` or `closed: true`).',
       );
       contextBlock += `\n\n${todoLines.join('\n')}`;
     }
@@ -2133,6 +2153,33 @@ Règles :
         
         try {
           const args = JSON.parse(toolCall.args || '{}');
+          const todoOperation: TodoRuntimeToolOperation | null = (() => {
+            if (toolCall.name !== 'todo') return null;
+            const actionRaw =
+              typeof args.action === 'string' ? args.action.trim().toLowerCase() : '';
+            if (
+              actionRaw === 'create' ||
+              actionRaw === 'update_todo' ||
+              actionRaw === 'update_task'
+            ) {
+              return actionRaw;
+            }
+            if (actionRaw.length > 0) {
+              return null;
+            }
+            const hasTaskId =
+              typeof args.taskId === 'string' && args.taskId.trim().length > 0;
+            if (hasTaskId) return 'update_task';
+            const hasTodoId =
+              typeof args.todoId === 'string' && args.todoId.trim().length > 0;
+            if (hasTodoId) return 'update_todo';
+            return 'create';
+          })();
+          if (toolCall.name === 'todo' && !todoOperation) {
+            throw new Error(
+              'todo: action must be one of create|update_todo|update_task',
+            );
+          }
           let result: unknown;
 
           if (toolCall.name === 'read_usecase' || toolCall.name === 'usecase_get') {
@@ -2429,13 +2476,15 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'todo_create') {
+          } else if (toolCall.name === 'todo_create' || todoOperation === 'create') {
+            const createToolLabel =
+              toolCall.name === 'todo' ? 'todo(action=create)' : 'todo_create';
             if (readOnly) {
-              throw new Error('Read-only workspace: todo_create is disabled');
+              throw new Error(`Read-only workspace: ${createToolLabel} is disabled`);
             }
             const title = typeof args.title === 'string' ? args.title.trim() : '';
             if (!title) {
-              throw new Error('todo_create: title is required');
+              throw new Error(`${createToolLabel}: title is required`);
             }
             const planId =
               typeof args.planId === 'string' && args.planId.trim().length > 0
@@ -2484,9 +2533,10 @@ Règles :
               }
             );
             const normalizedTodoResult = normalizeTodoRuntimeToolResult(
-              'todo_create',
+              toolCall.name === 'todo' ? 'todo' : 'todo_create',
               toolCall.id,
               todoResult,
+              'create',
             );
             result = normalizedTodoResult;
             await writeStreamEvent(
@@ -2497,16 +2547,20 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'todo_update') {
+          } else if (toolCall.name === 'todo_update' || todoOperation === 'update_todo') {
+            const todoUpdateLabel =
+              toolCall.name === 'todo'
+                ? 'todo(action=update_todo)'
+                : 'todo_update';
             if (readOnly) {
-              throw new Error('Read-only workspace: todo_update is disabled');
+              throw new Error(`Read-only workspace: ${todoUpdateLabel} is disabled`);
             }
             const todoId =
               typeof args.todoId === 'string' && args.todoId.trim().length > 0
                 ? args.todoId.trim()
                 : '';
             if (!todoId) {
-              throw new Error('todo_update: todoId is required');
+              throw new Error(`${todoUpdateLabel}: todoId is required`);
             }
             const title =
               typeof args.title === 'string' && args.title.trim().length > 0
@@ -2538,7 +2592,7 @@ Règles :
               !todoStructuralMutationIntent
             ) {
               throw new Error(
-                'todo_update: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)',
+                `${todoUpdateLabel}: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)`,
               );
             }
 
@@ -2559,9 +2613,10 @@ Règles :
               }
             );
             const normalizedTodoUpdateResult = normalizeTodoRuntimeToolResult(
-              'todo_update',
+              toolCall.name === 'todo' ? 'todo' : 'todo_update',
               toolCall.id,
               updateResult,
+              'update_todo',
             );
             result = normalizedTodoUpdateResult;
             await writeStreamEvent(
@@ -2572,16 +2627,20 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'task_update') {
+          } else if (toolCall.name === 'task_update' || todoOperation === 'update_task') {
+            const taskUpdateLabel =
+              toolCall.name === 'todo'
+                ? 'todo(action=update_task)'
+                : 'task_update';
             if (readOnly) {
-              throw new Error('Read-only workspace: task_update is disabled');
+              throw new Error(`Read-only workspace: ${taskUpdateLabel} is disabled`);
             }
             const taskId =
               typeof args.taskId === 'string' && args.taskId.trim().length > 0
                 ? args.taskId.trim()
                 : '';
             if (!taskId) {
-              throw new Error('task_update: taskId is required');
+              throw new Error(`${taskUpdateLabel}: taskId is required`);
             }
             const title =
               typeof args.title === 'string' && args.title.trim().length > 0
@@ -2612,7 +2671,7 @@ Règles :
               !todoStructuralMutationIntent
             ) {
               throw new Error(
-                'task_update: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)',
+                `${taskUpdateLabel}: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)`,
               );
             }
 
@@ -2632,9 +2691,10 @@ Règles :
               }
             );
             const normalizedTaskUpdateResult = normalizeTodoRuntimeToolResult(
-              'task_update',
+              toolCall.name === 'todo' ? 'todo' : 'task_update',
               toolCall.id,
               updateResult,
+              'update_task',
             );
             result = normalizedTaskUpdateResult;
             await writeStreamEvent(

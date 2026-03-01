@@ -79,7 +79,9 @@
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import {
+    isTodoRuntimeRunSteerable,
     normalizeTodoRuntimeRunState,
+    postTodoRuntimeSteer,
     type TodoRuntimeRunState,
   } from '$lib/utils/todo-runtime-steer';
   import {
@@ -141,13 +143,18 @@
     runTaskId: string | null;
     tasks: TodoRuntimeTask[];
     conflictMessage: string | null;
-    sourceTool: 'todo_create' | 'todo_update' | 'task_update';
+    sourceTool: 'todo' | 'todo_create' | 'todo_update' | 'task_update';
     updatedAtMs: number;
   };
   type TodoRuntimeToolResultEvent = {
     toolCallId: string;
-    toolName: 'todo_create' | 'todo_update' | 'task_update';
+    toolName: 'todo' | 'todo_create' | 'todo_update' | 'task_update';
     result: Record<string, unknown>;
+  };
+  type ComposerSteerAck = {
+    streamId: string;
+    message: string;
+    createdAtMs: number;
   };
   type LocalToolStreamState = {
     streamId: string;
@@ -996,6 +1003,8 @@
   let todoRuntimePanel: TodoRuntimePanelState | null = null;
   let todoRuntimeCollapsed = false;
   let todoRuntimeDeleteInFlight = false;
+  let composerSteerInFlight = false;
+  let composerSteerAck: ComposerSteerAck | null = null;
   const terminalRefreshInFlight = new Set<string>();
   const jobPollInFlight = new Set<string>();
   let localToolsHubKey = '';
@@ -1575,7 +1584,11 @@
         void sendCommentMessage();
         return;
       }
-      void sendMessage();
+      if (isComposerSteerMode()) {
+        void sendComposerSteer();
+      } else {
+        void sendMessage();
+      }
     }
   };
 
@@ -2294,7 +2307,20 @@
   const resetTodoRuntimePanel = () => {
     todoRuntimePanel = null;
     todoRuntimeCollapsed = false;
+    composerSteerAck = null;
   };
+
+  const getTodoRuntimeRunState = (): TodoRuntimeRunState => ({
+    runId: todoRuntimePanel?.runId ?? null,
+    runStatus: todoRuntimePanel?.runStatus ?? null,
+    runTaskId: todoRuntimePanel?.runTaskId ?? null,
+  });
+
+  const isComposerSteerMode = (): boolean =>
+    Boolean(
+      mode === 'ai' &&
+        isTodoRuntimeRunSteerable(getTodoRuntimeRunState()),
+    );
 
   const handleDeleteTodoRuntime = async () => {
     if (!todoRuntimePanel?.todoId || todoRuntimeDeleteInFlight) return;
@@ -2309,6 +2335,77 @@
       errorMsg = formatApiError(e, $_('chat.todoRuntimePanel.deleteError'));
     } finally {
       todoRuntimeDeleteInFlight = false;
+    }
+  };
+
+  const sendComposerSteer = async () => {
+    const steerText = input.trim();
+    if (!steerText) return;
+    if (composerSteerInFlight) return;
+    const runState = getTodoRuntimeRunState();
+    if (!isTodoRuntimeRunSteerable(runState) || !runState.runId) {
+      errorMsg = $_('chat.todoRuntimePanel.steer.unavailable');
+      return;
+    }
+
+    composerSteerInFlight = true;
+    errorMsg = null;
+    const activeOrLastAssistant =
+      activeAssistantMessage ??
+      [...messages]
+        .reverse()
+        .find((message) => message.role === 'assistant') ??
+      null;
+    const activeStreamId =
+      activeOrLastAssistant &&
+      (activeOrLastAssistant._streamId ?? activeOrLastAssistant.id);
+    const nowIso = new Date().toISOString();
+    const localSteerMessageId = `steer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    messages = [
+      ...messages,
+      {
+        id: localSteerMessageId,
+        sessionId: sessionId ?? activeOrLastAssistant?.sessionId ?? '',
+        role: 'user',
+        content: steerText,
+        createdAt: nowIso,
+        _localStatus: 'completed',
+      },
+    ];
+    input = '';
+    if (activeStreamId) {
+      composerSteerAck = {
+        streamId: activeStreamId,
+        message: $_('chat.todoRuntimePanel.steer.acknowledgement'),
+        createdAtMs: Date.now(),
+      };
+    } else {
+      composerSteerAck = null;
+    }
+    updateComposerHeight();
+    followBottom = true;
+    scheduleScrollToBottom({ force: true });
+
+    try {
+      const feedback = await postTodoRuntimeSteer(apiPost, runState.runId, steerText);
+      if (todoRuntimePanel?.runId === feedback.runId) {
+        todoRuntimePanel = {
+          ...todoRuntimePanel,
+          runStatus: feedback.status || todoRuntimePanel.runStatus,
+          updatedAtMs: Date.now(),
+        };
+      }
+    } catch (e) {
+      errorMsg = formatApiError(e, $_('chat.todoRuntimePanel.steer.error'));
+    } finally {
+      composerSteerInFlight = false;
+      const expectedAck = composerSteerAck?.createdAtMs;
+      setTimeout(() => {
+        if (composerSteerAck?.createdAtMs === expectedAck) {
+          composerSteerAck = null;
+        }
+      }, 5000);
     }
   };
 
@@ -3545,6 +3642,9 @@
                     historySource="stream"
                     initialEvents={initEvents}
                     historyPending={showDetailWaiter}
+                    acknowledgementText={composerSteerAck?.streamId === sid
+                      ? composerSteerAck.message
+                      : undefined}
                     onStreamEvent={() => scheduleScrollToBottom()}
                     onTodoRuntime={handleTodoRuntimeToolResult}
                     onTerminal={(t) => void handleAssistantTerminal(sid, t)}
@@ -4095,16 +4195,28 @@
           on:click={() =>
             mode === 'comments'
               ? void sendCommentMessage()
-              : void sendMessage()}
+              : isComposerSteerMode()
+                ? void sendComposerSteer()
+                : void sendMessage()}
           disabled={mode === 'comments'
             ? commentInput.trim().length === 0 ||
               !commentContextType ||
               !commentContextId ||
               !$workspaceCanComment ||
               commentThreadResolved
-            : sending || input.trim().length === 0}
+            : isComposerSteerMode()
+              ? composerSteerInFlight || input.trim().length === 0
+              : sending || input.trim().length === 0}
           type="button"
-          aria-label="Envoyer"
+          aria-label={isComposerSteerMode()
+            ? $_('chat.todoRuntimePanel.steer.submit')
+            : $_('common.send')}
+          title={isComposerSteerMode()
+            ? $_('chat.todoRuntimePanel.steer.submit')
+            : $_('common.send')}
+          data-testid={isComposerSteerMode()
+            ? 'chat-composer-steer-button'
+            : 'chat-composer-send-button'}
         >
           <Send class="w-4 h-4" />
         </button>
