@@ -19,6 +19,7 @@ import {
   folders,
   organizations,
   useCases,
+  agentDefinitions,
   jobQueue,
   ADMIN_WORKSPACE_ID,
   type JobQueueRow,
@@ -146,6 +147,30 @@ function cloneGenerationWorkflowRuntimeContextForTask(
     taskAssignments: { ...workflow.taskAssignments },
   };
 }
+
+type GenerationPromptOverride = {
+  promptId: string;
+  promptTemplate?: string;
+};
+
+export const resolveGenerationPromptOverrideFromConfig = (
+  rawConfig: unknown,
+  fallbackPromptId: string,
+): GenerationPromptOverride => {
+  const config =
+    rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
+      ? (rawConfig as Record<string, unknown>)
+      : {};
+  const promptId =
+    typeof config.promptId === 'string' && config.promptId.trim().length > 0
+      ? config.promptId.trim()
+      : fallbackPromptId;
+  const promptTemplate =
+    typeof config.promptTemplate === 'string' && config.promptTemplate.trim().length > 0
+      ? config.promptTemplate
+      : undefined;
+  return { promptId, promptTemplate };
+};
 
 function sanitizeJobResultForPublic(result: unknown): unknown {
   if (!result || typeof result !== 'object') return result;
@@ -429,6 +454,34 @@ export class QueueManager {
     } finally {
       client.release();
     }
+  }
+
+  private async resolveGenerationPromptOverride(
+    workspaceId: string,
+    agentDefinitionId: string | null | undefined,
+    fallbackPromptId: string,
+  ): Promise<GenerationPromptOverride> {
+    if (!agentDefinitionId || !agentDefinitionId.trim()) {
+      return { promptId: fallbackPromptId };
+    }
+
+    const [agent] = await db
+      .select({
+        config: agentDefinitions.config,
+      })
+      .from(agentDefinitions)
+      .where(
+        and(
+          eq(agentDefinitions.workspaceId, workspaceId),
+          eq(agentDefinitions.id, agentDefinitionId),
+        ),
+      )
+      .limit(1);
+
+    return resolveGenerationPromptOverrideFromConfig(
+      agent?.config ?? {},
+      fallbackPromptId,
+    );
   }
 
   private getAutoGenerationFieldLabel(contextType: CommentContextType, sectionKey: string, locale: AppLocale): string {
@@ -1330,6 +1383,7 @@ export class QueueManager {
 
   private async processMatrixGenerate(data: MatrixGenerateJobData, signal?: AbortSignal): Promise<void> {
     const { folderId, organizationId, model, initiatedByUserId, locale } = data;
+    const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
     const [folder] = await db
       .select()
@@ -1366,13 +1420,19 @@ export class QueueManager {
     );
 
     const streamId = `matrix_${folderId}`;
+    const matrixPromptOverride = await this.resolveGenerationPromptOverride(
+      folder.workspaceId,
+      workflow?.agentDefinitionId ?? workflow?.taskAssignments.matrixPrepareAgentId ?? null,
+      'organization_matrix_template',
+    );
     const template = await generateOrganizationMatrixTemplate(
       organization.name,
       organizationInfo,
       defaultMatrixConfig,
       selectedModel,
       signal,
-      streamId
+      streamId,
+      matrixPromptOverride,
     );
     const generatedMatrix = mergeOrganizationMatrixTemplate(defaultMatrixConfig, template);
 
@@ -1382,7 +1442,7 @@ export class QueueManager {
       matrixTemplateMeta: {
         generatedAt: new Date().toISOString(),
         model: selectedModel,
-        promptId: 'organization_matrix_template',
+        promptId: matrixPromptOverride.promptId,
         version: 1,
       },
     };
@@ -1875,6 +1935,11 @@ export class QueueManager {
 
     // Générer la liste de cas d'usage
     const streamId = `folder_${folderId}`;
+    const listPromptOverride = await this.resolveGenerationPromptOverride(
+      workspaceId,
+      workflow?.agentDefinitionId ?? workflow?.taskAssignments.usecaseListAgentId ?? null,
+      'use_case_list',
+    );
     const useCaseList = await generateUseCaseList(
       input,
       organizationInfo,
@@ -1884,7 +1949,8 @@ export class QueueManager {
       documentsContexts,
       documentsContextJson,
       signal,
-      streamId
+      streamId,
+      listPromptOverride,
     );
     
     // Mettre à jour le nom du dossier
@@ -2113,6 +2179,11 @@ export class QueueManager {
     
     // Générer le détail
     const streamId = `usecase_${useCaseId}`;
+    const detailPromptOverride = await this.resolveGenerationPromptOverride(
+      folder.workspaceId,
+      workflow?.agentDefinitionId ?? workflow?.taskAssignments.usecaseDetailAgentId ?? null,
+      'use_case_detail',
+    );
     const useCaseDetail = await generateUseCaseDetail(
       useCaseName,
       context,
@@ -2122,7 +2193,8 @@ export class QueueManager {
       documentsContexts,
       documentsContextJson,
       signal,
-      streamId
+      streamId,
+      detailPromptOverride,
     );
     
     // Valider les scores générés
@@ -2249,6 +2321,7 @@ export class QueueManager {
    */
   private async processExecutiveSummary(data: ExecutiveSummaryJobData, signal?: AbortSignal): Promise<void> {
     const { folderId, valueThreshold, complexityThreshold, model, initiatedByUserId, locale } = data;
+    const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
     console.log(`📊 Génération de la synthèse exécutive pour le dossier ${folderId}`);
     const [folderBefore] = await db
@@ -2258,6 +2331,12 @@ export class QueueManager {
       .limit(1);
     const beforeExecutiveSummary =
       parseJsonField<Record<string, unknown>>(folderBefore?.executiveSummary ?? null) ?? {};
+    const workspaceIdForPrompt = folderBefore?.workspaceId ?? "";
+    const executivePromptOverride = await this.resolveGenerationPromptOverride(
+      workspaceIdForPrompt,
+      workflow?.agentDefinitionId ?? workflow?.taskAssignments.executiveSummaryAgentId ?? null,
+      'executive_summary',
+    );
 
     // Générer la synthèse exécutive
     await generateExecutiveSummary({
@@ -2266,7 +2345,9 @@ export class QueueManager {
       complexityThreshold,
       model,
       signal,
-      streamId: `folder_${folderId}`
+      streamId: `folder_${folderId}`,
+      promptTemplate: executivePromptOverride.promptTemplate,
+      promptId: executivePromptOverride.promptId,
     });
 
     const [folderAfter] = await db

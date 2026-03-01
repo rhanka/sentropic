@@ -46,6 +46,8 @@ export interface GenerateExecutiveSummaryOptions {
   model?: string;
   signal?: AbortSignal;
   streamId?: string;
+  promptTemplate?: string;
+  promptId?: string;
 }
 
 export interface ExecutiveSummaryResult {
@@ -182,7 +184,11 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
   }
 
   // Récupérer le prompt executive_summary
-  const executiveSummaryPrompt = defaultPrompts.find(p => p.id === 'executive_summary')?.content;
+  const executiveSummaryPrompt =
+    (typeof options.promptTemplate === 'string' &&
+    options.promptTemplate.trim().length > 0
+      ? options.promptTemplate
+      : defaultPrompts.find(p => p.id === 'executive_summary')?.content) || '';
   if (!executiveSummaryPrompt) {
     throw new Error('Executive summary prompt not found');
   }
@@ -251,6 +257,10 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
   const isGpt5 = typeof selectedModel === 'string' && selectedModel.startsWith('gpt-5');
+  const promptId =
+    typeof options.promptId === 'string' && options.promptId.trim().length > 0
+      ? options.promptId.trim()
+      : 'executive_summary';
 
   // Appeler OpenAI (toujours avec streaming)
   const finalStreamId = streamId || `executive_summary_${folderId}_${Date.now()}`;
@@ -261,7 +271,7 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     documentsContexts,
     responseFormat: 'json_object',
     ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
-    promptId: 'executive_summary',
+    promptId,
     streamId: finalStreamId,
     signal
   });
