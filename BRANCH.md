@@ -654,6 +654,19 @@ Open decision items for BR-03 restart:
         - `spec/TOOLS.md`
       - Evidence:
         - Unified `todo` tool contract added (`action=create|update_todo|update_task`) with legacy aliases retained for backward compatibility; chat tool selection/orchestration now resolves TODO paths through the unified surface (`api/src/services/tools.ts`, `api/src/services/chat-service.ts`, `spec/TOOLS.md`).
+    - [x] `L4-S17` DEV - Post-response autonomous TODO decision loop (`continue|ask_user|stop`) with budgets and aside handling.
+      - Scope:
+        - Add a post-response decision gate when a session TODO remains active (`continue|ask_user|stop`) without requiring an immediate new user message.
+        - Enforce iteration budgets (`60` max per response turn, `300` global session budget).
+        - If last user message is an aside clarification and not an explicit TODO progression request, ask user opt-in before resuming TODO loop.
+        - Keep default behavior as `continue` when no strict blocker exists.
+      - Files expected:
+        - `api/src/services/chat-service.ts`
+        - `api/src/config/default-prompts.ts`
+      - Evidence:
+        - Added `chat_todo_post_response_decision` prompt contract and runtime parsing.
+        - Added session-level autonomous-iteration counting via stream status events (`todo_autonomous_iteration`).
+        - Added runtime status trace `todo_post_response_decision` and user opt-in message when decision is `ask_user`.
   - [ ] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
@@ -799,6 +812,21 @@ Open decision items for BR-03 restart:
           - `2026-02-28` pass signature: `✓ tests/api/chat-tools.test.ts (6 tests)`; `Test Files 1 passed`, `Tests 6 passed`.
         - [x] `make test-api-endpoints SCOPE=tests/api/todos.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
           - `2026-02-28` pass signature: `✓ tests/api/todos.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
+    - [x] `L4-S17` TEST - Post-response decision loop + aside opt-in + budget guard regression.
+      - Test evolution required:
+        - `api/tests/unit/chat-service-tools.test.ts`
+      - Scoped make commands:
+        - [x] `make typecheck-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `> top-ai-ideas-api@0.1.0 typecheck` then `tsc --noEmit` (exit `0`).
+        - [x] `make lint-api API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `> top-ai-ideas-api@0.1.0 lint` then `eslint "src/**/*.ts"` (exit `0`).
+        - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `✓ tests/unit/chat-service-tools.test.ts (13 tests)`; `Test Files 1 passed`, `Tests 13 passed`.
+      - Failure protocol traces captured before final pass:
+        - Signature: `Bind for 0.0.0.0:1003 failed: port is already allocated` (and `service "api" is not running` on dependent rerun).
+        - Diagnostics executed: `make logs-api`, `make logs-ui`, `make db-query QUERY="SELECT 1;"`, `git diff --name-status origin/main...HEAD`.
+        - Classification: `test/infra` (port collision / service startup precondition), not product bug.
+        - Recovery: `make down ... ENV=test-feat-todo-steering-workflow-core`, `make down ... ENV=e2e-feat-todo-steering-workflow-core`, then rerun scoped checks successfully.
   - [x] **Lot 4 UAT checklist**
     - [x] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):

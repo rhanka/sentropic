@@ -1964,7 +1964,8 @@ Règles :
     );
     streamSeq += 1;
 
-    while (true) {
+    let continueGenerationLoop = true;
+    while (continueGenerationLoop) {
       if (iteration >= maxIterations) {
         const canExtendTodoAutonomousLoop =
           todoAutonomousExtensionEnabled &&
@@ -1972,6 +1973,7 @@ Règles :
           !todoAwaitingUserInput &&
           maxIterations < TODO_AUTONOMOUS_MAX_ITERATIONS;
         if (!canExtendTodoAutonomousLoop) {
+          continueGenerationLoop = false;
           break;
         }
         maxIterations = Math.min(
@@ -2119,6 +2121,7 @@ Règles :
 
       // Si aucun tool call, on termine
       if (toolCalls.length === 0) {
+        continueGenerationLoop = false;
         break;
       }
 
