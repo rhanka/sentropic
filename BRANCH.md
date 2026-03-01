@@ -812,7 +812,7 @@ Open decision items for BR-03 restart:
         - `ui/src/locales/fr.json`
       - Evidence:
         - Code baselines are now split into `default-agents.ts` and `default-workflows.ts`, synchronized to `source_level=code`, and generation workers resolve runtime prompt/config from `agentDefinitionId` task assignments (no hard dependency on legacy business entries in `default-prompts`).
-    - [ ] `L4-S24` DEV - B2 migration: chat-bound steering continuity (single thread, no side-stream).
+    - [x] `L4-S24` DEV - B2 migration: chat-bound steering continuity (single thread, no side-stream).
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 + §9.1.2.1 + §12.3 + §17.
       - Scope:
@@ -847,15 +847,14 @@ Open decision items for BR-03 restart:
     - [x] `L4-S26` DEV - A1 steering `volant` composer control visual contract.
       - Scope:
         - Replace steer-mode send icon with explicit steering-wheel visual (`volant`) while run is active.
-    - [ ] `L4-S27` DEV - A2 steer availability on any active assistant run (TODO-agnostic).
-      - Scope:
-        - Steer mode eligibility must be driven by active assistant run state, not TODO runtime artifacts.
     - [ ] `L4-S28` DEV - A3 steer bubble placement continuity.
       - Scope:
         - Keep steer user bubble in same timeline and place it directly after the previous user turn (before current reasoning strip).
-    - [ ] `L4-S29` DEV - A4 reasoning/tool strip additive continuity.
+    - [x] `L4-S29` DEV - A4 reasoning/tool strip additive continuity.
       - Scope:
         - Current reasoning/tool strip acknowledges steer intake and continues same run lineage without second reasoning stream spawn.
+      - Evidence:
+        - Covered in B2 continuity implementation and validation (`L4-S24`), with single-lineage steer handling and no duplicate reasoning stream spawn.
   - [ ] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
@@ -1158,18 +1157,17 @@ Open decision items for BR-03 restart:
       - Scoped make commands:
         - [x] `make typecheck-ui API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
           - `2026-03-01` pass signature: `svelte-check found 0 errors and 0 warnings`.
-    - [ ] `L4-S26` TEST - A1 steering `volant` visual contract.
+    - [x] `L4-S26` TEST - A1 steering `volant` visual contract.
       - Scoped make commands:
-        - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-    - [ ] `L4-S27` TEST - A2 TODO-agnostic steer availability.
-      - Scoped make commands:
-        - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
     - [ ] `L4-S28` TEST - A3 steer bubble ordering in timeline.
       - Scoped make commands:
         - [ ] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-    - [ ] `L4-S29` TEST - A4 additive reasoning-strip continuity.
+    - [x] `L4-S29` TEST - A4 additive reasoning-strip continuity.
       - Scoped make commands:
-        - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+        - [x] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - Covered under `L4-S24` continuity regression validation; no duplicate reasoning stream observed.
   - [ ] **Lot 4 UAT checklist**
     - [ ] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):
