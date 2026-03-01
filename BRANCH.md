@@ -847,9 +847,12 @@ Open decision items for BR-03 restart:
     - [x] `L4-S26` DEV - A1 steering `volant` composer control visual contract.
       - Scope:
         - Replace steer-mode send icon with explicit steering-wheel visual (`volant`) while run is active.
-    - [ ] `L4-S28` DEV - A3 steer bubble placement continuity.
+    - [x] `L4-S28` DEV - A3 steer bubble placement continuity.
       - Scope:
         - Keep steer user bubble in same timeline and place it directly after the previous user turn (before current reasoning strip).
+      - Evidence:
+        - Backend steer persistence now inserts user steer message immediately before the targeted assistant message sequence (stable ordering after silent refresh/reload).
+        - Composer local insertion falls back to active steer stream id when assistant placeholder discovery is transiently unavailable, keeping the steer bubble before the in-flight assistant message.
     - [x] `L4-S29` DEV - A4 reasoning/tool strip additive continuity.
       - Scope:
         - Current reasoning/tool strip acknowledges steer intake and continues same run lineage without second reasoning stream spawn.
@@ -1161,9 +1164,12 @@ Open decision items for BR-03 restart:
       - Scoped make commands:
         - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
           - `2026-03-01` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
-    - [ ] `L4-S28` TEST - A3 steer bubble ordering in timeline.
+    - [x] `L4-S28` TEST - A3 steer bubble ordering in timeline.
       - Scoped make commands:
-        - [ ] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [x] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/api/chat.test.ts (36 tests)`; includes steer timeline ordering assertion (`steerIndex === assistantIndex - 1`).
     - [x] `L4-S29` TEST - A4 additive reasoning-strip continuity.
       - Scoped make commands:
         - [x] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`

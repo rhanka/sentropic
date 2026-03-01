@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
@@ -421,33 +421,46 @@ chatRouter.post('/messages/:id/steer', requireWorkspaceAccessRole(), zValidator(
 
   let steerMessageId: string | null = null;
   try {
-    const result = await db
-      .select({ maxSequence: sql<number>`MAX(${chatMessages.sequence})` })
-      .from(chatMessages)
-      .where(eq(chatMessages.sessionId, msg.sessionId));
-    const nextSequence = (result[0]?.maxSequence ?? 0) + 1;
-    steerMessageId = createId();
+    await db.transaction(async (tx) => {
+      const insertedSteerMessageId = createId();
+      const insertBeforeSequence = msg.sequence;
 
-    await db.insert(chatMessages).values({
-      id: steerMessageId,
-      sessionId: msg.sessionId,
-      role: 'user',
-      content: body.message,
-      toolCalls: null,
-      toolCallId: null,
-      reasoning: null,
-      model: null,
-      promptId: null,
-      promptVersionId: null,
-      contexts: null,
-      sequence: nextSequence,
-      createdAt: new Date(),
+      // Keep steer timeline continuity: insert steer right before the steered assistant message.
+      await tx
+        .update(chatMessages)
+        .set({
+          sequence: sql`${chatMessages.sequence} + 1`,
+        })
+        .where(
+          and(
+            eq(chatMessages.sessionId, msg.sessionId),
+            gte(chatMessages.sequence, insertBeforeSequence),
+          ),
+        );
+
+      await tx.insert(chatMessages).values({
+        id: insertedSteerMessageId,
+        sessionId: msg.sessionId,
+        role: 'user',
+        content: body.message,
+        toolCalls: null,
+        toolCallId: null,
+        reasoning: null,
+        model: null,
+        promptId: null,
+        promptVersionId: null,
+        contexts: null,
+        sequence: insertBeforeSequence,
+        createdAt: new Date(),
+      });
+
+      await tx
+        .update(chatSessions)
+        .set({ updatedAt: new Date() })
+        .where(eq(chatSessions.id, msg.sessionId));
+
+      steerMessageId = insertedSteerMessageId;
     });
-
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, msg.sessionId));
   } catch (error) {
     console.error('[chat/steer] failed to persist steer message', {
       assistantMessageId,
