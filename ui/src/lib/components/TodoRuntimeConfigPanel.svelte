@@ -259,6 +259,9 @@
     };
   };
 
+  const isWorkflowConfigJsonEditable = (item: WorkflowConfigItem): boolean =>
+    item.key !== 'ai_usecase_generation_v1';
+
   const saveAgent = async (item: AgentConfigItem) => {
     if (!canEdit) return;
     const draft = agentDraftById[item.id];
@@ -319,11 +322,14 @@
     const draft = workflowDraftById[item.id];
     if (!draft) return;
 
-    const config = parseObjectJson(
-      draft.configText,
-      'settings.runtime.errors.invalidWorkflowConfigJson',
-    );
-    if (!config) return;
+    const canEditConfigJson = isWorkflowConfigJsonEditable(item);
+    const parsedConfig = canEditConfigJson
+      ? parseObjectJson(
+          draft.configText,
+          'settings.runtime.errors.invalidWorkflowConfigJson',
+        )
+      : (item.config ?? {});
+    if (!parsedConfig) return;
 
     const name = draft.name.trim();
     if (!name) {
@@ -334,7 +340,9 @@
       return;
     }
 
-    const configWithoutPlaceholderMetadata = { ...config };
+    const configWithoutPlaceholderMetadata = {
+      ...(parsedConfig as Record<string, unknown>),
+    };
     delete (configWithoutPlaceholderMetadata as Record<string, unknown>)
       .placeholderMetadata;
 
@@ -761,6 +769,10 @@
                         <li>
                           {task.orderIndex + 1}. {task.title}
                           <span class="text-slate-400">({task.taskKey})</span>
+                          <span class="text-slate-500">
+                            · {$_('settings.runtime.workflow.agentLinkLabel')}:
+                            {task.agentDefinitionId ?? '—'}
+                          </span>
                         </li>
                       {/each}
                     </ul>
@@ -848,10 +860,20 @@
                       >
                         {$_('settings.runtime.configJsonLabel')}
                       </label>
+                      {#if !isWorkflowConfigJsonEditable(item)}
+                        <p class="mb-1 text-[11px] text-slate-500">
+                          {$_('settings.runtime.workflow.configJsonReadonlyHint')}
+                        </p>
+                      {/if}
                       <textarea
                         id={`workflow-config-json-${item.id}`}
-                        class="w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-xs"
+                        class={`w-full rounded border px-2 py-1.5 font-mono text-xs ${
+                          isWorkflowConfigJsonEditable(item)
+                            ? 'border-slate-300'
+                            : 'border-slate-200 bg-slate-100 text-slate-500'
+                        }`}
                         rows={8}
+                        readonly={!isWorkflowConfigJsonEditable(item)}
                         bind:value={workflowDraftById[item.id].configText}
                       ></textarea>
                     </div>

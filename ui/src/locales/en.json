@@ -525,7 +525,7 @@
     "account": "Account",
     "workspace": "Workspace",
     "dangerZone": "Danger zone",
-    "adminOnlyHint": "Advanced settings (prompts / AI / queue) are reserved for admins.",
+    "adminOnlyHint": "Advanced settings (AI runtime / AI / queue) are reserved for admins.",
     "emailLabel": "Email",
     "nameLabel": "Name",
     "effectiveRoleLabel": "Effective role",
@@ -679,8 +679,10 @@
         "title": "Workflow Configuration",
         "description": "Configure workflow definitions and keep placeholder extraction metadata up to date on save.",
         "tasksLabel": "Workflow tasks",
+        "agentLinkLabel": "Agent",
         "placeholdersLabel": "Extracted placeholders",
-        "placeholdersNone": "No placeholder detected in workflow metadata."
+        "placeholdersNone": "No placeholder detected in workflow metadata.",
+        "configJsonReadonlyHint": "JSON config is read-only for this workflow: this metadata is not the executable task logic."
       },
       "toasts": {
         "agentSaved": "Agent configuration updated.",
