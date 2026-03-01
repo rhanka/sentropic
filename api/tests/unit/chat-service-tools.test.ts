@@ -623,6 +623,76 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
     expect(calls[0]?.toolChoice).toBe('auto');
   });
 
+  it('should continue beyond 10 iterations when active TODO can progress without user input', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'go',
+      model: 'gpt-4.1-nano'
+    });
+
+    const created = await todoOrchestrationService.createTodoFromChat(
+      { userId, role: 'editor', workspaceId },
+      {
+        title: 'Long autonomous TODO',
+        sessionId: msg.sessionId,
+        tasks: [{ title: 'Task to keep progressing' }],
+      },
+    );
+    expect(created.status).toBe('completed');
+    const todoId =
+      created.status === 'completed' && typeof created.todoId === 'string'
+        ? created.todoId
+        : '';
+    expect(todoId).not.toBe('');
+    const [taskRow] = await db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.todoId, todoId)))
+      .limit(1);
+    expect(taskRow?.id).toBeTruthy();
+
+    let passCount = 0;
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      passCount += 1;
+      if (passCount <= 12) {
+        return stream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: `call_todo_loop_${passCount}`,
+              name: 'todo',
+              args: JSON.stringify({
+                action: 'update_task',
+                taskId: taskRow!.id,
+                status: 'in_progress',
+              })
+            }
+          },
+          { type: 'done', data: {} }
+        ]);
+      }
+      return stream([
+        { type: 'content_delta', data: { delta: 'Autonomous progression complete.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['todo']
+    });
+
+    expect(calls.length).toBeGreaterThan(10);
+  });
+
   it('should inject strict TODO orchestration rules in system prompt when an active session TODO exists', async () => {
     const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
     let systemPrompt = '';

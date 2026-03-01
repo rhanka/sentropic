@@ -112,6 +112,10 @@ type TodoRuntimeToolName = 'todo' | 'todo_create' | 'todo_update' | 'task_update
 type TodoRuntimeToolOperation = 'create' | 'update_todo' | 'update_task';
 
 const TODO_TERMINAL_STATUSES = new Set(['done', 'cancelled']);
+const TODO_BLOCKING_STATUSES = new Set(['blocked']);
+const BASE_MAX_ITERATIONS = 10;
+const TODO_AUTONOMOUS_MAX_ITERATIONS = 60;
+const TODO_AUTONOMOUS_EXTENSION_STEP = 10;
 
 type SessionTodoRuntimeTask = {
   id: string;
@@ -1811,7 +1815,14 @@ Règles :
       | { role: 'system' | 'user' | 'assistant'; content: string }
       | { role: 'tool'; content: string; tool_call_id: string }
     > = [{ role: 'system' as const, content: systemPrompt }, ...conversation];
-    const maxIterations = 10; // Limite de sécurité pour éviter les boucles infinies
+    let maxIterations = BASE_MAX_ITERATIONS;
+    const todoAutonomousExtensionEnabled = Boolean(
+      enforceTodoUpdateMode && todoProgressionFocusMode,
+    );
+    let todoContinuationActive = Boolean(
+      todoAutonomousExtensionEnabled && hasActiveSessionTodo,
+    );
+    let todoAwaitingUserInput = false;
     let iteration = 0;
     let previousResponseId: string | null =
       options.resumeFrom?.previousResponseId ?? null;
@@ -1953,13 +1964,31 @@ Règles :
     );
     streamSeq += 1;
 
-    while (iteration < maxIterations) {
+    while (true) {
+      if (iteration >= maxIterations) {
+        const canExtendTodoAutonomousLoop =
+          todoAutonomousExtensionEnabled &&
+          todoContinuationActive &&
+          !todoAwaitingUserInput &&
+          maxIterations < TODO_AUTONOMOUS_MAX_ITERATIONS;
+        if (!canExtendTodoAutonomousLoop) {
+          break;
+        }
+        maxIterations = Math.min(
+          maxIterations + TODO_AUTONOMOUS_EXTENSION_STEP,
+          TODO_AUTONOMOUS_MAX_ITERATIONS,
+        );
+      }
       iteration++;
       toolCalls.length = 0; // Réinitialiser pour chaque round
       contentParts.length = 0; // Réinitialiser le contenu pour chaque round
       reasoningParts.length = 0; // Réinitialiser le reasoning pour chaque round
       const pass1ToolChoice: 'auto' | 'required' =
-        todoProgressionFocusMode && iteration === 1 ? 'required' : 'auto';
+        todoAutonomousExtensionEnabled &&
+        todoContinuationActive &&
+        !todoAwaitingUserInput
+          ? 'required'
+          : 'auto';
 
       // Trace: exact payload sent to OpenAI (per iteration)
       await writeChatGenerationTrace({
@@ -2133,6 +2162,48 @@ Règles :
         const arg = typeof confirmationArg === 'string' ? confirmationArg.trim().toLowerCase() : '';
         if (arg !== 'yes') return false;
         return ['oui', 'yes', 'confirmer', 'confirme', 'confirm', 'ok'].includes(normalized);
+      };
+      const markTodoIterationState = (rawResult: unknown) => {
+        if (!todoAutonomousExtensionEnabled) return;
+        const resultRecord = asRecord(rawResult) ?? {};
+        const runtime = asRecord(resultRecord.todoRuntime) ?? resultRecord;
+        const todoRecord = asRecord(runtime.todo);
+        const activeTodoRecord = asRecord(runtime.activeTodo);
+        const status = normalizeTodoRuntimeStatus(resultRecord.status ?? runtime.status);
+        const todoStatus = normalizeTodoRuntimeStatus(
+          runtime.todoStatus ??
+            todoRecord?.derivedStatus ??
+            activeTodoRecord?.derivedStatus,
+        );
+        const todoId = String(
+          runtime.todoId ?? todoRecord?.id ?? activeTodoRecord?.id ?? '',
+        ).trim();
+        const message = String(
+          resultRecord.error ?? runtime.error ?? resultRecord.message ?? runtime.message ?? '',
+        ).toLowerCase();
+
+        if (status === 'error') {
+          todoAwaitingUserInput = true;
+        }
+        if (TODO_BLOCKING_STATUSES.has(todoStatus)) {
+          todoAwaitingUserInput = true;
+        }
+        if (TODO_TERMINAL_STATUSES.has(todoStatus)) {
+          todoContinuationActive = false;
+        } else if (todoId.length > 0) {
+          todoContinuationActive = true;
+        }
+        if (
+          message.includes('requires explicit user intent') ||
+          message.includes('is required') ||
+          message.includes('missing') ||
+          message.includes('security') ||
+          message.includes('permission') ||
+          message.includes('read-only') ||
+          message.includes('confirm')
+        ) {
+          todoAwaitingUserInput = true;
+        }
       };
 
       for (const toolCall of toolCalls) {
@@ -2538,6 +2609,7 @@ Règles :
               todoResult,
               'create',
             );
+            markTodoIterationState(normalizedTodoResult);
             result = normalizedTodoResult;
             await writeStreamEvent(
               options.assistantMessageId,
@@ -2618,6 +2690,7 @@ Règles :
               updateResult,
               'update_todo',
             );
+            markTodoIterationState(normalizedTodoUpdateResult);
             result = normalizedTodoUpdateResult;
             await writeStreamEvent(
               options.assistantMessageId,
@@ -2696,6 +2769,7 @@ Règles :
               updateResult,
               'update_task',
             );
+            markTodoIterationState(normalizedTaskUpdateResult);
             result = normalizedTaskUpdateResult;
             await writeStreamEvent(
               options.assistantMessageId,
@@ -2912,6 +2986,14 @@ Règles :
             status: 'error',
             error: error instanceof Error ? error.message : 'Unknown error'
           };
+          const todoErrorCall =
+            toolCall.name === 'todo' ||
+            toolCall.name === 'todo_create' ||
+            toolCall.name === 'todo_update' ||
+            toolCall.name === 'task_update';
+          if (todoErrorCall && todoAutonomousExtensionEnabled) {
+            markTodoIterationState(errorResult);
+          }
           await writeStreamEvent(
             options.assistantMessageId,
             'tool_call_result',
@@ -2968,6 +3050,30 @@ Règles :
         }),
         meta: { kind: 'executed_tools', callSite: 'ChatService.runAssistantGeneration/pass1/afterTools', openaiApi: 'responses' }
       });
+
+      if (todoAutonomousExtensionEnabled && !todoAwaitingUserInput) {
+        const refreshedSessionTodo = toSessionTodoRuntimeSnapshot(
+          await todoOrchestrationService.getSessionTodoRuntime(
+            {
+              userId: options.userId,
+              role: currentUserRole ?? 'viewer',
+              workspaceId: sessionWorkspaceId,
+            },
+            options.sessionId,
+          ),
+        );
+        if (!refreshedSessionTodo) {
+          todoContinuationActive = false;
+        } else {
+          const refreshedStatus = normalizeTodoRuntimeStatus(
+            refreshedSessionTodo.status,
+          );
+          todoContinuationActive = !TODO_TERMINAL_STATUSES.has(refreshedStatus);
+          if (TODO_BLOCKING_STATUSES.has(refreshedStatus)) {
+            todoAwaitingUserInput = true;
+          }
+        }
+      }
 
       if (pendingLocalToolCalls.length > 0) {
         if (!previousResponseId) {
