@@ -668,10 +668,17 @@ Open decision items for BR-03 restart:
         - Added session-level autonomous-iteration counting via stream status events (`todo_autonomous_iteration`).
         - Added runtime status trace `todo_post_response_decision` and user opt-in message when decision is `ask_user`.
     - [ ] `L4-S18` DEV - Remove TODO-bound legacy steering path (generic active-run steering only).
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §3.1 (Steer), §9.1.2 (Steering UX contract), §12 (API `POST /api/v1/runs/:runId/steer`), §17 (acceptance criteria).
       - Scope:
         - Remove composer steering dependency on TODO runtime panel run metadata (`todoRuntimePanel.runId/runStatus/runTaskId`).
         - Keep TODO panel focused on checklist progression only (no steering ownership in TODO runtime domain).
         - Rebind steering availability to the active assistant generation run state (single conversation path, non-interrupting).
+      - Implementation TODO (detailed):
+        - Introduce a dedicated composer steerability selector driven by active assistant run state (not TODO runtime snapshot).
+        - Remove hard dependency chain `getTodoRuntimeRunState -> isComposerSteerMode`.
+        - Keep `/runs/:runId/steer` as the only steer transport path and preserve non-interrupting semantics.
+        - Ensure TODO panel open/closed/absent states do not change steering availability.
       - Files expected:
         - `ui/src/lib/components/ChatPanel.svelte`
         - `ui/src/lib/components/StreamMessage.svelte`
@@ -679,11 +686,19 @@ Open decision items for BR-03 restart:
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
     - [ ] `L4-S22` DEV - Steering composer UX finalization (`volant`) + runtime behavior contract.
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 (composer steering, same-thread bubble, immediate acknowledgment, additive continuation).
       - Scope:
         - Replace composer send icon by a dedicated steering icon/button (`volant`) when assistant run is active and steerable.
         - Preserve primary button style contract and accessibility labels/tooltips in FR/EN.
         - On steering submit, append user steer as normal user bubble in same timeline and emit immediate reasoning/tool-strip acknowledgment (`Prise en compte d’un nouveau message utilisateur`).
         - Keep behavior non-interrupting for in-flight tools and additive for already-started final response (second assistant continuation bubble allowed).
+      - Implementation TODO (detailed):
+        - Add a distinct steer icon asset/component and keep existing primary CTA style tokens.
+        - Implement explicit UX state transitions: `send` -> `volant` (run active+steerable), `volant` -> `send` (run terminal/not steerable).
+        - Ensure steer submission creates one normal user message in timeline (no side-thread, no panel-only artifact).
+        - Emit acknowledgment banner/strip update immediately after steer accept, before next assistant chunk.
+        - Preserve additive continuation logic when final answer emission already started.
       - Files expected:
         - `ui/src/lib/components/ChatPanel.svelte`
         - `ui/src/lib/components/StreamMessage.svelte`
@@ -691,29 +706,51 @@ Open decision items for BR-03 restart:
         - `ui/src/locales/fr.json`
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (if wording alignment is required for icon/UX precision)
     - [ ] `L4-S19` DEV - Complete generation cutover to workflow-only execution (remove residual legacy chain).
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §12.1 (AI use-case generation workflow runtime migration, mandatory), §17 (acceptance criteria), mapping table in §12.1.
       - Scope:
         - Remove remaining legacy queue orchestration coupling in generation path (`matrix_generate`/`usecase_list` legacy chain behavior).
         - Keep one execution path: `POST /api/v1/use-cases/generate` -> workflow runtime orchestration -> ordered workflow tasks -> executive summary.
         - Ensure no dual-path fallback remains in route/queue progression.
+      - Implementation TODO (detailed):
+        - Remove route-level legacy fanout coupling and keep workflow-run bootstrap as the only dispatcher.
+        - Move generation sequencing ownership to workflow task progression with explicit task keys.
+        - Ensure lineage metadata is complete on each step (`workflowRunId`, `workflowDefinitionId`, `taskKey`, `agentDefinitionId`).
+        - Verify queue progression does not enqueue duplicate/parallel legacy chain for the same request.
       - Files expected:
         - `api/src/routes/api/use-cases.ts`
         - `api/src/services/queue-manager.ts`
         - `api/src/services/todo-orchestration.ts`
     - [ ] `L4-S20` DEV - Workflow config JSON UX alignment (no misleading editable metadata block).
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.3 (Basic Workflow Configuration section), §3.6 (Workflow terminology), §17 (acceptance criteria).
       - Scope:
         - Enforce one clear policy in settings:
           - either workflow JSON is a true executable contract and remains editable,
           - or it is metadata-only and becomes read-only in UI (no editable textarea/save path for that block).
         - Add explicit UI copy clarifying what is authoritative in this branch (workflow task list vs JSON metadata).
+      - Policy target for BR03:
+        - `workflow.config` is metadata-only in current runtime; UI must expose it read-only in BR03 to avoid operator confusion.
+      - Implementation TODO (detailed):
+        - Remove editable textarea+save path for metadata-only workflow JSON block (or hard-disable with explanatory note).
+        - Keep task list as primary actionable view and label it as authoritative execution map.
+        - Add precise copy for operators: what can be edited now (name/description if allowed) vs what is runtime-derived.
       - Files expected:
         - `ui/src/lib/components/TodoRuntimeConfigPanel.svelte`
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
     - [ ] `L4-S21` DEV - Finalize settings migration from legacy prompt management to agent/workflow configuration.
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2 (Basic Agent Configuration), §9.3 (Basic Workflow Configuration), §12.1 (generation agents/workflow linkage), §17.
       - Scope:
         - Remove/deprecate user-facing `Gestion des Prompts IA` section for BR03 target behavior.
         - Keep agent-centric configuration surface (`agent-config`) and workflow task linkage (`workflow-config`) as the single admin entrypoint.
         - Ensure workflow task rows expose assigned agent identifiers clearly for operator understanding.
+      - Implementation TODO (detailed):
+        - Remove/disable legacy prompts settings card in `/settings` for BR03 runtime path.
+        - Surface agent IDs/keys in workflow task rows (readability-first, no hidden linkage).
+        - Keep API compatibility for existing prompt endpoints only if required by other branches; otherwise narrow access explicitly.
+        - Ensure i18n labels reflect “agents/workflows” vocabulary as the single UI path.
       - Files expected:
         - `ui/src/routes/settings/+page.svelte`
         - `ui/src/lib/components/TodoRuntimeConfigPanel.svelte`
@@ -881,6 +918,8 @@ Open decision items for BR-03 restart:
         - Classification: `test/infra` (port collision / service startup precondition), not product bug.
         - Recovery: `make down ... ENV=test-feat-todo-steering-workflow-core`, `make down ... ENV=e2e-feat-todo-steering-workflow-core`, then rerun scoped checks successfully.
     - [ ] `L4-S18` TEST - Steering decoupling regression coverage (no TODO-bound gating).
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2.
       - Test evolution required:
         - `ui/tests/utils/todo-runtime-steer.test.ts` (or renamed generic steer test module)
         - `e2e/tests/09-todo-steering-core.spec.ts` (composer steering while TODO panel is absent/present)
@@ -888,6 +927,8 @@ Open decision items for BR-03 restart:
         - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
         - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
     - [ ] `L4-S22` TEST - Steering composer icon/behavior regression matrix.
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2.
       - Test evolution required:
         - `ui/tests/utils/todo-runtime-steer.test.ts` (mode switch + icon/label assertion in steer mode)
         - `ui/tests/utils/todo-chat-rendering.test.ts` (timeline insertion for steer user bubble)
@@ -898,6 +939,8 @@ Open decision items for BR-03 restart:
         - [ ] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
         - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
     - [ ] `L4-S19` TEST - Workflow-only generation cutover regression matrix.
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §12.1.
       - Test evolution required:
         - `api/tests/api/use-cases.test.ts`
         - `api/tests/api/use-cases-generate-matrix.test.ts`
@@ -912,6 +955,8 @@ Open decision items for BR-03 restart:
         - [ ] `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
         - [ ] `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
     - [ ] `L4-S20` TEST - Workflow config JSON policy validation.
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.3.
       - Test evolution required:
         - `ui/tests/utils/workflow-config-api.test.ts`
         - `e2e/tests/06-settings.spec.ts`
@@ -919,6 +964,8 @@ Open decision items for BR-03 restart:
         - [ ] `make test-ui SCOPE=tests/utils/workflow-config-api.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
         - [ ] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
     - [ ] `L4-S21` TEST - Settings IA migration to agent/workflow surface.
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2 + §9.3.
       - Test evolution required:
         - `ui/tests/utils/agent-config-api.test.ts`
         - `ui/tests/utils/api.test.ts` (settings panel requests)
