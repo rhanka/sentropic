@@ -414,6 +414,7 @@ describe('Chat API Endpoints', () => {
       const steerBody = await steerResponse.json();
       expect(steerBody.assistantMessageId).toBe(assistantMessageId);
       expect(steerBody.status).toBe('accepted');
+      expect(steerBody.action).toBe('interrupt_relaunch');
       expect(steerBody.steer?.message).toBe(
         'Concentre la réponse sur les trois priorités.',
       );
