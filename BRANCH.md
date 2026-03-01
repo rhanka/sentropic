@@ -835,6 +835,28 @@ Open decision items for BR-03 restart:
         - `ui/src/locales/fr.json`
       - Evidence:
         - Composer steer submit now targets `POST /runs/:runId/steer` via active run state and no longer sends steer payload through `/chat/messages`; steer input remains in the same conversation timeline as a regular user bubble.
+    - [x] `L4-S25` DEV - A0 steering TODO-decoupling (remove steer run targeting dependency on TODO panel state).
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 + §9.1.2.1 + §12.3.
+      - Scope:
+        - Remove steer run-source dependency on `todoRuntimePanel`.
+        - Introduce dedicated composer steer run-state lifecycle independent from TODO runtime panel visibility/reset.
+      - Files expected:
+        - `ui/src/lib/components/ChatPanel.svelte`
+      - Evidence:
+        - `getActiveRunForComposer` now resolves from dedicated `composerSteerRunState` instead of `todoRuntimePanel`, and session lifecycle resets this steer state independently from TODO panel state.
+    - [ ] `L4-S26` DEV - A1 steering `volant` composer control visual contract.
+      - Scope:
+        - Replace steer-mode send icon with explicit steering-wheel visual (`volant`) while run is active.
+    - [ ] `L4-S27` DEV - A2 steer availability on any active assistant run (TODO-agnostic).
+      - Scope:
+        - Steer mode eligibility must be driven by active assistant run state, not TODO runtime artifacts.
+    - [ ] `L4-S28` DEV - A3 steer bubble placement continuity.
+      - Scope:
+        - Keep steer user bubble in same timeline and place it directly after the previous user turn (before current reasoning strip).
+    - [ ] `L4-S29` DEV - A4 reasoning/tool strip additive continuity.
+      - Scope:
+        - Current reasoning/tool strip acknowledges steer intake and continues same run lineage without second reasoning stream spawn.
   - [ ] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
@@ -1133,6 +1155,22 @@ Open decision items for BR-03 restart:
         - [!] E2E build/spec validation is postponed to the UAT window per operator request (`2026-03-01`) and will be re-run there as scoped checks.
           - `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
           - `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+    - [x] `L4-S25` TEST - A0 TODO-decoupling safety gate (typecheck-only in close-loop mode).
+      - Scoped make commands:
+        - [x] `make typecheck-ui API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `svelte-check found 0 errors and 0 warnings`.
+    - [ ] `L4-S26` TEST - A1 steering `volant` visual contract.
+      - Scoped make commands:
+        - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+    - [ ] `L4-S27` TEST - A2 TODO-agnostic steer availability.
+      - Scoped make commands:
+        - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+    - [ ] `L4-S28` TEST - A3 steer bubble ordering in timeline.
+      - Scoped make commands:
+        - [ ] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+    - [ ] `L4-S29` TEST - A4 additive reasoning-strip continuity.
+      - Scoped make commands:
+        - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
   - [ ] **Lot 4 UAT checklist**
     - [ ] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):
