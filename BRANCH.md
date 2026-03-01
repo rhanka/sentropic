@@ -429,7 +429,7 @@ Open decision items for BR-03 restart:
     - [x] Legacy Lot 3 UAT checklist is archived; canonical human UAT source is now `Lot N-2` only.
 
 - [ ] **Lot 4 — Session-bound TODO progression + AI generation workflow runtime migration**
-  - [ ] Order contract (mandatory): finish DEV slices `L4-S1` to `L4-S14` before executing any TEST slice `L4-S15` to `L4-S18`.
+  - [ ] Order contract (mandatory): finish all targeted DEV slices before running their matching TEST slices.
   - [x] Baseline decisions for this lot:
     - [x] Migration policy is strict: no permanent dual execution path between legacy hardcoded generation and workflow runtime.
     - [x] Target workflow key is `ai_usecase_generation_v1` (context -> matrix optional -> usecase list -> TODO sync -> usecase details fanout -> executive summary).
@@ -620,16 +620,34 @@ Open decision items for BR-03 restart:
         - `ui/src/lib/components/StreamMessage.svelte`
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
-    - [ ] `L4-S14` DEV - Progression reliability contract (`go` handshake + actionable updates).
+    - [x] `L4-S14` DEV - Progression reliability contract (`go` handshake + actionable updates).
       - Scope:
         - Assistant asks explicit `go` before progressing a freshly created TODO.
         - Ensure `todo_update` / `task_update` are available and effectively used for checklist progression.
       - Files expected:
         - `api/src/services/chat-service.ts`
-        - `api/src/services/tools.ts`
         - `api/src/services/todo-orchestration.ts`
         - `ui/src/lib/components/ChatPanel.svelte`
-        - `spec/TOOLS.md` (state sync if checklist status changes)
+      - Evidence:
+        - Delivered in `aaf1748` with deterministic progression + update-only focus when an active session TODO exists.
+    - [ ] `L4-S15` DEV - Reasoning pre-classification TODO opportunity signal (`chat_reasoning_effort_eval` alignment).
+      - Scope:
+        - Add a compact TODO-opportunity signal to pre-classification input so the model better distinguishes "direct answer" vs "execution via TODO progression".
+        - Keep TODO payload compact and avoid full list duplication in evaluator prompt.
+      - Files expected:
+        - `api/src/config/default-prompts.ts`
+        - `api/src/services/chat-service.ts`
+    - [ ] `L4-S16` DEV - TODO tool surface fusion (`todo_create` + `todo_update` + `task_update` contract simplification).
+      - Scope:
+        - Refactor toward one user-facing TODO orchestration surface while preserving current behavior constraints:
+          - progress/check updates autonomous,
+          - add/remove/reorder/replace only on explicit user intent.
+      - Files expected:
+        - `api/src/services/tools.ts`
+        - `api/src/services/chat-service.ts`
+        - `api/src/services/todo-orchestration.ts`
+        - `api/src/config/default-prompts.ts`
+        - `spec/TOOLS.md`
   - [ ] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
@@ -746,6 +764,29 @@ Open decision items for BR-03 restart:
           - `2026-02-28` pass signature: API/UI production images built successfully (`top-ai-ideas-api:d0098e`, `top-ai-ideas-ui:ccbdee`) on the scoped e2e lane.
         - [x] `make test-e2e E2E_SPEC=tests/09-todo-runtime-panel-actions.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
           - `2026-02-28` pass signature: `✓ tests/09-todo-runtime-panel-actions.spec.ts` ; `1 passed (9.3s)`, command exit `0`.
+    - [ ] `L4-S13` TEST - Steer acknowledgment and additive continuation validation.
+      - Test evolution required:
+        - `ui/tests/utils/todo-runtime-steer.test.ts` (acknowledgment state assertions)
+        - `e2e/tests/09-todo-steering-core.spec.ts` (active-run steering continuity + additive assistant bubble)
+      - Scoped make commands (to run after DEV slice completion):
+        - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+    - [ ] `L4-S15` TEST - Reasoning pre-classification TODO opportunity coverage.
+      - Test evolution required:
+        - `api/tests/unit/chat-service-tools.test.ts` (prompt/evaluator input assertions)
+      - Scoped make commands (to run after DEV slice completion):
+        - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+    - [ ] `L4-S16` TEST - TODO tool fusion regression matrix.
+      - Test evolution required:
+        - `api/tests/unit/chat-service-tools.test.ts`
+        - `api/tests/unit/todo-orchestration-chat-progression.test.ts`
+        - `api/tests/api/chat-tools.test.ts`
+        - `api/tests/api/todos.test.ts`
+      - Scoped make commands (to run after DEV slice completion):
+        - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-api-unit SCOPE=tests/unit/todo-orchestration-chat-progression.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-api-endpoints SCOPE=tests/api/todos.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
   - [x] **Lot 4 UAT checklist**
     - [x] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):
@@ -754,7 +795,7 @@ Open decision items for BR-03 restart:
 - [ ] **Lot N-2 — UAT (post-Lot4 only; single source of truth)**
   - [ ] Web app
     - [x] UAT setup:
-      - [x] Execute only after `L4-S1` to `L4-S12b` are completed.
+      - [x] Execute UAT only after the targeted DEV scope is complete (minimum `L4-S1` to `L4-S12b`; full Lot 4 UAT requires `L4-S13` to `L4-S16` too).
       - [x] Use root workspace `~/src/top-ai-ideas-fullstack` on `ENV=dev` and open `/folders`.
       - [x] Open chat widget in a fresh session with TODO tooling enabled.
     - [ ] Scenario UAT-1: one TODO max per session.
@@ -771,11 +812,9 @@ Open decision items for BR-03 restart:
       - [ ] Verify checklist item typography is reduced to subtitle-equivalent size.
       - [ ] Click `trash` and verify active TODO is removed/closed for the session and panel disappears.
     - [ ] Scenario UAT-3: progression via AI.
-      - [!] Ask AI to mark one task as done, then another task in progress, then TODO done when all tasks are complete.
-        Feedback: once created the chat says he has no access to the list
-      - [!] Verify runtime progression is reflected in statuses (`todo -> planned -> in_progress -> done`, plus blocked/deferred/cancelled paths when explicitly requested).
-        Feedback: KO since chat has no access to tool to do that
-      - [!] Start one task execution and verify steering remains available from main composer while runtime metadata stays hidden in panel body.
+      - [ ] Ask AI to mark one task as done, then another task in progress, then TODO done when all tasks are complete.
+      - [ ] Verify runtime progression is reflected in statuses (`todo -> planned -> in_progress -> done`, plus blocked/deferred/cancelled paths when explicitly requested).
+      - [ ] Start one task execution and verify steering remains available from main composer while runtime metadata stays hidden in panel body.
       - [ ] Verify assistant asks for explicit `go` before autonomous checklist progression starts.
       - [ ] While assistant run is active, submit one steering message from main composer (not runtime panel) and verify:
         - user steer appears as a normal user bubble in same conversation timeline,
@@ -788,11 +827,10 @@ Open decision items for BR-03 restart:
       - [!] Verify non-completed tasks remain unstruck and visually distinct.
     - [ ] Scenario UAT-5: session persistence.
       - [ ] Close and reopen chat widget in same session; verify TODO panel state and task statuses persist.
-        Feedback: status progression was not testable due to missing update capability in prior build; collapse state persistence to revalidate.
       - [!] Switch to another session then back; verify the original session TODO panel is restored with identical progression state.
-        Feedback: not possible to hava a status change of a task (since not update tool), but the minimized/maximize status is not kepts (but the todo is still thee there)
+        Feedback (legacy build): minimized/maximized state was not kept; revalidate on current build.
       - [!] Reload page and reopen same chat session; verify persisted state is rehydrated.
-        Feedback: not possible to hava a status change of a task (since not update tool), but the minimized/maximize status is not kepts (but the todo is still thee there)
+        Feedback (legacy build): minimized/maximized state was not kept; revalidate on current build.
     - [ ] Scenario UAT-6: generation workflow end-to-end runtime migration validation.
       - [ ] Trigger one AI generation from `/folders` with organization context and matrix mode enabled.
       - [ ] Verify artifacts are produced in order (matrix if requested -> use-case list -> use-case details -> executive summary) without manual fallback actions.
@@ -802,6 +840,11 @@ Open decision items for BR-03 restart:
       - [ ] For one generation request, verify there is no duplicated generation chain behavior (no second parallel legacy-like execution observed in UI/queue progression).
       - [ ] Verify workflow run lineage is coherent with generation progression (task/run timeline remains single-path from start to executive summary).
       - [ ] Confirm steer interactions continue to target the active run path during generation progression (no legacy duplicate chain).
+    - [ ] Scenario UAT-8: reasoning and TODO orchestration contract.
+      - [ ] On a long iterative ask (for example batch URLs/folders), verify assistant proactively structures execution with TODO instead of free-text-only plan.
+      - [ ] With an active TODO, verify assistant progresses via TODO updates before proposing a brand new TODO list.
+      - [ ] Verify structural list mutations (add/remove/reorder/replace tasks) are refused unless explicitly requested by the user.
+      - [ ] Verify no user-facing "active TODO already exists" warning is shown while orchestration still prevents duplicate active TODO creation.
 - [ ] **Lot N-1 — Docs consolidation** (blocked until `Lot N-2` UAT sign-off)
   - [ ] Apply `BR03-EX1` if docs paths are touched.
   - [ ] Consolidate BR-03 semantics into target specs:
