@@ -1800,8 +1800,63 @@ Règles :
       DOCUMENTS_BLOCK: documentsBlock,
       AUTOMATION_BLOCK: automationBlock
     }).trim();
+    const STEER_PROMPT_MAX_MESSAGES = 8;
+    const normalizeSteerMessage = (value: string): string =>
+      value
+        .replace(/\s+/g, ' ')
+        .trim();
+    const buildSteerInterruptionPrompt = (messages: readonly string[]): string => {
+      if (messages.length === 0) return systemPrompt;
+      const lastDirective = messages[messages.length - 1] ?? '';
+      const lines = messages
+        .slice(-STEER_PROMPT_MAX_MESSAGES)
+        .map((message, index) => `${index + 1}. ${message}`);
+      const steerContext = [
+        'SYSTEM NOTE - STEER INTERRUPTION',
+        '- Previous reasoning was interrupted to integrate one or more user steering messages.',
+        '- Consider every steering message listed below in chronological order.',
+        '- If two steering directives conflict, the latest directive has priority.',
+        '- Continue without re-asking for confirmation unless a blocker requires clarification.',
+        '',
+        'Steering messages:',
+        ...lines,
+        '',
+        `Latest directive to prioritize: ${lastDirective}`,
+      ].join('\n');
+      return `${systemPrompt}\n\n${steerContext}`.trim();
+    };
+    const isPreviousResponseNotFoundError = (message: string): boolean => {
+      const normalized = message.toLowerCase();
+      return (
+        normalized.includes('previous response') &&
+        normalized.includes('not found')
+      );
+    };
+    const applySteerInterruptionPrompt = (
+      messages: Array<
+        | { role: 'system' | 'user' | 'assistant'; content: string }
+        | { role: 'tool'; content: string; tool_call_id: string }
+      >,
+      steerMessages: readonly string[],
+    ): Array<
+      | { role: 'system' | 'user' | 'assistant'; content: string }
+      | { role: 'tool'; content: string; tool_call_id: string }
+    > => {
+      const withoutSystem =
+        messages.length > 0 && messages[0]?.role === 'system'
+          ? messages.slice(1)
+          : messages;
+      return [
+        {
+          role: 'system' as const,
+          content: buildSteerInterruptionPrompt(steerMessages),
+        },
+        ...withoutSystem,
+      ];
+    };
 
     let streamSeq = await getNextSequence(options.assistantMessageId);
+    let lastObservedStreamSequence = Math.max(streamSeq - 1, 0);
     const contentParts: string[] = [];
     const reasoningParts: string[] = [];
     let lastErrorMessage: string | null = null;
@@ -1835,6 +1890,7 @@ Règles :
           output: item.output
         }))
       : null;
+    const steerHistoryMessages: string[] = [];
 
     const [aiSettings, catalog] = await Promise.all([
       settingsService.getAISettings({ userId: options.userId }),
@@ -1965,6 +2021,28 @@ Règles :
     streamSeq += 1;
 
     let continueGenerationLoop = true;
+    const consumePendingSteerMessages = async (): Promise<string[]> => {
+      const events = await readStreamEvents(
+        options.assistantMessageId,
+        lastObservedStreamSequence,
+      );
+      if (events.length === 0) return [];
+      lastObservedStreamSequence = events[events.length - 1]?.sequence ?? lastObservedStreamSequence;
+
+      const messages: string[] = [];
+      for (const event of events) {
+        if (event.eventType !== 'status') continue;
+        const data = asRecord(event.data);
+        if (!data || data.state !== 'steer_received') continue;
+        const message =
+          typeof data.message === 'string'
+            ? normalizeSteerMessage(data.message)
+            : '';
+        if (message) messages.push(message);
+      }
+      return messages;
+    };
+
     while (continueGenerationLoop) {
       if (iteration >= maxIterations) {
         const canExtendTodoAutonomousLoop =
@@ -1991,6 +2069,12 @@ Règles :
         !todoAwaitingUserInput
           ? 'required'
           : 'auto';
+      currentMessages = applySteerInterruptionPrompt(
+        currentMessages,
+        steerHistoryMessages,
+      );
+      let steerInterruptionRequested = false;
+      let steerInterruptionBatch: string[] = [];
 
       // Trace: exact payload sent to OpenAI (per iteration)
       await writeChatGenerationTrace({
@@ -2022,81 +2106,166 @@ Règles :
         }
       });
 
-      for await (const event of callOpenAIResponseStream({
-        providerId: selectedProviderId,
-        model: selectedModel,
-        credential: options.providerApiKey ?? undefined,
-        userId: options.userId,
-        workspaceId: sessionWorkspaceId,
-        messages: currentMessages,
-        tools,
-        // on laisse le service openai gérer la compat modèle (gpt-4.1-nano n'a pas reasoning.summary)
-        reasoningSummary: 'detailed',
-        reasoningEffort: reasoningEffortForThisMessage,
-        toolChoice: pass1ToolChoice,
-        previousResponseId: previousResponseId ?? undefined,
-        rawInput: pendingResponsesRawInput ?? undefined,
-        signal: options.signal
-      })) {
-        const eventType = event.type as StreamEventType;
-        const data = (event.data ?? {}) as Record<string, unknown>;
-        // IMPORTANT: on n'émet pas 'done' ici. On émettra un unique 'done' à la toute fin,
-        // après éventuel 2e pass (sinon l'UI peut se retrouver "terminée" sans contenu).
-        if (eventType === 'done') {
-          continue;
-        }
-        if (eventType === 'error') {
-          const msg = (data as Record<string, unknown>).message;
-          lastErrorMessage = typeof msg === 'string' ? msg : 'Unknown error';
+      let shouldRetryWithoutPreviousResponse = false;
+      try {
+        for await (const event of callOpenAIResponseStream({
+          providerId: selectedProviderId,
+          model: selectedModel,
+          credential: options.providerApiKey ?? undefined,
+          userId: options.userId,
+          workspaceId: sessionWorkspaceId,
+          messages: currentMessages,
+          tools,
+          // on laisse le service openai gérer la compat modèle (gpt-4.1-nano n'a pas reasoning.summary)
+          reasoningSummary: 'detailed',
+          reasoningEffort: reasoningEffortForThisMessage,
+          toolChoice: pass1ToolChoice,
+          previousResponseId: previousResponseId ?? undefined,
+          rawInput: pendingResponsesRawInput ?? undefined,
+          signal: options.signal
+        })) {
+          const eventType = event.type as StreamEventType;
+          const data = (event.data ?? {}) as Record<string, unknown>;
+          // IMPORTANT: on n'émet pas 'done' ici. On émettra un unique 'done' à la toute fin,
+          // après éventuel 2e pass (sinon l'UI peut se retrouver "terminée" sans contenu).
+          if (eventType === 'done') {
+            continue;
+          }
+          if (eventType === 'error') {
+            const msg = (data as Record<string, unknown>).message;
+            const errorMessage =
+              typeof msg === 'string' ? msg : 'Unknown error';
+            if (
+              steerInterruptionRequested &&
+              errorMessage.toLowerCase().includes('aborted')
+            ) {
+              continue;
+            }
+            lastErrorMessage = errorMessage;
+            await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+            // on laisse le flux se terminer / throw; le catch global gère
+            continue;
+          }
+
           await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
           streamSeq += 1;
-          // on laisse le flux se terminer / throw; le catch global gère
-          continue;
-        }
 
-        await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
+          // Capture Responses API response_id for proper continuation
+          if (eventType === 'status') {
+            const responseId = typeof (data as Record<string, unknown>).response_id === 'string' ? ((data as Record<string, unknown>).response_id as string) : '';
+            if (responseId) previousResponseId = responseId;
+          }
+
+          if (eventType === 'content_delta') {
+            const delta = typeof data.delta === 'string' ? data.delta : '';
+            if (delta) {
+              contentParts.push(delta);
+            }
+          } else if (eventType === 'reasoning_delta') {
+            const delta = typeof data.delta === 'string' ? data.delta : '';
+            if (delta) reasoningParts.push(delta);
+          } else if (eventType === 'tool_call_start') {
+            const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
+            const existingIndex = toolCalls.findIndex(tc => tc.id === toolCallId);
+            if (existingIndex === -1) {
+              toolCalls.push({
+                id: toolCallId,
+                name: typeof data.name === 'string' ? data.name : '',
+                args: typeof data.args === 'string' ? data.args : ''
+              });
+            } else {
+              const nextName = typeof data.name === 'string' ? data.name : '';
+              const nextArgs = typeof data.args === 'string' ? data.args : '';
+              toolCalls[existingIndex].name = nextName || toolCalls[existingIndex].name;
+              toolCalls[existingIndex].args = (toolCalls[existingIndex].args || '') + (nextArgs || '');
+            }
+          } else if (eventType === 'tool_call_delta') {
+            const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
+            const delta = typeof data.delta === 'string' ? data.delta : '';
+            const toolCall = toolCalls.find(tc => tc.id === toolCallId);
+            if (toolCall) {
+              toolCall.args += delta;
+            } else {
+              toolCalls.push({ id: toolCallId, name: '', args: delta });
+            }
+          }
+          if (!steerInterruptionRequested) {
+            const pendingSteerMessages = await consumePendingSteerMessages();
+            if (pendingSteerMessages.length > 0) {
+              steerInterruptionRequested = true;
+              steerInterruptionBatch = pendingSteerMessages;
+              await writeStreamEvent(
+                options.assistantMessageId,
+                'status',
+                {
+                  state: 'run_interrupted_for_steer',
+                  steer_count: steerInterruptionBatch.length,
+                  latest_message:
+                    steerInterruptionBatch[steerInterruptionBatch.length - 1] ??
+                    '',
+                },
+                streamSeq,
+                options.assistantMessageId,
+              );
+              streamSeq += 1;
+              break;
+            }
+          }
+          // Note: eventType 'done' est volontairement retardé (voir plus haut)
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error ?? '');
+        if (
+          previousResponseId &&
+          isPreviousResponseNotFoundError(message)
+        ) {
+          shouldRetryWithoutPreviousResponse = true;
+        } else {
+          throw error;
+        }
+      }
+      if (shouldRetryWithoutPreviousResponse) {
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'status',
+          {
+            state: 'response_lineage_reset',
+            reason: 'previous_response_not_found',
+          },
+          streamSeq,
+          options.assistantMessageId,
+        );
         streamSeq += 1;
-
-        // Capture Responses API response_id for proper continuation
-        if (eventType === 'status') {
-          const responseId = typeof (data as Record<string, unknown>).response_id === 'string' ? ((data as Record<string, unknown>).response_id as string) : '';
-          if (responseId) previousResponseId = responseId;
-        }
-
-        if (eventType === 'content_delta') {
-          const delta = typeof data.delta === 'string' ? data.delta : '';
-          if (delta) {
-            contentParts.push(delta);
-          }
-        } else if (eventType === 'reasoning_delta') {
-          const delta = typeof data.delta === 'string' ? data.delta : '';
-          if (delta) reasoningParts.push(delta);
-        } else if (eventType === 'tool_call_start') {
-          const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
-          const existingIndex = toolCalls.findIndex(tc => tc.id === toolCallId);
-          if (existingIndex === -1) {
-            toolCalls.push({
-              id: toolCallId,
-              name: typeof data.name === 'string' ? data.name : '',
-              args: typeof data.args === 'string' ? data.args : ''
-            });
-          } else {
-            const nextName = typeof data.name === 'string' ? data.name : '';
-            const nextArgs = typeof data.args === 'string' ? data.args : '';
-            toolCalls[existingIndex].name = nextName || toolCalls[existingIndex].name;
-            toolCalls[existingIndex].args = (toolCalls[existingIndex].args || '') + (nextArgs || '');
-          }
-        } else if (eventType === 'tool_call_delta') {
-          const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
-          const delta = typeof data.delta === 'string' ? data.delta : '';
-          const toolCall = toolCalls.find(tc => tc.id === toolCallId);
-          if (toolCall) {
-            toolCall.args += delta;
-          } else {
-            toolCalls.push({ id: toolCallId, name: '', args: delta });
-          }
-        }
-        // Note: eventType 'done' est volontairement retardé (voir plus haut)
+        previousResponseId = null;
+        pendingResponsesRawInput = null;
+        continue;
+      }
+      if (steerInterruptionRequested && steerInterruptionBatch.length > 0) {
+        pendingResponsesRawInput = null;
+        previousResponseId = null;
+        steerHistoryMessages.push(...steerInterruptionBatch);
+        currentMessages = [
+          ...currentMessages,
+          ...steerInterruptionBatch.map((message) => ({
+            role: 'user' as const,
+            content: message,
+          })),
+        ];
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'status',
+          {
+            state: 'run_resumed_with_steer',
+            steer_count: steerInterruptionBatch.length,
+            latest_message:
+              steerInterruptionBatch[steerInterruptionBatch.length - 1] ?? '',
+          },
+          streamSeq,
+          options.assistantMessageId,
+        );
+        streamSeq += 1;
+        continue;
       }
 
       // Debug (requested): if we asked for reasoningSummary=detailed but saw none, log it.
