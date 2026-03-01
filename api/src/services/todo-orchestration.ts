@@ -53,7 +53,6 @@ export class TodoOrchestrationError extends Error {
 }
 
 const RUN_MODES = new Set(["manual", "sub_agentic", "full_auto"]);
-const RUN_TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const RUN_RESUMABLE_STATUSES = new Set(["paused", "blocked"]);
 const RUN_ACTIVE_STATUSES = ["pending", "in_progress", "paused", "blocked"] as const;
 const CHAT_SESSION_LINK_SOURCE_ENTITY_TYPE = "plan";
@@ -1072,33 +1071,6 @@ export class TodoOrchestrationService {
       task: mapTask(latestTask),
       guardrailDecision: guardrailEvaluation.decision,
       guardrails: guardrailEvaluation.matched,
-    };
-  }
-
-  async steerRun(actor: TodoActor, runId: string, input: { message: string; metadata?: Record<string, unknown> }) {
-    const run = await this.getRunOrThrow(runId, actor.workspaceId);
-    if (RUN_TERMINAL_STATUSES.has(run.status)) {
-      throw new TodoOrchestrationError(409, "Run is already completed");
-    }
-
-    const payload = {
-      message: input.message,
-      metadata: normalizeMetadata(input.metadata),
-    };
-
-    await this.appendExecutionEvent(db, {
-      runId: run.id,
-      workspaceId: run.workspaceId,
-      eventType: "steer",
-      actorType: "user",
-      actorId: actor.userId,
-      payload,
-    });
-
-    return {
-      runId: run.id,
-      status: run.status,
-      steer: payload,
     };
   }
 

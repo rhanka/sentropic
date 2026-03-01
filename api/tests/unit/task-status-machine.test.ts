@@ -74,7 +74,7 @@ describe('execution event sequencing', () => {
       },
       {
         runId: 'run-A',
-        eventType: 'steer',
+        eventType: 'run_paused',
         payload: {},
         sequence: 1,
         createdAt: '2026-02-26T09:59:00.000Z',
@@ -87,8 +87,8 @@ describe('execution event sequencing', () => {
 
     const appended = appendExecutionEvent(existing, {
       runId: 'run-A',
-      eventType: 'steer',
-      payload: { message: 'prioritize task-2' },
+      eventType: 'run_resumed',
+      payload: { previousStatus: 'paused', nextStatus: 'in_progress' },
     });
 
     expect(appended.sequence).toBe(3);

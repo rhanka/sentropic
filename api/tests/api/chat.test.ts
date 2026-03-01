@@ -385,6 +385,90 @@ describe('Chat API Endpoints', () => {
     });
   });
 
+  describe('POST /api/v1/chat/messages/:id/steer', () => {
+    it('accepts steering on assistant message and records stream event', async () => {
+      const createResponse = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/chat/messages',
+        user.sessionToken!,
+        {
+          content: 'Initial message',
+        },
+      );
+      expect(createResponse.status).toBe(200);
+      const { assistantMessageId } = await createResponse.json();
+
+      const steerResponse = await authenticatedRequest(
+        app,
+        'POST',
+        `/api/v1/chat/messages/${assistantMessageId}/steer`,
+        user.sessionToken!,
+        {
+          message: 'Concentre la réponse sur les trois priorités.',
+          metadata: { source: 'e2e' },
+        },
+      );
+
+      expect(steerResponse.status).toBe(200);
+      const steerBody = await steerResponse.json();
+      expect(steerBody.assistantMessageId).toBe(assistantMessageId);
+      expect(steerBody.status).toBe('accepted');
+      expect(steerBody.steer?.message).toBe(
+        'Concentre la réponse sur les trois priorités.',
+      );
+
+      const eventsResponse = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/chat/messages/${assistantMessageId}/stream-events`,
+        user.sessionToken!,
+      );
+      expect(eventsResponse.status).toBe(200);
+      const eventsBody = await eventsResponse.json();
+      const events = Array.isArray(eventsBody.events) ? eventsBody.events : [];
+      const steerStatusEvent = events.find(
+        (event: any) =>
+          event?.eventType === 'status' &&
+          event?.data?.state === 'steer_received',
+      );
+      expect(steerStatusEvent).toBeTruthy();
+      expect(steerStatusEvent.data.message).toBe(
+        'Concentre la réponse sur les trois priorités.',
+      );
+    });
+
+    it('rejects steering on user message', async () => {
+      const createResponse = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/chat/messages',
+        user.sessionToken!,
+        {
+          content: 'Message user',
+        },
+      );
+      expect(createResponse.status).toBe(200);
+      const { userMessageId } = await createResponse.json();
+
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        `/api/v1/chat/messages/${userMessageId}/steer`,
+        user.sessionToken!,
+        {
+          message: 'Doit échouer',
+        },
+      );
+
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(String(body.error ?? '')).toContain(
+        'Only assistant messages can be steered',
+      );
+    });
+  });
+
   describe('GET /api/v1/chat/sessions', () => {
     it('should list sessions for the authenticated user', async () => {
       // Créer quelques sessions

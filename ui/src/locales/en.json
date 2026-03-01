@@ -1029,19 +1029,7 @@
       "tasksLabel": "Task checklist",
       "noTasks": "No task in this TODO yet.",
       "completedTaskLabel": "Completed task",
-      "pendingTaskLabel": "Pending task",
-      "steer": {
-        "title": "Steer active run",
-        "placeholder": "Refocus this run on...",
-        "submit": "Send steer",
-        "acknowledgement": "Acknowledged new user steering message",
-        "submitting": "Sending...",
-        "unavailable": "No active run available for steer yet.",
-        "inactive": "This run is no longer steerable in its current status.",
-        "lastMessageLabel": "Last steer",
-        "lastStatusLabel": "Run status",
-        "error": "Unable to send steer message"
-      }
+      "pendingTaskLabel": "Pending task"
     },
     "comments": {
       "chooseThread": "Comments list",
@@ -1077,6 +1065,12 @@
     },
     "chat": {
       "empty": "No message. Write a message to start."
+    },
+    "steer": {
+      "submit": "Send steer",
+      "acknowledgement": "Acknowledged new user steering message",
+      "unavailable": "No active assistant message available for steer yet.",
+      "error": "Unable to send steer message"
     },
     "edit": {
       "placeholder": "Edit message…"

@@ -5,11 +5,23 @@ type WorkspaceItem = {
   role?: string | null;
 };
 
-test.describe.serial('TODO steering core', () => {
+const isChatMessageCreateRequest = (req: { method(): string; url(): string }) => {
+  if (req.method() !== 'POST') return false;
+  const pathname = new URL(req.url()).pathname;
+  return /^\/api\/v1\/chat\/messages\/?$/.test(pathname);
+};
+
+const isChatSteerRequest = (req: { method(): string; url(): string }) => {
+  if (req.method() !== 'POST') return false;
+  const pathname = new URL(req.url()).pathname;
+  return /^\/api\/v1\/chat\/messages\/[^/]+\/steer\/?$/.test(pathname);
+};
+
+test.describe.serial('chat steering core', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const DEFAULT_AUTH_STATE = './.auth/state.json';
 
-  test('executes a workspace-scoped plan -> todo -> task -> steer flow via steer UI', async ({
+  test('steers in-flight assistant generation through chat endpoint only', async ({
     page,
   }) => {
     const api = await request.newContext({
@@ -32,7 +44,7 @@ test.describe.serial('TODO steering core', () => {
       const workspaceId = String(writableWorkspace?.id ?? '');
 
       const suffix = Date.now();
-      const sessionTitle = `E2E steer UI ${suffix}`;
+      const sessionTitle = `E2E chat steer ${suffix}`;
       const initialMessage =
         "Rédige 180 lignes numérotées sur l'analyse de la maintenance prédictive ferroviaire pour Bombardier Inc., avec exemples concrets, contraintes RGPD, cybersécurité OT, budget de 1M$ et délai de 6 mois. Ne pose aucune question et n'ajoute pas de résumé.";
       const steerMessage =
@@ -66,73 +78,6 @@ test.describe.serial('TODO steering core', () => {
         },
       );
       expect(createSessionRes.status()).toBe(200);
-      const createSessionBody = (await createSessionRes.json()) as {
-        sessionId?: string;
-      };
-      const sessionId = String(createSessionBody.sessionId ?? '');
-      expect(sessionId).toBeTruthy();
-
-      const createPlanRes = await api.post(
-        `/api/v1/plans?workspace_id=${encodeURIComponent(workspaceId)}`,
-        {
-          data: {
-            title: `E2E TODO plan ${suffix}`,
-            description: 'Minimal BR03 todo steering validation',
-          },
-        },
-      );
-      expect(createPlanRes.status()).toBe(201);
-      const createPlanBody = (await createPlanRes.json()) as {
-        plan?: { id?: string; derivedStatus?: string };
-      };
-      const planId = String(createPlanBody.plan?.id ?? '');
-      expect(planId).toBeTruthy();
-      expect(createPlanBody.plan?.derivedStatus).toBe('todo');
-
-      const createTodoRes = await api.post(
-        `/api/v1/plans/${encodeURIComponent(planId)}/todos?workspace_id=${encodeURIComponent(workspaceId)}`,
-        {
-          data: {
-            title: `E2E TODO ${suffix}`,
-            description: 'Created from e2e todo steering core spec',
-            sessionId,
-          },
-        },
-      );
-      expect(createTodoRes.status()).toBe(201);
-      const createTodoBody = (await createTodoRes.json()) as {
-        todo?: { id?: string; planId?: string; derivedStatus?: string };
-      };
-      const todoId = String(createTodoBody.todo?.id ?? '');
-      expect(todoId).toBeTruthy();
-      expect(createTodoBody.todo?.planId).toBe(planId);
-      expect(createTodoBody.todo?.derivedStatus).toBe('todo');
-
-      const createTaskRes = await api.post(
-        `/api/v1/todos/${encodeURIComponent(todoId)}/tasks?workspace_id=${encodeURIComponent(workspaceId)}`,
-        {
-          data: {
-            title: `E2E task ${suffix}`,
-            status: 'planned',
-          },
-        },
-      );
-      expect(createTaskRes.status()).toBe(201);
-      const createTaskBody = (await createTaskRes.json()) as {
-        task?: { id?: string; status?: string };
-      };
-      const taskId = String(createTaskBody.task?.id ?? '');
-      expect(taskId).toBeTruthy();
-      expect(createTaskBody.task?.status).toBe('planned');
-
-      const startRunRes = await api.post(
-        `/api/v1/tasks/${encodeURIComponent(taskId)}/start?workspace_id=${encodeURIComponent(workspaceId)}`,
-        { data: {} },
-      );
-      expect(startRunRes.status()).toBe(200);
-      const startRunBody = (await startRunRes.json()) as { runId?: string };
-      const runId = String(startRunBody.runId ?? '');
-      expect(runId).toBeTruthy();
 
       await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
@@ -151,19 +96,11 @@ test.describe.serial('TODO steering core', () => {
       await expect(composerEditable).toBeVisible();
 
       const sessionHeader = page
-        .locator('#chat-widget-dialog div.border-b div.min-w-0.text-xs.text-slate-500.truncate')
+        .locator(
+          '#chat-widget-dialog div.border-b div.min-w-0.text-xs.text-slate-500.truncate',
+        )
         .first();
       await expect(sessionHeader).toContainText(sessionTitle);
-
-      const runtimePanel = page.getByTestId('todo-runtime-panel');
-      await expect(runtimePanel).toBeVisible();
-
-      const aiSettingsRes = await api.put('/api/v1/ai-settings', {
-        data: {
-          processingInterval: 10000,
-        },
-      });
-      expect(aiSettingsRes.status()).toBe(200);
 
       const modelSelect = page.locator('#chat-widget-dialog select').last();
       await expect(modelSelect).toBeVisible();
@@ -178,24 +115,6 @@ test.describe.serial('TODO steering core', () => {
         await modelSelect.selectOption(gpt52OptionValue);
       }
 
-      const isChatMessageRequestFor = (
-        req: { method(): string; url(): string; postDataJSON(): unknown },
-        expectedContent: string,
-      ): boolean => {
-        if (
-          req.method() !== 'POST' ||
-          !req.url().includes('/api/v1/chat/messages')
-        ) {
-          return false;
-        }
-        try {
-          const payload = req.postDataJSON() as { content?: string };
-          return payload?.content === expectedContent;
-        } catch {
-          return false;
-        }
-      };
-
       await composerEditable.focus();
       await page.keyboard.press('Control+A');
       await page.keyboard.press('Backspace');
@@ -203,20 +122,35 @@ test.describe.serial('TODO steering core', () => {
       const sendButton = page.getByTestId('chat-composer-send-button');
       await expect(sendButton).toBeEnabled({ timeout: 15_000 });
       await Promise.all([
-        page.waitForRequest((req) => isChatMessageRequestFor(req, initialMessage)),
+        page.waitForRequest(
+          (req) =>
+            isChatMessageCreateRequest(req) &&
+            (() => {
+              try {
+                const payload = req.postDataJSON() as { content?: string };
+                return payload?.content === initialMessage;
+              } catch {
+                return false;
+              }
+            })(),
+        ),
         sendButton.click(),
       ]);
 
       const stopButton = page.locator('button[aria-label="Stopper"]');
       await expect(stopButton).toBeVisible({ timeout: 12_000 });
 
-      let secondChatMessageCallDetected = false;
+      let createRequestDetectedAfterSteer = false;
+      let runSteerRequestDetected = false;
       const onRequest = (req: { method(): string; url(): string }) => {
+        if (isChatMessageCreateRequest(req)) {
+          createRequestDetectedAfterSteer = true;
+        }
         if (
           req.method() === 'POST' &&
-          req.url().includes('/api/v1/chat/messages')
+          /\/api\/v1\/runs\/[^/]+\/steer\/?$/.test(new URL(req.url()).pathname)
         ) {
-          secondChatMessageCallDetected = true;
+          runSteerRequestDetected = true;
         }
       };
       page.on('request', onRequest);
@@ -232,33 +166,26 @@ test.describe.serial('TODO steering core', () => {
         .last();
       await expect(composerSubmit).toBeVisible();
       const [steerReq, steerRes] = await Promise.all([
-        page.waitForRequest((req) => {
-          return (
-            req.method() === 'POST' &&
-            req.url().includes(`/api/v1/runs/${encodeURIComponent(runId)}/steer`)
-          );
-        }),
-        page.waitForResponse((res) => {
-          const req = res.request();
-          return (
-            req.method() === 'POST' &&
-            req.url().includes(`/api/v1/runs/${encodeURIComponent(runId)}/steer`)
-          );
-        }),
+        page.waitForRequest((req) => isChatSteerRequest(req)),
+        page.waitForResponse((res) => isChatSteerRequest(res.request())),
         composerSubmit.click(),
       ]);
       page.off('request', onRequest);
+
       const steerBody = steerReq.postDataJSON() as {
         content?: string;
         message?: string;
       };
       expect(steerBody.message).toBe(steerMessage);
       expect(steerRes.status()).toBe(200);
-      expect(secondChatMessageCallDetected).toBe(false);
+      expect(createRequestDetectedAfterSteer).toBe(false);
+      expect(runSteerRequestDetected).toBe(false);
       await expect(page.locator('#chat-widget-dialog')).toContainText(
         /Prise en compte d'un nouveau message utilisateur|Acknowledged new user steering message/i,
       );
-      await expect(page.locator('#chat-widget-dialog')).toContainText(steerMessage);
+      await expect(page.locator('#chat-widget-dialog')).toContainText(
+        steerMessage,
+      );
     } finally {
       await api.dispose();
     }
