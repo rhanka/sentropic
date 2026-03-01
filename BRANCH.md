@@ -767,6 +767,24 @@ Open decision items for BR-03 restart:
         - `api/src/routes/api/prompts.ts` (if deprecation or access narrowing is required)
       - Evidence:
         - Settings runtime surface wording is now agent/workflow-centric (`settings.runtime.*` i18n update), workflow task rows expose `Agent ID`, and E2E settings coverage now asserts absence of legacy prompts management section in the page surface.
+    - [ ] `L4-S22` DEV - Restore operator parity for agent prompt editing and workflow task I/O editing.
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2 (Agent prompt direct edit parity) and §9.3 (workflow task `inputSchema`/`outputSchema` editability).
+      - Scope:
+        - Keep legacy prompts section removed, but reintroduce direct prompt editing on Agent Configuration cards (no JSON-only prompt editing).
+        - Expose workflow task I/O contracts (`inputSchema`, `outputSchema`) in settings and allow validated edits.
+        - Keep BR03 boundary: no full visual workflow studio; editing stays form/JSON-contract level.
+      - Implementation TODO (detailed):
+        - Add dedicated prompt field to agent editor with persistence on `agent-config`.
+        - Add per-task I/O contract editors under workflow tasks with validation + save path in `workflow-config`.
+        - Preserve existing lineage/fork/detach behaviors while editing prompt and I/O contracts.
+      - Files expected:
+        - `ui/src/lib/components/TodoRuntimeConfigPanel.svelte`
+        - `ui/src/locales/en.json`
+        - `ui/src/locales/fr.json`
+        - `api/src/routes/api/agent-config.ts` (if payload contract extension needed)
+        - `api/src/routes/api/workflow-config.ts` (if payload contract extension needed)
+        - `api/src/services/todo-orchestration.ts` (if schema persistence mapping update is required)
   - [ ] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
@@ -1005,6 +1023,17 @@ Open decision items for BR-03 restart:
           - `2026-03-01` pass signature: `Test Files 1 passed (1)`; `Tests 11 passed (11)`.
         - [x] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
           - `2026-03-01` pass signature: `17 passed, 3 skipped (19.7s)`.
+    - [ ] `L4-S22` TEST - Settings scoped validation for agent prompt + workflow task I/O editing parity.
+      - Spec refs:
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2 + §9.3.
+      - Test evolution required:
+        - `ui/tests/utils/agent-config-api.test.ts`
+        - `ui/tests/utils/workflow-config-api.test.ts`
+        - `e2e/tests/06-settings.spec.ts`
+      - Scoped make commands:
+        - [ ] `make test-ui SCOPE=tests/utils/agent-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-ui SCOPE=tests/utils/workflow-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [ ] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
   - [ ] **Lot 4 UAT checklist**
     - [ ] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):
@@ -1066,6 +1095,8 @@ Open decision items for BR-03 restart:
     - [ ] Scenario UAT-12: settings IA surface is agent/workflow-centric.
       - [ ] In `/settings`, verify legacy prompts management section is removed/de-emphasized per BR03 scope decision.
       - [ ] Verify agent IDs and workflow task-agent linkage are visible and understandable for admin operators.
+      - [ ] Verify each agent exposes a direct prompt editing field (not only generic JSON) and changes persist after reload.
+      - [ ] Verify workflow tasks expose editable `inputSchema` and `outputSchema` contracts with validation and persisted save/reload behavior.
     - [ ] Scenario UAT-13: steering composer UX (`volant`) and additive continuity.
       - [ ] During active assistant run, verify send control switches to steering `volant` button in main composer.
       - [ ] Submit one steering message and verify user bubble is appended in same conversation timeline and acknowledgment text appears immediately in reasoning/tool strip.
