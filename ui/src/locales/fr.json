@@ -1067,10 +1067,10 @@
       "empty": "Aucun message. Écris un message pour démarrer."
     },
     "steer": {
-      "submit": "Envoyer le steer",
+      "submit": "Ajouter une précision",
       "acknowledgement": "Prise en compte d'un nouveau message utilisateur",
-      "unavailable": "Aucun message assistant actif disponible pour steer.",
-      "error": "Impossible d'envoyer le message de steer"
+      "unavailable": "Impossible d’ajouter une précision: aucune réponse en cours.",
+      "error": "Impossible d’ajouter la précision."
     },
     "edit": {
       "placeholder": "Modifier le message…"
