@@ -397,7 +397,7 @@ describe('Chat API Endpoints', () => {
         },
       );
       expect(createResponse.status).toBe(200);
-      const { assistantMessageId } = await createResponse.json();
+      const { assistantMessageId, sessionId } = await createResponse.json();
 
       const steerResponse = await authenticatedRequest(
         app,
@@ -436,6 +436,22 @@ describe('Chat API Endpoints', () => {
       expect(steerStatusEvent.data.message).toBe(
         'Concentre la réponse sur les trois priorités.',
       );
+
+      const messagesResponse = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/chat/sessions/${sessionId}/messages`,
+        user.sessionToken!,
+      );
+      expect(messagesResponse.status).toBe(200);
+      const messagesBody = await messagesResponse.json();
+      const timeline = Array.isArray(messagesBody.messages) ? messagesBody.messages : [];
+      const steerTimelineMessage = timeline.find(
+        (message: any) =>
+          message?.role === 'user' &&
+          message?.content === 'Concentre la réponse sur les trois priorités.',
+      );
+      expect(steerTimelineMessage).toBeTruthy();
     });
 
     it('rejects steering on user message', async () => {
@@ -466,6 +482,57 @@ describe('Chat API Endpoints', () => {
       expect(String(body.error ?? '')).toContain(
         'Only assistant messages can be steered',
       );
+    });
+
+    it('handles concurrent steering submissions without HTTP 500', async () => {
+      const createResponse = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/chat/messages',
+        user.sessionToken!,
+        {
+          content: 'Initial message for concurrent steer',
+        },
+      );
+      expect(createResponse.status).toBe(200);
+      const { assistantMessageId } = await createResponse.json();
+
+      const payloads = Array.from({ length: 8 }, (_, index) => ({
+        message: `Steer batch ${index + 1}`,
+      }));
+
+      const responses = await Promise.all(
+        payloads.map((payload) =>
+          authenticatedRequest(
+            app,
+            'POST',
+            `/api/v1/chat/messages/${assistantMessageId}/steer`,
+            user.sessionToken!,
+            payload,
+          ),
+        ),
+      );
+
+      const statuses = responses.map((response) => response.status);
+      expect(statuses.every((status) => status === 200)).toBe(true);
+
+      const eventsResponse = await authenticatedRequest(
+        app,
+        'GET',
+        `/api/v1/chat/messages/${assistantMessageId}/stream-events`,
+        user.sessionToken!,
+      );
+      expect(eventsResponse.status).toBe(200);
+      const eventsBody = await eventsResponse.json();
+      const events = Array.isArray(eventsBody.events) ? eventsBody.events : [];
+      const steerEvents = events.filter(
+        (event: any) =>
+          event?.eventType === 'status' &&
+          event?.data?.state === 'steer_received' &&
+          typeof event?.data?.message === 'string' &&
+          event.data.message.startsWith('Steer batch '),
+      );
+      expect(steerEvents.length).toBeGreaterThanOrEqual(8);
     });
   });
 

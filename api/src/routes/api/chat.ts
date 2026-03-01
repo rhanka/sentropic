@@ -4,9 +4,9 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
-import { getNextSequence, readStreamEvents, writeStreamEvent } from '../../services/stream-service';
+import { readStreamEvents, writeStreamEventWithSequenceRetry } from '../../services/stream-service';
 import { db } from '../../db/client';
-import { extensionToolPermissions } from '../../db/schema';
+import { chatMessages, chatSessions, extensionToolPermissions } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { createId } from '../../utils/id';
 import { resolveLocaleFromHeaders } from '../../utils/locale';
@@ -403,8 +403,7 @@ chatRouter.post('/messages/:id/steer', requireWorkspaceAccessRole(), zValidator(
   }
 
   const streamId = assistantMessageId;
-  const sequence = await getNextSequence(streamId);
-  await writeStreamEvent(
+  await writeStreamEventWithSequenceRetry(
     streamId,
     'status',
     {
@@ -414,14 +413,53 @@ chatRouter.post('/messages/:id/steer', requireWorkspaceAccessRole(), zValidator(
       actor: 'user',
       actorId: user.userId,
     },
-    sequence,
-    streamId,
+    {
+      messageId: streamId,
+      maxAttempts: 6,
+    },
   );
+
+  let steerMessageId: string | null = null;
+  try {
+    const result = await db
+      .select({ maxSequence: sql<number>`MAX(${chatMessages.sequence})` })
+      .from(chatMessages)
+      .where(eq(chatMessages.sessionId, msg.sessionId));
+    const nextSequence = (result[0]?.maxSequence ?? 0) + 1;
+    steerMessageId = createId();
+
+    await db.insert(chatMessages).values({
+      id: steerMessageId,
+      sessionId: msg.sessionId,
+      role: 'user',
+      content: body.message,
+      toolCalls: null,
+      toolCallId: null,
+      reasoning: null,
+      model: null,
+      promptId: null,
+      promptVersionId: null,
+      contexts: null,
+      sequence: nextSequence,
+      createdAt: new Date(),
+    });
+
+    await db
+      .update(chatSessions)
+      .set({ updatedAt: new Date() })
+      .where(eq(chatSessions.id, msg.sessionId));
+  } catch (error) {
+    console.error('[chat/steer] failed to persist steer message', {
+      assistantMessageId,
+      error,
+    });
+  }
 
   return c.json({
     assistantMessageId,
     status: 'accepted',
     steer: {
+      messageId: steerMessageId,
       message: body.message,
       metadata: body.metadata ?? {},
     },
