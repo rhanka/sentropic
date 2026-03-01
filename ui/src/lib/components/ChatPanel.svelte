@@ -1002,6 +1002,11 @@
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
   let streamDetailsLoading = false;
   let todoRuntimePanel: TodoRuntimePanelState | null = null;
+  let composerSteerRunState: TodoRuntimeRunState = {
+    runId: null,
+    runStatus: null,
+    runTaskId: null,
+  };
   let todoRuntimeCollapsed = false;
   let todoRuntimeDeleteInFlight = false;
   let composerSteerInFlight = false;
@@ -2311,16 +2316,21 @@
     composerSteerAck = null;
   };
 
+  const resetComposerSteerRunState = () => {
+    composerSteerRunState = {
+      runId: null,
+      runStatus: null,
+      runTaskId: null,
+    };
+  };
+
   const getActiveAssistantStreamId = (): string | null => {
     if (!activeAssistantMessage) return null;
     return activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null;
   };
 
-  const getActiveRunForComposer = (): TodoRuntimeRunState => ({
-    runId: todoRuntimePanel?.runId ?? null,
-    runStatus: todoRuntimePanel?.runStatus ?? null,
-    runTaskId: todoRuntimePanel?.runTaskId ?? null,
-  });
+  const getActiveRunForComposer = (): TodoRuntimeRunState =>
+    composerSteerRunState;
 
   const isComposerSteerMode = (): boolean =>
     Boolean(
@@ -2499,6 +2509,10 @@
     next.runId = nextRunState.runId;
     next.runStatus = nextRunState.runStatus;
     next.runTaskId = nextRunState.runTaskId;
+    composerSteerRunState = normalizeTodoRuntimeRunState(
+      runtime,
+      composerSteerRunState,
+    );
 
     todoRuntimePanel = next;
   };
@@ -2602,6 +2616,7 @@
   export const selectSession = async (id: string) => {
     sessionId = id;
     resetTodoRuntimePanel();
+    resetComposerSteerRunState();
     resetLocalToolInterceptionState();
     await loadMessages(id, { scrollToBottom: true });
   };
@@ -2618,6 +2633,7 @@
     messages = [];
     initialEventsByMessageId = new Map();
     resetTodoRuntimePanel();
+    resetComposerSteerRunState();
     resetLocalToolInterceptionState();
     selectedProviderId = defaultProviderIdForNewSession;
     selectedModelId = defaultModelIdForNewSession;
@@ -2635,6 +2651,7 @@
       messages = [];
       initialEventsByMessageId = new Map();
       resetTodoRuntimePanel();
+      resetComposerSteerRunState();
       resetLocalToolInterceptionState();
       await loadSessions();
     } catch (e) {
