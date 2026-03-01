@@ -610,7 +610,7 @@ Open decision items for BR-03 restart:
           - `2026-02-28` pass signature: `> top-ai-ideas-ui@0.1.0 lint` then `eslint .` (exit `0`).
         - [x] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
           - `2026-02-28` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
-    - [ ] `L4-S13` DEV - In-flight steer acknowledgment and conversation continuity semantics.
+    - [x] `L4-S13` DEV - In-flight steer acknowledgment and conversation continuity semantics.
       - Scope:
         - On steer submit, reasoning/tool strip shows immediate acknowledgment message.
         - User steer message is appended as a regular user bubble in current conversation timeline.
@@ -620,6 +620,8 @@ Open decision items for BR-03 restart:
         - `ui/src/lib/components/StreamMessage.svelte`
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
+      - Evidence:
+        - `ChatPanel` composer steering mode + steer bubble append + acknowledgement handoff to `StreamMessage` implemented (`ui/src/lib/components/ChatPanel.svelte`, `ui/src/lib/components/StreamMessage.svelte`, locales `en/fr`).
     - [x] `L4-S14` DEV - Progression reliability contract (`go` handshake + actionable updates).
       - Scope:
         - Assistant asks explicit `go` before progressing a freshly created TODO.
@@ -630,14 +632,16 @@ Open decision items for BR-03 restart:
         - `ui/src/lib/components/ChatPanel.svelte`
       - Evidence:
         - Delivered in `aaf1748` with deterministic progression + update-only focus when an active session TODO exists.
-    - [ ] `L4-S15` DEV - Reasoning pre-classification TODO opportunity signal (`chat_reasoning_effort_eval` alignment).
+    - [x] `L4-S15` DEV - Reasoning pre-classification TODO signal removed (decision).
       - Scope:
-        - Add a compact TODO-opportunity signal to pre-classification input so the model better distinguishes "direct answer" vs "execution via TODO progression".
-        - Keep TODO payload compact and avoid full list duplication in evaluator prompt.
+        - Do not inject `todo_opportunity_signal` into `chat_reasoning_effort_eval`.
+        - Keep TODO progression behavior in system orchestration rules (not in reasoning classifier prompt payload).
       - Files expected:
         - `api/src/config/default-prompts.ts`
         - `api/src/services/chat-service.ts`
-    - [ ] `L4-S16` DEV - TODO tool surface fusion (`todo_create` + `todo_update` + `task_update` contract simplification).
+      - Evidence:
+        - Signal block + variable wiring removed from evaluator prompt/template path; chat service no longer builds/replaces `todo_opportunity_signal`.
+    - [x] `L4-S16` DEV - TODO tool surface fusion (`todo_create` + `todo_update` + `task_update` contract simplification).
       - Scope:
         - Refactor toward one user-facing TODO orchestration surface while preserving current behavior constraints:
           - progress/check updates autonomous,
@@ -648,6 +652,8 @@ Open decision items for BR-03 restart:
         - `api/src/services/todo-orchestration.ts`
         - `api/src/config/default-prompts.ts`
         - `spec/TOOLS.md`
+      - Evidence:
+        - Unified `todo` tool contract added (`action=create|update_todo|update_task`) with legacy aliases retained for backward compatibility; chat tool selection/orchestration now resolves TODO paths through the unified surface (`api/src/services/tools.ts`, `api/src/services/chat-service.ts`, `spec/TOOLS.md`).
   - [ ] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
@@ -769,24 +775,30 @@ Open decision items for BR-03 restart:
         - `ui/tests/utils/todo-runtime-steer.test.ts` (acknowledgment state assertions)
         - `e2e/tests/09-todo-steering-core.spec.ts` (active-run steering continuity + additive assistant bubble)
       - Scoped make commands (to run after DEV slice completion):
-        - [ ] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+        - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
         - [ ] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
-    - [ ] `L4-S15` TEST - Reasoning pre-classification TODO opportunity coverage.
+    - [x] `L4-S15` TEST - Reasoning pre-classification TODO signal removal coverage.
       - Test evolution required:
-        - `api/tests/unit/chat-service-tools.test.ts` (prompt/evaluator input assertions)
+        - `api/tests/unit/chat-service-tools.test.ts` (remove evaluator prompt assertions tied to `todo_opportunity_signal`)
       - Scoped make commands (to run after DEV slice completion):
-        - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
-    - [ ] `L4-S16` TEST - TODO tool fusion regression matrix.
+        - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+          - pass signature unchanged (`Test Files 1 passed`, `Tests 12 passed`) after removing signal-specific assertions.
+    - [x] `L4-S16` TEST - TODO tool fusion regression matrix.
       - Test evolution required:
         - `api/tests/unit/chat-service-tools.test.ts`
         - `api/tests/unit/todo-orchestration-chat-progression.test.ts`
         - `api/tests/api/chat-tools.test.ts`
         - `api/tests/api/todos.test.ts`
       - Scoped make commands (to run after DEV slice completion):
-        - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-api-unit SCOPE=tests/unit/todo-orchestration-chat-progression.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-api-endpoints SCOPE=tests/api/todos.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+        - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `✓ tests/unit/chat-service-tools.test.ts (12 tests)`; `Test Files 1 passed`, `Tests 12 passed`.
+        - [x] `make test-api-unit SCOPE=tests/unit/todo-orchestration-chat-progression.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `✓ tests/unit/todo-orchestration-chat-progression.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `✓ tests/api/chat-tools.test.ts (6 tests)`; `Test Files 1 passed`, `Tests 6 passed`.
+        - [x] `make test-api-endpoints SCOPE=tests/api/todos.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-02-28` pass signature: `✓ tests/api/todos.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
   - [x] **Lot 4 UAT checklist**
     - [x] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):

@@ -466,7 +466,7 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
     expect(seenToolNames).toContain('web_extract');
   });
 
-  it('should expose and execute todo_create when explicitly requested', async () => {
+  it('should expose and execute unified todo tool when explicitly requested', async () => {
     const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
@@ -478,8 +478,9 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
             type: 'tool_call_start',
             data: {
               tool_call_id: 'call_todo_create_1',
-              name: 'todo_create',
+              name: 'todo',
               args: JSON.stringify({
+                action: 'create',
                 title: 'Release hardening',
                 planTitle: 'Release wave',
                 tasks: [
@@ -510,10 +511,14 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
       sessionId: msg.sessionId,
       assistantMessageId: msg.assistantMessageId,
       model: msg.model,
-      tools: ['todo_create']
+      tools: ['todo']
     });
 
-    expect(toolNames(calls[0]?.tools)).toContain('todo_create');
+    const names = toolNames(calls[0]?.tools);
+    expect(names).toContain('todo');
+    expect(names).not.toContain('todo_create');
+    expect(names).not.toContain('todo_update');
+    expect(names).not.toContain('task_update');
 
     const events = await db
       .select()
@@ -530,7 +535,7 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
     expect((resultEvent as any).data?.result?.taskCount).toBe(2);
   });
 
-  it('should prefer todo_update/task_update over todo_create when an active session TODO exists', async () => {
+  it('should expose unified todo tool in active TODO mode even when legacy tool id is requested', async () => {
     const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
@@ -568,13 +573,14 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
     });
 
     const names = toolNames(calls[0]?.tools);
-    expect(names).toContain('todo_update');
-    expect(names).toContain('task_update');
+    expect(names).toContain('todo');
     expect(names).not.toContain('todo_create');
+    expect(names).not.toContain('todo_update');
+    expect(names).not.toContain('task_update');
     expect(calls[0]?.toolChoice).toBe('required');
   });
 
-  it('should keep todo_create available when user explicitly asks to replace with a new TODO list', async () => {
+  it('should keep unified todo tool available when user explicitly asks to replace with a new TODO list', async () => {
     const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
@@ -612,7 +618,8 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
     });
 
     const names = toolNames(calls[0]?.tools);
-    expect(names).toContain('todo_create');
+    expect(names).toContain('todo');
+    expect(names).not.toContain('todo_create');
     expect(calls[0]?.toolChoice).toBe('auto');
   });
 
@@ -659,6 +666,9 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
       'Prioritize progression of the active TODO before starting unrelated planning.',
     );
     expect(systemPrompt).toContain(
+      'Use `todo` with `action="update_task"` and `action="update_todo"` to progress the existing TODO.',
+    );
+    expect(systemPrompt).toContain(
       'Ask blocker questions upfront in one batch, then continue autonomously until a real blocker appears.',
     );
     expect(systemPrompt).toContain(
@@ -700,8 +710,9 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
             type: 'tool_call_start',
             data: {
               tool_call_id: 'call_todo_update_structural_1',
-              name: 'todo_update',
+              name: 'todo',
               args: JSON.stringify({
+                action: 'update_todo',
                 todoId,
                 title: 'Renamed without explicit intent',
                 status: 'in_progress'
@@ -782,8 +793,9 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
             type: 'tool_call_start',
             data: {
               tool_call_id: 'call_todo_update_structural_2',
-              name: 'todo_update',
+              name: 'todo',
               args: JSON.stringify({
+                action: 'update_todo',
                 todoId,
                 title: 'TODO finale',
               })

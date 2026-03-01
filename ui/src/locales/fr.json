@@ -1030,6 +1030,7 @@
         "title": "Steer du run actif",
         "placeholder": "Recentrer ce run sur...",
         "submit": "Envoyer steer",
+        "acknowledgement": "Prise en compte d'un nouveau message utilisateur",
         "submitting": "Envoi...",
         "unavailable": "Aucun run actif disponible pour steer.",
         "inactive": "Ce run n'est plus steerable dans son statut actuel.",

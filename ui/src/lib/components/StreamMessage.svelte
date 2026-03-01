@@ -24,6 +24,7 @@
   export let historyPending: boolean = false;
   export let smoothContentStreaming = false;
   export let smoothChunkThreshold = 80;
+  export let acknowledgementText: string | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
   export let onTerminal: ((t: 'done' | 'error') => void) | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
@@ -33,7 +34,7 @@
     | ((
         update: {
           toolCallId: string;
-          toolName: 'todo_create' | 'todo_update' | 'task_update';
+          toolName: 'todo' | 'todo_create' | 'todo_update' | 'task_update';
           result: Record<string, unknown>;
         },
       ) => void)
@@ -244,8 +245,11 @@
 
   const isTodoRuntimeToolName = (
     value: string | undefined,
-  ): value is 'todo_create' | 'todo_update' | 'task_update' =>
-    value === 'todo_create' || value === 'todo_update' || value === 'task_update';
+  ): value is 'todo' | 'todo_create' | 'todo_update' | 'task_update' =>
+    value === 'todo' ||
+    value === 'todo_create' ||
+    value === 'todo_update' ||
+    value === 'task_update';
 
   const asRecord = (value: unknown): Record<string, unknown> | null => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -274,7 +278,7 @@
     value.replace(/([\\`*_{}\[\]()#+.!|>~-])/g, '\\$1');
 
   const buildTodoRuntimeChecklist = (
-    toolName: 'todo_create' | 'todo_update' | 'task_update',
+    toolName: 'todo' | 'todo_create' | 'todo_update' | 'task_update',
     rawResult: unknown,
   ): string | null => {
     const result = asRecord(rawResult) ?? {};
@@ -438,7 +442,7 @@
         onTodoRuntime?.({
           toolCallId: toolId,
           toolName: (isTodoRuntimeToolName(toolName) ? toolName : runtimeToolName) as
-            'todo_create' | 'todo_update' | 'task_update',
+            'todo' | 'todo_create' | 'todo_update' | 'task_update',
           result: resultRecord,
         });
       }
@@ -614,6 +618,9 @@
 
   $: hasSteps = st.sawReasoning || st.sawTools;
   $: hasContent = !!st.contentText && st.contentText.trim().length > 0;
+  $: hasAcknowledgement =
+    typeof acknowledgementText === 'string' &&
+    acknowledgementText.trim().length > 0;
   $: showStartup = !!st.sawStarted && !hasSteps && !hasContent && !finalContent;
   $: toolsCount = st.toolCallIds.size;
   $: durationMs = (st.endedAtMs ?? Date.now()) - st.startedAtMs;
@@ -637,6 +644,11 @@
 </script>
 
 <div class="w-full max-w-full">
+    {#if variant === 'chat' && hasAcknowledgement}
+      <div class="text-[11px] text-slate-500 mt-0.5">
+        {acknowledgementText}
+      </div>
+    {/if}
     {#if showDetailLoader}
       <div class="flex items-center justify-between gap-2 mt-0.5">
         <div class="text-[11px] text-slate-500">{$_('stream.detailLoading')}</div>
