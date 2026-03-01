@@ -153,9 +153,19 @@ describe('Use Cases Generate - Matrix Mode', () => {
     expect(typeof useCaseListWorkflow?.workflowRunId).toBe('string');
     expect(typeof useCaseListWorkflow?.workflowDefinitionId).toBe('string');
     expect(useCaseListWorkflow?.taskKey).toBe('generation_usecase_list');
+    expect(typeof useCaseListWorkflow?.agentDefinitionId).toBe('string');
     expect(typeof matrixWorkflow?.workflowRunId).toBe('string');
     expect(typeof matrixWorkflow?.workflowDefinitionId).toBe('string');
     expect(matrixWorkflow?.taskKey).toBe('generation_matrix_prepare');
+    expect(typeof matrixWorkflow?.agentDefinitionId).toBe('string');
+    const taskAssignments = useCaseListWorkflow?.taskAssignments as Record<string, unknown> | undefined;
+    expect(taskAssignments).toBeDefined();
+    expect(typeof taskAssignments?.contextPrepareAgentId).toBe('string');
+    expect(typeof taskAssignments?.matrixPrepareAgentId).toBe('string');
+    expect(typeof taskAssignments?.usecaseListAgentId).toBe('string');
+    expect(typeof taskAssignments?.todoSyncAgentId).toBe('string');
+    expect(typeof taskAssignments?.usecaseDetailAgentId).toBe('string');
+    expect(typeof taskAssignments?.executiveSummaryAgentId).toBe('string');
   });
 
   it('rejects explicit matrix_mode=organization when organization has no template', async () => {
@@ -272,9 +282,19 @@ describe('Use Cases Generate - Matrix Mode', () => {
     expect(typeof useCaseListWorkflow?.workflowRunId).toBe('string');
     expect(typeof useCaseListWorkflow?.workflowDefinitionId).toBe('string');
     expect(useCaseListWorkflow?.taskKey).toBe('generation_usecase_list');
+    expect(typeof useCaseListWorkflow?.agentDefinitionId).toBe('string');
     expect(typeof matrixWorkflow?.workflowRunId).toBe('string');
     expect(typeof matrixWorkflow?.workflowDefinitionId).toBe('string');
     expect(matrixWorkflow?.taskKey).toBe('generation_matrix_prepare');
+    expect(typeof matrixWorkflow?.agentDefinitionId).toBe('string');
+    const taskAssignments = useCaseListWorkflow?.taskAssignments as Record<string, unknown> | undefined;
+    expect(taskAssignments).toBeDefined();
+    expect(typeof taskAssignments?.contextPrepareAgentId).toBe('string');
+    expect(typeof taskAssignments?.matrixPrepareAgentId).toBe('string');
+    expect(typeof taskAssignments?.usecaseListAgentId).toBe('string');
+    expect(typeof taskAssignments?.todoSyncAgentId).toBe('string');
+    expect(typeof taskAssignments?.usecaseDetailAgentId).toBe('string');
+    expect(typeof taskAssignments?.executiveSummaryAgentId).toBe('string');
   });
 
   it('falls back to matrix_mode=default when explicit generate is sent without organization', async () => {

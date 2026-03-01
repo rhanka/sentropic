@@ -15,6 +15,16 @@ import {
 } from "../db/schema";
 import { createId } from "../utils/id";
 import {
+  DEFAULT_GENERATION_AGENTS,
+  DEFAULT_GENERATION_AGENT_KEY_BY_TASK,
+} from "../config/default-agents";
+import {
+  DEFAULT_USE_CASE_GENERATION_WORKFLOW,
+  type GenerationAgentKey,
+  type UseCaseGenerationWorkflowTaskKey,
+  USE_CASE_GENERATION_WORKFLOW_KEY,
+} from "../config/default-workflows";
+import {
   assertTaskStatusTransition,
   canPerformTodoAction,
   classifyGuardrailDecision,
@@ -48,7 +58,6 @@ const RUN_RESUMABLE_STATUSES = new Set(["paused", "blocked"]);
 const RUN_ACTIVE_STATUSES = ["pending", "in_progress", "paused", "blocked"] as const;
 const CHAT_SESSION_LINK_SOURCE_ENTITY_TYPE = "plan";
 const GUARDRAIL_CATEGORIES = new Set<GuardrailCategory>(["scope", "quality", "safety", "approval"]);
-const USE_CASE_GENERATION_WORKFLOW_KEY = "ai_usecase_generation_v1";
 
 const computeTaskStatusPath = (fromStatus: TaskStatus, toStatus: TaskStatus): TaskStatus[] | null => {
   if (fromStatus === toStatus) {
@@ -77,49 +86,6 @@ const computeTaskStatusPath = (fromStatus: TaskStatus, toStatus: TaskStatus): Ta
   return null;
 };
 
-const USE_CASE_GENERATION_WORKFLOW_TASKS: Array<{
-  taskKey: UseCaseGenerationWorkflowTaskKey;
-  title: string;
-  description: string;
-  orderIndex: number;
-}> = [
-  {
-    taskKey: "generation_context_prepare",
-    title: "Generation context preparation",
-    description: "Normalize request payload and folder context before generation runtime starts.",
-    orderIndex: 0,
-  },
-  {
-    taskKey: "generation_matrix_prepare",
-    title: "Matrix preparation",
-    description: "Generate matrix configuration when matrix mode requires dynamic generation.",
-    orderIndex: 1,
-  },
-  {
-    taskKey: "generation_usecase_list",
-    title: "Use-case list generation",
-    description: "Generate draft use-case list from normalized context.",
-    orderIndex: 2,
-  },
-  {
-    taskKey: "generation_todo_sync",
-    title: "TODO synchronization",
-    description: "Synchronize generated items with chat session TODO runtime projection.",
-    orderIndex: 3,
-  },
-  {
-    taskKey: "generation_usecase_detail",
-    title: "Use-case detail generation",
-    description: "Generate detail payload for each draft use case.",
-    orderIndex: 4,
-  },
-  {
-    taskKey: "generation_executive_summary",
-    title: "Executive synthesis generation",
-    description: "Generate executive summary once all use cases are completed.",
-    orderIndex: 5,
-  },
-];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -203,14 +169,6 @@ export interface TaskExecutionInput {
   violatedGuardrailIds?: string[];
   approvalGrantedGuardrailIds?: string[];
 }
-
-export type UseCaseGenerationWorkflowTaskKey =
-  | "generation_context_prepare"
-  | "generation_matrix_prepare"
-  | "generation_usecase_list"
-  | "generation_todo_sync"
-  | "generation_usecase_detail"
-  | "generation_executive_summary";
 
 export interface UseCaseGenerationWorkflowTaskAssignments {
   contextPrepareAgentId: string | null;
@@ -1653,6 +1611,104 @@ export class TodoOrchestrationService {
     return updated;
   }
 
+  private async ensureDefaultGenerationAgents(
+    actor: TodoActor,
+  ): Promise<Record<GenerationAgentKey, string>> {
+    const now = new Date();
+    const requestedKeys = DEFAULT_GENERATION_AGENTS.map((item) => item.key);
+
+    const existingRows = await db
+      .select()
+      .from(agentDefinitions)
+      .where(
+        and(
+          eq(agentDefinitions.workspaceId, actor.workspaceId),
+          inArray(agentDefinitions.key, requestedKeys),
+        ),
+      );
+    const existingByKey = new Map(existingRows.map((row) => [row.key, row]));
+
+    for (const seed of DEFAULT_GENERATION_AGENTS) {
+      const existing = existingByKey.get(seed.key);
+      if (!existing) {
+        const id = createId();
+        await db.insert(agentDefinitions).values({
+          id,
+          workspaceId: actor.workspaceId,
+          key: seed.key,
+          name: seed.name,
+          description: seed.description,
+          config: normalizeMetadata(seed.config),
+          sourceLevel: seed.sourceLevel,
+          lineageRootId: id,
+          parentId: null,
+          isDetached: false,
+          lastParentSyncAt: now,
+          createdByUserId: actor.userId,
+          createdAt: now,
+          updatedAt: now,
+        });
+        continue;
+      }
+
+      if (existing.sourceLevel !== "code" || existing.isDetached || existing.parentId) {
+        continue;
+      }
+
+      const currentConfig = normalizeMetadata(existing.config);
+      const nextConfig = normalizeMetadata(seed.config);
+      const shouldSync =
+        existing.name !== seed.name ||
+        (existing.description ?? null) !== (seed.description ?? null) ||
+        JSON.stringify(currentConfig) !== JSON.stringify(nextConfig);
+
+      if (!shouldSync) {
+        continue;
+      }
+
+      await db
+        .update(agentDefinitions)
+        .set({
+          name: seed.name,
+          description: seed.description,
+          config: nextConfig,
+          updatedAt: now,
+          lastParentSyncAt: now,
+        })
+        .where(
+          and(
+            eq(agentDefinitions.id, existing.id),
+            eq(agentDefinitions.workspaceId, actor.workspaceId),
+          ),
+        );
+    }
+
+    const syncedRows = await db
+      .select({ id: agentDefinitions.id, key: agentDefinitions.key })
+      .from(agentDefinitions)
+      .where(
+        and(
+          eq(agentDefinitions.workspaceId, actor.workspaceId),
+          inArray(agentDefinitions.key, requestedKeys),
+        ),
+      );
+    const idsByKey = new Map(syncedRows.map((row) => [row.key, row.id]));
+
+    const out: Partial<Record<GenerationAgentKey, string>> = {};
+    for (const seed of DEFAULT_GENERATION_AGENTS) {
+      const agentId = idsByKey.get(seed.key);
+      if (!agentId) {
+        throw new TodoOrchestrationError(
+          500,
+          `Missing generation agent definition for key ${seed.key}`,
+        );
+      }
+      out[seed.key] = agentId;
+    }
+
+    return out as Record<GenerationAgentKey, string>;
+  }
+
   private async getUseCaseGenerationWorkflowTaskAssignments(
     workspaceId: string,
     workflowDefinitionId: string,
@@ -1689,6 +1745,8 @@ export class TodoOrchestrationService {
   private async ensureUseCaseGenerationWorkflowDefinition(
     actor: TodoActor,
   ): Promise<{ workflowDefinitionId: string; taskAssignments: UseCaseGenerationWorkflowTaskAssignments }> {
+    const generationAgentIds = await this.ensureDefaultGenerationAgents(actor);
+
     const [existingWorkflow] = await db
       .select()
       .from(workflowDefinitions)
@@ -1707,13 +1765,10 @@ export class TodoOrchestrationService {
       await db.insert(workflowDefinitions).values({
         id: workflowDefinitionId,
         workspaceId: actor.workspaceId,
-        key: USE_CASE_GENERATION_WORKFLOW_KEY,
-        name: "AI use-case generation workflow",
-        description: "Workflow runtime for use-case generation requests.",
-        config: normalizeMetadata({
-          route: "POST /api/v1/use-cases/generate",
-          migration: "lot4-runtime",
-        }),
+        key: DEFAULT_USE_CASE_GENERATION_WORKFLOW.key,
+        name: DEFAULT_USE_CASE_GENERATION_WORKFLOW.name,
+        description: DEFAULT_USE_CASE_GENERATION_WORKFLOW.description,
+        config: normalizeMetadata(DEFAULT_USE_CASE_GENERATION_WORKFLOW.config),
         sourceLevel: "code",
         lineageRootId: workflowDefinitionId,
         parentId: null,
@@ -1723,10 +1778,43 @@ export class TodoOrchestrationService {
         createdAt: now,
         updatedAt: now,
       });
+    } else if (
+      existingWorkflow.sourceLevel === "code" &&
+      !existingWorkflow.isDetached &&
+      !existingWorkflow.parentId
+    ) {
+      const currentConfig = normalizeMetadata(existingWorkflow.config);
+      const nextConfig = normalizeMetadata(DEFAULT_USE_CASE_GENERATION_WORKFLOW.config);
+      const shouldSync =
+        existingWorkflow.name !== DEFAULT_USE_CASE_GENERATION_WORKFLOW.name ||
+        (existingWorkflow.description ?? null) !==
+          (DEFAULT_USE_CASE_GENERATION_WORKFLOW.description ?? null) ||
+        JSON.stringify(currentConfig) !== JSON.stringify(nextConfig);
+      if (shouldSync) {
+        await db
+          .update(workflowDefinitions)
+          .set({
+            name: DEFAULT_USE_CASE_GENERATION_WORKFLOW.name,
+            description: DEFAULT_USE_CASE_GENERATION_WORKFLOW.description,
+            config: nextConfig,
+            updatedAt: now,
+            lastParentSyncAt: now,
+          })
+          .where(
+            and(
+              eq(workflowDefinitions.id, existingWorkflow.id),
+              eq(workflowDefinitions.workspaceId, actor.workspaceId),
+            ),
+          );
+      }
     }
 
     const workflowTaskRows = await db
-      .select({ taskKey: workflowDefinitionTasks.taskKey })
+      .select({
+        id: workflowDefinitionTasks.id,
+        taskKey: workflowDefinitionTasks.taskKey,
+        agentDefinitionId: workflowDefinitionTasks.agentDefinitionId,
+      })
       .from(workflowDefinitionTasks)
       .where(
         and(
@@ -1735,7 +1823,7 @@ export class TodoOrchestrationService {
         ),
       );
     const existingTaskKeys = new Set(workflowTaskRows.map((row) => row.taskKey));
-    const missingWorkflowTasks = USE_CASE_GENERATION_WORKFLOW_TASKS.filter(
+    const missingWorkflowTasks = DEFAULT_USE_CASE_GENERATION_WORKFLOW.tasks.filter(
       (taskDefinition) => !existingTaskKeys.has(taskDefinition.taskKey),
     );
 
@@ -1749,7 +1837,7 @@ export class TodoOrchestrationService {
           title: taskDefinition.title,
           description: taskDefinition.description,
           orderIndex: taskDefinition.orderIndex,
-          agentDefinitionId: null,
+          agentDefinitionId: generationAgentIds[taskDefinition.agentKey],
           schemaFormat: "json_schema",
           inputSchema: {},
           outputSchema: {},
@@ -1759,6 +1847,26 @@ export class TodoOrchestrationService {
           updatedAt: now,
         })),
       );
+    }
+
+    for (const row of workflowTaskRows) {
+      if (row.agentDefinitionId) continue;
+      const taskKey = row.taskKey as UseCaseGenerationWorkflowTaskKey;
+      const agentKey = DEFAULT_GENERATION_AGENT_KEY_BY_TASK[taskKey];
+      const agentId = generationAgentIds[agentKey];
+      if (!agentId) continue;
+      await db
+        .update(workflowDefinitionTasks)
+        .set({
+          agentDefinitionId: agentId,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(workflowDefinitionTasks.id, row.id),
+            eq(workflowDefinitionTasks.workspaceId, actor.workspaceId),
+          ),
+        );
     }
 
     const taskAssignments = await this.getUseCaseGenerationWorkflowTaskAssignments(
