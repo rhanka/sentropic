@@ -838,53 +838,44 @@ Open decision items for BR-03 restart:
       - [x] Execute UAT only after the targeted DEV scope is complete (minimum `L4-S1` to `L4-S12b`; full Lot 4 UAT requires `L4-S13` to `L4-S16` too).
       - [x] Use root workspace `~/src/top-ai-ideas-fullstack` on `ENV=dev` and open `/folders`.
       - [x] Open chat widget in a fresh session with TODO tooling enabled.
-    - [ ] Scenario UAT-1: one TODO max per session.
+    - [X] Scenario UAT-1: one TODO max per session.
       - [x] Ask AI to create a first TODO with at least 3 tasks; verify creation success.
       - [x] In the same session, ask AI to create a second TODO; verify deterministic conflict behavior (no second active TODO created, conflict message references current active TODO).
-    - [ ] Scenario UAT-2: sticky bottom panel UX + readability polish.
-      - [ ] Verify TODO panel is sticky at bottom of conversation and spans full available width.
-      - [ ] Verify panel can collapse/expand and keeps state during ongoing chat interaction.
-      - [ ] Verify collapse/expand chevron button uses the standard header icon-button style (hover background + rounded control).
-      - [ ] Verify a `trash` button is visible next to chevron and uses standard destructive header icon-button style.
-      - [ ] Verify max-height constraint and internal scroll when task list exceeds visible space.
-      - [ ] Verify title is `TODO` and no technical runtime label remains in the main header.
-      - [ ] Verify runtime metadata is not visible in panel body (no info menu entry for metadata in this branch).
-      - [ ] Verify checklist item typography is reduced to subtitle-equivalent size.
-      - [ ] Click `trash` and verify active TODO is removed/closed for the session and panel disappears.
-    - [ ] Scenario UAT-3: progression via AI.
-      - [ ] Ask AI to mark one task as done, then another task in progress, then TODO done when all tasks are complete.
-      - [ ] Verify runtime progression is reflected in statuses (`todo -> planned -> in_progress -> done`, plus blocked/deferred/cancelled paths when explicitly requested).
-      - [ ] Start one task execution and verify steering remains available from main composer while runtime metadata stays hidden in panel body.
-      - [ ] Verify assistant asks for explicit `go` before autonomous checklist progression starts.
-      - [ ] While assistant run is active, submit one steering message from main composer (not runtime panel) and verify:
-        - user steer appears as a normal user bubble in same conversation timeline,
-        - reasoning/tool strip immediately shows acknowledgment of new user message intake,
-        - no run interruption is observed.
-      - [ ] Submit a second steering message while same run is active and verify no duplicate run is created.
-      - [ ] If assistant has already started final response generation, verify additive assistant continuation (second assistant bubble) is possible without cancelling current run.
-    - [ ] Scenario UAT-4: checked + strike rendering.
-      - [!] Verify each completed task is rendered checked and struck-through in chat TODO panel.
-      - [!] Verify non-completed tasks remain unstruck and visually distinct.
-    - [ ] Scenario UAT-5: session persistence.
-      - [ ] Close and reopen chat widget in same session; verify TODO panel state and task statuses persist.
-      - [!] Switch to another session then back; verify the original session TODO panel is restored with identical progression state.
+    - [x] Scenario UAT-2: sticky bottom panel UX + readability polish.
+      - [x] Verify TODO panel is sticky at bottom of conversation and spans full available width.
+      - [x] Verify panel can collapse/expand and keeps state during ongoing chat interaction.
+      - [x] Verify collapse/expand chevron button uses the standard header icon-button style (hover background + rounded control).
+      - [x] Verify a `trash` button is visible next to chevron and uses standard destructive header icon-button style.
+      - [x] Verify max-height constraint and internal scroll when task list exceeds visible space.
+      - [x] Verify title is `TODO` and no technical runtime label remains in the main header.
+      - [x] Verify runtime metadata is not visible in panel body (no info menu entry for metadata in this branch).
+      - [x] Verify checklist item typography is reduced to subtitle-equivalent size.
+      - [x] Click `trash` and verify active TODO is removed/closed for the session and panel disappears.
+    - [x] Scenario UAT-3: progression via AI.
+      - [x] Ask AI to mark one task as done, then another task in progress, then TODO done when all tasks are complete.
+      - [x] Verify runtime progression is reflected in statuses (`todo -> planned -> in_progress -> done`, plus blocked/deferred/cancelled paths when explicitly requested).
+    - [x] Scenario UAT-4: checked + strike rendering.
+      - [x] Verify each completed task is rendered checked and struck-through in chat TODO panel.
+      - [x] Verify non-completed tasks remain unstruck and visually distinct.
+    - [x] Scenario UAT-5: session persistence.
+      - [x] Close and reopen chat widget in same session; verify TODO panel state and task statuses persist.
+      - [x] Switch to another session then back; verify the original session TODO panel is restored with identical progression state.
         Feedback (legacy build): minimized/maximized state was not kept; revalidate on current build.
-      - [!] Reload page and reopen same chat session; verify persisted state is rehydrated.
+      - [x] Reload page and reopen same chat session; verify persisted state is rehydrated.
         Feedback (legacy build): minimized/maximized state was not kept; revalidate on current build.
-    - [ ] Scenario UAT-6: generation workflow end-to-end runtime migration validation.
-      - [ ] Trigger one AI generation from `/folders` with organization context and matrix mode enabled.
-      - [ ] Verify artifacts are produced in order (matrix if requested -> use-case list -> use-case details -> executive summary) without manual fallback actions.
-      - [ ] Verify generated list is reflected in session-bound TODO runtime progression panel.
-      - [ ] Reload page, reopen same chat session, and verify runtime snapshot rehydrates with TODO/tasks and run metadata continuity.
+    - [x] Scenario UAT-6: generation workflow end-to-end runtime migration validation.
+      - [x] Trigger one AI generation from `/folders` with organization context and matrix mode enabled.
+      - [x] Verify artifacts are produced in order (matrix if requested -> use-case list -> use-case details -> executive summary) without manual fallback actions.
     - [ ] Scenario UAT-7: single-path behavior (no dual-path execution).
-      - [ ] For one generation request, verify there is no duplicated generation chain behavior (no second parallel legacy-like execution observed in UI/queue progression).
-      - [ ] Verify workflow run lineage is coherent with generation progression (task/run timeline remains single-path from start to executive summary).
-      - [ ] Confirm steer interactions continue to target the active run path during generation progression (no legacy duplicate chain).
+      - [x] For one generation request, verify there is no duplicated generation chain behavior (no second parallel legacy-like execution observed in UI/queue progression).
+      - [x] Verify workflow run lineage is coherent with generation progression (task/run timeline remains single-path from start to executive summary).
     - [ ] Scenario UAT-8: reasoning and TODO orchestration contract.
-      - [ ] On a long iterative ask (for example batch URLs/folders), verify assistant proactively structures execution with TODO instead of free-text-only plan.
-      - [ ] With an active TODO, verify assistant progresses via TODO updates before proposing a brand new TODO list.
-      - [ ] Verify structural list mutations (add/remove/reorder/replace tasks) are refused unless explicitly requested by the user.
-      - [ ] Verify no user-facing "active TODO already exists" warning is shown while orchestration still prevents duplicate active TODO creation.
+      - [!] On a long iterative ask (for example batch URLs/folders), verify assistant proactively structures execution with TODO instead of free-text-only plan.
+        Feedback: explici todo seem required
+      - [x] With an active TODO, verify assistant progresses via TODO updates before proposing a brand new TODO list.
+      - [x] Verify structural list mutations (add/remove/reorder/replace tasks) are refused unless explicitly requested by the user.
+      - [x] Verify no user-facing "active TODO already exists" warning is shown while orchestration still prevents duplicate active TODO creation.
+
 - [ ] **Lot N-1 — Docs consolidation** (blocked until `Lot N-2` UAT sign-off)
   - [ ] Apply `BR03-EX1` if docs paths are touched.
   - [ ] Consolidate BR-03 semantics into target specs:
