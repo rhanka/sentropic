@@ -119,8 +119,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] `api/src/routes/api/index.ts` (register `vscodeExtensionRouter` only)
       - [ ] `ui/package.json` / `ui/package-lock.json` (only required build script/deps for packaging)
     - [ ] **Rebuild fresh (do not recover fake implementation)**
-      - [ ] `ui/vscode-ext/extension.ts`
-      - [ ] `ui/vscode-ext/webview-entry.ts`
+      - [x] `ui/vscode-ext/extension.ts`
+      - [x] `ui/vscode-ext/webview-entry.ts`
       - [ ] `ui/vscode-ext/vscode-bridge.ts`
       - [ ] `ui/vscode-ext/auth-bridge.ts`
       - [ ] `ui/vscode-ext/local-tools.ts`
@@ -134,7 +134,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] `ui/vscode-ext/workflow-client.ts`
   - [x] Lock Lot 3 research target for VSCode code tools (baseline capability set + safety policy).
 
-- [ ] **Lot 1 — VSCode host hardening + token bootstrap**
+- [x] **Lot 1 — VSCode host hardening + token bootstrap**
   - [x] Spec mapping:
     - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `2`, `4.13`, `4.14`, `7.1` (BR05 foreground-only boundary), and reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
   - [x] Restore minimal VSCode extension packaging pipeline:
@@ -146,26 +146,28 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - [x] Keep implementation surface minimal:
     - [x] no fake shell tabs (`plan/tools/summary/checkpoint`) in extension UI,
     - [x] no fake workflow summary/checkpoint scaffolding.
-  - [ ] Migrate extension host surface to dockable side panel:
-    - [ ] replace editor-tab `WebviewPanel` primary path with `WebviewViewProvider`,
-    - [ ] keep `TopAI: Open Chat Panel` as focus/open command for the side view.
-  - [ ] Implement v1 token bootstrap (no provider OAuth in extension):
-    - [ ] web app admin endpoint/UI to generate/revoke/copy VSCode extension token,
-    - [ ] extension settings flow to paste/store token in `context.secrets`,
-    - [ ] explicit endpoint/token connectivity check with actionable errors.
-    - [ ] align error taxonomy with `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.14.3`.
-  - [ ] Remove ambiguous extension-side provider login CTA:
-    - [ ] remove `Open login`/provider-auth wording from extension bootstrap flow,
-    - [ ] replace with token guidance pointing to admin web app settings.
-    - [ ] enforce provider ownership split from `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.14.4`.
-  - [ ] Lot gate:
+  - [x] Migrate extension host surface to dockable side panel:
+    - [x] replace editor-tab `WebviewPanel` primary path with `WebviewViewProvider`,
+    - [x] keep `TopAI: Open Chat Panel` as focus/open command for the side view.
+  - [x] Implement v1 token bootstrap (no provider OAuth in extension):
+    - [x] web app admin endpoint/UI to generate/revoke/copy VSCode extension token,
+    - [x] extension settings flow to paste/store token in `context.secrets`,
+    - [x] explicit endpoint/token connectivity check with actionable errors.
+    - [x] align error taxonomy with `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.14.3`.
+  - [x] Remove ambiguous extension-side provider login CTA:
+    - [x] remove `Open login`/provider-auth wording from extension bootstrap flow,
+    - [x] replace with token guidance pointing to admin web app settings.
+    - [x] enforce provider ownership split from `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.14.4`.
+  - [x] Lot gate:
     - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-endpoints SCOPE=tests/api/vscode-extension-download.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-endpoints SCOPE=tests/api/vscode-extension-token.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/utils/vscode-extension-download.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [x] `make vscode-ext API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/vscode-ext/extension-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make vscode-ext API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 REGISTRY=local ENV=feat-vscode-plugin-v1`
     - [!] Initial run failed with port conflicts (`5105`/`1005`) because `test-feat-vscode-plugin-v1` containers were already running; validated successful rerun on free ports (`API=8715`, `UI=5115`, `MAILDEV=1015`) with same command scope.
 
 - [ ] **Lot 1.1 — Theme parity (VSCode host + web app)**
