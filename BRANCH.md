@@ -1,20 +1,24 @@
 # Feature: BR-05 Rebuild — VSCode Plugin v1 (Real ChatWidget + Global Summary/Checkpoint)
 
 ## Objective
-Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSCode plugin foundations (skeleton/build/download), then deliver real ChatWidget integration plus global conversation `summary` and `checkpoint` functions.
+Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSCode plugin foundations, then deliver a dockable VSCode ChatWidget host, token bootstrap, admin-managed provider auth, and global conversation `summary`/`checkpoint` functions.
 
 ## Scope / Guardrails
 - Scope limited to:
   - VSCode extension skeleton and `.vsix` packaging pipeline.
   - API/UI download distribution for VSCode extension in `/settings`.
-  - Real ChatWidget integration in VSCode webview.
+  - Real ChatWidget integration in VSCode host surface.
+  - Dockable side panel host path (`WebviewViewProvider`) as primary UX.
+  - Token-based extension bootstrap (admin-issued token).
+  - Admin-managed provider connections (Codex first, shared backend state).
+  - Theme parity (VSCode dark/light/high-contrast + web `system|light|dark`).
   - Global conversation `summary` function (context-budget compression strategy).
   - Global conversation `checkpoint` function (create/list/restore lifecycle).
   - VSCode plugin local code tools (v1 safe set).
 - Explicitly out of scope:
   - fake shell tabs `plan/tools/summary/checkpoint`,
   - fake workflow client/contracts for plugin smoke,
-  - dedicated Codex sign-in button outside ChatWidget configuration menu.
+  - provider-auth lifecycle owned by extension UI (moved to admin web app).
 - One migration max in `api/drizzle/*.sql` (if required).
 - Make-only workflow, no direct Docker commands.
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
@@ -64,6 +68,9 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
 - `BR05-FL2` — `attention`
   - Topic: summary/checkpoint must be product functions, not plugin-only fake features.
   - Requirement: scope and contracts locked in Lot 0 before implementation lots.
+- `BR05-FL3` — `attention`
+  - Topic: extension UX must be dockable side panel + token bootstrap; provider login flow is admin-web only.
+  - Requirement: no editor-tab-only delivery and no ambiguous `Open login` path in extension bootstrap.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -127,7 +134,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] `ui/vscode-ext/workflow-client.ts`
   - [x] Lock Lot 3 research target for VSCode code tools (baseline capability set + safety policy).
 
-- [x] **Lot 1 — Strict selective recovery (skeleton/build/download only)**
+- [ ] **Lot 1 — VSCode host hardening + token bootstrap**
   - [x] Spec mapping:
     - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `2`, `7.1` (BR05 foreground-only boundary), and reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
   - [x] Restore minimal VSCode extension packaging pipeline:
@@ -139,7 +146,17 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - [x] Keep implementation surface minimal:
     - [x] no fake shell tabs (`plan/tools/summary/checkpoint`) in extension UI,
     - [x] no fake workflow summary/checkpoint scaffolding.
-  - [x] Lot gate:
+  - [ ] Migrate extension host surface to dockable side panel:
+    - [ ] replace editor-tab `WebviewPanel` primary path with `WebviewViewProvider`,
+    - [ ] keep `TopAI: Open Chat Panel` as focus/open command for the side view.
+  - [ ] Implement v1 token bootstrap (no provider OAuth in extension):
+    - [ ] web app admin endpoint/UI to generate/revoke/copy VSCode extension token,
+    - [ ] extension settings flow to paste/store token in `context.secrets`,
+    - [ ] explicit endpoint/token connectivity check with actionable errors.
+  - [ ] Remove ambiguous extension-side provider login CTA:
+    - [ ] remove `Open login`/provider-auth wording from extension bootstrap flow,
+    - [ ] replace with token guidance pointing to admin web app settings.
+  - [ ] Lot gate:
     - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-endpoints SCOPE=tests/api/vscode-extension-download.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
@@ -149,22 +166,42 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make vscode-ext API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
     - [!] Initial run failed with port conflicts (`5105`/`1005`) because `test-feat-vscode-plugin-v1` containers were already running; validated successful rerun on free ports (`API=8715`, `UI=5115`, `MAILDEV=1015`) with same command scope.
 
-- [x] **Lot 2 — VSCode real ChatWidget integration**
-  - [x] Spec mapping:
-    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `1`, `2`, `6` (shared ChatWidget host parity).
-    - [x] reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
-  - [x] Integrate real `ChatWidget` in VSCode webview (shared component path, no parallel fake panel).
-  - [x] Wire runtime bridge for extension config and auth via ChatWidget settings menu (wheel).
-  - [x] Remove dedicated Codex button UI; keep auth treatment reachable from settings menu only.
-  - [x] Ensure panel can be opened/used with expected layout parity (right/left docking handled by host).
-  - [x] Lot gate:
-    - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [x] `make test-ui SCOPE=tests/vscode-ext/extension-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [x] `make test-ui SCOPE=tests/vscode-ext/vscode-bridge.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [x] `make test-ui SCOPE=tests/vscode-ext/auth-bridge.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [x] `make vscode-ext API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 REGISTRY=local ENV=feat-vscode-plugin-v1`
-    - [!] A parallel `typecheck`/`lint` launch produced a temporary Docker container-name conflict; rerun sequentially passed without code changes.
+- [ ] **Lot 1.1 — Theme parity (VSCode host + web app)**
+  - [ ] Spec mapping:
+    - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.13` (theming decision).
+  - [ ] VSCode host theme adaptation:
+    - [ ] consume VSCode theme tokens for dark/light/high-contrast,
+    - [ ] validate readability and semantic colors in all supported themes.
+  - [ ] Web app theme preference:
+    - [ ] add `system|light|dark` preference in settings/admin,
+    - [ ] ensure chat/widget components follow the selected theme mode consistently.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/vscode-ext/theme-parity.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+
+- [ ] **Lot 2 — Provider auth centralization (admin web app)**
+  - [x] Existing ChatWidget parity baseline:
+    - [x] integrate real `ChatWidget` in VSCode host,
+    - [x] runtime bridge for config/auth settings menu,
+    - [x] no dedicated top-level provider button in extension surface.
+  - [ ] Move provider auth ownership to web app admin:
+    - [ ] admin-only provider connection section in web app settings,
+    - [ ] shared provider connections at backend scope (first target: Codex),
+    - [ ] extension consumes backend provider readiness status only.
+  - [ ] Remove extension-side provider connection actions from bootstrap path:
+    - [ ] keep only endpoint/token bootstrap in extension,
+    - [ ] provider connection actions live in admin web app UI.
+  - [ ] Extend provider model and API contracts for shared provider state:
+    - [ ] provider metadata/status endpoint consumed by web+vscode,
+    - [ ] audit + update semantics for admin operations.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-api-endpoints SCOPE=tests/api/provider-connections-admin.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/settings/provider-connections-admin.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot 3 — VSCode plugin code tools (research + implementation)**
   - [ ] Spec mapping:
@@ -266,11 +303,21 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - [ ] VSCode plugin (`ENV=dev`, root workspace)
     - [ ] Build package: `make vscode-ext API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`.
     - [ ] Install generated `.vsix` in VSCode.
-    - [ ] Open plugin panel and validate real ChatWidget mount.
+    - [ ] Open plugin panel and validate real ChatWidget mount in a dockable side panel (not editor tab).
     - [ ] Open settings wheel in widget header and validate:
-      - [ ] endpoint/profile fields,
-      - [ ] auth flow entry for Codex sign-in via settings (no dedicated top-level button),
+      - [ ] endpoint/token bootstrap fields,
+      - [ ] token save/reload in secure storage,
+      - [ ] actionable connectivity errors when endpoint or token is invalid,
       - [ ] config save/reload.
+  - [ ] Web app admin provider settings (`ENV=dev`, root workspace)
+    - [ ] Open admin settings provider section and validate shared Codex connection lifecycle:
+      - [ ] connect/configure provider as admin,
+      - [ ] provider status visible as shared backend state,
+      - [ ] non-admin users cannot mutate provider connection settings.
+  - [ ] VSCode + web theme parity (`ENV=dev`, root workspace)
+    - [ ] Validate VSCode extension host in dark/light/high-contrast themes.
+    - [ ] Validate web app theme preference (`system|light|dark`) and chat/widget parity.
+  - [ ] Shared runtime regression (`ENV=dev`, root workspace)
     - [ ] Validate summary behavior on long context.
     - [ ] Validate summary UI:
       - [ ] gray strip appears during compaction and resolves to `Contexte compacté.`,
