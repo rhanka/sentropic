@@ -2,9 +2,11 @@
 
 ## Objective
 Deliver VSCode plugin v2 with multi-agent and multi-model orchestration while reusing shared chat core and API orchestration source of truth.
+Include background/detached tool execution lifecycle (without requiring explicit agent lane UX for the operator).
 
 ## Scope / Guardrails
 - Scope limited to VSCode plugin orchestration UX, agent lanes, model assignment, execution trace.
+- Scope includes background tool lifecycle contracts for long-running tool actions (`start/status/cancel/resume/result`), queue/audit-backed.
 - One migration max in `api/drizzle/*.sql` (if applicable).
 - Make-only workflow, no direct Docker commands.
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
@@ -100,6 +102,25 @@ Actions with the following status should be included around tasks only if really
   - [ ] Implement execution trace panel for decisions and changes.
   - [ ] Add regression tests for multi-agent + multi-model scenarios.
   - [ ] Lot 2 gate:
+    - [ ] `make typecheck-api ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make lint-api ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make test-api ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make typecheck-ui ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make lint-ui ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make test-ui ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make build-api build-ui-image API_PORT=8710 UI_PORT=5110 MAILDEV_UI_PORT=1010 ENV=e2e-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make clean test-e2e API_PORT=8710 UI_PORT=5110 MAILDEV_UI_PORT=1010 ENV=e2e-feat-vscode-plugin-v2-multi-agent`
+
+- [ ] **Lot 3 — Background Tools Lifecycle**
+  - [ ] Define detached tool runtime contract:
+    - [ ] `start` background tool run,
+    - [ ] `status` polling/subscription,
+    - [ ] `cancel` running task,
+    - [ ] `resume` compatible task,
+    - [ ] `result` retrieval with audit metadata.
+  - [ ] Ensure UX does not require explicit agent-lane creation for background tools.
+  - [ ] Add queue-backed persistence and reason-code error taxonomy.
+  - [ ] Lot 3 gate:
     - [ ] `make typecheck-api ENV=test-feat-vscode-plugin-v2-multi-agent`
     - [ ] `make lint-api ENV=test-feat-vscode-plugin-v2-multi-agent`
     - [ ] `make test-api ENV=test-feat-vscode-plugin-v2-multi-agent`

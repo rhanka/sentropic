@@ -172,6 +172,9 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] Return `answer + evidence(message ids/turns) + coverage/confidence`.
   - [ ] Implement allowed/denied policy model for the selected toolset.
   - [ ] Wire tool output path to chat orchestration contracts.
+  - [ ] Document tool-mode split:
+    - [ ] BR-05 = foreground/interactive tool execution only.
+    - [ ] BR-10 = background/detached tool lifecycle (`start/status/cancel/resume/result`) without explicit agent-lane UX requirement.
   - [ ] Lot gate:
     - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
@@ -242,7 +245,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] run resumes after compaction (in-flight when available, safe-boundary fallback otherwise),
       - [ ] soft-zone tool call returns replan signal before execution,
       - [ ] hard-zone tool call compacts first then replans,
-      - [ ] `history_analyze` can target one oversized tool result and return focused evidence,
+    - [ ] `history_analyze` can target one oversized tool result and return focused evidence,
       - [ ] heavy tool call is compacted/deferred with explicit reason when budget would overflow.
     - [ ] Validate checkpoint create/list/restore behavior.
     - [ ] Validate code tools baseline behavior (`bash`, `ls`, `grep/rg`, file read/edit, git read) with permission policy checks.
