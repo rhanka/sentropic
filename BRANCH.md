@@ -163,9 +163,18 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] file read,
     - [ ] file edit/write,
     - [ ] git read actions (`status`, `diff`).
+  - [ ] Add AI-assisted conversation history QA tool:
+    - [ ] Tool name: `history_analyze` (read-only).
+    - [ ] Dedicated sub-agent flow aligned with existing document analyzer (`documents.analyze`) including chunk + merge path for long history.
+    - [ ] Add prompt templates `history_analyze` + `history_analyze_merge`.
+    - [ ] Return `answer + evidence(message ids/turns) + coverage/confidence`.
   - [ ] Implement allowed/denied policy model for the selected toolset.
   - [ ] Wire tool output path to chat orchestration contracts.
   - [ ] Lot gate:
+    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-api-unit SCOPE=tests/unit/history-analyze-tool.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-api-endpoints SCOPE=tests/api/chat-history-analyze-tool.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
@@ -211,6 +220,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] Validate summary behavior on long context.
     - [ ] Validate checkpoint create/list/restore behavior.
     - [ ] Validate code tools baseline behavior (`bash`, `ls`, `grep/rg`, file read/edit, git read) with permission policy checks.
+    - [ ] Validate `history_analyze` from VSCode host:
+      - [ ] ask a targeted question about earlier turns and verify evidence references are returned,
+      - [ ] verify long conversation path uses chunked analysis (coverage indicates chunking when applicable).
+  - [ ] Web app chat runtime (`ENV=dev`, root workspace)
+    - [ ] Validate `history_analyze` from web app chat:
+      - [ ] targeted historical question returns answer + evidence references,
+      - [ ] no hidden reasoning leak in tool output,
+      - [ ] `insufficient_coverage` returned when scope is intentionally too narrow.
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate final BR-05 decisions into:
