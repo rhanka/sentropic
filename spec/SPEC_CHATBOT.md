@@ -165,6 +165,26 @@
 - Display normalization:
   - long Gemini model IDs are compacted for badges (example: `gemini-3.1`).
 
+## BR-03 TODO/Steering/Workflow baseline — delivered
+
+- Session-bound execution planning is available through the unified `plan` tool contract (`create`, `update_task`, `update_plan`).
+- Chat TODO runtime behavior (current BR-03 scope):
+  - one active session TODO at a time,
+  - TODO progression is persisted task-by-task in session runtime state,
+  - completed tasks remain rendered as checked + struck-through in chat panel.
+- In-flight steering behavior (chat-bound):
+  - steering transport endpoint is `POST /api/v1/chat/messages/:assistantMessageId/steer`,
+  - steering is available from the main composer during active assistant generation,
+  - steering availability is TODO-agnostic (must not depend on TODO panel visibility/state),
+  - steering stays in the same conversation timeline (no side-thread expected behavior).
+- Generation runtime migration baseline:
+  - use-case generation dispatch is workflow runtime-based (`/api/v1/use-cases/generate` through workflow chain),
+  - lineage is tracked through workflow/run/task metadata across matrix → list → detail → executive summary phases.
+- Settings migration baseline (BR-03):
+  - legacy prompts management UI is removed/de-emphasized in favor of `Agent Configuration` + `Workflow Configuration`.
+  - robust operator parity for direct agent prompt editing + authoritative workflow task I/O contract editing is explicitly deferred to BR-15:
+    - `spec/SPEC_EVOL_BR15_AGENT_WORKFLOW_CONFIG_ROBUSTNESS.md`
+
 ## Admin scoped chat (Chat‑1 + read‑only)
 
 Decision (linked to workspace sharing model):

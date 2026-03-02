@@ -13,6 +13,7 @@ import { defaultMatrixConfig } from '../../config/default-matrix';
 // import { defaultPrompts } from '../../config/default-prompts'; // Commented out - unused
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
+import { todoOrchestrationService } from '../../services/todo-orchestration';
 import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
@@ -543,7 +544,7 @@ const generateInput = z.object({
 
 useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zValidator('json', generateInput), async (c) => {
   try {
-    const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
+    const { workspaceId, userId, role } = c.get('user') as { workspaceId: string; userId: string; role: string };
     const requestLocale = resolveLocaleFromHeaders({
       appLocaleHeader: c.req.header('x-app-locale'),
       acceptLanguageHeader: c.req.header('accept-language')
@@ -645,33 +646,19 @@ useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zV
       await notifyFolderEvent(folderId);
     }
 
-    let matrixJobId: string | undefined;
-    if (resolvedMatrixMode === 'generate' && organizationId) {
-      matrixJobId = await queueManager.addJob(
-        'matrix_generate',
-        {
-          folderId: folderId!,
-          organizationId,
-          model: selectedModel,
-          initiatedByUserId: userId,
-          locale: requestLocale
-        },
-        { workspaceId, maxRetries: 1 }
-      );
-    }
-    
-    // Ajouter le job à la queue
-    const jobId = await queueManager.addJob('usecase_list', {
-      folderId: folderId!,
-      input,
-      organizationId,
-      matrixMode: resolvedMatrixMode,
-      model: selectedModel,
-      useCaseCount: use_case_count,
-      initiatedByUserId: userId,
-      locale: requestLocale
-    }, { workspaceId, maxRetries: 1 });
-    
+    const workflowDispatch = await todoOrchestrationService.startAndDispatchUseCaseGenerationWorkflow(
+      { workspaceId, userId, role },
+      {
+        folderId: folderId!,
+        organizationId,
+        matrixMode: resolvedMatrixMode,
+        input,
+        model: selectedModel,
+        useCaseCount: use_case_count,
+        locale: requestLocale
+      }
+    );
+
     return c.json({
       success: true,
       message: 'Génération démarrée',
@@ -679,8 +666,9 @@ useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zV
       folder_id: folderId,
       created_folder_id: folder_id ? undefined : folderId,
       matrix_mode: resolvedMatrixMode,
-      jobId,
-      matrixJobId
+      jobId: workflowDispatch.jobId,
+      matrixJobId: workflowDispatch.matrixJobId,
+      workflow_run_id: workflowDispatch.workflowRunId
     });
     
   } catch (error) {

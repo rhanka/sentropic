@@ -568,6 +568,87 @@ export const commentAssistantTool: OpenAI.Chat.Completions.ChatCompletionTool = 
   }
 };
 
+/**
+ * Plan runtime tool (chat orchestration -> plan/todo/task entities).
+ */
+export const planTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'plan',
+    description:
+      'Unified plan runtime orchestration tool. Use action=create to create a checklist plan, action=update_plan to update plan-level progression, and action=update_task to progress a task.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['create', 'update_plan', 'update_task'],
+          description:
+            'Operation to execute. create=create checklist; update_plan=update TODO status/content; update_task=update task status/content.',
+        },
+        title: {
+          type: 'string',
+          description: 'TODO/task title depending on action.'
+        },
+        description: {
+          type: 'string',
+          description: 'Optional TODO/task description depending on action.'
+        },
+        planId: {
+          type: 'string',
+          description: 'Optional existing plan ID (create action).'
+        },
+        planTitle: {
+          type: 'string',
+          description: 'Optional plan title; creates a new plan when planId is not provided (create action).'
+        },
+        tasks: {
+          type: 'array',
+          description: 'Optional initial tasks to create under the TODO (create action).',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'Task title (required).' },
+              description: { type: 'string', description: 'Optional task description.' }
+            },
+            required: ['title']
+          }
+        },
+        todoId: {
+          type: 'string',
+          description: 'TODO id to update (update_plan action).'
+        },
+        ownerUserId: {
+          type: 'string',
+          description: 'Optional TODO owner user id (update_plan action, reassignment permission required).'
+        },
+        closed: {
+          type: 'boolean',
+          description: 'Optional explicit TODO close flag (update_plan action).'
+        },
+        taskId: {
+          type: 'string',
+          description: 'Task id to update (update_task action).'
+        },
+        assigneeUserId: {
+          type: 'string',
+          description: 'Optional task assignee user id (update_task action, reassignment permission required).'
+        },
+        status: {
+          type: 'string',
+          enum: ['todo', 'planned', 'in_progress', 'blocked', 'done', 'deferred', 'cancelled'],
+          description: 'Status transition target (update_plan/update_task).'
+        },
+        metadata: {
+          type: 'object',
+          description: 'Optional metadata object (create/update_plan/update_task).'
+        }
+      },
+      required: ['action']
+    }
+  }
+};
+
 export interface SearchResult {
   title: string;
   url: string;

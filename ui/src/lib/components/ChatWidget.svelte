@@ -1992,7 +1992,7 @@
             </div>
           {/if}
           {#if !isPluginMode && activeTab === 'comments'}
-            <div class="h-full min-h-0">
+            <div class="h-full min-h-0 overflow-hidden">
               {#if commentContext?.id}
                 <ChatPanel
                   mode="comments"
@@ -2094,7 +2094,7 @@
                 </button>
               </div>
             </div>
-            <div class="flex-1 min-h-0">
+            <div class="flex-1 min-h-0 overflow-hidden">
               <ChatPanel
                 bind:this={chatPanelRef}
                 bind:sessions={chatSessions}
