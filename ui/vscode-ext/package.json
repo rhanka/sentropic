@@ -3,7 +3,7 @@
   "type": "module",
   "displayName": "Top AI Ideas",
   "description": "Top AI Ideas VSCode plugin v1 runtime shell.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "top-ai-ideas",
   "engines": {
     "vscode": "^1.85.0"
