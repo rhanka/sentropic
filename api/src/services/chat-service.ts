@@ -33,9 +33,11 @@ import {
   matrixGetTool,
   matrixUpdateTool,
   documentsTool,
-  commentAssistantTool
+  commentAssistantTool,
+  planTool
 } from './tools';
 import { toolService } from './tool-service';
+import { todoOrchestrationService } from './todo-orchestration';
 import { ensureWorkspaceForUser } from './workspace-service';
 import { getWorkspaceRole, hasWorkspaceRole, isWorkspaceDeleted } from './workspace-access';
 import { env } from '../config/env';
@@ -105,6 +107,231 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
 };
 
 const isValidToolName = (value: string): boolean => /^[a-zA-Z0-9_-]{1,64}$/.test(value);
+
+type TodoRuntimeToolName = 'plan';
+type TodoRuntimeToolOperation = 'create' | 'update_plan' | 'update_task';
+
+const TODO_TERMINAL_STATUSES = new Set(['done', 'cancelled']);
+const TODO_BLOCKING_STATUSES = new Set(['blocked']);
+const BASE_MAX_ITERATIONS = 10;
+const TODO_AUTONOMOUS_MAX_ITERATIONS = 60;
+const TODO_AUTONOMOUS_EXTENSION_STEP = 10;
+
+type SessionTodoRuntimeTask = {
+  id: string;
+  title: string;
+  status: string;
+};
+
+type SessionTodoRuntimeSnapshot = {
+  todoId: string;
+  todoTitle: string;
+  status: string;
+  tasks: SessionTodoRuntimeTask[];
+};
+
+const normalizeTodoRuntimeStatus = (value: unknown): string =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim().toLowerCase() : 'todo';
+
+const normalizeIntentText = (value: string): string =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const matchesAnyPattern = (text: string, patterns: RegExp[]): boolean =>
+  patterns.some((pattern) => pattern.test(text));
+
+const TODO_REPLACEMENT_PATTERNS = [
+  /\b(new|another|fresh)\s+(todo|checklist|list)\b/,
+  /\b(replace|replacement|restart|reset)\b.*\b(todo|checklist|list)\b/,
+  /\b(nouveau|nouvelle|autre)\s+(todo|liste|checklist)\b/,
+  /\b(remplace|remplacer|remplacement|recommence|recommencer|reset)\b.*\b(todo|liste|checklist)\b/,
+];
+
+const TODO_PROGRESSION_PATTERNS = [
+  /\b(go|continue|next|advance|progress|check|mark)\b/,
+  /\b(coche|cocher|avance|avancer|progression|progresser|termine|terminer|marque|marquer)\b/,
+];
+
+const TODO_GO_SIGNAL_PATTERNS = [
+  /^(go|ok|okay|yes|oui|vas y|vas-y|continue)$/i,
+  /\b(go ahead|on y va|vas y|vas-y)\b/i,
+];
+
+const TODO_STRUCTURAL_MUTATION_PATTERNS = [
+  /\b(add|append|insert|remove|delete|drop|replace|rewrite|rename|reorder|re organise|reorganize|split|merge)\b.*\b(todo|checklist|list|task|tasks|item|items|step|steps|plan)\b/,
+  /\b(ajoute|ajouter|ajout|retire|retirer|supprime|supprimer|suppression|remplace|remplacer|renomme|renommer|reordonne|reordonner|reorganise|reorganiser|scinde|scinder|fusionne|fusionner)\b.*\b(todo|liste|checklist|tache|taches|item|items|etape|etapes|plan)\b/,
+];
+
+const isExplicitTodoReplacementRequest = (message: string): boolean => {
+  const normalized = normalizeIntentText(message);
+  if (!normalized) return false;
+  return matchesAnyPattern(normalized, TODO_REPLACEMENT_PATTERNS);
+};
+
+const isTodoProgressionIntent = (message: string): boolean => {
+  const normalized = normalizeIntentText(message);
+  if (!normalized || isExplicitTodoReplacementRequest(message)) return false;
+  return matchesAnyPattern(normalized, TODO_PROGRESSION_PATTERNS);
+};
+
+const isTodoGoSignal = (message: string): boolean => {
+  const normalized = normalizeIntentText(message);
+  if (!normalized) return false;
+  return matchesAnyPattern(normalized, TODO_GO_SIGNAL_PATTERNS);
+};
+
+const isExplicitTodoStructuralMutationRequest = (message: string): boolean => {
+  const normalized = normalizeIntentText(message);
+  if (!normalized) return false;
+  return (
+    isExplicitTodoReplacementRequest(message) ||
+    matchesAnyPattern(normalized, TODO_STRUCTURAL_MUTATION_PATTERNS)
+  );
+};
+
+const toSessionTodoRuntimeSnapshot = (value: unknown): SessionTodoRuntimeSnapshot | null => {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const todo = asRecord(record.todo);
+  const activeTodo = asRecord(record.activeTodo);
+  const todoId = String(record.todoId ?? todo?.id ?? activeTodo?.id ?? '').trim();
+  if (!todoId) return null;
+
+  const todoTitle = String(todo?.title ?? activeTodo?.title ?? '').trim();
+  const status = normalizeTodoRuntimeStatus(
+    record.status ?? record.todoStatus ?? todo?.derivedStatus ?? activeTodo?.derivedStatus,
+  );
+  const tasksRaw = Array.isArray(record.tasks) ? record.tasks : [];
+  const tasks: SessionTodoRuntimeTask[] = tasksRaw
+    .map((entry) => {
+      const task = asRecord(entry);
+      if (!task) return null;
+      const title = String(task.title ?? '').trim();
+      const id = String(task.id ?? '').trim();
+      if (!title && !id) return null;
+      return {
+        id,
+        title: title || '(untitled task)',
+        status: normalizeTodoRuntimeStatus(task.status ?? task.derivedStatus),
+      };
+    })
+    .filter((entry): entry is SessionTodoRuntimeTask => entry !== null);
+
+  return {
+    todoId,
+    todoTitle,
+    status,
+    tasks,
+  };
+};
+
+const resolveTodoRuntimeOperation = (
+  _toolName: TodoRuntimeToolName,
+  operationHint?: TodoRuntimeToolOperation | null,
+): TodoRuntimeToolOperation => operationHint ?? 'update_plan';
+
+const normalizeTodoRuntimeToolResult = (
+  toolName: TodoRuntimeToolName,
+  toolCallId: string,
+  rawResult: unknown,
+  operationHint?: TodoRuntimeToolOperation | null,
+): Record<string, unknown> => {
+  const operation = resolveTodoRuntimeOperation(toolName, operationHint);
+  const base = asRecord(rawResult) ?? {};
+  const normalized: Record<string, unknown> = { ...base };
+  const todoRuntime: Record<string, unknown> = {
+    tool: toolName,
+    operation,
+    toolCallId,
+    status: typeof base.status === 'string' ? base.status : 'completed',
+  };
+
+  if (operation === 'create') {
+    if (typeof base.todoId === 'string' && base.todoId.trim().length > 0) {
+      todoRuntime.todoId = base.todoId;
+    }
+    if (typeof base.planId === 'string') {
+      todoRuntime.planId = base.planId;
+    } else if (base.planId === null) {
+      todoRuntime.planId = null;
+    }
+    if (Array.isArray(base.tasks)) {
+      todoRuntime.tasks = base.tasks;
+    }
+    if (typeof base.taskCount === 'number') {
+      todoRuntime.taskCount = base.taskCount;
+    }
+    if (typeof base.code === 'string') {
+      todoRuntime.code = base.code;
+    }
+    if (typeof base.message === 'string') {
+      todoRuntime.message = base.message;
+    }
+    const activeTodo = asRecord(base.activeTodo);
+    if (activeTodo) {
+      todoRuntime.activeTodo = activeTodo;
+      if (typeof activeTodo.id === 'string') {
+        todoRuntime.todoId = activeTodo.id;
+      }
+      if (
+        typeof activeTodo.derivedStatus === 'string' &&
+        !todoRuntime.todoStatus
+      ) {
+        todoRuntime.todoStatus = activeTodo.derivedStatus;
+      }
+    }
+  } else if (operation === 'update_plan') {
+    const todo = asRecord(base.todo);
+    if (todo) {
+      todoRuntime.todo = todo;
+      if (typeof todo.id === 'string') {
+        todoRuntime.todoId = todo.id;
+      }
+      if (typeof todo.planId === 'string') {
+        todoRuntime.planId = todo.planId;
+      } else if (todo.planId === null) {
+        todoRuntime.planId = null;
+      }
+      if (typeof todo.derivedStatus === 'string') {
+        todoRuntime.todoStatus = todo.derivedStatus;
+      }
+    }
+  } else if (operation === 'update_task') {
+    const task = asRecord(base.task);
+    if (task) {
+      todoRuntime.task = task;
+      if (typeof task.todoId === 'string') {
+        todoRuntime.todoId = task.todoId;
+      }
+    }
+    if (typeof base.todoStatus === 'string') {
+      todoRuntime.todoStatus = base.todoStatus;
+    }
+    if (typeof base.planStatus === 'string') {
+      todoRuntime.planStatus = base.planStatus;
+    } else if (base.planStatus === null) {
+      todoRuntime.planStatus = null;
+    }
+    if (typeof base.runId === 'string') {
+      todoRuntime.runId = base.runId;
+    }
+    if (typeof base.runStatus === 'string') {
+      todoRuntime.runStatus = base.runStatus;
+    }
+    if (typeof base.runTaskId === 'string') {
+      todoRuntime.runTaskId = base.runTaskId;
+    }
+  }
+
+  normalized.todoRuntime = todoRuntime;
+  return normalized;
+};
 
 export class ChatService {
   private normalizeMessageContexts(
@@ -487,7 +714,7 @@ export class ChatService {
     const session = await this.getSessionForUser(sessionId, userId);
     if (!session) throw new Error('Session not found');
 
-    return await db
+    const messages = await db
       .select({
         id: chatMessages.id,
         sessionId: chatMessages.sessionId,
@@ -511,6 +738,24 @@ export class ChatService {
       )
       .where(eq(chatMessages.sessionId, sessionId))
       .orderBy(asc(chatMessages.sequence));
+
+    let todoRuntime: Record<string, unknown> | null = null;
+    const sessionWorkspaceId =
+      typeof session.workspaceId === 'string' && session.workspaceId.trim().length > 0
+        ? session.workspaceId
+        : (await ensureWorkspaceForUser(userId, { createIfMissing: false })).workspaceId;
+    if (sessionWorkspaceId) {
+      const role = (await getWorkspaceRole(userId, sessionWorkspaceId)) ?? 'viewer';
+      todoRuntime = await todoOrchestrationService.getSessionTodoRuntime(
+        { userId, role, workspaceId: sessionWorkspaceId },
+        sessionId,
+      );
+    }
+
+    return {
+      messages,
+      todoRuntime,
+    };
   }
 
   async setMessageFeedback(options: { messageId: string; userId: string; vote: 'up' | 'down' | 'clear' }) {
@@ -1032,12 +1277,10 @@ export class ChatService {
         role: m.role as 'user' | 'assistant',
         content: m.content ?? ''
       }));
+    const lastUserMessage =
+      [...conversation].reverse().find((m) => m.role === 'user')?.content?.trim() || '';
 
     if (!session.title) {
-      const lastUserMessage =
-        [...messages]
-          .filter((m) => m.sequence < assistantRow.sequence && m.role === 'user')
-          .pop()?.content ?? '';
       if (lastUserMessage.trim()) {
         const safeContextType =
           focusContext?.contextType || (isChatContextType(session.primaryContextType) ? session.primaryContextType : null);
@@ -1136,6 +1379,35 @@ export class ChatService {
       }
     })();
 
+    const requestedTools = new Set(Array.isArray(options.tools) ? options.tools : []);
+    const todoToolRequested = requestedTools.has('plan');
+    const sessionTodoRuntimeSnapshot = todoToolRequested
+      ? toSessionTodoRuntimeSnapshot(
+          await todoOrchestrationService.getSessionTodoRuntime(
+            {
+              userId: options.userId,
+              role: currentUserRole ?? 'viewer',
+              workspaceId: sessionWorkspaceId,
+            },
+            options.sessionId,
+          ),
+        )
+      : null;
+    const hasActiveSessionTodo = Boolean(
+      sessionTodoRuntimeSnapshot &&
+      !TODO_TERMINAL_STATUSES.has(sessionTodoRuntimeSnapshot.status),
+    );
+    const explicitTodoReplacementRequest =
+      hasActiveSessionTodo && isExplicitTodoReplacementRequest(lastUserMessage);
+    const enforceTodoUpdateMode =
+      todoToolRequested && hasActiveSessionTodo && !explicitTodoReplacementRequest;
+    const todoStructuralMutationIntent =
+      enforceTodoUpdateMode && isExplicitTodoStructuralMutationRequest(lastUserMessage);
+    const todoProgressionIntent =
+      enforceTodoUpdateMode && isTodoProgressionIntent(lastUserMessage);
+    const todoGoSignal = enforceTodoUpdateMode && isTodoGoSignal(lastUserMessage);
+    const todoProgressionFocusMode = Boolean(todoProgressionIntent || todoGoSignal);
+
     // Prepare tools based on the active contexts (view-scoped behavior).
     // Note: destructive/batch tools are gated elsewhere; here we only enable what can be called.
     let tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined;
@@ -1199,12 +1471,25 @@ export class ChatService {
         webExtractTool
       ]);
     }
-    const requestedTools = new Set(Array.isArray(options.tools) ? options.tools : []);
-    if (requestedTools.has('web_search')) {
+    const effectiveRequestedTools = new Set(requestedTools);
+    if (todoToolRequested) {
+      effectiveRequestedTools.add('plan');
+    }
+    if (enforceTodoUpdateMode) {
+      effectiveRequestedTools.add('plan');
+    }
+    if (todoProgressionFocusMode) {
+      effectiveRequestedTools.delete('web_search');
+      effectiveRequestedTools.delete('web_extract');
+    }
+    if (effectiveRequestedTools.has('web_search')) {
       addTools([webSearchTool]);
     }
-    if (requestedTools.has('web_extract')) {
+    if (effectiveRequestedTools.has('web_extract')) {
       addTools([webExtractTool]);
+    }
+    if (effectiveRequestedTools.has('plan') || enforceTodoUpdateMode) {
+      addTools([planTool]);
     }
     if (hasDocuments) {
       addTools([documentsTool]);
@@ -1228,7 +1513,7 @@ export class ChatService {
 
     if (Array.isArray(options.tools) && options.tools.length > 0 && tools?.length) {
       const allowed = new Set<string>([
-        ...options.tools,
+        ...effectiveRequestedTools,
         ...Array.from(localToolNames)
       ]);
       tools = tools.filter((t) => (t.type === 'function' ? allowed.has(t.function?.name || '') : false));
@@ -1404,6 +1689,80 @@ Règles :
     if (hasCommentContexts) {
       contextBlock += `\n\nComment resolution tool:\n- \`comment_assistant\` (mode=suggest) to analyze comment threads and propose actions.\n- Always present the proposal as French markdown with a clear confirmation question.\n- Require an explicit user confirmation ("Confirmer" or "Annuler").\n- Only after confirmation, call \`comment_assistant\` with mode=resolve, include the same actions, and pass confirmation="yes".\n- If the user response is not an explicit confirmation, ask again with the fixed options.`;
     }
+    if (todoToolRequested) {
+      const todoLines: string[] = ['Plan runtime session constraints:'];
+      if (sessionTodoRuntimeSnapshot) {
+        todoLines.push(`- Active TODO id: ${sessionTodoRuntimeSnapshot.todoId}`);
+        todoLines.push(`- Active TODO status: ${sessionTodoRuntimeSnapshot.status}`);
+        if (sessionTodoRuntimeSnapshot.todoTitle) {
+          todoLines.push(`- Active TODO title: ${sessionTodoRuntimeSnapshot.todoTitle}`);
+        }
+        if (sessionTodoRuntimeSnapshot.tasks.length > 0) {
+          todoLines.push('- Ordered tasks (deterministic progression order):');
+          for (const [index, task] of sessionTodoRuntimeSnapshot.tasks.slice(0, 20).entries()) {
+            const taskId = task.id || '(no-id)';
+            todoLines.push(`  ${index + 1}. taskId=${taskId} status=${task.status} title=${task.title}`);
+          }
+        } else {
+          todoLines.push('- No tasks currently attached to this TODO.');
+        }
+      } else {
+        todoLines.push('- No active session TODO found.');
+      }
+      todoLines.push('');
+      todoLines.push('Mandatory plan orchestration rules:');
+      if (enforceTodoUpdateMode) {
+        todoLines.push(
+          '- A session plan is already active: do NOT call `plan` with `action="create"` unless the user explicitly asks for a replacement/new list.',
+        );
+        todoLines.push(
+          '- Prioritize progression of the active plan before starting unrelated planning.',
+        );
+        todoLines.push(
+          '- Use `plan` with `action="update_task"` and `action="update_plan"` to progress the existing plan.',
+        );
+        todoLines.push(
+          '- Progress task-by-task and persist each update while executing (no end-of-run bulk update only).',
+        );
+        todoLines.push(
+          '- Ask blocker questions upfront in one batch, then continue autonomously until a real blocker appears.',
+        );
+        todoLines.push(
+          '- Structural mutations (add/remove/reorder/replace tasks, or rewrite plan/task content) require explicit user intent.',
+        );
+      } else {
+        todoLines.push(
+          '- Use `plan` with `action="create"` only when the user explicitly asks to create a plan list.',
+        );
+      }
+      if (explicitTodoReplacementRequest) {
+        todoLines.push(
+          '- The user explicitly asked for a replacement/new list: `plan` with `action="create"` is allowed.',
+        );
+      }
+      if (todoStructuralMutationIntent) {
+        todoLines.push(
+          '- Explicit structural mutation intent detected: content/list changes are allowed in this turn.',
+        );
+      }
+      if (todoProgressionFocusMode) {
+        todoLines.push(
+          '- Progression intent detected: execute the required TODO updates immediately in this answer (multiple tool calls if needed).',
+        );
+        todoLines.push(
+          '- Deterministic progression: update tasks in listed order, continue until a real blocker (`blocked`, permission/guardrail error, or missing required input).',
+        );
+        if (todoGoSignal) {
+          todoLines.push(
+            '- User said "go": continue autonomously through next feasible tasks; ask one concise blocker question only if blocked.',
+          );
+        }
+      }
+      todoLines.push(
+        '- When all tasks are terminal (`done`/`cancelled`), finalize the active plan with `plan` and `action="update_plan"` (`status: "done"` or `closed: true`).',
+      );
+      contextBlock += `\n\n${todoLines.join('\n')}`;
+    }
 
     const activeToolNames = (tools ?? [])
       .map((tool) =>
@@ -1426,8 +1785,88 @@ Règles :
       DOCUMENTS_BLOCK: documentsBlock,
       AUTOMATION_BLOCK: automationBlock
     }).trim();
+    const STEER_PROMPT_MAX_MESSAGES = 8;
+    const STEER_REASONING_REPLAY_MAX_CHARS = 6000;
+    const STEER_REASONING_EXCERPT_MAX_CHARS = 1800;
+    const normalizeSteerMessage = (value: string): string =>
+      value
+        .replace(/\s+/g, ' ')
+        .trim();
+    const normalizeReasoningExcerpt = (value: string): string => {
+      const normalized = value.replace(/\s+/g, ' ').trim();
+      if (!normalized) return '';
+      if (normalized.length <= STEER_REASONING_EXCERPT_MAX_CHARS) {
+        return normalized;
+      }
+      return normalized.slice(-STEER_REASONING_EXCERPT_MAX_CHARS);
+    };
+    const buildSteerInterruptionPrompt = (
+      messages: readonly string[],
+      reasoningReplay: string,
+    ): string => {
+      if (messages.length === 0) return systemPrompt;
+      const lastDirective = messages[messages.length - 1] ?? '';
+      const lines = messages
+        .slice(-STEER_PROMPT_MAX_MESSAGES)
+        .map((message, index) => `${index + 1}. ${message}`);
+      const reasoningExcerpt = normalizeReasoningExcerpt(reasoningReplay);
+      const steerContext = [
+        'SYSTEM NOTE - STEER INTERRUPTION',
+        '- Previous reasoning was interrupted to integrate one or more user steering messages.',
+        '- Consider every steering message listed below in chronological order.',
+        '- If two steering directives conflict, the latest directive has priority.',
+        '- Continue without re-asking for confirmation unless a blocker requires clarification.',
+        '',
+        'Steering messages:',
+        ...lines,
+        '',
+        `Latest directive to prioritize: ${lastDirective}`,
+      ].join('\n');
+      if (!reasoningExcerpt) {
+        return `${systemPrompt}\n\n${steerContext}`.trim();
+      }
+      return [
+        systemPrompt,
+        '',
+        steerContext,
+        '',
+        'Reasoning excerpt already emitted before interruption (for continuity only):',
+        reasoningExcerpt,
+      ].join('\n').trim();
+    };
+    const isPreviousResponseNotFoundError = (message: string): boolean => {
+      const normalized = message.toLowerCase();
+      return (
+        normalized.includes('previous response') &&
+        normalized.includes('not found')
+      );
+    };
+    const applySteerInterruptionPrompt = (
+      messages: Array<
+        | { role: 'system' | 'user' | 'assistant'; content: string }
+        | { role: 'tool'; content: string; tool_call_id: string }
+      >,
+      steerMessages: readonly string[],
+      reasoningReplay: string,
+    ): Array<
+      | { role: 'system' | 'user' | 'assistant'; content: string }
+      | { role: 'tool'; content: string; tool_call_id: string }
+    > => {
+      const withoutSystem =
+        messages.length > 0 && messages[0]?.role === 'system'
+          ? messages.slice(1)
+          : messages;
+      return [
+        {
+          role: 'system' as const,
+          content: buildSteerInterruptionPrompt(steerMessages, reasoningReplay),
+        },
+        ...withoutSystem,
+      ];
+    };
 
     let streamSeq = await getNextSequence(options.assistantMessageId);
+    let lastObservedStreamSequence = Math.max(streamSeq - 1, 0);
     const contentParts: string[] = [];
     const reasoningParts: string[] = [];
     let lastErrorMessage: string | null = null;
@@ -1441,7 +1880,14 @@ Règles :
       | { role: 'system' | 'user' | 'assistant'; content: string }
       | { role: 'tool'; content: string; tool_call_id: string }
     > = [{ role: 'system' as const, content: systemPrompt }, ...conversation];
-    const maxIterations = 10; // Limite de sécurité pour éviter les boucles infinies
+    let maxIterations = BASE_MAX_ITERATIONS;
+    const todoAutonomousExtensionEnabled = Boolean(
+      enforceTodoUpdateMode && todoProgressionFocusMode,
+    );
+    let todoContinuationActive = Boolean(
+      todoAutonomousExtensionEnabled && hasActiveSessionTodo,
+    );
+    let todoAwaitingUserInput = false;
     let iteration = 0;
     let previousResponseId: string | null =
       options.resumeFrom?.previousResponseId ?? null;
@@ -1454,6 +1900,8 @@ Règles :
           output: item.output
         }))
       : null;
+    const steerHistoryMessages: string[] = [];
+    let steerReasoningReplay = '';
 
     const [aiSettings, catalog] = await Promise.all([
       settingsService.getAISettings({ userId: options.userId }),
@@ -1583,11 +2031,62 @@ Règles :
     );
     streamSeq += 1;
 
-    while (iteration < maxIterations) {
+    let continueGenerationLoop = true;
+    const consumePendingSteerMessages = async (): Promise<string[]> => {
+      const events = await readStreamEvents(
+        options.assistantMessageId,
+        lastObservedStreamSequence,
+      );
+      if (events.length === 0) return [];
+      lastObservedStreamSequence = events[events.length - 1]?.sequence ?? lastObservedStreamSequence;
+
+      const messages: string[] = [];
+      for (const event of events) {
+        if (event.eventType !== 'status') continue;
+        const data = asRecord(event.data);
+        if (!data || data.state !== 'steer_received') continue;
+        const message =
+          typeof data.message === 'string'
+            ? normalizeSteerMessage(data.message)
+            : '';
+        if (message) messages.push(message);
+      }
+      return messages;
+    };
+
+    while (continueGenerationLoop) {
+      if (iteration >= maxIterations) {
+        const canExtendTodoAutonomousLoop =
+          todoAutonomousExtensionEnabled &&
+          todoContinuationActive &&
+          !todoAwaitingUserInput &&
+          maxIterations < TODO_AUTONOMOUS_MAX_ITERATIONS;
+        if (!canExtendTodoAutonomousLoop) {
+          continueGenerationLoop = false;
+          break;
+        }
+        maxIterations = Math.min(
+          maxIterations + TODO_AUTONOMOUS_EXTENSION_STEP,
+          TODO_AUTONOMOUS_MAX_ITERATIONS,
+        );
+      }
       iteration++;
       toolCalls.length = 0; // Réinitialiser pour chaque round
       contentParts.length = 0; // Réinitialiser le contenu pour chaque round
       reasoningParts.length = 0; // Réinitialiser le reasoning pour chaque round
+      const pass1ToolChoice: 'auto' | 'required' =
+        todoAutonomousExtensionEnabled &&
+        todoContinuationActive &&
+        !todoAwaitingUserInput
+          ? 'required'
+          : 'auto';
+      currentMessages = applySteerInterruptionPrompt(
+        currentMessages,
+        steerHistoryMessages,
+        steerReasoningReplay,
+      );
+      let steerInterruptionRequested = false;
+      let steerInterruptionBatch: string[] = [];
 
       // Trace: exact payload sent to OpenAI (per iteration)
       await writeChatGenerationTrace({
@@ -1599,7 +2098,7 @@ Règles :
         phase: 'pass1',
         iteration,
         model: selectedModel || null,
-        toolChoice: 'auto',
+        toolChoice: pass1ToolChoice,
         // IMPORTANT: tracer les tools au complet (description + schema) pour debug.
         tools: tools ?? null,
         openaiMessages: {
@@ -1619,80 +2118,181 @@ Règles :
         }
       });
 
-      for await (const event of callOpenAIResponseStream({
-        providerId: selectedProviderId,
-        model: selectedModel,
-        credential: options.providerApiKey ?? undefined,
-        userId: options.userId,
-        workspaceId: sessionWorkspaceId,
-        messages: currentMessages,
-        tools,
-        // on laisse le service openai gérer la compat modèle (gpt-4.1-nano n'a pas reasoning.summary)
-        reasoningSummary: 'detailed',
-        reasoningEffort: reasoningEffortForThisMessage,
-        previousResponseId: previousResponseId ?? undefined,
-        rawInput: pendingResponsesRawInput ?? undefined,
-        signal: options.signal
-      })) {
-        const eventType = event.type as StreamEventType;
-        const data = (event.data ?? {}) as Record<string, unknown>;
-        // IMPORTANT: on n'émet pas 'done' ici. On émettra un unique 'done' à la toute fin,
-        // après éventuel 2e pass (sinon l'UI peut se retrouver "terminée" sans contenu).
-        if (eventType === 'done') {
-          continue;
-        }
-        if (eventType === 'error') {
-          const msg = (data as Record<string, unknown>).message;
-          lastErrorMessage = typeof msg === 'string' ? msg : 'Unknown error';
+      let shouldRetryWithoutPreviousResponse = false;
+      try {
+        for await (const event of callOpenAIResponseStream({
+          providerId: selectedProviderId,
+          model: selectedModel,
+          credential: options.providerApiKey ?? undefined,
+          userId: options.userId,
+          workspaceId: sessionWorkspaceId,
+          messages: currentMessages,
+          tools,
+          // on laisse le service openai gérer la compat modèle (gpt-4.1-nano n'a pas reasoning.summary)
+          reasoningSummary: 'detailed',
+          reasoningEffort: reasoningEffortForThisMessage,
+          toolChoice: pass1ToolChoice,
+          previousResponseId: previousResponseId ?? undefined,
+          rawInput: pendingResponsesRawInput ?? undefined,
+          signal: options.signal
+        })) {
+          const eventType = event.type as StreamEventType;
+          const data = (event.data ?? {}) as Record<string, unknown>;
+          // IMPORTANT: on n'émet pas 'done' ici. On émettra un unique 'done' à la toute fin,
+          // après éventuel 2e pass (sinon l'UI peut se retrouver "terminée" sans contenu).
+          if (eventType === 'done') {
+            continue;
+          }
+          if (eventType === 'error') {
+            const msg = (data as Record<string, unknown>).message;
+            const errorMessage =
+              typeof msg === 'string' ? msg : 'Unknown error';
+            if (
+              steerInterruptionRequested &&
+              errorMessage.toLowerCase().includes('aborted')
+            ) {
+              continue;
+            }
+            lastErrorMessage = errorMessage;
+            await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+            // on laisse le flux se terminer / throw; le catch global gère
+            continue;
+          }
+
           await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
           streamSeq += 1;
-          // on laisse le flux se terminer / throw; le catch global gère
-          continue;
-        }
 
-        await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
+          // Capture Responses API response_id for proper continuation
+          if (eventType === 'status') {
+            const responseId = typeof (data as Record<string, unknown>).response_id === 'string' ? ((data as Record<string, unknown>).response_id as string) : '';
+            if (responseId) previousResponseId = responseId;
+          }
+
+          if (eventType === 'content_delta') {
+            const delta = typeof data.delta === 'string' ? data.delta : '';
+            if (delta) {
+              contentParts.push(delta);
+            }
+          } else if (eventType === 'reasoning_delta') {
+            const delta = typeof data.delta === 'string' ? data.delta : '';
+            if (delta) {
+              reasoningParts.push(delta);
+              if (steerReasoningReplay.length < STEER_REASONING_REPLAY_MAX_CHARS) {
+                steerReasoningReplay += delta;
+                if (steerReasoningReplay.length > STEER_REASONING_REPLAY_MAX_CHARS) {
+                  steerReasoningReplay = steerReasoningReplay.slice(
+                    -STEER_REASONING_REPLAY_MAX_CHARS,
+                  );
+                }
+              } else {
+                steerReasoningReplay =
+                  `${steerReasoningReplay}${delta}`.slice(
+                    -STEER_REASONING_REPLAY_MAX_CHARS,
+                  );
+              }
+            }
+          } else if (eventType === 'tool_call_start') {
+            const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
+            const existingIndex = toolCalls.findIndex(tc => tc.id === toolCallId);
+            if (existingIndex === -1) {
+              toolCalls.push({
+                id: toolCallId,
+                name: typeof data.name === 'string' ? data.name : '',
+                args: typeof data.args === 'string' ? data.args : ''
+              });
+            } else {
+              const nextName = typeof data.name === 'string' ? data.name : '';
+              const nextArgs = typeof data.args === 'string' ? data.args : '';
+              toolCalls[existingIndex].name = nextName || toolCalls[existingIndex].name;
+              toolCalls[existingIndex].args = (toolCalls[existingIndex].args || '') + (nextArgs || '');
+            }
+          } else if (eventType === 'tool_call_delta') {
+            const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
+            const delta = typeof data.delta === 'string' ? data.delta : '';
+            const toolCall = toolCalls.find(tc => tc.id === toolCallId);
+            if (toolCall) {
+              toolCall.args += delta;
+            } else {
+              toolCalls.push({ id: toolCallId, name: '', args: delta });
+            }
+          }
+          if (!steerInterruptionRequested) {
+            const pendingSteerMessages = await consumePendingSteerMessages();
+            if (pendingSteerMessages.length > 0) {
+              steerInterruptionRequested = true;
+              steerInterruptionBatch = pendingSteerMessages;
+              await writeStreamEvent(
+                options.assistantMessageId,
+                'status',
+                {
+                  state: 'run_interrupted_for_steer',
+                  steer_count: steerInterruptionBatch.length,
+                  latest_message:
+                    steerInterruptionBatch[steerInterruptionBatch.length - 1] ??
+                    '',
+                },
+                streamSeq,
+                options.assistantMessageId,
+              );
+              streamSeq += 1;
+              break;
+            }
+          }
+          // Note: eventType 'done' est volontairement retardé (voir plus haut)
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error ?? '');
+        if (
+          previousResponseId &&
+          isPreviousResponseNotFoundError(message)
+        ) {
+          shouldRetryWithoutPreviousResponse = true;
+        } else {
+          throw error;
+        }
+      }
+      if (shouldRetryWithoutPreviousResponse) {
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'status',
+          {
+            state: 'response_lineage_reset',
+            reason: 'previous_response_not_found',
+          },
+          streamSeq,
+          options.assistantMessageId,
+        );
         streamSeq += 1;
-
-        // Capture Responses API response_id for proper continuation
-        if (eventType === 'status') {
-          const responseId = typeof (data as Record<string, unknown>).response_id === 'string' ? ((data as Record<string, unknown>).response_id as string) : '';
-          if (responseId) previousResponseId = responseId;
-        }
-
-        if (eventType === 'content_delta') {
-          const delta = typeof data.delta === 'string' ? data.delta : '';
-          if (delta) {
-            contentParts.push(delta);
-          }
-        } else if (eventType === 'reasoning_delta') {
-          const delta = typeof data.delta === 'string' ? data.delta : '';
-          if (delta) reasoningParts.push(delta);
-        } else if (eventType === 'tool_call_start') {
-          const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
-          const existingIndex = toolCalls.findIndex(tc => tc.id === toolCallId);
-          if (existingIndex === -1) {
-            toolCalls.push({
-              id: toolCallId,
-              name: typeof data.name === 'string' ? data.name : '',
-              args: typeof data.args === 'string' ? data.args : ''
-            });
-          } else {
-            const nextName = typeof data.name === 'string' ? data.name : '';
-            const nextArgs = typeof data.args === 'string' ? data.args : '';
-            toolCalls[existingIndex].name = nextName || toolCalls[existingIndex].name;
-            toolCalls[existingIndex].args = (toolCalls[existingIndex].args || '') + (nextArgs || '');
-          }
-        } else if (eventType === 'tool_call_delta') {
-          const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
-          const delta = typeof data.delta === 'string' ? data.delta : '';
-          const toolCall = toolCalls.find(tc => tc.id === toolCallId);
-          if (toolCall) {
-            toolCall.args += delta;
-          } else {
-            toolCalls.push({ id: toolCallId, name: '', args: delta });
-          }
-        }
-        // Note: eventType 'done' est volontairement retardé (voir plus haut)
+        previousResponseId = null;
+        pendingResponsesRawInput = null;
+        continue;
+      }
+      if (steerInterruptionRequested && steerInterruptionBatch.length > 0) {
+        pendingResponsesRawInput = null;
+        previousResponseId = null;
+        steerHistoryMessages.push(...steerInterruptionBatch);
+        currentMessages = [
+          ...currentMessages,
+          ...steerInterruptionBatch.map((message) => ({
+            role: 'user' as const,
+            content: message,
+          })),
+        ];
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'status',
+          {
+            state: 'run_resumed_with_steer',
+            steer_count: steerInterruptionBatch.length,
+            latest_message:
+              steerInterruptionBatch[steerInterruptionBatch.length - 1] ?? '',
+          },
+          streamSeq,
+          options.assistantMessageId,
+        );
+        streamSeq += 1;
+        continue;
       }
 
       // Debug (requested): if we asked for reasoningSummary=detailed but saw none, log it.
@@ -1717,6 +2317,7 @@ Règles :
 
       // Si aucun tool call, on termine
       if (toolCalls.length === 0) {
+        continueGenerationLoop = false;
         break;
       }
 
@@ -1761,6 +2362,48 @@ Règles :
         if (arg !== 'yes') return false;
         return ['oui', 'yes', 'confirmer', 'confirme', 'confirm', 'ok'].includes(normalized);
       };
+      const markTodoIterationState = (rawResult: unknown) => {
+        if (!todoAutonomousExtensionEnabled) return;
+        const resultRecord = asRecord(rawResult) ?? {};
+        const runtime = asRecord(resultRecord.todoRuntime) ?? resultRecord;
+        const todoRecord = asRecord(runtime.todo);
+        const activeTodoRecord = asRecord(runtime.activeTodo);
+        const status = normalizeTodoRuntimeStatus(resultRecord.status ?? runtime.status);
+        const todoStatus = normalizeTodoRuntimeStatus(
+          runtime.todoStatus ??
+            todoRecord?.derivedStatus ??
+            activeTodoRecord?.derivedStatus,
+        );
+        const todoId = String(
+          runtime.todoId ?? todoRecord?.id ?? activeTodoRecord?.id ?? '',
+        ).trim();
+        const message = String(
+          resultRecord.error ?? runtime.error ?? resultRecord.message ?? runtime.message ?? '',
+        ).toLowerCase();
+
+        if (status === 'error') {
+          todoAwaitingUserInput = true;
+        }
+        if (TODO_BLOCKING_STATUSES.has(todoStatus)) {
+          todoAwaitingUserInput = true;
+        }
+        if (TODO_TERMINAL_STATUSES.has(todoStatus)) {
+          todoContinuationActive = false;
+        } else if (todoId.length > 0) {
+          todoContinuationActive = true;
+        }
+        if (
+          message.includes('requires explicit user intent') ||
+          message.includes('is required') ||
+          message.includes('missing') ||
+          message.includes('security') ||
+          message.includes('permission') ||
+          message.includes('read-only') ||
+          message.includes('confirm')
+        ) {
+          todoAwaitingUserInput = true;
+        }
+      };
 
       for (const toolCall of toolCalls) {
         if (options.signal?.aborted) throw new Error('AbortError');
@@ -1780,6 +2423,33 @@ Règles :
         
         try {
           const args = JSON.parse(toolCall.args || '{}');
+          const todoOperation: TodoRuntimeToolOperation | null = (() => {
+            if (toolCall.name !== 'plan') return null;
+            const actionRaw =
+              typeof args.action === 'string' ? args.action.trim().toLowerCase() : '';
+            if (
+              actionRaw === 'create' ||
+              actionRaw === 'update_plan' ||
+              actionRaw === 'update_task'
+            ) {
+              return actionRaw;
+            }
+            if (actionRaw.length > 0) {
+              return null;
+            }
+            const hasTaskId =
+              typeof args.taskId === 'string' && args.taskId.trim().length > 0;
+            if (hasTaskId) return 'update_task';
+            const hasTodoId =
+              typeof args.todoId === 'string' && args.todoId.trim().length > 0;
+            if (hasTodoId) return 'update_plan';
+            return 'create';
+          })();
+          if (toolCall.name === 'plan' && !todoOperation) {
+            throw new Error(
+              'plan: action must be one of create|update_plan|update_task',
+            );
+          }
           let result: unknown;
 
           if (toolCall.name === 'read_usecase' || toolCall.name === 'usecase_get') {
@@ -2076,6 +2746,231 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
+          } else if (toolCall.name === 'plan' && todoOperation === 'create') {
+            const createToolLabel = 'plan(action=create)';
+            if (readOnly) {
+              throw new Error(`Read-only workspace: ${createToolLabel} is disabled`);
+            }
+            const title = typeof args.title === 'string' ? args.title.trim() : '';
+            if (!title) {
+              throw new Error(`${createToolLabel}: title is required`);
+            }
+            const planId =
+              typeof args.planId === 'string' && args.planId.trim().length > 0
+                ? args.planId.trim()
+                : undefined;
+            const planTitle =
+              typeof args.planTitle === 'string' && args.planTitle.trim().length > 0
+                ? args.planTitle.trim()
+                : undefined;
+            const description =
+              typeof args.description === 'string' && args.description.trim().length > 0
+                ? args.description
+                : undefined;
+            const taskDrafts: unknown[] = Array.isArray(args.tasks)
+              ? (args.tasks as unknown[])
+              : [];
+            const tasks: Array<{ title: string; description?: string }> =
+              taskDrafts
+              .map((item: unknown): { title: string; description?: string } => {
+                const draft = asRecord(item);
+                return {
+                  title: typeof draft?.title === 'string' ? draft.title.trim() : '',
+                  description:
+                    typeof draft?.description === 'string'
+                      ? draft.description
+                      : undefined
+                };
+              })
+              .filter((item) => item.title.length > 0);
+            const metadata = asRecord(args.metadata) ?? undefined;
+
+            const todoResult = await todoOrchestrationService.createTodoFromChat(
+              {
+                userId: options.userId,
+                role: currentUserRole ?? 'editor',
+                workspaceId: sessionWorkspaceId
+              },
+              {
+                title,
+                description,
+                planId,
+                planTitle,
+                tasks,
+                metadata,
+                sessionId: options.sessionId
+              }
+            );
+            const normalizedTodoResult = normalizeTodoRuntimeToolResult(
+              'plan',
+              toolCall.id,
+              todoResult,
+              'create',
+            );
+            markTodoIterationState(normalizedTodoResult);
+            result = normalizedTodoResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: normalizedTodoResult },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'plan' && todoOperation === 'update_plan') {
+            const todoUpdateLabel = 'plan(action=update_plan)';
+            if (readOnly) {
+              throw new Error(`Read-only workspace: ${todoUpdateLabel} is disabled`);
+            }
+            const todoId =
+              typeof args.todoId === 'string' && args.todoId.trim().length > 0
+                ? args.todoId.trim()
+                : '';
+            if (!todoId) {
+              throw new Error(`${todoUpdateLabel}: todoId is required`);
+            }
+            const title =
+              typeof args.title === 'string' && args.title.trim().length > 0
+                ? args.title.trim()
+                : undefined;
+            const description =
+              typeof args.description === 'string'
+                ? args.description
+                : undefined;
+            const ownerUserId =
+              typeof args.ownerUserId === 'string' && args.ownerUserId.trim().length > 0
+                ? args.ownerUserId.trim()
+                : undefined;
+            const status =
+              typeof args.status === 'string' && args.status.trim().length > 0
+                ? args.status.trim()
+                : undefined;
+            const closed = typeof args.closed === 'boolean' ? args.closed : undefined;
+            const metadataRecord = asRecord(args.metadata);
+            const metadata =
+              metadataRecord && Object.keys(metadataRecord).length > 0
+                ? metadataRecord
+                : undefined;
+            const hasStructuralTodoMutationArgs =
+              title !== undefined || description !== undefined || metadata !== undefined;
+            if (
+              enforceTodoUpdateMode &&
+              hasStructuralTodoMutationArgs &&
+              !todoStructuralMutationIntent
+            ) {
+              throw new Error(
+                `${todoUpdateLabel}: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)`,
+              );
+            }
+
+            const updateResult = await todoOrchestrationService.updateTodoFromChat(
+              {
+                userId: options.userId,
+                role: currentUserRole ?? 'editor',
+                workspaceId: sessionWorkspaceId
+              },
+              {
+                todoId,
+                title,
+                description,
+                ownerUserId,
+                status,
+                closed,
+                metadata
+              }
+            );
+            const normalizedTodoUpdateResult = normalizeTodoRuntimeToolResult(
+              'plan',
+              toolCall.id,
+              updateResult,
+              'update_plan',
+            );
+            markTodoIterationState(normalizedTodoUpdateResult);
+            result = normalizedTodoUpdateResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: normalizedTodoUpdateResult },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'plan' && todoOperation === 'update_task') {
+            const taskUpdateLabel = 'plan(action=update_task)';
+            if (readOnly) {
+              throw new Error(`Read-only workspace: ${taskUpdateLabel} is disabled`);
+            }
+            const taskId =
+              typeof args.taskId === 'string' && args.taskId.trim().length > 0
+                ? args.taskId.trim()
+                : '';
+            if (!taskId) {
+              throw new Error(`${taskUpdateLabel}: taskId is required`);
+            }
+            const title =
+              typeof args.title === 'string' && args.title.trim().length > 0
+                ? args.title.trim()
+                : undefined;
+            const description =
+              typeof args.description === 'string'
+                ? args.description
+                : undefined;
+            const assigneeUserId =
+              typeof args.assigneeUserId === 'string' && args.assigneeUserId.trim().length > 0
+                ? args.assigneeUserId.trim()
+                : undefined;
+            const status =
+              typeof args.status === 'string' && args.status.trim().length > 0
+                ? args.status.trim()
+                : undefined;
+            const metadataRecord = asRecord(args.metadata);
+            const metadata =
+              metadataRecord && Object.keys(metadataRecord).length > 0
+                ? metadataRecord
+                : undefined;
+            const hasStructuralTaskMutationArgs =
+              title !== undefined || description !== undefined || metadata !== undefined;
+            if (
+              enforceTodoUpdateMode &&
+              hasStructuralTaskMutationArgs &&
+              !todoStructuralMutationIntent
+            ) {
+              throw new Error(
+                `${taskUpdateLabel}: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)`,
+              );
+            }
+
+            const updateResult = await todoOrchestrationService.updateTaskFromChat(
+              {
+                userId: options.userId,
+                role: currentUserRole ?? 'editor',
+                workspaceId: sessionWorkspaceId
+              },
+              {
+                taskId,
+                title,
+                description,
+                assigneeUserId,
+                status,
+                metadata
+              }
+            );
+            const normalizedTaskUpdateResult = normalizeTodoRuntimeToolResult(
+              'plan',
+              toolCall.id,
+              updateResult,
+              'update_task',
+            );
+            markTodoIterationState(normalizedTaskUpdateResult);
+            result = normalizedTaskUpdateResult;
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: normalizedTaskUpdateResult },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
           } else if (toolCall.name === 'comment_assistant') {
             const mode = typeof args.mode === 'string' ? args.mode : '';
             const contextType = typeof args.contextType === 'string' ? args.contextType : '';
@@ -2283,6 +3178,10 @@ Règles :
             status: 'error',
             error: error instanceof Error ? error.message : 'Unknown error'
           };
+          const todoErrorCall = toolCall.name === 'plan';
+          if (todoErrorCall && todoAutonomousExtensionEnabled) {
+            markTodoIterationState(errorResult);
+          }
           await writeStreamEvent(
             options.assistantMessageId,
             'tool_call_result',
@@ -2320,7 +3219,7 @@ Règles :
         phase: 'pass1',
         iteration,
         model: selectedModel || null,
-        toolChoice: 'auto',
+        toolChoice: pass1ToolChoice,
         tools: tools ?? null,
         openaiMessages: {
           kind: 'executed_tools',
@@ -2339,6 +3238,30 @@ Règles :
         }),
         meta: { kind: 'executed_tools', callSite: 'ChatService.runAssistantGeneration/pass1/afterTools', openaiApi: 'responses' }
       });
+
+      if (todoAutonomousExtensionEnabled && !todoAwaitingUserInput) {
+        const refreshedSessionTodo = toSessionTodoRuntimeSnapshot(
+          await todoOrchestrationService.getSessionTodoRuntime(
+            {
+              userId: options.userId,
+              role: currentUserRole ?? 'viewer',
+              workspaceId: sessionWorkspaceId,
+            },
+            options.sessionId,
+          ),
+        );
+        if (!refreshedSessionTodo) {
+          todoContinuationActive = false;
+        } else {
+          const refreshedStatus = normalizeTodoRuntimeStatus(
+            refreshedSessionTodo.status,
+          );
+          todoContinuationActive = !TODO_TERMINAL_STATUSES.has(refreshedStatus);
+          if (TODO_BLOCKING_STATUSES.has(refreshedStatus)) {
+            todoAwaitingUserInput = true;
+          }
+        }
+      }
 
       if (pendingLocalToolCalls.length > 0) {
         if (!previousResponseId) {

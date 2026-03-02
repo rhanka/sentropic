@@ -144,5 +144,25 @@ describe('API Utils', () => {
       const [url] = fetchMock.mock.calls[0];
       expect(String(url)).toBe(`${API_BASE_URL}/auth/session`);
     });
+
+    it('appends workspace_id for TODO runtime config endpoints', async () => {
+      setUser({ id: 'user-1', email: 'user@example.com', displayName: 'User', role: 'editor' });
+      setWorkspaceScope('ws-1');
+
+      mockFetchJsonOnce({ items: [] });
+      await apiRequest('/agent-config');
+      let fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+      let [url] = fetchMock.mock.calls[0];
+      expect(String(url)).toContain(`${API_BASE_URL}/agent-config`);
+      expect(String(url)).toContain('workspace_id=ws-1');
+
+      resetFetchMock();
+      mockFetchJsonOnce({ items: [] });
+      await apiRequest('/workflow-config');
+      fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+      [url] = fetchMock.mock.calls[0];
+      expect(String(url)).toContain(`${API_BASE_URL}/workflow-config`);
+      expect(String(url)).toContain('workspace_id=ws-1');
+    });
   });
 });

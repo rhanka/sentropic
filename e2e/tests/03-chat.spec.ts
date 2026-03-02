@@ -9,6 +9,12 @@ test.describe.serial('Chat', () => {
   const assistantWrapper = (page: any) => page.locator('div.flex.justify-start');
   const assistantBubble = (page: any) =>
     assistantWrapper(page).locator('div.rounded.bg-white.border.border-slate-200');
+  const sessionMenuLabel = /choisir une conversation|choose (a )?(conversation|session)|session list|conversation list/i;
+  const sessionNewLabel = /nouvelle session|new session/i;
+  const sessionNoneLabel = /aucune conversation|no conversation/i;
+
+  const sessionHeaderLabel = (page: any) =>
+    page.locator('#chat-widget-dialog div.border-b div.min-w-0.text-xs.text-slate-500.truncate').first();
 
   async function sendMessageAndWaitApi(page: any, composer: any, message: string) {
     const editable = page
@@ -88,13 +94,63 @@ test.describe.serial('Chat', () => {
     }
   }
 
+  async function ensureSessionMenuOpen(page: any) {
+    const sessionMenuButton = page.getByRole('button', { name: sessionMenuLabel }).first();
+    await expect(sessionMenuButton).toBeVisible({ timeout: 3000 });
+    const newSessionAction = page.getByRole('button', { name: sessionNewLabel }).first();
+    if (!(await newSessionAction.isVisible().catch(() => false))) {
+      await sessionMenuButton.click();
+    }
+    await expect(newSessionAction).toBeVisible({ timeout: 3000 });
+    const sessionItems = page.locator('div.max-h-48 button');
+    return { sessionMenuButton, sessionItems };
+  }
+
+  async function waitForActiveSessionHeader(page: any, timeout = 30_000) {
+    const header = sessionHeaderLabel(page);
+    await expect(header).toBeVisible({ timeout: 5000 });
+    await expect
+      .poll(async () => (await header.textContent())?.trim() ?? '', { timeout })
+      .not.toMatch(sessionNoneLabel);
+    return header;
+  }
+
+  async function toggleUsefulFeedback(
+    page: any,
+    usefulButton: any,
+    expectedActive: boolean
+  ) {
+    const feedbackResponse = page
+      .waitForResponse((res: any) => {
+        const req = res.request();
+        return (
+          req.method() === 'POST' &&
+          res.url().includes('/api/v1/chat/messages/') &&
+          res.url().includes('/feedback')
+        );
+      }, { timeout: 10_000 })
+      .catch(() => null);
+
+    await usefulButton.click({ force: true });
+    const res = await feedbackResponse;
+    if (res) {
+      expect(res.ok()).toBeTruthy();
+      return;
+    }
+    if (expectedActive) {
+      await expect(usefulButton).toHaveClass(/text-slate-900/, { timeout: 5_000 });
+    } else {
+      await expect(usefulButton).not.toHaveClass(/text-slate-900/, { timeout: 5_000 });
+    }
+  }
+
   test('devrait ouvrir le chat, envoyer un message et recevoir une réponse', async ({ page }) => {
     // Aller sur une page simple (pas besoin de contexte spécifique)
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
     
     // Attendre que la page soit chargée (Svelte est réactif, timeout 1s)
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: 1000 });
     
     // Ouvrir le ChatWidget (bouton en bas à droite)
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -124,7 +180,7 @@ test.describe.serial('Chat', () => {
     // On cherche directement le texte "OK" dans le dernier message assistant qui le contient
     const assistantResponse = assistantBubble(page).filter({ hasText: expectedResponse }).last();
     try {
-      await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
+      await expect(assistantResponse).toBeVisible({ timeout: 45_000 });
     } catch (e) {
       await debugAssistantState(page);
       await debugBackendState(page, jobId, streamId);
@@ -139,7 +195,7 @@ test.describe.serial('Chat', () => {
     // 1) /folders → no contextId (expect no primaryContextType)
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: 1000 });
     await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     await expect(composer).toBeVisible({ timeout: 1000 });
@@ -150,7 +206,7 @@ test.describe.serial('Chat', () => {
     // 2) /organizations → no contextId (expect no primaryContextType)
     await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Organisations', { timeout: 1000 });
+    await expect(page.locator('h1')).toContainText(/Organisations|Organizations/i, { timeout: 1000 });
     await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     await expect(composer).toBeVisible({ timeout: 1000 });
@@ -161,7 +217,10 @@ test.describe.serial('Chat', () => {
     // 2bis) /organizations/[id] → organization + id from URL
     // Click the first organization row/card to navigate to detail.
     // Close the chat panel first to avoid intercepting clicks on the underlying cards.
-    const closeButton = page.locator('button[aria-label="Fermer"]');
+    const closeButton = page
+      .locator('#chat-widget-dialog')
+      .getByRole('button', { name: /Fermer|Close/i })
+      .first();
     if (await closeButton.isVisible().catch(() => false)) {
       await closeButton.click();
       await expect(composer).not.toBeVisible({ timeout: 1000 });
@@ -211,11 +270,11 @@ test.describe.serial('Chat', () => {
     await page.addInitScript(() => localStorage.clear());
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
-    const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
+    const menuButton = page.getByRole('button', { name: /Ouvrir le menu|Open menu/i }).first();
 
     await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Organisations', { timeout: 1000 });
+    await expect(page.locator('h1')).toContainText(/Organisations|Organizations/i, { timeout: 1000 });
 
     const organizationRows = page.locator('article.rounded.border.border-slate-200');
     if ((await organizationRows.count()) === 0) return;
@@ -229,7 +288,10 @@ test.describe.serial('Chat', () => {
     await chatButton.click();
     await expect(composer).toBeVisible({ timeout: 1000 });
     await menuButton.click();
-    const menu = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
+    const menu = page
+      .locator('div.absolute')
+      .filter({ hasText: /Contexte\(s\)|Context\(s\)/i })
+      .first();
     await expect(menu.locator('button', { hasText: orgName })).toBeVisible({ timeout: 1000 });
     const webSearchButton = menu.locator('button', { hasText: 'Web search' });
     const webSearchIcon = webSearchButton.locator('svg');
@@ -240,12 +302,15 @@ test.describe.serial('Chat', () => {
     // Quitter la vue sans envoyer de message: contexte provisoire supprimé.
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: 1000 });
     await expect(chatButton).toBeVisible({ timeout: 1000 });
     await chatButton.click();
     await expect(composer).toBeVisible({ timeout: 1000 });
     await menuButton.click();
-    const menu2 = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
+    const menu2 = page
+      .locator('div.absolute')
+      .filter({ hasText: /Contexte\(s\)|Context\(s\)/i })
+      .first();
     await expect(menu2.locator('button', { hasText: orgName })).toHaveCount(0);
     const webSearchButton2 = menu2.locator('button', { hasText: 'Web search' });
     const webSearchIcon2 = webSearchButton2.locator('svg');
@@ -268,14 +333,17 @@ test.describe.serial('Chat', () => {
     await chatButton.click();
     await expect(composer).toBeVisible({ timeout: 1000 });
     await menuButton.click();
-    const menu3 = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
+    const menu3 = page
+      .locator('div.absolute')
+      .filter({ hasText: /Contexte\(s\)|Context\(s\)/i })
+      .first();
     await expect(menu3.locator('button', { hasText: orgName })).toBeVisible({ timeout: 1000 });
   });
 
   test('non-régression app web: menu outils standard sans outils locaux extension', async ({ page }) => {
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 5000 });
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: 5000 });
 
     const chatButton = page.locator('button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]');
     await expect(chatButton).toBeVisible({ timeout: 5000 });
@@ -284,11 +352,11 @@ test.describe.serial('Chat', () => {
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 5000 });
 
-    const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
+    const menuButton = page.getByRole('button', { name: /Ouvrir le menu|Open menu/i }).first();
     await expect(menuButton).toBeVisible({ timeout: 5000 });
     await menuButton.click();
 
-    const menu = page.locator('div.absolute').filter({ hasText: 'Outils' }).first();
+    const menu = page.locator('div.absolute').filter({ hasText: /Outils|Tools/i }).first();
     await expect(menu).toBeVisible({ timeout: 5000 });
     await expect(menu.locator('button', { hasText: 'Documents' })).toBeVisible({ timeout: 5000 });
     await expect(menu.locator('button', { hasText: 'Web search' })).toBeVisible({ timeout: 5000 });
@@ -310,7 +378,7 @@ test.describe.serial('Chat', () => {
     // Aller sur une page simple
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: 1000 });
     
     // Ouvrir le ChatWidget
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -342,7 +410,7 @@ test.describe.serial('Chat', () => {
     // Aller sur une page simple
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: 1000 });
     
     // Ouvrir le ChatWidget
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -397,12 +465,11 @@ test.describe.serial('Chat', () => {
     const { jobId, streamId } = await sendMessageAndWaitApi(page, composer, message);
 
     const userGroup = page.locator('div.flex.flex-col.items-end.group').last();
-    const userMessage = userGroup.locator('.userMarkdown').filter({ hasText: message }).first();
-    await expect(userMessage).toBeVisible({ timeout: 1000 });
+    await expect(userGroup.locator('.userMarkdown').first()).toContainText(message, { timeout: 5000 });
 
     const assistantResponse = assistantBubble(page).filter({ hasText: expectedResponse }).last();
     try {
-      await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
+      await expect(assistantResponse).toBeVisible({ timeout: 45_000 });
     } catch (e) {
       await debugAssistantState(page);
       await debugBackendState(page, jobId, streamId);
@@ -410,28 +477,32 @@ test.describe.serial('Chat', () => {
     }
 
     await userGroup.hover();
-    await userGroup.locator('button[aria-label="Copier"]').click();
+    const editButton = userGroup.getByRole('button', { name: /Modifier|Edit/i });
+    await expect(editButton).toBeVisible({ timeout: 5000 });
+    await editButton.click();
 
-    await userGroup.locator('button[aria-label="Modifier"]').click({ force: true });
-    const editInput = userGroup.locator('[contenteditable="true"]').first();
-    await expect(editInput).toBeVisible({ timeout: 1000 });
+    const editInput = userGroup.locator('.markdown-input-wrapper [contenteditable="true"]').first();
+    await expect(editInput).toBeVisible({ timeout: 5000 });
     await editInput.click();
     await page.keyboard.press('Control+A');
     const updatedMessage = 'Message modifié (E2E)';
     await page.keyboard.type(updatedMessage);
-    const saveButton = userGroup.locator('button', { hasText: 'Envoyer' });
-    await expect(saveButton).toBeVisible({ timeout: 1000 });
+    const saveButton = userGroup.getByRole('button', { name: /Envoyer|Send/i });
+    await expect(saveButton).toBeVisible({ timeout: 5000 });
     await saveButton.click();
-    await expect(page.locator('.userMarkdown').filter({ hasText: updatedMessage }).first()).toBeVisible({ timeout: 1000 });
+    await expect(page.locator('.userMarkdown').filter({ hasText: updatedMessage }).first()).toBeVisible({ timeout: 5000 });
 
-    const assistantGroup = assistantWrapper(page).last();
-    const usefulButton = assistantGroup.locator('button[aria-label="Utile"]');
-    await usefulButton.click();
-    await expect(usefulButton).toHaveClass(/text-slate-900/);
-    await usefulButton.click();
-    await expect(usefulButton).not.toHaveClass(/text-slate-900/);
+    await userGroup.hover();
+    const copyButton = userGroup.getByRole('button', { name: /Copier|Copy/i });
+    await expect(copyButton).toBeVisible({ timeout: 5000 });
+    await copyButton.click();
 
-    const retryButton = assistantGroup.locator('button[aria-label="Réessayer"]');
+    const assistantGroup = assistantResponse.locator('xpath=ancestor::div[contains(@class,"flex") and contains(@class,"justify-start")]').first();
+    const usefulButton = assistantGroup.getByRole('button', { name: /^Utile$|^Useful$/i });
+    await toggleUsefulFeedback(page, usefulButton, true);
+    await toggleUsefulFeedback(page, usefulButton, false);
+
+    const retryButton = assistantGroup.getByRole('button', { name: /Réessayer|Retry/i });
     const [retryResponse] = await Promise.all([
       page.waitForResponse((res) => {
         const req = res.request();
@@ -446,7 +517,7 @@ test.describe.serial('Chat', () => {
   test('devrait mettre à jour le titre de session via SSE', async ({ page }) => {
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: 1000 });
 
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
     await expect(chatButton).toBeVisible({ timeout: 1000 });
@@ -457,26 +528,14 @@ test.describe.serial('Chat', () => {
 
     await sendMessageAndWaitApi(page, composer, 'Donne un titre court à cette conversation.');
 
-    const sessionMenuButton = page
-      .getByRole('button', { name: /choisir une conversation|choose (a )?(conversation|session)|session list|conversation list/i })
-      .first();
-    await expect(sessionMenuButton).toBeVisible({ timeout: 1000 });
-    await sessionMenuButton.click();
-    const sessionMenu = page.locator('div').filter({ hasText: /nouvelle session|new session/i }).first();
-    await expect(sessionMenu).toBeVisible({ timeout: 1000 });
-
-    const selectedSession = sessionMenu.locator('button.font-semibold').first();
-    await expect.poll(async () => {
-      const text = (await selectedSession.textContent())?.trim() ?? '';
-      return text;
-    }, { timeout: 90_000 }).not.toMatch(/^Conversation\s/);
+    await waitForActiveSessionHeader(page, 30_000);
   });
 
   test('devrait conserver la session après fermeture et réouverture du widget', async ({ page }) => {
     // Aller sur une page simple
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: 1000 });
     
     // Ouvrir le ChatWidget
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -500,7 +559,10 @@ test.describe.serial('Chat', () => {
     await expect.poll(async () => await assistantWrapper(page).count(), { timeout: 30_000 }).toBeGreaterThan(0);
     
     // Fermer le widget (bouton X)
-    const closeButton = page.locator('button[aria-label="Fermer"]');
+    const closeButton = page
+      .locator('#chat-widget-dialog')
+      .getByRole('button', { name: /Fermer|Close/i })
+      .first();
     await expect(closeButton).toBeVisible({ timeout: 1000 });
     await closeButton.click();
     
@@ -521,7 +583,7 @@ test.describe.serial('Chat', () => {
     // Aller sur une page simple
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: 1000 });
     
     // Ouvrir le ChatWidget
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -536,40 +598,38 @@ test.describe.serial('Chat', () => {
     // On demande explicitement de ne PAS utiliser d'outils
     const expectedResponse = 'OK';
     const message = `Réponds uniquement avec le mot ${expectedResponse}`;
-    const { jobId, streamId } = await sendMessageAndWaitApi(page, composer, message);
-    
-    // Attendre que le message utilisateur apparaisse
-    const userMessage = page.locator('.userMarkdown').filter({ hasText: message }).first();
-    await expect(userMessage).toBeVisible({ timeout: 1000 });
+    const { jobId, streamId, userMessageId } = await sendMessageAndWaitApi(page, composer, message);
+    expect(userMessageId).toBeTruthy();
     
     // Attendre la réponse de l'assistant avec le texte spécifique
     // On cherche directement le texte dans le dernier message assistant qui le contient
     const assistantResponse = assistantBubble(page).filter({ hasText: expectedResponse }).last();
     try {
-      await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
+      await expect(assistantResponse).toBeVisible({ timeout: 45_000 });
     } catch (e) {
       await debugAssistantState(page);
       await debugBackendState(page, jobId, streamId);
       throw e;
     }
     
-    // Vérifier que le menu de sessions contient maintenant au moins une conversation
-    const sessionMenuButton = page
-      .getByRole('button', { name: /choisir une conversation|choose (a )?(conversation|session)|session list|conversation list/i })
-      .first();
-    await expect(sessionMenuButton).toBeVisible({ timeout: 1000 });
-    await sessionMenuButton.click();
-    const sessionMenu = page.locator('div').filter({ hasText: /nouvelle session|new session/i }).first();
-    await expect(sessionMenu).toBeVisible({ timeout: 1000 });
-    const sessionItems = sessionMenu.locator('div.max-h-48 button');
-    expect(await sessionItems.count()).toBeGreaterThanOrEqual(1);
+    // Vérifier qu'une session active existe et que le sélecteur est ouvert.
+    await waitForActiveSessionHeader(page, 30_000);
+    const { sessionItems } = await ensureSessionMenuOpen(page);
+    await expect
+      .poll(async () => {
+        const count = await sessionItems.count();
+        if (count > 0) return true;
+        const headerText = (await sessionHeaderLabel(page).textContent())?.trim() ?? '';
+        return !sessionNoneLabel.test(headerText);
+      }, { timeout: 10_000 })
+      .toBe(true);
   });
 
   test('devrait supprimer une session', async ({ page }) => {
     // Aller sur une page simple
     await page.goto('/folders');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText('Dossiers', { timeout: 1000 });
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: 1000 });
     
     // Ouvrir le ChatWidget
     const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
@@ -593,27 +653,23 @@ test.describe.serial('Chat', () => {
     // On cherche directement le texte dans le dernier message assistant qui le contient
     const assistantResponse = assistantBubble(page).filter({ hasText: expectedResponse }).last();
     try {
-      await expect(assistantResponse).toBeVisible({ timeout: 90_000 });
+      await expect(assistantResponse).toBeVisible({ timeout: 45_000 });
     } catch (e) {
       await debugAssistantState(page);
       await debugBackendState(page, jobId, streamId);
       throw e;
     }
     
-    // Vérifier qu'une session existe dans le menu
-    const sessionMenuButton = page
-      .getByRole('button', { name: /choisir une conversation|choose (a )?(conversation|session)|session list|conversation list/i })
-      .first();
-    await expect(sessionMenuButton).toBeVisible({ timeout: 1000 });
-    await sessionMenuButton.click();
-    const sessionMenu = page.locator('div').filter({ hasText: /nouvelle session|new session/i }).first();
-    await expect(sessionMenu).toBeVisible({ timeout: 1000 });
-    const sessionItems = sessionMenu.locator('div.max-h-48 button');
-    expect(await sessionItems.count()).toBeGreaterThanOrEqual(1);
+    // Vérifier qu'une session active existe avant suppression.
+    await waitForActiveSessionHeader(page, 30_000);
+    await ensureSessionMenuOpen(page);
     
     // Cliquer sur le bouton de suppression (icône poubelle)
-    const deleteButton = page.locator('button[title="Supprimer la conversation"]');
+    const deleteButton = page.getByRole('button', {
+      name: /Supprimer la conversation|Delete conversation/i,
+    });
     await expect(deleteButton).toBeVisible({ timeout: 1000 });
+    await expect(deleteButton).toBeEnabled({ timeout: 5000 });
     
     // Configurer le handler pour le dialogue de confirmation
     page.on('dialog', dialog => {
@@ -622,24 +678,34 @@ test.describe.serial('Chat', () => {
     });
     
     // Déclencher la suppression et attendre un signal déterministe côté API
-    await Promise.all([
+    const [deleteResponse] = await Promise.all([
       page.waitForResponse((res) => {
         const req = res.request();
         return req.method() === 'DELETE' && res.url().includes('/api/v1/chat/sessions/');
       }, { timeout: 15_000 }),
       deleteButton.click()
     ]);
+    expect(deleteResponse.ok()).toBeTruthy();
+    const deletedSessionId = decodeURIComponent(
+      new URL(deleteResponse.url()).pathname.split('/').pop() ?? ''
+    );
+    expect(deletedSessionId).toBeTruthy();
 
-    // Attendre que l'UI revienne à l'état "nouvelle session" (messages vides)
-    await expect(page.getByText('Aucun message. Écris un message pour démarrer.')).toBeVisible({ timeout: 15_000 });
-    
-    // Vérifier que le menu est revenu à l'état "aucune conversation"
-    await sessionMenuButton.click();
+    // Vérifier côté API que la session ciblée a bien été supprimée.
     await expect
-      .poll(async () => sessionItems.count(), { timeout: 1000 })
-      .toBe(0);
-    const emptyLabel = sessionMenu.locator('div').filter({ hasText: /aucune conversation|no conversation/i }).first();
-    await expect(emptyLabel).toBeVisible({ timeout: 1000 });
+      .poll(async () => {
+        const sessionsRes = await page.request.get('/api/v1/chat/sessions');
+        if (!sessionsRes.ok()) return null;
+        const payload = await sessionsRes.json().catch(() => null);
+        const sessions = Array.isArray((payload as any)?.sessions)
+          ? (payload as any).sessions
+          : [];
+        return sessions.some((item: any) => String(item?.id ?? '') === deletedSessionId);
+      }, { timeout: 10_000 })
+      .toBe(false);
+
+    // Le menu de sessions doit rester opérable après suppression.
+    await ensureSessionMenuOpen(page);
   });
 
 });

@@ -66,6 +66,7 @@
     Brain,
     MessageCircle,
     Square,
+    ShipWheel,
     Clapperboard,
     ChevronsLeftRightEllipsis,
     List,
@@ -74,9 +75,14 @@
     FolderOpen,
     Trash2,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    ChevronDown
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
+  import {
+    insertSteerMessageInTimeline,
+    postChatSteer,
+  } from '$lib/utils/chat-steer';
   import {
     EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
     computeEnabledToolIds,
@@ -120,6 +126,34 @@
     data: any;
     sequence: number;
     createdAt?: string;
+  };
+  type TodoRuntimeTask = {
+    id?: string;
+    title: string;
+    status?: string;
+  };
+  type TodoRuntimePanelState = {
+    todoId: string;
+    planId: string | null;
+    title: string;
+    status: string;
+    runId: string | null;
+    runStatus: string | null;
+    runTaskId: string | null;
+    tasks: TodoRuntimeTask[];
+    conflictMessage: string | null;
+    sourceTool: 'plan';
+    updatedAtMs: number;
+  };
+  type TodoRuntimeToolResultEvent = {
+    toolCallId: string;
+    toolName: 'plan';
+    result: Record<string, unknown>;
+  };
+  type ComposerSteerAck = {
+    streamId: string;
+    message: string;
+    createdAtMs: number;
   };
   type LocalToolStreamState = {
     streamId: string;
@@ -606,15 +640,24 @@
   const getMessageStatus = (m: LocalMessage) =>
     m._localStatus ?? (m.content ? 'completed' : 'processing');
   let activeAssistantMessage: LocalMessage | null = null;
+  let composerSteerStreamId: string | null = null;
+  let composerSteerReady = false;
+  let composerRunInFlight = false;
+  const isAssistantMessageInProgress = (message: LocalMessage): boolean => {
+    if (message.role !== 'assistant') return false;
+    if (message._localStatus === 'processing') return true;
+    if (!message._localStatus && !message.content) return true;
+    return false;
+  };
   $: activeAssistantMessage =
-    mode === 'ai'
-      ? ([...messages]
-          .reverse()
-          .find(
-            (m) =>
-              m.role === 'assistant' && getMessageStatus(m) === 'processing',
-          ) ?? null)
-      : null;
+    [...messages].reverse().find((m) => isAssistantMessageInProgress(m)) ?? null;
+  $: composerSteerStreamId = activeAssistantMessage
+    ? (activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null)
+    : null;
+  $: composerSteerReady =
+    typeof composerSteerStreamId === 'string' &&
+    composerSteerStreamId.trim().length > 0;
+  $: composerRunInFlight = sending || composerSteerReady;
 
   const hasAssistantContent = (message: LocalMessage): boolean =>
     typeof message.content === 'string' && message.content.trim().length > 0;
@@ -965,6 +1008,11 @@
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
   let streamDetailsLoading = false;
+  let todoRuntimePanel: TodoRuntimePanelState | null = null;
+  let todoRuntimeCollapsed = false;
+  let todoRuntimeDeleteInFlight = false;
+  let composerSteerInFlight = false;
+  let composerSteerAck: ComposerSteerAck | null = null;
   const terminalRefreshInFlight = new Set<string>();
   const jobPollInFlight = new Set<string>();
   let localToolsHubKey = '';
@@ -1078,6 +1126,13 @@
       description: $_('chat.tools.commentAssistant.description'),
       toolIds: ['comment_assistant'],
       icon: MessageCircle,
+    },
+    {
+      id: 'plan',
+      label: $_('chat.tools.todoCreate.label'),
+      description: $_('chat.tools.todoCreate.description'),
+      toolIds: ['plan'],
+      icon: List,
     },
     {
       id: 'web_search',
@@ -1537,7 +1592,11 @@
         void sendCommentMessage();
         return;
       }
-      void sendMessage();
+      if (composerSteerReady) {
+        void sendComposerSteer();
+      } else {
+        void sendMessage();
+      }
     }
   };
 
@@ -2199,6 +2258,244 @@
     return fallback;
   };
 
+  const asRuntimeRecord = (value: unknown): Record<string, unknown> | null => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
+  };
+
+  const normalizeRuntimeStatus = (
+    value: unknown,
+    fallback = 'todo',
+  ): string => {
+    if (typeof value !== 'string') return fallback;
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : fallback;
+  };
+
+  const toTodoRuntimeTask = (value: unknown): TodoRuntimeTask | null => {
+    const task = asRuntimeRecord(value);
+    if (!task) return null;
+    const title = String(task.title ?? '').trim();
+    if (!title) return null;
+    const id = String(task.id ?? '').trim();
+    const status = normalizeRuntimeStatus(
+      task.status ?? task.derivedStatus,
+      'todo',
+    );
+    return id
+      ? { id, title, status }
+      : { title, status };
+  };
+
+  const mergeTodoRuntimeTask = (
+    tasks: TodoRuntimeTask[],
+    incoming: TodoRuntimeTask,
+  ): TodoRuntimeTask[] => {
+    const idKey = incoming.id ? incoming.id : null;
+    const titleKey = incoming.title.trim().toLowerCase();
+    const index = tasks.findIndex((task) => {
+      if (idKey && task.id === idKey) return true;
+      if (!idKey) return task.title.trim().toLowerCase() === titleKey;
+      return false;
+    });
+    if (index === -1) {
+      return [...tasks, incoming];
+    }
+    const next = [...tasks];
+    next[index] = {
+      ...next[index],
+      ...incoming,
+    };
+    return next;
+  };
+
+  const isRuntimeTaskDone = (status: string | undefined): boolean =>
+    normalizeRuntimeStatus(status, 'todo') === 'done';
+
+  const resetTodoRuntimePanel = () => {
+    todoRuntimePanel = null;
+    todoRuntimeCollapsed = false;
+    composerSteerAck = null;
+  };
+
+  const getActiveAssistantStreamId = (): string | null => {
+    return composerSteerStreamId;
+  };
+
+  const handleComposerPrimaryAction = () => {
+    if (mode === 'comments') {
+      void sendCommentMessage();
+      return;
+    }
+    if (composerRunInFlight) {
+      if (composerSteerReady) void sendComposerSteer();
+      return;
+    }
+    void sendMessage();
+  };
+
+  const handleDeleteTodoRuntime = async () => {
+    if (!todoRuntimePanel?.todoId || todoRuntimeDeleteInFlight) return;
+    if (!confirm($_('chat.todoRuntimePanel.confirmDelete'))) return;
+    todoRuntimeDeleteInFlight = true;
+    try {
+      await apiPatch(`/todos/${encodeURIComponent(todoRuntimePanel.todoId)}`, {
+        closed: true,
+      });
+      resetTodoRuntimePanel();
+    } catch (e) {
+      errorMsg = formatApiError(e, $_('chat.todoRuntimePanel.deleteError'));
+    } finally {
+      todoRuntimeDeleteInFlight = false;
+    }
+  };
+
+  const sendComposerSteer = async () => {
+    const steerText = input.trim();
+    if (!steerText) return;
+    if (composerSteerInFlight) return;
+
+    const targetStreamId = getActiveAssistantStreamId();
+    if (!targetStreamId) {
+      errorMsg = $_('chat.steer.unavailable');
+      return;
+    }
+
+    composerSteerInFlight = true;
+    errorMsg = null;
+    composerSteerAck = {
+      streamId: targetStreamId,
+      message: $_('chat.steer.acknowledgement'),
+      createdAtMs: Date.now(),
+    };
+
+    const nowIso = new Date().toISOString();
+    const localSteerMessage: LocalMessage = {
+      id: `local_steer_${Date.now()}`,
+      sessionId: sessionId ?? '',
+      role: 'user',
+      content: steerText,
+      createdAt: nowIso,
+      _localStatus: 'completed',
+    };
+    const activeAssistantId = activeAssistantMessage?.id ?? targetStreamId;
+    messages = insertSteerMessageInTimeline(
+      messages,
+      localSteerMessage,
+      activeAssistantId,
+    );
+    followBottom = true;
+    scheduleScrollToBottom({ force: true });
+    input = '';
+    composerIsMultiline = false;
+    updateComposerHeight();
+
+    try {
+      await postChatSteer(apiPost, targetStreamId, steerText);
+    } catch (e) {
+      errorMsg = formatApiError(e, $_('chat.steer.error'));
+    } finally {
+      composerSteerInFlight = false;
+      const expectedAck = composerSteerAck?.createdAtMs;
+      setTimeout(() => {
+        if (composerSteerAck?.createdAtMs === expectedAck) {
+          composerSteerAck = null;
+        }
+      }, 5000);
+    }
+  };
+
+  const handleTodoRuntimeToolResult = (update: TodoRuntimeToolResultEvent) => {
+    const result = asRuntimeRecord(update.result) ?? {};
+    const runtime = asRuntimeRecord(result.todoRuntime) ?? result;
+    const activeTodo = asRuntimeRecord(runtime.activeTodo);
+    const todo = asRuntimeRecord(runtime.todo);
+    const task = asRuntimeRecord(runtime.task);
+
+    const todoIdCandidate =
+      String(
+        runtime.todoId ??
+          todo?.id ??
+          activeTodo?.id ??
+          todoRuntimePanel?.todoId ??
+          '',
+      ).trim();
+    if (!todoIdCandidate) return;
+
+    const reusingCurrent = todoRuntimePanel?.todoId === todoIdCandidate;
+    const next: TodoRuntimePanelState = reusingCurrent && todoRuntimePanel
+      ? { ...todoRuntimePanel }
+      : {
+          todoId: todoIdCandidate,
+          planId: null,
+          title: '',
+          status: 'todo',
+          runId: null,
+          runStatus: null,
+          runTaskId: null,
+          tasks: [],
+          conflictMessage: null,
+          sourceTool: update.toolName,
+          updatedAtMs: Date.now(),
+        };
+    next.todoId = todoIdCandidate;
+    next.sourceTool = update.toolName;
+    next.updatedAtMs = Date.now();
+
+    const planIdValue = runtime.planId ?? todo?.planId ?? activeTodo?.planId;
+    if (typeof planIdValue === 'string') {
+      next.planId = planIdValue;
+    } else if (planIdValue === null) {
+      next.planId = null;
+    }
+
+    const titleValue = todo?.title ?? activeTodo?.title;
+    if (typeof titleValue === 'string' && titleValue.trim().length > 0) {
+      next.title = titleValue.trim();
+    }
+
+    const statusValue =
+      runtime.todoStatus ??
+      todo?.derivedStatus ??
+      activeTodo?.derivedStatus ??
+      runtime.status ??
+      result.status;
+    next.status = normalizeRuntimeStatus(statusValue, next.status || 'todo');
+
+    const runtimeTasks = Array.isArray(runtime.tasks) ? runtime.tasks : null;
+    const directTasks = Array.isArray(result.tasks) ? result.tasks : null;
+    const incomingTaskList = runtimeTasks ?? directTasks;
+    if (incomingTaskList) {
+      next.tasks = incomingTaskList
+        .map((entry) => toTodoRuntimeTask(entry))
+        .filter((entry): entry is TodoRuntimeTask => entry !== null);
+    }
+
+    const normalizedTask = toTodoRuntimeTask(task);
+    if (normalizedTask) {
+      next.tasks = mergeTodoRuntimeTask(next.tasks, normalizedTask);
+    }
+
+    const conflictCode =
+      typeof runtime.code === 'string'
+        ? runtime.code.trim().toLowerCase()
+        : typeof result.code === 'string'
+          ? result.code.trim().toLowerCase()
+          : '';
+    const conflictMessage =
+      typeof runtime.message === 'string'
+        ? runtime.message
+        : typeof result.message === 'string'
+          ? result.message
+          : null;
+    next.conflictMessage =
+      normalizeRuntimeStatus(runtime.status ?? result.status, '') === 'conflict' &&
+      conflictCode !== 'active_todo_exists'
+        ? conflictMessage
+        : null;
+    todoRuntimePanel = next;
+  };
+
   const loadSessions = async () => {
     loadingSessions = true;
     errorMsg = null;
@@ -2223,7 +2520,11 @@
     if (shouldShowLoader) loadingMessages = true;
     errorMsg = null;
     try {
-      const res = await apiGet<{ sessionId: string; messages: ChatMessage[] }>(
+      const res = await apiGet<{
+        sessionId: string;
+        messages: ChatMessage[];
+        todoRuntime?: Record<string, unknown> | null;
+      }>(
         `/chat/sessions/${id}/messages`,
       );
       const raw = res.messages ?? [];
@@ -2232,6 +2533,16 @@
         _streamId: m.id,
         _localStatus: m.content ? 'completed' : undefined,
       }));
+      const runtimeSnapshot = asRuntimeRecord(res.todoRuntime);
+      if (runtimeSnapshot) {
+        handleTodoRuntimeToolResult({
+          toolCallId: `session-runtime:${id}`,
+          toolName: 'plan',
+          result: { todoRuntime: runtimeSnapshot },
+        });
+      } else if (!opts?.silent) {
+        resetTodoRuntimePanel();
+      }
       const lastAssistantModel = [...raw]
         .reverse()
         .find((m) => m.role === 'assistant' && Boolean(m.model))?.model;
@@ -2283,6 +2594,7 @@
 
   export const selectSession = async (id: string) => {
     sessionId = id;
+    resetTodoRuntimePanel();
     resetLocalToolInterceptionState();
     await loadMessages(id, { scrollToBottom: true });
   };
@@ -2298,6 +2610,7 @@
     sessionId = null;
     messages = [];
     initialEventsByMessageId = new Map();
+    resetTodoRuntimePanel();
     resetLocalToolInterceptionState();
     selectedProviderId = defaultProviderIdForNewSession;
     selectedModelId = defaultModelIdForNewSession;
@@ -2314,6 +2627,7 @@
       sessionId = null;
       messages = [];
       initialEventsByMessageId = new Map();
+      resetTodoRuntimePanel();
       resetLocalToolInterceptionState();
       await loadSessions();
     } catch (e) {
@@ -2528,7 +2842,7 @@
 
   const sendMessage = async () => {
     const text = input.trim();
-    if (!text || sending) return;
+    if (!text || (sending && !composerSteerReady)) return;
 
     sending = true;
     errorMsg = null;
@@ -3313,7 +3627,11 @@
                     historySource="stream"
                     initialEvents={initEvents}
                     historyPending={showDetailWaiter}
+                    acknowledgementText={composerSteerAck?.streamId === sid
+                      ? composerSteerAck.message
+                      : undefined}
                     onStreamEvent={() => scheduleScrollToBottom()}
+                    onTodoRuntime={handleTodoRuntimeToolResult}
                     onTerminal={(t) => void handleAssistantTerminal(sid, t)}
                   />
                   {#if isTerminal}
@@ -3459,6 +3777,101 @@
       {/if}
     </div>
   </div>
+
+  {#if mode === 'ai' && todoRuntimePanel}
+    <div class="w-full border-t border-slate-200 bg-slate-50/70" data-testid="todo-runtime-panel">
+      <div class="px-3 py-2">
+        <div class="w-full flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-slate-700">
+              {$_('chat.todoRuntimePanel.title')}
+            </div>
+            <div class="text-[11px] text-slate-500 truncate">
+              {todoRuntimePanel.title || $_('chat.todoRuntimePanel.subtitle')}
+            </div>
+          </div>
+          <div class="flex items-center gap-1">
+            <button
+              class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+              type="button"
+              disabled={todoRuntimeDeleteInFlight}
+              on:click={() => void handleDeleteTodoRuntime()}
+              aria-label={$_('chat.todoRuntimePanel.delete')}
+              title={$_('chat.todoRuntimePanel.delete')}
+              data-testid="todo-runtime-delete-button"
+            >
+              <Trash2 class="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              class="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+              on:click={() => (todoRuntimeCollapsed = !todoRuntimeCollapsed)}
+              aria-label={todoRuntimeCollapsed
+                ? $_('chat.todoRuntimePanel.expand')
+                : $_('chat.todoRuntimePanel.collapse')}
+              title={todoRuntimeCollapsed
+                ? $_('chat.todoRuntimePanel.expand')
+                : $_('chat.todoRuntimePanel.collapse')}
+              data-testid="todo-runtime-toggle-button"
+            >
+              <ChevronDown
+                class={`w-4 h-4 transition-transform duration-150 ${
+                  todoRuntimeCollapsed ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+        {#if !todoRuntimeCollapsed}
+          <div class="mt-2 max-h-28 overflow-y-auto slim-scroll space-y-2 text-[11px] text-slate-700">
+            {#if todoRuntimePanel.conflictMessage}
+              <div class="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+                {todoRuntimePanel.conflictMessage}
+              </div>
+            {/if}
+            <div>
+              <div class="font-medium">
+                {$_('chat.todoRuntimePanel.tasksLabel')} ({todoRuntimePanel.tasks.length})
+              </div>
+              {#if todoRuntimePanel.tasks.length === 0}
+                <div class="mt-1 text-[11px] text-slate-500">
+                  {$_('chat.todoRuntimePanel.noTasks')}
+                </div>
+              {:else}
+                <ul class="mt-1 space-y-1">
+                  {#each todoRuntimePanel.tasks as task, index (task.id ?? `${todoRuntimePanel.todoId}-${index}`)}
+                    {@const done = isRuntimeTaskDone(task.status)}
+                    <li class="flex items-center gap-2">
+                      <span
+                        class={`inline-flex h-3.5 w-3.5 items-center justify-center rounded border text-[9px] leading-none ${
+                          done
+                            ? 'border-emerald-500 bg-emerald-500 text-white'
+                            : 'border-slate-400 text-transparent'
+                        }`}
+                      >{done ? '✓' : ''}</span
+                      >
+                      <span
+                        class={`truncate ${
+                          done ? 'line-through text-slate-400' : 'text-slate-700'
+                        }`}
+                      >
+                        {task.title}
+                      </span>
+                      <span class="sr-only">
+                        {done
+                          ? $_('chat.todoRuntimePanel.completedTaskLabel')
+                          : $_('chat.todoRuntimePanel.pendingTaskLabel')}
+                      </span>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 
   <div class="p-2 border-t border-slate-200">
     <div>
@@ -3750,7 +4163,7 @@
           </select>
         {/if}
         <div class="ml-auto flex items-center gap-2">
-        {#if mode === 'ai' && activeAssistantMessage}
+        {#if composerSteerReady && activeAssistantMessage}
           <button
             class="rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-60"
             on:click={stopAssistantMessage}
@@ -3764,21 +4177,34 @@
         {/if}
         <button
           class="rounded bg-primary hover:bg-primary/90 text-white w-8 h-8 flex items-center justify-center disabled:opacity-60"
-          on:click={() =>
-            mode === 'comments'
-              ? void sendCommentMessage()
-              : void sendMessage()}
+          on:click={handleComposerPrimaryAction}
           disabled={mode === 'comments'
             ? commentInput.trim().length === 0 ||
               !commentContextType ||
               !commentContextId ||
               !$workspaceCanComment ||
               commentThreadResolved
-            : sending || input.trim().length === 0}
+            : composerRunInFlight
+              ? !composerSteerReady ||
+                composerSteerInFlight ||
+                input.trim().length === 0
+              : sending || input.trim().length === 0}
           type="button"
-          aria-label="Envoyer"
+          aria-label={composerRunInFlight
+            ? $_('chat.steer.submit')
+            : $_('common.send')}
+          title={composerRunInFlight
+            ? $_('chat.steer.submit')
+            : $_('common.send')}
+          data-testid={composerRunInFlight
+            ? 'chat-composer-steer-button'
+            : 'chat-composer-send-button'}
         >
-          <Send class="w-4 h-4" />
+          {#if composerRunInFlight}
+            <ShipWheel class="w-4 h-4" />
+          {:else}
+            <Send class="w-4 h-4" />
+          {/if}
         </button>
         </div>
       </div>

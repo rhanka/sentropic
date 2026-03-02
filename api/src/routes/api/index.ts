@@ -16,6 +16,12 @@ import queueRouter from './queue';
 import aiSettingsRouter from './ai-settings';
 import { modelsRouter } from './models';
 import { workspacesRouter } from './workspaces';
+import { plansRouter } from './plans';
+import { todosRouter } from './todos';
+import { tasksRouter } from './tasks';
+import { runsRouter } from './runs';
+import { agentConfigRouter } from './agent-config';
+import { workflowConfigRouter } from './workflow-config';
 import { locksRouter } from './locks';
 import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
@@ -57,6 +63,26 @@ apiRouter.route('/chrome-extension', chromeExtensionRouter);
 // Workspace routes (authenticated; role checks are enforced per endpoint)
 apiRouter.use('/workspaces/*', requireAuth);
 apiRouter.route('/workspaces', workspacesRouter);
+
+// TODO orchestration routes (authenticated; workspace role checks are enforced per endpoint)
+apiRouter.use('/plans/*', requireAuth);
+apiRouter.route('/plans', plansRouter);
+
+apiRouter.use('/todos/*', requireAuth);
+apiRouter.route('/todos', todosRouter);
+
+apiRouter.use('/tasks/*', requireAuth);
+apiRouter.route('/tasks', tasksRouter);
+
+apiRouter.use('/runs/*', requireAuth);
+apiRouter.route('/runs', runsRouter);
+
+// Runtime configuration routes (authenticated; workspace role checks are enforced per endpoint)
+apiRouter.use('/agent-config/*', requireAuth);
+apiRouter.route('/agent-config', agentConfigRouter);
+
+apiRouter.use('/workflow-config/*', requireAuth);
+apiRouter.route('/workflow-config', workflowConfigRouter);
 
 // Locks (authenticated; read is allowed, mutations require workspace editor/admin)
 apiRouter.use('/locks/*', requireAuth);

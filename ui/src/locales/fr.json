@@ -525,7 +525,7 @@
     "account": "Compte",
     "workspace": "Workspace",
     "dangerZone": "Zone dangereuse",
-    "adminOnlyHint": "Les paramètres avancés (prompts / IA / queue) sont réservés aux admins.",
+    "adminOnlyHint": "Les paramètres avancés (runtime IA / IA / queue) sont réservés aux admins.",
     "emailLabel": "Email",
     "nameLabel": "Nom",
     "effectiveRoleLabel": "Role effectif",
@@ -641,6 +641,70 @@
       "confirmPurgeAll": "Êtes-vous sûr de vouloir purger TOUS les jobs de la queue ? Cette action est irréversible.",
       "errors": {
         "purge": "Erreur lors de la purge de la queue"
+      }
+    },
+    "runtime": {
+      "title": "Configuration des agents et workflows IA",
+      "description": "Gérez les définitions d’agents IA et la cartographie des tâches workflow utilisées par le runtime de génération.",
+      "loading": "Chargement de la configuration agents/workflows IA…",
+      "refresh": "Actualiser la configuration agents/workflows",
+      "refreshing": "Actualisation…",
+      "readonlyHint": "Mode lecture seule : les rôles viewer/commenter peuvent consulter la configuration runtime mais ne peuvent pas éditer, forker ou détacher.",
+      "scopeBoundary": {
+        "title": "Limite de périmètre BR-03",
+        "description": "Cette page couvre uniquement la configuration Agent et Workflow. Le panneau opérationnel complet Plan/Comments/Chat/Jobs et un designer visuel de workflow sont volontairement reportés."
+      },
+      "empty": "Aucun élément de configuration agent/workflow trouvé.",
+      "source": "Source",
+      "parent": "Parent",
+      "root": "Racine de lignée",
+      "nameLabel": "Nom",
+      "descriptionLabel": "Description",
+      "configJsonLabel": "Configuration (JSON)",
+      "edit": "Modifier",
+      "fork": "Fork",
+      "detach": "Detach",
+      "save": "Sauvegarder",
+      "cancel": "Annuler",
+      "inheritance": {
+        "attached": "Attaché au parent",
+        "detached": "Détaché du parent",
+        "drift": "Drift détecté"
+      },
+      "agent": {
+        "title": "Agent Configuration",
+        "description": "Configurez les agents de génération avec indicateurs fork/detach et héritage."
+      },
+      "workflow": {
+        "title": "Workflow Configuration",
+        "description": "Configurez les définitions de workflow et mettez à jour les métadonnées d’extraction de placeholders à la sauvegarde.",
+        "tasksLabel": "Tâches du workflow",
+        "executionMapHint": "La liste des tâches ci-dessous est la cartographie exécutable de référence pour ce workflow.",
+        "agentLinkLabel": "ID agent",
+        "placeholdersLabel": "Placeholders extraits",
+        "placeholdersNone": "Aucun placeholder détecté dans les métadonnées workflow.",
+        "metadataOnlyTitle": "Métadonnées workflow (lecture seule)",
+        "configJsonReadonlyHint": "La configuration JSON de ce workflow est informative uniquement dans BR03. La logique d’exécution est portée par la liste des tâches et leurs liaisons d’agent."
+      },
+      "toasts": {
+        "agentSaved": "Configuration agent mise à jour.",
+        "workflowSaved": "Configuration workflow mise à jour.",
+        "agentForked": "Configuration agent forkée.",
+        "workflowForked": "Configuration workflow forkée.",
+        "agentDetached": "Configuration agent détachée du parent.",
+        "workflowDetached": "Configuration workflow détachée du parent."
+      },
+      "errors": {
+        "load": "Échec du chargement de la configuration agents/workflows IA",
+        "missingName": "Le nom est obligatoire",
+        "invalidAgentConfigJson": "Le JSON de configuration agent doit être un objet valide",
+        "invalidWorkflowConfigJson": "Le JSON de configuration workflow doit être un objet valide",
+        "saveAgent": "Échec de sauvegarde de la configuration agent",
+        "saveWorkflow": "Échec de sauvegarde de la configuration workflow",
+        "forkAgent": "Échec du fork de la configuration agent",
+        "forkWorkflow": "Échec du fork de la configuration workflow",
+        "detachAgent": "Échec du detach de la configuration agent",
+        "detachWorkflow": "Échec du detach de la configuration workflow"
       }
     },
     "admin": {
@@ -911,6 +975,10 @@
         "label": "Commentaires (résolution)",
         "description": "Analyser et proposer des résolutions"
       },
+      "todoCreate": {
+        "label": "Plan",
+        "description": "Créer et faire progresser des plans exécutables depuis le chat"
+      },
       "webSearch": {
         "label": "Web search",
         "description": "Rechercher des infos sur le web"
@@ -935,6 +1003,33 @@
       "usecaseUpdate": { "label": "Cas d'usage (édition)" },
       "matrix": { "label": "Matrice (lecture/édition)" },
       "executiveSummary": { "label": "Synthèse exécutive" }
+    },
+    "todoCard": {
+      "title": "Plan créé depuis le chat",
+      "statusLabel": "Statut",
+      "planIdLabel": "Plan",
+      "todoIdLabel": "TODO",
+      "taskCountLabel": "Tâches",
+      "tasksLabel": "Checklist des tâches"
+    },
+    "todoRuntimePanel": {
+      "title": "Plan",
+      "subtitle": "Checklist en cours",
+      "collapse": "Réduire le panneau",
+      "expand": "Déployer le panneau",
+      "delete": "Supprimer le plan",
+      "confirmDelete": "Supprimer ce plan de la session de chat courante ?",
+      "deleteError": "Impossible de supprimer le plan",
+      "statusLabel": "Statut",
+      "planIdLabel": "Plan",
+      "todoIdLabel": "TODO",
+      "runIdLabel": "Run",
+      "runStatusLabel": "Statut du run",
+      "runTaskIdLabel": "Tâche active",
+      "tasksLabel": "Checklist des tâches",
+      "noTasks": "Aucune tâche dans ce plan pour le moment.",
+      "completedTaskLabel": "Tâche terminée",
+      "pendingTaskLabel": "Tâche en attente"
     },
     "comments": {
       "chooseThread": "Liste des commentaires",
@@ -970,6 +1065,12 @@
     },
     "chat": {
       "empty": "Aucun message. Écris un message pour démarrer."
+    },
+    "steer": {
+      "submit": "Ajouter une précision",
+      "acknowledgement": "Prise en compte d'un nouveau message utilisateur",
+      "unavailable": "Impossible d’ajouter une précision: aucune réponse en cours.",
+      "error": "Impossible d’ajouter la précision."
     },
     "edit": {
       "placeholder": "Modifier le message…"

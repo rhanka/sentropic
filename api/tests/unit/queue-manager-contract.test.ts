@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildGeneratedUseCasePayloadForPersistence,
   normalizeAutoGenerationSectionKeys,
+  resolveGenerationPromptOverrideFromConfig,
 } from '../../src/services/queue-manager';
 import type { UseCaseDetail } from '../../src/services/context-usecase';
 
@@ -78,5 +79,26 @@ describe('queue manager contracts', () => {
     expect(generatedUseCaseFields).not.toContain('data.prerequisites');
     expect(generatedUseCaseFields).not.toContain('data.name');
     expect(generatedUseCaseFields).not.toContain('data.description');
+  });
+
+  it('extracts generation prompt override from agent config with fallback prompt id', () => {
+    const configured = resolveGenerationPromptOverrideFromConfig(
+      {
+        promptId: 'agent.use_case_list.v2',
+        promptTemplate: 'Template body',
+      },
+      'use_case_list',
+    );
+    expect(configured.promptId).toBe('agent.use_case_list.v2');
+    expect(configured.promptTemplate).toBe('Template body');
+
+    const fallback = resolveGenerationPromptOverrideFromConfig(
+      {
+        role: 'usecase_list_generation',
+      },
+      'use_case_list',
+    );
+    expect(fallback.promptId).toBe('use_case_list');
+    expect(fallback.promptTemplate).toBeUndefined();
   });
 });

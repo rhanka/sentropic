@@ -525,7 +525,7 @@
     "account": "Account",
     "workspace": "Workspace",
     "dangerZone": "Danger zone",
-    "adminOnlyHint": "Advanced settings (prompts / AI / queue) are reserved for admins.",
+    "adminOnlyHint": "Advanced settings (AI runtime / AI / queue) are reserved for admins.",
     "emailLabel": "Email",
     "nameLabel": "Name",
     "effectiveRoleLabel": "Effective role",
@@ -641,6 +641,70 @@
       "confirmPurgeAll": "Are you sure you want to purge ALL jobs in the queue? This action is irreversible.",
       "errors": {
         "purge": "Error while purging queue"
+      }
+    },
+    "runtime": {
+      "title": "AI agents and workflows configuration",
+      "description": "Manage AI agent definitions and workflow task mappings used by the generation runtime.",
+      "loading": "Loading AI agents/workflows configuration…",
+      "refresh": "Refresh agents/workflows configuration",
+      "refreshing": "Refreshing…",
+      "readonlyHint": "Read-only scope: viewer/commenter roles can inspect runtime configuration but cannot edit, fork, or detach.",
+      "scopeBoundary": {
+        "title": "BR-03 scope boundary",
+        "description": "This page only covers Agent and Workflow configuration. Full Plan/Comments/Chat/Jobs operations and a visual workflow designer are intentionally deferred."
+      },
+      "empty": "No agent/workflow configuration item found.",
+      "source": "Source",
+      "parent": "Parent",
+      "root": "Lineage root",
+      "nameLabel": "Name",
+      "descriptionLabel": "Description",
+      "configJsonLabel": "Configuration (JSON)",
+      "edit": "Edit",
+      "fork": "Fork",
+      "detach": "Detach",
+      "save": "Save",
+      "cancel": "Cancel",
+      "inheritance": {
+        "attached": "Attached to parent",
+        "detached": "Detached from parent",
+        "drift": "Drift detected"
+      },
+      "agent": {
+        "title": "Agent Configuration",
+        "description": "Configure generation agents with fork/detach and inheritance indicators."
+      },
+      "workflow": {
+        "title": "Workflow Configuration",
+        "description": "Configure workflow definitions and keep placeholder extraction metadata up to date on save.",
+        "tasksLabel": "Workflow tasks",
+        "executionMapHint": "The task list below is the authoritative executable mapping for this workflow.",
+        "agentLinkLabel": "Agent ID",
+        "placeholdersLabel": "Extracted placeholders",
+        "placeholdersNone": "No placeholder detected in workflow metadata.",
+        "metadataOnlyTitle": "Workflow metadata (read-only)",
+        "configJsonReadonlyHint": "In BR03, this workflow JSON is informational only. Execution logic is driven by the workflow task list and agent linkage."
+      },
+      "toasts": {
+        "agentSaved": "Agent configuration updated.",
+        "workflowSaved": "Workflow configuration updated.",
+        "agentForked": "Agent configuration forked.",
+        "workflowForked": "Workflow configuration forked.",
+        "agentDetached": "Agent configuration detached from parent.",
+        "workflowDetached": "Workflow configuration detached from parent."
+      },
+      "errors": {
+        "load": "Failed to load AI agents/workflows configuration",
+        "missingName": "Name is required",
+        "invalidAgentConfigJson": "Agent configuration JSON must be a valid object",
+        "invalidWorkflowConfigJson": "Workflow configuration JSON must be a valid object",
+        "saveAgent": "Failed to save agent configuration",
+        "saveWorkflow": "Failed to save workflow configuration",
+        "forkAgent": "Failed to fork agent configuration",
+        "forkWorkflow": "Failed to fork workflow configuration",
+        "detachAgent": "Failed to detach agent configuration",
+        "detachWorkflow": "Failed to detach workflow configuration"
       }
     },
     "admin": {
@@ -911,6 +975,10 @@
         "label": "Comments (resolution)",
         "description": "Analyze and suggest resolutions"
       },
+      "todoCreate": {
+        "label": "Plan",
+        "description": "Create and progress executable plans from chat"
+      },
       "webSearch": {
         "label": "Web search",
         "description": "Search for information on the web"
@@ -935,6 +1003,33 @@
       "usecaseUpdate": { "label": "Use case (edit)" },
       "matrix": { "label": "Matrix (read/edit)" },
       "executiveSummary": { "label": "Executive summary" }
+    },
+    "todoCard": {
+      "title": "Plan created from chat",
+      "statusLabel": "Status",
+      "planIdLabel": "Plan",
+      "todoIdLabel": "TODO",
+      "taskCountLabel": "Tasks",
+      "tasksLabel": "Task checklist"
+    },
+    "todoRuntimePanel": {
+      "title": "Plan",
+      "subtitle": "Current checklist",
+      "collapse": "Collapse panel",
+      "expand": "Expand panel",
+      "delete": "Delete plan",
+      "confirmDelete": "Delete this plan from the current chat session?",
+      "deleteError": "Unable to delete plan",
+      "statusLabel": "Status",
+      "planIdLabel": "Plan",
+      "todoIdLabel": "TODO",
+      "runIdLabel": "Run",
+      "runStatusLabel": "Run status",
+      "runTaskIdLabel": "Active task",
+      "tasksLabel": "Task checklist",
+      "noTasks": "No task in this plan yet.",
+      "completedTaskLabel": "Completed task",
+      "pendingTaskLabel": "Pending task"
     },
     "comments": {
       "chooseThread": "Comments list",
@@ -970,6 +1065,12 @@
     },
     "chat": {
       "empty": "No message. Write a message to start."
+    },
+    "steer": {
+      "submit": "Send steer",
+      "acknowledgement": "Acknowledged new user steering message",
+      "unavailable": "No active assistant message available for steer yet.",
+      "error": "Unable to send steer message"
     },
     "edit": {
       "placeholder": "Edit message…"

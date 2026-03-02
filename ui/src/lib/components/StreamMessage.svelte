@@ -24,12 +24,36 @@
   export let historyPending: boolean = false;
   export let smoothContentStreaming = false;
   export let smoothChunkThreshold = 80;
+  export let acknowledgementText: string | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
   export let onTerminal: ((t: 'done' | 'error') => void) | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
   export let onStreamEvent: ((t: string) => void) | undefined = undefined;
+  // eslint-disable-next-line no-unused-vars
+  export let onTodoRuntime:
+    | ((
+        update: {
+          toolCallId: string;
+          toolName: 'plan';
+          result: Record<string, unknown>;
+        },
+      ) => void)
+    | undefined = undefined;
 
   type Step = { title: string; body?: string; kind?: 'reasoning' | 'tool' | 'status' | 'content' | 'startup' | 'other' };
+  type TodoToolTask = {
+    id?: string;
+    title: string;
+    status?: string;
+  };
+  type TodoToolCard = {
+    toolCallId: string;
+    status: string;
+    planId: string | null;
+    todoId: string;
+    taskCount: number;
+    tasks: TodoToolTask[];
+  };
   type State = {
     startedAtMs: number;
     endedAtMs?: number | null;
@@ -44,6 +68,7 @@
     sawTools: boolean;
     sawStarted: boolean;
     steps: Step[];
+    todoCards: TodoToolCard[];
     expanded: boolean;
     lastSeq: number;
   };
@@ -62,6 +87,7 @@
     sawTools: false,
     sawStarted: false,
     steps: [],
+    todoCards: [],
     expanded: initiallyExpanded,
     lastSeq: 0
   };
@@ -169,6 +195,132 @@
     return !/\s$/.test(prev);
   };
 
+  const parseTodoToolCard = (
+    toolCallId: string,
+    rawResult: unknown,
+  ): TodoToolCard | null => {
+    if (!rawResult || typeof rawResult !== 'object') return null;
+    const result = rawResult as Record<string, unknown>;
+    const todoId = String(result.todoId ?? '').trim();
+    if (!todoId) return null;
+
+    const tasks = Array.isArray(result.tasks)
+      ? result.tasks
+          .map((entry): TodoToolTask | null => {
+            const item =
+              entry && typeof entry === 'object'
+                ? (entry as Record<string, unknown>)
+                : null;
+            const title = String(item?.title ?? '').trim();
+            if (!title) return null;
+            const id = String(item?.id ?? '').trim();
+            const status = String(item?.status ?? item?.derivedStatus ?? '').trim();
+            return id ? { id, title, status } : { title, status };
+          })
+          .filter((entry): entry is TodoToolTask => entry !== null)
+      : [];
+
+    return {
+      toolCallId,
+      status: String(result.status ?? 'completed'),
+      planId: typeof result.planId === 'string' ? result.planId : null,
+      todoId,
+      taskCount:
+        typeof result.taskCount === 'number' ? result.taskCount : tasks.length,
+      tasks,
+    };
+  };
+
+  const upsertTodoToolCard = (card: TodoToolCard) => {
+    const existingIndex = st.todoCards.findIndex(
+      (item) => item.toolCallId === card.toolCallId,
+    );
+    if (existingIndex === -1) {
+      st.todoCards = [...st.todoCards, card];
+      return;
+    }
+    st.todoCards[existingIndex] = card;
+    st.todoCards = [...st.todoCards];
+  };
+
+  const isTodoRuntimeToolName = (
+    value: string | undefined,
+  ): value is 'plan' => value === 'plan';
+
+  const asRecord = (value: unknown): Record<string, unknown> | null => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
+  };
+
+  const normalizeTaskStatus = (value: unknown): string =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim().toLowerCase() : 'todo';
+
+  const asTaskList = (value: unknown): TodoToolTask[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((entry): TodoToolTask | null => {
+        const item = asRecord(entry);
+        if (!item) return null;
+        const title = String(item.title ?? '').trim();
+        if (!title) return null;
+        const id = String(item.id ?? '').trim();
+        const status = normalizeTaskStatus(item.status ?? item.derivedStatus);
+        return id ? { id, title, status } : { title, status };
+      })
+      .filter((entry): entry is TodoToolTask => entry !== null);
+  };
+
+  const escapeMarkdownText = (value: string): string =>
+    value.replace(/([\\`*_{}\[\]()#+.!|>~-])/g, '\\$1');
+
+  const buildTodoRuntimeChecklist = (
+    toolName: 'plan',
+    rawResult: unknown,
+  ): string | null => {
+    const result = asRecord(rawResult) ?? {};
+    const runtime = asRecord(result.todoRuntime) ?? result;
+    const operation = String(runtime.operation ?? '').trim();
+    const todo = asRecord(runtime.todo);
+    const activeTodo = asRecord(runtime.activeTodo);
+    const task = asRecord(runtime.task);
+
+    const todoTitle = String(todo?.title ?? activeTodo?.title ?? '').trim();
+    const todoId = String(runtime.todoId ?? todo?.id ?? activeTodo?.id ?? '').trim();
+    const headerLabel = todoTitle
+      ? `Plan ${todoTitle}`
+      : todoId
+        ? `Plan ${todoId}`
+        : 'Plan';
+
+    const tasksFromRuntime = asTaskList(runtime.tasks);
+    const tasksFromResult = asTaskList(result.tasks);
+    let taskItems = tasksFromRuntime.length > 0 ? tasksFromRuntime : tasksFromResult;
+
+    if (taskItems.length === 0 && task) {
+      const taskTitle = String(task.title ?? '').trim();
+      if (taskTitle) {
+        taskItems = [{
+          id: String(task.id ?? '').trim() || undefined,
+          title: taskTitle,
+          status: normalizeTaskStatus(task.status ?? task.derivedStatus),
+        }];
+      }
+    }
+
+    if (taskItems.length === 0) return null;
+
+    const lines = [headerLabel];
+    for (const item of taskItems) {
+      const done = normalizeTaskStatus(item.status) === 'done';
+      const safeTitle = escapeMarkdownText(item.title);
+      lines.push(done ? `- [x] ~~${safeTitle}~~` : `- [ ] ${safeTitle}`);
+    }
+    if (operation === 'update_task' && taskItems.length === 1) {
+      lines.push(`_Task status: ${normalizeTaskStatus(taskItems[0].status)}_`);
+    }
+    return lines.join('\n');
+  };
+
   const applyEvent = (eventType: string, data: any, sequence: number, createdAt?: string) => {
     if (!Number.isFinite(sequence)) return;
     if (sequence <= st.lastSeq) return;
@@ -255,11 +407,48 @@
       const err = data?.result?.error;
       const toolId = String(data?.tool_call_id ?? '').trim();
       const toolName = toolId ? st.toolNameById[toolId] : undefined;
+      const runtimeToolName = (() => {
+        const runtime = asRecord(data?.result?.todoRuntime);
+        const candidate = typeof runtime?.tool === 'string' ? runtime.tool : '';
+        return isTodoRuntimeToolName(candidate) ? candidate : undefined;
+      })();
       const label = toolName ? `${toolName} (${err ? 'error' : status})` : (err ? 'erreur' : status);
       st.stepKind = 'tool';
       st.stepTitle = $_('stream.tool', { values: { name: label } });
-      if (err) st.auxText = String(err);
-      upsertStep(st.stepTitle, err ? String(err) : undefined);
+      st.auxText = '';
+      let toolResultBody: string | undefined;
+      if (err) {
+        st.auxText = String(err);
+        toolResultBody = String(err);
+      } else {
+        const checklist = buildTodoRuntimeChecklist(
+          (isTodoRuntimeToolName(toolName) ? toolName : runtimeToolName) ?? 'plan',
+          data?.result,
+        );
+        if (checklist) {
+          st.auxText = checklist;
+          toolResultBody = checklist;
+        }
+      }
+      upsertStep(st.stepTitle, toolResultBody);
+      if (toolId && (isTodoRuntimeToolName(toolName) || runtimeToolName)) {
+        const resultRecord =
+          data?.result && typeof data.result === 'object' && !Array.isArray(data.result)
+            ? (data.result as Record<string, unknown>)
+            : {};
+        onTodoRuntime?.({
+          toolCallId: toolId,
+          toolName: (isTodoRuntimeToolName(toolName) ? toolName : runtimeToolName) as
+            'plan',
+          result: resultRecord,
+        });
+      }
+      if (toolId && toolName === 'plan') {
+        const todoCard = parseTodoToolCard(toolId, data?.result);
+        if (todoCard) {
+          upsertTodoToolCard(todoCard);
+        }
+      }
     } else if (eventType === 'content_delta') {
       st.sawStarted = false;
       st.stepKind = 'content';
@@ -291,7 +480,14 @@
       applyEvent(ev.eventType, ev.data, ev.sequence, ev.createdAt);
     }
     // trigger rerender for Set/Record updates
-    st = { ...st, toolCallIds: new Set(st.toolCallIds), toolArgsById: { ...st.toolArgsById }, toolNameById: { ...st.toolNameById }, steps: [...st.steps] };
+    st = {
+      ...st,
+      toolCallIds: new Set(st.toolCallIds),
+      toolArgsById: { ...st.toolArgsById },
+      toolNameById: { ...st.toolNameById },
+      steps: [...st.steps],
+      todoCards: [...st.todoCards],
+    };
   };
 
   const hydrateHistory = async () => {
@@ -335,7 +531,14 @@
     const data = (evt as any).data ?? {};
 
     applyEvent(type, data, sequence);
-    st = { ...st, toolCallIds: new Set(st.toolCallIds), toolArgsById: { ...st.toolArgsById }, steps: [...st.steps] };
+    st = {
+      ...st,
+      toolCallIds: new Set(st.toolCallIds),
+      toolArgsById: { ...st.toolArgsById },
+      toolNameById: { ...st.toolNameById },
+      steps: [...st.steps],
+      todoCards: [...st.todoCards],
+    };
 
     // callback parent pour scroll (uniquement sur events)
     onStreamEvent?.(type);
@@ -381,6 +584,7 @@
       sawTools: false,
       sawStarted: false,
       steps: [],
+      todoCards: [],
       expanded: initiallyExpanded,
       lastSeq: 0
     };
@@ -411,6 +615,9 @@
 
   $: hasSteps = st.sawReasoning || st.sawTools;
   $: hasContent = !!st.contentText && st.contentText.trim().length > 0;
+  $: hasAcknowledgement =
+    typeof acknowledgementText === 'string' &&
+    acknowledgementText.trim().length > 0;
   $: showStartup = !!st.sawStarted && !hasSteps && !hasContent && !finalContent;
   $: toolsCount = st.toolCallIds.size;
   $: durationMs = (st.endedAtMs ?? Date.now()) - st.startedAtMs;
@@ -434,6 +641,11 @@
 </script>
 
 <div class="w-full max-w-full">
+    {#if variant === 'chat' && hasAcknowledgement}
+      <div class="text-[11px] text-slate-500 mt-0.5">
+        {acknowledgementText}
+      </div>
+    {/if}
     {#if showDetailLoader}
       <div class="flex items-center justify-between gap-2 mt-0.5">
         <div class="text-[11px] text-slate-500">{$_('stream.detailLoading')}</div>
@@ -477,7 +689,7 @@
                     class="mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto slim-scroll [&_*]:text-slate-400"
                     use:scrollToEnd
                   >
-                    {#if step.kind === 'reasoning'}
+                    {#if step.kind === 'reasoning' || step.kind === 'tool'}
                       <Streamdown content={step.body} />
                     {:else}
                       {step.body}
@@ -510,7 +722,7 @@
               class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll [&_*]:text-slate-400"
               use:scrollToEnd
             >
-              {#if st.stepKind === 'reasoning'}
+              {#if st.stepKind === 'reasoning' || st.stepKind === 'tool'}
                 <Streamdown content={st.auxText} />
               {:else}
                 {st.auxText}

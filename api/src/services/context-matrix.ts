@@ -105,9 +105,17 @@ export async function generateOrganizationMatrixTemplate(
   baseMatrix: MatrixConfig,
   model?: string,
   signal?: AbortSignal,
-  streamId?: string
+  streamId?: string,
+  runtimePrompt?: {
+    promptTemplate?: string;
+    promptId?: string;
+  }
 ): Promise<OrganizationMatrixTemplate> {
-  const promptTemplate = defaultPrompts.find((p) => p.id === 'organization_matrix_template')?.content || '';
+  const promptTemplate =
+    (typeof runtimePrompt?.promptTemplate === 'string' &&
+    runtimePrompt.promptTemplate.trim().length > 0
+      ? runtimePrompt.promptTemplate
+      : defaultPrompts.find((p) => p.id === 'organization_matrix_template')?.content) || '';
   if (!promptTemplate) {
     throw new Error('Prompt organization_matrix_template non trouvé');
   }
@@ -119,6 +127,11 @@ export async function generateOrganizationMatrixTemplate(
 
   const isGpt5 = typeof model === 'string' && model.startsWith('gpt-5');
   const finalStreamId = streamId || `organization_matrix_${Date.now()}`;
+  const promptId =
+    typeof runtimePrompt?.promptId === 'string' &&
+    runtimePrompt.promptId.trim().length > 0
+      ? runtimePrompt.promptId.trim()
+      : 'organization_matrix_template';
 
   const { content } = await executeWithToolsStream(prompt, {
     model,
@@ -188,7 +201,7 @@ export async function generateOrganizationMatrixTemplate(
       },
     },
     ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
-    promptId: 'organization_matrix_template',
+    promptId,
     streamId: finalStreamId,
     signal,
   });
@@ -205,4 +218,3 @@ export async function generateOrganizationMatrixTemplate(
   validateExpectedAxes(normalized);
   return normalized;
 }
-

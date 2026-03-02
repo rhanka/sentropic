@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
-import { readStreamEvents } from '../../services/stream-service';
+import { readStreamEvents, writeStreamEventWithSequenceRetry } from '../../services/stream-service';
 import { db } from '../../db/client';
-import { extensionToolPermissions } from '../../db/schema';
+import { chatMessages, chatSessions, extensionToolPermissions } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { createId } from '../../utils/id';
 import { resolveLocaleFromHeaders } from '../../utils/locale';
@@ -65,6 +65,11 @@ const createSessionInput = z.object({
 const toolResultInput = z.object({
   toolCallId: z.string().min(1),
   result: z.unknown()
+});
+
+const steerInput = z.object({
+  message: z.string().min(1),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 const extensionToolPermissionInput = z.object({
@@ -282,8 +287,8 @@ chatRouter.post('/sessions', requireWorkspaceAccessRole(), zValidator('json', cr
 chatRouter.get('/sessions/:id/messages', async (c) => {
   const user = c.get('user');
   const sessionId = c.req.param('id');
-  const messages = await chatService.listMessages(sessionId, user.userId);
-  return c.json({ sessionId, messages });
+  const result = await chatService.listMessages(sessionId, user.userId);
+  return c.json({ sessionId, messages: result.messages, todoRuntime: result.todoRuntime });
 });
 
 /**
@@ -380,6 +385,99 @@ chatRouter.post('/messages/:id/stop', requireWorkspaceAccessRole(), async (c) =>
   }
 
   return c.json({ ok: true, jobId: jobId ?? null });
+});
+
+/**
+ * POST /api/v1/chat/messages/:id/steer
+ * Push an in-flight steering message to the active assistant stream.
+ */
+chatRouter.post('/messages/:id/steer', requireWorkspaceAccessRole(), zValidator('json', steerInput), async (c) => {
+  const user = c.get('user');
+  const assistantMessageId = c.req.param('id');
+  const body = c.req.valid('json');
+
+  const msg = await chatService.getMessageForUser(assistantMessageId, user.userId);
+  if (!msg) return c.json({ error: 'Message not found' }, 404);
+  if (msg.role !== 'assistant') {
+    return c.json({ error: 'Only assistant messages can be steered' }, 400);
+  }
+
+  const streamId = assistantMessageId;
+  await writeStreamEventWithSequenceRetry(
+    streamId,
+    'status',
+    {
+      state: 'steer_received',
+      message: body.message,
+      metadata: body.metadata ?? {},
+      actor: 'user',
+      actorId: user.userId,
+    },
+    {
+      messageId: streamId,
+      maxAttempts: 6,
+    },
+  );
+
+  let steerMessageId: string | null = null;
+  try {
+    await db.transaction(async (tx) => {
+      const insertedSteerMessageId = createId();
+      const insertBeforeSequence = msg.sequence;
+
+      // Keep steer timeline continuity: insert steer right before the steered assistant message.
+      await tx
+        .update(chatMessages)
+        .set({
+          sequence: sql`${chatMessages.sequence} + 1`,
+        })
+        .where(
+          and(
+            eq(chatMessages.sessionId, msg.sessionId),
+            gte(chatMessages.sequence, insertBeforeSequence),
+          ),
+        );
+
+      await tx.insert(chatMessages).values({
+        id: insertedSteerMessageId,
+        sessionId: msg.sessionId,
+        role: 'user',
+        content: body.message,
+        toolCalls: null,
+        toolCallId: null,
+        reasoning: null,
+        model: null,
+        promptId: null,
+        promptVersionId: null,
+        contexts: null,
+        sequence: insertBeforeSequence,
+        createdAt: new Date(),
+      });
+
+      await tx
+        .update(chatSessions)
+        .set({ updatedAt: new Date() })
+        .where(eq(chatSessions.id, msg.sessionId));
+
+      steerMessageId = insertedSteerMessageId;
+    });
+  } catch (error) {
+    console.error('[chat/steer] failed to persist steer message', {
+      assistantMessageId,
+      error,
+    });
+  }
+
+  return c.json({
+    assistantMessageId,
+    status: 'accepted',
+    action: 'interrupt_relaunch',
+    steer: {
+      messageId: steerMessageId,
+      message: body.message,
+      metadata: body.metadata ?? {},
+    },
+  });
 });
 
 /**
