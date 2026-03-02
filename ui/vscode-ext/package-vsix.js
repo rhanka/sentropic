@@ -12,7 +12,7 @@ const rootDir = path.resolve(__dirname, '..');
 const manifestPath = path.resolve(__dirname, 'package.json');
 const extensionEntryPoint = path.resolve(__dirname, 'extension.ts');
 const distDir = path.resolve(__dirname, 'dist');
-const distExtensionPath = path.join(distDir, 'extension.js');
+const distExtensionPath = path.join(distDir, 'extension.cjs');
 const distWebviewPath = path.join(distDir, 'webview-entry.js');
 const staticVsCodeExtensionDir = path.resolve(rootDir, 'static', 'vscode-extension');
 const vsixName = 'top-ai-ideas-vscode-extension.vsix';
@@ -83,6 +83,7 @@ const createContentTypesXml = () => `<?xml version="1.0" encoding="utf-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="json" ContentType="application/json" />
   <Default Extension="js" ContentType="application/javascript" />
+  <Default Extension="cjs" ContentType="application/javascript" />
   <Default Extension="md" ContentType="text/markdown" />
   <Default Extension="txt" ContentType="text/plain" />
   <Default Extension="xml" ContentType="text/xml" />
