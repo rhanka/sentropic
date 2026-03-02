@@ -1,18 +1,18 @@
 import * as vscode from 'vscode';
+import {
+  createTopAiVsCodeRequestHandler,
+  type TopAiRuntimeConfig,
+  type TopAiVsCodeCommand,
+} from './host-handler';
 
 const COMMAND_OPEN_PANEL = 'topai.openPanel';
 const COMMAND_CODEX_SIGN_IN = 'topai.codex.signIn';
 const VIEW_TYPE = 'topai.chat';
 const STATE_KEY_CODEX_CONNECTED = 'topai.codexConnected';
 
-type TopAiRuntimeConfig = {
-  apiBaseUrl: string;
-  sessionToken: string;
-  codexSignInUrl: string;
-};
-
 const defaultConfig: TopAiRuntimeConfig = {
   apiBaseUrl: 'http://localhost:8705/api/v1',
+  appBaseUrl: 'http://localhost:5173',
   sessionToken: '',
   codexSignInUrl: 'https://chatgpt.com/auth/login?next=/codex',
 };
@@ -20,11 +20,13 @@ const defaultConfig: TopAiRuntimeConfig = {
 const readRuntimeConfig = (): TopAiRuntimeConfig => {
   const config = vscode.workspace.getConfiguration('topai');
   const apiBaseUrl = String(config.get<string>('apiBaseUrl', defaultConfig.apiBaseUrl)).trim();
+  const appBaseUrl = String(config.get<string>('appBaseUrl', defaultConfig.appBaseUrl)).trim();
   const sessionToken = String(config.get<string>('sessionToken', defaultConfig.sessionToken)).trim();
   const codexSignInUrl = String(config.get<string>('codexSignInUrl', defaultConfig.codexSignInUrl)).trim();
 
   return {
     apiBaseUrl,
+    appBaseUrl,
     sessionToken,
     codexSignInUrl,
   };
@@ -43,8 +45,8 @@ const createWebviewHtml = (webview: vscode.Webview, extensionUri: vscode.Uri, co
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
     <title>Top AI Ideas</title>
   </head>
-  <body>
-    <div id="topai-vscode-root"></div>
+  <body style="margin: 0; padding: 0; overflow: hidden;">
+    <div id="topai-vscode-root" style="height: 100vh;"></div>
     <script nonce="${nonce}">
       window.__TOPAI_VSCODE_RUNTIME__ = ${runtimeConfigJson};
     </script>
@@ -54,18 +56,29 @@ const createWebviewHtml = (webview: vscode.Webview, extensionUri: vscode.Uri, co
 };
 
 const openCodexSignIn = async (
-  context: vscode.ExtensionContext,
-  config: TopAiRuntimeConfig,
+  handler: ReturnType<typeof createTopAiVsCodeRequestHandler>,
 ): Promise<{ opened: boolean; url: string }> => {
-  const opened = await vscode.env.openExternal(vscode.Uri.parse(config.codexSignInUrl));
-  if (opened) {
-    await context.globalState.update(STATE_KEY_CODEX_CONNECTED, true);
+  const result = await handler('auth.codex.signIn');
+  if (!result || typeof result !== 'object') {
+    throw new Error('Invalid auth.codex.signIn response.');
   }
-  return { opened, url: config.codexSignInUrl };
+  const payload = result as { opened?: unknown; url?: unknown };
+  return {
+    opened: payload.opened === true,
+    url: typeof payload.url === 'string' ? payload.url : '',
+  };
 };
 
 export const activate = (context: vscode.ExtensionContext): void => {
   let panel: vscode.WebviewPanel | null = null;
+  const handler = createTopAiVsCodeRequestHandler({
+    getRuntimeConfig: readRuntimeConfig,
+    openExternal: async (url: string) => vscode.env.openExternal(vscode.Uri.parse(url)),
+    getCodexConnected: () => Boolean(context.globalState.get<boolean>(STATE_KEY_CODEX_CONNECTED, false)),
+    setCodexConnected: async (connected: boolean) => {
+      await context.globalState.update(STATE_KEY_CODEX_CONNECTED, connected);
+    },
+  });
 
   const revealPanel = (): vscode.WebviewPanel => {
     if (panel) {
@@ -109,28 +122,8 @@ export const activate = (context: vscode.ExtensionContext): void => {
       };
 
       try {
-        if (command === 'runtime.config.get') {
-          respond(true, readRuntimeConfig());
-          return;
-        }
-
-        if (command === 'auth.codex.status') {
-          const connected = Boolean(context.globalState.get<boolean>(STATE_KEY_CODEX_CONNECTED, false));
-          respond(true, {
-            connected,
-            accountLabel: null,
-            reason: connected ? 'Codex sign-in initiated in this extension profile.' : 'not_connected',
-          });
-          return;
-        }
-
-        if (command === 'auth.codex.signIn') {
-          const result = await openCodexSignIn(context, readRuntimeConfig());
-          respond(true, result);
-          return;
-        }
-
-        respond(false, undefined, `Unsupported command: ${command}`);
+        const result = await handler(command as TopAiVsCodeCommand);
+        respond(true, result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         respond(false, undefined, message);
@@ -152,7 +145,7 @@ export const activate = (context: vscode.ExtensionContext): void => {
 
   context.subscriptions.push(
     vscode.commands.registerCommand(COMMAND_CODEX_SIGN_IN, async () => {
-      await openCodexSignIn(context, readRuntimeConfig());
+      await openCodexSignIn(handler);
       if (panel) {
         panel.webview.html = createWebviewHtml(panel.webview, context.extensionUri, readRuntimeConfig());
       }
