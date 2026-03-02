@@ -166,6 +166,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - [ ] Add AI-assisted conversation history QA tool:
     - [ ] Tool name: `history_analyze` (read-only).
     - [ ] Dedicated sub-agent flow aligned with existing document analyzer (`documents.analyze`) including chunk + merge path for long history.
+    - [ ] Refactor shared internal analysis engine (single chunk/analyze/merge orchestration function) reused by both `documents.analyze` and `history_analyze`.
     - [ ] Add prompt templates `history_analyze` + `history_analyze_merge`.
     - [ ] Support targeted analysis of one tool output (`target_tool_call_id` / result message id) for context-overflow mitigation.
     - [ ] Return `answer + evidence(message ids/turns) + coverage/confidence`.
