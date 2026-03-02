@@ -182,7 +182,17 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
 
 - [ ] **Lot 4 — Global conversation Summary (not VSCode-specific)**
   - [ ] Implement context-budget summary strategy shared by chat surfaces (web + VSCode host integration path).
-  - [ ] Define trigger threshold(s), regeneration policy, and prompt/context injection contract.
+  - [ ] Define trigger thresholds and automatic behavior:
+    - [ ] soft trigger at 85%, hard trigger at 92%,
+    - [ ] in-flight compaction when supported, otherwise safe-boundary compaction + auto-resume.
+  - [ ] Implement summary UI contract:
+    - [ ] transverse light-gray system strip in timeline (`Résumé du contexte en cours…` -> `Contexte compacté.`),
+    - [ ] no default metrics in message body; metrics available via hover/tooltip,
+    - [ ] subtle persistent context-occupancy indicator visible at all times.
+  - [ ] Implement heavy tool-call overflow guardrails:
+    - [ ] pre-dispatch budget estimate for tool calls,
+    - [ ] compaction-before-dispatch when hard threshold is projected,
+    - [ ] explicit defer/block reason codes for oversized/deferred tool calls.
   - [ ] Ensure behavior is not tied to VSCode-only UI.
   - [ ] Lot gate:
     - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
@@ -218,6 +228,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] auth flow entry for Codex sign-in via settings (no dedicated top-level button),
       - [ ] config save/reload.
     - [ ] Validate summary behavior on long context.
+    - [ ] Validate summary UI:
+      - [ ] gray strip appears during compaction and resolves to `Contexte compacté.`,
+      - [ ] default strip message has no metrics, hover reveals metrics,
+      - [ ] occupancy indicator remains visible and non-intrusive.
+    - [ ] Validate overflow handling during reasoning/tool calls:
+      - [ ] overflow triggered mid-run does not lose user intent,
+      - [ ] run resumes after compaction (in-flight when available, safe-boundary fallback otherwise),
+      - [ ] heavy tool call is compacted/deferred with explicit reason when budget would overflow.
     - [ ] Validate checkpoint create/list/restore behavior.
     - [ ] Validate code tools baseline behavior (`bash`, `ls`, `grep/rg`, file read/edit, git read) with permission policy checks.
     - [ ] Validate `history_analyze` from VSCode host:
