@@ -569,22 +569,22 @@ export const commentAssistantTool: OpenAI.Chat.Completions.ChatCompletionTool = 
 };
 
 /**
- * TODO runtime tool (chat orchestration -> plan/todo/task entities).
+ * Plan runtime tool (chat orchestration -> plan/todo/task entities).
  */
-export const todoTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const planTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
-    name: 'todo',
+    name: 'plan',
     description:
-      'Unified TODO runtime orchestration tool. Use action=create to create a TODO checklist, action=update_todo to update TODO-level progression, and action=update_task to progress a task.',
+      'Unified plan runtime orchestration tool. Use action=create to create a checklist plan, action=update_plan to update plan-level progression, and action=update_task to progress a task.',
     parameters: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['create', 'update_todo', 'update_task'],
+          enum: ['create', 'update_plan', 'update_task'],
           description:
-            'Operation to execute. create=create checklist; update_todo=update TODO status/content; update_task=update task status/content.',
+            'Operation to execute. create=create checklist; update_plan=update TODO status/content; update_task=update task status/content.',
         },
         title: {
           type: 'string',
@@ -616,15 +616,15 @@ export const todoTool: OpenAI.Chat.Completions.ChatCompletionTool = {
         },
         todoId: {
           type: 'string',
-          description: 'TODO id to update (update_todo action).'
+          description: 'TODO id to update (update_plan action).'
         },
         ownerUserId: {
           type: 'string',
-          description: 'Optional TODO owner user id (update_todo action, reassignment permission required).'
+          description: 'Optional TODO owner user id (update_plan action, reassignment permission required).'
         },
         closed: {
           type: 'boolean',
-          description: 'Optional explicit TODO close flag (update_todo action).'
+          description: 'Optional explicit TODO close flag (update_plan action).'
         },
         taskId: {
           type: 'string',
@@ -637,148 +637,14 @@ export const todoTool: OpenAI.Chat.Completions.ChatCompletionTool = {
         status: {
           type: 'string',
           enum: ['todo', 'planned', 'in_progress', 'blocked', 'done', 'deferred', 'cancelled'],
-          description: 'Status transition target (update_todo/update_task).'
+          description: 'Status transition target (update_plan/update_task).'
         },
         metadata: {
           type: 'object',
-          description: 'Optional metadata object (create/update_todo/update_task).'
+          description: 'Optional metadata object (create/update_plan/update_task).'
         }
       },
       required: ['action']
-    }
-  }
-};
-
-/**
- * Legacy aliases kept for backward compatibility with existing prompts/tests.
- */
-export const todoCreateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-  type: 'function',
-  function: {
-    name: 'todo_create',
-    description:
-      'Create an executable TODO item (optionally inside a plan) with optional tasks. Use this tool when the user asks to create a TODO checklist from chat.',
-    parameters: {
-      type: 'object',
-      properties: {
-        title: {
-          type: 'string',
-          description: 'TODO title (required).'
-        },
-        description: {
-          type: 'string',
-          description: 'Optional TODO description.'
-        },
-        planId: {
-          type: 'string',
-          description: 'Optional existing plan ID to attach the TODO to.'
-        },
-        planTitle: {
-          type: 'string',
-          description: 'Optional plan title; creates a new plan when planId is not provided.'
-        },
-        tasks: {
-          type: 'array',
-          description: 'Optional initial tasks to create under the TODO.',
-          items: {
-            type: 'object',
-            properties: {
-              title: { type: 'string', description: 'Task title (required).' },
-              description: { type: 'string', description: 'Optional task description.' }
-            },
-            required: ['title']
-          }
-        },
-        metadata: {
-          type: 'object',
-          description: 'Optional TODO metadata object.'
-        }
-      },
-      required: ['title']
-    }
-  }
-};
-
-export const todoUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-  type: 'function',
-  function: {
-    name: 'todo_update',
-    description:
-      'Update an existing TODO item from chat. Use this tool to update ownership/content and to close or reopen TODO progression.',
-    parameters: {
-      type: 'object',
-      properties: {
-        todoId: {
-          type: 'string',
-          description: 'TODO id to update (required).'
-        },
-        title: {
-          type: 'string',
-          description: 'Optional updated TODO title.'
-        },
-        description: {
-          type: 'string',
-          description: 'Optional updated TODO description.'
-        },
-        ownerUserId: {
-          type: 'string',
-          description: 'Optional owner user id (requires reassignment permission).'
-        },
-        status: {
-          type: 'string',
-          enum: ['todo', 'planned', 'in_progress', 'blocked', 'done', 'deferred', 'cancelled'],
-          description: 'Optional aggregate status intent. `done` closes the TODO; other statuses keep it open.'
-        },
-        closed: {
-          type: 'boolean',
-          description: 'Optional explicit close flag (true=close, false=reopen).'
-        },
-        metadata: {
-          type: 'object',
-          description: 'Optional TODO metadata object.'
-        }
-      },
-      required: ['todoId']
-    }
-  }
-};
-
-export const taskUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-  type: 'function',
-  function: {
-    name: 'task_update',
-    description:
-      'Update an existing task from chat. Use this tool to progress task status and update assignee/content.',
-    parameters: {
-      type: 'object',
-      properties: {
-        taskId: {
-          type: 'string',
-          description: 'Task id to update (required).'
-        },
-        title: {
-          type: 'string',
-          description: 'Optional updated task title.'
-        },
-        description: {
-          type: 'string',
-          description: 'Optional updated task description.'
-        },
-        assigneeUserId: {
-          type: 'string',
-          description: 'Optional assignee user id (requires reassignment permission).'
-        },
-        status: {
-          type: 'string',
-          enum: ['todo', 'planned', 'in_progress', 'blocked', 'done', 'deferred', 'cancelled'],
-          description: 'Optional task status transition.'
-        },
-        metadata: {
-          type: 'object',
-          description: 'Optional task metadata object.'
-        }
-      },
-      required: ['taskId']
     }
   }
 };
