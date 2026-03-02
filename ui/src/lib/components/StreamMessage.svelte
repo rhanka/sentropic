@@ -34,7 +34,7 @@
     | ((
         update: {
           toolCallId: string;
-          toolName: 'todo' | 'todo_create' | 'todo_update' | 'task_update';
+          toolName: 'plan';
           result: Record<string, unknown>;
         },
       ) => void)
@@ -245,11 +245,7 @@
 
   const isTodoRuntimeToolName = (
     value: string | undefined,
-  ): value is 'todo' | 'todo_create' | 'todo_update' | 'task_update' =>
-    value === 'todo' ||
-    value === 'todo_create' ||
-    value === 'todo_update' ||
-    value === 'task_update';
+  ): value is 'plan' => value === 'plan';
 
   const asRecord = (value: unknown): Record<string, unknown> | null => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -278,11 +274,12 @@
     value.replace(/([\\`*_{}\[\]()#+.!|>~-])/g, '\\$1');
 
   const buildTodoRuntimeChecklist = (
-    toolName: 'todo' | 'todo_create' | 'todo_update' | 'task_update',
+    toolName: 'plan',
     rawResult: unknown,
   ): string | null => {
     const result = asRecord(rawResult) ?? {};
     const runtime = asRecord(result.todoRuntime) ?? result;
+    const operation = String(runtime.operation ?? '').trim();
     const todo = asRecord(runtime.todo);
     const activeTodo = asRecord(runtime.activeTodo);
     const task = asRecord(runtime.task);
@@ -290,10 +287,10 @@
     const todoTitle = String(todo?.title ?? activeTodo?.title ?? '').trim();
     const todoId = String(runtime.todoId ?? todo?.id ?? activeTodo?.id ?? '').trim();
     const headerLabel = todoTitle
-      ? `TODO ${todoTitle}`
+      ? `Plan ${todoTitle}`
       : todoId
-        ? `TODO ${todoId}`
-        : 'TODO';
+        ? `Plan ${todoId}`
+        : 'Plan';
 
     const tasksFromRuntime = asTaskList(runtime.tasks);
     const tasksFromResult = asTaskList(result.tasks);
@@ -318,7 +315,7 @@
       const safeTitle = escapeMarkdownText(item.title);
       lines.push(done ? `- [x] ~~${safeTitle}~~` : `- [ ] ${safeTitle}`);
     }
-    if (toolName === 'task_update' && taskItems.length === 1) {
+    if (operation === 'update_task' && taskItems.length === 1) {
       lines.push(`_Task status: ${normalizeTaskStatus(taskItems[0].status)}_`);
     }
     return lines.join('\n');
@@ -425,7 +422,7 @@
         toolResultBody = String(err);
       } else {
         const checklist = buildTodoRuntimeChecklist(
-          (isTodoRuntimeToolName(toolName) ? toolName : runtimeToolName) ?? 'todo_create',
+          (isTodoRuntimeToolName(toolName) ? toolName : runtimeToolName) ?? 'plan',
           data?.result,
         );
         if (checklist) {
@@ -442,11 +439,11 @@
         onTodoRuntime?.({
           toolCallId: toolId,
           toolName: (isTodoRuntimeToolName(toolName) ? toolName : runtimeToolName) as
-            'todo' | 'todo_create' | 'todo_update' | 'task_update',
+            'plan',
           result: resultRecord,
         });
       }
-      if (toolId && toolName === 'todo_create') {
+      if (toolId && toolName === 'plan') {
         const todoCard = parseTodoToolCard(toolId, data?.result);
         if (todoCard) {
           upsertTodoToolCard(todoCard);
