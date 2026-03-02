@@ -122,16 +122,29 @@ Required behavior:
   - VSCode plugin embedded ChatWidget host.
 - Proposal timing:
   - show restore proposal only when at least one checkpoint exists and current state diverges from a restorable checkpoint.
-  - if no delta exists, hide restore CTA (or render as non-actionable informational state).
+  - if no effective delta exists, do not present a restore CTA.
+- Banner pattern (mandatory):
+  - reuse the same visual pattern as the current Chrome-extension permission validation banner in chat (`ChatPanel.svelte` permission prompt block): rounded light panel, compact title/description, primary and secondary compact actions.
+  - CTA set: primary `Oui, restaurer`, secondary `Non`.
+  - `Oui, restaurer` is the highlighted default action (primary button style).
+- Trigger points (mandatory):
+  - **A. After user edit + send**:
+    - when a user edits a previous message and presses send, show restore banner before executing the new run if a rollback is possible.
+  - **B. From user message actions**:
+    - add a restore action button (`lucide undo-dot`) in the user-message action row,
+    - placement: immediately left of existing copy action,
+    - style: same icon button style as other message actions.
+  - **C. From assistant retry path**:
+    - when user clicks retry under an assistant message and rollback is possible, show restore banner before rerun.
 - Proposal content:
   - checkpoint label/time,
   - impacted artifact counts (`files`, `objects`),
   - conflict count from `dry-run`,
   - explicit note when unsupported artifacts are present.
 - Action flow:
-  - `Preview restore` (dry-run summary),
-  - `Apply restore` (explicit confirmation),
-  - result panel with per-artifact outcomes and reason codes.
+  - `Oui, restaurer` triggers restore preview/apply flow (`dry-run` then explicit apply),
+  - `Non` continues without restore and proceeds with requested action,
+  - result panel shows per-artifact outcomes and reason codes.
 
 ### 4.10 Observability and audit
 - Mandatory v1 observability:

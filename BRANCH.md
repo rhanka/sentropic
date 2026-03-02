@@ -92,7 +92,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - [ ] Lock functional framing for:
     - [x] Global conversation `summary` (context budget threshold, summary refresh policy, injection strategy).
     - [x] Global conversation `checkpoint` (create/list/restore lifecycle, consistency guarantees, UX/API contract).
-    - [x] Restore proposal UI contract (web app + VSCode host parity, no-delta no-CTA behavior, preview/apply flow).
+    - [x] Restore proposal UI contract (web app + VSCode host parity, no-delta no-CTA behavior, banner reuse, triggers A/B/C, preview/apply flow) — functional framing locked; UAT validation remains in Lot N-2.
   - [ ] Produce and validate strict Lot 1 recovery matrix from `backup/br05-total-reset-feat-20260302-093246`:
     - [ ] **Recover verbatim**
       - [ ] `api/src/routes/api/vscode-extension.ts`
