@@ -171,6 +171,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] Support targeted analysis of one tool output (`target_tool_call_id` / result message id) for context-overflow mitigation.
     - [ ] Return `answer + evidence(message ids/turns) + coverage/confidence`.
   - [ ] Implement allowed/denied policy model for the selected toolset.
+  - [ ] Implement `bash` policy engine (v1 locked model):
+    - [ ] parser splits command segments (`&&`, `||`, `|`, `;`, subshell boundaries) before evaluation,
+    - [ ] matcher supports mono + bigram rules,
+    - [ ] decision precedence `deny > ask > allow`, default `ask`,
+    - [ ] user defaults + workspace safety override merge (`deny`/`ask` dominate),
+    - [ ] explicit support for divergent rules like `git add` vs `git push`.
+  - [ ] Reuse Chrome-style confirmation banner for `bash` `ask` decisions (`Yes once/No once/Always/Never`).
+  - [ ] Add editable settings UI for mono/bigram rule list (no JSON-only editing requirement).
   - [ ] Wire tool output path to chat orchestration contracts.
   - [ ] Document tool-mode split:
     - [ ] BR-05 = foreground/interactive tool execution only.
@@ -178,10 +186,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - [ ] Lot gate:
     - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-api-unit SCOPE=tests/unit/bash-policy-engine.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-api-endpoints SCOPE=tests/api/chat-bash-policy-gate.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make test-api-unit SCOPE=tests/unit/history-analyze-tool.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make test-api-endpoints SCOPE=tests/api/chat-history-analyze-tool.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/vscode-ext/bash-policy-banner.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/vscode-ext/bash-policy-settings.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make test-ui SCOPE=tests/vscode-ext/tool-permissions.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
@@ -249,6 +261,10 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] heavy tool call is compacted/deferred with explicit reason when budget would overflow.
     - [ ] Validate checkpoint create/list/restore behavior.
     - [ ] Validate code tools baseline behavior (`bash`, `ls`, `grep/rg`, file read/edit, git read) with permission policy checks.
+    - [ ] Validate bash policy specifics:
+      - [ ] `git add` and `git push` can resolve differently by mono/bigram rules,
+      - [ ] ask decisions show Chrome-style confirmation banner,
+      - [ ] workspace override cannot be weakened by user-level allow rule.
     - [ ] Validate `history_analyze` from VSCode host:
       - [ ] ask a targeted question about earlier turns and verify evidence references are returned,
       - [ ] verify long conversation path uses chunked analysis (coverage indicates chunking when applicable).

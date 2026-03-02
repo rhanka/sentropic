@@ -79,6 +79,12 @@ Actions with the following status should be included around tasks only if really
   - [ ] Confirm scope and dependency boundaries with upstream branches.
   - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [ ] Finalize open questions required before implementation starts.
+  - [ ] **Background mode cadrage phase (mandatory before BR10 implementation lots)**
+    - [ ] Define state machine for detached tool runs (`queued`, `running`, `succeeded`, `failed`, `cancelled`, `paused/resumable`).
+    - [ ] Define contract granularity for `start/status/cancel/resume/result` endpoints/events.
+    - [ ] Define permission and tenancy model (who can start/cancel/resume/read results).
+    - [ ] Define UX contract for background runs without explicit agent lane creation.
+    - [ ] Define failure/retry semantics and audit evidence requirements.
 
 - [ ] **Lot 1 — Multi-Agent Lanes**
   - [ ] Add multi-agent task lanes and assignment model in plugin UI.

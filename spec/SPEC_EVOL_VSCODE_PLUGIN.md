@@ -313,6 +313,34 @@ This section provides a concise contract per tool for implementation alignment.
 - Output: `stdout`, `stderr`, `exit_code`, `duration_ms`, truncation flag.
 - Guards: command allow/deny policy, output size cap, timeout cap, explicit permission policy.
 
+Policy model (locked from options):
+- Matching model: **hybrid mono+bigrame** with shell-segment awareness.
+  - evaluate both first token (`mono`) and first two tokens (`bigram`) for each command segment.
+  - examples:
+    - `git add` can be `allow`,
+    - `git push` can be `ask` or `deny`.
+- Parser model:
+  - normalize and tokenize command,
+  - split shell into independent segments (`&&`, `||`, `|`, `;`, subshell boundaries) before rule evaluation.
+- Decision model:
+  - decisions are `deny`, `ask`, `allow`,
+  - precedence is strict: `deny > ask > allow`,
+  - default decision when no rule matches: `ask`.
+- Scope model:
+  - policy sources: user defaults + workspace override.
+  - workspace override direction: workspace defines an upper safety bound (cannot be weakened by user).
+  - effective merge:
+    - if either scope resolves `deny` => `deny`,
+    - else if either scope resolves `ask` => `ask`,
+    - else `allow` only when both scopes resolve `allow`,
+    - else fallback to default `ask`.
+- UX confirmation model (`ask` decisions):
+  - reuse the same banner interaction pattern as Chrome tool permission confirmation (`Yes once` / `No once` / `Always` / `Never`).
+  - no dedicated custom modal for v1.
+- Config editability:
+  - provide an editable rule list for mono and bigram entries (decision + optional scope/filter),
+  - quick operator edits should not require raw JSON editing.
+
 ### 8.2 `ls`
 - Intent: list directory entries quickly.
 - Input: `path`, optional depth.

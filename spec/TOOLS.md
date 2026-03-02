@@ -125,6 +125,11 @@ This document is the single checklist for **chat tools**: what is already implem
 ### VSCode code tools v1 (rapid contracts)
 - [ ] `bash` (safe shell wrapper, foreground mode in BR-05)
   - bounded command execution, explicit policy gates, capped output/time.
+  - policy model: hybrid mono+bigrame + shell segment parsing.
+  - decisions: `deny/ask/allow` with precedence `deny > ask > allow`, default `ask`.
+  - scope merge: user defaults + workspace safety override (workspace cannot be weakened).
+  - `ask` UX reuses Chrome permission banner pattern (`Yes once/No once/Always/Never`).
+  - config editing: mono and bigram rule list editable in settings.
 - [ ] `ls`
   - path-scoped listing, normalized entries.
 - [ ] `grep_rg`
