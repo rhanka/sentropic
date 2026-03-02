@@ -1,0 +1,235 @@
+# Feature: BR-05 Rebuild — VSCode Plugin v1 (Real ChatWidget + Global Summary/Checkpoint)
+
+## Objective
+Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSCode plugin foundations (skeleton/build/download), then deliver real ChatWidget integration plus global conversation `summary` and `checkpoint` functions.
+
+## Scope / Guardrails
+- Scope limited to:
+  - VSCode extension skeleton and `.vsix` packaging pipeline.
+  - API/UI download distribution for VSCode extension in `/settings`.
+  - Real ChatWidget integration in VSCode webview.
+  - Global conversation `summary` function (context-budget compression strategy).
+  - Global conversation `checkpoint` function (create/list/restore lifecycle).
+  - VSCode plugin local code tools (v1 safe set).
+- Explicitly out of scope:
+  - fake shell tabs `plan/tools/summary/checkpoint`,
+  - fake workflow client/contracts for plugin smoke,
+  - dedicated Codex sign-in button outside ChatWidget configuration menu.
+- One migration max in `api/drizzle/*.sql` (if required).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development happens in isolated worktree `tmp/feat-vscode-plugin-v1`.
+- Automated test campaigns run on dedicated branch environments (`ENV=test-feat-vscode-plugin-v1`, `ENV=e2e-feat-vscode-plugin-v1`), never on root `ENV=dev`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- Tests are scoped file-by-file only (`SCOPE=...` and `E2E_SPEC=...`), no grouped/global lot validation runs.
+- No timeout/retry inflation in tests.
+- All new text in English.
+- Branch environment mapping:
+  - Dev: `API_PORT=8705`, `UI_PORT=5105`, `MAILDEV_UI_PORT=1005`, `ENV=feat-vscode-plugin-v1`
+  - Test: `API_PORT=8705`, `UI_PORT=5105`, `MAILDEV_UI_PORT=1005`, `ENV=test-feat-vscode-plugin-v1`
+  - E2E: `API_PORT=8705`, `UI_PORT=5105`, `MAILDEV_UI_PORT=1005`, `ENV=e2e-feat-vscode-plugin-v1`
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `api/**`
+  - `ui/**`
+  - `e2e/**`
+  - `scripts/**`
+  - `BRANCH.md`
+  - `plan/05-BRANCH_feat-vscode-plugin-v1.md`
+  - `spec/SPEC_EVOL_VSCODE_PLUGIN.md`
+  - `spec/TOOLS.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile`
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `PLAN.md`, `TODO.md`
+- **Exception process**:
+  - Declare exception ID `BR05-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+
+## Feedback Loop
+- `BR05-EX1` — `attention`
+  - Path: `Makefile`
+  - Reason: add/restore `make vscode-ext` and optional `make dev-vscode-ext` targets required for VSCode plugin build/distribution.
+  - Impact: build orchestration only for BR-05 scope.
+  - Rollback: revert target block if packaging strategy changes.
+- `BR05-FL1` — `attention`
+  - Topic: strict selective recovery from backup branch.
+  - Requirement: no residual fake UI/contracts (`plan/tools/summary/checkpoint` shell) must survive Lot 1.
+- `BR05-FL2` — `attention`
+  - Topic: summary/checkpoint must be product functions, not plugin-only fake features.
+  - Requirement: scope and contracts locked in Lot 0 before implementation lots.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: this rebuild is one capability branch with tightly coupled API/UI/VSCode extension contracts.
+
+## UAT Management (in orchestration context)
+- UAT checkpoints are listed in `Lot N-2`.
+- User intervention is not expected before `Lot N-2`.
+- Execution flow:
+  - develop and run tests in `tmp/feat-vscode-plugin-v1`,
+  - push branch before UAT,
+  - run human UAT from root workspace (`ENV=dev`),
+  - return to worktree for fixes.
+
+## Plan / Todo (lot-based)
+- [ ] **Lot 0 — Cadrage interactif + matrice de récupération Lot 1**
+  - [ ] Lock functional framing for:
+    - [x] Global conversation `summary` (context budget threshold, summary refresh policy, injection strategy).
+    - [x] Global conversation `checkpoint` (create/list/restore lifecycle, consistency guarantees, UX/API contract).
+    - [x] Restore proposal UI contract (web app + VSCode host parity, no-delta no-CTA behavior, preview/apply flow).
+  - [ ] Produce and validate strict Lot 1 recovery matrix from `backup/br05-total-reset-feat-20260302-093246`:
+    - [ ] **Recover verbatim**
+      - [ ] `api/src/routes/api/vscode-extension.ts`
+      - [ ] `api/tests/api/vscode-extension-download.test.ts`
+      - [ ] `ui/src/lib/utils/vscode-extension-download.ts`
+      - [ ] `ui/tests/utils/vscode-extension-download.test.ts`
+      - [ ] `ui/vscode-ext/package-vsix.js`
+      - [ ] `ui/vscode-ext/package.json` (only packaging metadata/scripts kept after review)
+    - [ ] **Recover partially (selective hunks only)**
+      - [ ] `ui/src/routes/settings/+page.svelte` (VSCode download card only)
+      - [ ] `ui/src/locales/en.json` (settings.vscodeExtension keys only)
+      - [ ] `ui/src/locales/fr.json` (settings.vscodeExtension keys only)
+      - [ ] `api/src/config/env.ts` (`VSCODE_EXTENSION_*` env keys only)
+      - [ ] `api/src/routes/api/index.ts` (register `vscodeExtensionRouter` only)
+      - [ ] `ui/package.json` / `ui/package-lock.json` (only required build script/deps for packaging)
+    - [ ] **Rebuild fresh (do not recover fake implementation)**
+      - [ ] `ui/vscode-ext/extension.ts`
+      - [ ] `ui/vscode-ext/webview-entry.ts`
+      - [ ] `ui/vscode-ext/vscode-bridge.ts`
+      - [ ] `ui/vscode-ext/auth-bridge.ts`
+      - [ ] `ui/vscode-ext/local-tools.ts`
+    - [ ] **Explicitly exclude (must not exist after Lot 1)**
+      - [ ] `ui/src/routes/vscode-plugin-smoke/+page.svelte`
+      - [ ] `e2e/tests/03-chat-vscode-plugin-smoke.spec.ts`
+      - [ ] `e2e/tests/03-chat-vscode-plugin.spec.ts`
+      - [ ] `ui/tests/vscode-ext/summary-panel.test.ts`
+      - [ ] `ui/tests/vscode-ext/checkpoint-panel.test.ts`
+      - [ ] `ui/tests/vscode-ext/checkpoint-restore.test.ts`
+      - [ ] `ui/vscode-ext/workflow-client.ts`
+  - [x] Lock Lot 3 research target for VSCode code tools (baseline capability set + safety policy).
+
+- [ ] **Lot 1 — Strict selective recovery (skeleton/build/download only)**
+  - [ ] Restore minimal VSCode extension packaging pipeline:
+    - [ ] add `ui/vscode-ext` packaging scripts/assets required to produce `.vsix`,
+    - [ ] add `make vscode-ext` target (and optional `make dev-vscode-ext`) under `BR05-EX1`.
+  - [ ] Restore VSCode extension download distribution:
+    - [ ] API endpoint `/api/v1/vscode-extension/download`,
+    - [ ] UI settings card for `.vsix` download metadata.
+  - [ ] Keep implementation surface minimal:
+    - [ ] no fake shell tabs (`plan/tools/summary/checkpoint`) in extension UI,
+    - [ ] no fake workflow summary/checkpoint scaffolding.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-api-endpoints SCOPE=tests/api/vscode-extension-download.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/utils/vscode-extension-download.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make vscode-ext API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
+
+- [ ] **Lot 2 — VSCode real ChatWidget integration**
+  - [ ] Integrate real `ChatWidget` in VSCode webview (shared component path, no parallel fake panel).
+  - [ ] Wire runtime bridge for extension config and auth via ChatWidget settings menu (wheel).
+  - [ ] Remove dedicated Codex button UI; keep auth treatment reachable from settings menu only.
+  - [ ] Ensure panel can be opened/used with expected layout parity (right/left docking handled by host).
+  - [ ] Lot gate:
+    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/vscode-ext/extension-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/vscode-ext/vscode-bridge.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/vscode-ext/auth-bridge.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+
+- [ ] **Lot 3 — VSCode plugin code tools (research + implementation)**
+  - [ ] Research/code-scan and lock baseline toolset for v1 plugin code interactions:
+    - [ ] `bash` (safe shell wrapper),
+    - [ ] `ls`,
+    - [ ] `grep`/`rg`,
+    - [ ] file read,
+    - [ ] file edit/write,
+    - [ ] git read actions (`status`, `diff`).
+  - [ ] Implement allowed/denied policy model for the selected toolset.
+  - [ ] Wire tool output path to chat orchestration contracts.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/vscode-ext/tool-permissions.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+
+- [ ] **Lot 4 — Global conversation Summary (not VSCode-specific)**
+  - [ ] Implement context-budget summary strategy shared by chat surfaces (web + VSCode host integration path).
+  - [ ] Define trigger threshold(s), regeneration policy, and prompt/context injection contract.
+  - [ ] Ensure behavior is not tied to VSCode-only UI.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-api-unit SCOPE=tests/unit/chat-summary-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+
+- [ ] **Lot 5 — Global conversation Checkpoint (not VSCode-specific)**
+  - [ ] Implement checkpoint lifecycle shared by chat runtime:
+    - [ ] create checkpoint,
+    - [ ] list checkpoints,
+    - [ ] restore checkpoint.
+  - [ ] Ensure consistency rules (timeline, state snapshot boundaries) are enforced.
+  - [ ] Expose minimal UI integration points where required, without fake plugin tabs.
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+
+- [ ] **Lot N-2** UAT
+  - [ ] Web app (`ENV=dev`, root workspace)
+    - [ ] Open `/settings` and validate VSCode download card:
+      - [ ] metadata loaded (`version`, `source`),
+      - [ ] download CTA points to valid `.vsix`,
+      - [ ] explicit error message if missing config/package.
+  - [ ] VSCode plugin (`ENV=dev`, root workspace)
+    - [ ] Build package: `make vscode-ext API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`.
+    - [ ] Install generated `.vsix` in VSCode.
+    - [ ] Open plugin panel and validate real ChatWidget mount.
+    - [ ] Open settings wheel in widget header and validate:
+      - [ ] endpoint/profile fields,
+      - [ ] auth flow entry for Codex sign-in via settings (no dedicated top-level button),
+      - [ ] config save/reload.
+    - [ ] Validate summary behavior on long context.
+    - [ ] Validate checkpoint create/list/restore behavior.
+    - [ ] Validate code tools baseline behavior (`bash`, `ls`, `grep/rg`, file read/edit, git read) with permission policy checks.
+
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Consolidate final BR-05 decisions into:
+    - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md`
+    - [ ] `spec/TOOLS.md`
+  - [ ] Ensure removed fake features are not described as delivered behavior.
+
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & Lint
+    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+  - [ ] Scoped API tests (file-by-file, impacted files only)
+  - [ ] Scoped UI tests (file-by-file, impacted files only)
+  - [ ] Scoped E2E tests (file-by-file, impacted files only)
+    - [ ] `make build-api build-ui-image API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
+    - [ ] `make test-e2e E2E_SPEC=tests/03-chat-vscode-extension.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
+  - [ ] Final gate:
+    - [ ] create/update PR with `BRANCH.md` as source body,
+    - [ ] verify CI,
+    - [ ] remove `BRANCH.md` only after UAT + CI are both `OK`.
