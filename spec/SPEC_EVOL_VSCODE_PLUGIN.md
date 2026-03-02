@@ -343,45 +343,78 @@ Policy model (locked from options):
 
 ### 8.2 `ls`
 - Intent: list directory entries quickly.
-- Input: `path`, optional depth.
+- Input: `path`, optional depth, optional `include_hidden`.
 - Output: normalized entry list (name, type, size, mtime).
-- Guards: workspace/path scope restrictions.
+- Guards:
+  - workspace/path scope restrictions,
+  - bounded recursion depth (default bounded mode, no unbounded recursion),
+  - hidden entries excluded by default unless explicitly requested.
 
 ### 8.3 `grep_rg`
 - Intent: text search over workspace files.
 - Input: `pattern`, optional `path`, optional glob filters.
 - Output: matches with file path + line references.
-- Guards: result cap + path scope restrictions.
+- Guards:
+  - use `rg` by default, fallback to `grep` only when needed,
+  - bounded result volume (max matches/files/snippet size),
+  - continuation/pagination contract for long result sets,
+  - path scope restrictions.
 
 ### 8.4 `file_read`
 - Intent: read file content for analysis.
-- Input: `path`, optional line/window parameters.
-- Output: text excerpt + file metadata.
-- Guards: max bytes/lines per call, binary-file rejection path.
+- Input:
+  - default: `path` + window parameters (line/range/offset),
+  - optional explicit full-read request.
+- Output: text excerpt (or full content when explicitly requested) + file metadata.
+- Guards:
+  - windowed bounded reads are default,
+  - full-read allowed only when explicitly requested and still bounded by caps,
+  - sensitive-path policy (deny/mask for secrets-configured paths),
+  - binary-file rejection path.
 
-### 8.5 `file_edit_write`
-- Intent: apply deterministic file edits.
-- Input: path + structured edit payload.
-- Output: edit summary + affected ranges/checksum.
-- Guards: write permission policy, protected-path denylist, patch validation.
+### 8.5 `file_edit` (multi-mode)
+- Intent: apply deterministic file changes with one unified tool entrypoint.
+- Input: `path` + `mode` + structured payload.
+  - `mode=edit` (targeted line/range edits),
+  - `mode=write` (controlled overwrite),
+  - `mode=apply_patch` (diff/patch apply).
+- Output: edit summary + affected ranges/checksum + patch diagnostics.
+- Guards:
+  - default decision = `ask` (Chrome-style confirmation banner),
+  - protected-path denylist + validation guards,
+  - path-pattern authorization profile to reduce repeated prompts (e.g. allow `api/*` scope),
+  - explicit path-pattern grants are policy-governed and auditable.
 
 ### 8.6 `git_status`
 - Intent: inspect working tree status.
 - Input: optional path filter.
 - Output: staged/unstaged/untracked summary.
-- Guards: read-only git interaction.
+- Guards:
+  - read-only git interaction only,
+  - default decision = allow.
 
 ### 8.7 `git_diff`
 - Intent: inspect content changes.
 - Input: optional path + ref range.
 - Output: bounded diff payload.
-- Guards: diff size cap, read-only git interaction.
+- Guards:
+  - bounded diff payload (size/hunks/files),
+  - scope restrictions to allowed workspace refs/paths,
+  - read-only git interaction.
 
 ### 8.8 `history_analyze`
 - Intent: targeted question-answering on conversation history.
 - Input: `question`, optional range selectors, optional tool-target selectors.
-- Output: `answer`, `evidence`, `coverage`, optional `confidence`.
+- Output:
+  - default: free-form answer optimized for operator readability,
+  - optional structured mode: `answer`, `evidence`, `coverage`, optional `confidence`.
 - Guards: read-only, no hidden-reasoning leakage, explicit `insufficient_coverage` signaling.
+
+### 8.9 Non-shell policy engine (shared)
+- Apply a unified `deny/ask/allow` policy engine across non-shell tools where relevant.
+- Precedence: `deny > ask > allow`.
+- Scope merge: user defaults + workspace safety override.
+  - workspace policy is an upper safety bound and cannot be weakened by user-level rules.
 
 ## 9) Risks
 - Missing object adapters can cause partial restores in v1; this must be explicit in UI/API responses.
