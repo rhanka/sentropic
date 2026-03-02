@@ -576,6 +576,20 @@
         "load": "Unable to load the Settings Chrome Plugin card. Set CHROME_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /chrome-extension/top-ai-ideas-chrome-extension.zip, then restart the API."
       }
     },
+    "vscodeExtension": {
+      "title": "VSCode extension",
+      "description": "Download the latest VSCode extension package configured for this instance.",
+      "experimentalWarning": "(experimental only, for developers)",
+      "loading": "Loading extension package…",
+      "downloadCta": "Download extension (.vsix)",
+      "downloadTooltip": "Download the VSCode extension",
+      "retry": "Retry",
+      "versionLabel": "Version",
+      "sourceLabel": "Source",
+      "errors": {
+        "load": "Unable to load the Settings VSCode Plugin card. Set VSCODE_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /vscode-extension/top-ai-ideas-vscode-extension.vsix, then restart the API."
+      }
+    },
     "systemInfo": "System information",
     "systemInfoLabels": {
       "version": "Version",
