@@ -14,6 +14,8 @@
     "test": "vitest run",
     "build:ext": "vite build --config ./chrome-ext/vite.config.ext.ts && node ./chrome-ext/copy-assets.js && node ./chrome-ext/package-extension-zip.js",
     "dev:ext": "vite build --config ./chrome-ext/vite.config.ext.ts --watch",
+    "build:vscode-ext": "node ./vscode-ext/package-vsix.js",
+    "dev:vscode-ext": "node ./vscode-ext/package-vsix.js --watch",
     "client:generate": "echo 'Client generation placeholder'"
   },
   "devDependencies": {
