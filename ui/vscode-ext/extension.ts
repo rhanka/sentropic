@@ -6,34 +6,141 @@ import {
 } from './host-handler';
 
 const COMMAND_OPEN_PANEL = 'topai.openPanel';
-const COMMAND_CODEX_SIGN_IN = 'topai.codex.signIn';
-const VIEW_TYPE = 'topai.chat';
-const STATE_KEY_CODEX_CONNECTED = 'topai.codexConnected';
+const VIEW_ID = 'topai.chatView';
+const SECRET_SESSION_TOKEN_KEY = 'topai.sessionToken';
+const CONFIG_TARGET = vscode.ConfigurationTarget.Global;
 
 const defaultConfig: TopAiRuntimeConfig = {
   apiBaseUrl: 'http://localhost:8705/api/v1',
   appBaseUrl: 'http://localhost:5173',
+  wsBaseUrl: '',
   sessionToken: '',
   codexSignInUrl: 'https://chatgpt.com/auth/login?next=/codex',
 };
 
-const readRuntimeConfig = (): TopAiRuntimeConfig => {
+type RuntimeConfigPatchPayload = {
+  apiBaseUrl?: string;
+  appBaseUrl?: string;
+  wsBaseUrl?: string;
+  sessionToken?: string;
+};
+
+const normalizeConfigString = (value: unknown, fallback = ''): string => {
+  if (typeof value !== 'string') return fallback;
+  return value.trim();
+};
+
+const readRuntimeConfig = async (
+  context: vscode.ExtensionContext,
+): Promise<TopAiRuntimeConfig> => {
   const config = vscode.workspace.getConfiguration('topai');
-  const apiBaseUrl = String(config.get<string>('apiBaseUrl', defaultConfig.apiBaseUrl)).trim();
-  const appBaseUrl = String(config.get<string>('appBaseUrl', defaultConfig.appBaseUrl)).trim();
-  const sessionToken = String(config.get<string>('sessionToken', defaultConfig.sessionToken)).trim();
-  const codexSignInUrl = String(config.get<string>('codexSignInUrl', defaultConfig.codexSignInUrl)).trim();
+  const apiBaseUrl = normalizeConfigString(
+    config.get<string>('apiBaseUrl', defaultConfig.apiBaseUrl),
+    defaultConfig.apiBaseUrl,
+  );
+  const appBaseUrl = normalizeConfigString(
+    config.get<string>('appBaseUrl', defaultConfig.appBaseUrl),
+    defaultConfig.appBaseUrl,
+  );
+  const wsBaseUrl = normalizeConfigString(
+    config.get<string>('wsBaseUrl', defaultConfig.wsBaseUrl),
+    defaultConfig.wsBaseUrl,
+  );
+  const codexSignInUrl = normalizeConfigString(
+    config.get<string>('codexSignInUrl', defaultConfig.codexSignInUrl),
+    defaultConfig.codexSignInUrl,
+  );
+
+  const secretToken = await context.secrets.get(SECRET_SESSION_TOKEN_KEY);
+  const fallbackSettingToken = normalizeConfigString(
+    config.get<string>('sessionToken', ''),
+    '',
+  );
 
   return {
     apiBaseUrl,
     appBaseUrl,
-    sessionToken,
+    wsBaseUrl,
+    sessionToken: normalizeConfigString(secretToken, fallbackSettingToken),
     codexSignInUrl,
   };
 };
 
-const createWebviewHtml = (webview: vscode.Webview, extensionUri: vscode.Uri, config: TopAiRuntimeConfig): string => {
-  const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview-entry.js'));
+const saveRuntimeConfigPatch = async (
+  context: vscode.ExtensionContext,
+  payload: RuntimeConfigPatchPayload,
+): Promise<TopAiRuntimeConfig> => {
+  const config = vscode.workspace.getConfiguration('topai');
+
+  if (typeof payload.apiBaseUrl === 'string') {
+    await config.update('apiBaseUrl', payload.apiBaseUrl.trim(), CONFIG_TARGET);
+  }
+  if (typeof payload.appBaseUrl === 'string') {
+    await config.update('appBaseUrl', payload.appBaseUrl.trim(), CONFIG_TARGET);
+  }
+  if (typeof payload.wsBaseUrl === 'string') {
+    await config.update('wsBaseUrl', payload.wsBaseUrl.trim(), CONFIG_TARGET);
+  }
+
+  if (typeof payload.sessionToken === 'string') {
+    const token = payload.sessionToken.trim();
+    if (token.length > 0) {
+      await context.secrets.store(SECRET_SESSION_TOKEN_KEY, token);
+    } else {
+      await context.secrets.delete(SECRET_SESSION_TOKEN_KEY);
+    }
+
+    // Keep workspace/global settings clear of plaintext tokens.
+    await config.update('sessionToken', '', CONFIG_TARGET);
+  }
+
+  return readRuntimeConfig(context);
+};
+
+const testApiConnectivity = async (
+  apiBaseUrl: string,
+  sessionToken: string,
+): Promise<{
+  ok: boolean;
+  status?: number;
+  statusText?: string;
+  error?: string;
+}> => {
+  const normalizedBase = apiBaseUrl.replace(/\/$/, '');
+  const healthUrl = `${normalizedBase}/health`;
+
+  try {
+    const response = await fetch(healthUrl, {
+      method: 'GET',
+      headers: {
+        ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+      },
+    });
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      error: response.ok
+        ? undefined
+        : `HTTP ${response.status}: ${response.statusText}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+};
+
+const createWebviewHtml = (
+  webview: vscode.Webview,
+  extensionUri: vscode.Uri,
+  config: TopAiRuntimeConfig,
+): string => {
+  const scriptUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, 'dist', 'webview-entry.js'),
+  );
   const nonce = `${Date.now()}${Math.random().toString(36).slice(2)}`;
   const runtimeConfigJson = JSON.stringify(config).replace(/</g, '\\u003c');
 
@@ -55,108 +162,156 @@ const createWebviewHtml = (webview: vscode.Webview, extensionUri: vscode.Uri, co
 </html>`;
 };
 
-const openCodexSignIn = async (
-  handler: ReturnType<typeof createTopAiVsCodeRequestHandler>,
-): Promise<{ opened: boolean; url: string }> => {
-  const result = await handler('auth.codex.signIn');
-  if (!result || typeof result !== 'object') {
-    throw new Error('Invalid auth.codex.signIn response.');
-  }
-  const payload = result as { opened?: unknown; url?: unknown };
-  return {
-    opened: payload.opened === true,
-    url: typeof payload.url === 'string' ? payload.url : '',
-  };
-};
+class TopAiChatViewProvider implements vscode.WebviewViewProvider {
+  private view: vscode.WebviewView | null = null;
+  private revealRequested = false;
 
-export const activate = (context: vscode.ExtensionContext): void => {
-  let panel: vscode.WebviewPanel | null = null;
-  const handler = createTopAiVsCodeRequestHandler({
-    getRuntimeConfig: readRuntimeConfig,
-    openExternal: async (url: string) => vscode.env.openExternal(vscode.Uri.parse(url)),
-    getCodexConnected: () => Boolean(context.globalState.get<boolean>(STATE_KEY_CODEX_CONNECTED, false)),
-    setCodexConnected: async (connected: boolean) => {
-      await context.globalState.update(STATE_KEY_CODEX_CONNECTED, connected);
-    },
-  });
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly runtimeHandler: ReturnType<typeof createTopAiVsCodeRequestHandler>,
+  ) {}
 
-  const revealPanel = (): vscode.WebviewPanel => {
-    if (panel) {
-      panel.reveal(vscode.ViewColumn.Beside, true);
-      panel.webview.html = createWebviewHtml(panel.webview, context.extensionUri, readRuntimeConfig());
-      return panel;
-    }
+  async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
+    this.view = webviewView;
+    webviewView.webview.options = {
+      enableScripts: true,
+    };
 
-    panel = vscode.window.createWebviewPanel(
-      VIEW_TYPE,
-      'Top AI Ideas',
-      vscode.ViewColumn.Beside,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-      },
+    const runtimeConfig = await readRuntimeConfig(this.context);
+    webviewView.webview.html = createWebviewHtml(
+      webviewView.webview,
+      this.context.extensionUri,
+      runtimeConfig,
     );
 
-    panel.webview.html = createWebviewHtml(panel.webview, context.extensionUri, readRuntimeConfig());
+    webviewView.webview.onDidReceiveMessage((message: unknown) => {
+      void this.handleWebviewMessage(message);
+    });
 
-    panel.webview.onDidReceiveMessage(async (message: unknown) => {
-      if (!message || typeof message !== 'object') return;
-      const payload = message as Record<string, unknown>;
-      if (payload.source !== 'topai-vscode-webview') return;
-      if (payload.type !== 'request') return;
+    if (this.revealRequested) {
+      this.revealRequested = false;
+      const maybeShow = (webviewView as vscode.WebviewView & {
+        show?: (preserveFocus?: boolean) => void;
+      }).show;
+      maybeShow?.call(webviewView, true);
+    }
+  }
 
-      const requestId = typeof payload.requestId === 'string' ? payload.requestId : '';
-      const command = typeof payload.command === 'string' ? payload.command : '';
-      if (!requestId || !command) return;
+  async reveal(): Promise<void> {
+    this.revealRequested = true;
+    await vscode.commands.executeCommand('workbench.view.explorer');
+    await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
 
-      const respond = (ok: boolean, resultPayload?: unknown, error?: string): void => {
-        panel?.webview.postMessage({
-          source: 'topai-vscode-host',
-          type: 'response',
-          command,
-          requestId,
-          ok,
-          payload: resultPayload,
-          error,
-        });
-      };
+    if (this.view) {
+      const maybeShow = (this.view as vscode.WebviewView & {
+        show?: (preserveFocus?: boolean) => void;
+      }).show;
+      maybeShow?.call(this.view, true);
+    }
+  }
 
-      try {
-        const result = await handler(command as TopAiVsCodeCommand);
-        respond(true, result);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        respond(false, undefined, message);
+  async refresh(): Promise<void> {
+    if (!this.view) return;
+    const runtimeConfig = await readRuntimeConfig(this.context);
+    this.view.webview.html = createWebviewHtml(
+      this.view.webview,
+      this.context.extensionUri,
+      runtimeConfig,
+    );
+  }
+
+  private async handleWebviewMessage(rawMessage: unknown): Promise<void> {
+    if (!this.view || !rawMessage || typeof rawMessage !== 'object') return;
+
+    const payload = rawMessage as Record<string, unknown>;
+    if (payload.source !== 'topai-vscode-webview') return;
+    if (payload.type !== 'request') return;
+
+    const requestId =
+      typeof payload.requestId === 'string' ? payload.requestId : '';
+    const command = typeof payload.command === 'string' ? payload.command : '';
+    if (!requestId || !command) return;
+
+    const respond = (ok: boolean, resultPayload?: unknown, error?: string): void => {
+      this.view?.webview.postMessage({
+        source: 'topai-vscode-host',
+        type: 'response',
+        command,
+        requestId,
+        ok,
+        payload: resultPayload,
+        error,
+      });
+    };
+
+    try {
+      if (command === 'runtime.config.get') {
+        respond(true, await readRuntimeConfig(this.context));
+        return;
       }
-    });
 
-    panel.onDidDispose(() => {
-      panel = null;
-    });
+      if (command === 'runtime.config.set') {
+        const patch =
+          payload.payload && typeof payload.payload === 'object'
+            ? (payload.payload as RuntimeConfigPatchPayload)
+            : {};
+        const updatedConfig = await saveRuntimeConfigPatch(this.context, patch);
+        respond(true, updatedConfig);
+        return;
+      }
 
-    return panel;
-  };
+      if (command === 'runtime.config.test') {
+        const runtimeConfig = await readRuntimeConfig(this.context);
+        const requestPayload =
+          payload.payload && typeof payload.payload === 'object'
+            ? (payload.payload as { apiBaseUrl?: unknown })
+            : {};
+        const targetApiBaseUrl =
+          typeof requestPayload.apiBaseUrl === 'string' &&
+          requestPayload.apiBaseUrl.trim().length > 0
+            ? requestPayload.apiBaseUrl.trim()
+            : runtimeConfig.apiBaseUrl;
+
+        const result = await testApiConnectivity(
+          targetApiBaseUrl,
+          runtimeConfig.sessionToken,
+        );
+        respond(true, result);
+        return;
+      }
+
+      const result = await this.runtimeHandler(command as TopAiVsCodeCommand);
+      respond(true, result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      respond(false, undefined, message);
+    }
+  }
+}
+
+export const activate = (context: vscode.ExtensionContext): void => {
+  const runtimeHandler = createTopAiVsCodeRequestHandler({
+    getRuntimeConfig: () => defaultConfig,
+  });
+
+  const provider = new TopAiChatViewProvider(context, runtimeHandler);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand(COMMAND_OPEN_PANEL, () => {
-      revealPanel();
+    vscode.window.registerWebviewViewProvider(VIEW_ID, provider, {
+      webviewOptions: { retainContextWhenHidden: true },
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand(COMMAND_CODEX_SIGN_IN, async () => {
-      await openCodexSignIn(handler);
-      if (panel) {
-        panel.webview.html = createWebviewHtml(panel.webview, context.extensionUri, readRuntimeConfig());
-      }
+    vscode.commands.registerCommand(COMMAND_OPEN_PANEL, () => {
+      void provider.reveal();
     }),
   );
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration('topai')) return;
-      if (!panel) return;
-      panel.webview.html = createWebviewHtml(panel.webview, context.extensionUri, readRuntimeConfig());
+      void provider.refresh();
     }),
   );
 };
