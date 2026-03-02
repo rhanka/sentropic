@@ -260,7 +260,7 @@ Implication for this repo:
 - Plugin provides installable shell + shared chat surface.
 - Runtime emits turn checkpoints automatically.
 - Restore can target files and objects (when adapters exist).
-- Summary policy follows 85% trigger with reserved headroom.
+- Summary policy follows soft/hard thresholds (85% / 92%) with reserved headroom.
 - No legacy plugin-only summary/checkpoint tabs.
 
 ## 7) Future branch boundary
