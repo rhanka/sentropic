@@ -159,16 +159,13 @@ test.describe.serial('chat steering core', () => {
       await page.keyboard.press('Control+A');
       await page.keyboard.press('Backspace');
       await page.keyboard.type(steerMessage);
-      const composerSubmit = page
-        .locator(
-          '[data-testid="chat-composer-steer-button"], [data-testid="chat-composer-send-button"]',
-        )
-        .last();
-      await expect(composerSubmit).toBeVisible();
+      const steerButton = page.getByTestId('chat-composer-steer-button');
+      await expect(steerButton).toBeVisible();
+      await expect(page.getByTestId('chat-composer-send-button')).toHaveCount(0);
       const [steerReq, steerRes] = await Promise.all([
         page.waitForRequest((req) => isChatSteerRequest(req)),
         page.waitForResponse((res) => isChatSteerRequest(res.request())),
-        composerSubmit.click(),
+        steerButton.click(),
       ]);
       page.off('request', onRequest);
 
@@ -186,6 +183,40 @@ test.describe.serial('chat steering core', () => {
       await expect(page.locator('#chat-widget-dialog')).toContainText(
         steerMessage,
       );
+      const timelineContainer = page.locator(
+        '#chat-widget-dialog .h-full.overflow-y-auto.p-3.space-y-2.slim-scroll',
+      );
+      await expect(timelineContainer).toBeVisible();
+      const timelineShape = await timelineContainer.evaluate(
+        (container, expectedSteerText) => {
+          const rows = Array.from(container.children).map((row) => {
+            const htmlRow = row as HTMLElement;
+            const className = htmlRow.className ?? '';
+            const role = className.includes('items-end')
+              ? 'user'
+              : className.includes('justify-start')
+                ? 'assistant'
+                : 'other';
+            const text = (htmlRow.textContent ?? '').replace(/\s+/g, ' ').trim();
+            return { role, text };
+          });
+          const steerIndex = rows.findIndex(
+            (row) => row.role === 'user' && row.text.includes(expectedSteerText),
+          );
+          return {
+            steerIndex,
+            previousRole: steerIndex > 0 ? rows[steerIndex - 1]?.role : null,
+            nextRole:
+              steerIndex >= 0 && steerIndex + 1 < rows.length
+                ? rows[steerIndex + 1]?.role
+                : null,
+          };
+        },
+        steerMessage,
+      );
+      expect(timelineShape.steerIndex).toBeGreaterThan(0);
+      expect(timelineShape.previousRole).toBe('user');
+      expect(timelineShape.nextRole).toBe('assistant');
     } finally {
       await api.dispose();
     }

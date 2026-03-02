@@ -17,6 +17,10 @@ type ChatSteerApiResponse = {
 
 type ApiPostLike = <T = unknown>(endpoint: string, body?: unknown) => Promise<T>;
 
+type TimelineMessageLike = {
+  id: string;
+};
+
 const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
@@ -60,4 +64,25 @@ export const postChatSteer = async (
     metadata: responseMetadata,
     submittedAtMs: Date.now(),
   };
+};
+
+export const insertSteerMessageInTimeline = <T extends TimelineMessageLike>(
+  timeline: readonly T[],
+  steerMessage: T,
+  activeAssistantMessageId: string | null,
+): T[] => {
+  if (!activeAssistantMessageId) {
+    return [...timeline, steerMessage];
+  }
+  const assistantIndex = timeline.findIndex(
+    (message) => message.id === activeAssistantMessageId,
+  );
+  if (assistantIndex === -1) {
+    return [...timeline, steerMessage];
+  }
+  return [
+    ...timeline.slice(0, assistantIndex),
+    steerMessage,
+    ...timeline.slice(assistantIndex),
+  ];
 };
