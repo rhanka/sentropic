@@ -27,6 +27,14 @@ type TopAiRuntimeConfig = {
   updatedAt?: number;
 };
 
+type PersistedRuntimeConfig = {
+  profile?: 'uat' | 'prod';
+  apiBaseUrl?: string;
+  appBaseUrl?: string;
+  wsBaseUrl?: string;
+  updatedAt?: number;
+};
+
 declare global {
   interface Window {
     __TOPAI_VSCODE_RUNTIME__?: TopAiRuntimeConfig;
@@ -91,19 +99,32 @@ const normalizeRuntimeConfig = (
   };
 };
 
-const loadPersistedRuntimeConfig = (): Partial<TopAiRuntimeConfig> => {
+const loadPersistedRuntimeConfig = (): PersistedRuntimeConfig => {
   try {
     const raw = localStorage.getItem(RUNTIME_CONFIG_STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as Partial<TopAiRuntimeConfig>;
-    return parsed ?? {};
+    const parsed = (JSON.parse(raw) as PersistedRuntimeConfig) ?? {};
+    return {
+      profile: parsed.profile === 'prod' ? 'prod' : parsed.profile === 'uat' ? 'uat' : undefined,
+      apiBaseUrl: typeof parsed.apiBaseUrl === 'string' ? parsed.apiBaseUrl : undefined,
+      appBaseUrl: typeof parsed.appBaseUrl === 'string' ? parsed.appBaseUrl : undefined,
+      wsBaseUrl: typeof parsed.wsBaseUrl === 'string' ? parsed.wsBaseUrl : undefined,
+      updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : undefined,
+    };
   } catch {
     return {};
   }
 };
 
 const persistRuntimeConfig = (config: Required<TopAiRuntimeConfig>): void => {
-  localStorage.setItem(RUNTIME_CONFIG_STORAGE_KEY, JSON.stringify(config));
+  const persisted: PersistedRuntimeConfig = {
+    profile: config.profile,
+    apiBaseUrl: config.apiBaseUrl,
+    appBaseUrl: config.appBaseUrl,
+    wsBaseUrl: config.wsBaseUrl,
+    updatedAt: config.updatedAt,
+  };
+  localStorage.setItem(RUNTIME_CONFIG_STORAGE_KEY, JSON.stringify(persisted));
 };
 
 const createBridge = (): VsCodeBridge | null => {
@@ -203,7 +224,10 @@ const normalizeConfigSetPayload = (
       typeof raw.appBaseUrl === 'string' ? raw.appBaseUrl : current.appBaseUrl,
     wsBaseUrl:
       typeof raw.wsBaseUrl === 'string' ? raw.wsBaseUrl : current.wsBaseUrl,
-    sessionToken: current.sessionToken,
+    sessionToken:
+      typeof raw.sessionToken === 'string'
+        ? raw.sessionToken
+        : current.sessionToken,
     codexSignInUrl: current.codexSignInUrl,
     updatedAt: Date.now(),
   });
@@ -232,13 +256,35 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
           apiBaseUrl: state.config.apiBaseUrl,
           appBaseUrl: state.config.appBaseUrl,
           wsBaseUrl: state.config.wsBaseUrl,
+          sessionToken: state.config.sessionToken,
           updatedAt: state.config.updatedAt,
         },
       };
     }
 
     if (type === 'extension_config_set') {
-      state.config = normalizeConfigSetPayload(message.payload, state.config);
+      const nextConfig = normalizeConfigSetPayload(message.payload, state.config);
+
+      if (state.bridge) {
+        const synced = await state.bridge.request<Partial<TopAiRuntimeConfig>>(
+          'runtime.config.set',
+          {
+            apiBaseUrl: nextConfig.apiBaseUrl,
+            appBaseUrl: nextConfig.appBaseUrl,
+            wsBaseUrl: nextConfig.wsBaseUrl,
+            sessionToken: nextConfig.sessionToken,
+          },
+        );
+        state.config = normalizeRuntimeConfig({
+          ...state.config,
+          ...nextConfig,
+          ...(synced ?? {}),
+          updatedAt: Date.now(),
+        });
+      } else {
+        state.config = nextConfig;
+      }
+
       persistRuntimeConfig(state.config);
       applyApiRuntimeConfig(state.config);
       return {
@@ -248,6 +294,7 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
           apiBaseUrl: state.config.apiBaseUrl,
           appBaseUrl: state.config.appBaseUrl,
           wsBaseUrl: state.config.wsBaseUrl,
+          sessionToken: state.config.sessionToken,
           updatedAt: state.config.updatedAt,
         },
       };
@@ -262,6 +309,17 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
         typeof payload.apiBaseUrl === 'string' && payload.apiBaseUrl.trim().length > 0
           ? payload.apiBaseUrl.trim()
           : state.config.apiBaseUrl;
+
+      if (state.bridge) {
+        const result = await state.bridge.request<{
+          ok: boolean;
+          status?: number;
+          statusText?: string;
+          error?: string;
+        }>('runtime.config.test', { apiBaseUrl });
+        return result;
+      }
+
       const healthUrl = `${apiBaseUrl.replace(/\/$/, '')}/health`;
       try {
         const response = await fetch(healthUrl, {
@@ -335,19 +393,10 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
     }
 
     if (type === 'extension_auth_open_login') {
-      if (state.bridge) {
-        const result = await state.bridge.request<{ opened?: boolean; url?: string }>(
-          'auth.codex.signIn',
-        );
-        return {
-          ok: Boolean(result?.opened),
-          loginUrl: result?.url ?? loginUrl,
-        };
-      }
-      window.open(loginUrl, '_blank', 'noopener,noreferrer');
       return {
-        ok: true,
-        loginUrl,
+        ok: false,
+        code: 'UNSUPPORTED',
+        error: 'Provider login is managed from admin web app settings.',
       };
     }
 
@@ -390,11 +439,9 @@ const bootstrapRuntimeState = async (): Promise<RuntimeState> => {
     ...hostConfig,
     ...persisted,
     sessionToken:
-      persisted.sessionToken?.trim() ||
       hostConfig.sessionToken?.trim() ||
       DEFAULT_RUNTIME_CONFIG.sessionToken,
     codexSignInUrl:
-      persisted.codexSignInUrl?.trim() ||
       hostConfig.codexSignInUrl?.trim() ||
       DEFAULT_RUNTIME_CONFIG.codexSignInUrl,
   });

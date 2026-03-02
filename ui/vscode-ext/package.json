@@ -14,7 +14,7 @@
   "activationEvents": [
     "onStartupFinished",
     "onCommand:topai.openPanel",
-    "onCommand:topai.codex.signIn"
+    "onView:topai.chatView"
   ],
   "main": "./dist/extension.cjs",
   "contributes": {
@@ -22,12 +22,16 @@
       {
         "command": "topai.openPanel",
         "title": "TopAI: Open Chat Panel"
-      },
-      {
-        "command": "topai.codex.signIn",
-        "title": "TopAI: Sign In to Codex"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "topai.chatView",
+          "name": "Top AI Ideas"
+        }
+      ]
+    },
     "configuration": {
       "title": "Top AI Ideas",
       "properties": {
@@ -41,15 +45,15 @@
           "default": "http://localhost:5173",
           "description": "Top AI Ideas app base URL used by open-link navigation in VSCode runtime."
         },
+        "topai.wsBaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Optional websocket base URL used by the VSCode extension runtime."
+        },
         "topai.sessionToken": {
           "type": "string",
           "default": "",
           "description": "Session token used as Bearer auth for VSCode extension requests to /api/v1."
-        },
-        "topai.codexSignInUrl": {
-          "type": "string",
-          "default": "https://chatgpt.com/auth/login?next=/codex",
-          "description": "Codex sign-in URL opened by the VSCode extension for dev/plugin workflow."
         }
       }
     }
