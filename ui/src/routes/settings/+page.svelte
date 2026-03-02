@@ -1,6 +1,6 @@
 <script lang="ts">
   import { addToast } from '$lib/stores/toast';
-  import { apiGet, apiPost, apiPut } from '$lib/utils/api';
+  import { apiDelete, apiGet, apiPost, apiPut } from '$lib/utils/api';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
@@ -21,7 +21,7 @@
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
   import WorkspaceSettingsPanel from '$lib/components/WorkspaceSettingsPanel.svelte';
   import TodoRuntimeConfigPanel from '$lib/components/TodoRuntimeConfigPanel.svelte';
-  import { Download } from '@lucide/svelte';
+  import { Copy, Download, RefreshCw } from '@lucide/svelte';
 
   interface CatalogProvider {
     provider_id: 'openai' | 'gemini';
@@ -50,6 +50,23 @@
     models: CatalogModel[];
   }
 
+  interface VsCodeExtensionTokenMeta {
+    issuedByUserId: string;
+    issuedAt: string;
+    expiresAt: string;
+    last4: string;
+    revokedAt: string | null;
+  }
+
+  interface VsCodeExtensionTokenStatusPayload {
+    active: boolean;
+    meta: VsCodeExtensionTokenMeta | null;
+  }
+
+  interface VsCodeExtensionTokenIssuePayload extends VsCodeExtensionTokenStatusPayload {
+    token: string;
+  }
+
   let isResetting = false;
   let chromeExtensionDownloadMetadata: ChromeExtensionDownloadMetadata | null = null;
   let chromeExtensionDownloadError = '';
@@ -57,6 +74,14 @@
   let vscodeExtensionDownloadMetadata: VsCodeExtensionDownloadMetadata | null = null;
   let vscodeExtensionDownloadError = '';
   let isLoadingVsCodeExtensionDownload = false;
+  let isLoadingVsCodeExtensionToken = false;
+  let isIssuingVsCodeExtensionToken = false;
+  let isRevokingVsCodeExtensionToken = false;
+  let isCopyingVsCodeExtensionToken = false;
+  let vscodeExtensionTokenActive = false;
+  let vscodeExtensionTokenMeta: VsCodeExtensionTokenMeta | null = null;
+  let vscodeExtensionTokenPlaintext = '';
+  let vscodeExtensionTokenError = '';
   
   // Configuration IA
   let aiSettings = {
@@ -117,6 +142,7 @@
     if (isAdmin()) {
       await loadAISettings();
       await loadQueueStats();
+      await loadVsCodeExtensionTokenStatus();
     }
   });
 
@@ -128,6 +154,13 @@
   const isAdminApp = () => {
     const s = get(session);
     return s.user?.role === 'admin_app';
+  };
+
+  const formatDateTime = (iso: string | null | undefined): string => {
+    if (!iso) return get(_)('settings.vscodeExtension.token.notAvailable');
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return iso;
+    return parsed.toLocaleString();
   };
 
 
@@ -196,6 +229,99 @@
       );
     } finally {
       isLoadingVsCodeExtensionDownload = false;
+    }
+  };
+
+  const loadVsCodeExtensionTokenStatus = async () => {
+    isLoadingVsCodeExtensionToken = true;
+    vscodeExtensionTokenError = '';
+    try {
+      const payload = await apiGet<VsCodeExtensionTokenStatusPayload>(
+        '/settings/vscode-extension-token',
+      );
+      vscodeExtensionTokenActive = payload.active;
+      vscodeExtensionTokenMeta = payload.meta;
+    } catch (error) {
+      console.error('Failed to load vscode extension token status:', error);
+      vscodeExtensionTokenError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.vscodeExtension.token.errors.load');
+    } finally {
+      isLoadingVsCodeExtensionToken = false;
+    }
+  };
+
+  const issueVsCodeExtensionToken = async () => {
+    isIssuingVsCodeExtensionToken = true;
+    vscodeExtensionTokenError = '';
+    try {
+      const payload = await apiPost<VsCodeExtensionTokenIssuePayload>(
+        '/settings/vscode-extension-token',
+      );
+      vscodeExtensionTokenActive = payload.active;
+      vscodeExtensionTokenMeta = payload.meta;
+      vscodeExtensionTokenPlaintext = payload.token;
+      addToast({
+        type: 'success',
+        message: get(_)('settings.vscodeExtension.token.toasts.issued'),
+      });
+    } catch (error) {
+      console.error('Failed to issue vscode extension token:', error);
+      vscodeExtensionTokenError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.vscodeExtension.token.errors.issue');
+    } finally {
+      isIssuingVsCodeExtensionToken = false;
+    }
+  };
+
+  const revokeVsCodeExtensionToken = async () => {
+    isRevokingVsCodeExtensionToken = true;
+    vscodeExtensionTokenError = '';
+    try {
+      const payload = await apiDelete<VsCodeExtensionTokenStatusPayload & { revoked: boolean }>(
+        '/settings/vscode-extension-token',
+      );
+      vscodeExtensionTokenActive = payload.active;
+      vscodeExtensionTokenMeta = payload.meta;
+      vscodeExtensionTokenPlaintext = '';
+      addToast({
+        type: 'success',
+        message: get(_)('settings.vscodeExtension.token.toasts.revoked'),
+      });
+    } catch (error) {
+      console.error('Failed to revoke vscode extension token:', error);
+      vscodeExtensionTokenError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.vscodeExtension.token.errors.revoke');
+    } finally {
+      isRevokingVsCodeExtensionToken = false;
+    }
+  };
+
+  const copyVsCodeExtensionToken = async () => {
+    if (!vscodeExtensionTokenPlaintext) return;
+    isCopyingVsCodeExtensionToken = true;
+    try {
+      await navigator.clipboard.writeText(vscodeExtensionTokenPlaintext);
+      addToast({
+        type: 'success',
+        message: get(_)('settings.vscodeExtension.token.toasts.copied'),
+      });
+    } catch (error) {
+      console.error('Failed to copy vscode extension token:', error);
+      addToast({
+        type: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : get(_)('settings.vscodeExtension.token.errors.copy'),
+      });
+    } finally {
+      isCopyingVsCodeExtensionToken = false;
     }
   };
   // Fonctions pour la configuration IA
@@ -758,6 +884,101 @@
       </p>
     {/if}
   </div>
+
+  {#if isAdmin()}
+    <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="vscode-extension-token-card">
+      <div class="space-y-1">
+        <h2 class="text-lg font-semibold text-slate-800">{$_('settings.vscodeExtension.token.title')}</h2>
+        <p class="text-sm text-slate-600">{$_('settings.vscodeExtension.token.description')}</p>
+      </div>
+
+      {#if isLoadingVsCodeExtensionToken}
+        <p class="text-sm text-slate-600">{$_('settings.vscodeExtension.token.loading')}</p>
+      {:else}
+        <dl class="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+          <div class="rounded border border-slate-200 p-3">
+            <dt class="text-slate-500">{$_('settings.vscodeExtension.token.statusLabel')}</dt>
+            <dd class="font-medium text-slate-900" data-testid="vscode-extension-token-status">
+              {vscodeExtensionTokenActive
+                ? $_('settings.vscodeExtension.token.statusActive')
+                : $_('settings.vscodeExtension.token.statusInactive')}
+            </dd>
+          </div>
+          <div class="rounded border border-slate-200 p-3">
+            <dt class="text-slate-500">{$_('settings.vscodeExtension.token.last4Label')}</dt>
+            <dd class="font-medium text-slate-900" data-testid="vscode-extension-token-last4">
+              {vscodeExtensionTokenMeta?.last4 ?? $_('settings.vscodeExtension.token.notAvailable')}
+            </dd>
+          </div>
+          <div class="rounded border border-slate-200 p-3">
+            <dt class="text-slate-500">{$_('settings.vscodeExtension.token.issuedAtLabel')}</dt>
+            <dd class="font-medium text-slate-900">
+              {formatDateTime(vscodeExtensionTokenMeta?.issuedAt)}
+            </dd>
+          </div>
+          <div class="rounded border border-slate-200 p-3">
+            <dt class="text-slate-500">{$_('settings.vscodeExtension.token.expiresAtLabel')}</dt>
+            <dd class="font-medium text-slate-900">
+              {formatDateTime(vscodeExtensionTokenMeta?.expiresAt)}
+            </dd>
+          </div>
+        </dl>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            class="inline-flex items-center gap-2 rounded bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+            type="button"
+            on:click={issueVsCodeExtensionToken}
+            disabled={isIssuingVsCodeExtensionToken || isRevokingVsCodeExtensionToken}
+          >
+            <RefreshCw class="h-3.5 w-3.5" />
+            {vscodeExtensionTokenActive
+              ? $_('settings.vscodeExtension.token.rotate')
+              : $_('settings.vscodeExtension.token.issue')}
+          </button>
+          <button
+            class="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            type="button"
+            on:click={revokeVsCodeExtensionToken}
+            disabled={!vscodeExtensionTokenActive || isIssuingVsCodeExtensionToken || isRevokingVsCodeExtensionToken}
+          >
+            {$_('settings.vscodeExtension.token.revoke')}
+          </button>
+        </div>
+
+        {#if vscodeExtensionTokenPlaintext}
+          <div class="space-y-2 rounded border border-amber-200 bg-amber-50 p-3">
+            <p class="text-xs text-amber-800">{$_('settings.vscodeExtension.token.oneTimeNotice')}</p>
+            <div class="flex items-center gap-2">
+              <input
+                class="w-full rounded border border-amber-300 bg-white px-2 py-1 text-xs text-slate-700"
+                type="text"
+                readonly
+                value={vscodeExtensionTokenPlaintext}
+                data-testid="vscode-extension-token-plaintext"
+              />
+              <button
+                class="inline-flex items-center gap-1 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-amber-100 disabled:opacity-50"
+                type="button"
+                on:click={copyVsCodeExtensionToken}
+                disabled={isCopyingVsCodeExtensionToken}
+                data-testid="vscode-extension-token-copy"
+              >
+                <Copy class="h-3.5 w-3.5" />
+                {$_('settings.vscodeExtension.token.copy')}
+              </button>
+            </div>
+          </div>
+        {/if}
+
+        {#if vscodeExtensionTokenError}
+          <p class="text-sm text-rose-700" data-testid="vscode-extension-token-error">
+            {vscodeExtensionTokenError}
+          </p>
+        {/if}
+      {/if}
+    </div>
+  {/if}
 
   {#if !isAdmin()}
     <div class="rounded border border-slate-200 bg-white p-6">

@@ -588,6 +588,34 @@
       "sourceLabel": "Source",
       "errors": {
         "load": "Impossible de charger la carte Paramètres Plugin VSCode. Configurez VSCODE_EXTENSION_DOWNLOAD_URL dans l'API, ou assurez-vous qu'un package local est disponible à /vscode-extension/top-ai-ideas-vscode-extension.vsix, puis redémarrez l'API."
+      },
+      "token": {
+        "title": "Token bootstrap extension",
+        "description": "Émettez ou régénérez le token partagé VSCode utilisé pour les appels API en bearer.",
+        "loading": "Chargement de l’état du token…",
+        "issue": "Émettre le token",
+        "rotate": "Régénérer le token",
+        "revoke": "Révoquer le token",
+        "copy": "Copier",
+        "oneTimeNotice": "Copiez ce token maintenant. Il n’est affiché qu’une fois après émission/régénération.",
+        "statusLabel": "Statut",
+        "statusActive": "Actif",
+        "statusInactive": "Inactif",
+        "last4Label": "Suffixe token",
+        "issuedAtLabel": "Émis le",
+        "expiresAtLabel": "Expire le",
+        "notAvailable": "N/A",
+        "toasts": {
+          "issued": "Token extension VSCode émis.",
+          "revoked": "Token extension VSCode révoqué.",
+          "copied": "Token extension VSCode copié."
+        },
+        "errors": {
+          "load": "Impossible de charger l’état du token.",
+          "issue": "Impossible d’émettre le token extension VSCode.",
+          "revoke": "Impossible de révoquer le token extension VSCode.",
+          "copy": "Impossible de copier le token extension VSCode."
+        }
       }
     },
     "systemInfo": "Informations système",
@@ -867,6 +895,8 @@
       "apiBaseUrl": "URL API",
       "appBaseUrl": "URL app",
       "wsBaseUrlOptional": "URL WS (optionnel)",
+      "sessionToken": "Token extension",
+      "sessionTokenHint": "Collez le token VSCode généré par un administrateur dans les paramètres web.",
       "testApi": "Tester l’API",
       "permissions": {
         "title": "Permissions des outils",
@@ -882,16 +912,17 @@
         "missingDraftFields": "Renseigne un outil et une origine/pattern valide (ex: https://site.com, *.site.com, *)."
       },
       "authRequired": {
-        "title": "Connexion extension requise avant d’utiliser cette zone.",
-        "description": "Ouvre les paramètres, puis clique sur « Connecter ». Si nécessaire, ouvre d’abord la page de connexion de l’application.",
+        "title": "Un token extension est requis avant d’utiliser cette zone.",
+        "description": "Ouvrez les paramètres puis collez le token VSCode émis par un administrateur.",
         "openSettings": "Ouvrir les paramètres"
       },
       "auth": {
         "title": "Authentification extension",
         "connectedAs": "Connecté en tant que",
         "notConnected": "Non connecté",
-        "connect": "Connecter",
-        "logout": "Déconnecter",
+        "connect": "Valider le token",
+        "logout": "Vider la session",
+        "providerManagedInAdmin": "La connexion fournisseur se gère dans les paramètres admin de l’app web.",
         "openLogin": "Ouvrir la connexion"
       },
       "status": {
