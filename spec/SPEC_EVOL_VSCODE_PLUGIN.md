@@ -7,6 +7,8 @@ Refocus VSCode scope on a robust plugin host for the shared chat runtime, and re
 
 Primary goals:
 - Keep VSCode plugin v1 as a host for shared `ChatWidget` + runtime bridge.
+- Make VSCode host truly dockable (side panel container), not editor-tab only.
+- Ship a simple and testable auth bootstrap in v1 using admin-issued token.
 - Align summary/checkpoint behavior with shared chat runtime (web/chrome/vscode parity).
 - Define a deterministic checkpoint + restore model usable beyond Git-only flows.
 
@@ -17,11 +19,15 @@ In scope:
 - Embedded shared chat surface (same core runtime family as web/chrome).
 - Shared summary/checkpoint runtime contracts and policies.
 - Command bridge for runtime actions (including restore).
+- Admin-managed token onboarding for VSCode extension v1.
+- Theme parity requirements for VSCode host (dark/light/high-contrast) and web app theme preference (`system|light|dark`).
+- Provider connection centralization in web app admin (Codex first), consumed by VSCode host.
 
 Out of scope:
 - Legacy plugin tabs/views (`Plan`, `Tools`, `Summary`, `Checkpoint`) as standalone plugin UI features.
 - Plugin-local bespoke checkpoint logic disconnected from shared chat runtime.
 - Multi-agent orchestration UI (deferred to BR-10).
+- Per-user provider OAuth flow inside VSCode extension for v1.
 
 ## 3) Baseline references
 - `spec/SPEC_CHATBOT.md`
@@ -272,6 +278,34 @@ Safety and UX:
   - web app chat,
   - VSCode ChatWidget host.
 
+### 4.13 VSCode host/auth/theming decisions (locked)
+Host placement:
+- Primary VSCode surface must be a dockable `WebviewView` (side panel container), not an editor-tab `WebviewPanel`.
+- `TopAI: Open Chat Panel` remains a focus/open command for the view container.
+- Editor-tab fallback is not the target UX for v1 delivery.
+
+Auth bootstrap v1:
+- v1 extension onboarding uses an admin-issued personal access token (PAT-like), not provider OAuth in extension.
+- Required flow:
+  - admin creates/revokes token in web app settings,
+  - operator copies token and pastes it in extension settings,
+  - extension stores token in secure VSCode storage (`context.secrets`) and validates via API.
+- UX rule:
+  - remove ambiguous provider login CTA in extension settings for v1 bootstrap,
+  - show explicit guidance to obtain token from web app admin settings.
+
+Provider auth centralization (Lot 2 target):
+- Provider connections are configured in web app admin only, then shared at backend scope (app/workspace policy).
+- VSCode/web chat surfaces consume provider readiness from backend; they do not own provider auth lifecycle in v1.
+- Delivery order:
+  - Codex provider first,
+  - Gemini Code Assist and other providers follow the same admin-managed pattern.
+
+Theming:
+- VSCode host UI follows VSCode theme tokens (light/dark/high contrast) automatically.
+- Web app exposes a standard theme preference (`system`, `light`, `dark`) in settings/admin.
+- Theme policy keeps component parity without forking chat runtime behavior.
+
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
 - Claude Code: auto compact near context limits + explicit manual compaction command.
@@ -283,11 +317,13 @@ Implication for this repo:
 - VSCode remains a host surface, not a divergent runtime implementation.
 
 ## 6) v1 functional target (BR-05)
-- Plugin provides installable shell + shared chat surface.
+- Plugin provides installable shell + shared chat surface in a dockable side panel container.
 - Runtime emits turn checkpoints automatically.
 - Restore can target files and objects (when adapters exist).
 - Summary policy follows soft/hard thresholds (85% / 92%) with reserved headroom.
 - No legacy plugin-only summary/checkpoint tabs.
+- v1 auth bootstrap uses admin-issued token path for extension connectivity.
+- Provider auth ownership is centralized in web app admin (extension consumes backend readiness only).
 
 ## 7) Future branch boundary
 - BR-05: deliver host/runtime parity and v1 restore/summary policy behavior.
