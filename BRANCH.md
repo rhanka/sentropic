@@ -89,6 +89,9 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Cadrage interactif + matrice de récupération Lot 1**
+  - [x] Sédimenter la mini-spec de réutilisation BR-05:
+    - [x] `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`
+    - [x] règles de réutilisation référencées explicitement dans les Lots 1/2/3.
   - [ ] Lock functional framing for:
     - [x] Global conversation `summary` (context budget threshold, summary refresh policy, injection strategy).
     - [x] Global conversation `checkpoint` (create/list/restore lifecycle, consistency guarantees, UX/API contract).
@@ -125,6 +128,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - [x] Lock Lot 3 research target for VSCode code tools (baseline capability set + safety policy).
 
 - [ ] **Lot 1 — Strict selective recovery (skeleton/build/download only)**
+  - [ ] Spec mapping:
+    - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `2`, `7.1` (BR05 foreground-only boundary), and reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
   - [ ] Restore minimal VSCode extension packaging pipeline:
     - [ ] add `ui/vscode-ext` packaging scripts/assets required to produce `.vsix`,
     - [ ] add `make vscode-ext` target (and optional `make dev-vscode-ext`) under `BR05-EX1`.
@@ -144,6 +149,9 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] `make vscode-ext API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
 
 - [ ] **Lot 2 — VSCode real ChatWidget integration**
+  - [ ] Spec mapping:
+    - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `1`, `2`, `6` (shared ChatWidget host parity).
+    - [ ] reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
   - [ ] Integrate real `ChatWidget` in VSCode webview (shared component path, no parallel fake panel).
   - [ ] Wire runtime bridge for extension config and auth via ChatWidget settings menu (wheel).
   - [ ] Remove dedicated Codex button UI; keep auth treatment reachable from settings menu only.
@@ -156,12 +164,16 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] `make test-ui SCOPE=tests/vscode-ext/auth-bridge.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot 3 — VSCode plugin code tools (research + implementation)**
+  - [ ] Spec mapping:
+    - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `8` (rapid v1 tool contracts, including policy engine),
+    - [ ] `spec/TOOLS.md` section `VSCode code tools v1 (rapid contracts)`,
+    - [ ] reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md` (shared analyzer + shared permission primitives).
   - [ ] Research/code-scan and lock baseline toolset for v1 plugin code interactions:
     - [ ] `bash` (safe shell wrapper),
     - [ ] `ls`,
     - [ ] `grep`/`rg`,
     - [ ] file read,
-    - [ ] file edit/write,
+    - [ ] file edit (`edit|write|apply_patch`),
     - [ ] git read actions (`status`, `diff`).
   - [ ] Add AI-assisted conversation history QA tool:
     - [ ] Tool name: `history_analyze` (read-only).
@@ -179,6 +191,15 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] explicit support for divergent rules like `git add` vs `git push`.
   - [ ] Reuse Chrome-style confirmation banner for `bash` `ask` decisions (`Yes once/No once/Always/Never`).
   - [ ] Add editable settings UI for mono/bigram rule list (no JSON-only editing requirement).
+  - [ ] Implement non-shell policy defaults and guards:
+    - [ ] `ls` uses bounded depth and hidden-files opt-in,
+    - [ ] `grep/rg` uses `rg` default + bounded paginated results,
+    - [ ] `file_read` defaults to windowed reads + explicit full-read mode + secret-path policy,
+    - [ ] `file_edit` unified multi-mode (`edit|write|apply_patch`) with default `ask`,
+    - [ ] path-pattern grants (e.g. `api/*`) to reduce repeated asks while respecting workspace override,
+    - [ ] `git_status` default allow read-only,
+    - [ ] `git_diff` bounded read-only with path/ref scope restrictions,
+    - [ ] shared non-shell policy engine (`deny/ask/allow`, workspace cannot be weakened).
   - [ ] Wire tool output path to chat orchestration contracts.
   - [ ] Document tool-mode split:
     - [ ] BR-05 = foreground/interactive tool execution only.
@@ -278,6 +299,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - [ ] Consolidate final BR-05 decisions into:
     - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md`
     - [ ] `spec/TOOLS.md`
+  - [ ] Merge durable reuse rules from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md` into durable specs then delete the mini-spec file.
   - [ ] Ensure removed fake features are not described as delivered behavior.
 
 - [ ] **Lot N — Final validation**
