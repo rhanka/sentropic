@@ -1,128 +1,179 @@
-# SPEC EVOL - VSCode Plugin (Plan, Tools, Summary, Checkpoint)
+# SPEC EVOL - VSCode Plugin (ChatWidget host + shared Summary/Checkpoint runtime)
 
-Status: Draft for roadmap orchestration (2026-02-22)
+Status: Draft updated (2026-03-02)
 
 ## 1) Objective
-Deliver VSCode plugin capabilities in two stages:
+Refocus VSCode scope on a robust plugin host for the shared chat runtime, and remove the old plugin-only checkpoint/summary design.
 
-- Milestone W1 (deadline: 2026-03-01)
-  - Plugin v1: `plan`, `tools`, `summary`, `checkpoint`.
-- Milestone W2 (deadline: 2026-03-08)
-  - Plugin v2: multi-agent + multi-model orchestration.
-
-Mandatory architecture baseline for both milestones:
-- The VSCode plugin reuses the shared `ChatWidget`/chat core foundation (same family as web app and Chrome plugin).
-- Tools execution is local-first inside VSCode extension runtime.
-- Chat and agent orchestration stays API-driven (server-side orchestration, streaming, traceability, policy).
+Primary goals:
+- Keep VSCode plugin v1 as a host for shared `ChatWidget` + runtime bridge.
+- Align summary/checkpoint behavior with shared chat runtime (web/chrome/vscode parity).
+- Define a deterministic checkpoint + restore model usable beyond Git-only flows.
 
 ## 2) Scope
 
 In scope:
-- VSCode extension shell and command palette integration.
-- Plan/step panel synchronized with backend TODO/steering domain.
-- Tool execution surface (local safe tools + remote API tools through API orchestration contracts).
-- Context summarization and checkpoint lifecycle.
-- Multi-agent execution UX and model selection (W2).
+- VSCode extension shell and packaging (`.vsix`) for local install/UAT.
+- Embedded shared chat surface (same core runtime family as web/chrome).
+- Shared summary/checkpoint runtime contracts and policies.
+- Command bridge for runtime actions (including restore).
 
 Out of scope:
-- Full IDE replacement or complete SCM feature parity.
-- Marketplace growth activities and pricing model.
+- Legacy plugin tabs/views (`Plan`, `Tools`, `Summary`, `Checkpoint`) as standalone plugin UI features.
+- Plugin-local bespoke checkpoint logic disconnected from shared chat runtime.
+- Multi-agent orchestration UI (deferred to BR-10).
 
-## 3) Existing baseline
-Relevant references:
-- `spec/SPEC_CHROME_PLUGIN.md` (abstraction and runtime patterns to reuse)
+## 3) Baseline references
 - `spec/SPEC_CHATBOT.md`
-- `spec/TOOLS.md`
 - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`
-- `TODO.md` (`Agent de code`, `Vs code`, `Autonomous agent` items)
+- `spec/SPEC_EVOL_RELEASE_QA_PIPELINE.md`
+- `PLAN.md` (BR-05 / BR-10 dependencies)
 
-Current state summary:
-- No production VSCode plugin baseline in repo roadmap.
-- Chat/tool runtime exists in web and chrome plugin domain and is reused as the plugin foundation.
+## 4) Lot-0 decisions (locked)
 
-## 4) Target design
+### 4.1 Checkpoint granularity
+- Granularity: **one checkpoint per conversation turn** (`every turn`).
+- Each turn checkpoint captures:
+  - turn identifiers (chat/session/message boundaries),
+  - runtime context digest,
+  - artifact delta references (files/objects changed in the turn),
+  - optional provider metadata for traceability.
 
-### 4.0 Host architecture (mandatory)
-- Shared UI/chat core:
-  - Reuse `ChatWidget` and shared chat stores/adapters as the base interaction layer.
-  - Keep host-specific adapters for VSCode runtime (webview, command bridge, auth bridge).
-- Local tools:
-  - Executed in VSCode extension host (or controlled helper process), not in browser runtime.
-  - Results are attached to orchestrated chat/agent flows via API contracts.
-- Remote orchestration:
-  - API remains source of truth for chat sessions, agent orchestration, multi-model routing, and traces.
-  - Plugin does not implement an independent orchestration engine.
+### 4.2 Restore mode v1
+- Locked mode: **C** = restore by selected artifacts.
+- v1 behavior:
+  - restore files when file adapters are available,
+  - restore domain objects when object adapters are available,
+  - support mixed restore set (files + objects) in one restore request,
+  - run `dry-run` first (preview impact + conflicts),
+  - then apply restore with explicit result per artifact,
+  - do not offer restore action when there is no effective delta to apply.
 
-### 4.1 Plugin v1 (W1)
-- Main views:
-  - Plan tree view (steps + status + blockers).
-  - Tool run panel.
-  - Session summary panel.
-  - Checkpoint list (create/restore/compare metadata).
-- Core commands:
-  - `TopAI: Create Plan`
-  - `TopAI: Run Next Step`
-  - `TopAI: Summarize Context`
-  - `TopAI: Create Checkpoint`
-  - `TopAI: Restore Checkpoint`
+### 4.3 Artifact version tracking (not Git-only)
+Checkpoint restore must not depend exclusively on Git.
 
-### 4.2 Plugin v2 (W2)
-- Multi-agent orchestration:
-  - create agent roles per task.
-  - parallel execution lanes with merge checkpoints.
-- Multi-model routing:
-  - select model/provider by task or by agent profile.
-- Decision trace:
-  - track who/what changed a file and why.
+Required tracking model:
+- Shared artifact ledger per turn with:
+  - `artifact_type` (`file`, `object`, ...),
+  - stable artifact key (path or object identifier),
+  - `before_version`, `after_version`,
+  - minimal payload reference for restore.
+- `version` source is adapter-driven:
+  - file adapter: content hash + optional git blob/commit metadata when available,
+  - object adapter: object revision/version field from domain store.
+- Git metadata is **optional enrichment**, not the sole restore substrate.
 
-### 4.3 Tooling strategy
-- Local tools:
-  - file read/search,
-  - safe shell wrappers,
-  - git checkpoint actions.
-- Remote tools:
-  - use existing API contracts for chat/tool/plan execution and orchestration resumption.
-- Permission model:
-  - explicit allow/deny per tool category.
+### 4.4 Conflict policy (restore)
+- Locked conflict policy: **B** = stop and require explicit user decision when current state diverges from checkpoint baseline.
+- v1 rules:
+  - no silent overwrite on conflict,
+  - `dry-run` must expose conflicts before apply,
+  - apply path proceeds only for non-conflicting artifacts or after explicit user confirmation.
 
-### 4.4 Codex sign-in constraints (W1 clarification)
-- Codex sign-in via ChatGPT is allowed for developer/plugin coding workflows.
-- This sign-in path is **not** an end-user authentication provider for this application.
-- The plugin must keep auth domains separated:
-  - App/API domain: existing app auth/session contracts for API-backed features.
-  - Codex domain: coding assistant auth used by Codex workflows in dev/plugin contexts.
-- Product rule: do not build OpenAI OAuth login for app users from this Codex sign-in capability.
-- Billing rule: Codex/ChatGPT sign-in may include plan-limited Codex usage for coding workflows, but does not imply free backend OpenAI API usage.
+### 4.5 Object scope for restore v1 (precise B definition)
+Object restore in v1 is whitelist-based (not global-all-objects by default).
 
-## 5) Branch plan
+`B` is defined as:
+- Restorable objects must be explicitly registered with an object adapter implementing:
+  - version read (`before_version` / `after_version`),
+  - snapshot read at checkpoint boundary,
+  - restore apply with validation,
+  - conflict detection.
+- Default v1 whitelist:
+  - session runtime objects (`plan`, `todo`, `task`, session summary/checkpoint metadata),
+  - chat-editable domain objects already supporting revisioned updates in current runtime,
+  - code-session domain objects when an adapter exists (tracked in artifact ledger like files).
+- Non-registered objects are excluded from restore and reported as unsupported.
 
-- `feat/vscode-plugin-v1`
-  - extension skeleton + plan/tools/summary/checkpoint.
-- `feat/vscode-plugin-v2-multi-agent`
-  - multi-agent orchestration + multi-model routing.
+### 4.6 Summary policy (state-of-the-art aligned)
+Default policy proposal:
+- Auto-summary trigger at **85%** projected usage of usable context budget.
+- Preserve reserved headroom for continuation:
+  - ~10% answer generation,
+  - ~5% steering/tool/system overhead.
+- Hysteresis after compaction:
+  - compact down to ~60% effective usage target to avoid immediate re-compaction loops.
+- Additional trigger:
+  - if next-turn projection would exceed budget, compact before next model call.
+- Manual compaction command remains available.
 
-## 6) Acceptance criteria
+Rationale:
+- Aligns with modern agent clients using near-limit auto compaction + reserve windows.
+- Avoids late hard-fail behavior while preserving answer quality.
 
-W1:
-- Extension can create and execute a plan with visible progress.
-- Users can run tools and inspect outputs in plugin UI.
-- Context summary and checkpoint create/restore are functional.
+### 4.7 Retention policy
+- Session retention default: unlimited checkpoints per session.
+- Admin-configurable policy:
+  - optional cap per session,
+  - dedicated TTL for code sessions, default **15 days**, configurable by admin.
+- Retention changes must be non-destructive by default (dry-run preview before cleanup jobs in admin tooling).
 
-W2:
-- Multi-agent tasks can run in parallel with explicit merge points.
-- Different models/providers can be assigned per agent/task.
-- Execution trace is auditable from plugin UI.
+### 4.8 Permissions
+- Restore permission baseline: any user with `editor` rights (and above) can execute restore.
+- `viewer` cannot restore because restore mutates files/objects.
+- Permission evaluation must be workspace-scoped and auditable.
 
-## 7) Open questions
+### 4.9 UI proposal contract (web app + VSCode host)
+Restore UX must be explicit and parity-driven across host surfaces.
 
-- `VSC-Q1`: Which publishing channel is primary (Open VSX, VS Marketplace, both)?
-- `VSC-Q2`: Which shell commands are allowed in v1 by default?
-- `VSC-Q3`: Are checkpoints Git-based only, or mixed with domain-level snapshots?
-- `VSC-Q4`: What is the v2 UX model for multi-agent conflicts (queue, merge queue, explicit vote)?
-- `VSC-Q5`: Is telemetry opt-in required before any usage analytics?
+Required behavior:
+- Surfaces:
+  - web app chat UI,
+  - VSCode plugin embedded ChatWidget host.
+- Proposal timing:
+  - show restore proposal only when at least one checkpoint exists and current state diverges from a restorable checkpoint.
+  - if no delta exists, hide restore CTA (or render as non-actionable informational state).
+- Proposal content:
+  - checkpoint label/time,
+  - impacted artifact counts (`files`, `objects`),
+  - conflict count from `dry-run`,
+  - explicit note when unsupported artifacts are present.
+- Action flow:
+  - `Preview restore` (dry-run summary),
+  - `Apply restore` (explicit confirmation),
+  - result panel with per-artifact outcomes and reason codes.
+
+### 4.10 Observability and audit
+- Mandatory v1 observability:
+  - structured logs for checkpoint create/list/restore,
+  - restore audit trail table (actor, timestamp, artifacts, outcome),
+  - metrics for success/failure/conflict rates and unsupported artifact counts,
+  - stable reason codes in API responses.
+
+### 4.11 Test strategy (v1 mandatory)
+- Mandatory test layers:
+  - unit tests (adapters, versioning, conflict detection, retention),
+  - integration tests (checkpoint lifecycle + permission + audit),
+  - e2e tests (restore success path + conflict path + unsupported artifact path).
+- Reliability expectation:
+  - deterministic restore behavior under conflict/no-conflict scenarios,
+  - explicit partial result reporting when mixed artifact sets include unsupported types.
+- Surface coverage requirement:
+  - web app flow coverage (checkpoint proposal visibility + preview/apply + no-delta behavior),
+  - VSCode plugin host flow coverage with parity assertions against web app behavior.
+
+## 5) Industry alignment snapshot (for implementation framing)
+- Cursor: checkpoint/rewind conversation flow + strong context controls.
+- Claude Code: auto compact near context limits + explicit manual compaction command.
+- OpenCode: configurable auto compaction (`auto`, `reserved`, `prune`) and explicit revert flows.
+- Codex protocol: compaction and rollback are first-class runtime events; history rollback is distinct from local file revert.
+
+Implication for this repo:
+- Keep summary/checkpoint as runtime concerns first.
+- VSCode remains a host surface, not a divergent runtime implementation.
+
+## 6) v1 functional target (BR-05)
+- Plugin provides installable shell + shared chat surface.
+- Runtime emits turn checkpoints automatically.
+- Restore can target files and objects (when adapters exist).
+- Summary policy follows 85% trigger with reserved headroom.
+- No legacy plugin-only summary/checkpoint tabs.
+
+## 7) Future branch boundary
+- BR-05: deliver host/runtime parity and v1 restore/summary policy behavior.
+- BR-10: extend to multi-agent/multi-model orchestration UI and advanced workflow composition.
 
 ## 8) Risks
-
-- Scope creep from v1 into v2 features.
-- Conflicts between plugin checkpoint model and existing git workflows.
-- Security concerns around local shell tool exposure.
+- Missing object adapters can cause partial restores in v1; this must be explicit in UI/API responses.
+- Over-aggressive compaction can degrade context quality; threshold and hysteresis tuning should remain observable.
+- Divergence risk if any surface (web/chrome/vscode) bypasses shared runtime contracts.
