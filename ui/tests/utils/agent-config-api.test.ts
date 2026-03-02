@@ -50,8 +50,8 @@ describe('agent-config api client', () => {
     const payload = {
       name: 'Planner v2',
       model: 'gpt-4.1-mini',
-      instructions: 'Prioritize TODO orchestration output.',
-      capabilities: ['todo_create', 'todo_update']
+      instructions: 'Prioritize plan orchestration output.',
+      capabilities: ['plan']
     };
 
     mockFetchJsonOnce({ id: 'agent_1', ...payload });
@@ -68,7 +68,7 @@ describe('agent-config api client', () => {
 
     const body = JSON.parse(String(init?.body));
     expect(body.name).toBe('Planner v2');
-    expect(body.capabilities).toEqual(['todo_create', 'todo_update']);
+    expect(body.capabilities).toEqual(['plan']);
   });
 
   it('surfaces fork permission errors with ApiError', async () => {

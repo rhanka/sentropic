@@ -142,12 +142,12 @@
     runTaskId: string | null;
     tasks: TodoRuntimeTask[];
     conflictMessage: string | null;
-    sourceTool: 'todo' | 'todo_create' | 'todo_update' | 'task_update';
+    sourceTool: 'plan';
     updatedAtMs: number;
   };
   type TodoRuntimeToolResultEvent = {
     toolCallId: string;
-    toolName: 'todo' | 'todo_create' | 'todo_update' | 'task_update';
+    toolName: 'plan';
     result: Record<string, unknown>;
   };
   type ComposerSteerAck = {
@@ -1128,10 +1128,10 @@
       icon: MessageCircle,
     },
     {
-      id: 'todo_create',
+      id: 'plan',
       label: $_('chat.tools.todoCreate.label'),
       description: $_('chat.tools.todoCreate.description'),
-      toolIds: ['todo_create', 'todo_update', 'task_update'],
+      toolIds: ['plan'],
       icon: List,
     },
     {
@@ -2537,7 +2537,7 @@
       if (runtimeSnapshot) {
         handleTodoRuntimeToolResult({
           toolCallId: `session-runtime:${id}`,
-          toolName: 'todo_update',
+          toolName: 'plan',
           result: { todoRuntime: runtimeSnapshot },
         });
       } else if (!opts?.silent) {

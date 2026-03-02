@@ -13,7 +13,7 @@ describe('todo-api chat client behavior', () => {
     workspaceScope.set({ loading: false, items: [], selectedId: null, error: null });
   });
 
-  it('posts chat payload for todo_create with scoped workspace query', async () => {
+  it('posts chat payload for plan tool with scoped workspace query', async () => {
     setUser({
       id: 'user-1',
       email: 'user@example.com',
@@ -27,7 +27,7 @@ describe('todo-api chat client behavior', () => {
 
     const payload = {
       message: 'Create a TODO for release hardening',
-      tools: ['todo_create'],
+      tools: ['plan'],
       metadata: {
         todo: {
           title: 'Release hardening',
@@ -51,7 +51,7 @@ describe('todo-api chat client behavior', () => {
     expect(headers['X-App-Locale']).toBe('en');
 
     const body = JSON.parse(String(init?.body));
-    expect(body.tools).toContain('todo_create');
+    expect(body.tools).toContain('plan');
     expect(body.metadata.todo.title).toBe('Release hardening');
     expect(body.metadata.todo.tasks).toHaveLength(2);
   });
@@ -69,7 +69,7 @@ describe('todo-api chat client behavior', () => {
 
     await apiPost('/chat/messages?workspace_id=ws-explicit', {
       message: 'Use explicit scope',
-      tools: ['todo_create']
+      tools: ['plan']
     });
 
     const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
@@ -77,21 +77,21 @@ describe('todo-api chat client behavior', () => {
     expect(String(url)).toBe(`${API_BASE_URL}/chat/messages?workspace_id=ws-explicit`);
   });
 
-  it('surfaces API error message for invalid todo_create payload', async () => {
+  it('surfaces API error message for invalid plan payload', async () => {
     mockFetchJsonOnce(
-      { error: 'Bad Request', message: 'todo_create: title is required' },
+      { error: 'Bad Request', message: 'plan(action=create): title is required' },
       400
     );
 
     await expect(
       apiPost('/chat/messages', {
         message: 'Create TODO',
-        tools: ['todo_create'],
+        tools: ['plan'],
         metadata: { todo: { title: '' } }
       })
     ).rejects.toMatchObject<ApiError>({
       status: 400,
-      message: 'todo_create: title is required'
+      message: 'plan(action=create): title is required'
     });
   });
 });
