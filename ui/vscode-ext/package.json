@@ -2,7 +2,7 @@
   "name": "top-ai-ideas-vscode-extension",
   "type": "module",
   "displayName": "Top AI Ideas",
-  "description": "Top AI Ideas VSCode plugin v1 with plan/tools/summary/checkpoint workflows.",
+  "description": "Top AI Ideas VSCode plugin v1 runtime shell.",
   "version": "0.1.0",
   "publisher": "top-ai-ideas",
   "engines": {
@@ -13,35 +13,15 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onCommand:topai.createPlan",
-    "onCommand:topai.runNextStep",
-    "onCommand:topai.summarizeContext",
-    "onCommand:topai.createCheckpoint",
-    "onCommand:topai.restoreCheckpoint",
+    "onCommand:topai.openPanel",
     "onCommand:topai.codex.signIn"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "topai.createPlan",
-        "title": "TopAI: Create Plan"
-      },
-      {
-        "command": "topai.runNextStep",
-        "title": "TopAI: Run Next Step"
-      },
-      {
-        "command": "topai.summarizeContext",
-        "title": "TopAI: Summarize Context"
-      },
-      {
-        "command": "topai.createCheckpoint",
-        "title": "TopAI: Create Checkpoint"
-      },
-      {
-        "command": "topai.restoreCheckpoint",
-        "title": "TopAI: Restore Checkpoint"
+        "command": "topai.openPanel",
+        "title": "TopAI: Open Chat Panel"
       },
       {
         "command": "topai.codex.signIn",
