@@ -129,19 +129,37 @@ Execution policy:
 - Never silently drop user intent:
   - pending user request and steer context must be preserved across compaction boundary.
 
-Heavy tool-call guardrails:
+Heavy tool-call guardrails (locked options: `1B 2A 3A 4A 5A`):
+- Threshold model:
+  - soft threshold = 85% (preventive),
+  - hard threshold = 92% (mandatory compaction boundary).
 - Pre-dispatch budget check for each tool call:
-  - estimate tool input + expected output contribution to context usage.
-- If estimated call would violate hard threshold:
-  - compact first, then dispatch tool call, or
-  - request narrowing if compaction cannot free enough budget safely.
+  - estimate tool input + expected output contribution to context usage,
+  - compute projected occupancy before executing the call.
+- Soft-zone behavior (`>=85%` and `<92%`):
+  - do not dispatch immediately,
+  - return a structured `context_budget_risk` signal to the LLM,
+  - LLM must replan the next action before execution.
+- Hard-zone behavior (`>=92%`):
+  - compaction is forced first,
+  - then return control to LLM for replan,
+  - no direct oversized call dispatch before compaction.
+- Replan attempts:
+  - one attempt only before explicit user escalation.
+- Mandatory alternative set offered to LLM on risk:
+  - narrow tool scope,
+  - request targeted summary,
+  - use `history_analyze` to extract only required evidence/context,
+  - ask user narrowing question when required.
 - Runtime protections:
   - max payload guard for tool outputs,
   - per-turn tool-call ceiling to prevent runaway loops,
   - explicit reason codes when deferring/blocking:
+    - `context_budget_risk`,
     - `context_compaction_required`,
     - `tool_payload_too_large`,
-    - `tool_call_deferred_for_compaction`.
+    - `tool_call_deferred_for_compaction`,
+    - `context_replan_required`.
 
 ### 4.7 Retention policy
 - Session retention default: unlimited checkpoints per session.
@@ -225,6 +243,7 @@ Proposed tool contract:
 - Input:
   - `question` (required),
   - optional range selectors (`from_message_id`, `to_message_id`, `max_turns`),
+  - optional tool-target selectors (`target_tool_call_id`, `target_tool_result_message_id`) to analyze one specific tool output when overflow risk comes from that call,
   - optional flags (`include_tool_results`, `include_system_messages`) with safe defaults.
 - Output:
   - `answer`,

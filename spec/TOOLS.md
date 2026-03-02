@@ -118,5 +118,6 @@ This document is the single checklist for **chat tools**: what is already implem
 ### Conversation history QA tool (planned)
 - [ ] `history_analyze` (read-only)
   - Targeted Q&A over chat history with evidence references (message ids/turns)
+  - Can target one specific tool output (`target_tool_call_id` / tool-result message id) when an oversized tool call risks context overflow
   - Dedicated analyzer flow aligned with `documents.analyze` + chunk/merge strategy for long histories
   - Must return explicit coverage metadata and `insufficient_coverage` when the selected range is too narrow

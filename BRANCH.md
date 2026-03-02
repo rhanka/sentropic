@@ -167,6 +167,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] Tool name: `history_analyze` (read-only).
     - [ ] Dedicated sub-agent flow aligned with existing document analyzer (`documents.analyze`) including chunk + merge path for long history.
     - [ ] Add prompt templates `history_analyze` + `history_analyze_merge`.
+    - [ ] Support targeted analysis of one tool output (`target_tool_call_id` / result message id) for context-overflow mitigation.
     - [ ] Return `answer + evidence(message ids/turns) + coverage/confidence`.
   - [ ] Implement allowed/denied policy model for the selected toolset.
   - [ ] Wire tool output path to chat orchestration contracts.
@@ -191,7 +192,10 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] subtle persistent context-occupancy indicator visible at all times.
   - [ ] Implement heavy tool-call overflow guardrails:
     - [ ] pre-dispatch budget estimate for tool calls,
-    - [ ] compaction-before-dispatch when hard threshold is projected,
+    - [ ] soft zone (85-92%) returns `context_budget_risk` to LLM and enforces replan before dispatch,
+    - [ ] hard zone (>=92%) enforces compaction-before-dispatch then LLM replan,
+    - [ ] max one replan attempt before user escalation,
+    - [ ] mandatory replan alternatives include `history_analyze` for targeted extraction from oversized tool output,
     - [ ] explicit defer/block reason codes for oversized/deferred tool calls.
   - [ ] Ensure behavior is not tied to VSCode-only UI.
   - [ ] Lot gate:
@@ -235,6 +239,9 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] Validate overflow handling during reasoning/tool calls:
       - [ ] overflow triggered mid-run does not lose user intent,
       - [ ] run resumes after compaction (in-flight when available, safe-boundary fallback otherwise),
+      - [ ] soft-zone tool call returns replan signal before execution,
+      - [ ] hard-zone tool call compacts first then replans,
+      - [ ] `history_analyze` can target one oversized tool result and return focused evidence,
       - [ ] heavy tool call is compacted/deferred with explicit reason when budget would overflow.
     - [ ] Validate checkpoint create/list/restore behavior.
     - [ ] Validate code tools baseline behavior (`bash`, `ls`, `grep/rg`, file read/edit, git read) with permission policy checks.
