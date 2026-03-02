@@ -42,10 +42,18 @@ declare global {
 }
 
 const RUNTIME_CONFIG_STORAGE_KEY = 'topai.vscode.runtime.config';
+const buildEnv = (import.meta as ImportMeta & {
+  env?: Record<string, string | undefined>;
+}).env;
+const resolveDefault = (value: string | undefined, fallback: string): string => {
+  if (!value) return fallback;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+};
 const DEFAULT_RUNTIME_CONFIG: Required<TopAiRuntimeConfig> = {
   profile: 'uat',
-  apiBaseUrl: 'http://localhost:8705/api/v1',
-  appBaseUrl: 'http://localhost:5173',
+  apiBaseUrl: resolveDefault(buildEnv?.VITE_EXTENSION_API_BASE_URL, 'http://localhost:8787/api/v1'),
+  appBaseUrl: resolveDefault(buildEnv?.VITE_EXTENSION_APP_BASE_URL, 'http://localhost:5173'),
   wsBaseUrl: '',
   sessionToken: '',
   codexSignInUrl: 'https://chatgpt.com/auth/login?next=/codex',

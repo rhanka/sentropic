@@ -28,6 +28,7 @@
       "explorer": [
         {
           "id": "topai.chatView",
+          "type": "webview",
           "name": "Top AI Ideas"
         }
       ]
@@ -37,7 +38,7 @@
       "properties": {
         "topai.apiBaseUrl": {
           "type": "string",
-          "default": "http://localhost:8705/api/v1",
+          "default": "http://localhost:8787/api/v1",
           "description": "Top AI Ideas API base URL used by the VSCode extension runtime."
         },
         "topai.appBaseUrl": {
