@@ -523,4 +523,311 @@ export const extensionToolPermissions = pgTable('extension_tool_permissions', {
   ).on(table.userId, table.workspaceId, table.toolName, table.origin),
 }));
 
+// BR-03: TODO + steering + workflow core runtime entities
+export const plans = pgTable('plans', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+  metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  workspaceIdIdx: index('plans_workspace_id_idx').on(table.workspaceId),
+}));
+
+export const todos = pgTable('todos', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  planId: text('plan_id').references(() => plans.id, { onDelete: 'cascade' }),
+  parentTodoId: text('parent_todo_id'),
+  title: text('title').notNull(),
+  description: text('description'),
+  position: integer('position').notNull().default(0),
+  createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+  closedAt: timestamp('closed_at', { withTimezone: false }),
+  metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  parentTodoIdFk: foreignKey({
+    columns: [table.parentTodoId],
+    foreignColumns: [table.id],
+    name: 'todos_parent_todo_id_todos_id_fk',
+  }),
+  workspaceIdIdx: index('todos_workspace_id_idx').on(table.workspaceId),
+  planIdIdx: index('todos_plan_id_idx').on(table.planId),
+  parentTodoIdIdx: index('todos_parent_todo_id_idx').on(table.parentTodoId),
+  ownerUserIdIdx: index('todos_owner_user_id_idx').on(table.ownerUserId),
+}));
+
+export const tasks = pgTable('tasks', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  todoId: text('todo_id')
+    .notNull()
+    .references(() => todos.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  position: integer('position').notNull().default(0),
+  status: text('status').notNull().default('todo'),
+  createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  assigneeUserId: text('assignee_user_id').references(() => users.id, { onDelete: 'set null' }),
+  startedAt: timestamp('started_at', { withTimezone: false }),
+  completedAt: timestamp('completed_at', { withTimezone: false }),
+  metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  workspaceIdIdx: index('tasks_workspace_id_idx').on(table.workspaceId),
+  todoIdIdx: index('tasks_todo_id_idx').on(table.todoId),
+  statusIdx: index('tasks_status_idx').on(table.status),
+  assigneeUserIdIdx: index('tasks_assignee_user_id_idx').on(table.assigneeUserId),
+}));
+
+export const todoDependencies = pgTable('todo_dependencies', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  todoId: text('todo_id')
+    .notNull()
+    .references(() => todos.id, { onDelete: 'cascade' }),
+  dependsOnTodoId: text('depends_on_todo_id')
+    .notNull()
+    .references(() => todos.id, { onDelete: 'cascade' }),
+  dependencyType: text('dependency_type').notNull().default('blocks'),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  dependencyUnique: uniqueIndex('todo_dependencies_unique_idx').on(table.todoId, table.dependsOnTodoId),
+  workspaceIdIdx: index('todo_dependencies_workspace_id_idx').on(table.workspaceId),
+}));
+
+export const taskDependencies = pgTable('task_dependencies', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  taskId: text('task_id')
+    .notNull()
+    .references(() => tasks.id, { onDelete: 'cascade' }),
+  dependsOnTaskId: text('depends_on_task_id')
+    .notNull()
+    .references(() => tasks.id, { onDelete: 'cascade' }),
+  dependencyType: text('dependency_type').notNull().default('blocks'),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  dependencyUnique: uniqueIndex('task_dependencies_unique_idx').on(table.taskId, table.dependsOnTaskId),
+  workspaceIdIdx: index('task_dependencies_workspace_id_idx').on(table.workspaceId),
+}));
+
+export const taskIoContracts = pgTable('task_io_contracts', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  taskId: text('task_id')
+    .notNull()
+    .references(() => tasks.id, { onDelete: 'cascade' }),
+  schemaFormat: text('schema_format').notNull().default('json_schema'),
+  inputSchema: jsonb('input_schema').notNull().default(sql`'{}'::jsonb`),
+  outputSchema: jsonb('output_schema').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  taskIdUnique: uniqueIndex('task_io_contracts_task_id_unique').on(table.taskId),
+  workspaceIdIdx: index('task_io_contracts_workspace_id_idx').on(table.workspaceId),
+}));
+
+export const agentDefinitions = pgTable('agent_definitions', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  config: jsonb('config').notNull().default(sql`'{}'::jsonb`),
+  sourceLevel: text('source_level').notNull().default('code'),
+  lineageRootId: text('lineage_root_id'),
+  parentId: text('parent_id'),
+  isDetached: boolean('is_detached').notNull().default(false),
+  lastParentSyncAt: timestamp('last_parent_sync_at', { withTimezone: false }),
+  createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  parentIdFk: foreignKey({
+    columns: [table.parentId],
+    foreignColumns: [table.id],
+    name: 'agent_definitions_parent_id_agent_definitions_id_fk',
+  }),
+  workspaceKeyUnique: uniqueIndex('agent_definitions_workspace_key_unique').on(table.workspaceId, table.key),
+  workspaceIdIdx: index('agent_definitions_workspace_id_idx').on(table.workspaceId),
+  parentIdIdx: index('agent_definitions_parent_id_idx').on(table.parentId),
+}));
+
+export const workflowDefinitions = pgTable('workflow_definitions', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  config: jsonb('config').notNull().default(sql`'{}'::jsonb`),
+  sourceLevel: text('source_level').notNull().default('code'),
+  lineageRootId: text('lineage_root_id'),
+  parentId: text('parent_id'),
+  isDetached: boolean('is_detached').notNull().default(false),
+  lastParentSyncAt: timestamp('last_parent_sync_at', { withTimezone: false }),
+  createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  parentIdFk: foreignKey({
+    columns: [table.parentId],
+    foreignColumns: [table.id],
+    name: 'workflow_definitions_parent_id_workflow_definitions_id_fk',
+  }),
+  workspaceKeyUnique: uniqueIndex('workflow_definitions_workspace_key_unique').on(table.workspaceId, table.key),
+  workspaceIdIdx: index('workflow_definitions_workspace_id_idx').on(table.workspaceId),
+  parentIdIdx: index('workflow_definitions_parent_id_idx').on(table.parentId),
+}));
+
+export const workflowDefinitionTasks = pgTable('workflow_definition_tasks', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  workflowDefinitionId: text('workflow_definition_id')
+    .notNull()
+    .references(() => workflowDefinitions.id, { onDelete: 'cascade' }),
+  taskKey: text('task_key').notNull(),
+  title: text('title').notNull(),
+  description: text('description'),
+  orderIndex: integer('order_index').notNull().default(0),
+  agentDefinitionId: text('agent_definition_id').references(() => agentDefinitions.id, { onDelete: 'set null' }),
+  schemaFormat: text('schema_format').notNull().default('json_schema'),
+  inputSchema: jsonb('input_schema').notNull().default(sql`'{}'::jsonb`),
+  outputSchema: jsonb('output_schema').notNull().default(sql`'{}'::jsonb`),
+  sectionKey: text('section_key'),
+  metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  workflowTaskKeyUnique: uniqueIndex('workflow_definition_tasks_unique_key').on(table.workflowDefinitionId, table.taskKey),
+  orderIdx: index('workflow_definition_tasks_order_idx').on(table.workflowDefinitionId, table.orderIndex),
+  workspaceIdIdx: index('workflow_definition_tasks_workspace_id_idx').on(table.workspaceId),
+}));
+
+export const guardrails = pgTable('guardrails', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  entityType: text('entity_type').notNull(),
+  entityId: text('entity_id').notNull(),
+  category: text('category').notNull(),
+  title: text('title'),
+  instruction: text('instruction').notNull(),
+  config: jsonb('config').notNull().default(sql`'{}'::jsonb`),
+  isActive: boolean('is_active').notNull().default(true),
+  createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  workspaceIdIdx: index('guardrails_workspace_id_idx').on(table.workspaceId),
+  entityIdx: index('guardrails_entity_idx').on(table.entityType, table.entityId),
+}));
+
+export const entityLinks = pgTable('entity_links', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  sourceEntityType: text('source_entity_type').notNull(),
+  sourceEntityId: text('source_entity_id').notNull(),
+  targetObjectType: text('target_object_type').notNull(),
+  targetObjectId: text('target_object_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  entityLinkUnique: uniqueIndex('entity_links_unique_idx').on(
+    table.workspaceId,
+    table.sourceEntityType,
+    table.sourceEntityId,
+    table.targetObjectType,
+    table.targetObjectId,
+  ),
+  sourceEntityIdx: index('entity_links_source_entity_idx').on(table.sourceEntityType, table.sourceEntityId),
+  targetObjectIdx: index('entity_links_target_object_idx').on(table.targetObjectType, table.targetObjectId),
+}));
+
+export const executionRuns = pgTable('execution_runs', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  planId: text('plan_id').references(() => plans.id, { onDelete: 'set null' }),
+  todoId: text('todo_id').references(() => todos.id, { onDelete: 'set null' }),
+  taskId: text('task_id').references(() => tasks.id, { onDelete: 'set null' }),
+  workflowDefinitionId: text('workflow_definition_id').references(() => workflowDefinitions.id, { onDelete: 'set null' }),
+  agentDefinitionId: text('agent_definition_id').references(() => agentDefinitions.id, { onDelete: 'set null' }),
+  mode: text('mode').notNull().default('manual'),
+  status: text('status').notNull().default('pending'),
+  startedByUserId: text('started_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  startedAt: timestamp('started_at', { withTimezone: false }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: false }),
+  metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  workspaceIdIdx: index('execution_runs_workspace_id_idx').on(table.workspaceId),
+  statusIdx: index('execution_runs_status_idx').on(table.status),
+  taskIdIdx: index('execution_runs_task_id_idx').on(table.taskId),
+}));
+
+export const executionEvents = pgTable('execution_events', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  runId: text('run_id')
+    .notNull()
+    .references(() => executionRuns.id, { onDelete: 'cascade' }),
+  eventType: text('event_type').notNull(),
+  actorType: text('actor_type'),
+  actorId: text('actor_id'),
+  payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+  sequence: integer('sequence').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  runIdSequenceUnique: uniqueIndex('execution_events_run_id_sequence_unique').on(table.runId, table.sequence),
+  workspaceIdIdx: index('execution_events_workspace_id_idx').on(table.workspaceId),
+  runIdIdx: index('execution_events_run_id_idx').on(table.runId),
+  eventTypeIdx: index('execution_events_event_type_idx').on(table.eventType),
+}));
+
 export type ExtensionToolPermissionRow = typeof extensionToolPermissions.$inferSelect;
+export type PlanRow = typeof plans.$inferSelect;
+export type TodoRow = typeof todos.$inferSelect;
+export type TaskRow = typeof tasks.$inferSelect;
+export type TodoDependencyRow = typeof todoDependencies.$inferSelect;
+export type TaskDependencyRow = typeof taskDependencies.$inferSelect;
+export type TaskIoContractRow = typeof taskIoContracts.$inferSelect;
+export type GuardrailRow = typeof guardrails.$inferSelect;
+export type WorkflowDefinitionRow = typeof workflowDefinitions.$inferSelect;
+export type WorkflowDefinitionTaskRow = typeof workflowDefinitionTasks.$inferSelect;
+export type AgentDefinitionRow = typeof agentDefinitions.$inferSelect;
+export type EntityLinkRow = typeof entityLinks.$inferSelect;
+export type ExecutionRunRow = typeof executionRuns.$inferSelect;
+export type ExecutionEventRow = typeof executionEvents.$inferSelect;

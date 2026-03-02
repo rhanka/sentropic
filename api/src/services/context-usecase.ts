@@ -391,9 +391,17 @@ export const generateUseCaseList = async (
   documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>,
   documentsContextJson?: string,
   signal?: AbortSignal,
-  streamId?: string
+  streamId?: string,
+  runtimePrompt?: {
+    promptTemplate?: string;
+    promptId?: string;
+  },
 ): Promise<UseCaseList> => {
-  const useCaseListPrompt = defaultPrompts.find(p => p.id === 'use_case_list')?.content || '';
+  const useCaseListPrompt =
+    (typeof runtimePrompt?.promptTemplate === 'string' &&
+    runtimePrompt.promptTemplate.trim().length > 0
+      ? runtimePrompt.promptTemplate
+      : defaultPrompts.find(p => p.id === 'use_case_list')?.content) || '';
   
   if (!useCaseListPrompt) {
     throw new Error('Prompt use_case_list non trouvé');
@@ -421,6 +429,10 @@ export const generateUseCaseList = async (
 
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
   const finalStreamId = streamId || `usecase_list_${Date.now()}`;
+  const runtimePromptId =
+    typeof runtimePrompt?.promptId === 'string' && runtimePrompt.promptId.trim().length > 0
+      ? runtimePrompt.promptId.trim()
+      : 'use_case_list';
   
   const isGpt5 = typeof model === 'string' && model.startsWith('gpt-5');
   const content = await executeStructuredGenerationWithGeminiFallback({
@@ -434,7 +446,7 @@ export const generateUseCaseList = async (
       schema: USE_CASE_LIST_STRUCTURED_SCHEMA,
     },
     ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
-    promptId: 'use_case_list',
+    promptId: runtimePromptId,
     streamId: finalStreamId,
     signal,
   });
@@ -468,9 +480,17 @@ export const generateUseCaseDetail = async (
   documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>,
   documentsContextJson?: string,
   signal?: AbortSignal,
-  streamId?: string
+  streamId?: string,
+  runtimePrompt?: {
+    promptTemplate?: string;
+    promptId?: string;
+  },
 ): Promise<UseCaseDetail> => {
-  const useCaseDetailPrompt = defaultPrompts.find(p => p.id === 'use_case_detail')?.content || '';
+  const useCaseDetailPrompt =
+    (typeof runtimePrompt?.promptTemplate === 'string' &&
+    runtimePrompt.promptTemplate.trim().length > 0
+      ? runtimePrompt.promptTemplate
+      : defaultPrompts.find(p => p.id === 'use_case_detail')?.content) || '';
   
   if (!useCaseDetailPrompt) {
     throw new Error('Prompt use_case_detail non trouvé');
@@ -498,6 +518,10 @@ export const generateUseCaseDetail = async (
 
   // Générer un streamId si non fourni (pour utiliser executeWithToolsStream)
   const finalStreamId = streamId || `usecase_detail_${Date.now()}`;
+  const runtimePromptId =
+    typeof runtimePrompt?.promptId === 'string' && runtimePrompt.promptId.trim().length > 0
+      ? runtimePrompt.promptId.trim()
+      : 'use_case_detail';
   
   const isGpt5 = typeof model === 'string' && model.startsWith('gpt-5');
   const content = await executeStructuredGenerationWithGeminiFallback({
@@ -511,7 +535,7 @@ export const generateUseCaseDetail = async (
       schema: USE_CASE_DETAIL_STRUCTURED_SCHEMA,
     },
     ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
-    promptId: 'use_case_detail',
+    promptId: runtimePromptId,
     streamId: finalStreamId,
     signal,
   });

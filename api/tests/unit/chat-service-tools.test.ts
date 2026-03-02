@@ -1,9 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../../src/db/client';
-import { chatMessages, chatSessions, chatStreamEvents, folders, users, workspaces } from '../../src/db/schema';
+import {
+  chatMessages,
+  chatSessions,
+  chatStreamEvents,
+  executionEvents,
+  executionRuns,
+  folders,
+  plans,
+  tasks,
+  todos,
+  users,
+  workspaces,
+  workspaceMemberships,
+} from '../../src/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { todoOrchestrationService } from '../../src/services/todo-orchestration';
 
 // Mock OpenAI streaming to keep unit tests deterministic and fast.
 // IMPORTANT: this must be declared before importing chatService.
@@ -67,9 +81,16 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     await db.delete(chatStreamEvents);
     await db.delete(chatMessages);
     await db.delete(chatSessions).where(eq(chatSessions.userId, userId));
+    await db.delete(executionEvents).where(eq(executionEvents.workspaceId, workspaceId));
+    await db.delete(executionRuns).where(eq(executionRuns.workspaceId, workspaceId));
+    await db.delete(tasks).where(eq(tasks.workspaceId, workspaceId));
+    await db.delete(todos).where(eq(todos.workspaceId, workspaceId));
+    await db.delete(plans).where(eq(plans.workspaceId, workspaceId));
+    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
     await db.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
     await db.delete(users).where(eq(users.id, userId));
+    vi.clearAllMocks();
   });
 
   it('should enable expected tools per primaryContextType and always include web_search/web_extract', async () => {
@@ -443,5 +464,440 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
 
     expect(seenToolNames).toContain('web_search');
     expect(seenToolNames).toContain('web_extract');
+  });
+
+  it('should expose and execute unified todo tool when explicitly requested', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      if (calls.length === 1) {
+        return stream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: 'call_todo_create_1',
+              name: 'plan',
+              args: JSON.stringify({
+                action: 'create',
+                title: 'Release hardening',
+                planTitle: 'Release wave',
+                tasks: [
+                  { title: 'Run regression suite' },
+                  { title: 'Publish changelog' }
+                ]
+              })
+            }
+          },
+          { type: 'done', data: {} }
+        ]);
+      }
+      return stream([
+        { type: 'content_delta', data: { delta: 'TODO created.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Create a release TODO with tasks',
+      model: 'gpt-4.1-nano'
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['plan']
+    });
+
+    const names = toolNames(calls[0]?.tools);
+    expect(names).toContain('plan');
+
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, msg.assistantMessageId));
+    const resultEvent = events.find(
+      (e) =>
+        e.eventType === 'tool_call_result' &&
+        (e.data as any)?.tool_call_id === 'call_todo_create_1'
+    );
+    expect(resultEvent).toBeDefined();
+    expect((resultEvent as any).data?.result?.status).toBe('completed');
+    expect(typeof (resultEvent as any).data?.result?.todoId).toBe('string');
+    expect((resultEvent as any).data?.result?.taskCount).toBe(2);
+  });
+
+  it('should expose unified plan tool in active TODO mode', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      return stream([
+        { type: 'content_delta', data: { delta: 'Progress applied.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Continue and check the TODO progression now',
+      model: 'gpt-4.1-nano'
+    });
+
+    const created = await todoOrchestrationService.createTodoFromChat(
+      { userId, role: 'editor', workspaceId },
+      {
+        title: 'Active runtime TODO',
+        sessionId: msg.sessionId,
+        tasks: [{ title: 'First task' }, { title: 'Second task' }],
+      },
+    );
+    expect(created.status).toBe('completed');
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['plan']
+    });
+
+    const names = toolNames(calls[0]?.tools);
+    expect(names).toContain('plan');
+    expect(calls[0]?.toolChoice).toBe('required');
+  });
+
+  it('should keep unified todo tool available when user explicitly asks to replace with a new TODO list', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      return stream([
+        { type: 'content_delta', data: { delta: 'Replacement TODO prepared.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Create a new TODO list and replace the current one',
+      model: 'gpt-4.1-nano'
+    });
+
+    const created = await todoOrchestrationService.createTodoFromChat(
+      { userId, role: 'editor', workspaceId },
+      {
+        title: 'Current TODO',
+        sessionId: msg.sessionId,
+        tasks: [{ title: 'Legacy task' }],
+      },
+    );
+    expect(created.status).toBe('completed');
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['plan']
+    });
+
+    const names = toolNames(calls[0]?.tools);
+    expect(names).toContain('plan');
+    expect(calls[0]?.toolChoice).toBe('auto');
+  });
+
+  it('should continue beyond 10 iterations when active TODO can progress without user input', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'go',
+      model: 'gpt-4.1-nano'
+    });
+
+    const created = await todoOrchestrationService.createTodoFromChat(
+      { userId, role: 'editor', workspaceId },
+      {
+        title: 'Long autonomous TODO',
+        sessionId: msg.sessionId,
+        tasks: [{ title: 'Task to keep progressing' }],
+      },
+    );
+    expect(created.status).toBe('completed');
+    const todoId =
+      created.status === 'completed' && typeof created.todoId === 'string'
+        ? created.todoId
+        : '';
+    expect(todoId).not.toBe('');
+    const [taskRow] = await db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.workspaceId, workspaceId), eq(tasks.todoId, todoId)))
+      .limit(1);
+    expect(taskRow?.id).toBeTruthy();
+
+    let passCount = 0;
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      passCount += 1;
+      if (passCount <= 12) {
+        return stream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: `call_todo_loop_${passCount}`,
+              name: 'plan',
+              args: JSON.stringify({
+                action: 'update_task',
+                taskId: taskRow!.id,
+                status: 'in_progress',
+              })
+            }
+          },
+          { type: 'done', data: {} }
+        ]);
+      }
+      return stream([
+        { type: 'content_delta', data: { delta: 'Autonomous progression complete.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['plan']
+    });
+
+    expect(calls.length).toBeGreaterThan(10);
+  });
+
+  it('should inject strict TODO orchestration rules in system prompt when an active session TODO exists', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    let systemPrompt = '';
+
+    mock.mockImplementation((opts: any) => {
+      const messages = Array.isArray(opts?.messages) ? opts.messages : [];
+      systemPrompt =
+        typeof messages[0]?.content === 'string' ? messages[0].content : '';
+      return stream([
+        { type: 'content_delta', data: { delta: 'Progress applied.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Continue TODO execution',
+      model: 'gpt-4.1-nano'
+    });
+
+    const created = await todoOrchestrationService.createTodoFromChat(
+      { userId, role: 'editor', workspaceId },
+      {
+        title: 'Runtime TODO',
+        sessionId: msg.sessionId,
+        tasks: [{ title: 'Task one' }, { title: 'Task two' }],
+      },
+    );
+    expect(created.status).toBe('completed');
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['plan']
+    });
+
+    expect(systemPrompt).toContain(
+      'Prioritize progression of the active plan before starting unrelated planning.',
+    );
+    expect(systemPrompt).toContain(
+      'Use `plan` with `action="update_task"` and `action="update_plan"` to progress the existing plan.',
+    );
+    expect(systemPrompt).toContain(
+      'Ask blocker questions upfront in one batch, then continue autonomously until a real blocker appears.',
+    );
+    expect(systemPrompt).toContain(
+      'Structural mutations (add/remove/reorder/replace tasks, or rewrite plan/task content) require explicit user intent.',
+    );
+  });
+
+  it('should block structural todo_update mutation without explicit user intent in active TODO mode', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Continue TODO progression now',
+      model: 'gpt-4.1-nano'
+    });
+
+    const created = await todoOrchestrationService.createTodoFromChat(
+      { userId, role: 'editor', workspaceId },
+      {
+        title: 'Current TODO title',
+        sessionId: msg.sessionId,
+        tasks: [{ title: 'A task' }],
+      },
+    );
+    expect(created.status).toBe('completed');
+    const todoId =
+      created.status === 'completed' && typeof created.todoId === 'string'
+        ? created.todoId
+        : '';
+    expect(todoId).not.toBe('');
+
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      if (calls.length === 1) {
+        return stream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: 'call_todo_update_structural_1',
+              name: 'plan',
+              args: JSON.stringify({
+                action: 'update_plan',
+                todoId,
+                title: 'Renamed without explicit intent',
+                status: 'in_progress'
+              })
+            }
+          },
+          { type: 'done', data: {} }
+        ]);
+      }
+      return stream([
+        { type: 'content_delta', data: { delta: 'Handled.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['plan']
+    });
+
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, msg.assistantMessageId));
+    const resultEvent = events.find(
+      (e) =>
+        e.eventType === 'tool_call_result' &&
+        (e.data as any)?.tool_call_id === 'call_todo_update_structural_1'
+    );
+    expect(resultEvent).toBeDefined();
+    expect((resultEvent as any).data?.result?.status).toBe('error');
+    expect(String((resultEvent as any).data?.result?.error ?? '')).toContain(
+      'structural mutation requires explicit user intent',
+    );
+
+    const [storedTodo] = await db
+      .select({ title: todos.title })
+      .from(todos)
+      .where(eq(todos.id, todoId))
+      .limit(1);
+    expect(storedTodo?.title).toBe('Current TODO title');
+  });
+
+  it('should allow structural todo_update mutation when user intent is explicit', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Renomme la TODO actuelle en TODO finale',
+      model: 'gpt-4.1-nano'
+    });
+
+    const created = await todoOrchestrationService.createTodoFromChat(
+      { userId, role: 'editor', workspaceId },
+      {
+        title: 'TODO to rename',
+        sessionId: msg.sessionId,
+        tasks: [{ title: 'A task' }],
+      },
+    );
+    expect(created.status).toBe('completed');
+    const todoId =
+      created.status === 'completed' && typeof created.todoId === 'string'
+        ? created.todoId
+        : '';
+    expect(todoId).not.toBe('');
+
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      if (calls.length === 1) {
+        return stream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: 'call_todo_update_structural_2',
+              name: 'plan',
+              args: JSON.stringify({
+                action: 'update_plan',
+                todoId,
+                title: 'TODO finale',
+              })
+            }
+          },
+          { type: 'done', data: {} }
+        ]);
+      }
+      return stream([
+        { type: 'content_delta', data: { delta: 'Renamed.' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['plan']
+    });
+
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, msg.assistantMessageId));
+    const resultEvent = events.find(
+      (e) =>
+        e.eventType === 'tool_call_result' &&
+        (e.data as any)?.tool_call_id === 'call_todo_update_structural_2'
+    );
+    expect(resultEvent).toBeDefined();
+    expect((resultEvent as any).data?.result?.status).toBe('completed');
+
+    const [storedTodo] = await db
+      .select({ title: todos.title })
+      .from(todos)
+      .where(eq(todos.id, todoId))
+      .limit(1);
+    expect(storedTodo?.title).toBe('TODO finale');
   });
 });

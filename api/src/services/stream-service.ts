@@ -4,6 +4,21 @@ import { createId } from '../utils/id';
 import { sql, eq, and, gt } from 'drizzle-orm';
 import type { StreamEventType } from './openai';
 
+const DEFAULT_SEQUENCE_RETRY_ATTEMPTS = 6;
+
+const isStreamSequenceConflictError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false;
+  const maybe = error as { code?: unknown; constraint?: unknown; message?: unknown };
+  const code = typeof maybe.code === 'string' ? maybe.code : '';
+  if (code !== '23505') return false;
+  const constraint = typeof maybe.constraint === 'string' ? maybe.constraint : '';
+  const message = typeof maybe.message === 'string' ? maybe.message : '';
+  return (
+    constraint.includes('chat_stream_events_stream_id_sequence_unique') ||
+    message.includes('chat_stream_events_stream_id_sequence_unique')
+  );
+};
+
 /**
  * Génère un stream_id unique
  * - Pour générations classiques : `prompt_id` + timestamp (ou `job_id` si disponible)
@@ -38,34 +53,52 @@ export async function writeStreamEvent(
   data: unknown,
   sequence: number,
   messageId?: string | null
-): Promise<void> {
+): Promise<number> {
   const eventId = createId();
+  let nextSequence = Number.isFinite(sequence) && sequence > 0 ? Math.floor(sequence) : 1;
 
-  // Écrire l'événement dans chat_stream_events
-  await db.insert(chatStreamEvents).values({
-    id: eventId,
-    messageId: messageId || null,
-    streamId,
-    eventType,
-    data,
-    sequence
-  });
+  for (let attempt = 1; attempt <= DEFAULT_SEQUENCE_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      // Écrire l'événement dans chat_stream_events
+      await db.insert(chatStreamEvents).values({
+        id: eventId,
+        messageId: messageId || null,
+        streamId,
+        eventType,
+        data,
+        sequence: nextSequence,
+      });
 
-  // Envoyer un NOTIFY PostgreSQL pour temps réel
-  // Payload minimal : stream_id, sequence, event_type (pour éviter dépassement 8k)
-  const notifyPayload = JSON.stringify({
-    stream_id: streamId,
-    sequence,
-    event_type: eventType
-  });
+      // Envoyer un NOTIFY PostgreSQL pour temps réel
+      // Payload minimal : stream_id, sequence, event_type (pour éviter dépassement 8k)
+      const notifyPayload = JSON.stringify({
+        stream_id: streamId,
+        sequence: nextSequence,
+        event_type: eventType,
+      });
 
-  // Utiliser le pool PostgreSQL directement pour NOTIFY
-  const client = await pool.connect();
-  try {
-    await client.query(`NOTIFY stream_events, '${notifyPayload.replace(/'/g, "''")}'`);
-  } finally {
-    client.release();
+      // Utiliser le pool PostgreSQL directement pour NOTIFY
+      const client = await pool.connect();
+      try {
+        await client.query(`NOTIFY stream_events, '${notifyPayload.replace(/'/g, "''")}'`);
+      } finally {
+        client.release();
+      }
+
+      return nextSequence;
+    } catch (error) {
+      if (
+        isStreamSequenceConflictError(error) &&
+        attempt < DEFAULT_SEQUENCE_RETRY_ATTEMPTS
+      ) {
+        nextSequence = await getNextSequence(streamId);
+        continue;
+      }
+      throw error;
+    }
   }
+
+  throw new Error('Unable to append stream event');
 }
 
 /**
@@ -79,6 +112,63 @@ export async function getNextSequence(streamId: string): Promise<number> {
 
   const maxSequence = result[0]?.maxSequence ?? 0;
   return maxSequence + 1;
+}
+
+type SequenceRetryDeps = {
+  getNextSequenceFn?: (streamId: string) => Promise<number>;
+  writeStreamEventFn?: (
+    streamId: string,
+    eventType: StreamEventType,
+    data: unknown,
+    sequence: number,
+    messageId?: string | null,
+  ) => Promise<number | void>;
+};
+
+/**
+ * Writes a stream event with optimistic sequence assignment and retries when
+ * a concurrent insert hits the unique (stream_id, sequence) constraint.
+ */
+export async function writeStreamEventWithSequenceRetry(
+  streamId: string,
+  eventType: StreamEventType,
+  data: unknown,
+  options?: {
+    messageId?: string | null;
+    maxAttempts?: number;
+    deps?: SequenceRetryDeps;
+  },
+): Promise<number> {
+  const maxAttempts = Math.max(1, options?.maxAttempts ?? 4);
+  const getNextSequenceFn = options?.deps?.getNextSequenceFn ?? getNextSequence;
+  const writeStreamEventFn = options?.deps?.writeStreamEventFn ?? writeStreamEvent;
+  let attempt = 0;
+  let lastError: unknown;
+
+  while (attempt < maxAttempts) {
+    const sequence = await getNextSequenceFn(streamId);
+    try {
+      const insertedSequence = await writeStreamEventFn(
+        streamId,
+        eventType,
+        data,
+        sequence,
+        options?.messageId ?? null,
+      );
+      return typeof insertedSequence === 'number'
+        ? insertedSequence
+        : sequence;
+    } catch (error) {
+      if (isStreamSequenceConflictError(error) && attempt < maxAttempts - 1) {
+        attempt += 1;
+        lastError = error;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw lastError ?? new Error('Unable to append stream event');
 }
 
 /**
@@ -152,4 +242,3 @@ export async function listActiveStreamIds(options?: { sinceMinutes?: number; lim
 
   return rows.map(r => r.streamId).filter(Boolean);
 }
-
