@@ -25,6 +25,17 @@ RUN mkdir -p /tmp/tar-update && \
       mv package tar; \
     fi && \
     rm -rf /tmp/tar-update
+# Security: Force update minimatch in npm itself to fix CVE-2026-27903 / CVE-2026-27904
+RUN mkdir -p /tmp/minimatch-update && \
+    cd /tmp/minimatch-update && \
+    npm pack minimatch@10.2.4 && \
+    cd /usr/local/lib/node_modules/npm/node_modules && \
+    if [ -d minimatch ]; then \
+      rm -rf minimatch && \
+      tar -xzf /tmp/minimatch-update/minimatch-10.2.4.tgz && \
+      mv package minimatch; \
+    fi && \
+    rm -rf /tmp/minimatch-update
 WORKDIR /app
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 RUN if [ -f package-lock.json ]; then npm ci; \
@@ -67,6 +78,17 @@ RUN mkdir -p /tmp/tar-update && \
       mv package tar; \
     fi && \
     rm -rf /tmp/tar-update
+# Security: Force update minimatch in npm itself to fix CVE-2026-27903 / CVE-2026-27904
+RUN mkdir -p /tmp/minimatch-update && \
+    cd /tmp/minimatch-update && \
+    npm pack minimatch@10.2.4 && \
+    cd /usr/local/lib/node_modules/npm/node_modules && \
+    if [ -d minimatch ]; then \
+      rm -rf minimatch && \
+      tar -xzf /tmp/minimatch-update/minimatch-10.2.4.tgz && \
+      mv package minimatch; \
+    fi && \
+    rm -rf /tmp/minimatch-update
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=base /app/package.json ./
