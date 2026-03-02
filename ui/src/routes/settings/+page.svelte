@@ -12,6 +12,11 @@
     getChromeExtensionDownloadErrorMessage,
     type ChromeExtensionDownloadMetadata,
   } from '$lib/utils/chrome-extension-download';
+  import {
+    fetchVsCodeExtensionDownloadMetadata,
+    getVsCodeExtensionDownloadErrorMessage,
+    type VsCodeExtensionDownloadMetadata,
+  } from '$lib/utils/vscode-extension-download';
   import { emitUserAISettingsUpdated } from '$lib/utils/user-ai-settings-events';
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
   import WorkspaceSettingsPanel from '$lib/components/WorkspaceSettingsPanel.svelte';
@@ -49,6 +54,9 @@
   let chromeExtensionDownloadMetadata: ChromeExtensionDownloadMetadata | null = null;
   let chromeExtensionDownloadError = '';
   let isLoadingChromeExtensionDownload = false;
+  let vscodeExtensionDownloadMetadata: VsCodeExtensionDownloadMetadata | null = null;
+  let vscodeExtensionDownloadError = '';
+  let isLoadingVsCodeExtensionDownload = false;
   
   // Configuration IA
   let aiSettings = {
@@ -103,6 +111,7 @@
   onMount(async () => {
     await loadMe();
     await loadChromeExtensionDownloadMetadata();
+    await loadVsCodeExtensionDownloadMetadata();
     await loadModelCatalog();
     await loadUserAISettings();
     if (isAdmin()) {
@@ -172,6 +181,23 @@
     }
   };
 
+  const loadVsCodeExtensionDownloadMetadata = async () => {
+    isLoadingVsCodeExtensionDownload = true;
+    vscodeExtensionDownloadError = '';
+
+    try {
+      vscodeExtensionDownloadMetadata = await fetchVsCodeExtensionDownloadMetadata();
+    } catch (error) {
+      console.error('Failed to load vscode extension metadata:', error);
+      vscodeExtensionDownloadMetadata = null;
+      vscodeExtensionDownloadError = getVsCodeExtensionDownloadErrorMessage(
+        error,
+        get(_)('settings.vscodeExtension.errors.load')
+      );
+    } finally {
+      isLoadingVsCodeExtensionDownload = false;
+    }
+  };
   // Fonctions pour la configuration IA
   const loadAISettings = async () => {
     isLoadingAISettings = true;
@@ -669,6 +695,66 @@
     {:else if chromeExtensionDownloadError}
       <p class="text-sm text-rose-700" data-testid="chrome-extension-download-error">
         {chromeExtensionDownloadError}
+      </p>
+    {/if}
+  </div>
+
+  <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="vscode-extension-download-card">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="space-y-1">
+        <h2 class="text-lg font-semibold text-slate-800">{$_('settings.vscodeExtension.title')}</h2>
+        <p class="text-sm text-slate-600">{$_('settings.vscodeExtension.description')}</p>
+        <p class="text-sm font-medium text-rose-700">
+          {$_('settings.vscodeExtension.experimentalWarning')}
+        </p>
+      </div>
+
+      {#if isLoadingVsCodeExtensionDownload}
+        <span class="text-sm text-slate-600" data-testid="vscode-extension-download-loading">
+          {$_('settings.vscodeExtension.loading')}
+        </span>
+      {:else if vscodeExtensionDownloadMetadata}
+        <a
+          class="inline-flex items-center justify-center rounded p-2 transition text-primary hover:bg-slate-100"
+          href={vscodeExtensionDownloadMetadata.downloadUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label={$_('settings.vscodeExtension.downloadTooltip')}
+          title={$_('settings.vscodeExtension.downloadTooltip')}
+          data-testid="vscode-extension-download-cta"
+        >
+          <Download class="h-5 w-5" />
+        </a>
+      {:else}
+        <button
+          class="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          type="button"
+          on:click={loadVsCodeExtensionDownloadMetadata}
+          data-testid="vscode-extension-download-retry"
+        >
+          {$_('settings.vscodeExtension.retry')}
+        </button>
+      {/if}
+    </div>
+
+    {#if vscodeExtensionDownloadMetadata}
+      <dl class="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+        <div class="rounded border border-slate-200 p-3">
+          <dt class="text-slate-500">{$_('settings.vscodeExtension.versionLabel')}</dt>
+          <dd class="font-medium text-slate-900" data-testid="vscode-extension-version">
+            {vscodeExtensionDownloadMetadata.version}
+          </dd>
+        </div>
+        <div class="rounded border border-slate-200 p-3">
+          <dt class="text-slate-500">{$_('settings.vscodeExtension.sourceLabel')}</dt>
+          <dd class="font-medium text-slate-900" data-testid="vscode-extension-source">
+            {vscodeExtensionDownloadMetadata.source}
+          </dd>
+        </div>
+      </dl>
+    {:else if vscodeExtensionDownloadError}
+      <p class="text-sm text-rose-700" data-testid="vscode-extension-download-error">
+        {vscodeExtensionDownloadError}
       </p>
     {/if}
   </div>

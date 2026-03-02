@@ -1,0 +1,72 @@
+{
+  "name": "top-ai-ideas-vscode-extension",
+  "type": "module",
+  "displayName": "Top AI Ideas",
+  "description": "Top AI Ideas VSCode plugin v1 with plan/tools/summary/checkpoint workflows.",
+  "version": "0.1.0",
+  "publisher": "top-ai-ideas",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:topai.createPlan",
+    "onCommand:topai.runNextStep",
+    "onCommand:topai.summarizeContext",
+    "onCommand:topai.createCheckpoint",
+    "onCommand:topai.restoreCheckpoint",
+    "onCommand:topai.codex.signIn"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "topai.createPlan",
+        "title": "TopAI: Create Plan"
+      },
+      {
+        "command": "topai.runNextStep",
+        "title": "TopAI: Run Next Step"
+      },
+      {
+        "command": "topai.summarizeContext",
+        "title": "TopAI: Summarize Context"
+      },
+      {
+        "command": "topai.createCheckpoint",
+        "title": "TopAI: Create Checkpoint"
+      },
+      {
+        "command": "topai.restoreCheckpoint",
+        "title": "TopAI: Restore Checkpoint"
+      },
+      {
+        "command": "topai.codex.signIn",
+        "title": "TopAI: Sign In to Codex"
+      }
+    ],
+    "configuration": {
+      "title": "Top AI Ideas",
+      "properties": {
+        "topai.apiBaseUrl": {
+          "type": "string",
+          "default": "http://localhost:8705/api/v1",
+          "description": "Top AI Ideas API base URL used by the VSCode extension runtime."
+        },
+        "topai.sessionToken": {
+          "type": "string",
+          "default": "",
+          "description": "Session token used as Bearer auth for VSCode extension requests to /api/v1."
+        },
+        "topai.codexSignInUrl": {
+          "type": "string",
+          "default": "https://chatgpt.com/auth/login?next=/codex",
+          "description": "Codex sign-in URL opened by the VSCode extension for dev/plugin workflow."
+        }
+      }
+    }
+  }
+}

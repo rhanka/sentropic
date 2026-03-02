@@ -27,6 +27,7 @@ import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
 import { chromeExtensionRouter } from './chrome-extension';
+import { vscodeExtensionRouter } from './vscode-extension';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
@@ -59,6 +60,10 @@ apiRouter.route('/me', meRouter);
 // Chrome extension metadata route for authenticated users.
 apiRouter.use('/chrome-extension/*', requireAuth);
 apiRouter.route('/chrome-extension', chromeExtensionRouter);
+
+// VSCode extension metadata route for authenticated users.
+apiRouter.use('/vscode-extension/*', requireAuth);
+apiRouter.route('/vscode-extension', vscodeExtensionRouter);
 
 // Workspace routes (authenticated; role checks are enforced per endpoint)
 apiRouter.use('/workspaces/*', requireAuth);
