@@ -117,51 +117,54 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] `ui/vscode-ext/vscode-bridge.ts`
       - [ ] `ui/vscode-ext/auth-bridge.ts`
       - [ ] `ui/vscode-ext/local-tools.ts`
-    - [ ] **Explicitly exclude (must not exist after Lot 1)**
-      - [ ] `ui/src/routes/vscode-plugin-smoke/+page.svelte`
-      - [ ] `e2e/tests/03-chat-vscode-plugin-smoke.spec.ts`
-      - [ ] `e2e/tests/03-chat-vscode-plugin.spec.ts`
-      - [ ] `ui/tests/vscode-ext/summary-panel.test.ts`
-      - [ ] `ui/tests/vscode-ext/checkpoint-panel.test.ts`
-      - [ ] `ui/tests/vscode-ext/checkpoint-restore.test.ts`
-      - [ ] `ui/vscode-ext/workflow-client.ts`
+    - [x] **Explicitly exclude (must not exist after Lot 1)**
+      - [x] `ui/src/routes/vscode-plugin-smoke/+page.svelte`
+      - [x] `e2e/tests/03-chat-vscode-plugin-smoke.spec.ts`
+      - [x] `e2e/tests/03-chat-vscode-plugin.spec.ts`
+      - [x] `ui/tests/vscode-ext/summary-panel.test.ts`
+      - [x] `ui/tests/vscode-ext/checkpoint-panel.test.ts`
+      - [x] `ui/tests/vscode-ext/checkpoint-restore.test.ts`
+      - [x] `ui/vscode-ext/workflow-client.ts`
   - [x] Lock Lot 3 research target for VSCode code tools (baseline capability set + safety policy).
 
-- [ ] **Lot 1 — Strict selective recovery (skeleton/build/download only)**
-  - [ ] Spec mapping:
-    - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `2`, `7.1` (BR05 foreground-only boundary), and reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
-  - [ ] Restore minimal VSCode extension packaging pipeline:
-    - [ ] add `ui/vscode-ext` packaging scripts/assets required to produce `.vsix`,
-    - [ ] add `make vscode-ext` target (and optional `make dev-vscode-ext`) under `BR05-EX1`.
-  - [ ] Restore VSCode extension download distribution:
-    - [ ] API endpoint `/api/v1/vscode-extension/download`,
-    - [ ] UI settings card for `.vsix` download metadata.
-  - [ ] Keep implementation surface minimal:
-    - [ ] no fake shell tabs (`plan/tools/summary/checkpoint`) in extension UI,
-    - [ ] no fake workflow summary/checkpoint scaffolding.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/vscode-extension-download.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/utils/vscode-extension-download.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make vscode-ext API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
+- [x] **Lot 1 — Strict selective recovery (skeleton/build/download only)**
+  - [x] Spec mapping:
+    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `2`, `7.1` (BR05 foreground-only boundary), and reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
+  - [x] Restore minimal VSCode extension packaging pipeline:
+    - [x] add `ui/vscode-ext` packaging scripts/assets required to produce `.vsix`,
+    - [x] add `make vscode-ext` target (and optional `make dev-vscode-ext`) under `BR05-EX1`.
+  - [x] Restore VSCode extension download distribution:
+    - [x] API endpoint `/api/v1/vscode-extension/download`,
+    - [x] UI settings card for `.vsix` download metadata.
+  - [x] Keep implementation surface minimal:
+    - [x] no fake shell tabs (`plan/tools/summary/checkpoint`) in extension UI,
+    - [x] no fake workflow summary/checkpoint scaffolding.
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-endpoints SCOPE=tests/api/vscode-extension-download.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/utils/vscode-extension-download.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make vscode-ext API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
+    - [!] Initial run failed with port conflicts (`5105`/`1005`) because `test-feat-vscode-plugin-v1` containers were already running; validated successful rerun on free ports (`API=8715`, `UI=5115`, `MAILDEV=1015`) with same command scope.
 
-- [ ] **Lot 2 — VSCode real ChatWidget integration**
-  - [ ] Spec mapping:
-    - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `1`, `2`, `6` (shared ChatWidget host parity).
-    - [ ] reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
-  - [ ] Integrate real `ChatWidget` in VSCode webview (shared component path, no parallel fake panel).
-  - [ ] Wire runtime bridge for extension config and auth via ChatWidget settings menu (wheel).
-  - [ ] Remove dedicated Codex button UI; keep auth treatment reachable from settings menu only.
-  - [ ] Ensure panel can be opened/used with expected layout parity (right/left docking handled by host).
-  - [ ] Lot gate:
-    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/vscode-ext/extension-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/vscode-ext/vscode-bridge.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/vscode-ext/auth-bridge.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+- [x] **Lot 2 — VSCode real ChatWidget integration**
+  - [x] Spec mapping:
+    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `1`, `2`, `6` (shared ChatWidget host parity).
+    - [x] reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
+  - [x] Integrate real `ChatWidget` in VSCode webview (shared component path, no parallel fake panel).
+  - [x] Wire runtime bridge for extension config and auth via ChatWidget settings menu (wheel).
+  - [x] Remove dedicated Codex button UI; keep auth treatment reachable from settings menu only.
+  - [x] Ensure panel can be opened/used with expected layout parity (right/left docking handled by host).
+  - [x] Lot gate:
+    - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/vscode-ext/extension-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/vscode-ext/vscode-bridge.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/vscode-ext/auth-bridge.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make vscode-ext API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 REGISTRY=local ENV=feat-vscode-plugin-v1`
+    - [!] A parallel `typecheck`/`lint` launch produced a temporary Docker container-name conflict; rerun sequentially passed without code changes.
 
 - [ ] **Lot 3 — VSCode plugin code tools (research + implementation)**
   - [ ] Spec mapping:
