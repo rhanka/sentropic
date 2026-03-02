@@ -38,6 +38,14 @@ This document is the single checklist for **chat tools**: what is already implem
 
 ### TODO runtime tools
 - [x] `plan` (unified contract: `action=create|update_plan|update_task`)
+  - Session contract:
+    - one active TODO per chat session at a time
+    - duplicate `create` attempts are rejected by runtime conflict handling
+  - Progression contract:
+    - `update_task` and `update_plan` are the expected progression path for active TODO execution
+    - structural list mutations must come from explicit user intent (no silent add/remove/reorder/replace)
+  - Orchestration note:
+    - for long/iterative workloads (URLs, folders, object batches), assistant should structure execution with `plan`
 
 ## Implemented wiring / behavior ✅
 
