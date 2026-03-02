@@ -274,6 +274,21 @@ dev-ext: up-ui ## Watch build Chrome extension
 	@echo "👀 Watching Chrome Extension..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run dev:ext
 
+.PHONY: vscode-ext
+vscode-ext: up-ui ## Build VSCode extension package to ui/static/vscode-extension
+	@echo "📦 Syncing UI dependencies in container..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm install --include=dev
+	@echo "🧩 Building VSCode Extension package..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run build:vscode-ext
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /app/static/vscode-extension /app/vscode-ext/dist'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui sh -lc 'test -f /app/static/vscode-extension/top-ai-ideas-vscode-extension.vsix && test -f /app/vscode-ext/dist/extension.js'
+	@echo "✅ VSCode extension package built in ui/static/vscode-extension"
+
+.PHONY: dev-vscode-ext
+dev-vscode-ext: up-ui ## Watch and rebuild VSCode extension package
+	@echo "👀 Watching VSCode Extension..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run dev:vscode-ext
+
 update-%:
 	@echo "🔒 Updating $* ..."
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec $* sh -lc "npm update"
