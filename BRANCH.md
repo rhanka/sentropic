@@ -317,7 +317,7 @@ Open decision items for BR-03 restart:
     - execution control:
       - `POST /api/v1/tasks/:taskId/start`
       - `POST /api/v1/tasks/:taskId/complete`
-      - `POST /api/v1/chat/messages/:id/steer`
+      - `POST /api/v1/runs/:runId/steer`
       - `POST /api/v1/runs/:runId/pause`
       - `POST /api/v1/runs/:runId/resume`
     - configuration:
@@ -531,14 +531,14 @@ Open decision items for BR-03 restart:
           - `2026-02-27` pass signature: `> top-ai-ideas-ui@0.1.0 lint` then `eslint .` (exit `0`).
         - [x] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
           - `2026-02-27` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
-    - [x] `L4-S6b` DEV - [deprecated] Historical TODO-panel steering prototype (superseded by chat-only steering in `L4-S18`/`L4-S25`).
+    - [x] `L4-S6b` DEV - Active-run steer UI consumption in TODO runtime panel.
       - API files impacted:
         - `api/src/services/todo-orchestration.ts` (session-bound runtime now returns `activeRun` + `runId`/`runStatus`/`runTaskId`; chat TODO creation accepts optional `sessionId` link for panel rehydration context).
         - `api/src/services/chat-service.ts` (tool result normalization now forwards run metadata for `task_update`; chat session message payload includes `todoRuntime` snapshot).
         - `api/src/routes/api/plans.ts` (optional `sessionId` support in TODO creation schema).
       - UI files impacted:
-        - `ui/src/lib/components/ChatPanel.svelte` (historical prototype; current steer transport is `POST /api/v1/chat/messages/:id/steer` via main composer path).
-        - `ui/src/lib/utils/todo-runtime-steer.ts` (historical helper; current steer helper lives in `ui/src/lib/utils/chat-steer.ts`).
+        - `ui/src/lib/components/ChatPanel.svelte` (steer message input + submit action to `POST /api/v1/runs/:runId/steer` + last steer feedback rendering in active runtime panel).
+        - `ui/src/lib/utils/todo-runtime-steer.ts` (run-state normalization + steer submit helper).
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
       - Scoped make checks:
@@ -653,7 +653,7 @@ Open decision items for BR-03 restart:
         - `api/src/config/default-prompts.ts`
         - `spec/TOOLS.md`
       - Evidence:
-        - Unified `todo` tool contract added (`action=create|update_todo|update_task`) with legacy aliases retained for backward compatibility; chat tool selection/orchestration now resolves TODO paths through the unified surface (`api/src/services/tools.ts`, `api/src/services/chat-service.ts`, `spec/TOOLS.md`).
+        - Unified `todo` tool contract added (`action=create|update_plan|update_task`) with legacy aliases retained for backward compatibility; chat tool selection/orchestration now resolves TODO paths through the unified surface (`api/src/services/tools.ts`, `api/src/services/chat-service.ts`, `spec/TOOLS.md`).
     - [x] `L4-S17` DEV - Post-response autonomous TODO decision loop (`continue|ask_user|stop`) with budgets and aside handling.
       - Scope:
         - Add a post-response decision gate when a session TODO remains active (`continue|ask_user|stop`) without requiring an immediate new user message.
@@ -667,15 +667,15 @@ Open decision items for BR-03 restart:
         - Added `chat_todo_post_response_decision` prompt contract and runtime parsing.
         - Added session-level autonomous-iteration counting via stream status events (`todo_autonomous_iteration`).
         - Added runtime status trace `todo_post_response_decision` and user opt-in message when decision is `ask_user`.
-    - [x] `L4-S18` DEV - Remove TODO-bound legacy steering path (generic active assistant-response steering only).
+    - [x] `L4-S18` DEV - Remove TODO-bound legacy steering path (generic active-run steering only).
       - Spec refs:
-        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §3.1 (Steer), §9.1.2 (Steering UX contract), §12 (API `POST /api/v1/chat/messages/:id/steer`), §17 (acceptance criteria).
+        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §3.1 (Steer), §9.1.2 (Steering UX contract), §12 (API `POST /api/v1/runs/:runId/steer`), §17 (acceptance criteria).
       - Scope:
         - Remove composer steering dependency on TODO runtime panel run metadata (`todoRuntimePanel.runId/runStatus/runTaskId`).
         - Keep TODO panel focused on checklist progression only (no steering ownership in TODO runtime domain).
-        - Rebind steering availability to active assistant generation state (single conversation path, non-interrupting).
+        - Rebind steering availability to the active assistant generation run state (single conversation path, non-interrupting).
       - Implementation TODO (detailed):
-        - Introduce a dedicated composer steerability selector driven by active assistant generation state (not TODO runtime snapshot).
+        - Introduce a dedicated composer steerability selector driven by active assistant run state (not TODO runtime snapshot).
         - Remove hard dependency chain `getTodoRuntimeRunState -> isComposerSteerMode`.
         - Keep steering transport on chat messages path (no TODO-runtime run metadata dependency).
         - Ensure TODO panel open/closed/absent states do not change steering availability.
@@ -687,7 +687,7 @@ Open decision items for BR-03 restart:
         - `ui/src/locales/fr.json`
       - Evidence:
         - `2026-03-01`: composer steer mode is now driven by active assistant message state (`mode === 'ai' && activeAssistantMessage`) and no longer blocked by TODO runtime run metadata or `sending` state gate (`ui/src/lib/components/ChatPanel.svelte`).
-    - [ ] `L4-S22` DEV - Steering composer UX finalization (`volant`) + runtime behavior contract.
+    - [x] `L4-S22` DEV - Steering composer UX finalization (`volant`) + runtime behavior contract.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 (composer steering, same-thread bubble, immediate acknowledgment, additive continuation).
       - Scope:
@@ -767,7 +767,7 @@ Open decision items for BR-03 restart:
         - `api/src/routes/api/prompts.ts` (if deprecation or access narrowing is required)
       - Evidence:
         - Settings runtime surface wording is now agent/workflow-centric (`settings.runtime.*` i18n update), workflow task rows expose `Agent ID`, and E2E settings coverage now asserts absence of legacy prompts management section in the page surface.
-    - [ ] `L4-S30` DEV - Restore operator parity for agent prompt editing and workflow task I/O editing.
+    - [x] `L4-S30` DEV - Restore operator parity for agent prompt editing and workflow task I/O editing.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2 (Agent prompt direct edit parity) and §9.3 (workflow task `inputSchema`/`outputSchema` editability).
       - Scope:
@@ -785,6 +785,9 @@ Open decision items for BR-03 restart:
         - `api/src/routes/api/agent-config.ts` (if payload contract extension needed)
         - `api/src/routes/api/workflow-config.ts` (if payload contract extension needed)
         - `api/src/services/todo-orchestration.ts` (if schema persistence mapping update is required)
+      - Evidence:
+        - Agent editor now exposes a dedicated prompt field (direct edit, not JSON-only), and workflow editor now exposes per-task editable I/O contracts (`inputSchema`, `outputSchema`) plus task linkage fields, all persisted via existing `agent-config` / `workflow-config` save paths.
+        - Scope reconciliation: this slice absorbs the previously deferred operator-parity scope (`L4-S30` / BR15 candidate), so no separate BR15 carry-over is required for this item.
     - [x] `L4-S23` DEV - A2 migration: agent/workflow objects as generation runtime source-of-truth.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2.1, §9.3.1, §12.2, §17.
@@ -812,52 +815,29 @@ Open decision items for BR-03 restart:
         - `ui/src/locales/fr.json`
       - Evidence:
         - Code baselines are now split into `default-agents.ts` and `default-workflows.ts`, synchronized to `source_level=code`, and generation workers resolve runtime prompt/config from `agentDefinitionId` task assignments (no hard dependency on legacy business entries in `default-prompts`).
-    - [x] `L4-S24` DEV - B2 migration: chat-bound steering continuity (single thread, no side-stream).
+    - [x] `L4-S24` DEV - B2 migration: run-bound steering continuity (single thread, no side-stream).
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 + §9.1.2.1 + §12.3 + §17.
       - Scope:
-        - Steer mode submit must target active assistant message endpoint (`POST /chat/messages/:id/steer`) and must not create a second assistant placeholder through `/chat/messages`.
+        - Steer mode submit must target active run endpoint (`POST /runs/:runId/steer`) and must not create a new assistant placeholder through `/chat/messages`.
         - Keep timeline behavior: user steer appears as normal user bubble in same conversation.
-        - Keep execution continuity: same active assistant response lineage continues; no duplicate reasoning/tool stream created by steer action.
+        - Keep execution continuity: same run lineage continues; no duplicate reasoning/tool stream created by steer action.
       - Implementation TODO (detailed):
-        - Wire composer steer action to active assistant message state (`assistantMessageId`) and chat steer transport.
-        - Ensure steer availability is derived from in-progress assistant message state and gracefully degrades when no steerable assistant response exists.
-        - Consume `steer_received` events in current assistant stream path (buffer/apply at safe boundary when model/tool step is non-interruptible).
-        - Remove/replace test assumptions expecting workflow-run steering transport.
+        - Wire composer steer action to active run state (`runId`) and run steer transport.
+        - Ensure active run availability is derived from runtime state and gracefully degrades when no steerable run exists.
+        - Consume steer events in current run path (buffer/apply at safe boundary when model/tool step is non-interruptible).
+        - Remove/replace test assumptions expecting steer via `/chat/messages`.
       - Files expected:
         - `ui/src/lib/components/ChatPanel.svelte`
         - `ui/src/lib/components/StreamMessage.svelte` (if acknowledgement/render timing needs adjustment)
-        - `ui/src/lib/utils/chat-steer.ts`
-        - `api/src/routes/api/chat.ts`
-        - `api/src/services/chat-service.ts`
+        - `ui/src/lib/utils/todo-runtime-steer.ts`
+        - `api/src/routes/api/runs.ts`
+        - `api/src/services/todo-orchestration.ts`
+        - `api/src/services/chat-service.ts` (if run-binding projection glue is required)
         - `ui/src/locales/en.json`
         - `ui/src/locales/fr.json`
       - Evidence:
-        - Composer steer submit targets `POST /chat/messages/:id/steer` using active assistant message state; steer input remains in the same conversation timeline as a regular user bubble.
-    - [x] `L4-S25` DEV - A0 steering TODO-decoupling (remove steer run targeting dependency on TODO panel state).
-      - Spec refs:
-        - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 + §9.1.2.1 + §12.3.
-      - Scope:
-        - Remove steer run-source dependency on `todoRuntimePanel`.
-        - Introduce dedicated composer steer run-state lifecycle independent from TODO runtime panel visibility/reset.
-      - Files expected:
-        - `ui/src/lib/components/ChatPanel.svelte`
-      - Evidence:
-        - `getActiveRunForComposer` now resolves from dedicated `composerSteerRunState` instead of `todoRuntimePanel`, and session lifecycle resets this steer state independently from TODO panel state.
-    - [x] `L4-S26` DEV - A1 steering `volant` composer control visual contract.
-      - Scope:
-        - Replace steer-mode send icon with explicit steering-wheel visual (`volant`) while run is active.
-    - [x] `L4-S28` DEV - A3 steer bubble placement continuity.
-      - Scope:
-        - Keep steer user bubble in same timeline and place it directly after the previous user turn (before current reasoning strip).
-      - Evidence:
-        - Backend steer persistence now inserts user steer message immediately before the targeted assistant message sequence (stable ordering after silent refresh/reload).
-        - Composer local insertion falls back to active steer stream id when assistant placeholder discovery is transiently unavailable, keeping the steer bubble before the in-flight assistant message.
-    - [x] `L4-S29` DEV - A4 reasoning/tool strip additive continuity.
-      - Scope:
-        - Current reasoning/tool strip acknowledges steer intake and continues same run lineage without second reasoning stream spawn.
-      - Evidence:
-        - Covered in B2 continuity implementation and validation (`L4-S24`), with single-lineage steer handling and no duplicate reasoning stream spawn.
+        - Composer steer submit now targets `POST /runs/:runId/steer` via active run state and no longer sends steer payload through `/chat/messages`; steer input remains in the same conversation timeline as a regular user bubble.
   - [ ] **TEST slices (execute only after DEV slices are complete)**
     - [x] `L4-S7` TEST - API scoped validation for progression + session rule.
       - API files impacted:
@@ -1096,7 +1076,7 @@ Open decision items for BR-03 restart:
           - `2026-03-01` pass signature: `Test Files 1 passed (1)`; `Tests 11 passed (11)`.
         - [x] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
           - `2026-03-01` pass signature: `17 passed, 3 skipped (19.7s)`.
-    - [ ] `L4-S30` TEST - Settings scoped validation for agent prompt + workflow task I/O editing parity.
+    - [x] `L4-S30` TEST - Settings scoped validation for agent prompt + workflow task I/O editing parity.
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2 + §9.3.
       - Test evolution required:
@@ -1104,10 +1084,13 @@ Open decision items for BR-03 restart:
         - `ui/tests/utils/workflow-config-api.test.ts`
         - `e2e/tests/06-settings.spec.ts`
       - Scoped make commands:
-        - [ ] `make test-ui SCOPE=tests/utils/agent-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-ui SCOPE=tests/utils/workflow-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-        - [ ] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
-    - [ ] `L4-S23` TEST - A2 source split regression (agent/workflow-driven generation runtime).
+        - [x] `make test-ui SCOPE=tests/utils/agent-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/utils/agent-config-api.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [x] `make test-ui SCOPE=tests/utils/workflow-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/utils/workflow-config-api.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
+        - [x] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local WORKERS=1 ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `17 passed, 3 skipped (17.6s)`.
+    - [x] `L4-S23` TEST - A2 source split regression (agent/workflow-driven generation runtime).
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.2.1 + §9.3.1 + §12.2.
       - Test evolution required:
@@ -1130,18 +1113,21 @@ Open decision items for BR-03 restart:
           - `2026-03-01` pass signature: `✓ tests/utils/agent-config-api.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
         - [x] `make test-ui SCOPE=tests/utils/workflow-config-api.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
           - `2026-03-01` pass signature: `✓ tests/utils/workflow-config-api.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
-        - [!] E2E build/spec validations are postponed to the UAT window per operator request (`2026-03-01`) and will be re-run there as scoped checks.
-          - `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-          - `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-          - `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-          - `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-    - [x] `L4-S24` TEST - B2 steering chat-transport continuity regression (transport + continuity).
+        - [x] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: images built successfully (`local/top-ai-ideas-ui:323b21`).
+        - [x] `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `2 passed (1.1m)`.
+        - [x] `make test-e2e E2E_SPEC=tests/05-executive-summary.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `2 passed (11.8s)`.
+        - [x] `make test-e2e E2E_SPEC=tests/06-settings.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `17 passed, 3 skipped (17.6s)`.
+    - [x] `L4-S24` TEST - B2 steering run-binding regression (transport + continuity).
       - Spec refs:
         - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §9.1.2 + §9.1.2.1 + §12.3.
       - Test evolution required:
         - `ui/tests/utils/todo-runtime-steer.test.ts`
         - `ui/tests/utils/todo-chat-rendering.test.ts`
-        - `api/tests/api/chat.test.ts` (steer endpoint + stream event continuity expectations)
+        - `api/tests/api/runs-steer.test.ts`
         - `api/tests/unit/chat-service-tools.test.ts` (steer orchestration expectations)
         - `e2e/tests/09-todo-steering-core.spec.ts`
       - Scoped make commands:
@@ -1149,31 +1135,14 @@ Open decision items for BR-03 restart:
           - `2026-03-01` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
         - [x] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
           - `2026-03-01` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
-        - [x] `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-          - `2026-03-01` pass signature: steer endpoint assertions covered under `tests/api/chat.test.ts` (`POST /api/v1/chat/messages/:id/steer`).
+        - [x] `make test-api-endpoints SCOPE=tests/api/runs-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: `✓ tests/api/runs-steer.test.ts (2 tests)`; `Test Files 1 passed`, `Tests 2 passed`.
         - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
           - `2026-03-01` pass signature: `✓ tests/unit/chat-service-tools.test.ts (13 tests)`; `Test Files 1 passed`, `Tests 13 passed`.
-        - [!] E2E build/spec validation is postponed to the UAT window per operator request (`2026-03-01`) and will be re-run there as scoped checks.
-          - `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-          - `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-    - [x] `L4-S25` TEST - A0 TODO-decoupling safety gate (typecheck-only in close-loop mode).
-      - Scoped make commands:
-        - [x] `make typecheck-ui API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-          - `2026-03-01` pass signature: `svelte-check found 0 errors and 0 warnings`.
-    - [x] `L4-S26` TEST - A1 steering `volant` visual contract.
-      - Scoped make commands:
-        - [x] `make test-ui SCOPE=tests/utils/todo-runtime-steer.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-          - `2026-03-01` pass signature: `✓ tests/utils/todo-runtime-steer.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
-    - [x] `L4-S28` TEST - A3 steer bubble ordering in timeline.
-      - Scoped make commands:
-        - [x] `make test-ui SCOPE=tests/utils/todo-chat-rendering.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-          - `2026-03-01` pass signature: `✓ tests/utils/todo-chat-rendering.test.ts (3 tests)`; `Test Files 1 passed`, `Tests 3 passed`.
-        - [x] `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=8713 UI_PORT=5113 MAILDEV_UI_PORT=1013 REGISTRY=local ENV=test-feat-todo-steering-workflow-core`
-          - `2026-03-01` pass signature: `✓ tests/api/chat.test.ts (36 tests)`; includes steer timeline ordering assertion (`steerIndex === assistantIndex - 1`).
-    - [x] `L4-S29` TEST - A4 additive reasoning-strip continuity.
-      - Scoped make commands:
+        - [x] `make build-api build-ui-image API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
+          - `2026-03-01` pass signature: images built successfully (`local/top-ai-ideas-ui:323b21`).
         - [x] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
-          - Covered under `L4-S24` continuity regression validation; no duplicate reasoning stream observed.
+          - `2026-03-01` pass signature: `1 passed (9.2s)`.
   - [ ] **Lot 4 UAT checklist**
     - [ ] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):
