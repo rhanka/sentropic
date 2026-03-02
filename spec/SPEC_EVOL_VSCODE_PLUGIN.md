@@ -237,6 +237,13 @@ Tool intent:
 - Provide a precise answer about prior conversation content without forcing the main model to re-scan a very long timeline in-context.
 - Reuse the same pattern as document QA tooling currently in code (`documents.analyze` + merge prompt `documents_analyze_merge`): dedicated AI sub-agent call with optional chunking + merge.
 
+Implementation constraint (mandatory):
+- Do not duplicate orchestration code between `documents.analyze` and `history_analyze`.
+- Both tools must share the same internal chunk/analyze/merge execution engine (single reusable service/function), with adapter-level differences only:
+  - source adapter (`document` vs `chat history`),
+  - prompt ids (`documents_*` vs `history_*`),
+  - security/scope filters.
+
 Proposed tool contract:
 - Name: `history_analyze`.
 - Scope: read-only over the active chat session history.
