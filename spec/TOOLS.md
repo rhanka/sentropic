@@ -114,3 +114,9 @@ This document is the single checklist for **chat tools**: what is already implem
 - [ ] Organization AI populate / enrich batch from chat tools
 - [ ] Folder AI populate (create folders + generate use cases) from chat tools
 - [ ] Cost/limits safeguards + job queue integration for AI actions
+
+### Conversation history QA tool (planned)
+- [ ] `history_analyze` (read-only)
+  - Targeted Q&A over chat history with evidence references (message ids/turns)
+  - Dedicated analyzer flow aligned with `documents.analyze` + chunk/merge strategy for long histories
+  - Must return explicit coverage metadata and `insufficient_coverage` when the selected range is too narrow

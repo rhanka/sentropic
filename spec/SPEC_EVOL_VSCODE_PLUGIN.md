@@ -165,6 +165,40 @@ Required behavior:
   - web app flow coverage (checkpoint proposal visibility + preview/apply + no-delta behavior),
   - VSCode plugin host flow coverage with parity assertions against web app behavior.
 
+### 4.12 Conversation history QA tool (Lot 3 addition)
+Add a dedicated tool for targeted questions over conversation history.
+
+Tool intent:
+- Provide a precise answer about prior conversation content without forcing the main model to re-scan a very long timeline in-context.
+- Reuse the same pattern as document QA tooling currently in code (`documents.analyze` + merge prompt `documents_analyze_merge`): dedicated AI sub-agent call with optional chunking + merge.
+
+Proposed tool contract:
+- Name: `history_analyze`.
+- Scope: read-only over the active chat session history.
+- Input:
+  - `question` (required),
+  - optional range selectors (`from_message_id`, `to_message_id`, `max_turns`),
+  - optional flags (`include_tool_results`, `include_system_messages`) with safe defaults.
+- Output:
+  - `answer`,
+  - `evidence` list (message ids / turn references used),
+  - `coverage` metadata (scanned turns, truncated/chunked indicator),
+  - optional `confidence` bucket.
+
+Execution strategy:
+- If history is short: single-pass targeted analysis.
+- If history is long: split into chunks, run targeted analysis per chunk, then merge with a final synthesis prompt, mirroring document flow semantics:
+  - analysis prompt: `history_analyze` (equivalent role to `documents_analyze`),
+  - merge prompt: `history_analyze_merge` (equivalent role to `documents_analyze_merge`).
+- The tool must never expose hidden reasoning internals; it can only rely on stored conversation artifacts/events allowed by policy.
+
+Safety and UX:
+- No mutation side effects (strictly read-only).
+- Must return explicit `insufficient_coverage` when the selected range cannot support a confident answer.
+- Designed for parity on both surfaces:
+  - web app chat,
+  - VSCode ChatWidget host.
+
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
 - Claude Code: auto compact near context limits + explicit manual compaction command.
