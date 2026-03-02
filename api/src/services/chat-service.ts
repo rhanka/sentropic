@@ -34,7 +34,7 @@ import {
   matrixUpdateTool,
   documentsTool,
   commentAssistantTool,
-  todoTool
+  planTool
 } from './tools';
 import { toolService } from './tool-service';
 import { todoOrchestrationService } from './todo-orchestration';
@@ -108,8 +108,8 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
 
 const isValidToolName = (value: string): boolean => /^[a-zA-Z0-9_-]{1,64}$/.test(value);
 
-type TodoRuntimeToolName = 'todo' | 'todo_create' | 'todo_update' | 'task_update';
-type TodoRuntimeToolOperation = 'create' | 'update_todo' | 'update_task';
+type TodoRuntimeToolName = 'plan';
+type TodoRuntimeToolOperation = 'create' | 'update_plan' | 'update_task';
 
 const TODO_TERMINAL_STATUSES = new Set(['done', 'cancelled']);
 const TODO_BLOCKING_STATUSES = new Set(['blocked']);
@@ -232,17 +232,9 @@ const toSessionTodoRuntimeSnapshot = (value: unknown): SessionTodoRuntimeSnapsho
 };
 
 const resolveTodoRuntimeOperation = (
-  toolName: TodoRuntimeToolName,
+  _toolName: TodoRuntimeToolName,
   operationHint?: TodoRuntimeToolOperation | null,
-): TodoRuntimeToolOperation =>
-  operationHint ??
-  (toolName === 'todo_create'
-    ? 'create'
-    : toolName === 'todo_update'
-      ? 'update_todo'
-      : toolName === 'task_update'
-        ? 'update_task'
-        : 'update_todo');
+): TodoRuntimeToolOperation => operationHint ?? 'update_plan';
 
 const normalizeTodoRuntimeToolResult = (
   toolName: TodoRuntimeToolName,
@@ -294,7 +286,7 @@ const normalizeTodoRuntimeToolResult = (
         todoRuntime.todoStatus = activeTodo.derivedStatus;
       }
     }
-  } else if (operation === 'update_todo') {
+  } else if (operation === 'update_plan') {
     const todo = asRecord(base.todo);
     if (todo) {
       todoRuntime.todo = todo;
@@ -1388,11 +1380,7 @@ export class ChatService {
     })();
 
     const requestedTools = new Set(Array.isArray(options.tools) ? options.tools : []);
-    const todoToolRequested =
-      requestedTools.has('todo') ||
-      requestedTools.has('todo_create') ||
-      requestedTools.has('todo_update') ||
-      requestedTools.has('task_update');
+    const todoToolRequested = requestedTools.has('plan');
     const sessionTodoRuntimeSnapshot = todoToolRequested
       ? toSessionTodoRuntimeSnapshot(
           await todoOrchestrationService.getSessionTodoRuntime(
@@ -1485,13 +1473,10 @@ export class ChatService {
     }
     const effectiveRequestedTools = new Set(requestedTools);
     if (todoToolRequested) {
-      effectiveRequestedTools.add('todo');
-      effectiveRequestedTools.delete('todo_create');
-      effectiveRequestedTools.delete('todo_update');
-      effectiveRequestedTools.delete('task_update');
+      effectiveRequestedTools.add('plan');
     }
     if (enforceTodoUpdateMode) {
-      effectiveRequestedTools.add('todo');
+      effectiveRequestedTools.add('plan');
     }
     if (todoProgressionFocusMode) {
       effectiveRequestedTools.delete('web_search');
@@ -1503,8 +1488,8 @@ export class ChatService {
     if (effectiveRequestedTools.has('web_extract')) {
       addTools([webExtractTool]);
     }
-    if (effectiveRequestedTools.has('todo') || enforceTodoUpdateMode) {
-      addTools([todoTool]);
+    if (effectiveRequestedTools.has('plan') || enforceTodoUpdateMode) {
+      addTools([planTool]);
     }
     if (hasDocuments) {
       addTools([documentsTool]);
@@ -1705,7 +1690,7 @@ Règles :
       contextBlock += `\n\nComment resolution tool:\n- \`comment_assistant\` (mode=suggest) to analyze comment threads and propose actions.\n- Always present the proposal as French markdown with a clear confirmation question.\n- Require an explicit user confirmation ("Confirmer" or "Annuler").\n- Only after confirmation, call \`comment_assistant\` with mode=resolve, include the same actions, and pass confirmation="yes".\n- If the user response is not an explicit confirmation, ask again with the fixed options.`;
     }
     if (todoToolRequested) {
-      const todoLines: string[] = ['TODO runtime session constraints:'];
+      const todoLines: string[] = ['Plan runtime session constraints:'];
       if (sessionTodoRuntimeSnapshot) {
         todoLines.push(`- Active TODO id: ${sessionTodoRuntimeSnapshot.todoId}`);
         todoLines.push(`- Active TODO status: ${sessionTodoRuntimeSnapshot.status}`);
@@ -1725,16 +1710,16 @@ Règles :
         todoLines.push('- No active session TODO found.');
       }
       todoLines.push('');
-      todoLines.push('Mandatory TODO orchestration rules:');
+      todoLines.push('Mandatory plan orchestration rules:');
       if (enforceTodoUpdateMode) {
         todoLines.push(
-          '- A session TODO is already active: do NOT call `todo` with `action="create"` unless the user explicitly asks for a replacement/new list.',
+          '- A session plan is already active: do NOT call `plan` with `action="create"` unless the user explicitly asks for a replacement/new list.',
         );
         todoLines.push(
-          '- Prioritize progression of the active TODO before starting unrelated planning.',
+          '- Prioritize progression of the active plan before starting unrelated planning.',
         );
         todoLines.push(
-          '- Use `todo` with `action="update_task"` and `action="update_todo"` to progress the existing TODO.',
+          '- Use `plan` with `action="update_task"` and `action="update_plan"` to progress the existing plan.',
         );
         todoLines.push(
           '- Progress task-by-task and persist each update while executing (no end-of-run bulk update only).',
@@ -1743,16 +1728,16 @@ Règles :
           '- Ask blocker questions upfront in one batch, then continue autonomously until a real blocker appears.',
         );
         todoLines.push(
-          '- Structural mutations (add/remove/reorder/replace tasks, or rewrite TODO/task content) require explicit user intent.',
+          '- Structural mutations (add/remove/reorder/replace tasks, or rewrite plan/task content) require explicit user intent.',
         );
       } else {
         todoLines.push(
-          '- Use `todo` with `action="create"` only when the user explicitly asks to create a TODO list.',
+          '- Use `plan` with `action="create"` only when the user explicitly asks to create a plan list.',
         );
       }
       if (explicitTodoReplacementRequest) {
         todoLines.push(
-          '- The user explicitly asked for a replacement/new list: `todo` with `action="create"` is allowed.',
+          '- The user explicitly asked for a replacement/new list: `plan` with `action="create"` is allowed.',
         );
       }
       if (todoStructuralMutationIntent) {
@@ -1774,7 +1759,7 @@ Règles :
         }
       }
       todoLines.push(
-        '- When all tasks are terminal (`done`/`cancelled`), finalize the TODO with `todo` and `action="update_todo"` (`status: "done"` or `closed: true`).',
+        '- When all tasks are terminal (`done`/`cancelled`), finalize the active plan with `plan` and `action="update_plan"` (`status: "done"` or `closed: true`).',
       );
       contextBlock += `\n\n${todoLines.join('\n')}`;
     }
@@ -2439,12 +2424,12 @@ Règles :
         try {
           const args = JSON.parse(toolCall.args || '{}');
           const todoOperation: TodoRuntimeToolOperation | null = (() => {
-            if (toolCall.name !== 'todo') return null;
+            if (toolCall.name !== 'plan') return null;
             const actionRaw =
               typeof args.action === 'string' ? args.action.trim().toLowerCase() : '';
             if (
               actionRaw === 'create' ||
-              actionRaw === 'update_todo' ||
+              actionRaw === 'update_plan' ||
               actionRaw === 'update_task'
             ) {
               return actionRaw;
@@ -2457,12 +2442,12 @@ Règles :
             if (hasTaskId) return 'update_task';
             const hasTodoId =
               typeof args.todoId === 'string' && args.todoId.trim().length > 0;
-            if (hasTodoId) return 'update_todo';
+            if (hasTodoId) return 'update_plan';
             return 'create';
           })();
-          if (toolCall.name === 'todo' && !todoOperation) {
+          if (toolCall.name === 'plan' && !todoOperation) {
             throw new Error(
-              'todo: action must be one of create|update_todo|update_task',
+              'plan: action must be one of create|update_plan|update_task',
             );
           }
           let result: unknown;
@@ -2761,9 +2746,8 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'todo_create' || todoOperation === 'create') {
-            const createToolLabel =
-              toolCall.name === 'todo' ? 'todo(action=create)' : 'todo_create';
+          } else if (toolCall.name === 'plan' && todoOperation === 'create') {
+            const createToolLabel = 'plan(action=create)';
             if (readOnly) {
               throw new Error(`Read-only workspace: ${createToolLabel} is disabled`);
             }
@@ -2818,7 +2802,7 @@ Règles :
               }
             );
             const normalizedTodoResult = normalizeTodoRuntimeToolResult(
-              toolCall.name === 'todo' ? 'todo' : 'todo_create',
+              'plan',
               toolCall.id,
               todoResult,
               'create',
@@ -2833,11 +2817,8 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'todo_update' || todoOperation === 'update_todo') {
-            const todoUpdateLabel =
-              toolCall.name === 'todo'
-                ? 'todo(action=update_todo)'
-                : 'todo_update';
+          } else if (toolCall.name === 'plan' && todoOperation === 'update_plan') {
+            const todoUpdateLabel = 'plan(action=update_plan)';
             if (readOnly) {
               throw new Error(`Read-only workspace: ${todoUpdateLabel} is disabled`);
             }
@@ -2899,10 +2880,10 @@ Règles :
               }
             );
             const normalizedTodoUpdateResult = normalizeTodoRuntimeToolResult(
-              toolCall.name === 'todo' ? 'todo' : 'todo_update',
+              'plan',
               toolCall.id,
               updateResult,
-              'update_todo',
+              'update_plan',
             );
             markTodoIterationState(normalizedTodoUpdateResult);
             result = normalizedTodoUpdateResult;
@@ -2914,11 +2895,8 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'task_update' || todoOperation === 'update_task') {
-            const taskUpdateLabel =
-              toolCall.name === 'todo'
-                ? 'todo(action=update_task)'
-                : 'task_update';
+          } else if (toolCall.name === 'plan' && todoOperation === 'update_task') {
+            const taskUpdateLabel = 'plan(action=update_task)';
             if (readOnly) {
               throw new Error(`Read-only workspace: ${taskUpdateLabel} is disabled`);
             }
@@ -2978,7 +2956,7 @@ Règles :
               }
             );
             const normalizedTaskUpdateResult = normalizeTodoRuntimeToolResult(
-              toolCall.name === 'todo' ? 'todo' : 'task_update',
+              'plan',
               toolCall.id,
               updateResult,
               'update_task',
@@ -3200,11 +3178,7 @@ Règles :
             status: 'error',
             error: error instanceof Error ? error.message : 'Unknown error'
           };
-          const todoErrorCall =
-            toolCall.name === 'todo' ||
-            toolCall.name === 'todo_create' ||
-            toolCall.name === 'todo_update' ||
-            toolCall.name === 'task_update';
+          const todoErrorCall = toolCall.name === 'plan';
           if (todoErrorCall && todoAutonomousExtensionEnabled) {
             markTodoIterationState(errorResult);
           }

@@ -37,10 +37,7 @@ This document is the single checklist for **chat tools**: what is already implem
   - Traceability: comments created by the tool include `tool_call_id`
 
 ### TODO runtime tools
-- [x] `todo` (unified contract: `action=create|update_todo|update_task`)
-- [x] `todo_create` (legacy alias retained for backward compatibility)
-- [x] `todo_update` (legacy alias retained for backward compatibility)
-- [x] `task_update` (legacy alias retained for backward compatibility)
+- [x] `plan` (unified contract: `action=create|update_plan|update_task`)
 
 ## Implemented wiring / behavior ✅
 

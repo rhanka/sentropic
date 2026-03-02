@@ -478,7 +478,7 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
             type: 'tool_call_start',
             data: {
               tool_call_id: 'call_todo_create_1',
-              name: 'todo',
+              name: 'plan',
               args: JSON.stringify({
                 action: 'create',
                 title: 'Release hardening',
@@ -511,14 +511,11 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
       sessionId: msg.sessionId,
       assistantMessageId: msg.assistantMessageId,
       model: msg.model,
-      tools: ['todo']
+      tools: ['plan']
     });
 
     const names = toolNames(calls[0]?.tools);
-    expect(names).toContain('todo');
-    expect(names).not.toContain('todo_create');
-    expect(names).not.toContain('todo_update');
-    expect(names).not.toContain('task_update');
+    expect(names).toContain('plan');
 
     const events = await db
       .select()
@@ -535,7 +532,7 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
     expect((resultEvent as any).data?.result?.taskCount).toBe(2);
   });
 
-  it('should expose unified todo tool in active TODO mode even when legacy tool id is requested', async () => {
+  it('should expose unified plan tool in active TODO mode', async () => {
     const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
@@ -569,14 +566,11 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
       sessionId: msg.sessionId,
       assistantMessageId: msg.assistantMessageId,
       model: msg.model,
-      tools: ['todo_create']
+      tools: ['plan']
     });
 
     const names = toolNames(calls[0]?.tools);
-    expect(names).toContain('todo');
-    expect(names).not.toContain('todo_create');
-    expect(names).not.toContain('todo_update');
-    expect(names).not.toContain('task_update');
+    expect(names).toContain('plan');
     expect(calls[0]?.toolChoice).toBe('required');
   });
 
@@ -614,12 +608,11 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
       sessionId: msg.sessionId,
       assistantMessageId: msg.assistantMessageId,
       model: msg.model,
-      tools: ['todo_create']
+      tools: ['plan']
     });
 
     const names = toolNames(calls[0]?.tools);
-    expect(names).toContain('todo');
-    expect(names).not.toContain('todo_create');
+    expect(names).toContain('plan');
     expect(calls[0]?.toolChoice).toBe('auto');
   });
 
@@ -665,7 +658,7 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
             type: 'tool_call_start',
             data: {
               tool_call_id: `call_todo_loop_${passCount}`,
-              name: 'todo',
+              name: 'plan',
               args: JSON.stringify({
                 action: 'update_task',
                 taskId: taskRow!.id,
@@ -687,7 +680,7 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
       sessionId: msg.sessionId,
       assistantMessageId: msg.assistantMessageId,
       model: msg.model,
-      tools: ['todo']
+      tools: ['plan']
     });
 
     expect(calls.length).toBeGreaterThan(10);
@@ -729,20 +722,20 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
       sessionId: msg.sessionId,
       assistantMessageId: msg.assistantMessageId,
       model: msg.model,
-      tools: ['todo_create']
+      tools: ['plan']
     });
 
     expect(systemPrompt).toContain(
-      'Prioritize progression of the active TODO before starting unrelated planning.',
+      'Prioritize progression of the active plan before starting unrelated planning.',
     );
     expect(systemPrompt).toContain(
-      'Use `todo` with `action="update_task"` and `action="update_todo"` to progress the existing TODO.',
+      'Use `plan` with `action="update_task"` and `action="update_plan"` to progress the existing plan.',
     );
     expect(systemPrompt).toContain(
       'Ask blocker questions upfront in one batch, then continue autonomously until a real blocker appears.',
     );
     expect(systemPrompt).toContain(
-      'Structural mutations (add/remove/reorder/replace tasks, or rewrite TODO/task content) require explicit user intent.',
+      'Structural mutations (add/remove/reorder/replace tasks, or rewrite plan/task content) require explicit user intent.',
     );
   });
 
@@ -780,9 +773,9 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
             type: 'tool_call_start',
             data: {
               tool_call_id: 'call_todo_update_structural_1',
-              name: 'todo',
+              name: 'plan',
               args: JSON.stringify({
-                action: 'update_todo',
+                action: 'update_plan',
                 todoId,
                 title: 'Renamed without explicit intent',
                 status: 'in_progress'
@@ -803,7 +796,7 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
       sessionId: msg.sessionId,
       assistantMessageId: msg.assistantMessageId,
       model: msg.model,
-      tools: ['todo_create']
+      tools: ['plan']
     });
 
     const events = await db
@@ -863,9 +856,9 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
             type: 'tool_call_start',
             data: {
               tool_call_id: 'call_todo_update_structural_2',
-              name: 'todo',
+              name: 'plan',
               args: JSON.stringify({
-                action: 'update_todo',
+                action: 'update_plan',
                 todoId,
                 title: 'TODO finale',
               })
@@ -885,7 +878,7 @@ it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is
       sessionId: msg.sessionId,
       assistantMessageId: msg.assistantMessageId,
       model: msg.model,
-      tools: ['todo_create']
+      tools: ['plan']
     });
 
     const events = await db
