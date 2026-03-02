@@ -18,6 +18,10 @@ const staticVsCodeExtensionDir = path.resolve(rootDir, 'static', 'vscode-extensi
 const vsixName = 'top-ai-ideas-vscode-extension.vsix';
 const vsixOutputPath = path.join(staticVsCodeExtensionDir, vsixName);
 const nodeProcess = globalThis.process;
+const DEFAULT_EXTENSION_API_BASE_URL =
+  nodeProcess.env.VITE_EXTENSION_API_BASE_URL || 'http://localhost:8787/api/v1';
+const DEFAULT_EXTENSION_APP_BASE_URL =
+  nodeProcess.env.VITE_EXTENSION_APP_BASE_URL || 'http://localhost:5173';
 
 const xmlEscape = (value) =>
   String(value)
@@ -148,6 +152,10 @@ const buildHostBundle = async () => {
     target: ['node18'],
     format: 'cjs',
     external: ['vscode'],
+    define: {
+      __TOPAI_DEFAULT_API_BASE_URL__: JSON.stringify(DEFAULT_EXTENSION_API_BASE_URL),
+      __TOPAI_DEFAULT_APP_BASE_URL__: JSON.stringify(DEFAULT_EXTENSION_APP_BASE_URL),
+    },
     outfile: distExtensionPath,
     sourcemap: false,
     logLevel: 'info',
@@ -188,6 +196,10 @@ const runWatch = async () => {
     target: ['node18'],
     format: 'cjs',
     external: ['vscode'],
+    define: {
+      __TOPAI_DEFAULT_API_BASE_URL__: JSON.stringify(DEFAULT_EXTENSION_API_BASE_URL),
+      __TOPAI_DEFAULT_APP_BASE_URL__: JSON.stringify(DEFAULT_EXTENSION_APP_BASE_URL),
+    },
     outfile: distExtensionPath,
     sourcemap: false,
     logLevel: 'info',

@@ -10,9 +10,17 @@ const VIEW_ID = 'topai.chatView';
 const SECRET_SESSION_TOKEN_KEY = 'topai.sessionToken';
 const CONFIG_TARGET = vscode.ConfigurationTarget.Global;
 
+declare const __TOPAI_DEFAULT_API_BASE_URL__: string | undefined;
+declare const __TOPAI_DEFAULT_APP_BASE_URL__: string | undefined;
+
+const DEFAULT_API_BASE_URL =
+  __TOPAI_DEFAULT_API_BASE_URL__ || 'http://localhost:8787/api/v1';
+const DEFAULT_APP_BASE_URL =
+  __TOPAI_DEFAULT_APP_BASE_URL__ || 'http://localhost:5173';
+
 const defaultConfig: TopAiRuntimeConfig = {
-  apiBaseUrl: 'http://localhost:8705/api/v1',
-  appBaseUrl: 'http://localhost:5173',
+  apiBaseUrl: DEFAULT_API_BASE_URL,
+  appBaseUrl: DEFAULT_APP_BASE_URL,
   wsBaseUrl: '',
   sessionToken: '',
   codexSignInUrl: 'https://chatgpt.com/auth/login?next=/codex',
