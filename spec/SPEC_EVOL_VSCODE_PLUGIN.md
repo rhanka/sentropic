@@ -306,6 +306,54 @@ Theming:
 - Web app exposes a standard theme preference (`system`, `light`, `dark`) in settings/admin.
 - Theme policy keeps component parity without forking chat runtime behavior.
 
+### 4.14 Lot-1 increment contract (precise)
+This section locks the implementation contract for the immediate Lot-1 increment.
+
+#### 4.14.1 Host surface contract
+- Extension primary surface is `WebviewViewProvider` in a dockable side panel container.
+- `WebviewPanel` editor-tab mode is not a valid primary path for BR-05 delivery.
+- `TopAI: Open Chat Panel` command must:
+  - reveal/focus the side container,
+  - focus/reveal the `Top AI Ideas` view if already resolved.
+
+#### 4.14.2 Token bootstrap contract (v1)
+- Authentication bootstrap for VSCode uses a backend-issued extension token (admin-created).
+- Token lifecycle:
+  - create/revoke from web app admin settings,
+  - copy once for operator use,
+  - paste in extension settings flow.
+- Storage:
+  - extension token is stored in VSCode secure storage (`ExtensionContext.secrets`),
+  - token must not be persisted in plain workspace settings or browser localStorage.
+- Runtime use:
+  - token is attached as `Authorization: Bearer <token>` on extension API calls,
+  - token validity is checked via explicit connectivity test endpoint flow.
+
+#### 4.14.3 Extension settings UX contract (Lot 1)
+- Bootstrap fields:
+  - API endpoint,
+  - extension token input/update action,
+  - `Test API` action with explicit error classification.
+- Error taxonomy must be actionable:
+  - endpoint unreachable/network,
+  - token missing,
+  - token invalid/expired,
+  - server error.
+- Extension UI must not expose provider-login actions in this bootstrap path.
+
+#### 4.14.4 Provider ownership split (applies from Lot 1 onward)
+- Provider connections (Codex first) are owned by web app admin settings only.
+- Extension consumes read-only provider readiness status from backend.
+- No provider OAuth/session flow is initiated from extension UI in BR-05 Lot 1.
+
+#### 4.14.5 Minimal API contract additions
+- Admin web app:
+  - endpoint(s) to create/revoke/read extension tokens (admin-only).
+- Runtime read:
+  - endpoint exposing provider readiness metadata for clients (web/vscode).
+- Audit:
+  - token create/revoke and provider-connection changes are auditable.
+
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
 - Claude Code: auto compact near context limits + explicit manual compaction command.

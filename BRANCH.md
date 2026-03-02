@@ -136,7 +136,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
 
 - [ ] **Lot 1 — VSCode host hardening + token bootstrap**
   - [x] Spec mapping:
-    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `2`, `7.1` (BR05 foreground-only boundary), and reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
+    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `2`, `4.13`, `4.14`, `7.1` (BR05 foreground-only boundary), and reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
   - [x] Restore minimal VSCode extension packaging pipeline:
     - [x] add `ui/vscode-ext` packaging scripts/assets required to produce `.vsix`,
     - [x] add `make vscode-ext` target (and optional `make dev-vscode-ext`) under `BR05-EX1`.
@@ -153,9 +153,11 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] web app admin endpoint/UI to generate/revoke/copy VSCode extension token,
     - [ ] extension settings flow to paste/store token in `context.secrets`,
     - [ ] explicit endpoint/token connectivity check with actionable errors.
+    - [ ] align error taxonomy with `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.14.3`.
   - [ ] Remove ambiguous extension-side provider login CTA:
     - [ ] remove `Open login`/provider-auth wording from extension bootstrap flow,
     - [ ] replace with token guidance pointing to admin web app settings.
+    - [ ] enforce provider ownership split from `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.14.4`.
   - [ ] Lot gate:
     - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
