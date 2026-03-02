@@ -1,105 +1,443 @@
+import '../src/app.css';
+
+import ChatWidget from '$lib/components/ChatWidget.svelte';
+import { initApiClient } from '$lib/core/api-client';
+import { createExtensionContextProvider } from '$lib/core/context-provider';
+import { createExtensionNavigation, initNavigation } from '$lib/core/navigation-adapter';
+import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
+import { initializeSession } from '$lib/stores/session';
+import { init as initI18n, register } from 'svelte-i18n';
+import { mount as mountSvelte } from 'svelte';
+import {
+  createVsCodeBridge,
+  createWindowVsCodeBridgeTransport,
+  type VsCodeBridge,
+} from './vscode-bridge';
+
+import en from '../src/locales/en.json';
+import fr from '../src/locales/fr.json';
+
 type TopAiRuntimeConfig = {
+  profile: 'uat' | 'prod';
   apiBaseUrl?: string;
+  appBaseUrl?: string;
+  wsBaseUrl?: string;
   sessionToken?: string;
   codexSignInUrl?: string;
-};
-
-type VsCodeApi = {
-  postMessage(message: unknown): void;
+  updatedAt?: number;
 };
 
 declare global {
   interface Window {
-    acquireVsCodeApi?: () => VsCodeApi;
     __TOPAI_VSCODE_RUNTIME__?: TopAiRuntimeConfig;
   }
 }
 
-const runtime = window.__TOPAI_VSCODE_RUNTIME__ ?? {};
-const vscode = typeof window.acquireVsCodeApi === 'function' ? window.acquireVsCodeApi() : null;
+const RUNTIME_CONFIG_STORAGE_KEY = 'topai.vscode.runtime.config';
+const DEFAULT_RUNTIME_CONFIG: Required<TopAiRuntimeConfig> = {
+  profile: 'uat',
+  apiBaseUrl: 'http://localhost:8705/api/v1',
+  appBaseUrl: 'http://localhost:5173',
+  wsBaseUrl: '',
+  sessionToken: '',
+  codexSignInUrl: 'https://chatgpt.com/auth/login?next=/codex',
+  updatedAt: Date.now(),
+};
+
+type RuntimeState = {
+  config: Required<TopAiRuntimeConfig>;
+  bridge: VsCodeBridge | null;
+};
+
+type ExtensionMessage = {
+  type?: unknown;
+  payload?: unknown;
+};
 
 const root = document.getElementById('topai-vscode-root');
 if (!root) {
   throw new Error('Missing #topai-vscode-root container.');
 }
 
-root.innerHTML = `
-  <main style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 16px; color: #1f2937;">
-    <h1 style="font-size: 18px; margin: 0 0 12px;">Top AI Ideas</h1>
-    <p style="margin: 0 0 8px; font-size: 13px; color: #334155;">
-      VSCode extension runtime initialized.
-    </p>
-    <p style="margin: 0 0 14px; font-size: 12px; color: #64748b;">
-      API: <code>${runtime.apiBaseUrl ?? 'not configured'}</code>
-    </p>
-    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-      <button id="topai-open-codex" type="button" style="border: 1px solid #cbd5e1; background: #fff; color: #0f172a; border-radius: 6px; padding: 6px 10px; cursor: pointer;">Connect Codex</button>
-      <button id="topai-refresh-config" type="button" style="border: 1px solid #cbd5e1; background: #fff; color: #0f172a; border-radius: 6px; padding: 6px 10px; cursor: pointer;">Refresh runtime config</button>
-    </div>
-    <pre id="topai-runtime-status" style="margin-top: 12px; font-size: 12px; color: #334155; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; white-space: pre-wrap;"></pre>
-  </main>
-`;
+register('en', () => Promise.resolve(en));
+register('fr', () => Promise.resolve(fr));
 
-const statusNode = document.getElementById('topai-runtime-status');
-const setStatus = (value: unknown): void => {
-  if (!statusNode) return;
-  statusNode.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+const browserLocale = (navigator.language || 'fr').split('-')[0].toLowerCase();
+initI18n({
+  fallbackLocale: 'fr',
+  initialLocale: browserLocale === 'en' ? 'en' : 'fr',
+});
+
+const normalizeRuntimeConfig = (
+  raw?: Partial<TopAiRuntimeConfig> | null,
+): Required<TopAiRuntimeConfig> => {
+  const profile = raw?.profile === 'prod' ? 'prod' : 'uat';
+  const apiBaseUrl = raw?.apiBaseUrl?.trim() || DEFAULT_RUNTIME_CONFIG.apiBaseUrl;
+  const appBaseUrl = raw?.appBaseUrl?.trim() || DEFAULT_RUNTIME_CONFIG.appBaseUrl;
+  const wsBaseUrl = raw?.wsBaseUrl?.trim() || '';
+  const sessionToken = raw?.sessionToken?.trim() || '';
+  const codexSignInUrl =
+    raw?.codexSignInUrl?.trim() || DEFAULT_RUNTIME_CONFIG.codexSignInUrl;
+
+  return {
+    profile,
+    apiBaseUrl,
+    appBaseUrl,
+    wsBaseUrl,
+    sessionToken,
+    codexSignInUrl,
+    updatedAt:
+      typeof raw?.updatedAt === 'number' ? raw.updatedAt : Date.now(),
+  };
 };
 
-const request = (command: string, payload?: unknown): Promise<unknown> => {
-  if (!vscode) {
-    return Promise.reject(new Error('VSCode bridge unavailable.'));
+const loadPersistedRuntimeConfig = (): Partial<TopAiRuntimeConfig> => {
+  try {
+    const raw = localStorage.getItem(RUNTIME_CONFIG_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Partial<TopAiRuntimeConfig>;
+    return parsed ?? {};
+  } catch {
+    return {};
   }
-  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+};
 
-  return new Promise((resolve, reject) => {
-    const onMessage = (event: MessageEvent<unknown>) => {
-      const data = event.data as Record<string, unknown> | null;
-      if (!data) return;
-      if (data.source !== 'topai-vscode-host' || data.type !== 'response') return;
-      if (data.requestId !== requestId) return;
-      window.removeEventListener('message', onMessage);
-      if (data.ok === false) {
-        reject(new Error(typeof data.error === 'string' ? data.error : 'Host request failed.'));
-        return;
-      }
-      resolve(data.payload);
-    };
+const persistRuntimeConfig = (config: Required<TopAiRuntimeConfig>): void => {
+  localStorage.setItem(RUNTIME_CONFIG_STORAGE_KEY, JSON.stringify(config));
+};
 
-    window.addEventListener('message', onMessage);
-    vscode.postMessage({
-      source: 'topai-vscode-webview',
-      type: 'request',
-      command,
-      requestId,
-      payload,
+const createBridge = (): VsCodeBridge | null => {
+  try {
+    const transport = createWindowVsCodeBridgeTransport();
+    return createVsCodeBridge(transport);
+  } catch {
+    return null;
+  }
+};
+
+const applyApiRuntimeConfig = (
+  config: Required<TopAiRuntimeConfig>,
+): void => {
+  initApiClient({
+    baseUrl: config.apiBaseUrl,
+    isBrowser: true,
+    authToken: config.sessionToken || undefined,
+  });
+  initNavigation(createExtensionNavigation(config.apiBaseUrl));
+};
+
+const fetchSessionUser = async (
+  config: Required<TopAiRuntimeConfig>,
+): Promise<
+  | {
+      ok: true;
+      user: { id: string; email: string | null; displayName: string | null; role: string };
+    }
+  | {
+      ok: false;
+      error: string;
+      status?: number;
+    }
+> => {
+  const endpoint = `${config.apiBaseUrl.replace(/\/$/, '')}/auth/session`;
+  try {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        ...(config.sessionToken
+          ? { Authorization: `Bearer ${config.sessionToken}` }
+          : {}),
+      },
     });
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: `HTTP ${response.status}: ${response.statusText}`,
+        status: response.status,
+      };
+    }
+    const payload = (await response.json()) as {
+      userId?: string;
+      email?: string | null;
+      displayName?: string | null;
+      role?: string;
+    };
+    if (!payload?.userId) {
+      return {
+        ok: false,
+        error: 'Invalid auth/session payload.',
+      };
+    }
+    return {
+      ok: true,
+      user: {
+        id: payload.userId,
+        email: payload.email ?? null,
+        displayName: payload.displayName ?? null,
+        role: payload.role ?? 'editor',
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+};
+
+const normalizeConfigSetPayload = (
+  payload: unknown,
+  current: Required<TopAiRuntimeConfig>,
+): Required<TopAiRuntimeConfig> => {
+  const raw =
+    payload && typeof payload === 'object'
+      ? (payload as Record<string, unknown>)
+      : {};
+
+  return normalizeRuntimeConfig({
+    profile: raw.profile === 'prod' ? 'prod' : raw.profile === 'uat' ? 'uat' : current.profile,
+    apiBaseUrl:
+      typeof raw.apiBaseUrl === 'string' ? raw.apiBaseUrl : current.apiBaseUrl,
+    appBaseUrl:
+      typeof raw.appBaseUrl === 'string' ? raw.appBaseUrl : current.appBaseUrl,
+    wsBaseUrl:
+      typeof raw.wsBaseUrl === 'string' ? raw.wsBaseUrl : current.wsBaseUrl,
+    sessionToken: current.sessionToken,
+    codexSignInUrl: current.codexSignInUrl,
+    updatedAt: Date.now(),
   });
 };
 
-const refreshStatus = async (): Promise<void> => {
-  try {
-    const config = await request('runtime.config.get');
-    const auth = await request('auth.codex.status');
-    setStatus({ config, auth });
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
-  }
+const installExtensionRuntimeShim = (state: RuntimeState): void => {
+  const ext = globalThis as typeof globalThis & {
+    chrome?: {
+      runtime?: {
+        id?: string;
+        sendMessage?: (message: ExtensionMessage) => Promise<unknown>;
+      };
+    };
+  };
+  const existing = ext.chrome ?? {};
+
+  const sendMessage = async (message: ExtensionMessage): Promise<unknown> => {
+    const type = typeof message?.type === 'string' ? message.type : '';
+    const loginUrl = `${state.config.appBaseUrl.replace(/\/$/, '')}/auth/login`;
+
+    if (type === 'extension_config_get') {
+      return {
+        ok: true,
+        config: {
+          profile: state.config.profile,
+          apiBaseUrl: state.config.apiBaseUrl,
+          appBaseUrl: state.config.appBaseUrl,
+          wsBaseUrl: state.config.wsBaseUrl,
+          updatedAt: state.config.updatedAt,
+        },
+      };
+    }
+
+    if (type === 'extension_config_set') {
+      state.config = normalizeConfigSetPayload(message.payload, state.config);
+      persistRuntimeConfig(state.config);
+      applyApiRuntimeConfig(state.config);
+      return {
+        ok: true,
+        config: {
+          profile: state.config.profile,
+          apiBaseUrl: state.config.apiBaseUrl,
+          appBaseUrl: state.config.appBaseUrl,
+          wsBaseUrl: state.config.wsBaseUrl,
+          updatedAt: state.config.updatedAt,
+        },
+      };
+    }
+
+    if (type === 'extension_config_test') {
+      const payload =
+        message.payload && typeof message.payload === 'object'
+          ? (message.payload as Record<string, unknown>)
+          : {};
+      const apiBaseUrl =
+        typeof payload.apiBaseUrl === 'string' && payload.apiBaseUrl.trim().length > 0
+          ? payload.apiBaseUrl.trim()
+          : state.config.apiBaseUrl;
+      const healthUrl = `${apiBaseUrl.replace(/\/$/, '')}/health`;
+      try {
+        const response = await fetch(healthUrl, {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            ...(state.config.sessionToken
+              ? { Authorization: `Bearer ${state.config.sessionToken}` }
+              : {}),
+          },
+        });
+        return {
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          error: response.ok
+            ? undefined
+            : `HTTP ${response.status}: ${response.statusText}`,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+
+    if (type === 'extension_auth_status') {
+      const session = await fetchSessionUser(state.config);
+      if (!session.ok) {
+        return {
+          ok: true,
+          status: {
+            connected: false,
+            reason:
+              session.status === 401 || session.status === 403
+                ? 'not_connected'
+                : session.error,
+            user: null,
+          },
+        };
+      }
+      return {
+        ok: true,
+        status: {
+          connected: true,
+          reason: 'connected',
+          user: session.user,
+        },
+      };
+    }
+
+    if (type === 'extension_auth_connect') {
+      const session = await fetchSessionUser(state.config);
+      if (!session.ok) {
+        return {
+          ok: false,
+          code: 'APP_SESSION_REQUIRED',
+          error: session.error,
+          loginUrl,
+        };
+      }
+      return {
+        ok: true,
+        user: session.user,
+      };
+    }
+
+    if (type === 'extension_auth_logout') {
+      return { ok: true };
+    }
+
+    if (type === 'extension_auth_open_login') {
+      if (state.bridge) {
+        const result = await state.bridge.request<{ opened?: boolean; url?: string }>(
+          'auth.codex.signIn',
+        );
+        return {
+          ok: Boolean(result?.opened),
+          loginUrl: result?.url ?? loginUrl,
+        };
+      }
+      window.open(loginUrl, '_blank', 'noopener,noreferrer');
+      return {
+        ok: true,
+        loginUrl,
+      };
+    }
+
+    return {
+      ok: false,
+      error: `Unsupported runtime message: ${type}`,
+    };
+  };
+
+  ext.chrome = {
+    ...existing,
+    runtime: {
+      ...(existing.runtime ?? {}),
+      id: 'topai.vscode.runtime',
+      sendMessage,
+    },
+  };
 };
 
-const openCodexButton = document.getElementById('topai-open-codex');
-openCodexButton?.addEventListener('click', async () => {
-  try {
-    const result = await request('auth.codex.signIn');
-    setStatus({ action: 'auth.codex.signIn', result });
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
+const bootstrapRuntimeState = async (): Promise<RuntimeState> => {
+  const bridge = createBridge();
+  const hostRuntime = window.__TOPAI_VSCODE_RUNTIME__ ?? {};
+  let hostConfig: Partial<TopAiRuntimeConfig> = hostRuntime;
+  if (bridge) {
+    try {
+      const config = await bridge.request<Partial<TopAiRuntimeConfig>>(
+        'runtime.config.get',
+      );
+      hostConfig = {
+        ...hostConfig,
+        ...(config ?? {}),
+      };
+    } catch {
+      // Keep host injected fallback config.
+    }
   }
+
+  const persisted = loadPersistedRuntimeConfig();
+  const config = normalizeRuntimeConfig({
+    ...hostConfig,
+    ...persisted,
+    sessionToken:
+      persisted.sessionToken?.trim() ||
+      hostConfig.sessionToken?.trim() ||
+      DEFAULT_RUNTIME_CONFIG.sessionToken,
+    codexSignInUrl:
+      persisted.codexSignInUrl?.trim() ||
+      hostConfig.codexSignInUrl?.trim() ||
+      DEFAULT_RUNTIME_CONFIG.codexSignInUrl,
+  });
+  persistRuntimeConfig(config);
+  applyApiRuntimeConfig(config);
+
+  return {
+    config,
+    bridge,
+  };
+};
+
+const contextProvider = createExtensionContextProvider({
+  route: { id: '/vscode' },
+  params: {},
+  url: new URL('https://top-ai-ideas.local/vscode'),
 });
 
-const refreshButton = document.getElementById('topai-refresh-config');
-refreshButton?.addEventListener('click', () => {
-  void refreshStatus();
-});
+const initialState: ChatWidgetHandoffState = {
+  activeTab: 'chat',
+  chatSessionId: null,
+  draft: '',
+  commentThreadId: null,
+  commentSectionKey: null,
+  displayMode: 'docked',
+  isOpen: true,
+  updatedAt: Date.now(),
+  source: 'sidepanel',
+};
 
-void refreshStatus();
+const boot = async (): Promise<void> => {
+  const runtimeState = await bootstrapRuntimeState();
+  installExtensionRuntimeShim(runtimeState);
+  await initializeSession();
+
+  mountSvelte(ChatWidget, {
+    target: root,
+    props: {
+      contextProvider,
+      hostMode: 'sidepanel',
+      initialState,
+    },
+  });
+};
+
+void boot();

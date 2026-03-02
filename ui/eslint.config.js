@@ -2,7 +2,15 @@ import js from '@eslint/js';
 
 export default [
   {
-    ignores: ['build/**', 'chrome-ext/dist/**', 'node_modules/**', '**/*.d.ts', '.vite/**', '.svelte-kit/**']
+    ignores: [
+      'build/**',
+      'chrome-ext/dist/**',
+      'vscode-ext/dist/**',
+      'node_modules/**',
+      '**/*.d.ts',
+      '.vite/**',
+      '.svelte-kit/**',
+    ]
   },
   {
     languageOptions: {

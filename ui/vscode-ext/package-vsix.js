@@ -11,7 +11,6 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const manifestPath = path.resolve(__dirname, 'package.json');
 const extensionEntryPoint = path.resolve(__dirname, 'extension.ts');
-const webviewEntryPoint = path.resolve(__dirname, 'webview-entry.ts');
 const distDir = path.resolve(__dirname, 'dist');
 const distExtensionPath = path.join(distDir, 'extension.js');
 const distWebviewPath = path.join(distDir, 'webview-entry.js');
@@ -155,16 +154,14 @@ const buildHostBundle = async () => {
 };
 
 const buildWebviewBundle = async () => {
-  await esbuild.build({
-    entryPoints: [webviewEntryPoint],
-    bundle: true,
-    platform: 'browser',
-    target: ['es2022'],
-    format: 'iife',
-    outfile: distWebviewPath,
-    sourcemap: false,
-    logLevel: 'info',
+  const result = spawnSync('npm', ['run', 'build:vscode-webview'], {
+    cwd: rootDir,
+    stdio: 'inherit',
   });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`VSCode webview build failed (status ${result.status ?? 'unknown'}).`);
+  }
 };
 
 const buildAndPackage = async () => {
@@ -203,32 +200,14 @@ const runWatch = async () => {
     ],
   });
 
-  const webviewCtx = await esbuild.context({
-    entryPoints: [webviewEntryPoint],
-    bundle: true,
-    platform: 'browser',
-    target: ['es2022'],
-    format: 'iife',
-    outfile: distWebviewPath,
-    sourcemap: false,
-    logLevel: 'info',
-    plugins: [
-      {
-        name: 'package-vsix-on-webview-build',
-        setup(build) {
-          build.onEnd(packageOnSuccess);
-        },
-      },
-    ],
-  });
-
   await hostCtx.watch();
-  await webviewCtx.watch();
+  await buildWebviewBundle();
   await hostCtx.rebuild();
-  await webviewCtx.rebuild();
   packageVsix();
 
-  console.log('👀 Watching VSCode extension sources...');
+  console.log(
+    '👀 Watching VSCode host sources (extension.ts). Re-run dev-vscode-ext after webview (Svelte) changes.'
+  );
   nodeProcess.stdin.resume();
 };
 

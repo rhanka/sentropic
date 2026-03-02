@@ -36,6 +36,11 @@
           "default": "http://localhost:8705/api/v1",
           "description": "Top AI Ideas API base URL used by the VSCode extension runtime."
         },
+        "topai.appBaseUrl": {
+          "type": "string",
+          "default": "http://localhost:5173",
+          "description": "Top AI Ideas app base URL used by open-link navigation in VSCode runtime."
+        },
         "topai.sessionToken": {
           "type": "string",
           "default": "",
