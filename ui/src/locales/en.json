@@ -976,8 +976,8 @@
         "description": "Analyze and suggest resolutions"
       },
       "todoCreate": {
-        "label": "TODO",
-        "description": "Create and progress executable TODO lists from chat"
+        "label": "Plan",
+        "description": "Create and progress executable plans from chat"
       },
       "webSearch": {
         "label": "Web search",
@@ -1005,7 +1005,7 @@
       "executiveSummary": { "label": "Executive summary" }
     },
     "todoCard": {
-      "title": "TODO created from chat",
+      "title": "Plan created from chat",
       "statusLabel": "Status",
       "planIdLabel": "Plan",
       "todoIdLabel": "TODO",
@@ -1013,13 +1013,13 @@
       "tasksLabel": "Task checklist"
     },
     "todoRuntimePanel": {
-      "title": "TODO",
+      "title": "Plan",
       "subtitle": "Current checklist",
       "collapse": "Collapse panel",
       "expand": "Expand panel",
-      "delete": "Delete TODO",
-      "confirmDelete": "Delete this TODO from the current chat session?",
-      "deleteError": "Unable to delete TODO",
+      "delete": "Delete plan",
+      "confirmDelete": "Delete this plan from the current chat session?",
+      "deleteError": "Unable to delete plan",
       "statusLabel": "Status",
       "planIdLabel": "Plan",
       "todoIdLabel": "TODO",
@@ -1027,7 +1027,7 @@
       "runStatusLabel": "Run status",
       "runTaskIdLabel": "Active task",
       "tasksLabel": "Task checklist",
-      "noTasks": "No task in this TODO yet.",
+      "noTasks": "No task in this plan yet.",
       "completedTaskLabel": "Completed task",
       "pendingTaskLabel": "Pending task"
     },
