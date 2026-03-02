@@ -5,7 +5,7 @@
  */
 
 const _skBrowser = typeof window !== 'undefined';
-import { getApiBaseUrl, getApiBrowserFlag } from '$lib/core/api-client';
+import { getApiAuthToken, getApiBaseUrl, getApiBrowserFlag } from '$lib/core/api-client';
 import { API_BASE_URL } from '$lib/config';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
@@ -60,6 +60,7 @@ export async function apiRequest<T = any>(
     headers: {
       'Content-Type': 'application/json',
       'X-App-Locale': appLocale,
+      ...(getApiAuthToken() ? { Authorization: `Bearer ${getApiAuthToken()}` } : {}),
       ...options.headers,
     },
   });
