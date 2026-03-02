@@ -159,8 +159,6 @@ export const activate = (context: vscode.ExtensionContext): void => {
       panel.webview.html = createWebviewHtml(panel.webview, context.extensionUri, readRuntimeConfig());
     }),
   );
-
-  revealPanel();
 };
 
 export const deactivate = (): void => {
