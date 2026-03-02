@@ -132,16 +132,23 @@ This document is the single checklist for **chat tools**: what is already implem
   - config editing: mono and bigram rule list editable in settings.
 - [ ] `ls`
   - path-scoped listing, normalized entries.
+  - bounded depth recursion; hidden files excluded by default (explicit opt-in).
 - [ ] `grep_rg`
-  - bounded search results with file/line references.
+  - use `rg` by default with `grep` fallback.
+  - bounded search results with file/line references + pagination/continuation for long sets.
 - [ ] `file_read`
-  - bounded text reads with metadata.
-- [ ] `file_edit_write`
+  - bounded windowed reads by default; explicit full-read path allowed under caps.
+  - sensitive path policy for secret-bearing files (deny/mask as configured).
+- [ ] `file_edit` (multi-mode: `edit|write|apply_patch`)
+  - default policy `ask` with Chrome-style confirmation banner.
   - structured deterministic edits with protected-path policies.
+  - path-pattern grants to reduce repeated asks (e.g. `api/*`), auditable and policy-scoped.
 - [ ] `git_status`
-  - read-only workspace state inspection.
+  - read-only workspace state inspection, default allow.
 - [ ] `git_diff`
-  - bounded read-only diff inspection.
+  - bounded read-only diff inspection with path/ref scope restrictions.
+- [ ] Shared non-shell policy engine
+  - `deny/ask/allow`, precedence `deny > ask > allow`, user+workspace merge where workspace cannot be weakened.
 
 ### Background tool mode (deferred)
 - [ ] Detached/background tool execution lifecycle is deferred to BR-10:
