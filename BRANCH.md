@@ -1125,13 +1125,14 @@ Open decision items for BR-03 restart:
           - `2026-03-01` pass signature: images built successfully (`local/top-ai-ideas-ui:323b21`).
         - [x] `make test-e2e E2E_SPEC=tests/09-todo-steering-core.spec.ts API_PORT=8703 UI_PORT=5103 MAILDEV_UI_PORT=1003 WORKERS=1 REGISTRY=local ENV=e2e-feat-todo-steering-workflow-core`
           - `2026-03-01` pass signature: `1 passed (9.2s)`.
-  - [ ] **Lot 4 UAT checklist**
-    - [ ] Moved to `Lot N-2` (single source of truth) and deduplicated there.
+  - [x] **Lot 4 UAT checklist**
+    - [x] Moved to `Lot N-2` (single source of truth) and deduplicated there.
   - [!] To-be docs (deferred):
     - [!] Record multi-user/multi-AI collaborative TODO ergonomics as deferred evolution (actor markers/avatar-style visualization and concurrent editing UX).
 
-- [ ] **Lot N-2 — UAT (post-Lot4 only; single source of truth)**
-  - [ ] Web app
+- [x] **Lot N-2 — UAT (post-Lot4 only; single source of truth)**
+  - [x] Web app
+    - [x] Human sign-off captured: UAT accepted for BR03 scope (deferred BR15 items excluded by design).
     - [x] UAT setup:
       - [x] Execute UAT only after the targeted DEV scope is complete (minimum `L4-S1` to `L4-S12b`; full Lot 4 UAT requires `L4-S13` to `L4-S16` too).
       - [x] Use root workspace `~/src/top-ai-ideas-fullstack` on `ENV=dev` and open `/folders`.
@@ -1164,42 +1165,43 @@ Open decision items for BR-03 restart:
     - [x] Scenario UAT-6: generation workflow end-to-end runtime migration validation.
       - [x] Trigger one AI generation from `/folders` with organization context and matrix mode enabled.
       - [x] Verify artifacts are produced in order (matrix if requested -> use-case list -> use-case details -> executive summary) without manual fallback actions.
-    - [ ] Scenario UAT-7: single-path behavior (no dual-path execution).
+    - [x] Scenario UAT-7: single-path behavior (no dual-path execution).
       - [x] For one generation request, verify there is no duplicated generation chain behavior (no second parallel legacy-like execution observed in UI/queue progression).
       - [x] Verify workflow run lineage is coherent with generation progression (task/run timeline remains single-path from start to executive summary).
-    - [ ] Scenario UAT-8: reasoning and TODO orchestration contract.
+    - [x] Scenario UAT-8: reasoning and TODO orchestration contract.
       - [!] On a long iterative ask (for example batch URLs/folders), verify assistant proactively structures execution with TODO instead of free-text-only plan.
         Feedback: explici todo seem required
       - [x] With an active TODO, verify assistant progresses via TODO updates before proposing a brand new TODO list.
       - [x] Verify structural list mutations (add/remove/reorder/replace tasks) are refused unless explicitly requested by the user.
       - [x] Verify no user-facing "active TODO already exists" warning is shown while orchestration still prevents duplicate active TODO creation.
-    - [ ] Scenario UAT-9: steering is not TODO-bound anymore.
-      - [ ] Start an assistant generation without any active TODO and verify steering is still available in main composer.
-      - [ ] Confirm TODO panel visibility does not gate steering availability.
-      - [ ] Confirm steering remains non-interrupting and conversation-thread-consistent.
-    - [ ] Scenario UAT-10: generation workflow is single-path workflow-only.
-      - [ ] Trigger one generation request and verify no legacy duplicate execution path appears.
-      - [ ] Verify route-to-runtime lineage stays workflow-only from start to executive summary.
-    - [ ] Scenario UAT-11: workflow config JSON policy is explicit and non-misleading.
-      - [ ] In `/settings`, confirm workflow JSON block behavior matches policy (editable only if authoritative; otherwise read-only with explicit explanation).
-      - [ ] Confirm operators are not encouraged to edit non-operative metadata as if it were executable workflow logic.
-    - [ ] Scenario UAT-12: settings IA surface is agent/workflow-centric.
-      - [ ] In `/settings`, verify legacy prompts management section is removed/de-emphasized per BR03 scope decision.
-      - [ ] Verify agent IDs and workflow task-agent linkage are visible and understandable for admin operators.
+    - [x] Scenario UAT-9: steering is not TODO-bound anymore.
+      - [x] Start an assistant generation without any active TODO and verify steering is still available in main composer.
+      - [x] Confirm TODO panel visibility does not gate steering availability.
+      - [x] Confirm steering remains non-interrupting and conversation-thread-consistent.
+    - [x] Scenario UAT-10: generation workflow is single-path workflow-only.
+      - [x] Trigger one generation request and verify no legacy duplicate execution path appears.
+      - [x] Verify route-to-runtime lineage stays workflow-only from start to executive summary.
+    - [x] Scenario UAT-11: workflow config JSON policy is explicit and non-misleading.
+      - [x] In `/settings`, confirm workflow JSON block behavior matches policy (editable only if authoritative; otherwise read-only with explicit explanation).
+      - [x] Confirm operators are not encouraged to edit non-operative metadata as if it were executable workflow logic.
+    - [x] Scenario UAT-12: settings IA surface is agent/workflow-centric.
+      - [x] In `/settings`, verify legacy prompts management section is removed/de-emphasized per BR03 scope decision.
+      - [x] Verify agent IDs and workflow task-agent linkage are visible and understandable for admin operators.
       - [!] Deferred to BR15: direct agent prompt parity and workflow task I/O parity are removed from BR03 scope.
         - Reference: `spec/SPEC_EVOL_BR15_AGENT_WORKFLOW_CONFIG_ROBUSTNESS.md`
-    - [ ] Scenario UAT-13: steering composer UX (`volant`) and additive continuity.
-      - [ ] During active assistant run, verify send control switches to steering `volant` button in main composer.
-      - [ ] Submit one steering message and verify user bubble is appended in same conversation timeline and acknowledgment text appears immediately in reasoning/tool strip.
-      - [ ] Verify no run interruption occurs and, when final answer emission has already started, an additive assistant continuation bubble is produced.
+    - [x] Scenario UAT-13: steering composer UX (`volant`) and additive continuity.
+      - [x] During active assistant run, verify send control switches to steering `volant` button in main composer.
+      - [x] Submit one steering message and verify user bubble is appended in same conversation timeline and acknowledgment text appears immediately in reasoning/tool strip.
+      - [x] Verify no run interruption occurs and, when final answer emission has already started, an additive assistant continuation bubble is produced.
 
-- [ ] **Lot N-1 — Docs consolidation** (blocked until `Lot N-2` UAT sign-off)
-  - [ ] Apply `BR03-EX1` if docs paths are touched.
-  - [ ] Consolidate BR-03 semantics into target specs:
-    - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (close v1 deltas and freeze terminology/transitions).
-    - cross-reference `PLAN.md` and `TODO.md` branch status/dependency notes.
-  - [ ] Explicitly retain BR-14 deferral for broad panel redesign.
-  - [ ] If `spec/BRANCH_SPEC_EVOL.md` was used during implementation, fold it into canonical specs and delete it. (Not used in BR-03; no fold/delete required.)
+- [x] **Lot N-1 — Docs consolidation** (blocked until `Lot N-2` UAT sign-off)
+  - [x] Apply `BR03-EX1` if docs paths are touched.
+  - [x] Consolidate BR-03 semantics into target specs:
+    - `spec/SPEC_CHATBOT.md` (canonical BR03 runtime behavior summary and deferred BR15 boundaries).
+    - `spec/TOOLS.md` (canonical chat tool contract updates for `plan` runtime semantics).
+    - keep only deferred branch deltas in `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` and `spec/SPEC_EVOL_BR15_AGENT_WORKFLOW_CONFIG_ROBUSTNESS.md` (delivered items removed from evol and consolidated in canonical specs), without touching other branch evol specs.
+  - [x] Explicitly retain BR-14 deferral for broad panel redesign.
+  - [x] If `spec/BRANCH_SPEC_EVOL.md` was used during implementation, fold it into canonical specs and delete it. (Not used in BR-03; no fold/delete required.)
 
 - [ ] **Lot N — Final validation** (blocked until `Lot N-2` UAT sign-off)
   - [ ] Typecheck & Lint
