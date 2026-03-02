@@ -293,7 +293,69 @@ Implication for this repo:
 - BR-05: deliver host/runtime parity and v1 restore/summary policy behavior.
 - BR-10: extend to multi-agent/multi-model orchestration UI and advanced workflow composition.
 
-## 8) Risks
+### 7.1 Background tool execution deferral (explicit)
+- Current state: no explicit contract yet for launching long-running tools in background without explicit agent lane UX.
+- Decision: defer this capability to **BR-10**.
+- BR-05 constraint:
+  - tools are executed in foreground/interactive mode only (single request-response lifecycle).
+  - no detached/background tool-run lifecycle in BR-05.
+- BR-10 target:
+  - add background tool run lifecycle (`start`, `status`, `cancel`, `resume`, `result`),
+  - queue-backed execution with audit trail,
+  - explicit UI state for running background tasks without forcing user-visible agent lane creation.
+
+## 8) Rapid v1 tool contracts (BR-05 baseline)
+This section provides a concise contract per tool for implementation alignment.
+
+### 8.1 `bash` (safe shell wrapper)
+- Intent: run bounded shell commands for coding workflows.
+- Input: `command`, optional `cwd`, optional timeout profile.
+- Output: `stdout`, `stderr`, `exit_code`, `duration_ms`, truncation flag.
+- Guards: command allow/deny policy, output size cap, timeout cap, explicit permission policy.
+
+### 8.2 `ls`
+- Intent: list directory entries quickly.
+- Input: `path`, optional depth.
+- Output: normalized entry list (name, type, size, mtime).
+- Guards: workspace/path scope restrictions.
+
+### 8.3 `grep_rg`
+- Intent: text search over workspace files.
+- Input: `pattern`, optional `path`, optional glob filters.
+- Output: matches with file path + line references.
+- Guards: result cap + path scope restrictions.
+
+### 8.4 `file_read`
+- Intent: read file content for analysis.
+- Input: `path`, optional line/window parameters.
+- Output: text excerpt + file metadata.
+- Guards: max bytes/lines per call, binary-file rejection path.
+
+### 8.5 `file_edit_write`
+- Intent: apply deterministic file edits.
+- Input: path + structured edit payload.
+- Output: edit summary + affected ranges/checksum.
+- Guards: write permission policy, protected-path denylist, patch validation.
+
+### 8.6 `git_status`
+- Intent: inspect working tree status.
+- Input: optional path filter.
+- Output: staged/unstaged/untracked summary.
+- Guards: read-only git interaction.
+
+### 8.7 `git_diff`
+- Intent: inspect content changes.
+- Input: optional path + ref range.
+- Output: bounded diff payload.
+- Guards: diff size cap, read-only git interaction.
+
+### 8.8 `history_analyze`
+- Intent: targeted question-answering on conversation history.
+- Input: `question`, optional range selectors, optional tool-target selectors.
+- Output: `answer`, `evidence`, `coverage`, optional `confidence`.
+- Guards: read-only, no hidden-reasoning leakage, explicit `insufficient_coverage` signaling.
+
+## 9) Risks
 - Missing object adapters can cause partial restores in v1; this must be explicit in UI/API responses.
 - Over-aggressive compaction can degrade context quality; threshold and hysteresis tuning should remain observable.
 - Divergence risk if any surface (web/chrome/vscode) bypasses shared runtime contracts.

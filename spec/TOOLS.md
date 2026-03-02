@@ -121,3 +121,25 @@ This document is the single checklist for **chat tools**: what is already implem
   - Can target one specific tool output (`target_tool_call_id` / tool-result message id) when an oversized tool call risks context overflow
   - Dedicated analyzer flow aligned with `documents.analyze` + chunk/merge strategy for long histories
   - Must return explicit coverage metadata and `insufficient_coverage` when the selected range is too narrow
+
+### VSCode code tools v1 (rapid contracts)
+- [ ] `bash` (safe shell wrapper, foreground mode in BR-05)
+  - bounded command execution, explicit policy gates, capped output/time.
+- [ ] `ls`
+  - path-scoped listing, normalized entries.
+- [ ] `grep_rg`
+  - bounded search results with file/line references.
+- [ ] `file_read`
+  - bounded text reads with metadata.
+- [ ] `file_edit_write`
+  - structured deterministic edits with protected-path policies.
+- [ ] `git_status`
+  - read-only workspace state inspection.
+- [ ] `git_diff`
+  - bounded read-only diff inspection.
+
+### Background tool mode (deferred)
+- [ ] Detached/background tool execution lifecycle is deferred to BR-10:
+  - `start`, `status`, `cancel`, `resume`, `result`,
+  - queue/audit-backed runtime,
+  - no explicit agent-lane requirement for user-facing UX.
