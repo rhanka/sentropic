@@ -588,6 +588,34 @@
       "sourceLabel": "Source",
       "errors": {
         "load": "Unable to load the Settings VSCode Plugin card. Set VSCODE_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /vscode-extension/top-ai-ideas-vscode-extension.vsix, then restart the API."
+      },
+      "token": {
+        "title": "Extension bootstrap token",
+        "description": "Issue or rotate the shared VSCode extension token used for bearer-auth API calls.",
+        "loading": "Loading token status…",
+        "issue": "Issue token",
+        "rotate": "Rotate token",
+        "revoke": "Revoke token",
+        "copy": "Copy",
+        "oneTimeNotice": "Copy this token now. It is shown once after issue/rotation.",
+        "statusLabel": "Status",
+        "statusActive": "Active",
+        "statusInactive": "Inactive",
+        "last4Label": "Token suffix",
+        "issuedAtLabel": "Issued at",
+        "expiresAtLabel": "Expires at",
+        "notAvailable": "N/A",
+        "toasts": {
+          "issued": "VSCode extension token issued.",
+          "revoked": "VSCode extension token revoked.",
+          "copied": "VSCode extension token copied."
+        },
+        "errors": {
+          "load": "Unable to load token status.",
+          "issue": "Unable to issue VSCode extension token.",
+          "revoke": "Unable to revoke VSCode extension token.",
+          "copy": "Unable to copy VSCode extension token."
+        }
       }
     },
     "systemInfo": "System information",
@@ -867,6 +895,8 @@
       "apiBaseUrl": "API Base URL",
       "appBaseUrl": "App Base URL",
       "wsBaseUrlOptional": "WS Base URL (optional)",
+      "sessionToken": "Extension token",
+      "sessionTokenHint": "Paste the admin-issued VSCode extension token from web app settings.",
       "testApi": "Test API",
       "permissions": {
         "title": "Tool permissions",
@@ -882,16 +912,17 @@
         "missingDraftFields": "Provide a tool and a valid origin/pattern (e.g. https://site.com, *.site.com, *)."
       },
       "authRequired": {
-        "title": "Extension auth is required before using this area.",
-        "description": "Open settings, then click Connect. If needed, open app login first.",
+        "title": "An extension token is required before using this area.",
+        "description": "Open settings and paste the VSCode extension token issued by an admin.",
         "openSettings": "Open settings"
       },
       "auth": {
         "title": "Extension auth",
         "connectedAs": "Connected as",
         "notConnected": "Not connected",
-        "connect": "Connect",
-        "logout": "Logout",
+        "connect": "Validate token",
+        "logout": "Clear session",
+        "providerManagedInAdmin": "Provider login is managed in admin web app settings.",
         "openLogin": "Open login"
       },
       "status": {
