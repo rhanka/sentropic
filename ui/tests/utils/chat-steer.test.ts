@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { postChatSteer } from '../../src/lib/utils/chat-steer';
+import {
+  insertSteerMessageInTimeline,
+  postChatSteer,
+} from '../../src/lib/utils/chat-steer';
 
 describe('chat steer utils', () => {
   it('posts steer payload to chat message endpoint and normalizes feedback', async () => {
@@ -43,5 +46,41 @@ describe('chat steer utils', () => {
     await expect(
       postChatSteer(apiPost, 'msg_assistant_2', '   '),
     ).rejects.toThrow('Missing steer message');
+  });
+
+  it('inserts steer message just before active assistant message', () => {
+    const timeline = [
+      { id: 'user_1', role: 'user' },
+      { id: 'assistant_1', role: 'assistant' },
+    ];
+    const steerMessage = { id: 'steer_1', role: 'user' };
+
+    const next = insertSteerMessageInTimeline(
+      timeline,
+      steerMessage,
+      'assistant_1',
+    );
+
+    expect(next.map((message) => message.id)).toEqual([
+      'user_1',
+      'steer_1',
+      'assistant_1',
+    ]);
+  });
+
+  it('appends steer message when active assistant message is unavailable', () => {
+    const timeline = [
+      { id: 'user_1', role: 'user' },
+      { id: 'assistant_1', role: 'assistant' },
+    ];
+    const steerMessage = { id: 'steer_1', role: 'user' };
+
+    const next = insertSteerMessageInTimeline(timeline, steerMessage, null);
+
+    expect(next.map((message) => message.id)).toEqual([
+      'user_1',
+      'assistant_1',
+      'steer_1',
+    ]);
   });
 });
