@@ -87,7 +87,9 @@ Object restore in v1 is whitelist-based (not global-all-objects by default).
 
 ### 4.6 Summary policy (state-of-the-art aligned)
 Default policy proposal:
-- Auto-summary trigger at **85%** projected usage of usable context budget.
+- Double threshold policy (automatic):
+  - `soft` trigger at **85%** projected usage of usable context budget,
+  - `hard` trigger at **92%** projected usage (compaction mandatory before continuing model progression).
 - Preserve reserved headroom for continuation:
   - ~10% answer generation,
   - ~5% steering/tool/system overhead.
@@ -100,6 +102,46 @@ Default policy proposal:
 Rationale:
 - Aligns with modern agent clients using near-limit auto compaction + reserve windows.
 - Avoids late hard-fail behavior while preserving answer quality.
+
+### 4.6.1 User-facing summary UX (locked)
+- Visual pattern:
+  - show a transverse light-gray system strip in timeline (not an assistant message bubble).
+  - states:
+    - running: `Résumé du contexte en cours…`
+    - done: `Contexte compacté.`
+- Messaging:
+  - default message stays metric-free (clean UX).
+  - metrics are available on hover/tooltip only (example: turns compacted, estimated token delta).
+- Persistent context occupancy indicator:
+  - show a very lightweight occupancy indicator at all times in chat UI (web + VSCode host parity),
+  - indicator must stay subtle (small bar/dot + tooltip), never blocking composition.
+- No-op rule:
+  - if compaction runs but no effective delta is produced, do not show a completed compaction strip.
+
+### 4.6.2 Overflow during reasoning / tool execution (locked)
+Goal: avoid context crashes even when overflow happens mid-reasoning or around heavy tool calls.
+
+Execution policy:
+- Preferred path:
+  - if provider/runtime supports in-flight compaction continuation, compact and continue same run.
+- Fallback path:
+  - otherwise compact at next safe boundary (end of current reasoning/tool step), then resume automatically.
+- Never silently drop user intent:
+  - pending user request and steer context must be preserved across compaction boundary.
+
+Heavy tool-call guardrails:
+- Pre-dispatch budget check for each tool call:
+  - estimate tool input + expected output contribution to context usage.
+- If estimated call would violate hard threshold:
+  - compact first, then dispatch tool call, or
+  - request narrowing if compaction cannot free enough budget safely.
+- Runtime protections:
+  - max payload guard for tool outputs,
+  - per-turn tool-call ceiling to prevent runaway loops,
+  - explicit reason codes when deferring/blocking:
+    - `context_compaction_required`,
+    - `tool_payload_too_large`,
+    - `tool_call_deferred_for_compaction`.
 
 ### 4.7 Retention policy
 - Session retention default: unlimited checkpoints per session.
@@ -164,6 +206,11 @@ Required behavior:
 - Surface coverage requirement:
   - web app flow coverage (checkpoint proposal visibility + preview/apply + no-delta behavior),
   - VSCode plugin host flow coverage with parity assertions against web app behavior.
+- Summary/overflow mandatory coverage:
+  - summary strip lifecycle (`running` -> `done`) on both surfaces,
+  - occupancy indicator visibility/parity on both surfaces,
+  - overflow during reasoning/tool step with automatic resume behavior,
+  - heavy tool-call guardrails (pre-dispatch budget check + explicit defer/block reason codes).
 
 ### 4.12 Conversation history QA tool (Lot 3 addition)
 Add a dedicated tool for targeted questions over conversation history.
