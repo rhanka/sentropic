@@ -70,18 +70,44 @@ version:
 cloc: ## Count lines of code (whole repo)
 	@cloc --vcs=git --not-match-f='(package.*\.json|.*_snapshot\.json)$$'
 
+CONDUCTOR_LANES ?=
+CONDUCTOR_LANES_FILE ?=
+CONDUCTOR_AUTO_GLOB ?= tmp/feat-* tmp/fix-*
+
 .PHONY: conductor-agent-report agent-conductor-report conductor-agent-status agent-conductor-status agent-conductore-status
-conductor-agent-report: ## Conductor report with done/treated % (UAT-excluded), SLOC and heartbeat/stall for BR03/04/05/06
+conductor-agent-report: ## Conductor report with done/treated % (UAT-excluded), SLOC and heartbeat/stall (configurable lanes)
 	@set -euo pipefail; \
 	now="$$(date +%s)"; \
 	ts="$$(date '+%Y-%m-%d %H:%M:%S %z')"; \
 	total_done=0; total_treated=0; total_all=0; \
-	lanes=( \
-		"BR03|A|tmp/feat-todo-steering-workflow-core" \
-		"BR04|B|tmp/feat-workspace-template-catalog" \
-		"BR05|C|tmp/feat-vscode-plugin-v1" \
-		"BR06|D|tmp/feat-chrome-upstream-v1" \
-	); \
+	lanes=(); \
+	if [ -n "$(CONDUCTOR_LANES)" ]; then \
+		IFS=';' read -r -a lanes <<< "$(CONDUCTOR_LANES)"; \
+	elif [ -n "$(CONDUCTOR_LANES_FILE)" ] && [ -f "$(CONDUCTOR_LANES_FILE)" ]; then \
+		while IFS= read -r raw_line; do \
+			line="$${raw_line%%#*}"; \
+			line="$$(echo "$$line" | xargs)"; \
+			if [ -z "$$line" ]; then \
+				continue; \
+			fi; \
+			lanes+=("$$line"); \
+		done < "$(CONDUCTOR_LANES_FILE)"; \
+	else \
+		auto_i=1; \
+		for dir in $(CONDUCTOR_AUTO_GLOB); do \
+			if [ ! -d "$$dir" ] || [ ! -f "$$dir/BRANCH.md" ]; then \
+				continue; \
+			fi; \
+			lanes+=("$$(printf 'AUTO%02d|-|%s' "$$auto_i" "$$dir")"); \
+			auto_i="$$((auto_i + 1))"; \
+		done; \
+	fi; \
+	if [ "$${#lanes[@]}" -eq 0 ]; then \
+		echo "No conductor lanes configured."; \
+		echo "Use CONDUCTOR_LANES='BR04|B|tmp/feat-workspace-template-catalog;BR05|C|tmp/feat-vscode-plugin-v1;BR06|D|tmp/feat-chrome-upstream-v1'"; \
+		echo "or CONDUCTOR_LANES_FILE=<path> (one 'lane|agent|dir' entry per line)."; \
+		exit 1; \
+	fi; \
 	echo "Conductor report ($$ts)"; \
 	echo "lane | agent | branch | done | treated | dirty | head | sloc | heartbeat"; \
 	echo "-----|-------|--------|------|---------|-------|------|------|----------"; \
