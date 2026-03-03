@@ -54,13 +54,14 @@ export async function apiRequest<T = any>(
     return u.toString();
   })();
 
+  const authToken = getApiAuthToken();
   const response = await fetch(url, {
     ...options,
-    credentials: 'include', // Always include cookies for authentication
+    credentials: authToken ? 'omit' : 'include',
     headers: {
       'Content-Type': 'application/json',
       'X-App-Locale': appLocale,
-      ...(getApiAuthToken() ? { Authorization: `Bearer ${getApiAuthToken()}` } : {}),
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...options.headers,
     },
   });
