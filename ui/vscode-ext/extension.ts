@@ -491,7 +491,12 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
 }
 
 export const activate = (context: vscode.ExtensionContext): void => {
-  const localToolsRuntime = createVsCodeLocalToolsRuntime(context);
+  const localToolsRuntime = createVsCodeLocalToolsRuntime(context, {
+    getWorkspaceRoot: () => {
+      const folder = vscode.workspace.workspaceFolders?.[0];
+      return folder?.uri?.fsPath ?? null;
+    },
+  });
   const runtimeHandler = createTopAiVsCodeRequestHandler({
     getRuntimeConfig: async () => readRuntimeConfig(context),
     validateRuntimeAuth: async () => {

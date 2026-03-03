@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+import type { ExtensionContext } from 'vscode';
 import { execFile as execFileCb } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -34,6 +34,7 @@ export type VsCodeToolPermissionEntry = {
   toolName: string;
   origin: string;
   policy: VsCodeToolPermissionPolicy;
+  pathPattern?: string | null;
   updatedAt: string;
 };
 
@@ -42,6 +43,7 @@ type PendingPermissionRequest = {
   toolCallId: string;
   toolName: string;
   origin: string;
+  pathPattern?: string | null;
   details?: Record<string, unknown>;
 };
 
@@ -60,11 +62,13 @@ type PolicyInput = {
   toolName: string;
   origin: string;
   policy: string;
+  pathPattern?: string;
 };
 
 type PolicyDeleteInput = {
   toolName: string;
   origin: string;
+  pathPattern?: string;
 };
 
 type CommandDecision = 'allow' | 'ask' | 'deny';
@@ -82,6 +86,16 @@ const MAX_OUTPUT_CHARS = 12_000;
 const MAX_FILE_READ_CHARS = 64_000;
 const MAX_RG_RESULTS = 400;
 const MAX_LS_DEPTH = 4;
+const MAX_RG_OFFSET = 2_000;
+const MAX_RG_SCAN = 2_400;
+const SENSITIVE_PATH_MATCHERS = [
+  /(^|\/)\.env(?:\..+)?$/i,
+  /(^|\/).*\.pem$/i,
+  /(^|\/)id_rsa(?:\.pub)?$/i,
+  /(^|\/)secrets?(?:\/|$)/i,
+  /(^|\/)\.aws(?:\/|$)/i,
+  /(^|\/)\.ssh(?:\/|$)/i,
+];
 
 const isToolName = (value: string): value is VsCodeLocalToolName => {
   return (
@@ -120,6 +134,117 @@ const normalizeOrigin = (raw: string): string | null => {
   if (value === '*') return '*';
   if (value === ORIGIN_VSCODE_WORKSPACE) return ORIGIN_VSCODE_WORKSPACE;
   return null;
+};
+
+const normalizePathPattern = (raw: string | null | undefined): string | null => {
+  const value = String(raw ?? '')
+    .trim()
+    .replace(/\\/g, '/');
+  if (!value) return null;
+  if (value.startsWith('/')) return null;
+  if (value.includes('..')) return null;
+  if (value.includes('//')) return null;
+  return value.toLowerCase();
+};
+
+const pathPatternToRegex = (pattern: string): RegExp => {
+  const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${escaped.replace(/\\\*/g, '.*')}$`, 'i');
+};
+
+const matchesPathPattern = (
+  pattern: string | null | undefined,
+  targetPath: string | null,
+): boolean => {
+  if (!pattern) return true;
+  if (!targetPath) return false;
+  return pathPatternToRegex(pattern).test(targetPath);
+};
+
+const getPathPatternSpecificity = (pattern: string | null | undefined): number => {
+  if (!pattern) return 0;
+  return pattern.replace(/\*/g, '').length;
+};
+
+const isSensitivePath = (relativePath: string | null): boolean => {
+  if (!relativePath) return false;
+  const normalized = relativePath.replace(/\\/g, '/');
+  return SENSITIVE_PATH_MATCHERS.some((matcher) => matcher.test(normalized));
+};
+
+const isMissingBinaryError = (error: unknown, binary: string): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('ENOENT') && message.toLowerCase().includes(binary);
+};
+
+const extractPatchTargetPath = (patchText: string): string | null => {
+  const lines = patchText.split(/\r?\n/g);
+  const plusLine = lines.find((line) => line.startsWith('+++ '));
+  if (!plusLine) return null;
+  const raw = plusLine.slice(4).trim();
+  if (!raw) return null;
+  const sanitized = raw.startsWith('b/') ? raw.slice(2) : raw;
+  return sanitized || null;
+};
+
+const applyUnifiedPatchFallback = async (
+  workspaceRoot: string,
+  patchText: string,
+): Promise<{ applied: boolean; mode: 'apply_patch'; fallback: true }> => {
+  const relativePath = extractPatchTargetPath(patchText);
+  if (!relativePath) {
+    throw new Error('file_edit(apply_patch): unsupported patch format');
+  }
+  const targetPath = await resolveRealPath(workspaceRoot, relativePath);
+  let content = await fs.readFile(targetPath, 'utf8');
+
+  const lines = patchText.split(/\r?\n/g);
+  let index = 0;
+  let appliedHunks = 0;
+  while (index < lines.length) {
+    if (!lines[index]?.startsWith('@@')) {
+      index += 1;
+      continue;
+    }
+    index += 1;
+    const oldChunk: string[] = [];
+    const nextChunk: string[] = [];
+    while (
+      index < lines.length &&
+      !lines[index]?.startsWith('@@') &&
+      !lines[index]?.startsWith('diff --git')
+    ) {
+      const line = lines[index] ?? '';
+      if (line.startsWith('\\')) {
+        index += 1;
+        continue;
+      }
+      const marker = line[0] ?? '';
+      const body = line.slice(1);
+      if (marker === ' ' || marker === '-') oldChunk.push(body);
+      if (marker === ' ' || marker === '+') nextChunk.push(body);
+      index += 1;
+    }
+    const oldText = oldChunk.join('\n');
+    const nextText = nextChunk.join('\n');
+    if (!oldText) continue;
+    if (!content.includes(oldText)) {
+      throw new Error('file_edit(apply_patch): hunk context not found');
+    }
+    content = content.replace(oldText, nextText);
+    appliedHunks += 1;
+  }
+
+  if (appliedHunks === 0) {
+    throw new Error('file_edit(apply_patch): no hunks could be applied');
+  }
+
+  await fs.writeFile(targetPath, content, 'utf8');
+  return {
+    mode: 'apply_patch',
+    applied: true,
+    fallback: true,
+  };
 };
 
 const matchesToolPattern = (pattern: string, toolName: string): boolean => {
@@ -164,14 +289,6 @@ const resolveRealPath = async (workspaceRoot: string, inputPath?: string): Promi
     throw new Error(`Path outside workspace is not allowed: ${candidate}`);
   }
   return resolved;
-};
-
-const safeJson = (value: unknown): string => {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
 };
 
 const defaultWorkspaceDecision = (
@@ -267,6 +384,9 @@ export class VsCodeLocalToolsRuntime {
       const toolName = normalizeToolPattern(String(record.toolName ?? ''));
       const origin = normalizeOrigin(String(record.origin ?? ''));
       const policy = String(record.policy ?? '').toLowerCase();
+      const pathPattern = normalizePathPattern(
+        typeof record.pathPattern === 'string' ? record.pathPattern : null,
+      );
       if (!toolName || !origin) continue;
       if (policy !== 'allow' && policy !== 'deny') continue;
       const updatedAtRaw = String(record.updatedAt ?? '').trim();
@@ -278,6 +398,7 @@ export class VsCodeLocalToolsRuntime {
         toolName,
         origin,
         policy,
+        pathPattern,
         updatedAt,
       });
     }
@@ -288,21 +409,34 @@ export class VsCodeLocalToolsRuntime {
     await this.deps.updateGlobalState(STORAGE_KEY_POLICIES, entries);
   }
 
-  private resolveUserPolicy(toolName: string, origin: string): VsCodeToolPermissionPolicy | null {
+  private resolveUserPolicy(
+    toolName: string,
+    origin: string,
+    targetPath: string | null,
+  ): VsCodeToolPermissionPolicy | null {
     const entries = this.getPolicies().filter((entry) => {
       if (entry.origin !== '*' && entry.origin !== origin) return false;
       return matchesToolPattern(entry.toolName, toolName);
     });
-    if (entries.length === 0) return null;
+    const withPath = entries.filter((entry) =>
+      matchesPathPattern(entry.pathPattern, targetPath),
+    );
+    if (withPath.length === 0) return null;
 
-    entries.sort((a, b) => {
-      const scoreA = (a.origin === '*' ? 0 : 10_000) + getPatternSpecificity(a.toolName);
-      const scoreB = (b.origin === '*' ? 0 : 10_000) + getPatternSpecificity(b.toolName);
+    withPath.sort((a, b) => {
+      const scoreA =
+        (a.origin === '*' ? 0 : 10_000) +
+        getPatternSpecificity(a.toolName) +
+        getPathPatternSpecificity(a.pathPattern);
+      const scoreB =
+        (b.origin === '*' ? 0 : 10_000) +
+        getPatternSpecificity(b.toolName) +
+        getPathPatternSpecificity(b.pathPattern);
       if (scoreA !== scoreB) return scoreB - scoreA;
       return b.updatedAt.localeCompare(a.updatedAt);
     });
 
-    return entries[0]?.policy ?? null;
+    return withPath[0]?.policy ?? null;
   }
 
   private buildPermissionToolName(name: VsCodeLocalToolName, args: Record<string, unknown>): string {
@@ -318,6 +452,32 @@ export class VsCodeLocalToolsRuntime {
     return `bash:${bigram}`;
   }
 
+  private async resolvePermissionTargetPath(
+    name: VsCodeLocalToolName,
+    args: Record<string, unknown>,
+  ): Promise<string | null> {
+    if (
+      name !== 'ls' &&
+      name !== 'rg' &&
+      name !== 'file_read' &&
+      name !== 'file_edit' &&
+      name !== 'git_diff'
+    ) {
+      return null;
+    }
+    const workspaceRoot = this.getWorkspaceRootOrThrow();
+    const rawPath =
+      typeof args.path === 'string'
+        ? args.path
+        : name === 'ls' || name === 'rg'
+          ? '.'
+          : '';
+    if (!rawPath) return null;
+    const resolved = await resolveRealPath(workspaceRoot, rawPath);
+    const relative = path.relative(workspaceRoot, resolved) || '.';
+    return relative.replace(/\\/g, '/');
+  }
+
   private async evaluatePermission(input: {
     toolCallId: string;
     name: VsCodeLocalToolName;
@@ -329,14 +489,32 @@ export class VsCodeLocalToolsRuntime {
   > {
     const origin = ORIGIN_VSCODE_WORKSPACE;
     const permissionToolName = this.buildPermissionToolName(input.name, input.args);
+    const targetPath = await this.resolvePermissionTargetPath(input.name, input.args).catch(
+      () => null,
+    );
 
     if (this.oneTimeAllowByToolCallId.has(input.toolCallId)) {
       this.oneTimeAllowByToolCallId.delete(input.toolCallId);
       return { allowed: true };
     }
 
+    if (
+      (input.name === 'file_read' || input.name === 'file_edit') &&
+      isSensitivePath(targetPath)
+    ) {
+      return {
+        allowed: false,
+        denied: true,
+        reason: `Permission denied for sensitive path: ${targetPath}.`,
+      };
+    }
+
     const workspaceDecision = defaultWorkspaceDecision(input.name, input.args);
-    const userPolicy = this.resolveUserPolicy(permissionToolName, origin);
+    const userPolicy = this.resolveUserPolicy(
+      permissionToolName,
+      origin,
+      targetPath,
+    );
     const effective = mergeDecision(
       workspaceDecision,
       toCommandDecisionFromPolicy(userPolicy),
@@ -360,12 +538,17 @@ export class VsCodeLocalToolsRuntime {
       toolCallId: input.toolCallId,
       toolName: permissionToolName,
       origin,
+      pathPattern: targetPath,
       details:
         input.name === 'bash'
           ? {
               command: typeof input.args.command === 'string' ? input.args.command : '',
             }
-          : undefined,
+          : targetPath
+            ? {
+                path: targetPath,
+              }
+            : undefined,
     };
     this.pendingRequests.set(requestId, request);
     return {
@@ -391,15 +574,32 @@ export class VsCodeLocalToolsRuntime {
     const command = typeof args.command === 'string' ? args.command.trim() : '';
     if (!command) throw new Error('bash: command is required');
     const timeoutMs = withTimeoutMs(args, 15_000, 1_000, 60_000);
-    const { stdout, stderr } = await execFile('bash', ['-lc', command], {
-      cwd: workspaceRoot,
-      timeout: timeoutMs,
-      maxBuffer: 512 * 1024,
-    });
+    let stdout = '';
+    let stderr = '';
+    try {
+      const res = await execFile('bash', ['-lc', command], {
+        cwd: workspaceRoot,
+        timeout: timeoutMs,
+        maxBuffer: 512 * 1024,
+      });
+      stdout = String(res.stdout ?? '');
+      stderr = String(res.stderr ?? '');
+    } catch (error) {
+      if (!isMissingBinaryError(error, 'bash')) {
+        throw error;
+      }
+      const res = await execFile('sh', ['-lc', command], {
+        cwd: workspaceRoot,
+        timeout: timeoutMs,
+        maxBuffer: 512 * 1024,
+      });
+      stdout = String(res.stdout ?? '');
+      stderr = String(res.stderr ?? '');
+    }
     return {
       command,
-      stdout: truncate(String(stdout ?? '')),
-      stderr: truncate(String(stderr ?? '')),
+      stdout: truncate(stdout),
+      stderr: truncate(stderr),
     };
   }
 
@@ -457,6 +657,12 @@ export class VsCodeLocalToolsRuntime {
       1,
       MAX_RG_RESULTS,
     );
+    const offset = clamp(
+      typeof args.offset === 'number' ? Math.floor(args.offset) : 0,
+      0,
+      MAX_RG_OFFSET,
+    );
+    const scanLimit = clamp(offset + maxResults, 1, MAX_RG_SCAN);
     const timeoutMs = withTimeoutMs(args, 10_000, 1_000, 30_000);
 
     const commandArgs = [
@@ -465,23 +671,45 @@ export class VsCodeLocalToolsRuntime {
       '--color',
       'never',
       '-m',
-      String(maxResults),
+      String(scanLimit),
       pattern,
       targetPath,
     ];
-    const { stdout, stderr } = await execFile('rg', commandArgs, {
-      cwd: workspaceRoot,
-      timeout: timeoutMs,
-      maxBuffer: 512 * 1024,
-    });
+    let stdout = '';
+    let stderr = '';
+    try {
+      const res = await execFile('rg', commandArgs, {
+        cwd: workspaceRoot,
+        timeout: timeoutMs,
+        maxBuffer: 512 * 1024,
+      });
+      stdout = String(res.stdout ?? '');
+      stderr = String(res.stderr ?? '');
+    } catch (error) {
+      if (!isMissingBinaryError(error, 'rg')) {
+        throw error;
+      }
+      const grepArgs = ['-R', '-n', pattern, targetPath];
+      const res = await execFile('grep', grepArgs, {
+        cwd: workspaceRoot,
+        timeout: timeoutMs,
+        maxBuffer: 512 * 1024,
+      });
+      stdout = String(res.stdout ?? '');
+      stderr = String(res.stderr ?? '');
+    }
     const lines = String(stdout ?? '')
       .split(/\r?\n/g)
       .filter((line) => line.trim().length > 0);
+    const paged = lines.slice(offset, offset + maxResults);
+    const nextOffset = offset + maxResults < lines.length ? offset + maxResults : null;
     return {
       pattern,
       path: path.relative(workspaceRoot, targetPath) || '.',
-      results: lines.slice(0, maxResults),
-      truncated: lines.length > maxResults,
+      offset,
+      results: paged,
+      nextOffset,
+      truncated: nextOffset !== null,
       stderr: truncate(String(stderr ?? '')),
     };
   }
@@ -526,6 +754,43 @@ export class VsCodeLocalToolsRuntime {
 
   private async runFileEdit(workspaceRoot: string, args: Record<string, unknown>): Promise<unknown> {
     const mode = typeof args.mode === 'string' ? args.mode.trim().toLowerCase() : 'write';
+    if (mode === 'apply_patch') {
+      const patchText = typeof args.patch === 'string' ? args.patch : '';
+      if (!patchText.trim()) {
+        throw new Error('file_edit(apply_patch): patch is required');
+      }
+      const tempPatchPath = path.join(
+        workspaceRoot,
+        `.topai_patch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.diff`,
+      );
+      await fs.writeFile(tempPatchPath, patchText, 'utf8');
+      try {
+        try {
+          await execFile('git', ['apply', '--check', '--whitespace=nowarn', tempPatchPath], {
+            cwd: workspaceRoot,
+            timeout: 15_000,
+            maxBuffer: 256 * 1024,
+          });
+          await execFile('git', ['apply', '--whitespace=nowarn', tempPatchPath], {
+            cwd: workspaceRoot,
+            timeout: 15_000,
+            maxBuffer: 256 * 1024,
+          });
+          return {
+            mode,
+            applied: true,
+          };
+        } catch (error) {
+          if (!isMissingBinaryError(error, 'git')) {
+            throw error;
+          }
+          return applyUnifiedPatchFallback(workspaceRoot, patchText);
+        }
+      } finally {
+        await fs.unlink(tempPatchPath).catch(() => undefined);
+      }
+    }
+
     const targetPath = await resolveRealPath(
       workspaceRoot,
       typeof args.path === 'string' ? args.path : undefined,
@@ -559,10 +824,6 @@ export class VsCodeLocalToolsRuntime {
         changed: next !== previous,
         replaceAll,
       };
-    }
-
-    if (mode === 'apply_patch') {
-      throw new Error('file_edit(apply_patch): unsupported in BR05 runtime host');
     }
 
     throw new Error(`file_edit: unsupported mode ${mode}`);
@@ -706,6 +967,7 @@ export class VsCodeLocalToolsRuntime {
       toolName: pending.toolName,
       origin: pending.origin,
       policy: decision === 'allow_always' ? 'allow' : 'deny',
+      pathPattern: pending.pathPattern ?? null,
       updatedAt: new Date().toISOString(),
     });
     await this.savePolicies(entries);
@@ -728,6 +990,7 @@ export class VsCodeLocalToolsRuntime {
     const toolName = normalizeToolPattern(String(input.toolName ?? ''));
     const origin = normalizeOrigin(String(input.origin ?? ''));
     const policy = String(input.policy ?? '').trim().toLowerCase();
+    const pathPattern = normalizePathPattern(input.pathPattern);
     if (!toolName) return { ok: false, error: 'toolName is required.' };
     if (!origin) return { ok: false, error: 'origin is invalid.' };
     if (policy !== 'allow' && policy !== 'deny') {
@@ -735,12 +998,18 @@ export class VsCodeLocalToolsRuntime {
     }
 
     const entries = this.getPolicies().filter(
-      (entry) => !(entry.toolName === toolName && entry.origin === origin),
+      (entry) =>
+        !(
+          entry.toolName === toolName &&
+          entry.origin === origin &&
+          (entry.pathPattern ?? null) === (pathPattern ?? null)
+        ),
     );
     const item: VsCodeToolPermissionEntry = {
       toolName,
       origin,
       policy,
+      pathPattern,
       updatedAt: new Date().toISOString(),
     };
     entries.push(item);
@@ -752,11 +1021,17 @@ export class VsCodeLocalToolsRuntime {
     const input = (payload ?? {}) as PolicyDeleteInput;
     const toolName = normalizeToolPattern(String(input.toolName ?? ''));
     const origin = normalizeOrigin(String(input.origin ?? ''));
+    const pathPattern = normalizePathPattern(input.pathPattern);
     if (!toolName) return { ok: false, error: 'toolName is required.' };
     if (!origin) return { ok: false, error: 'origin is invalid.' };
 
     const entries = this.getPolicies().filter(
-      (entry) => !(entry.toolName === toolName && entry.origin === origin),
+      (entry) =>
+        !(
+          entry.toolName === toolName &&
+          entry.origin === origin &&
+          (entry.pathPattern ?? null) === (pathPattern ?? null)
+        ),
     );
     await this.savePolicies(entries);
     return { ok: true };
@@ -764,13 +1039,13 @@ export class VsCodeLocalToolsRuntime {
 }
 
 export const createVsCodeLocalToolsRuntime = (
-  context: vscode.ExtensionContext,
+  context: ExtensionContext,
+  options?: {
+    getWorkspaceRoot?: () => string | null;
+  },
 ): VsCodeLocalToolsRuntime => {
   return new VsCodeLocalToolsRuntime({
-    getWorkspaceRoot: () => {
-      const folder = vscode.workspace.workspaceFolders?.[0];
-      return folder?.uri?.fsPath ?? null;
-    },
+    getWorkspaceRoot: () => options?.getWorkspaceRoot?.() ?? null,
     getGlobalState: <T>(key: string, fallback: T): T =>
       context.globalState.get<T>(key, fallback),
     updateGlobalState: (key: string, value: unknown): Thenable<void> =>
@@ -820,6 +1095,7 @@ export const VSCODE_CODE_TOOL_DEFINITIONS: Array<{
         pattern: { type: 'string' },
         path: { type: 'string' },
         maxResults: { type: 'integer', minimum: 1, maximum: 400 },
+        offset: { type: 'integer', minimum: 0, maximum: 2000 },
         timeoutMs: { type: 'integer', minimum: 1000, maximum: 30000 },
       },
       required: ['pattern'],
@@ -843,18 +1119,19 @@ export const VSCODE_CODE_TOOL_DEFINITIONS: Array<{
   {
     name: 'file_edit',
     description:
-      'Apply deterministic file edits with mode=write|edit (apply_patch not enabled in BR05 host).',
+      'Apply deterministic file edits with mode=write|edit|apply_patch under permission policy checks.',
     parameters: {
       type: 'object',
       properties: {
         mode: { type: 'string', enum: ['write', 'edit', 'apply_patch'] },
         path: { type: 'string' },
+        patch: { type: 'string' },
         content: { type: 'string' },
         find: { type: 'string' },
         replace: { type: 'string' },
         replaceAll: { type: 'boolean' },
       },
-      required: ['mode', 'path'],
+      required: ['mode'],
     },
   },
   {
