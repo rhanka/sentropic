@@ -943,6 +943,8 @@
         "empty": "Aucune règle enregistrée.",
         "allowLabel": "Autoriser",
         "denyLabel": "Refuser",
+        "pathPatternLabel": "Périmètre de chemin",
+        "pathPatternPlaceholder": "Pattern chemin optionnel (ex: api/*)",
         "loadError": "Impossible de charger les permissions outils.",
         "updateError": "Impossible de mettre à jour la permission outil.",
         "deleteError": "Impossible de supprimer la permission outil.",

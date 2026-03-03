@@ -197,6 +197,7 @@
   ];
   let extensionPermissionDraftToolName = 'tab_action:*';
   let extensionPermissionDraftOrigin = '';
+  let extensionPermissionDraftPathPattern = '';
   let extensionPermissionDraftPolicy: 'allow' | 'deny' = 'allow';
   let extensionConfigForm: ExtensionRuntimeConfig = {
     profile: 'uat',
@@ -861,6 +862,7 @@
     toolName: string,
     origin: string,
     policy: 'allow' | 'deny',
+    pathPattern?: string | null,
   ) => {
     extensionToolPermissionsError = '';
     try {
@@ -868,6 +870,7 @@
         toolName,
         origin,
         policy,
+        pathPattern: pathPattern?.trim() || undefined,
       });
       await loadExtensionToolPermissions();
     } catch (error) {
@@ -881,12 +884,14 @@
   const deleteExtensionToolPermission = async (
     toolName: string,
     origin: string,
+    pathPattern?: string | null,
   ) => {
     extensionToolPermissionsError = '';
     try {
       await deleteLocalToolPermissionPolicy({
         toolName,
         origin,
+        pathPattern: pathPattern?.trim() || undefined,
       });
       await loadExtensionToolPermissions();
     } catch (error) {
@@ -910,8 +915,10 @@
       toolName,
       origin,
       extensionPermissionDraftPolicy,
+      extensionPermissionDraftPathPattern,
     );
     extensionPermissionDraftOrigin = '';
+    extensionPermissionDraftPathPattern = '';
   };
 
   $: if (
@@ -1961,6 +1968,14 @@
                             ? 'vscode://workspace | *'
                             : 'https://example.com | https://* | *.example.com | *'}
                         />
+                        {#if isVsCodeExtensionRuntime()}
+                          <input
+                            class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                            type="text"
+                            bind:value={extensionPermissionDraftPathPattern}
+                            placeholder={$_('chat.extension.permissions.pathPatternPlaceholder')}
+                          />
+                        {/if}
                         <select
                           class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
                           bind:value={extensionPermissionDraftPolicy}
@@ -1994,7 +2009,7 @@
                     {:else}
                       <div class="space-y-2">
                         {#each extensionToolPermissions as entry (
-                          `${entry.toolName}:${entry.origin}`
+                          `${entry.toolName}:${entry.origin}:${entry.pathPattern ?? ''}`
                         )}
                           <div class="rounded border border-slate-200 p-2 space-y-2">
                             <div class="text-[11px] font-semibold text-slate-700 break-all">
@@ -2003,6 +2018,11 @@
                             <div class="text-[11px] text-slate-500 break-all">
                               {entry.origin}
                             </div>
+                            {#if entry.pathPattern}
+                              <div class="text-[11px] text-slate-500 break-all">
+                                {$_('chat.extension.permissions.pathPatternLabel')}: {entry.pathPattern}
+                              </div>
+                            {/if}
                             <div class="flex items-center gap-2">
                               <select
                                 class="flex-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
@@ -2014,6 +2034,7 @@
                                     (
                                       event.currentTarget as HTMLSelectElement
                                     ).value as 'allow' | 'deny',
+                                    entry.pathPattern,
                                   )}
                               >
                                 <option value="allow">
@@ -2030,6 +2051,7 @@
                                   void deleteExtensionToolPermission(
                                     entry.toolName,
                                     entry.origin,
+                                    entry.pathPattern,
                                   )}
                               >
                                 {$_('common.delete')}

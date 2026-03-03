@@ -943,6 +943,8 @@
         "empty": "No tool permission policy yet.",
         "allowLabel": "Allow",
         "denyLabel": "Deny",
+        "pathPatternLabel": "Path scope",
+        "pathPatternPlaceholder": "Optional path pattern (e.g. api/*)",
         "loadError": "Unable to load tool permissions.",
         "updateError": "Unable to update tool permission.",
         "deleteError": "Unable to delete tool permission.",
