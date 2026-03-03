@@ -276,28 +276,28 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/vscode-ext/tool-permissions.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
-- [ ] **Lot 4 — Global conversation Summary (not VSCode-specific)**
-  - [ ] Implement context-budget summary strategy shared by chat surfaces (web + VSCode host integration path).
-  - [ ] Define trigger thresholds and automatic behavior:
-    - [ ] soft trigger at 85%, hard trigger at 92%,
-    - [ ] in-flight compaction when supported, otherwise safe-boundary compaction + auto-resume.
-  - [ ] Implement summary UI contract:
-    - [ ] transverse light-gray system strip in timeline (`Résumé du contexte en cours…` -> `Contexte compacté.`),
-    - [ ] no default metrics in message body; metrics available via hover/tooltip,
-    - [ ] subtle persistent context-occupancy indicator visible at all times.
-  - [ ] Implement heavy tool-call overflow guardrails:
-    - [ ] pre-dispatch budget estimate for tool calls,
-    - [ ] soft zone (85-92%) returns `context_budget_risk` to LLM and enforces replan before dispatch,
-    - [ ] hard zone (>=92%) enforces compaction-before-dispatch then LLM replan,
-    - [ ] max one replan attempt before user escalation,
-    - [ ] mandatory replan alternatives include `history_analyze` for targeted extraction from oversized tool output,
-    - [ ] explicit defer/block reason codes for oversized/deferred tool calls.
-  - [ ] Ensure behavior is not tied to VSCode-only UI.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-api-unit SCOPE=tests/unit/chat-summary-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+- [x] **Lot 4 — Global conversation Summary (not VSCode-specific)**
+  - [x] Implement context-budget summary strategy shared by chat surfaces (web + VSCode host integration path).
+  - [x] Define trigger thresholds and automatic behavior:
+    - [x] soft trigger at 85%, hard trigger at 92%,
+    - [x] in-flight compaction when supported, otherwise safe-boundary compaction + auto-resume.
+  - [x] Implement summary UI contract:
+    - [x] transverse light-gray system strip in timeline (`Résumé du contexte en cours…` -> `Contexte compacté.`),
+    - [x] no default metrics in message body; metrics available via hover/tooltip,
+    - [x] subtle persistent context-occupancy indicator visible at all times.
+  - [x] Implement heavy tool-call overflow guardrails:
+    - [x] pre-dispatch budget estimate for tool calls,
+    - [x] soft zone (85-92%) returns `context_budget_risk` to LLM and enforces replan before dispatch,
+    - [x] hard zone (>=92%) enforces compaction-before-dispatch then LLM replan,
+    - [x] max one replan attempt before user escalation,
+    - [x] mandatory replan alternatives include `history_analyze` for targeted extraction from oversized tool output,
+    - [x] explicit defer/block reason codes for oversized/deferred tool calls.
+  - [x] Ensure behavior is not tied to VSCode-only UI.
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-unit SCOPE=tests/unit/chat-summary-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot 5 — Global conversation Checkpoint (not VSCode-specific)**
   - [ ] Implement checkpoint lifecycle shared by chat runtime:
