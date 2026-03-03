@@ -1,0 +1,90 @@
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../src/services/openai', () => {
+  return {
+    callOpenAI: vi.fn(),
+    callOpenAIResponseStream: vi.fn(),
+  };
+});
+
+import { app } from '../../src/app';
+import { chatService } from '../../src/services/chat-service';
+import { queueManager } from '../../src/services/queue-manager';
+import { callOpenAIResponseStream } from '../../src/services/openai';
+import {
+  authenticatedRequest,
+  cleanupAuthData,
+  createAuthenticatedUser,
+} from '../utils/auth-helper';
+
+type StreamEvent = { type: string; data: unknown };
+
+async function* stream(events: StreamEvent[]): AsyncGenerator<StreamEvent, void, unknown> {
+  for (const event of events) {
+    yield event;
+  }
+}
+
+describe('Chat summary contract endpoint', () => {
+  let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
+  let processJobsSpy: ReturnType<typeof vi.spyOn>;
+  const mockedCallOpenAIResponseStream = vi.mocked(callOpenAIResponseStream);
+
+  beforeEach(async () => {
+    processJobsSpy = vi.spyOn(queueManager, 'processJobs').mockResolvedValue(undefined);
+    user = await createAuthenticatedUser('editor');
+    mockedCallOpenAIResponseStream.mockReset();
+  });
+
+  afterEach(async () => {
+    await cleanupAuthData();
+    processJobsSpy.mockRestore();
+    vi.clearAllMocks();
+  });
+
+  afterAll(() => {
+    vi.clearAllMocks();
+  });
+
+  it('exposes context budget status events in message stream endpoint', async () => {
+    mockedCallOpenAIResponseStream.mockImplementation(() =>
+      stream([
+        { type: 'content_delta', data: { delta: 'Réponse test budget.' } },
+        { type: 'done', data: {} },
+      ]),
+    );
+
+    const create = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/chat/messages',
+      user.sessionToken!,
+      {
+        content: 'Test contrat budget contexte',
+      },
+    );
+    expect(create.status).toBe(200);
+    const payload = await create.json();
+
+    await chatService.runAssistantGeneration({
+      userId: user.id,
+      sessionId: payload.sessionId,
+      assistantMessageId: payload.assistantMessageId,
+      model: 'gpt-4.1-nano',
+    });
+
+    const eventsResponse = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/chat/messages/${payload.assistantMessageId}/stream-events`,
+      user.sessionToken!,
+    );
+    expect(eventsResponse.status).toBe(200);
+    const eventsPayload = await eventsResponse.json();
+    const statusEvents = Array.isArray(eventsPayload.events)
+      ? eventsPayload.events.filter((event: any) => event.eventType === 'status')
+      : [];
+    const states = statusEvents.map((event: any) => String(event.data?.state ?? ''));
+    expect(states).toContain('context_budget_update');
+  });
+});
