@@ -299,18 +299,18 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make test-api-unit SCOPE=tests/unit/chat-summary-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
-- [ ] **Lot 5 — Global conversation Checkpoint (not VSCode-specific)**
-  - [ ] Implement checkpoint lifecycle shared by chat runtime:
-    - [ ] create checkpoint,
-    - [ ] list checkpoints,
-    - [ ] restore checkpoint.
-  - [ ] Ensure consistency rules (timeline, state snapshot boundaries) are enforced.
-  - [ ] Expose minimal UI integration points where required, without fake plugin tabs.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+- [x] **Lot 5 — Global conversation Checkpoint (not VSCode-specific)**
+  - [x] Implement checkpoint lifecycle shared by chat runtime:
+    - [x] create checkpoint,
+    - [x] list checkpoints,
+    - [x] restore checkpoint.
+  - [x] Ensure consistency rules (timeline, state snapshot boundaries) are enforced.
+  - [x] Expose minimal UI integration points where required, without fake plugin tabs.
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
