@@ -1023,6 +1023,11 @@
       "defaultTitle": "Conversation {id}",
       "confirmDelete": "Supprimer cette conversation ?"
     },
+    "checkpoints": {
+      "create": "Créer un checkpoint",
+      "restoreLatest": "Restaurer le dernier checkpoint",
+      "confirmRestoreLatest": "Restaurer le dernier checkpoint ? Les messages récents seront supprimés."
+    },
     "composer": {
       "ariaLabel": "Composer",
       "placeholder": {
@@ -1207,6 +1212,8 @@
       "loadSessions": "Erreur lors du chargement des sessions",
       "loadMessages": "Erreur lors du chargement des messages",
       "deleteSession": "Erreur lors de la suppression de la session",
+      "checkpointCreate": "Erreur lors de la création du checkpoint",
+      "checkpointRestore": "Erreur lors de la restauration du checkpoint",
       "send": "Erreur lors de l’envoi",
       "stop": "Erreur lors de l’arrêt",
       "feedback": "Erreur lors de la mise à jour du feedback"
