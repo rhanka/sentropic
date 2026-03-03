@@ -18,6 +18,10 @@
     type VsCodeExtensionDownloadMetadata,
   } from '$lib/utils/vscode-extension-download';
   import { emitUserAISettingsUpdated } from '$lib/utils/user-ai-settings-events';
+  import {
+    themePreference,
+    type ThemePreference,
+  } from '$lib/stores/themePreference';
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
   import WorkspaceSettingsPanel from '$lib/components/WorkspaceSettingsPanel.svelte';
   import TodoRuntimeConfigPanel from '$lib/components/TodoRuntimeConfigPanel.svelte';
@@ -154,6 +158,12 @@
   const isAdminApp = () => {
     const s = get(session);
     return s.user?.role === 'admin_app';
+  };
+
+  const updateThemePreference = (value: string) => {
+    const next: ThemePreference =
+      value === 'light' || value === 'dark' ? value : 'system';
+    themePreference.set(next);
   };
 
   const formatDateTime = (iso: string | null | undefined): string => {
@@ -702,6 +712,27 @@
 	        </div>
 	      </div>
     {/if}
+  </div>
+
+  <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
+    <h2 class="text-lg font-semibold text-slate-800">{$_('settings.theme.title')}</h2>
+    <p class="text-sm text-slate-600">{$_('settings.theme.description')}</p>
+    <div class="max-w-sm space-y-2">
+      <label for="theme-preference" class="block text-sm font-medium text-slate-700">
+        {$_('settings.theme.modeLabel')}
+      </label>
+      <select
+        id="theme-preference"
+        value={$themePreference}
+        on:change={(event) =>
+          updateThemePreference((event.currentTarget as HTMLSelectElement).value)}
+        class="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="system">{$_('settings.theme.modes.system')}</option>
+        <option value="light">{$_('settings.theme.modes.light')}</option>
+        <option value="dark">{$_('settings.theme.modes.dark')}</option>
+      </select>
+    </div>
   </div>
 
   <div class="space-y-4 rounded border border-slate-200 bg-white p-6">

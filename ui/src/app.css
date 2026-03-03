@@ -183,3 +183,105 @@ body {
 .slim-scroll:hover::-webkit-scrollbar-thumb {
   background-color: rgba(15, 23, 42, 0.32);
 }
+
+/* Web app theme preference (system|light|dark) */
+.topai-theme-dark body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+.topai-theme-dark .bg-white {
+  background-color: #0f172a !important;
+}
+
+.topai-theme-dark .bg-slate-50,
+.topai-theme-dark .bg-slate-50\/70 {
+  background-color: #111827 !important;
+}
+
+.topai-theme-dark .bg-slate-100 {
+  background-color: #1f2937 !important;
+}
+
+.topai-theme-dark .border-slate-100,
+.topai-theme-dark .border-slate-200,
+.topai-theme-dark .border-slate-300,
+.topai-theme-dark .border-gray-200 {
+  border-color: #334155 !important;
+}
+
+.topai-theme-dark .text-slate-900,
+.topai-theme-dark .text-slate-800,
+.topai-theme-dark .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+
+.topai-theme-dark .text-slate-600,
+.topai-theme-dark .text-slate-500 {
+  color: #cbd5e1 !important;
+}
+
+.topai-theme-dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+/* VSCode host theme parity */
+body.vscode-dark #topai-vscode-root,
+body.vscode-high-contrast #topai-vscode-root,
+body.vscode-high-contrast-light #topai-vscode-root {
+  background-color: var(--vscode-sideBar-background);
+  color: var(--vscode-foreground);
+}
+
+body.vscode-dark #topai-vscode-root .topai-chat-widget-shell,
+body.vscode-high-contrast #topai-vscode-root .topai-chat-widget-shell,
+body.vscode-high-contrast-light #topai-vscode-root .topai-chat-widget-shell {
+  background-color: var(--vscode-sideBar-background) !important;
+  color: var(--vscode-foreground) !important;
+  border-color: var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root .bg-white,
+body.vscode-dark #topai-vscode-root .bg-slate-50,
+body.vscode-dark #topai-vscode-root .bg-slate-100,
+body.vscode-high-contrast #topai-vscode-root .bg-white,
+body.vscode-high-contrast #topai-vscode-root .bg-slate-50,
+body.vscode-high-contrast #topai-vscode-root .bg-slate-100,
+body.vscode-high-contrast-light #topai-vscode-root .bg-white,
+body.vscode-high-contrast-light #topai-vscode-root .bg-slate-50,
+body.vscode-high-contrast-light #topai-vscode-root .bg-slate-100 {
+  background-color: var(--vscode-sideBar-background) !important;
+}
+
+body.vscode-dark #topai-vscode-root .border-slate-100,
+body.vscode-dark #topai-vscode-root .border-slate-200,
+body.vscode-dark #topai-vscode-root .border-slate-300,
+body.vscode-dark #topai-vscode-root .border-gray-200,
+body.vscode-high-contrast #topai-vscode-root .border-slate-100,
+body.vscode-high-contrast #topai-vscode-root .border-slate-200,
+body.vscode-high-contrast #topai-vscode-root .border-slate-300,
+body.vscode-high-contrast #topai-vscode-root .border-gray-200,
+body.vscode-high-contrast-light #topai-vscode-root .border-slate-100,
+body.vscode-high-contrast-light #topai-vscode-root .border-slate-200,
+body.vscode-high-contrast-light #topai-vscode-root .border-slate-300,
+body.vscode-high-contrast-light #topai-vscode-root .border-gray-200 {
+  border-color: var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root .text-slate-900,
+body.vscode-dark #topai-vscode-root .text-slate-800,
+body.vscode-dark #topai-vscode-root .text-slate-700,
+body.vscode-dark #topai-vscode-root .text-slate-600,
+body.vscode-dark #topai-vscode-root .text-slate-500,
+body.vscode-high-contrast #topai-vscode-root .text-slate-900,
+body.vscode-high-contrast #topai-vscode-root .text-slate-800,
+body.vscode-high-contrast #topai-vscode-root .text-slate-700,
+body.vscode-high-contrast #topai-vscode-root .text-slate-600,
+body.vscode-high-contrast #topai-vscode-root .text-slate-500,
+body.vscode-high-contrast-light #topai-vscode-root .text-slate-900,
+body.vscode-high-contrast-light #topai-vscode-root .text-slate-800,
+body.vscode-high-contrast-light #topai-vscode-root .text-slate-700,
+body.vscode-high-contrast-light #topai-vscode-root .text-slate-600,
+body.vscode-high-contrast-light #topai-vscode-root .text-slate-500 {
+  color: var(--vscode-foreground) !important;
+}

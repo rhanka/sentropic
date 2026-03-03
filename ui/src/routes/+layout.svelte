@@ -35,6 +35,7 @@
   } from '$lib/stores/workspaceScope';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { addToast } from '$lib/stores/toast';
+  import { themePreference } from '$lib/stores/themePreference';
 
   // Keep header visible on /auth/devices (required for navigation).
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/magic-link'];
@@ -175,6 +176,7 @@
 
   // Initialize session on app mount
   onMount(async () => {
+    themePreference.init();
     await initializeSession();
   });
 
