@@ -5,6 +5,7 @@ import {
   type TopAiRuntimeConfig,
   type TopAiVsCodeCommand,
 } from './host-handler';
+import { createVsCodeLocalToolsRuntime } from './local-tools';
 
 const COMMAND_OPEN_PANEL = 'topai.openPanel';
 const VIEW_ID = 'topai.chatView';
@@ -322,6 +323,7 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly runtimeHandler: ReturnType<typeof createTopAiVsCodeRequestHandler>,
+    private readonly localToolsRuntime: ReturnType<typeof createVsCodeLocalToolsRuntime>,
   ) {}
 
   async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
@@ -446,6 +448,36 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      if (command === 'runtime.local_tools.execute') {
+        const result = await this.localToolsRuntime.execute(payload.payload);
+        respond(true, result);
+        return;
+      }
+
+      if (command === 'runtime.local_tools.permission_decide') {
+        const result = await this.localToolsRuntime.decide(payload.payload);
+        respond(true, result);
+        return;
+      }
+
+      if (command === 'runtime.local_tools.permissions.list') {
+        const result = await this.localToolsRuntime.listPolicies();
+        respond(true, result);
+        return;
+      }
+
+      if (command === 'runtime.local_tools.permissions.upsert') {
+        const result = await this.localToolsRuntime.upsertPolicy(payload.payload);
+        respond(true, result);
+        return;
+      }
+
+      if (command === 'runtime.local_tools.permissions.delete') {
+        const result = await this.localToolsRuntime.deletePolicy(payload.payload);
+        respond(true, result);
+        return;
+      }
+
       const result = await this.runtimeHandler(
         command as TopAiVsCodeCommand,
         payload.payload,
@@ -459,6 +491,7 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
 }
 
 export const activate = (context: vscode.ExtensionContext): void => {
+  const localToolsRuntime = createVsCodeLocalToolsRuntime(context);
   const runtimeHandler = createTopAiVsCodeRequestHandler({
     getRuntimeConfig: async () => readRuntimeConfig(context),
     validateRuntimeAuth: async () => {
@@ -474,7 +507,11 @@ export const activate = (context: vscode.ExtensionContext): void => {
     },
   });
 
-  const provider = new TopAiChatViewProvider(context, runtimeHandler);
+  const provider = new TopAiChatViewProvider(
+    context,
+    runtimeHandler,
+    localToolsRuntime,
+  );
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(VIEW_ID, provider, {
