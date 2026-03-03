@@ -117,6 +117,19 @@ const TODO_BLOCKING_STATUSES = new Set(['blocked']);
 const BASE_MAX_ITERATIONS = 10;
 const TODO_AUTONOMOUS_MAX_ITERATIONS = 60;
 const TODO_AUTONOMOUS_EXTENSION_STEP = 10;
+const CONTEXT_BUDGET_SOFT_THRESHOLD = 85;
+const CONTEXT_BUDGET_HARD_THRESHOLD = 92;
+const CONTEXT_BUDGET_DEFAULT_TOKENS = 32_000;
+const CONTEXT_BUDGET_OPENAI_GPT5_TOKENS = 128_000;
+const CONTEXT_BUDGET_GEMINI_TOKENS = 128_000;
+const CONTEXT_SUMMARY_RECENT_MESSAGES = 8;
+const CONTEXT_SUMMARY_MAX_CHARS = 32_000;
+const CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS = 700;
+const CONTEXT_SUMMARY_SYSTEM_MARKER_START = '[CONTEXT_COMPACT_SUMMARY_BEGIN]';
+const CONTEXT_SUMMARY_SYSTEM_MARKER_END = '[CONTEXT_COMPACT_SUMMARY_END]';
+const CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS = 1;
+const CONTEXT_BUDGET_SOFT_ZONE_CODE = 'context_budget_risk';
+const CONTEXT_BUDGET_HARD_ZONE_CODE = 'context_budget_blocked';
 
 type SessionTodoRuntimeTask = {
   id: string;
@@ -129,6 +142,19 @@ type SessionTodoRuntimeSnapshot = {
   todoTitle: string;
   status: string;
   tasks: SessionTodoRuntimeTask[];
+};
+
+type ChatRuntimeMessage =
+  | { role: 'system' | 'user' | 'assistant'; content: string }
+  | { role: 'tool'; content: string; tool_call_id: string };
+
+type ContextBudgetZone = 'normal' | 'soft' | 'hard';
+
+type ContextBudgetSnapshot = {
+  estimatedTokens: number;
+  maxTokens: number;
+  occupancyPct: number;
+  zone: ContextBudgetZone;
 };
 
 const normalizeTodoRuntimeStatus = (value: unknown): string =>
@@ -332,6 +358,216 @@ const normalizeTodoRuntimeToolResult = (
 
   normalized.todoRuntime = todoRuntime;
   return normalized;
+};
+
+const toBudgetString = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value ?? null);
+  } catch {
+    return String(value ?? '');
+  }
+};
+
+const inferContextBudgetMaxTokens = (
+  providerId: ProviderId,
+  modelId: string | null | undefined,
+): number => {
+  const model = String(modelId ?? '').trim().toLowerCase();
+  if (providerId === 'gemini') return CONTEXT_BUDGET_GEMINI_TOKENS;
+  if (model.startsWith('gpt-5')) return CONTEXT_BUDGET_OPENAI_GPT5_TOKENS;
+  return CONTEXT_BUDGET_DEFAULT_TOKENS;
+};
+
+const estimateTokenCountFromChars = (charCount: number): number =>
+  Math.max(1, Math.ceil(charCount / 4));
+
+const resolveBudgetZone = (occupancyPct: number): ContextBudgetZone => {
+  if (occupancyPct >= CONTEXT_BUDGET_HARD_THRESHOLD) return 'hard';
+  if (occupancyPct >= CONTEXT_BUDGET_SOFT_THRESHOLD) return 'soft';
+  return 'normal';
+};
+
+const estimateContextBudget = (input: {
+  messages: ChatRuntimeMessage[];
+  tools?: unknown;
+  rawInput?: unknown[] | null;
+  providerId: ProviderId;
+  modelId: string | null | undefined;
+}): ContextBudgetSnapshot => {
+  const maxTokens = inferContextBudgetMaxTokens(input.providerId, input.modelId);
+  const messageChars = input.messages.reduce<number>((acc, message) => {
+    const base = `${message.role}:${toBudgetString(message.content)}`;
+    return acc + base.length;
+  }, 0);
+  const toolsChars = input.tools ? toBudgetString(input.tools).length : 0;
+  const rawInputChars = Array.isArray(input.rawInput)
+    ? input.rawInput.reduce<number>(
+        (acc, entry) => acc + toBudgetString(entry).length,
+        0,
+      )
+    : 0;
+  const estimatedTokens = estimateTokenCountFromChars(
+    messageChars + toolsChars + rawInputChars,
+  );
+  const occupancyPct = Math.min(
+    100,
+    Math.max(0, Math.round((estimatedTokens / maxTokens) * 100)),
+  );
+  const zone: ContextBudgetZone = resolveBudgetZone(occupancyPct);
+  return {
+    estimatedTokens,
+    maxTokens,
+    occupancyPct,
+    zone,
+  };
+};
+
+const estimateToolResultProjectionChars = (
+  toolName: string,
+  args: Record<string, unknown>,
+): number => {
+  if (toolName === 'documents') {
+    const action = typeof args.action === 'string' ? args.action : '';
+    if (action === 'get_content') {
+      const maxChars =
+        typeof args.maxChars === 'number' && Number.isFinite(args.maxChars)
+          ? Math.max(2000, Math.floor(args.maxChars))
+          : 70_000;
+      return maxChars;
+    }
+    if (action === 'analyze') return 20_000;
+    if (action === 'list' || action === 'get_summary') return 8_000;
+  }
+  if (toolName === 'web_extract') {
+    const urls = Array.isArray(args.urls)
+      ? args.urls.length
+      : args.url
+        ? 1
+        : 0;
+    const count = Math.max(1, urls);
+    return Math.min(180_000, count * 40_000);
+  }
+  if (toolName === 'history_analyze') return 16_000;
+  if (toolName === 'web_search') return 8_000;
+  if (toolName === 'plan') return 5_000;
+  return 6_000;
+};
+
+const stripCompactSummaryFromSystemPrompt = (prompt: string): string => {
+  const startIndex = prompt.indexOf(CONTEXT_SUMMARY_SYSTEM_MARKER_START);
+  const endIndex = prompt.indexOf(CONTEXT_SUMMARY_SYSTEM_MARKER_END);
+  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+    return prompt.trim();
+  }
+  const before = prompt.slice(0, startIndex).trim();
+  const after = prompt
+    .slice(endIndex + CONTEXT_SUMMARY_SYSTEM_MARKER_END.length)
+    .trim();
+  return `${before}\n\n${after}`.trim();
+};
+
+const injectCompactSummaryInSystemPrompt = (prompt: string, summary: string): string => {
+  const cleanPrompt = stripCompactSummaryFromSystemPrompt(prompt);
+  const cleanSummary = summary.trim();
+  if (!cleanSummary) return cleanPrompt;
+  return [
+    cleanPrompt,
+    '',
+    CONTEXT_SUMMARY_SYSTEM_MARKER_START,
+    'Conversation context summary (auto-generated for context budget compaction):',
+    cleanSummary,
+    CONTEXT_SUMMARY_SYSTEM_MARKER_END,
+  ].join('\n').trim();
+};
+
+const formatConversationForSummary = (messages: ChatRuntimeMessage[]): string =>
+  messages
+    .map((message, index) => {
+      const role = String(message.role || 'unknown').toUpperCase();
+      const content = toBudgetString(message.content).slice(
+        0,
+        CONTEXT_SUMMARY_MAX_CHARS,
+      );
+      return `#${index + 1} ${role}\n${content}`;
+    })
+    .join('\n\n');
+
+const compactConversationContext = async (input: {
+  messages: ChatRuntimeMessage[];
+  providerId: ProviderId;
+  modelId: string | null | undefined;
+  userId: string;
+  workspaceId: string;
+  signal?: AbortSignal;
+}): Promise<{
+  compactedMessages: ChatRuntimeMessage[];
+  summary: string;
+  summarizedCount: number;
+}> => {
+  const [systemMessage, ...conversation] = input.messages;
+  const safeSystemMessage =
+    systemMessage?.role === 'system'
+      ? systemMessage
+      : ({ role: 'system', content: '' } as const);
+  const keepTailCount =
+    conversation.length > CONTEXT_SUMMARY_RECENT_MESSAGES
+      ? CONTEXT_SUMMARY_RECENT_MESSAGES
+      : Math.min(2, conversation.length);
+  if (conversation.length <= keepTailCount) {
+    return {
+      compactedMessages: input.messages,
+      summary: '',
+      summarizedCount: 0,
+    };
+  }
+
+  const summaryTarget = conversation.slice(
+    0,
+    Math.max(0, conversation.length - keepTailCount),
+  );
+  const keepTail = conversation.slice(-keepTailCount);
+  const summaryInput = formatConversationForSummary(summaryTarget);
+  const summaryPrompt = [
+    'Summarize the conversation history for continuity.',
+    '- Keep key user goals, constraints, and unresolved questions.',
+    '- Keep factual tool outputs/evidence already established.',
+    '- Keep language concise, neutral, and faithful.',
+    '- Return plain markdown bullet points (max 12 bullets).',
+    '',
+    summaryInput,
+  ].join('\n');
+
+  const summaryResponse = await callOpenAI({
+    providerId: input.providerId,
+    model:
+      input.providerId === 'gemini'
+        ? 'gemini-2.5-flash-lite'
+        : 'gpt-4.1-nano',
+    userId: input.userId,
+    workspaceId: input.workspaceId,
+    messages: [{ role: 'user', content: summaryPrompt }],
+    maxOutputTokens: CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS,
+    signal: input.signal,
+  });
+  const summary = String(
+    summaryResponse.choices?.[0]?.message?.content ?? '',
+  ).trim();
+  const nextSystemContent = injectCompactSummaryInSystemPrompt(
+    safeSystemMessage.content,
+    summary,
+  );
+  return {
+    compactedMessages: [
+      {
+        role: 'system',
+        content: nextSystemContent,
+      },
+      ...keepTail,
+    ],
+    summary,
+    summarizedCount: summaryTarget.length,
+  };
 };
 
 export class ChatService {
@@ -1879,10 +2115,10 @@ Règles :
     const toolCalls: Array<{ id: string; name: string; args: string }> = [];
     
     // Boucle itérative pour gérer plusieurs rounds de tool calls
-    let currentMessages: Array<
-      | { role: 'system' | 'user' | 'assistant'; content: string }
-      | { role: 'tool'; content: string; tool_call_id: string }
-    > = [{ role: 'system' as const, content: systemPrompt }, ...conversation];
+    let currentMessages: ChatRuntimeMessage[] = [
+      { role: 'system' as const, content: systemPrompt },
+      ...conversation,
+    ];
     let maxIterations = BASE_MAX_ITERATIONS;
     const todoAutonomousExtensionEnabled = Boolean(
       enforceTodoUpdateMode && todoProgressionFocusMode,
@@ -1905,6 +2141,8 @@ Règles :
       : null;
     const steerHistoryMessages: string[] = [];
     let steerReasoningReplay = '';
+    let lastBudgetAnnouncedPct = -1;
+    let contextBudgetReplanAttempts = 0;
 
     const [aiSettings, catalog] = await Promise.all([
       settingsService.getAISettings({ userId: options.userId }),
@@ -2057,6 +2295,109 @@ Règles :
       return messages;
     };
 
+    const writeContextBudgetStatus = async (
+      phase: 'pre_model' | 'pre_tool',
+      snapshot: ContextBudgetSnapshot,
+      extras?: Record<string, unknown>,
+    ) => {
+      if (
+        snapshot.occupancyPct === lastBudgetAnnouncedPct &&
+        snapshot.zone === 'normal'
+      ) {
+        return;
+      }
+      await writeStreamEvent(
+        options.assistantMessageId,
+        'status',
+        {
+          state: 'context_budget_update',
+          phase,
+          occupancy_pct: snapshot.occupancyPct,
+          estimated_tokens: snapshot.estimatedTokens,
+          max_tokens: snapshot.maxTokens,
+          zone: snapshot.zone,
+          ...(extras ?? {}),
+        },
+        streamSeq,
+        options.assistantMessageId,
+      );
+      streamSeq += 1;
+      lastBudgetAnnouncedPct = snapshot.occupancyPct;
+    };
+
+    const compactContextIfNeeded = async (
+      reason:
+        | 'pre_model_hard_threshold'
+        | 'pre_tool_hard_threshold',
+      snapshot: ContextBudgetSnapshot,
+    ): Promise<ContextBudgetSnapshot> => {
+      await writeStreamEvent(
+        options.assistantMessageId,
+        'status',
+        {
+          state: 'context_compaction_started',
+          reason,
+          occupancy_pct_before: snapshot.occupancyPct,
+        },
+        streamSeq,
+        options.assistantMessageId,
+      );
+      streamSeq += 1;
+      try {
+        const compacted = await compactConversationContext({
+          messages: currentMessages,
+          providerId: selectedProviderId,
+          modelId: selectedModel,
+          userId: options.userId,
+          workspaceId: sessionWorkspaceId,
+          signal: options.signal,
+        });
+        if (compacted.summary.trim().length > 0) {
+          currentMessages = compacted.compactedMessages;
+        }
+        const afterSnapshot = estimateContextBudget({
+          messages: currentMessages,
+          tools,
+          rawInput: pendingResponsesRawInput,
+          providerId: selectedProviderId,
+          modelId: selectedModel,
+        });
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'status',
+          {
+            state: 'context_compaction_done',
+            reason,
+            occupancy_pct_before: snapshot.occupancyPct,
+            occupancy_pct_after: afterSnapshot.occupancyPct,
+            summarized_messages: compacted.summarizedCount,
+          },
+          streamSeq,
+          options.assistantMessageId,
+        );
+        streamSeq += 1;
+        await writeContextBudgetStatus('pre_model', afterSnapshot, {
+          source: 'compaction',
+        });
+        return afterSnapshot;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error ?? '');
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'status',
+          {
+            state: 'context_compaction_failed',
+            reason,
+            message: message.slice(0, 300),
+          },
+          streamSeq,
+          options.assistantMessageId,
+        );
+        streamSeq += 1;
+        return snapshot;
+      }
+    };
+
     while (continueGenerationLoop) {
       if (iteration >= maxIterations) {
         const canExtendTodoAutonomousLoop =
@@ -2088,6 +2429,20 @@ Règles :
         steerHistoryMessages,
         steerReasoningReplay,
       );
+      let preModelBudget = estimateContextBudget({
+        messages: currentMessages,
+        tools,
+        rawInput: pendingResponsesRawInput,
+        providerId: selectedProviderId,
+        modelId: selectedModel,
+      });
+      await writeContextBudgetStatus('pre_model', preModelBudget);
+      if (preModelBudget.zone === 'hard') {
+        preModelBudget = await compactContextIfNeeded(
+          'pre_model_hard_threshold',
+          preModelBudget,
+        );
+      }
       let steerInterruptionRequested = false;
       let steerInterruptionBatch: string[] = [];
 
@@ -2426,6 +2781,107 @@ Règles :
         
         try {
           const args = JSON.parse(toolCall.args || '{}');
+          const projectedResultChars = estimateToolResultProjectionChars(
+            toolCall.name,
+            asRecord(args) ?? {},
+          );
+          let preToolBudget = estimateContextBudget({
+            messages: currentMessages,
+            tools,
+            rawInput: responseToolOutputs,
+            providerId: selectedProviderId,
+            modelId: selectedModel,
+          });
+          await writeContextBudgetStatus('pre_tool', preToolBudget, {
+            tool_name: toolCall.name,
+          });
+          const computeProjected = (snapshot: ContextBudgetSnapshot) => {
+            const projectedTokens =
+              snapshot.estimatedTokens +
+              estimateTokenCountFromChars(projectedResultChars);
+            const projectedPct = Math.min(
+              100,
+              Math.max(0, Math.round((projectedTokens / snapshot.maxTokens) * 100)),
+            );
+            return {
+              projectedTokens,
+              projectedPct,
+              projectedZone: resolveBudgetZone(projectedPct),
+            };
+          };
+          let projectedBudget = computeProjected(preToolBudget);
+          if (projectedBudget.projectedZone === 'hard') {
+            preToolBudget = await compactContextIfNeeded(
+              'pre_tool_hard_threshold',
+              preToolBudget,
+            );
+            projectedBudget = computeProjected(preToolBudget);
+          }
+          if (projectedBudget.projectedZone !== 'normal') {
+            contextBudgetReplanAttempts += 1;
+            const escalationRequired =
+              contextBudgetReplanAttempts > CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS;
+            const deferredResult = {
+              status: 'deferred',
+              code:
+                projectedBudget.projectedZone === 'hard'
+                  ? CONTEXT_BUDGET_HARD_ZONE_CODE
+                  : CONTEXT_BUDGET_SOFT_ZONE_CODE,
+              message:
+                projectedBudget.projectedZone === 'hard'
+                  ? 'Tool call blocked: context budget still above hard threshold after compaction.'
+                  : 'Tool call deferred: projected output would exceed context budget soft threshold.',
+              occupancy_pct: projectedBudget.projectedPct,
+              estimated_tokens: projectedBudget.projectedTokens,
+              max_tokens: preToolBudget.maxTokens,
+              replan_required: true,
+              escalation_required: escalationRequired,
+              suggested_actions: [
+                'Narrow scope and retry tool with smaller payload.',
+                'Use history_analyze for targeted extraction if needed.',
+              ],
+            };
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: deferredResult },
+              streamSeq,
+              options.assistantMessageId,
+            );
+            streamSeq += 1;
+            if (escalationRequired) {
+              await writeStreamEvent(
+                options.assistantMessageId,
+                'status',
+                {
+                  state: 'context_budget_user_escalation_required',
+                  occupancy_pct: projectedBudget.projectedPct,
+                  code: deferredResult.code,
+                },
+                streamSeq,
+                options.assistantMessageId,
+              );
+              streamSeq += 1;
+            }
+            toolResults.push({
+              role: 'tool',
+              content: JSON.stringify(deferredResult),
+              tool_call_id: toolCall.id,
+            });
+            responseToolOutputs.push({
+              type: 'function_call_output',
+              call_id: toolCall.id,
+              output: JSON.stringify(deferredResult),
+            });
+            executedTools.push({
+              toolCallId: toolCall.id,
+              name: toolCall.name || 'unknown_tool',
+              args,
+              result: deferredResult,
+            });
+            continue;
+          }
+          contextBudgetReplanAttempts = 0;
           const todoOperation: TodoRuntimeToolOperation | null = (() => {
             if (toolCall.name !== 'plan') return null;
             const actionRaw =
