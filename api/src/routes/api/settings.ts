@@ -4,11 +4,20 @@ import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
 import { sql } from 'drizzle-orm';
 import { createSession, revokeSession } from '../../services/session-manager';
+import {
+  listProviderConnections,
+  updateCodexConnection,
+} from '../../services/provider-connections';
 
 const settingsSchema = z.object({
   openaiModels: z.record(z.string()).default({}),
   prompts: z.record(z.any()).default({}),
   generationLimits: z.record(z.any()).default({})
+});
+
+const providerConnectionUpdateSchema = z.object({
+  connected: z.boolean(),
+  accountLabel: z.string().trim().max(120).optional().nullable(),
 });
 
 export const settingsRouter = new Hono();
@@ -161,6 +170,38 @@ settingsRouter.delete('/vscode-extension-token', async (c) => {
     meta: toPublicMeta(revokedMeta),
   });
 });
+
+settingsRouter.get('/provider-connections', async (c) => {
+  const providers = await listProviderConnections();
+  return c.json({ providers });
+});
+
+settingsRouter.put(
+  '/provider-connections/:providerId',
+  zValidator('json', providerConnectionUpdateSchema),
+  async (c) => {
+    const providerId = c.req.param('providerId');
+    if (providerId !== 'codex') {
+      return c.json(
+        { message: 'Only codex provider connection is configurable in BR05.' },
+        400,
+      );
+    }
+
+    const user = c.get('user') as { userId?: string } | undefined;
+    if (!user?.userId) {
+      return c.json({ message: 'Authentication required' }, 401);
+    }
+
+    const payload = c.req.valid('json');
+    const provider = await updateCodexConnection({
+      connected: payload.connected,
+      accountLabel: payload.accountLabel ?? null,
+      updatedByUserId: user.userId,
+    });
+    return c.json({ provider });
+  },
+);
 
 settingsRouter.get('/', async (c) => {
   // Récupérer les paramètres depuis le système clé-valeur
