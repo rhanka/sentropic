@@ -172,7 +172,7 @@ const fetchSessionUser = async (
   try {
     const response = await fetch(endpoint, {
       method: 'GET',
-      credentials: 'include',
+      credentials: config.sessionToken ? 'omit' : 'include',
       headers: {
         ...(config.sessionToken
           ? { Authorization: `Bearer ${config.sessionToken}` }
@@ -251,6 +251,60 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
     };
   };
   const existing = ext.chrome ?? {};
+
+  const resolveAuthStatus = async (): Promise<{
+    connected: boolean;
+    reason: string;
+    user: {
+      id: string;
+      email: string | null;
+      displayName: string | null;
+      role: string;
+    } | null;
+  }> => {
+    if (state.bridge) {
+      try {
+        const result = await state.bridge.request<{
+          connected: boolean;
+          reason: string;
+          user?: {
+            id: string;
+            email: string | null;
+            displayName: string | null;
+            role: string;
+          } | null;
+        }>('runtime.auth.validate');
+        return {
+          connected: Boolean(result?.connected),
+          reason: result?.reason || 'not_connected',
+          user: result?.user ?? null,
+        };
+      } catch (error) {
+        return {
+          connected: false,
+          reason: error instanceof Error ? error.message : String(error),
+          user: null,
+        };
+      }
+    }
+
+    const session = await fetchSessionUser(state.config);
+    if (!session.ok) {
+      return {
+        connected: false,
+        reason:
+          session.status === 401 || session.status === 403
+            ? 'not_connected'
+            : session.error,
+        user: null,
+      };
+    }
+    return {
+      connected: true,
+      reason: 'connected',
+      user: session.user,
+    };
+  };
 
   const sendMessage = async (message: ExtensionMessage): Promise<unknown> => {
     const type = typeof message?.type === 'string' ? message.type : '';
@@ -356,16 +410,13 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
     }
 
     if (type === 'extension_auth_status') {
-      const session = await fetchSessionUser(state.config);
-      if (!session.ok) {
+      const status = await resolveAuthStatus();
+      if (!status.connected || !status.user) {
         return {
           ok: true,
           status: {
             connected: false,
-            reason:
-              session.status === 401 || session.status === 403
-                ? 'not_connected'
-                : session.error,
+            reason: status.reason || 'not_connected',
             user: null,
           },
         };
@@ -375,24 +426,31 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
         status: {
           connected: true,
           reason: 'connected',
-          user: session.user,
+          user: status.user,
         },
       };
     }
 
     if (type === 'extension_auth_connect') {
-      const session = await fetchSessionUser(state.config);
-      if (!session.ok) {
+      const status = await resolveAuthStatus();
+      if (!status.connected || !status.user) {
+        const code =
+          !state.config.sessionToken.trim()
+            ? 'TOKEN_REQUIRED'
+            : 'CONNECT_FAILED';
         return {
           ok: false,
-          code: 'APP_SESSION_REQUIRED',
-          error: session.error,
+          code,
+          error:
+            code === 'TOKEN_REQUIRED'
+              ? 'Extension token is required. Paste it in Extension settings and save.'
+              : status.reason || 'Unable to validate extension token',
           loginUrl,
         };
       }
       return {
         ok: true,
-        user: session.user,
+        user: status.user,
       };
     }
 
