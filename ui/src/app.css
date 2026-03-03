@@ -285,3 +285,63 @@ body.vscode-high-contrast-light #topai-vscode-root .text-slate-600,
 body.vscode-high-contrast-light #topai-vscode-root .text-slate-500 {
   color: var(--vscode-foreground) !important;
 }
+
+body.vscode-dark #topai-vscode-root .bg-red-50,
+body.vscode-high-contrast #topai-vscode-root .bg-red-50,
+body.vscode-high-contrast-light #topai-vscode-root .bg-red-50 {
+  background-color: color-mix(in srgb, var(--vscode-errorForeground) 18%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root .border-red-200,
+body.vscode-high-contrast #topai-vscode-root .border-red-200,
+body.vscode-high-contrast-light #topai-vscode-root .border-red-200 {
+  border-color: color-mix(in srgb, var(--vscode-errorForeground) 38%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root .text-red-700,
+body.vscode-high-contrast #topai-vscode-root .text-red-700,
+body.vscode-high-contrast-light #topai-vscode-root .text-red-700 {
+  color: var(--vscode-errorForeground) !important;
+}
+
+body.vscode-dark #topai-vscode-root .bg-green-50,
+body.vscode-high-contrast #topai-vscode-root .bg-green-50,
+body.vscode-high-contrast-light #topai-vscode-root .bg-green-50 {
+  background-color: color-mix(in srgb, var(--vscode-testing-iconPassed) 18%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root .border-green-200,
+body.vscode-high-contrast #topai-vscode-root .border-green-200,
+body.vscode-high-contrast-light #topai-vscode-root .border-green-200 {
+  border-color: color-mix(in srgb, var(--vscode-testing-iconPassed) 38%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root .text-green-700,
+body.vscode-high-contrast #topai-vscode-root .text-green-700,
+body.vscode-high-contrast-light #topai-vscode-root .text-green-700 {
+  color: var(--vscode-testing-iconPassed) !important;
+}
+
+body.vscode-dark #topai-vscode-root .extension-test-api-button,
+body.vscode-high-contrast #topai-vscode-root .extension-test-api-button,
+body.vscode-high-contrast-light #topai-vscode-root .extension-test-api-button {
+  background-color: transparent !important;
+  color: var(--vscode-foreground) !important;
+  border-color: var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root .extension-test-api-button:hover,
+body.vscode-high-contrast #topai-vscode-root .extension-test-api-button:hover,
+body.vscode-high-contrast-light #topai-vscode-root .extension-test-api-button:hover {
+  background-color: var(--vscode-toolbar-hoverBackground) !important;
+}
+
+#topai-vscode-root .extension-test-api-button {
+  background-color: transparent !important;
+  color: var(--vscode-foreground) !important;
+  border-color: var(--vscode-panel-border) !important;
+}
+
+#topai-vscode-root .extension-test-api-button:hover {
+  background-color: var(--vscode-toolbar-hoverBackground) !important;
+}
