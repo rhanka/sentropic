@@ -1086,6 +1086,34 @@
         "label": "Onglet (actions)",
         "description": "Agir sur l’onglet actif (scroll, clic, saisie, attente)"
       },
+      "localCodeBash": {
+        "label": "Code: shell",
+        "description": "Exécuter des commandes shell dans le workspace avec politique d'autorisation"
+      },
+      "localCodeLs": {
+        "label": "Code: lister fichiers",
+        "description": "Lister les fichiers/dossiers avec récursion bornée"
+      },
+      "localCodeRg": {
+        "label": "Code: recherche",
+        "description": "Rechercher dans les fichiers du workspace (ripgrep)"
+      },
+      "localCodeFileRead": {
+        "label": "Code: lire fichier",
+        "description": "Lire le contenu des fichiers (fenêtré/complet borné)"
+      },
+      "localCodeFileEdit": {
+        "label": "Code: éditer fichier",
+        "description": "Modifier/écrire des fichiers avec contrôle d'autorisation"
+      },
+      "localCodeGitStatus": {
+        "label": "Code: git status",
+        "description": "Inspecter l'état git (lecture seule)"
+      },
+      "localCodeGitDiff": {
+        "label": "Code: git diff",
+        "description": "Inspecter le diff git (lecture seule)"
+      },
       "organizationRead": { "label": "Organisation (lecture)" },
       "organizationUpdate": { "label": "Organisation (édition)" },
       "folderRead": { "label": "Dossier (lecture)" },
