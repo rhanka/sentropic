@@ -354,6 +354,17 @@ This section locks the implementation contract for the immediate Lot-1 increment
 - Audit:
   - token create/revoke and provider-connection changes are auditable.
 
+#### 4.14.6 Lot 1.1 API transport hardening contract (planned)
+- Goal: remove direct API fetch dependency from the VSCode webview and route chat/runtime API calls through the extension host bridge.
+- Contract:
+  - webview issues host commands (bridge) for HTTP calls instead of direct cross-origin `fetch`,
+  - host executes HTTP requests and returns normalized payload/error envelopes to webview,
+  - host attaches token/session/workspace context consistently,
+  - webview CSP/CORS remain permissive fallback, but are no longer a primary runtime dependency for chat flow.
+- Scope:
+  - applies first to chat bootstrap/runtime endpoints (`models/catalog`, sessions, messages, stream entrypoint),
+  - preserves current token bootstrap UX from Lot 1.
+
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
 - Claude Code: auto compact near context limits + explicit manual compaction command.
