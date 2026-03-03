@@ -1,0 +1,164 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import os from 'node:os';
+import path from 'node:path';
+import { promises as fs } from 'node:fs';
+
+vi.mock('vscode', () => ({ workspace: { workspaceFolders: [] } }), {
+  virtual: true,
+});
+
+type RuntimeState = {
+  store: Map<string, unknown>;
+};
+
+const createState = (): RuntimeState => ({
+  store: new Map<string, unknown>(),
+});
+
+const createRuntime = async (workspaceRoot: string, state: RuntimeState) => {
+  const mod = await import('../../vscode-ext/local-tools');
+  return new mod.VsCodeLocalToolsRuntime({
+    getWorkspaceRoot: () => workspaceRoot,
+    getGlobalState: <T>(key: string, fallback: T): T =>
+      state.store.has(key) ? (state.store.get(key) as T) : fallback,
+    updateGlobalState: async (key: string, value: unknown) => {
+      state.store.set(key, value);
+    },
+  });
+};
+
+describe('vscode local tools runtime', () => {
+  let workspaceRoot = '';
+
+  beforeEach(async () => {
+    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'topai-vscode-tools-'));
+    await fs.writeFile(path.join(workspaceRoot, '.env'), 'OPENAI_API_KEY=secret\n', 'utf8');
+    await fs.writeFile(path.join(workspaceRoot, 'notes.txt'), 'line1\nline2\nline3\nline4', 'utf8');
+    await fs.writeFile(
+      path.join(workspaceRoot, 'search.txt'),
+      Array.from({ length: 25 }, (_, i) => `foo-${i + 1}`).join('\n'),
+      'utf8',
+    );
+  });
+
+  afterEach(async () => {
+    if (workspaceRoot) {
+      await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('blocks sensitive file reads by default guardrail', async () => {
+    const runtime = await createRuntime(workspaceRoot, createState());
+
+    const result = await runtime.execute({
+      toolCallId: 'read-sensitive-1',
+      name: 'file_read',
+      args: { path: '.env', full: true },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(String(result.error ?? '')).toMatch(/sensitive path/i);
+  });
+
+  it('supports rg pagination via offset + maxResults', async () => {
+    const runtime = await createRuntime(workspaceRoot, createState());
+
+    const result = await runtime.execute({
+      toolCallId: 'rg-1',
+      name: 'rg',
+      args: {
+        pattern: 'foo-',
+        path: 'search.txt',
+        maxResults: 5,
+        offset: 3,
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.result).toMatchObject({
+      offset: 3,
+      nextOffset: 8,
+      truncated: true,
+    });
+    expect(Array.isArray((result.result as any).results)).toBe(true);
+    expect((result.result as any).results).toHaveLength(5);
+  });
+
+  it('applies file_edit apply_patch mode after explicit allow_once decision', async () => {
+    const runtime = await createRuntime(workspaceRoot, createState());
+    await fs.writeFile(path.join(workspaceRoot, 'patch-target.txt'), 'before\n', 'utf8');
+
+    const patch = [
+      'diff --git a/patch-target.txt b/patch-target.txt',
+      'index 1b9a6f5..fe7a8f3 100644',
+      '--- a/patch-target.txt',
+      '+++ b/patch-target.txt',
+      '@@ -1 +1 @@',
+      '-before',
+      '+after',
+      '',
+    ].join('\n');
+
+    const first = await runtime.execute({
+      toolCallId: 'edit-1',
+      name: 'file_edit',
+      args: {
+        mode: 'apply_patch',
+        patch,
+      },
+    });
+
+    expect(first.ok).toBe(false);
+    expect(first.error).toBe('permission_required');
+    expect(first.permissionRequest?.requestId).toBeTruthy();
+
+    await expect(
+      runtime.decide({
+        requestId: first.permissionRequest?.requestId,
+        decision: 'allow_once',
+      }),
+    ).resolves.toMatchObject({ ok: true });
+
+    const second = await runtime.execute({
+      toolCallId: 'edit-1',
+      name: 'file_edit',
+      args: {
+        mode: 'apply_patch',
+        patch,
+      },
+    });
+
+    expect(second.ok).toBe(true);
+    expect(second.result).toMatchObject({ mode: 'apply_patch', applied: true });
+    await expect(fs.readFile(path.join(workspaceRoot, 'patch-target.txt'), 'utf8')).resolves.toContain(
+      'after',
+    );
+  });
+
+  it('supports allow_once for bash ask decisions on same tool call id', async () => {
+    const runtime = await createRuntime(workspaceRoot, createState());
+
+    const first = await runtime.execute({
+      toolCallId: 'bash-1',
+      name: 'bash',
+      args: { command: 'echo lot3' },
+    });
+
+    expect(first.ok).toBe(false);
+    expect(first.error).toBe('permission_required');
+
+    await runtime.decide({
+      requestId: first.permissionRequest?.requestId,
+      decision: 'allow_once',
+    });
+
+    const second = await runtime.execute({
+      toolCallId: 'bash-1',
+      name: 'bash',
+      args: { command: 'echo lot3' },
+    });
+
+    expect(second.ok).toBe(true);
+    expect(String((second.result as any)?.stdout ?? '')).toContain('lot3');
+  });
+});
