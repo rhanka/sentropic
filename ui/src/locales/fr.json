@@ -533,6 +533,16 @@
     "promptManagement": "Gestion des Prompts IA",
     "aiConfig": "Configuration IA",
     "aiLoading": "Chargement des paramètres…",
+    "theme": {
+      "title": "Thème",
+      "description": "Choisissez le rendu clair/sombre pour la web app et les widgets de chat.",
+      "modeLabel": "Mode d’apparence",
+      "modes": {
+        "system": "Système",
+        "light": "Clair",
+        "dark": "Sombre"
+      }
+    },
     "userAi": {
       "title": "Configuration IA",
       "description": "Choisissez le modèle IA par défaut pour vos nouveaux chats et formulaires de génération.",

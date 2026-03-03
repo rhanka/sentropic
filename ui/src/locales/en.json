@@ -533,6 +533,16 @@
     "promptManagement": "AI prompts management",
     "aiConfig": "AI configuration",
     "aiLoading": "Loading settings…",
+    "theme": {
+      "title": "Theme",
+      "description": "Choose how the web app and chat widgets render light/dark mode.",
+      "modeLabel": "Appearance mode",
+      "modes": {
+        "system": "System",
+        "light": "Light",
+        "dark": "Dark"
+      }
+    },
     "userAi": {
       "title": "AI configuration",
       "description": "Choose the default AI model for your new chats and generation forms.",
