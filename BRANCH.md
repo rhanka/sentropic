@@ -71,10 +71,6 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
 - `BR05-FL3` — `attention`
   - Topic: extension UX must be dockable side panel + token bootstrap; provider login flow is admin-web only.
   - Requirement: no editor-tab-only delivery and no ambiguous `Open login` path in extension bootstrap.
-- `BR05-FL4` — `[!] deferred`
-  - Topic: Chrome extension documents flow reports `Fail to fetch` (upload/list) during non-regression checks.
-  - Decision: do not patch in BR-05; carry as dedicated bugfix slice in the next Chrome branch cycle.
-  - Scope note: BR-05 keeps VSCode/Web documents fix only.
 
 ## AI Flaky tests
 - Acceptance rule:
