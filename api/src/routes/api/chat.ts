@@ -62,6 +62,11 @@ const createSessionInput = z.object({
   sessionTitle: z.string().optional()
 });
 
+const createCheckpointInput = z.object({
+  title: z.string().min(1).max(120).optional(),
+  anchorMessageId: z.string().min(1).optional(),
+});
+
 const toolResultInput = z.object({
   toolCallId: z.string().min(1),
   result: z.unknown()
@@ -290,6 +295,54 @@ chatRouter.get('/sessions/:id/messages', async (c) => {
   const result = await chatService.listMessages(sessionId, user.userId);
   return c.json({ sessionId, messages: result.messages, todoRuntime: result.todoRuntime });
 });
+
+chatRouter.get('/sessions/:id/checkpoints', requireWorkspaceAccessRole(), async (c) => {
+  const user = c.get('user');
+  const sessionId = c.req.param('id');
+  const url = new URL(c.req.url);
+  const limitRaw = Number(url.searchParams.get('limit') ?? '20');
+  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.floor(limitRaw))) : 20;
+  const checkpoints = await chatService.listCheckpoints({
+    sessionId,
+    userId: user.userId,
+    limit,
+  });
+  return c.json({ sessionId, checkpoints });
+});
+
+chatRouter.post(
+  '/sessions/:id/checkpoints',
+  requireWorkspaceAccessRole(),
+  zValidator('json', createCheckpointInput),
+  async (c) => {
+    const user = c.get('user');
+    const sessionId = c.req.param('id');
+    const body = c.req.valid('json');
+    const checkpoint = await chatService.createCheckpoint({
+      sessionId,
+      userId: user.userId,
+      title: body.title ?? null,
+      anchorMessageId: body.anchorMessageId ?? null,
+    });
+    return c.json({ sessionId, checkpoint });
+  },
+);
+
+chatRouter.post(
+  '/sessions/:id/checkpoints/:checkpointId/restore',
+  requireWorkspaceEditorRole(),
+  async (c) => {
+    const user = c.get('user');
+    const sessionId = c.req.param('id');
+    const checkpointId = c.req.param('checkpointId');
+    const restored = await chatService.restoreCheckpoint({
+      sessionId,
+      checkpointId,
+      userId: user.userId,
+    });
+    return c.json({ sessionId, ...restored });
+  },
+);
 
 /**
  * GET /api/v1/chat/sessions/:id/stream-events
