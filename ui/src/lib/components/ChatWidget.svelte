@@ -847,9 +847,14 @@
   $: if (
     isExtensionConfigAvailable() &&
     showExtensionConfigMenu &&
-    extensionSettingsTab === 'permissions'
+    extensionSettingsTab === 'permissions' &&
+    !isSidePanelHost
   ) {
     void loadExtensionToolPermissions();
+  }
+
+  $: if (isSidePanelHost && extensionSettingsTab === 'permissions') {
+    extensionSettingsTab = 'endpoint';
   }
 
   $: if (
@@ -1605,16 +1610,18 @@
                         >
                           {$_('chat.extension.settingsTabs.endpoint')}
                         </button>
-                        <button
-                          class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
-                          'permissions'
-                            ? 'bg-white text-slate-900 shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700'}"
-                          type="button"
-                          on:click={() => (extensionSettingsTab = 'permissions')}
-                        >
-                          {$_('chat.extension.settingsTabs.permissions')}
-                        </button>
+                        {#if !isSidePanelHost}
+                          <button
+                            class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
+                            'permissions'
+                              ? 'bg-white text-slate-900 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700'}"
+                            type="button"
+                            on:click={() => (extensionSettingsTab = 'permissions')}
+                          >
+                            {$_('chat.extension.settingsTabs.permissions')}
+                          </button>
+                        {/if}
                       </div>
                     </div>
                     <div class="flex-1 min-h-0 overflow-auto slim-scroll space-y-2 p-2">

@@ -183,9 +183,14 @@ const getRuntime = (): RuntimeLike | null => {
   return ext.chrome?.runtime ?? null;
 };
 
+const isVsCodeRuntime = (runtime: RuntimeLike | null): boolean => {
+  const runtimeId = String(runtime?.id ?? '').trim().toLowerCase();
+  return runtimeId === 'topai.vscode.runtime';
+};
+
 const hasExtensionRuntimeMessaging = (): boolean => {
   const runtime = getRuntime();
-  return Boolean(runtime?.id && runtime?.sendMessage);
+  return Boolean(runtime?.id && runtime?.sendMessage) && !isVsCodeRuntime(runtime);
 };
 
 export const isLocalToolName = (name: string): name is LocalToolName =>
