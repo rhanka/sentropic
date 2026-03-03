@@ -3,6 +3,7 @@ import {
   computeEnabledToolIds,
   computeToolToggleDefaults,
   computeVisibleToolToggleIds,
+  VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
   isExtensionRestrictedToolsetMode,
   type ChatToolScopeToggle,
 } from '../../src/lib/utils/chat-tool-scope';
@@ -111,5 +112,34 @@ describe('chat-tool-scope', () => {
     expect(enabledIds).toEqual(['web_search', 'web_extract', 'tab_action']);
     expect(enabledIds).not.toContain('documents');
     expect(enabledIds).not.toContain('organizations_list');
+  });
+
+  it('supports custom allowed set for vscode code-tool restricted mode', () => {
+    const toggles: ChatToolScopeToggle[] = [
+      { id: 'bash', toolIds: ['bash'] },
+      { id: 'ls', toolIds: ['ls'] },
+      { id: 'web_search', toolIds: ['web_search'] },
+      { id: 'documents', toolIds: ['documents'] },
+    ];
+
+    const visible = computeVisibleToolToggleIds({
+      toolToggles: toggles,
+      restrictedMode: true,
+      allowedToolIds: VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
+    });
+    expect(visible).toEqual(['bash', 'ls']);
+
+    const enabled = computeEnabledToolIds({
+      toolToggles: toggles,
+      restrictedMode: true,
+      allowedToolIds: VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
+      toolEnabledById: {
+        bash: true,
+        ls: true,
+        web_search: true,
+        documents: true,
+      },
+    });
+    expect(enabled).toEqual(['bash', 'ls']);
   });
 });

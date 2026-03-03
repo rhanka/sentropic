@@ -172,7 +172,7 @@
   let extensionToolPermissionsLoading = false;
   let extensionToolPermissionsError = '';
   let extensionToolPermissions: LocalToolPermissionPolicyEntry[] = [];
-  const EXTENSION_PERMISSION_TOOL_OPTIONS = [
+  const CHROME_EXTENSION_PERMISSION_TOOL_OPTIONS = [
     'tab_read:*',
     'tab_read:info',
     'tab_read:dom',
@@ -183,6 +183,17 @@
     'tab_action:input',
     'tab_action:scroll',
     'tab_action:wait',
+  ];
+  const VSCODE_EXTENSION_PERMISSION_TOOL_OPTIONS = [
+    'bash:*',
+    'bash:git add',
+    'bash:git push',
+    'ls',
+    'rg',
+    'file_read',
+    'file_edit',
+    'git_status',
+    'git_diff',
   ];
   let extensionPermissionDraftToolName = 'tab_action:*';
   let extensionPermissionDraftOrigin = '';
@@ -199,9 +210,35 @@
     };
     return Boolean(ext.chrome?.runtime?.id);
   };
+  const isVsCodeExtensionRuntime = () => {
+    const ext = globalThis as typeof globalThis & {
+      chrome?: { runtime?: { id?: string } };
+    };
+    const runtimeId = String(ext.chrome?.runtime?.id ?? '')
+      .trim()
+      .toLowerCase();
+    return runtimeId === 'topai.vscode.runtime';
+  };
+  const getExtensionPermissionToolOptions = () => {
+    return isVsCodeExtensionRuntime()
+      ? VSCODE_EXTENSION_PERMISSION_TOOL_OPTIONS
+      : CHROME_EXTENSION_PERMISSION_TOOL_OPTIONS;
+  };
+  const isExtensionPermissionsTabAvailable = () => {
+    return !isSidePanelHost || isVsCodeExtensionRuntime();
+  };
   $: isSidePanelHost = hostMode === 'sidepanel';
   $: isExtensionOverlayHost = !isSidePanelHost && isExtensionRuntime();
   $: isPluginMode = isExtensionRuntime();
+  $: {
+    const toolOptions = getExtensionPermissionToolOptions();
+    if (!toolOptions.includes(extensionPermissionDraftToolName)) {
+      extensionPermissionDraftToolName = toolOptions[0] ?? '';
+    }
+    if (isVsCodeExtensionRuntime() && !extensionPermissionDraftOrigin.trim()) {
+      extensionPermissionDraftOrigin = 'vscode://workspace';
+    }
+  }
   $: if (isPluginMode && activeTab === 'comments') activeTab = 'chat';
   $: if (isBrowser) {
     const saved = localStorage.getItem(DISPLAY_MODE_STORAGE_KEY);
@@ -897,12 +934,12 @@
     isExtensionConfigAvailable() &&
     showExtensionConfigMenu &&
     extensionSettingsTab === 'permissions' &&
-    !isSidePanelHost
+    isExtensionPermissionsTabAvailable()
   ) {
     void loadExtensionToolPermissions();
   }
 
-  $: if (isSidePanelHost && extensionSettingsTab === 'permissions') {
+  $: if (!isExtensionPermissionsTabAvailable() && extensionSettingsTab === 'permissions') {
     extensionSettingsTab = 'endpoint';
   }
 
@@ -1659,7 +1696,7 @@
                         >
                           {$_('chat.extension.settingsTabs.endpoint')}
                         </button>
-                        {#if !isSidePanelHost}
+                        {#if isExtensionPermissionsTabAvailable()}
                           <button
                             class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
                             'permissions'
@@ -1912,7 +1949,7 @@
                           class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
                           bind:value={extensionPermissionDraftToolName}
                         >
-                          {#each EXTENSION_PERMISSION_TOOL_OPTIONS as option}
+                          {#each getExtensionPermissionToolOptions() as option}
                             <option value={option}>{option}</option>
                           {/each}
                         </select>
@@ -1920,7 +1957,9 @@
                           class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
                           type="text"
                           bind:value={extensionPermissionDraftOrigin}
-                          placeholder="https://example.com | https://* | *.example.com | *"
+                          placeholder={isVsCodeExtensionRuntime()
+                            ? 'vscode://workspace | *'
+                            : 'https://example.com | https://* | *.example.com | *'}
                         />
                         <select
                           class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"

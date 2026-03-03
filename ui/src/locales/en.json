@@ -1086,6 +1086,34 @@
         "label": "Tab (actions)",
         "description": "Act on active tab (scroll, click, type, wait)"
       },
+      "localCodeBash": {
+        "label": "Code: shell",
+        "description": "Run shell commands in workspace with policy gating"
+      },
+      "localCodeLs": {
+        "label": "Code: list files",
+        "description": "List files/directories with bounded recursion"
+      },
+      "localCodeRg": {
+        "label": "Code: search",
+        "description": "Search content in workspace files (ripgrep)"
+      },
+      "localCodeFileRead": {
+        "label": "Code: read file",
+        "description": "Read file content with bounded window/full modes"
+      },
+      "localCodeFileEdit": {
+        "label": "Code: edit file",
+        "description": "Edit/write files with explicit permission checks"
+      },
+      "localCodeGitStatus": {
+        "label": "Code: git status",
+        "description": "Inspect git status (read-only)"
+      },
+      "localCodeGitDiff": {
+        "label": "Code: git diff",
+        "description": "Inspect git diff (read-only)"
+      },
       "organizationRead": { "label": "Organization (read)" },
       "organizationUpdate": { "label": "Organization (edit)" },
       "folderRead": { "label": "Folder (read)" },
