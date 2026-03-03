@@ -7,6 +7,7 @@ import {
 
 const COMMAND_OPEN_PANEL = 'topai.openPanel';
 const VIEW_ID = 'topai.chatView';
+const VIEW_CONTAINER_ID = 'topai';
 const SECRET_SESSION_TOKEN_KEY = 'topai.sessionToken';
 const STATE_KEY_RUNTIME_CONFIG = 'topai.runtimeConfig';
 
@@ -289,7 +290,9 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
 
   async reveal(): Promise<void> {
     this.revealRequested = true;
-    await vscode.commands.executeCommand('workbench.view.explorer');
+    await vscode.commands.executeCommand(
+      `workbench.view.extension.${VIEW_CONTAINER_ID}`,
+    );
     await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
 
     if (this.view) {
@@ -319,7 +322,8 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
 
     const requestId =
       typeof payload.requestId === 'string' ? payload.requestId : '';
-    const command = typeof payload.command === 'string' ? payload.command : '';
+    const command =
+      typeof payload.command === 'string' ? payload.command.trim() : '';
     if (!requestId || !command) return;
 
     const respond = (ok: boolean, resultPayload?: unknown, error?: string): void => {
@@ -391,7 +395,14 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
 
 export const activate = (context: vscode.ExtensionContext): void => {
   const runtimeHandler = createTopAiVsCodeRequestHandler({
-    getRuntimeConfig: () => defaultConfig,
+    getRuntimeConfig: async () => readRuntimeConfig(context),
+    validateRuntimeAuth: async () => {
+      const runtimeConfig = await readRuntimeConfig(context);
+      return validateTokenSession(
+        runtimeConfig.apiBaseUrl,
+        runtimeConfig.sessionToken,
+      );
+    },
   });
 
   const provider = new TopAiChatViewProvider(context, runtimeHandler);
