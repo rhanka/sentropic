@@ -572,6 +572,33 @@
     "queueRunning": "En cours",
     "queueDone": "Terminés",
     "queueFailed": "Échoués",
+    "providerConnections": {
+      "title": "Connexions providers",
+      "description": "Configurez l’état partagé des providers dans les paramètres admin. Les clients VSCode/web consomment cet état backend en lecture seule.",
+      "status": {
+        "ready": "Prêt",
+        "notReady": "Non prêt"
+      },
+      "managedBy": {
+        "admin": "Géré dans les paramètres admin",
+        "environment": "Géré par l’environnement",
+        "none": "Non configuré"
+      },
+      "codex": {
+        "accountLabel": "Libellé compte Codex (optionnel)",
+        "accountPlaceholder": "admin@example.com",
+        "connect": "Marquer connecté",
+        "disconnect": "Marquer déconnecté"
+      },
+      "toasts": {
+        "codexConnected": "Provider Codex marqué comme connecté.",
+        "codexDisconnected": "Provider Codex marqué comme déconnecté."
+      },
+      "errors": {
+        "load": "Impossible de charger les connexions providers.",
+        "save": "Impossible de mettre à jour la connexion provider."
+      }
+    },
     "chromeExtension": {
       "title": "Extension Chrome",
       "description": "Téléchargez le dernier package de l'extension Chrome configuré pour cette instance.",
@@ -934,6 +961,15 @@
         "logout": "Vider la session",
         "providerManagedInAdmin": "La connexion fournisseur se gère dans les paramètres admin de l’app web.",
         "openLogin": "Ouvrir la connexion"
+      },
+      "providerReadiness": {
+        "title": "État des providers",
+        "empty": "Aucun statut provider disponible pour l’instant.",
+        "loadError": "Impossible de charger l’état des providers.",
+        "status": {
+          "ready": "Prêt",
+          "notReady": "Non prêt"
+        }
       },
       "status": {
         "loadingConfig": "Chargement de la configuration endpoint…",
