@@ -221,18 +221,18 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/settings/provider-connections-admin.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
-- [ ] **Lot 3 — VSCode plugin code tools (research + implementation)**
-  - [ ] Spec mapping:
-    - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `8` (rapid v1 tool contracts, including policy engine),
-    - [ ] `spec/TOOLS.md` section `VSCode code tools v1 (rapid contracts)`,
-    - [ ] reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md` (shared analyzer + shared permission primitives).
-  - [ ] Research/code-scan and lock baseline toolset for v1 plugin code interactions:
-    - [ ] `bash` (safe shell wrapper),
-    - [ ] `ls`,
-    - [ ] `grep`/`rg`,
-    - [ ] file read,
-    - [ ] file edit (`edit|write|apply_patch`),
-    - [ ] git read actions (`status`, `diff`).
+- [x] **Lot 3 — VSCode plugin code tools (research + implementation)**
+  - [x] Spec mapping:
+    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `8` (rapid v1 tool contracts, including policy engine),
+    - [x] `spec/TOOLS.md` section `VSCode code tools v1 (rapid contracts)`,
+    - [x] reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md` (shared analyzer + shared permission primitives).
+  - [x] Research/code-scan and lock baseline toolset for v1 plugin code interactions:
+    - [x] `bash` (safe shell wrapper),
+    - [x] `ls`,
+    - [x] `grep`/`rg`,
+    - [x] file read,
+    - [x] file edit (`edit|write|apply_patch`),
+    - [x] git read actions (`status`, `diff`).
   - [x] Add AI-assisted conversation history QA tool:
     - [x] Tool name: `history_analyze` (read-only).
     - [x] Dedicated sub-agent flow aligned with existing document analyzer (`documents.analyze`) including chunk + merge path for long history.
@@ -240,41 +240,41 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] Add prompt templates `history_analyze` + `history_analyze_merge`.
     - [x] Support targeted analysis of one tool output (`target_tool_call_id` / result message id) for context-overflow mitigation.
     - [x] Return `answer + evidence(message ids/turns) + coverage/confidence`.
-  - [ ] Implement allowed/denied policy model for the selected toolset.
-  - [ ] Implement `bash` policy engine (v1 locked model):
-    - [ ] parser splits command segments (`&&`, `||`, `|`, `;`, subshell boundaries) before evaluation,
-    - [ ] matcher supports mono + bigram rules,
-    - [ ] decision precedence `deny > ask > allow`, default `ask`,
-    - [ ] user defaults + workspace safety override merge (`deny`/`ask` dominate),
-    - [ ] explicit support for divergent rules like `git add` vs `git push`.
-  - [ ] Reuse Chrome-style confirmation banner for `bash` `ask` decisions (`Yes once/No once/Always/Never`).
-  - [ ] Add editable settings UI for mono/bigram rule list (no JSON-only editing requirement).
-  - [ ] Implement non-shell policy defaults and guards:
-    - [ ] `ls` uses bounded depth and hidden-files opt-in,
-    - [ ] `grep/rg` uses `rg` default + bounded paginated results,
-    - [ ] `file_read` defaults to windowed reads + explicit full-read mode + secret-path policy,
-    - [ ] `file_edit` unified multi-mode (`edit|write|apply_patch`) with default `ask`,
-    - [ ] path-pattern grants (e.g. `api/*`) to reduce repeated asks while respecting workspace override,
-    - [ ] `git_status` default allow read-only,
-    - [ ] `git_diff` bounded read-only with path/ref scope restrictions,
-    - [ ] shared non-shell policy engine (`deny/ask/allow`, workspace cannot be weakened).
-  - [ ] Wire tool output path to chat orchestration contracts.
-  - [ ] Document tool-mode split:
-    - [ ] BR-05 = foreground/interactive tool execution only.
-    - [ ] BR-10 = background/detached tool lifecycle (`start/status/cancel/resume/result`) without explicit agent-lane UX requirement.
-  - [ ] Lot gate:
+  - [x] Implement allowed/denied policy model for the selected toolset.
+  - [x] Implement `bash` policy engine (v1 locked model):
+    - [x] parser splits command segments (`&&`, `||`, `|`, `;`, subshell boundaries) before evaluation,
+    - [x] matcher supports mono + bigram rules,
+    - [x] decision precedence `deny > ask > allow`, default `ask`,
+    - [x] user defaults + workspace safety override merge (`deny`/`ask` dominate),
+    - [x] explicit support for divergent rules like `git add` vs `git push`.
+  - [x] Reuse Chrome-style confirmation banner for `bash` `ask` decisions (`Yes once/No once/Always/Never`).
+  - [x] Add editable settings UI for mono/bigram rule list (no JSON-only editing requirement).
+  - [x] Implement non-shell policy defaults and guards:
+    - [x] `ls` uses bounded depth and hidden-files opt-in,
+    - [x] `grep/rg` uses `rg` default + bounded paginated results,
+    - [x] `file_read` defaults to windowed reads + explicit full-read mode + secret-path policy,
+    - [x] `file_edit` unified multi-mode (`edit|write|apply_patch`) with default `ask`,
+    - [x] path-pattern grants (e.g. `api/*`) to reduce repeated asks while respecting workspace override,
+    - [x] `git_status` default allow read-only,
+    - [x] `git_diff` bounded read-only with path/ref scope restrictions,
+    - [x] shared non-shell policy engine (`deny/ask/allow`, workspace cannot be weakened).
+  - [x] Wire tool output path to chat orchestration contracts.
+  - [x] Document tool-mode split:
+    - [x] BR-05 = foreground/interactive tool execution only.
+    - [x] BR-10 = background/detached tool lifecycle (`start/status/cancel/resume/result`) without explicit agent-lane UX requirement.
+  - [x] Lot gate:
     - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-api-unit SCOPE=tests/unit/bash-policy-engine.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/chat-bash-policy-gate.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-unit SCOPE=tests/unit/history-analyze-tool.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-endpoints SCOPE=tests/api/chat-history-analyze-tool.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/vscode-ext/bash-policy-banner.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/vscode-ext/bash-policy-settings.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/vscode-ext/tool-permissions.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-unit SCOPE=tests/unit/history-analyze-tool.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-endpoints SCOPE=tests/api/chat-history-analyze-tool.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/vscode-ext/bash-policy-banner.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/vscode-ext/bash-policy-settings.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/vscode-ext/tool-permissions.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot 4 — Global conversation Summary (not VSCode-specific)**
   - [ ] Implement context-budget summary strategy shared by chat surfaces (web + VSCode host integration path).
