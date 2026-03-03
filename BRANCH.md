@@ -233,13 +233,13 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] file read,
     - [ ] file edit (`edit|write|apply_patch`),
     - [ ] git read actions (`status`, `diff`).
-  - [ ] Add AI-assisted conversation history QA tool:
-    - [ ] Tool name: `history_analyze` (read-only).
-    - [ ] Dedicated sub-agent flow aligned with existing document analyzer (`documents.analyze`) including chunk + merge path for long history.
-    - [ ] Refactor shared internal analysis engine (single chunk/analyze/merge orchestration function) reused by both `documents.analyze` and `history_analyze`.
-    - [ ] Add prompt templates `history_analyze` + `history_analyze_merge`.
-    - [ ] Support targeted analysis of one tool output (`target_tool_call_id` / result message id) for context-overflow mitigation.
-    - [ ] Return `answer + evidence(message ids/turns) + coverage/confidence`.
+  - [x] Add AI-assisted conversation history QA tool:
+    - [x] Tool name: `history_analyze` (read-only).
+    - [x] Dedicated sub-agent flow aligned with existing document analyzer (`documents.analyze`) including chunk + merge path for long history.
+    - [x] Refactor shared internal analysis engine (single chunk/analyze/merge orchestration function) reused by both `documents.analyze` and `history_analyze`.
+    - [x] Add prompt templates `history_analyze` + `history_analyze_merge`.
+    - [x] Support targeted analysis of one tool output (`target_tool_call_id` / result message id) for context-overflow mitigation.
+    - [x] Return `answer + evidence(message ids/turns) + coverage/confidence`.
   - [ ] Implement allowed/denied policy model for the selected toolset.
   - [ ] Implement `bash` policy engine (v1 locked model):
     - [ ] parser splits command segments (`&&`, `||`, `|`, `;`, subshell boundaries) before evaluation,
@@ -263,12 +263,12 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] BR-05 = foreground/interactive tool execution only.
     - [ ] BR-10 = background/detached tool lifecycle (`start/status/cancel/resume/result`) without explicit agent-lane UX requirement.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make test-api-unit SCOPE=tests/unit/bash-policy-engine.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make test-api-endpoints SCOPE=tests/api/chat-bash-policy-gate.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-api-unit SCOPE=tests/unit/history-analyze-tool.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/chat-history-analyze-tool.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-unit SCOPE=tests/unit/history-analyze-tool.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-endpoints SCOPE=tests/api/chat-history-analyze-tool.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make test-ui SCOPE=tests/vscode-ext/bash-policy-banner.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`

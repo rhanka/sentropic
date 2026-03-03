@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { db, pool } from '../db/client';
 import {
+  chatMessages,
   chatSessions,
   chatContexts,
   comments,
@@ -1668,6 +1669,155 @@ export class ToolService {
     return { text: words.slice(0, max).join(' ') + '\n…(tronqué)…', trimmed: true, words: max };
   }
 
+  private getPromptTemplateOrThrow(promptId: string): string {
+    const template =
+      defaultPrompts.find((prompt) => prompt.id === promptId)?.content || '';
+    if (!template) throw new Error(`Prompt ${promptId} non trouvé`);
+    return template;
+  }
+
+  private renderTemplate(
+    template: string,
+    variables: Record<string, string>,
+  ): string {
+    return Object.entries(variables).reduce((acc, [key, value]) => {
+      return acc.replaceAll(`{{${key}}}`, value);
+    }, template);
+  }
+
+  private async runChunkedPromptAnalysis(options: {
+    model: string;
+    text: string;
+    instruction: string;
+    maxWords: number;
+    perChunkMaxWords: number;
+    singlePassTokenLimit: number;
+    chunkTargetTokens: number;
+    analysisPromptId: string;
+    mergePromptId: string;
+    templateVars: Record<string, string>;
+    textVarName: string;
+    scopeVarName: string;
+    instructionVarName: string;
+    notesVarName: string;
+    signal?: AbortSignal;
+  }): Promise<{
+    analysis: string;
+    analysisWords: number;
+    clipped: boolean;
+    chunked: boolean;
+    chunkCount: number;
+  }> {
+    const text = (options.text || '').trim();
+    if (!text) {
+      return {
+        analysis: '',
+        analysisWords: 0,
+        clipped: false,
+        chunked: false,
+        chunkCount: 0,
+      };
+    }
+
+    const template = this.getPromptTemplateOrThrow(options.analysisPromptId);
+    const mergeTemplate = this.getPromptTemplateOrThrow(options.mergePromptId);
+    const estimatedTokens = this.estimateTokensFromText(text);
+
+    const makeTemplateVars = (
+      dynamicVars: Record<string, string>,
+      maxWordsValue: number,
+    ): Record<string, string> => ({
+      ...options.templateVars,
+      max_words: String(maxWordsValue),
+      ...dynamicVars,
+    });
+
+    if (estimatedTokens > 0 && estimatedTokens <= options.singlePassTokenLimit) {
+      const userPrompt = this.renderTemplate(
+        template,
+        makeTemplateVars(
+          {
+            [options.scopeVarName]: 'single_pass',
+            [options.textVarName]: text,
+            [options.instructionVarName]: options.instruction,
+          },
+          options.maxWords,
+        ),
+      );
+
+      const response = await callOpenAI({
+        messages: [{ role: 'user', content: userPrompt }],
+        model: options.model,
+        maxOutputTokens: 25_000,
+        signal: options.signal,
+      });
+
+      const raw = String(response.choices?.[0]?.message?.content ?? '').trim();
+      const trimmed = this.trimToMaxWords(raw, options.maxWords);
+      return {
+        analysis: trimmed.text,
+        analysisWords: trimmed.words,
+        clipped: trimmed.trimmed,
+        chunked: false,
+        chunkCount: 1,
+      };
+    }
+
+    const chunks = this.chunkTextByApproxTokens(text, options.chunkTargetTokens);
+    const notes: string[] = [];
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index] ?? '';
+      const userPrompt = this.renderTemplate(
+        template,
+        makeTemplateVars(
+          {
+            [options.scopeVarName]: `chunk_${index + 1}/${chunks.length}`,
+            [options.textVarName]: chunk,
+            [options.instructionVarName]: options.instruction,
+          },
+          options.perChunkMaxWords,
+        ),
+      );
+      const response = await callOpenAI({
+        messages: [{ role: 'user', content: userPrompt }],
+        model: options.model,
+        maxOutputTokens: 6_000,
+        signal: options.signal,
+      });
+      notes.push(String(response.choices?.[0]?.message?.content ?? '').trim());
+    }
+
+    const mergedPrompt = this.renderTemplate(
+      mergeTemplate,
+      makeTemplateVars(
+        {
+          [options.notesVarName]: notes
+            .map((note, index) => `### Chunk ${index + 1}/${notes.length}\n${note}`)
+            .join('\n\n'),
+          [options.instructionVarName]: options.instruction,
+        },
+        options.maxWords,
+      ),
+    );
+
+    const merged = await callOpenAI({
+      messages: [{ role: 'user', content: mergedPrompt }],
+      model: options.model,
+      maxOutputTokens: 20_000,
+      signal: options.signal,
+    });
+
+    const raw = String(merged.choices?.[0]?.message?.content ?? '').trim();
+    const trimmed = this.trimToMaxWords(raw, options.maxWords);
+    return {
+      analysis: trimmed.text,
+      analysisWords: trimmed.words,
+      clipped: trimmed.trimmed,
+      chunked: true,
+      chunkCount: chunks.length,
+    };
+  }
+
   async listContextDocuments(opts: {
     workspaceId: string;
     contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
@@ -1957,114 +2107,244 @@ export class ToolService {
     const fullWords = this.countWords(fullText);
     const estTokens = this.estimateTokensFromText(fullText);
 
-    const template = defaultPrompts.find((p0) => p0.id === 'documents_analyze')?.content || '';
-    if (!template) throw new Error('Prompt documents_analyze non trouvé');
-
     const pageValue = typeof extracted.metadata.pages === 'number' ? String(extracted.metadata.pages) : 'Non précisé';
     const titleValue =
       typeof extracted.metadata.title === 'string' && extracted.metadata.title.trim() ? extracted.metadata.title.trim() : 'Non précisé';
-
-    // If it fits: single-call analysis on full extracted text.
-    if (estTokens > 0 && estTokens <= 700_000) {
-      const user = template
-        .replace('{{lang}}', 'français')
-        .replace('{{max_words}}', String(maxWords))
-        .replace('{{filename}}', row.filename)
-        .replace('{{pages}}', pageValue)
-        .replace('{{title}}', titleValue)
-        .replace('{{full_words}}', String(fullWords))
-        .replace('{{est_tokens}}', String(estTokens))
-        .replace('{{scope}}', 'texte intégral extrait')
-        .replace('{{document_text}}', fullText)
-        .replace('{{instruction}}', p);
-
-      const resp = await callOpenAI({
-        messages: [
-          { role: 'user', content: user }
-        ],
-        model,
-        // Avoid truncation for long analyses; still trimmed by maxWords at the end.
-        maxOutputTokens: 25000,
-        signal: opts.signal
-      });
-
-      const raw = String(resp.choices?.[0]?.message?.content ?? '').trim();
-      const trimmed = this.trimToMaxWords(raw, maxWords);
-      return {
-        documentId: row.id,
-        documentStatus: row.status,
-        filename: row.filename,
-        mode: 'full_text',
-        analysis: trimmed.text,
-        analysisWords: trimmed.words,
-        clipped: trimmed.trimmed,
-        summary: this.getDataString(row.data, 'summary')
-      };
-    }
-
-    // Large doc: scan ALL chunks (no retrieval/RAG), then consolidate.
-    const chunks = this.chunkTextByApproxTokens(fullText, 300_000);
-    const chunkAnalyses: string[] = [];
-    for (let i = 0; i < chunks.length; i += 1) {
-      const chunk = chunks[i]!;
-      const perChunkUser = template
-        .replace('{{lang}}', 'français')
-        .replace('{{max_words}}', String(1500))
-        .replace('{{filename}}', row.filename)
-        .replace('{{pages}}', pageValue)
-        .replace('{{title}}', titleValue)
-        .replace('{{full_words}}', String(fullWords))
-        .replace('{{est_tokens}}', String(estTokens))
-        .replace('{{scope}}', `extrait ${i + 1}/${chunks.length}`)
-        .replace('{{document_text}}', chunk)
-        .replace('{{instruction}}', p);
-
-      const resp = await callOpenAI({
-        messages: [
-          { role: 'user', content: perChunkUser }
-        ],
-        model,
-        // Per-chunk notes; bounded for cost and determinism. The final merge is also bounded.
-        maxOutputTokens: 6000,
-        signal: opts.signal
-      });
-      chunkAnalyses.push(String(resp.choices?.[0]?.message?.content ?? '').trim());
-    }
-
-    const mergeTemplate = defaultPrompts.find((p0) => p0.id === 'documents_analyze_merge')?.content || '';
-    if (!mergeTemplate) throw new Error('Prompt documents_analyze_merge non trouvé');
-    const notes = chunkAnalyses.map((a, i) => `### Extrait ${i + 1}/${chunkAnalyses.length}\n${a}`).join('\n\n');
-    const mergeUser = mergeTemplate
-      .replace('{{lang}}', 'français')
-      .replace('{{max_words}}', String(maxWords))
-      .replace('{{filename}}', row.filename)
-      .replace('{{pages}}', pageValue)
-      .replace('{{title}}', titleValue)
-      .replace('{{full_words}}', String(fullWords))
-      .replace('{{est_tokens}}', String(estTokens))
-      .replace('{{notes}}', notes)
-      .replace('{{instruction}}', p);
-
-    const merged = await callOpenAI({
-      messages: [
-        { role: 'user', content: mergeUser }
-      ],
+    const analyzed = await this.runChunkedPromptAnalysis({
       model,
-      maxOutputTokens: 20000,
-      signal: opts.signal
+      text: fullText,
+      instruction: p,
+      maxWords,
+      perChunkMaxWords: 1_500,
+      singlePassTokenLimit: 700_000,
+      chunkTargetTokens: 300_000,
+      analysisPromptId: 'documents_analyze',
+      mergePromptId: 'documents_analyze_merge',
+      templateVars: {
+        lang: 'français',
+        filename: row.filename,
+        pages: pageValue,
+        title: titleValue,
+        full_words: String(fullWords),
+        est_tokens: String(estTokens),
+      },
+      textVarName: 'document_text',
+      scopeVarName: 'scope',
+      instructionVarName: 'instruction',
+      notesVarName: 'notes',
+      signal: opts.signal,
     });
 
-    const raw = String(merged.choices?.[0]?.message?.content ?? '').trim();
-    const trimmed = this.trimToMaxWords(raw, maxWords);
     return {
       documentId: row.id,
       documentStatus: row.status,
       filename: row.filename,
       mode: 'full_text',
-      analysis: trimmed.text,
-      analysisWords: trimmed.words,
-      clipped: trimmed.trimmed,
+      analysis: analyzed.analysis,
+      analysisWords: analyzed.analysisWords,
+      clipped: analyzed.clipped,
       summary: this.getDataString(row.data, 'summary')
+    };
+  }
+
+  async analyzeHistory(opts: {
+    workspaceId: string;
+    sessionId: string;
+    question: string;
+    fromMessageId?: string | null;
+    toMessageId?: string | null;
+    maxTurns?: number | null;
+    targetToolCallId?: string | null;
+    targetToolResultMessageId?: string | null;
+    includeToolResults?: boolean;
+    includeSystemMessages?: boolean;
+    maxWords?: number | null;
+    signal?: AbortSignal;
+  }): Promise<{
+    answer: string;
+    evidence: Array<{ messageId: string; role: string; sequence: number }>;
+    coverage: {
+      scannedTurns: number;
+      totalTurns: number;
+      chunked: boolean;
+      chunkCount: number;
+      truncated: boolean;
+      insufficientCoverage: boolean;
+    };
+    confidence: 'low' | 'medium' | 'high';
+  }> {
+    const question = (opts.question || '').trim();
+    if (!question) throw new Error('history_analyze: question is required');
+    const maxWords = Math.max(200, Math.min(6_000, Math.floor(opts.maxWords ?? 1_500)));
+
+    const [session] = await db
+      .select({
+        id: chatSessions.id,
+        workspaceId: chatSessions.workspaceId,
+      })
+      .from(chatSessions)
+      .where(eq(chatSessions.id, opts.sessionId))
+      .limit(1);
+
+    if (!session) throw new Error('history_analyze: session not found');
+    if (!session.workspaceId || session.workspaceId !== opts.workspaceId) {
+      throw new Error('Security: history_analyze session does not match workspace');
+    }
+
+    const allMessages = await db
+      .select({
+        id: chatMessages.id,
+        role: chatMessages.role,
+        content: chatMessages.content,
+        sequence: chatMessages.sequence,
+        toolCallId: chatMessages.toolCallId,
+      })
+      .from(chatMessages)
+      .where(eq(chatMessages.sessionId, opts.sessionId))
+      .orderBy(asc(chatMessages.sequence));
+
+    const fromMessageId =
+      typeof opts.fromMessageId === 'string' ? opts.fromMessageId.trim() : '';
+    const toMessageId =
+      typeof opts.toMessageId === 'string' ? opts.toMessageId.trim() : '';
+    const fromSequence =
+      fromMessageId.length > 0
+        ? allMessages.find((msg) => msg.id === fromMessageId)?.sequence ?? null
+        : null;
+    const toSequence =
+      toMessageId.length > 0
+        ? allMessages.find((msg) => msg.id === toMessageId)?.sequence ?? null
+        : null;
+    if (fromMessageId && fromSequence == null) {
+      throw new Error('history_analyze: from_message_id not found in session');
+    }
+    if (toMessageId && toSequence == null) {
+      throw new Error('history_analyze: to_message_id not found in session');
+    }
+
+    const includeToolResults = opts.includeToolResults !== false;
+    const includeSystemMessages = opts.includeSystemMessages === true;
+    const maxTurns =
+      typeof opts.maxTurns === 'number' && Number.isFinite(opts.maxTurns)
+        ? Math.max(1, Math.min(500, Math.floor(opts.maxTurns)))
+        : 80;
+
+    let selected = allMessages.filter((message) => {
+      if (fromSequence != null && message.sequence < fromSequence) return false;
+      if (toSequence != null && message.sequence > toSequence) return false;
+      if (message.role === 'tool' && !includeToolResults) return false;
+      if (message.role === 'system' && !includeSystemMessages) return false;
+      return message.role === 'user' || message.role === 'assistant' || message.role === 'tool' || message.role === 'system';
+    });
+
+    const targetToolCallId =
+      typeof opts.targetToolCallId === 'string' ? opts.targetToolCallId.trim() : '';
+    const targetToolResultMessageId =
+      typeof opts.targetToolResultMessageId === 'string'
+        ? opts.targetToolResultMessageId.trim()
+        : '';
+    if (targetToolCallId || targetToolResultMessageId) {
+      let targetSequence: number | null = null;
+      if (targetToolResultMessageId) {
+        targetSequence =
+          allMessages.find((msg) => msg.id === targetToolResultMessageId)?.sequence ??
+          null;
+      } else if (targetToolCallId) {
+        targetSequence =
+          allMessages.find(
+            (msg) => msg.role === 'tool' && msg.toolCallId === targetToolCallId,
+          )?.sequence ?? null;
+      }
+      if (targetSequence != null) {
+        selected = selected.filter(
+          (message) =>
+            message.sequence >= targetSequence - 6 &&
+            message.sequence <= targetSequence + 6,
+        );
+      }
+    }
+
+    let truncated = false;
+    if (selected.length > maxTurns) {
+      selected = selected.slice(-maxTurns);
+      truncated = true;
+    }
+
+    const evidence = selected.map((message) => ({
+      messageId: message.id,
+      role: message.role,
+      sequence: message.sequence,
+    }));
+
+    const historyText = selected
+      .map((message) => {
+        const body = (message.content || '').trim();
+        const normalized =
+          body.length > 3_500 ? `${body.slice(0, 3_500)}\n...(truncated)...` : body;
+        return [
+          `message_id=${message.id}`,
+          `sequence=${message.sequence}`,
+          `role=${message.role}`,
+          normalized || '(empty)',
+        ].join('\n');
+      })
+      .join('\n\n---\n\n');
+
+    if (!historyText.trim()) {
+      return {
+        answer: 'insufficient_coverage',
+        evidence: [],
+        coverage: {
+          scannedTurns: 0,
+          totalTurns: allMessages.length,
+          chunked: false,
+          chunkCount: 0,
+          truncated,
+          insufficientCoverage: true,
+        },
+        confidence: 'low',
+      };
+    }
+
+    const analyzed = await this.runChunkedPromptAnalysis({
+      model: 'gpt-4.1-nano',
+      text: historyText,
+      instruction: question,
+      maxWords,
+      perChunkMaxWords: 900,
+      singlePassTokenLimit: 240_000,
+      chunkTargetTokens: 120_000,
+      analysisPromptId: 'history_analyze',
+      mergePromptId: 'history_analyze_merge',
+      templateVars: {
+        lang: 'français',
+        session_id: opts.sessionId,
+        total_turns: String(allMessages.length),
+      },
+      textVarName: 'history_text',
+      scopeVarName: 'scope',
+      instructionVarName: 'question',
+      notesVarName: 'notes',
+      signal: opts.signal,
+    });
+
+    return {
+      answer: analyzed.analysis,
+      evidence,
+      coverage: {
+        scannedTurns: selected.length,
+        totalTurns: allMessages.length,
+        chunked: analyzed.chunked,
+        chunkCount: analyzed.chunkCount,
+        truncated,
+        insufficientCoverage: false,
+      },
+      confidence:
+        selected.length <= 2 || truncated
+          ? 'low'
+          : analyzed.chunked
+            ? 'medium'
+            : 'high',
     };
   }
 }
