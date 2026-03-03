@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import {
   createTopAiVsCodeRequestHandler,
+  type RuntimeHttpRequestResult,
   type TopAiRuntimeConfig,
   type TopAiVsCodeCommand,
 } from './host-handler';
@@ -148,6 +149,67 @@ const testApiConnectivity = async (
       error: error instanceof Error ? error.message : String(error),
     };
   }
+};
+
+const performRuntimeHttpRequest = async (
+  runtimeConfig: TopAiRuntimeConfig,
+  payload: {
+    url: string;
+    method?: string;
+    headers?: Record<string, string>;
+    bodyText?: string;
+  },
+): Promise<RuntimeHttpRequestResult> => {
+  const url = typeof payload.url === 'string' ? payload.url.trim() : '';
+  if (!url) {
+    throw new Error('runtime.http.request requires a non-empty url.');
+  }
+
+  const method = typeof payload.method === 'string' && payload.method.trim()
+    ? payload.method.trim().toUpperCase()
+    : 'GET';
+  const targetUrl = new URL(url);
+  const apiBaseOrigin = (() => {
+    try {
+      return new URL(runtimeConfig.apiBaseUrl).origin;
+    } catch {
+      return '';
+    }
+  })();
+
+  if (apiBaseOrigin && targetUrl.origin !== apiBaseOrigin) {
+    throw new Error('runtime.http.request rejects cross-origin targets.');
+  }
+
+  const requestHeaders: Record<string, string> = {
+    ...(payload.headers ?? {}),
+  };
+
+  if (runtimeConfig.sessionToken.trim()) {
+    requestHeaders.Authorization = `Bearer ${runtimeConfig.sessionToken.trim()}`;
+  }
+
+  const response = await fetch(targetUrl.toString(), {
+    method,
+    headers: requestHeaders,
+    body:
+      typeof payload.bodyText === 'string' && method !== 'GET' && method !== 'HEAD'
+        ? payload.bodyText
+        : undefined,
+  });
+
+  const headers: Record<string, string> = {};
+  response.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+    bodyText: await response.text(),
+  };
 };
 
 const validateTokenSession = async (
@@ -384,7 +446,10 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      const result = await this.runtimeHandler(command as TopAiVsCodeCommand);
+      const result = await this.runtimeHandler(
+        command as TopAiVsCodeCommand,
+        payload.payload,
+      );
       respond(true, result);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -402,6 +467,10 @@ export const activate = (context: vscode.ExtensionContext): void => {
         runtimeConfig.apiBaseUrl,
         runtimeConfig.sessionToken,
       );
+    },
+    performRuntimeHttpRequest: async (payload) => {
+      const runtimeConfig = await readRuntimeConfig(context);
+      return performRuntimeHttpRequest(runtimeConfig, payload);
     },
   });
 

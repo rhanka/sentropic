@@ -8,11 +8,26 @@ export type TopAiRuntimeConfig = {
 
 export type TopAiVsCodeCommand =
   | 'runtime.config.get'
-  | 'runtime.auth.validate';
+  | 'runtime.auth.validate'
+  | 'runtime.http.request';
 
 export type TopAiVsCodeRequestPayloadMap = {
   'runtime.config.get': undefined;
   'runtime.auth.validate': undefined;
+  'runtime.http.request': {
+    url: string;
+    method?: string;
+    headers?: Record<string, string>;
+    bodyText?: string;
+  };
+};
+
+export type RuntimeHttpRequestResult = {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  bodyText: string;
 };
 
 export type TopAiVsCodeRequestHandlerDeps = {
@@ -38,6 +53,9 @@ export type TopAiVsCodeRequestHandlerDeps = {
           role: string;
         } | null;
       }>;
+  performRuntimeHttpRequest?: (
+    payload: TopAiVsCodeRequestPayloadMap['runtime.http.request'],
+  ) => RuntimeHttpRequestResult | Promise<RuntimeHttpRequestResult>;
 };
 
 export const createTopAiVsCodeRequestHandler =
@@ -55,6 +73,15 @@ export const createTopAiVsCodeRequestHandler =
         throw new Error(`Unsupported command: ${command}`);
       }
       return await deps.validateRuntimeAuth();
+    }
+
+    if (command === 'runtime.http.request') {
+      if (!deps.performRuntimeHttpRequest) {
+        throw new Error(`Unsupported command: ${command}`);
+      }
+      return await deps.performRuntimeHttpRequest(
+        (_payload ?? {}) as TopAiVsCodeRequestPayloadMap['runtime.http.request'],
+      );
     }
 
     throw new Error(`Unsupported command: ${command}`);

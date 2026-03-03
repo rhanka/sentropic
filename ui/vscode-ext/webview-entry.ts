@@ -65,6 +65,14 @@ type RuntimeState = {
   bridge: VsCodeBridge | null;
 };
 
+type RuntimeHttpRequestResult = {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  bodyText: string;
+};
+
 type ExtensionMessage = {
   type?: unknown;
   payload?: unknown;
@@ -153,6 +161,94 @@ const applyApiRuntimeConfig = (
     authToken: config.sessionToken || undefined,
   });
   initNavigation(createExtensionNavigation(config.apiBaseUrl));
+};
+
+const installBridgeApiFetchProxy = (state: RuntimeState): void => {
+  const bridge = state.bridge;
+  if (!bridge) return;
+  if (typeof window === 'undefined') return;
+
+  const nativeFetch = window.fetch.bind(window);
+  const apiBaseUrl = state.config.apiBaseUrl.replace(/\/$/, '');
+  const apiBaseOrigin = (() => {
+    try {
+      return new URL(apiBaseUrl).origin;
+    } catch {
+      return '';
+    }
+  })();
+
+  const isBridgeableBody = (value: unknown): value is string | undefined => {
+    if (typeof value === 'undefined') return true;
+    return typeof value === 'string';
+  };
+
+  window.fetch = async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    try {
+      const request = input instanceof Request ? input : null;
+      const rawUrl = request ? request.url : String(input);
+      const targetUrl = new URL(rawUrl, window.location.origin);
+      if (!apiBaseOrigin || targetUrl.origin !== apiBaseOrigin) {
+        return nativeFetch(input, init);
+      }
+      if (!targetUrl.toString().startsWith(apiBaseUrl)) {
+        return nativeFetch(input, init);
+      }
+
+      const method = (
+        init?.method ??
+        request?.method ??
+        'GET'
+      ).toUpperCase();
+
+      let bodyText: string | undefined;
+      if (!isBridgeableBody(init?.body)) {
+        return nativeFetch(input, init);
+      }
+      if (typeof init?.body === 'string') {
+        bodyText = init.body;
+      } else if (request && method !== 'GET' && method !== 'HEAD') {
+        const contentType = request.headers.get('content-type') ?? '';
+        if (
+          contentType.includes('multipart/form-data') ||
+          contentType.includes('application/octet-stream')
+        ) {
+          return nativeFetch(input, init);
+        }
+        bodyText = await request.clone().text();
+      }
+
+      const headers = new Headers(request?.headers ?? undefined);
+      if (init?.headers) {
+        new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+      }
+      const headersObject: Record<string, string> = {};
+      headers.forEach((value, key) => {
+        headersObject[key] = value;
+      });
+
+      const response = await bridge.request<RuntimeHttpRequestResult>(
+        'runtime.http.request',
+        {
+          url: targetUrl.toString(),
+          method,
+          headers: headersObject,
+          bodyText,
+        },
+      );
+
+      return new Response(response.bodyText ?? '', {
+        status: Number.isFinite(response.status) ? response.status : 500,
+        statusText: response.statusText || '',
+        headers: new Headers(response.headers ?? {}),
+      });
+    } catch {
+      return nativeFetch(input, init);
+    }
+  };
 };
 
 const fetchSessionUser = async (
@@ -541,6 +637,7 @@ const initialState: ChatWidgetHandoffState = {
 const boot = async (): Promise<void> => {
   const runtimeState = await bootstrapRuntimeState();
   installExtensionRuntimeShim(runtimeState);
+  installBridgeApiFetchProxy(runtimeState);
   await initializeSession();
 
   mountSvelte(ChatWidget, {
