@@ -3186,7 +3186,7 @@
   });
 </script>
 
-<div class="flex flex-col h-full" bind:this={panelEl}>
+<div class="topai-chat-panel-shell flex flex-col h-full" bind:this={panelEl}>
   {#if mode === 'comments'}
     {@const assignedUser = currentCommentRoot?.assigned_to_user ?? null}
     {@const isAssignedToMe = assignedUser?.id && assignedUser.id === $session.user?.id}

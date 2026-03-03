@@ -1508,10 +1508,10 @@
       bind:this={dialogEl}
       on:keydown={onDialogKeyDown}
       class={isSidePanelHost
-        ? 'h-full w-full bg-white flex flex-col'
+        ? 'topai-chat-widget-shell h-full w-full bg-white flex flex-col'
         : isDocked
-        ? 'fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 flex flex-col'
-        : 'fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg'}
+        ? 'topai-chat-widget-shell fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 flex flex-col'
+        : 'topai-chat-widget-shell fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg'}
       style={isSidePanelHost ? '' : isDocked ? `width: ${dockWidthCss};` : ''}
       class:hidden={!isVisible}
       class:overflow-hidden={!showExtensionConfigMenu}
