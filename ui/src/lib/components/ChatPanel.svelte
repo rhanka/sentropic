@@ -1213,6 +1213,13 @@
   ];
 
   const LOCAL_TOOL_TOGGLE_IDS = new Set(['tab_read', 'tab_action']);
+  const isVsCodeRuntimeHost = (): boolean => {
+    const runtime = (globalThis as typeof globalThis & {
+      chrome?: { runtime?: { id?: string } };
+    }).chrome?.runtime;
+    const runtimeId = String(runtime?.id ?? '').trim().toLowerCase();
+    return runtimeId === 'topai.vscode.runtime';
+  };
 
   const getPrefsKey = (id: string | null) =>
     `chat_session_prefs:${id || 'new'}`;
@@ -1286,14 +1293,18 @@
       extensionRestrictedToolset,
     });
 
-  const getToolScopeToggles = () =>
-    TOOL_TOGGLES.filter(
+  const getToolScopeToggles = () => {
+    if (mode === 'ai' && isVsCodeRuntimeHost()) {
+      return [];
+    }
+    return TOOL_TOGGLES.filter(
       (toggle) =>
         !LOCAL_TOOL_TOGGLE_IDS.has(toggle.id) || isLocalToolRuntimeAvailable(),
     ).map((toggle) => ({
       id: toggle.id,
       toolIds: toggle.toolIds,
     }));
+  };
 
   const getToolToggleDefaults = () => {
     return computeToolToggleDefaults({

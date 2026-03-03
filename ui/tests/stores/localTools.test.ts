@@ -5,6 +5,7 @@ import {
   decideLocalToolPermission,
   executeLocalTool,
   getLocalToolDefinitions,
+  isLocalToolRuntimeAvailable,
   isLocalToolName,
   localToolsStore,
 } from '../../src/lib/stores/localTools';
@@ -170,5 +171,16 @@ describe('localTools store', () => {
     await expect(
       executeLocalTool('call-4', 'tab_read', { mode: 'screenshot' })
     ).rejects.toThrow(/unavailable outside extension context/i);
+  });
+
+  it('keeps Chrome-only local tools disabled in VSCode runtime host', () => {
+    (globalThis as any).chrome = {
+      runtime: {
+        id: 'topai.vscode.runtime',
+        sendMessage: vi.fn(),
+      },
+    };
+
+    expect(isLocalToolRuntimeAvailable()).toBe(false);
   });
 });
