@@ -17,6 +17,11 @@
     getVsCodeExtensionDownloadErrorMessage,
     type VsCodeExtensionDownloadMetadata,
   } from '$lib/utils/vscode-extension-download';
+  import {
+    fetchProviderConnections,
+    saveCodexProviderConnection,
+    type ProviderConnectionState,
+  } from '$lib/utils/provider-connections-api';
   import { emitUserAISettingsUpdated } from '$lib/utils/user-ai-settings-events';
   import {
     themePreference,
@@ -86,6 +91,11 @@
   let vscodeExtensionTokenMeta: VsCodeExtensionTokenMeta | null = null;
   let vscodeExtensionTokenPlaintext = '';
   let vscodeExtensionTokenError = '';
+  let isLoadingProviderConnections = false;
+  let isSavingCodexProviderConnection = false;
+  let providerConnectionsError = '';
+  let providerConnections: ProviderConnectionState[] = [];
+  let codexConnectionAccountLabel = '';
   
   // Configuration IA
   let aiSettings = {
@@ -147,6 +157,7 @@
       await loadAISettings();
       await loadQueueStats();
       await loadVsCodeExtensionTokenStatus();
+      await loadProviderConnections();
     }
   });
 
@@ -172,6 +183,10 @@
     if (Number.isNaN(parsed.getTime())) return iso;
     return parsed.toLocaleString();
   };
+
+  const codexProviderConnection = () =>
+    providerConnections.find((provider) => provider.providerId === 'codex') ||
+    null;
 
 
   let deleting = false;
@@ -334,6 +349,58 @@
       isCopyingVsCodeExtensionToken = false;
     }
   };
+
+  const loadProviderConnections = async () => {
+    isLoadingProviderConnections = true;
+    providerConnectionsError = '';
+    try {
+      providerConnections = await fetchProviderConnections();
+      codexConnectionAccountLabel =
+        providerConnections.find((provider) => provider.providerId === 'codex')
+          ?.accountLabel || '';
+    } catch (error) {
+      console.error('Failed to load provider connections:', error);
+      providerConnectionsError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.providerConnections.errors.load');
+    } finally {
+      isLoadingProviderConnections = false;
+    }
+  };
+
+  const updateCodexProviderConnection = async (connected: boolean) => {
+    isSavingCodexProviderConnection = true;
+    providerConnectionsError = '';
+    try {
+      const updatedProvider = await saveCodexProviderConnection({
+        connected,
+        accountLabel: codexConnectionAccountLabel.trim() || null,
+      });
+      providerConnections = providerConnections.map((provider) =>
+        provider.providerId === 'codex' ? updatedProvider : provider,
+      );
+      if (!providerConnections.some((provider) => provider.providerId === 'codex')) {
+        providerConnections = [updatedProvider, ...providerConnections];
+      }
+      codexConnectionAccountLabel = updatedProvider.accountLabel || '';
+      addToast({
+        type: 'success',
+        message: connected
+          ? get(_)('settings.providerConnections.toasts.codexConnected')
+          : get(_)('settings.providerConnections.toasts.codexDisconnected'),
+      });
+    } catch (error) {
+      console.error('Failed to update codex provider connection:', error);
+      providerConnectionsError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.providerConnections.errors.save');
+    } finally {
+      isSavingCodexProviderConnection = false;
+    }
+  };
+
   // Fonctions pour la configuration IA
   const loadAISettings = async () => {
     isLoadingAISettings = true;
@@ -1014,6 +1081,88 @@
       <p class="text-sm text-slate-600">{$_('settings.adminOnlyHint')}</p>
     </div>
   {:else}
+
+  <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
+    <h2 class="text-lg font-semibold text-slate-800 mb-1">
+      {$_('settings.providerConnections.title')}
+    </h2>
+    <p class="text-sm text-slate-600">
+      {$_('settings.providerConnections.description')}
+    </p>
+
+    {#if isLoadingProviderConnections}
+      <p class="text-sm text-slate-600">{$_('common.loading')}</p>
+    {:else}
+      <div class="grid gap-3 md:grid-cols-3">
+        {#each providerConnections as provider (provider.providerId)}
+          <div class="rounded border border-slate-200 bg-slate-50 p-3">
+            <div class="flex items-center justify-between gap-2">
+              <div class="text-sm font-semibold text-slate-800">{provider.label}</div>
+              <span
+                class={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  provider.ready
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-slate-200 text-slate-700'
+                }`}
+              >
+                {provider.ready
+                  ? $_('settings.providerConnections.status.ready')
+                  : $_('settings.providerConnections.status.notReady')}
+              </span>
+            </div>
+            <div class="mt-1 text-xs text-slate-600">
+              {provider.managedBy === 'admin_settings'
+                ? $_('settings.providerConnections.managedBy.admin')
+                : provider.managedBy === 'environment'
+                  ? $_('settings.providerConnections.managedBy.environment')
+                  : $_('settings.providerConnections.managedBy.none')}
+            </div>
+            {#if provider.accountLabel}
+              <div class="mt-1 text-xs text-slate-500">{provider.accountLabel}</div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+
+      {#if codexProviderConnection()?.canConfigure}
+        <div class="space-y-2 rounded border border-slate-200 p-3">
+          <label for="codex-provider-account" class="block text-sm font-medium text-slate-700">
+            {$_('settings.providerConnections.codex.accountLabel')}
+          </label>
+          <input
+            id="codex-provider-account"
+            type="text"
+            bind:value={codexConnectionAccountLabel}
+            placeholder={$_('settings.providerConnections.codex.accountPlaceholder')}
+            class="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-700"
+            disabled={isSavingCodexProviderConnection}
+          />
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="rounded bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+              on:click={() => updateCodexProviderConnection(true)}
+              disabled={isSavingCodexProviderConnection}
+            >
+              {$_('settings.providerConnections.codex.connect')}
+            </button>
+            <button
+              type="button"
+              class="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              on:click={() => updateCodexProviderConnection(false)}
+              disabled={isSavingCodexProviderConnection}
+            >
+              {$_('settings.providerConnections.codex.disconnect')}
+            </button>
+          </div>
+        </div>
+      {/if}
+    {/if}
+
+    {#if providerConnectionsError}
+      <p class="text-sm text-rose-700">{providerConnectionsError}</p>
+    {/if}
+  </div>
 
   <!-- Section Configuration IA -->
 	  <div class="space-y-4 rounded border border-slate-200 bg-white p-6">

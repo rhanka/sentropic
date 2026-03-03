@@ -3,7 +3,7 @@
   import type { ContextProvider } from '$lib/core/context-provider';
   import { _ } from 'svelte-i18n';
   import { queueStore, loadJobs, updateJob, addJob } from '$lib/stores/queue';
-  import { apiPost } from '$lib/utils/api';
+  import { apiGet, apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
   import {
     isAuthenticated,
@@ -113,6 +113,13 @@
   };
   type ExtensionConfigStatusKind = 'info' | 'ok' | 'error';
   type ExtensionAuthStatusKind = 'info' | 'ok' | 'error';
+  type ProviderReadinessEntry = {
+    providerId: string;
+    label: string;
+    ready: boolean;
+    managedBy: 'admin_settings' | 'environment' | 'none';
+    accountLabel?: string | null;
+  };
   const DISPLAY_MODE_STORAGE_KEY = 'chatWidgetDisplayMode';
   const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
   const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
@@ -156,6 +163,9 @@
   let extensionAuthLoggingOut = false;
   let extensionAuthConnected = false;
   let extensionAuthUser: User | null = null;
+  let extensionProviderReadiness: ProviderReadinessEntry[] = [];
+  let extensionProviderReadinessLoading = false;
+  let extensionProviderReadinessError = '';
   let extensionConfigMenuWasOpen = false;
   let extensionSettingsTab: 'endpoint' | 'permissions' = 'endpoint';
   let extensionConfigMenuMaxHeightPx = 360;
@@ -590,6 +600,8 @@
         setExtensionAuthStatus(reason, 'error');
         extensionAuthConnected = false;
         extensionAuthUser = null;
+        extensionProviderReadiness = [];
+        extensionProviderReadinessError = '';
         clearUser();
         extensionAuthStatusLoaded = true;
         return;
@@ -599,6 +611,8 @@
       if (!status.connected || !status.user) {
         extensionAuthConnected = false;
         extensionAuthUser = null;
+        extensionProviderReadiness = [];
+        extensionProviderReadinessError = '';
         clearUser();
         setExtensionAuthStatus(
           status.reason || $_('chat.extension.auth.notConnected'),
@@ -614,6 +628,7 @@
       setUser(user);
       setExtensionAuthStatus($_('chat.extension.status.connected'), 'ok');
       extensionAuthStatusLoaded = true;
+      void loadExtensionProviderReadiness();
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       setExtensionAuthStatus(
@@ -622,6 +637,8 @@
       );
       extensionAuthConnected = false;
       extensionAuthUser = null;
+      extensionProviderReadiness = [];
+      extensionProviderReadinessError = '';
       clearUser();
       extensionAuthStatusLoaded = true;
     } finally {
@@ -657,6 +674,8 @@
           response?.error ?? $_('chat.extension.status.connectFailed');
         extensionAuthConnected = false;
         extensionAuthUser = null;
+        extensionProviderReadiness = [];
+        extensionProviderReadinessError = '';
         clearUser();
         setExtensionAuthStatus(reason, 'error');
         extensionAuthStatusLoaded = true;
@@ -669,10 +688,13 @@
       setUser(user);
       setExtensionAuthStatus($_('chat.extension.status.connectedSuccess'), 'ok');
       extensionAuthStatusLoaded = true;
+      void loadExtensionProviderReadiness();
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       extensionAuthConnected = false;
       extensionAuthUser = null;
+      extensionProviderReadiness = [];
+      extensionProviderReadinessError = '';
       clearUser();
       setExtensionAuthStatus(
         $_('chat.extension.status.connectionFailed', { values: { reason } }),
@@ -696,6 +718,8 @@
       });
       extensionAuthConnected = false;
       extensionAuthUser = null;
+      extensionProviderReadiness = [];
+      extensionProviderReadinessError = '';
       clearUser();
       setExtensionAuthStatus($_('chat.extension.status.loggedOut'), 'ok');
       extensionAuthStatusLoaded = true;
@@ -707,6 +731,31 @@
       );
     } finally {
       extensionAuthLoggingOut = false;
+    }
+  };
+
+  const loadExtensionProviderReadiness = async () => {
+    if (!extensionAuthConnected) {
+      extensionProviderReadiness = [];
+      extensionProviderReadinessError = '';
+      return;
+    }
+    extensionProviderReadinessLoading = true;
+    extensionProviderReadinessError = '';
+    try {
+      const payload = await apiGet<{ providers: ProviderReadinessEntry[] }>(
+        '/models/provider-readiness',
+      );
+      extensionProviderReadiness = Array.isArray(payload.providers)
+        ? payload.providers
+        : [];
+    } catch (error) {
+      extensionProviderReadinessError =
+        error instanceof Error
+          ? error.message
+          : $_('chat.extension.providerReadiness.loadError');
+    } finally {
+      extensionProviderReadinessLoading = false;
     }
   };
 
@@ -1786,6 +1835,52 @@
                       </div>
                       <div class="text-[11px] text-slate-500">
                         {$_('chat.extension.auth.providerManagedInAdmin')}
+                      </div>
+                      <div class="space-y-1 rounded border border-slate-200 bg-slate-50 p-2">
+                        <div class="text-[11px] font-semibold text-slate-700">
+                          {$_('chat.extension.providerReadiness.title')}
+                        </div>
+                        {#if extensionProviderReadinessLoading}
+                          <div class="text-[11px] text-slate-500">
+                            {$_('common.loading')}
+                          </div>
+                        {:else if extensionProviderReadiness.length === 0}
+                          <div class="text-[11px] text-slate-500">
+                            {$_('chat.extension.providerReadiness.empty')}
+                          </div>
+                        {:else}
+                          <div class="space-y-1">
+                            {#each extensionProviderReadiness as provider (
+                              provider.providerId
+                            )}
+                              <div class="flex items-center justify-between gap-2 text-[11px]">
+                                <span class="text-slate-700 truncate">
+                                  {provider.label}
+                                </span>
+                                <span
+                                  class={`rounded px-1.5 py-0.5 ${
+                                    provider.ready
+                                      ? 'bg-green-100 text-green-700'
+                                      : 'bg-slate-200 text-slate-700'
+                                  }`}
+                                >
+                                  {provider.ready
+                                    ? $_(
+                                        'chat.extension.providerReadiness.status.ready',
+                                      )
+                                    : $_(
+                                        'chat.extension.providerReadiness.status.notReady',
+                                      )}
+                                </span>
+                              </div>
+                            {/each}
+                          </div>
+                        {/if}
+                        {#if extensionProviderReadinessError}
+                          <div class="text-[11px] text-rose-700">
+                            {extensionProviderReadinessError}
+                          </div>
+                        {/if}
                       </div>
                       {#if extensionAuthStatus}
                         <div
