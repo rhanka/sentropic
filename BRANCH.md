@@ -178,48 +178,48 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make vscode-ext API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 REGISTRY=local ENV=feat-vscode-plugin-v1`
     - [!] Initial run failed with port conflicts (`5105`/`1005`) because `test-feat-vscode-plugin-v1` containers were already running; validated successful rerun on free ports (`API=8715`, `UI=5115`, `MAILDEV=1015`) with same command scope.
 
-- [ ] **Lot 1.1 — Theme parity (VSCode host + web app)**
-  - [ ] Spec mapping:
-    - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.13` (theming decision).
-    - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.14.6` (host-bridge API transport hardening).
-  - [ ] VSCode host bridge transport hardening:
-    - [ ] route chat bootstrap/runtime API calls via host bridge (no direct webview cross-origin fetch path for core chat flow),
-    - [ ] keep normalized error envelopes for actionable UX,
-    - [ ] retain token bootstrap compatibility from Lot 1.
-  - [ ] VSCode host theme adaptation:
-    - [ ] consume VSCode theme tokens for dark/light/high-contrast,
-    - [ ] validate readability and semantic colors in all supported themes.
-  - [ ] Web app theme preference:
-    - [ ] add `system|light|dark` preference in settings/admin,
-    - [ ] ensure chat/widget components follow the selected theme mode consistently.
-  - [ ] Lot gate:
-    - [ ] `make test-ui SCOPE=tests/vscode-ext/host-bridge-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/vscode-ext/theme-parity.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+- [x] **Lot 1.1 — Theme parity (VSCode host + web app)**
+  - [x] Spec mapping:
+    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.13` (theming decision).
+    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.14.6` (host-bridge API transport hardening).
+  - [x] VSCode host bridge transport hardening:
+    - [x] route chat bootstrap/runtime API calls via host bridge (no direct webview cross-origin fetch path for core chat flow),
+    - [x] keep normalized error envelopes for actionable UX,
+    - [x] retain token bootstrap compatibility from Lot 1.
+  - [x] VSCode host theme adaptation:
+    - [x] consume VSCode theme tokens for dark/light/high-contrast,
+    - [x] validate readability and semantic colors in all supported themes.
+  - [x] Web app theme preference:
+    - [x] add `system|light|dark` preference in settings/admin,
+    - [x] ensure chat/widget components follow the selected theme mode consistently.
+  - [x] Lot gate:
+    - [x] `make test-ui SCOPE=tests/vscode-ext/host-bridge-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/vscode-ext/theme-parity.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
-- [ ] **Lot 2 — Provider auth centralization (admin web app)**
+- [x] **Lot 2 — Provider auth centralization (admin web app)**
   - [x] Existing ChatWidget parity baseline:
     - [x] integrate real `ChatWidget` in VSCode host,
     - [x] runtime bridge for config/auth settings menu,
     - [x] no dedicated top-level provider button in extension surface.
-  - [ ] Move provider auth ownership to web app admin:
-    - [ ] admin-only provider connection section in web app settings,
-    - [ ] shared provider connections at backend scope (first target: Codex),
-    - [ ] extension consumes backend provider readiness status only.
-  - [ ] Remove extension-side provider connection actions from bootstrap path:
-    - [ ] keep only endpoint/token bootstrap in extension,
-    - [ ] provider connection actions live in admin web app UI.
-  - [ ] Extend provider model and API contracts for shared provider state:
-    - [ ] provider metadata/status endpoint consumed by web+vscode,
-    - [ ] audit + update semantics for admin operations.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/provider-connections-admin.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/settings/provider-connections-admin.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+  - [x] Move provider auth ownership to web app admin:
+    - [x] admin-only provider connection section in web app settings,
+    - [x] shared provider connections at backend scope (first target: Codex),
+    - [x] extension consumes backend provider readiness status only.
+  - [x] Remove extension-side provider connection actions from bootstrap path:
+    - [x] keep only endpoint/token bootstrap in extension,
+    - [x] provider connection actions live in admin web app UI.
+  - [x] Extend provider model and API contracts for shared provider state:
+    - [x] provider metadata/status endpoint consumed by web+vscode,
+    - [x] audit + update semantics for admin operations.
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-endpoints SCOPE=tests/api/provider-connections-admin.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/settings/provider-connections-admin.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot 3 — VSCode plugin code tools (research + implementation)**
   - [ ] Spec mapping:
