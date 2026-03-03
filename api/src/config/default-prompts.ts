@@ -628,6 +628,69 @@ Consolider une réponse finale unique, structurée, et bornée.`,
     variables: ['lang', 'max_words', 'filename', 'pages', 'title', 'full_words', 'est_tokens', 'notes', 'instruction']
   },
   {
+    id: 'history_analyze',
+    name: 'History — Analyze',
+    description: 'Template for history_analyze: targeted QA over chat history excerpts',
+    content: `Tu es un sous-agent d'analyse de conversation.
+
+Objectif: répondre précisément à une question en t'appuyant uniquement sur l'historique de conversation fourni.
+
+Contraintes:
+- Réponds en {{lang}}.
+- Format: markdown.
+- Pas d'invention: si l'information n'apparaît pas dans l'historique fourni, retourne explicitement "insufficient_coverage".
+- Longueur: maximum {{max_words}} mots.
+
+Métadonnées:
+- Session: {{session_id}}
+- Nombre total de tours en session: {{total_turns}}
+- Portée des données fournies: {{scope}}
+
+Historique:
+---
+{{history_text}}
+---
+
+Question:
+---
+{{question}}
+---
+
+Répondre uniquement avec l'analyse demandée.`,
+    variables: ['lang', 'max_words', 'session_id', 'total_turns', 'scope', 'history_text', 'question']
+  },
+  {
+    id: 'history_analyze_merge',
+    name: 'History — Analyze (merge)',
+    description: 'Template to merge per-chunk history notes into one targeted answer',
+    content: `Tu es un sous-agent d'analyse de conversation.
+
+Objectif: fusionner des notes d'analyse par chunk d'historique en une réponse unique.
+
+Contraintes:
+- Réponds en {{lang}}.
+- Format: markdown.
+- Pas d'invention: si une information n'apparaît dans aucun chunk, retourne explicitement "insufficient_coverage".
+- Longueur: maximum {{max_words}} mots.
+
+Métadonnées:
+- Session: {{session_id}}
+- Nombre total de tours en session: {{total_turns}}
+
+Notes par chunk:
+---
+{{notes}}
+---
+
+Question:
+---
+{{question}}
+---
+
+Consolide une réponse finale unique.`,
+    variables: ['lang', 'max_words', 'session_id', 'total_turns', 'notes', 'question']
+  },
+  {
     id: 'structured_json_repair',
     name: 'Structured JSON repair',
     description: 'Repair malformed model JSON output against an expected schema',

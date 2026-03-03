@@ -33,6 +33,7 @@ import {
   matrixGetTool,
   matrixUpdateTool,
   documentsTool,
+  historyAnalyzeTool,
   commentAssistantTool,
   planTool
 } from './tools';
@@ -1497,6 +1498,7 @@ export class ChatService {
     if (hasCommentContexts) {
       addTools([commentAssistantTool]);
     }
+    addTools([historyAnalyzeTool]);
     const localTools = this.normalizeLocalToolDefinitions(
       options.localToolDefinitions
     );
@@ -1514,6 +1516,7 @@ export class ChatService {
     if (Array.isArray(options.tools) && options.tools.length > 0 && tools?.length) {
       const allowed = new Set<string>([
         ...effectiveRequestedTools,
+        'history_analyze',
         ...Array.from(localToolNames)
       ]);
       tools = tools.filter((t) => (t.type === 'function' ? allowed.has(t.function?.name || '') : false));
@@ -3145,6 +3148,64 @@ Règles :
               throw new Error(`documents: unknown action ${action}`);
             }
 
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
+          } else if (toolCall.name === 'history_analyze') {
+            const question =
+              typeof args.question === 'string' ? args.question.trim() : '';
+            if (!question) {
+              throw new Error('history_analyze: question is required');
+            }
+            const fromMessageId =
+              typeof args.from_message_id === 'string'
+                ? args.from_message_id
+                : undefined;
+            const toMessageId =
+              typeof args.to_message_id === 'string'
+                ? args.to_message_id
+                : undefined;
+            const maxTurns =
+              typeof args.max_turns === 'number' ? args.max_turns : undefined;
+            const targetToolCallId =
+              typeof args.target_tool_call_id === 'string'
+                ? args.target_tool_call_id
+                : undefined;
+            const targetToolResultMessageId =
+              typeof args.target_tool_result_message_id === 'string'
+                ? args.target_tool_result_message_id
+                : undefined;
+            const includeToolResults =
+              typeof args.include_tool_results === 'boolean'
+                ? args.include_tool_results
+                : undefined;
+            const includeSystemMessages =
+              typeof args.include_system_messages === 'boolean'
+                ? args.include_system_messages
+                : undefined;
+            const maxWords =
+              typeof args.max_words === 'number' ? args.max_words : undefined;
+
+            const analysis = await toolService.analyzeHistory({
+              workspaceId: sessionWorkspaceId,
+              sessionId: options.sessionId,
+              question,
+              fromMessageId,
+              toMessageId,
+              maxTurns,
+              targetToolCallId,
+              targetToolResultMessageId,
+              includeToolResults,
+              includeSystemMessages,
+              maxWords,
+              signal: options.signal,
+            });
+            result = { status: 'completed', ...analysis };
             await writeStreamEvent(
               options.assistantMessageId,
               'tool_call_result',
