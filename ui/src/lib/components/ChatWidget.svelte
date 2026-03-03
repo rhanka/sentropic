@@ -1732,7 +1732,7 @@
                       </label>
                       <input
                         id="extension-config-api-base-url"
-                        class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                        class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                         type="text"
                         bind:value={extensionConfigForm.apiBaseUrl}
                         placeholder="https://.../api/v1"
@@ -1750,7 +1750,7 @@
                       </label>
                       <input
                         id="extension-config-app-base-url"
-                        class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                        class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                         type="text"
                         bind:value={extensionConfigForm.appBaseUrl}
                         placeholder="https://..."
@@ -1768,7 +1768,7 @@
                       </label>
                       <input
                         id="extension-config-ws-base-url"
-                        class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                        class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                         type="text"
                         bind:value={extensionConfigForm.wsBaseUrl}
                         placeholder="wss://..."
@@ -1786,7 +1786,7 @@
                       </label>
                       <input
                         id="extension-config-session-token"
-                        class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                        class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                         type="password"
                         bind:value={extensionConfigForm.sessionToken}
                         placeholder="tok_..."
@@ -1812,7 +1812,7 @@
                         {$_('common.save')}
                       </button>
                       <button
-                        class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        class="extension-test-api-button rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                         type="button"
                         on:click={() => void testExtensionConfig()}
                         disabled={extensionConfigLoading ||
@@ -1828,7 +1828,7 @@
                           extensionConfigStatusKind === 'ok'
                             ? 'border-green-200 bg-green-50 text-green-700'
                             : extensionConfigStatusKind === 'error'
-                              ? 'border-red-200 bg-red-50 text-red-700'
+                              ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200'
                               : 'border-slate-200 bg-slate-50 text-slate-600'
                         }`}
                       >
@@ -1932,7 +1932,7 @@
                             extensionAuthStatusKind === 'ok'
                               ? 'border-green-200 bg-green-50 text-green-700'
                               : extensionAuthStatusKind === 'error'
-                                ? 'border-red-200 bg-red-50 text-red-700'
+                              ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200'
                                 : 'border-slate-200 bg-slate-50 text-slate-600'
                           }`}
                         >
@@ -1953,7 +1953,7 @@
                       </div>
                       <div class="grid grid-cols-1 gap-2">
                         <select
-                          class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                           bind:value={extensionPermissionDraftToolName}
                         >
                           {#each getExtensionPermissionToolOptions() as option}
@@ -1961,7 +1961,7 @@
                           {/each}
                         </select>
                         <input
-                          class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                           type="text"
                           bind:value={extensionPermissionDraftOrigin}
                           placeholder={isVsCodeExtensionRuntime()
@@ -1970,14 +1970,14 @@
                         />
                         {#if isVsCodeExtensionRuntime()}
                           <input
-                            class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                            class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                             type="text"
                             bind:value={extensionPermissionDraftPathPattern}
                             placeholder={$_('chat.extension.permissions.pathPatternPlaceholder')}
                           />
                         {/if}
                         <select
-                          class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                           bind:value={extensionPermissionDraftPolicy}
                         >
                           <option value="allow">
@@ -2025,7 +2025,7 @@
                             {/if}
                             <div class="flex items-center gap-2">
                               <select
-                                class="flex-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                                class="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                                 value={entry.policy}
                                 on:change={(event) =>
                                   void upsertExtensionToolPermission(
@@ -2064,7 +2064,7 @@
 
                     {#if extensionToolPermissionsError}
                       <div
-                        class="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700"
+                        class="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200"
                       >
                         {extensionToolPermissionsError}
                       </div>
