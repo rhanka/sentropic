@@ -64,6 +64,7 @@ export type LocalToolPermissionPolicyEntry = {
   toolName: string;
   origin: string;
   policy: LocalToolPermissionPolicy;
+  pathPattern?: string | null;
   updatedAt: string;
 };
 
@@ -196,6 +197,7 @@ const VSCODE_LOCAL_TOOL_DEFINITIONS: ReadonlyArray<LocalToolDefinition> = [
         pattern: { type: 'string' },
         path: { type: 'string' },
         maxResults: { type: 'integer', minimum: 1, maximum: 400 },
+        offset: { type: 'integer', minimum: 0, maximum: 2000 },
         timeoutMs: { type: 'integer', minimum: 1000, maximum: 30000 },
       },
       required: ['pattern'],
@@ -225,12 +227,13 @@ const VSCODE_LOCAL_TOOL_DEFINITIONS: ReadonlyArray<LocalToolDefinition> = [
       properties: {
         mode: { type: 'string', enum: ['write', 'edit', 'apply_patch'] },
         path: { type: 'string' },
+        patch: { type: 'string' },
         content: { type: 'string' },
         find: { type: 'string' },
         replace: { type: 'string' },
         replaceAll: { type: 'boolean' },
       },
-      required: ['mode', 'path'],
+      required: ['mode'],
     },
   },
   {
@@ -487,6 +490,7 @@ export async function upsertLocalToolPermissionPolicy(input: {
   toolName: string;
   origin: string;
   policy: LocalToolPermissionPolicy;
+  pathPattern?: string;
 }): Promise<LocalToolPermissionPolicyEntry> {
   const runtime = getRuntimeWithMessaging();
   const sendMessage = runtime.sendMessage as NonNullable<RuntimeLike['sendMessage']>;
@@ -503,6 +507,7 @@ export async function upsertLocalToolPermissionPolicy(input: {
 export async function deleteLocalToolPermissionPolicy(input: {
   toolName: string;
   origin: string;
+  pathPattern?: string;
 }): Promise<void> {
   const runtime = getRuntimeWithMessaging();
   const sendMessage = runtime.sendMessage as NonNullable<RuntimeLike['sendMessage']>;
