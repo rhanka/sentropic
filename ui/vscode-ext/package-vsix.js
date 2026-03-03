@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const manifestPath = path.resolve(__dirname, 'package.json');
 const extensionEntryPoint = path.resolve(__dirname, 'extension.ts');
+const extensionIconPath = path.resolve(__dirname, 'topai-icon.svg');
 const distDir = path.resolve(__dirname, 'dist');
 const distExtensionPath = path.join(distDir, 'extension.cjs');
 const distWebviewPath = path.join(distDir, 'webview-entry.js');
@@ -115,6 +116,7 @@ const packageVsix = () => {
   try {
     fs.mkdirSync(stagedExtensionRoot, { recursive: true });
     fs.cpSync(manifestPath, path.join(stagedExtensionRoot, 'package.json'));
+    fs.cpSync(extensionIconPath, path.join(stagedExtensionRoot, 'topai-icon.svg'));
     fs.cpSync(distDir, path.join(stagedExtensionRoot, 'dist'), { recursive: true });
 
     fs.writeFileSync(path.join(stagedRoot, '[Content_Types].xml'), createContentTypesXml(), 'utf8');

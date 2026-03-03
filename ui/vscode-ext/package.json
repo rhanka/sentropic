@@ -24,8 +24,17 @@
         "title": "TopAI: Open Chat Panel"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "topai",
+          "title": "Top AI Ideas",
+          "icon": "topai-icon.svg"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "topai": [
         {
           "id": "topai.chatView",
           "type": "webview",

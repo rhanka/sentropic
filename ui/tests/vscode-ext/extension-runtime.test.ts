@@ -25,6 +25,33 @@ describe('vscode extension runtime host handler', () => {
     await expect(handler('runtime.config.get')).resolves.toEqual(createRuntimeConfig());
   });
 
+  it('supports runtime.auth.validate when validate handler is provided', async () => {
+    const handler = createTopAiVsCodeRequestHandler({
+      getRuntimeConfig: () => createRuntimeConfig(),
+      validateRuntimeAuth: () => ({
+        connected: true,
+        reason: 'connected',
+        user: {
+          id: 'u_1',
+          email: 'admin@example.com',
+          displayName: 'Admin',
+          role: 'admin_app',
+        },
+      }),
+    });
+
+    await expect(handler('runtime.auth.validate')).resolves.toEqual({
+      connected: true,
+      reason: 'connected',
+      user: {
+        id: 'u_1',
+        email: 'admin@example.com',
+        displayName: 'Admin',
+        role: 'admin_app',
+      },
+    });
+  });
+
   it('throws for unsupported commands', async () => {
     const handler = createTopAiVsCodeRequestHandler({
       getRuntimeConfig: () => createRuntimeConfig(),
