@@ -69,6 +69,9 @@
     sawStarted: boolean;
     steps: Step[];
     todoCards: TodoToolCard[];
+    contextBudgetPct: number | null;
+    contextBudgetZone: 'normal' | 'soft' | 'hard';
+    contextCompactionStrip: string;
     expanded: boolean;
     lastSeq: number;
   };
@@ -88,6 +91,9 @@
     sawStarted: false,
     steps: [],
     todoCards: [],
+    contextBudgetPct: null,
+    contextBudgetZone: 'normal',
+    contextCompactionStrip: '',
     expanded: initiallyExpanded,
     lastSeq: 0
   };
@@ -360,6 +366,45 @@
         st.stepTitle = $_('stream.reasoningEffortFailed');
         st.auxText = msg;
         upsertStep(st.stepTitle, msg);
+      } else if (state === 'context_budget_update') {
+        const pctRaw = Number(data?.occupancy_pct);
+        const pct = Number.isFinite(pctRaw)
+          ? Math.max(0, Math.min(100, Math.round(pctRaw)))
+          : null;
+        const zoneRaw = String(data?.zone ?? 'normal');
+        const zone = zoneRaw === 'hard' || zoneRaw === 'soft' ? zoneRaw : 'normal';
+        st.contextBudgetPct = pct;
+        st.contextBudgetZone = zone;
+        const line = pct === null
+          ? $_('stream.contextBudget')
+          : $_('stream.contextOccupancy', { values: { pct } });
+        st.stepKind = 'status';
+        st.stepTitle = $_('stream.contextBudget');
+        st.auxText = line;
+        upsertStep(st.stepTitle, line);
+      } else if (state === 'context_compaction_started') {
+        st.contextCompactionStrip = $_('stream.contextCompactionInProgress');
+        st.stepKind = 'status';
+        st.stepTitle = $_('stream.contextCompaction');
+        st.auxText = $_('stream.contextCompactionInProgress');
+        upsertStep(st.stepTitle, st.auxText);
+      } else if (state === 'context_compaction_done') {
+        st.contextCompactionStrip = $_('stream.contextCompactionDone');
+        st.stepKind = 'status';
+        st.stepTitle = $_('stream.contextCompaction');
+        st.auxText = $_('stream.contextCompactionDone');
+        upsertStep(st.stepTitle, st.auxText);
+      } else if (state === 'context_compaction_failed') {
+        st.contextCompactionStrip = $_('stream.contextCompactionFailed');
+        st.stepKind = 'status';
+        st.stepTitle = $_('stream.contextCompaction');
+        st.auxText = String(data?.message ?? $_('stream.unknownError'));
+        upsertStep(st.stepTitle, st.auxText);
+      } else if (state === 'context_budget_user_escalation_required') {
+        st.stepKind = 'status';
+        st.stepTitle = $_('stream.contextBudgetEscalation');
+        st.auxText = $_('stream.contextBudgetEscalationBody');
+        upsertStep(st.stepTitle, st.auxText);
       } else {
         st.stepKind = 'status';
         st.stepTitle = $_('stream.status', { values: { state } });
@@ -585,6 +630,9 @@
       sawStarted: false,
       steps: [],
       todoCards: [],
+      contextBudgetPct: null,
+      contextBudgetZone: 'normal',
+      contextCompactionStrip: '',
       expanded: initiallyExpanded,
       lastSeq: 0
     };
@@ -646,6 +694,11 @@
         {acknowledgementText}
       </div>
     {/if}
+    {#if variant === 'chat' && st.contextCompactionStrip}
+      <div class="mt-1 rounded border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] text-slate-700">
+        {st.contextCompactionStrip}
+      </div>
+    {/if}
     {#if showDetailLoader}
       <div class="flex items-center justify-between gap-2 mt-0.5">
         <div class="text-[11px] text-slate-500">{$_('stream.detailLoading')}</div>
@@ -666,6 +719,10 @@
           {#if st.sawReasoning}{$_('stream.reasoning')} {Math.max(0, Math.floor(durationMs / 60000))}m{String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, '0')}s{/if}
           {#if st.sawReasoning && toolsCount > 0}, {/if}
           {#if toolsCount > 0}{$_('stream.toolCalls', { values: { count: toolsCount } })}{/if}
+          {#if st.contextBudgetPct !== null}
+            {#if st.sawReasoning || toolsCount > 0}, {/if}
+            {$_('stream.contextOccupancy', { values: { pct: st.contextBudgetPct } })}
+          {/if}
         </div>
         <button
           class="text-slate-500 hover:text-slate-700 p-1 rounded hover:bg-slate-100 shrink-0"
