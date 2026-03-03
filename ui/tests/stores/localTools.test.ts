@@ -35,6 +35,28 @@ describe('localTools store', () => {
     expect(isLocalToolName('unknown_tool')).toBe(false);
   });
 
+  it('exposes VSCode code tool definitions in vscode runtime host', () => {
+    (globalThis as any).chrome = {
+      runtime: {
+        id: 'topai.vscode.runtime',
+        sendMessage: vi.fn(),
+      },
+    };
+
+    const definitions = getLocalToolDefinitions();
+    expect(definitions.map((tool) => tool.name).sort()).toEqual([
+      'bash',
+      'file_edit',
+      'file_read',
+      'git_diff',
+      'git_status',
+      'ls',
+      'rg',
+    ]);
+    expect(isLocalToolName('bash')).toBe(true);
+    expect(isLocalToolName('git_status')).toBe(true);
+  });
+
   it('executes a local tool successfully and stores completed state', async () => {
     const sendMessage = vi.fn().mockResolvedValue({
       ok: true,
@@ -173,7 +195,7 @@ describe('localTools store', () => {
     ).rejects.toThrow(/unavailable outside extension context/i);
   });
 
-  it('keeps Chrome-only local tools disabled in VSCode runtime host', () => {
+  it('enables local tool runtime in VSCode runtime host', () => {
     (globalThis as any).chrome = {
       runtime: {
         id: 'topai.vscode.runtime',
@@ -181,6 +203,6 @@ describe('localTools store', () => {
       },
     };
 
-    expect(isLocalToolRuntimeAvailable()).toBe(false);
+    expect(isLocalToolRuntimeAvailable()).toBe(true);
   });
 });

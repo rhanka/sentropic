@@ -76,7 +76,10 @@
     Trash2,
     ChevronLeft,
     ChevronRight,
-    ChevronDown
+    ChevronDown,
+    Terminal,
+    Search,
+    GitBranch
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import {
@@ -85,6 +88,7 @@
   } from '$lib/utils/chat-steer';
   import {
     EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+    VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
     computeEnabledToolIds,
     computeToolToggleDefaults,
     computeVisibleToolToggleIds,
@@ -1210,15 +1214,90 @@
       toolIds: ['tab_action'],
       icon: Clapperboard,
     },
+    {
+      id: 'bash',
+      label: $_('chat.tools.localCodeBash.label'),
+      description: $_('chat.tools.localCodeBash.description'),
+      toolIds: ['bash'],
+      icon: Terminal,
+    },
+    {
+      id: 'ls',
+      label: $_('chat.tools.localCodeLs.label'),
+      description: $_('chat.tools.localCodeLs.description'),
+      toolIds: ['ls'],
+      icon: FolderOpen,
+    },
+    {
+      id: 'rg',
+      label: $_('chat.tools.localCodeRg.label'),
+      description: $_('chat.tools.localCodeRg.description'),
+      toolIds: ['rg'],
+      icon: Search,
+    },
+    {
+      id: 'file_read',
+      label: $_('chat.tools.localCodeFileRead.label'),
+      description: $_('chat.tools.localCodeFileRead.description'),
+      toolIds: ['file_read'],
+      icon: FileText,
+    },
+    {
+      id: 'file_edit',
+      label: $_('chat.tools.localCodeFileEdit.label'),
+      description: $_('chat.tools.localCodeFileEdit.description'),
+      toolIds: ['file_edit'],
+      icon: Pencil,
+    },
+    {
+      id: 'git_status',
+      label: $_('chat.tools.localCodeGitStatus.label'),
+      description: $_('chat.tools.localCodeGitStatus.description'),
+      toolIds: ['git_status'],
+      icon: GitBranch,
+    },
+    {
+      id: 'git_diff',
+      label: $_('chat.tools.localCodeGitDiff.label'),
+      description: $_('chat.tools.localCodeGitDiff.description'),
+      toolIds: ['git_diff'],
+      icon: GitBranch,
+    },
   ];
 
-  const LOCAL_TOOL_TOGGLE_IDS = new Set(['tab_read', 'tab_action']);
-  const isVsCodeRuntimeHost = (): boolean => {
+  const CHROME_LOCAL_TOOL_TOGGLE_IDS = new Set(['tab_read', 'tab_action']);
+  const VSCODE_LOCAL_TOOL_TOGGLE_IDS = new Set([
+    'bash',
+    'ls',
+    'rg',
+    'file_read',
+    'file_edit',
+    'git_status',
+    'git_diff',
+  ]);
+  const LOCAL_TOOL_TOGGLE_IDS = new Set([
+    ...CHROME_LOCAL_TOOL_TOGGLE_IDS,
+    ...VSCODE_LOCAL_TOOL_TOGGLE_IDS,
+  ]);
+
+  const getExtensionRuntimeHostKind = (): 'none' | 'chrome' | 'vscode' => {
     const runtime = (globalThis as typeof globalThis & {
       chrome?: { runtime?: { id?: string } };
     }).chrome?.runtime;
     const runtimeId = String(runtime?.id ?? '').trim().toLowerCase();
-    return runtimeId === 'topai.vscode.runtime';
+    if (!runtimeId) return 'none';
+    if (runtimeId === 'topai.vscode.runtime') return 'vscode';
+    return 'chrome';
+  };
+
+  const isVsCodeRuntimeHost = (): boolean => {
+    return getExtensionRuntimeHostKind() === 'vscode';
+  };
+
+  const getRestrictedAllowedToolIds = (): ReadonlySet<string> => {
+    return isVsCodeRuntimeHost()
+      ? VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS
+      : EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS;
   };
 
   const getPrefsKey = (id: string | null) =>
@@ -1294,12 +1373,17 @@
     });
 
   const getToolScopeToggles = () => {
-    if (mode === 'ai' && isVsCodeRuntimeHost()) {
-      return [];
-    }
+    const runtimeKind = getExtensionRuntimeHostKind();
+    const hasExtensionRuntime = runtimeKind !== 'none';
     return TOOL_TOGGLES.filter(
-      (toggle) =>
-        !LOCAL_TOOL_TOGGLE_IDS.has(toggle.id) || isLocalToolRuntimeAvailable(),
+      (toggle) => {
+        if (!LOCAL_TOOL_TOGGLE_IDS.has(toggle.id)) return true;
+        if (!hasExtensionRuntime) return false;
+        if (runtimeKind === 'vscode') {
+          return VSCODE_LOCAL_TOOL_TOGGLE_IDS.has(toggle.id);
+        }
+        return CHROME_LOCAL_TOOL_TOGGLE_IDS.has(toggle.id);
+      },
     ).map((toggle) => ({
       id: toggle.id,
       toolIds: toggle.toolIds,
@@ -1310,7 +1394,7 @@
     return computeToolToggleDefaults({
       toolToggles: getToolScopeToggles(),
       restrictedMode: isExtensionRestrictedToolsetMode(),
-      allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+      allowedToolIds: getRestrictedAllowedToolIds(),
     });
   };
 
@@ -1319,7 +1403,7 @@
       computeVisibleToolToggleIds({
         toolToggles: getToolScopeToggles(),
         restrictedMode: isExtensionRestrictedToolsetMode(),
-        allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+        allowedToolIds: getRestrictedAllowedToolIds(),
       }),
     );
     return TOOL_TOGGLES.filter(
@@ -1334,7 +1418,7 @@
       computeVisibleToolToggleIds({
         toolToggles: getToolScopeToggles(),
         restrictedMode: isExtensionRestrictedToolsetMode(),
-        allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+        allowedToolIds: getRestrictedAllowedToolIds(),
       }),
     );
     return TOOL_TOGGLES.filter(
@@ -1344,7 +1428,10 @@
   };
 
   const loadExtensionActiveTabContext = async () => {
-    if (!isLocalToolRuntimeAvailable()) {
+    if (
+      !isLocalToolRuntimeAvailable() ||
+      getExtensionRuntimeHostKind() !== 'chrome'
+    ) {
       extensionActiveTabContext = null;
       return;
     }
@@ -1534,7 +1621,7 @@
       toolToggles: getToolScopeToggles(),
       toolEnabledById,
       restrictedMode: isExtensionRestrictedToolsetMode(),
-      allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+      allowedToolIds: getRestrictedAllowedToolIds(),
     });
   };
 
