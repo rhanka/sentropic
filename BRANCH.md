@@ -319,7 +319,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] download CTA points to valid `.vsix`,
       - [ ] explicit error message if missing config/package.
   - [ ] VSCode plugin (`ENV=dev`, root workspace)
-    - [ ] Build package: `make vscode-ext API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`.
+    - [ ] Build package on standard dev ports: `make vscode-ext`.
     - [ ] Install generated `.vsix` in VSCode.
     - [ ] Open plugin panel and validate real ChatWidget mount in a dockable side panel (not editor tab).
     - [ ] Open settings wheel in widget header and validate:
