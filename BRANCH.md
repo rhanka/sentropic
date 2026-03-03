@@ -158,6 +158,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] remove `Open login`/provider-auth wording from extension bootstrap flow,
     - [x] replace with token guidance pointing to admin web app settings.
     - [x] enforce provider ownership split from `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.14.4`.
+  - [x] VSCode webview connectivity stabilization (Lot 1 patch):
+    - [x] allow webview `connect-src` in host CSP for API calls.
+    - [x] extend API default CORS allowlist with `vscode-webview://*`.
+    - [x] force bearer-token mode to use `credentials: omit` (no cookie dependency).
+  - [x] VSCode runtime scope boundary (no Chrome/Web tools bleed):
+    - [x] sidepanel runtime exposes no chat tool toggles (tools deferred to Lot 3).
+    - [x] local-tab permission tab hidden in VSCode sidepanel settings.
+    - [x] overlay-only controls hidden in sidepanel header (`close`, `minimize/maximize`).
   - [x] Lot gate:
     - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
@@ -173,6 +181,11 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
 - [ ] **Lot 1.1 — Theme parity (VSCode host + web app)**
   - [ ] Spec mapping:
     - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.13` (theming decision).
+    - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `4.14.6` (host-bridge API transport hardening).
+  - [ ] VSCode host bridge transport hardening:
+    - [ ] route chat bootstrap/runtime API calls via host bridge (no direct webview cross-origin fetch path for core chat flow),
+    - [ ] keep normalized error envelopes for actionable UX,
+    - [ ] retain token bootstrap compatibility from Lot 1.
   - [ ] VSCode host theme adaptation:
     - [ ] consume VSCode theme tokens for dark/light/high-contrast,
     - [ ] validate readability and semantic colors in all supported themes.
@@ -180,6 +193,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] add `system|light|dark` preference in settings/admin,
     - [ ] ensure chat/widget components follow the selected theme mode consistently.
   - [ ] Lot gate:
+    - [ ] `make test-ui SCOPE=tests/vscode-ext/host-bridge-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make test-ui SCOPE=tests/vscode-ext/theme-parity.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
