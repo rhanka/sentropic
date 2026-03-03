@@ -562,6 +562,83 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
       };
     }
 
+    if (type === 'tool_execute') {
+      if (!state.bridge) {
+        return {
+          ok: false,
+          error: 'Local tool runtime is unavailable in this context.',
+        };
+      }
+      const payload =
+        message.payload && typeof message.payload === 'object'
+          ? (message.payload as Record<string, unknown>)
+          : {};
+      return state.bridge.request<{
+        ok: boolean;
+        result?: unknown;
+        error?: string;
+        permissionRequest?: unknown;
+      }>('runtime.local_tools.execute', {
+        toolCallId: message.toolCallId,
+        name: message.name,
+        args: payload,
+      });
+    }
+
+    if (type === 'tool_permission_decide') {
+      if (!state.bridge) {
+        return {
+          ok: false,
+          error: 'Local tool runtime is unavailable in this context.',
+        };
+      }
+      return state.bridge.request<{ ok: boolean; error?: string }>(
+        'runtime.local_tools.permission_decide',
+        message.payload ?? {},
+      );
+    }
+
+    if (type === 'extension_tool_permissions_list') {
+      if (!state.bridge) {
+        return {
+          ok: true,
+          items: [],
+        };
+      }
+      return state.bridge.request<{
+        ok: boolean;
+        items?: unknown[];
+        error?: string;
+      }>('runtime.local_tools.permissions.list');
+    }
+
+    if (type === 'extension_tool_permissions_upsert') {
+      if (!state.bridge) {
+        return {
+          ok: false,
+          error: 'Local tool runtime is unavailable in this context.',
+        };
+      }
+      return state.bridge.request<{
+        ok: boolean;
+        item?: unknown;
+        error?: string;
+      }>('runtime.local_tools.permissions.upsert', message.payload ?? {});
+    }
+
+    if (type === 'extension_tool_permissions_delete') {
+      if (!state.bridge) {
+        return {
+          ok: false,
+          error: 'Local tool runtime is unavailable in this context.',
+        };
+      }
+      return state.bridge.request<{ ok: boolean; error?: string }>(
+        'runtime.local_tools.permissions.delete',
+        message.payload ?? {},
+      );
+    }
+
     return {
       ok: false,
       error: `Unsupported runtime message: ${type}`,
