@@ -51,6 +51,8 @@
     Copy,
     Pencil,
     RotateCcw,
+    BookmarkPlus,
+    UndoDot,
     Check,
     Paperclip,
     X,
@@ -106,6 +108,15 @@
     primaryContextId?: string | null;
     createdAt?: string;
     updatedAt?: string | null;
+  };
+
+  type ChatCheckpoint = {
+    id: string;
+    title: string;
+    anchorMessageId: string;
+    anchorSequence: number;
+    messageCount: number;
+    createdAt: string;
   };
 
   type ChatMessage = {
@@ -992,6 +1003,8 @@
   let sessionDocs: ContextDocumentItem[] = [];
   let sessionDocsUploading = false;
   let sessionDocsError: string | null = null;
+  let sessionCheckpoints: ChatCheckpoint[] = [];
+  let checkpointActionInFlight = false;
   let sessionDocsKey = '';
   let sessionDocsSseKey = '';
   let sessionTitlesSseKey = '';
@@ -2594,6 +2607,56 @@
     todoRuntimePanel = next;
   };
 
+  const loadCheckpoints = async (id: string) => {
+    if (!id) {
+      sessionCheckpoints = [];
+      return;
+    }
+    try {
+      const res = await apiGet<{ checkpoints?: ChatCheckpoint[] }>(
+        `/chat/sessions/${id}/checkpoints?limit=20`,
+      );
+      sessionCheckpoints = Array.isArray(res.checkpoints) ? res.checkpoints : [];
+    } catch {
+      sessionCheckpoints = [];
+    }
+  };
+
+  const createCheckpoint = async () => {
+    if (!sessionId || checkpointActionInFlight) return;
+    checkpointActionInFlight = true;
+    errorMsg = null;
+    try {
+      await apiPost(`/chat/sessions/${sessionId}/checkpoints`, {});
+      await loadCheckpoints(sessionId);
+    } catch (e) {
+      errorMsg = formatApiError(e, $_('chat.errors.checkpointCreate'));
+    } finally {
+      checkpointActionInFlight = false;
+    }
+  };
+
+  const restoreLatestCheckpoint = async () => {
+    if (!sessionId || checkpointActionInFlight) return;
+    const latest = sessionCheckpoints[0];
+    if (!latest) return;
+    if (!confirm($_('chat.checkpoints.confirmRestoreLatest'))) return;
+    checkpointActionInFlight = true;
+    errorMsg = null;
+    try {
+      await apiPost(
+        `/chat/sessions/${sessionId}/checkpoints/${latest.id}/restore`,
+        {},
+      );
+      await loadMessages(sessionId, { scrollToBottom: true, silent: true });
+      await loadCheckpoints(sessionId);
+    } catch (e) {
+      errorMsg = formatApiError(e, $_('chat.errors.checkpointRestore'));
+    } finally {
+      checkpointActionInFlight = false;
+    }
+  };
+
   const loadSessions = async () => {
     loadingSessions = true;
     errorMsg = null;
@@ -2655,6 +2718,7 @@
       }
       if (opts?.scrollToBottom !== false)
         scheduleScrollToBottom({ force: true });
+      await loadCheckpoints(id);
 
       // Hydratation batch (Option C) en arrière-plan: ne doit pas bloquer l'affichage des messages
       initialEventsByMessageId = new Map();
@@ -2707,6 +2771,7 @@
   export const newSession = () => {
     sessionId = null;
     messages = [];
+    sessionCheckpoints = [];
     initialEventsByMessageId = new Map();
     resetTodoRuntimePanel();
     resetLocalToolInterceptionState();
@@ -4237,6 +4302,26 @@
               </div>
             </svelte:fragment>
           </MenuPopover>
+          <button
+            class="rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            type="button"
+            on:click={() => void createCheckpoint()}
+            disabled={!sessionId || checkpointActionInFlight}
+            aria-label={$_('chat.checkpoints.create')}
+            title={$_('chat.checkpoints.create')}
+          >
+            <BookmarkPlus class="w-4 h-4" />
+          </button>
+          <button
+            class="rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            type="button"
+            on:click={() => void restoreLatestCheckpoint()}
+            disabled={!sessionId || sessionCheckpoints.length === 0 || checkpointActionInFlight}
+            aria-label={$_('chat.checkpoints.restoreLatest')}
+            title={$_('chat.checkpoints.restoreLatest')}
+          >
+            <UndoDot class="w-4 h-4" />
+          </button>
           <select
             id="chat-model-selection"
             value={selectedModelSelectionKey}

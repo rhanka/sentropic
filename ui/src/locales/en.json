@@ -1023,6 +1023,11 @@
       "defaultTitle": "Conversation {id}",
       "confirmDelete": "Delete this conversation?"
     },
+    "checkpoints": {
+      "create": "Create checkpoint",
+      "restoreLatest": "Restore latest checkpoint",
+      "confirmRestoreLatest": "Restore latest checkpoint? Recent messages will be removed."
+    },
     "composer": {
       "ariaLabel": "Composer",
       "placeholder": {
@@ -1207,6 +1212,8 @@
       "loadSessions": "Error while loading sessions",
       "loadMessages": "Error while loading messages",
       "deleteSession": "Error while deleting session",
+      "checkpointCreate": "Error while creating checkpoint",
+      "checkpointRestore": "Error while restoring checkpoint",
       "send": "Error while sending",
       "stop": "Error while stopping",
       "feedback": "Error while updating feedback"
