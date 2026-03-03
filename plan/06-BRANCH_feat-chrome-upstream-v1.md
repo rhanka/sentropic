@@ -40,6 +40,10 @@ Deliver upstream remote control foundation for Chrome plugin with secure single-
 Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
 - subagent or agent requires support or informs: `blocked` / `deferred` / `cancelled` / `attention`
 - conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
+- `CHU-FL1` — `deferred`
+  - Topic: Chrome extension chat-session documents flow reports `Fail to fetch` (`/api/v1/documents`) during non-regression checks from BR-05.
+  - Current state: web app + VSCode plugin pass; Chrome extension still failing.
+  - Decision: do not patch in BR-05; treat as explicit bugfix scope in this Chrome branch.
 
 ## Questions / Notes
 - CHU-Q1: Upstream transport mode (WS-only vs SSE/REST hybrid).
@@ -97,6 +101,7 @@ Actions with the following status should be included around tasks only if really
 - [ ] **Lot 2 — Single-Tab Control + Non-Regression**
   - [ ] Implement single-tab delegated control using upstream protocol.
   - [ ] Preserve existing tab_read/tab_action compatibility and permissions.
+  - [ ] Fix Chrome extension documents auth/runtime path for chat-session documents (`list/upload/delete`) and remove `Fail to fetch` on `/api/v1/documents`.
   - [ ] Add integration tests and UAT checklist for extension runtime parity.
   - [ ] Lot 2 gate:
     - [ ] `make typecheck-api ENV=test-feat-chrome-upstream-v1`
