@@ -8,7 +8,7 @@ import {
 const COMMAND_OPEN_PANEL = 'topai.openPanel';
 const VIEW_ID = 'topai.chatView';
 const SECRET_SESSION_TOKEN_KEY = 'topai.sessionToken';
-const CONFIG_TARGET = vscode.ConfigurationTarget.Global;
+const STATE_KEY_RUNTIME_CONFIG = 'topai.runtimeConfig';
 
 declare const __TOPAI_DEFAULT_API_BASE_URL__: string | undefined;
 declare const __TOPAI_DEFAULT_APP_BASE_URL__: string | undefined;
@@ -35,28 +35,32 @@ type RuntimeConfigPatchPayload = {
 
 const normalizeConfigString = (value: unknown, fallback = ''): string => {
   if (typeof value !== 'string') return fallback;
-  return value.trim();
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
 };
 
 const readRuntimeConfig = async (
   context: vscode.ExtensionContext,
 ): Promise<TopAiRuntimeConfig> => {
   const config = vscode.workspace.getConfiguration('topai');
+  const persisted = context.globalState.get<RuntimeConfigPatchPayload>(
+    STATE_KEY_RUNTIME_CONFIG,
+    {},
+  );
   const apiBaseUrl = normalizeConfigString(
-    config.get<string>('apiBaseUrl', defaultConfig.apiBaseUrl),
+    persisted.apiBaseUrl ??
+      config.get<string>('apiBaseUrl', defaultConfig.apiBaseUrl),
     defaultConfig.apiBaseUrl,
   );
   const appBaseUrl = normalizeConfigString(
-    config.get<string>('appBaseUrl', defaultConfig.appBaseUrl),
+    persisted.appBaseUrl ??
+      config.get<string>('appBaseUrl', defaultConfig.appBaseUrl),
     defaultConfig.appBaseUrl,
   );
   const wsBaseUrl = normalizeConfigString(
-    config.get<string>('wsBaseUrl', defaultConfig.wsBaseUrl),
+    persisted.wsBaseUrl ??
+      config.get<string>('wsBaseUrl', defaultConfig.wsBaseUrl),
     defaultConfig.wsBaseUrl,
-  );
-  const codexSignInUrl = normalizeConfigString(
-    config.get<string>('codexSignInUrl', defaultConfig.codexSignInUrl),
-    defaultConfig.codexSignInUrl,
   );
 
   const secretToken = await context.secrets.get(SECRET_SESSION_TOKEN_KEY);
@@ -70,7 +74,7 @@ const readRuntimeConfig = async (
     appBaseUrl,
     wsBaseUrl,
     sessionToken: normalizeConfigString(secretToken, fallbackSettingToken),
-    codexSignInUrl,
+    codexSignInUrl: defaultConfig.codexSignInUrl,
   };
 };
 
@@ -78,16 +82,22 @@ const saveRuntimeConfigPatch = async (
   context: vscode.ExtensionContext,
   payload: RuntimeConfigPatchPayload,
 ): Promise<TopAiRuntimeConfig> => {
-  const config = vscode.workspace.getConfiguration('topai');
+  const current = context.globalState.get<RuntimeConfigPatchPayload>(
+    STATE_KEY_RUNTIME_CONFIG,
+    {},
+  );
+  const next: RuntimeConfigPatchPayload = {
+    ...current,
+  };
 
   if (typeof payload.apiBaseUrl === 'string') {
-    await config.update('apiBaseUrl', payload.apiBaseUrl.trim(), CONFIG_TARGET);
+    next.apiBaseUrl = payload.apiBaseUrl.trim();
   }
   if (typeof payload.appBaseUrl === 'string') {
-    await config.update('appBaseUrl', payload.appBaseUrl.trim(), CONFIG_TARGET);
+    next.appBaseUrl = payload.appBaseUrl.trim();
   }
   if (typeof payload.wsBaseUrl === 'string') {
-    await config.update('wsBaseUrl', payload.wsBaseUrl.trim(), CONFIG_TARGET);
+    next.wsBaseUrl = payload.wsBaseUrl.trim();
   }
 
   if (typeof payload.sessionToken === 'string') {
@@ -97,11 +107,9 @@ const saveRuntimeConfigPatch = async (
     } else {
       await context.secrets.delete(SECRET_SESSION_TOKEN_KEY);
     }
-
-    // Keep workspace/global settings clear of plaintext tokens.
-    await config.update('sessionToken', '', CONFIG_TARGET);
   }
 
+  await context.globalState.update(STATE_KEY_RUNTIME_CONFIG, next);
   return readRuntimeConfig(context);
 };
 
@@ -137,6 +145,80 @@ const testApiConnectivity = async (
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
+    };
+  }
+};
+
+const validateTokenSession = async (
+  apiBaseUrl: string,
+  sessionToken: string,
+): Promise<{
+  connected: boolean;
+  reason: string;
+  user?: {
+    id: string;
+    email: string | null;
+    displayName: string | null;
+    role: string;
+  } | null;
+}> => {
+  if (!sessionToken.trim()) {
+    return {
+      connected: false,
+      reason: 'TOKEN_REQUIRED',
+      user: null,
+    };
+  }
+
+  const normalizedBase = apiBaseUrl.replace(/\/$/, '');
+  const sessionUrl = `${normalizedBase}/auth/session`;
+
+  try {
+    const response = await fetch(sessionUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${sessionToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        connected: false,
+        reason: `HTTP_${response.status}`,
+        user: null,
+      };
+    }
+
+    const payload = (await response.json()) as {
+      userId?: string;
+      email?: string | null;
+      displayName?: string | null;
+      role?: string;
+    };
+
+    if (!payload?.userId) {
+      return {
+        connected: false,
+        reason: 'INVALID_SESSION_PAYLOAD',
+        user: null,
+      };
+    }
+
+    return {
+      connected: true,
+      reason: 'connected',
+      user: {
+        id: payload.userId,
+        email: payload.email ?? null,
+        displayName: payload.displayName ?? null,
+        role: payload.role ?? 'editor',
+      },
+    };
+  } catch (error) {
+    return {
+      connected: false,
+      reason: error instanceof Error ? error.message : String(error),
+      user: null,
     };
   }
 };
@@ -282,6 +364,16 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
 
         const result = await testApiConnectivity(
           targetApiBaseUrl,
+          runtimeConfig.sessionToken,
+        );
+        respond(true, result);
+        return;
+      }
+
+      if (command === 'runtime.auth.validate') {
+        const runtimeConfig = await readRuntimeConfig(this.context);
+        const result = await validateTokenSession(
+          runtimeConfig.apiBaseUrl,
           runtimeConfig.sessionToken,
         );
         respond(true, result);
