@@ -1912,33 +1912,35 @@
                 </svelte:fragment>
               </MenuPopover>
             {/if}
-            <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
-            <button
-              class={`${isSidePanelHost ? 'inline-flex' : 'hidden lg:inline-flex'} text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded`}
-              on:click={toggleDisplayMode}
-              title={isDocked
-                ? $_('chat.widget.switchToWidget')
-                : $_('chat.widget.switchToPanel')}
-              aria-label={isDocked
-                ? $_('chat.widget.switchToWidget')
-                : $_('chat.widget.switchToPanel')}
-              type="button"
-            >
-              {#if isDocked}
-                <Minimize2 class="w-4 h-4" aria-hidden="true" />
-              {:else}
-                <Maximize2 class="w-4 h-4" aria-hidden="true" />
-              {/if}
-            </button>
-            <button
-              class="text-gray-400 hover:text-gray-600"
-              on:click={close}
-              aria-label={$_('common.close')}
-              type="button"
-              bind:this={closeButtonEl}
-            >
-              <X class="w-5 h-5" />
-            </button>
+            {#if !isSidePanelHost}
+              <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
+              <button
+                class="hidden lg:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                on:click={toggleDisplayMode}
+                title={isDocked
+                  ? $_('chat.widget.switchToWidget')
+                  : $_('chat.widget.switchToPanel')}
+                aria-label={isDocked
+                  ? $_('chat.widget.switchToWidget')
+                  : $_('chat.widget.switchToPanel')}
+                type="button"
+              >
+                {#if isDocked}
+                  <Minimize2 class="w-4 h-4" aria-hidden="true" />
+                {:else}
+                  <Maximize2 class="w-4 h-4" aria-hidden="true" />
+                {/if}
+              </button>
+              <button
+                class="text-gray-400 hover:text-gray-600"
+                on:click={close}
+                aria-label={$_('common.close')}
+                type="button"
+                bind:this={closeButtonEl}
+              >
+                <X class="w-5 h-5" />
+              </button>
+            {/if}
           </div>
         </div>
       </div>
