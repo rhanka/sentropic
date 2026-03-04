@@ -126,6 +126,23 @@ type RuntimeHttpRequestResult = {
 type ExtensionMessage = {
   type?: unknown;
   payload?: unknown;
+  toolCallId?: unknown;
+  name?: unknown;
+  args?: unknown;
+};
+
+type RuntimePortListener<T> = (message: T) => void;
+
+type RuntimePortEvents<T> = {
+  addListener: (listener: RuntimePortListener<T>) => void;
+  removeListener: (listener: RuntimePortListener<T>) => void;
+};
+
+type RuntimePortLike = {
+  postMessage: (message: unknown) => void;
+  disconnect: () => void;
+  onMessage: RuntimePortEvents<any>;
+  onDisconnect: RuntimePortEvents<void>;
 };
 
 type CodeWorkspaceSummary = {
@@ -579,6 +596,7 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
       runtime?: {
         id?: string;
         sendMessage?: (message: ExtensionMessage) => Promise<unknown>;
+        connect?: (options: { name: string }) => RuntimePortLike;
       };
     };
   };
@@ -961,19 +979,22 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
           error: 'Local tool runtime is unavailable in this context.',
         };
       }
-      const payload =
-        message.payload && typeof message.payload === 'object'
-          ? (message.payload as Record<string, unknown>)
-          : {};
+      const argsPayload =
+        message.args && typeof message.args === 'object'
+          ? (message.args as Record<string, unknown>)
+          : message.payload && typeof message.payload === 'object'
+            ? (message.payload as Record<string, unknown>)
+            : {};
       return state.bridge.request<{
         ok: boolean;
         result?: unknown;
         error?: string;
         permissionRequest?: unknown;
       }>('runtime.local_tools.execute', {
-        toolCallId: message.toolCallId,
-        name: message.name,
-        args: payload,
+        toolCallId:
+          typeof message.toolCallId === 'string' ? message.toolCallId : '',
+        name: typeof message.name === 'string' ? message.name : '',
+        args: argsPayload,
       });
     }
 
@@ -1037,12 +1058,125 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
     };
   };
 
+  const createRuntimePort = (): RuntimePortLike => {
+    const portId = `vscode_port_${Date.now()}_${Math.random()
+      .toString(36)
+      .slice(2, 10)}`;
+    const messageListeners = new Set<RuntimePortListener<any>>();
+    const disconnectListeners = new Set<RuntimePortListener<void>>();
+    const stopStreamEventForward = state.bridge
+      ? state.bridge.onEvent('runtime.stream.proxy.event', (payload) => {
+          const record =
+            payload && typeof payload === 'object'
+              ? (payload as { portId?: unknown; message?: unknown })
+              : {};
+          if (record.portId !== portId) return;
+          for (const listener of messageListeners) {
+            listener(record.message);
+          }
+          const maybeMessage =
+            record.message && typeof record.message === 'object'
+              ? (record.message as { type?: unknown })
+              : {};
+          if (maybeMessage.type === 'sse_closed') {
+            disconnect();
+          }
+        })
+      : null;
+    let disconnected = false;
+
+    const disconnect = () => {
+      if (disconnected) return;
+      disconnected = true;
+      stopStreamEventForward?.();
+      if (state.bridge) {
+        void state.bridge
+          .request('runtime.stream.proxy.stop', { portId })
+          .catch(() => undefined);
+      }
+      for (const listener of disconnectListeners) {
+        listener();
+      }
+    };
+
+    return {
+      postMessage: (message: unknown) => {
+        if (disconnected) return;
+        const event =
+          message && typeof message === 'object'
+            ? (message as { type?: unknown; payload?: unknown })
+            : {};
+        const type = typeof event.type === 'string' ? event.type : '';
+        if (type === 'stream_proxy_start') {
+          if (!state.bridge) {
+            for (const listener of messageListeners) {
+              listener({
+                type: 'sse_error',
+                error: 'Bridge unavailable for runtime stream proxy.',
+              });
+            }
+            return;
+          }
+          const payload =
+            event.payload && typeof event.payload === 'object'
+              ? (event.payload as Record<string, unknown>)
+              : {};
+          void state.bridge
+            .request('runtime.stream.proxy.start', {
+              portId,
+              baseUrl:
+                typeof payload.baseUrl === 'string' ? payload.baseUrl : '',
+              workspaceId:
+                typeof payload.workspaceId === 'string'
+                  ? payload.workspaceId
+                  : null,
+              streamIds: Array.isArray(payload.streamIds)
+                ? payload.streamIds
+                : [],
+            })
+            .catch((error) => {
+              const reason =
+                error instanceof Error ? error.message : String(error);
+              for (const listener of messageListeners) {
+                listener({
+                  type: 'sse_error',
+                  error: reason,
+                });
+              }
+            });
+          return;
+        }
+        if (type === 'stream_proxy_stop') {
+          disconnect();
+        }
+      },
+      disconnect,
+      onMessage: {
+        addListener(listener: RuntimePortListener<any>) {
+          messageListeners.add(listener);
+        },
+        removeListener(listener: RuntimePortListener<any>) {
+          messageListeners.delete(listener);
+        },
+      },
+      onDisconnect: {
+        addListener(listener: RuntimePortListener<void>) {
+          disconnectListeners.add(listener);
+        },
+        removeListener(listener: RuntimePortListener<void>) {
+          disconnectListeners.delete(listener);
+        },
+      },
+    };
+  };
+
   ext.chrome = {
     ...existing,
     runtime: {
       ...(existing.runtime ?? {}),
       id: 'topai.vscode.runtime',
       sendMessage,
+      connect: () => createRuntimePort(),
     },
   };
 };

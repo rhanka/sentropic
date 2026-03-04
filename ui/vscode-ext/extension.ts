@@ -10,6 +10,10 @@ import {
 } from './host-handler';
 import { createVsCodeLocalToolsRuntime } from './local-tools';
 import {
+  runVsCodeSseProxy,
+  type VsCodeSseProxyMessage,
+} from './stream-proxy';
+import {
   DEFAULT_VSCODE_CODE_AGENT_PROMPT,
   resolveCodeAgentPromptProfile,
 } from '../src/lib/vscode/code-agent-profile';
@@ -992,6 +996,7 @@ const createWebviewHtml = (
 class TopAiChatViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | null = null;
   private revealRequested = false;
+  private readonly streamProxyControllers = new Map<string, AbortController>();
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -1000,6 +1005,7 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
   ) {}
 
   async resolveWebviewView(webviewView: vscode.WebviewView): Promise<void> {
+    this.stopAllStreamProxies();
     this.view = webviewView;
     webviewView.webview.options = {
       enableScripts: true,
@@ -1042,12 +1048,100 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
 
   async refresh(): Promise<void> {
     if (!this.view) return;
+    this.stopAllStreamProxies();
     const runtimeConfig = await readRuntimeConfig(this.context);
     this.view.webview.html = createWebviewHtml(
       this.view.webview,
       this.context.extensionUri,
       runtimeConfig,
     );
+  }
+
+  private emitHostEvent(command: string, payload: unknown): void {
+    this.view?.webview.postMessage({
+      source: 'topai-vscode-host',
+      type: 'event',
+      command,
+      payload,
+    });
+  }
+
+  private emitStreamProxyMessage(
+    portId: string,
+    message: VsCodeSseProxyMessage,
+  ): void {
+    this.emitHostEvent('runtime.stream.proxy.event', {
+      portId,
+      message,
+    });
+  }
+
+  private stopStreamProxy(portId: string): void {
+    const controller = this.streamProxyControllers.get(portId);
+    if (!controller) return;
+    this.streamProxyControllers.delete(portId);
+    controller.abort();
+  }
+
+  private stopAllStreamProxies(): void {
+    for (const controller of this.streamProxyControllers.values()) {
+      controller.abort();
+    }
+    this.streamProxyControllers.clear();
+  }
+
+  private async startStreamProxy(input: {
+    portId: string;
+    baseUrl: string;
+    workspaceId: string | null;
+    streamIds: string[];
+  }): Promise<void> {
+    const runtimeConfig = await readRuntimeConfig(this.context);
+    const baseUrl = input.baseUrl.trim();
+    if (!baseUrl) {
+      throw new Error('runtime.stream.proxy.start requires baseUrl.');
+    }
+    const requestedOrigin = new URL(baseUrl).origin;
+    const apiOrigin = new URL(runtimeConfig.apiBaseUrl).origin;
+    if (requestedOrigin !== apiOrigin) {
+      throw new Error('runtime.stream.proxy.start rejects cross-origin targets.');
+    }
+
+    const controller = new AbortController();
+    this.stopStreamProxy(input.portId);
+    this.streamProxyControllers.set(input.portId, controller);
+
+    try {
+      await runVsCodeSseProxy(
+        {
+          baseUrl,
+          workspaceId: input.workspaceId,
+          streamIds: input.streamIds,
+          authToken: runtimeConfig.sessionToken,
+        },
+        {
+          signal: controller.signal,
+          emit: (message) => {
+            this.emitStreamProxyMessage(input.portId, message);
+          },
+        },
+      );
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.emitStreamProxyMessage(input.portId, {
+          type: 'sse_error',
+          error: reason,
+        });
+      }
+    } finally {
+      if (this.streamProxyControllers.get(input.portId) === controller) {
+        this.streamProxyControllers.delete(input.portId);
+      }
+      this.emitStreamProxyMessage(input.portId, {
+        type: 'sse_closed',
+      });
+    }
   }
 
   private async handleWebviewMessage(rawMessage: unknown): Promise<void> {
@@ -1260,6 +1354,69 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
           runtimeConfig.sessionToken,
         );
         respond(true, result);
+        return;
+      }
+
+      if (command === 'runtime.stream.proxy.start') {
+        const requestPayload =
+          payload.payload && typeof payload.payload === 'object'
+            ? (payload.payload as {
+                portId?: unknown;
+                baseUrl?: unknown;
+                workspaceId?: unknown;
+                streamIds?: unknown;
+              })
+            : {};
+        const portId =
+          typeof requestPayload.portId === 'string'
+            ? requestPayload.portId.trim()
+            : '';
+        const baseUrl =
+          typeof requestPayload.baseUrl === 'string'
+            ? requestPayload.baseUrl.trim()
+            : '';
+        const workspaceId =
+          typeof requestPayload.workspaceId === 'string' &&
+          requestPayload.workspaceId.trim().length > 0
+            ? requestPayload.workspaceId.trim()
+            : null;
+        const streamIds = Array.isArray(requestPayload.streamIds)
+          ? requestPayload.streamIds
+              .map((entry) =>
+                typeof entry === 'string' ? entry.trim() : '',
+              )
+              .filter((entry) => entry.length > 0)
+              .slice(0, 200)
+          : [];
+        if (!portId) {
+          respond(false, undefined, 'runtime.stream.proxy.start requires portId.');
+          return;
+        }
+        void this.startStreamProxy({
+          portId,
+          baseUrl,
+          workspaceId,
+          streamIds,
+        });
+        respond(true, { started: true });
+        return;
+      }
+
+      if (command === 'runtime.stream.proxy.stop') {
+        const requestPayload =
+          payload.payload && typeof payload.payload === 'object'
+            ? (payload.payload as { portId?: unknown })
+            : {};
+        const portId =
+          typeof requestPayload.portId === 'string'
+            ? requestPayload.portId.trim()
+            : '';
+        if (!portId) {
+          respond(false, undefined, 'runtime.stream.proxy.stop requires portId.');
+          return;
+        }
+        this.stopStreamProxy(portId);
+        respond(true, { stopped: true });
         return;
       }
 
