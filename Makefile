@@ -628,6 +628,10 @@ up: ## Start the full stack in detached mode
 up-e2e: ## Start stack with test overrides (UI env for API URL)
 	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
 
+.PHONY: up-e2e-vscode
+up-e2e-vscode: ## Start VSCode E2E stack (api/ui/e2e/openvscode)
+	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml up -d
+
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
