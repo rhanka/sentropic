@@ -2049,12 +2049,12 @@
             {/if}
 
             <div class="flex items-center gap-2">
-              <div class="flex items-center gap-1 rounded bg-slate-50 p-1">
+              <div class="extension-main-tabs flex items-center gap-1 rounded bg-slate-50 p-1">
                 {#if !isPluginMode}
                   <button
-                    class="rounded px-2 py-1 text-xs transition {activeTab ===
+                    class="extension-main-tab rounded px-2 py-1 text-xs transition {activeTab ===
                     'comments'
-                      ? 'bg-white text-slate-900 shadow-sm'
+                      ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
                       : 'text-slate-500 hover:text-slate-700'}"
                     type="button"
                     on:click={() => (activeTab = 'comments')}
@@ -2063,9 +2063,9 @@
                   </button>
                 {/if}
                 <button
-                  class="rounded px-2 py-1 text-xs transition {activeTab ===
+                  class="extension-main-tab rounded px-2 py-1 text-xs transition {activeTab ===
                   'chat'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'}"
                   type="button"
                   on:click={() => (activeTab = 'chat')}
@@ -2073,9 +2073,9 @@
                   {$_('chat.tabs.chat')}
                 </button>
                 <button
-                  class="rounded px-2 py-1 text-xs transition {activeTab ===
+                  class="extension-main-tab rounded px-2 py-1 text-xs transition {activeTab ===
                   'queue'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'}"
                   type="button"
                   on:click={() => (activeTab = 'queue')}
@@ -2112,11 +2112,11 @@
                 <svelte:fragment slot="menu">
                   <div class="flex h-full min-h-0 flex-col">
                     <div class="border-b border-slate-200 p-2">
-                      <div class="flex items-center gap-1 rounded bg-slate-50 p-1">
+                      <div class="extension-main-tabs flex items-center gap-1 rounded bg-slate-50 p-1">
                         <button
-                          class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
+                          class="extension-main-tab rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
                           'server'
-                            ? 'bg-white text-slate-900 shadow-sm'
+                            ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'}"
                           type="button"
                           on:click={() => (extensionSettingsTab = 'server')}
@@ -2124,9 +2124,9 @@
                           {$_('chat.extension.settingsTabs.server')}
                         </button>
                         <button
-                          class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
+                          class="extension-main-tab rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
                           'workspace'
-                            ? 'bg-white text-slate-900 shadow-sm'
+                            ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'}"
                           type="button"
                           on:click={() => (extensionSettingsTab = 'workspace')}
@@ -2135,9 +2135,9 @@
                         </button>
                         {#if isExtensionPermissionsTabAvailable()}
                           <button
-                            class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
+                            class="extension-main-tab rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
                             'tools'
-                              ? 'bg-white text-slate-900 shadow-sm'
+                              ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
                               : 'text-slate-500 hover:text-slate-700'}"
                             type="button"
                             on:click={() => (extensionSettingsTab = 'tools')}
@@ -2334,8 +2334,8 @@
                                 <span
                                   class={`rounded px-1.5 py-0.5 ${
                                     provider.ready
-                                      ? 'bg-green-100 text-green-700'
-                                      : 'bg-slate-200 text-slate-700'
+                                      ? 'extension-provider-readiness-badge extension-provider-readiness-ready bg-green-100 text-green-700'
+                                      : 'extension-provider-readiness-badge extension-provider-readiness-not-ready bg-slate-200 text-slate-700'
                                   }`}
                                 >
                                   {provider.ready
@@ -2815,7 +2815,7 @@
               <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
                 <div class="min-w-0 text-xs text-slate-500 truncate">{$_('chat.tabs.jobs')}</div>
                 <button
-                  class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
+                  class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
                   on:click={handlePurgeMyJobs}
                   title={$_('chat.queue.purgeMine')}
                   aria-label={$_('chat.queue.purgeMine')}
@@ -2921,7 +2921,7 @@
                   <Plus class="w-4 h-4" />
                 </button>
                 <button
-                  class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+                  class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
                   on:click={() => chatPanelRef?.deleteCurrentSession?.()}
                   title={$_('chat.sessions.delete')}
                   aria-label={$_('chat.sessions.delete')}

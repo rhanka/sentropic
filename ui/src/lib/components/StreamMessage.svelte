@@ -743,7 +743,7 @@
                 <div class="font-medium text-slate-600">{step.title}</div>
                 {#if step.body}
                   <div
-                    class="mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto slim-scroll [&_*]:text-slate-400"
+                    class="stream-aux-markdown mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto slim-scroll [&_*]:text-slate-400"
                     use:scrollToEnd
                   >
                     {#if step.kind === 'reasoning' || step.kind === 'tool'}
@@ -776,7 +776,7 @@
           <div class="text-[11px] text-slate-500">{$_('stream.stepRunning', { values: { title: st.stepTitle || $_('stream.inProgress') } })}</div>
           {#if st.auxText}
             <div
-              class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll [&_*]:text-slate-400"
+              class="stream-aux-markdown mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll [&_*]:text-slate-400"
               use:scrollToEnd
             >
               {#if st.stepKind === 'reasoning' || st.stepKind === 'tool'}
@@ -863,5 +863,57 @@
   .chatMarkdown :global(td) {
     padding: 0.2rem 0.35rem;
     vertical-align: top;
+  }
+
+  /* Keep code blocks and inline code aligned with message text size. */
+  .chatMarkdown :global(code),
+  .stream-aux-markdown :global(code),
+  .chatMarkdown :global(pre code),
+  .stream-aux-markdown :global(pre code),
+  .chatMarkdown :global(pre code *),
+  .stream-aux-markdown :global(pre code *) {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+
+  /* Streamdown can inject wrappers with text-sm around fenced code.
+     Keep code typography aligned with chat body size in all hosts (web + VSCode). */
+  .chatMarkdown :global(.text-sm),
+  .stream-aux-markdown :global(.text-sm) {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+
+  .chatMarkdown :global(pre),
+  .stream-aux-markdown :global(pre),
+  .chatMarkdown :global(.shiki),
+  .stream-aux-markdown :global(.shiki),
+  .chatMarkdown :global([data-rehype-pretty-code-fragment]),
+  .stream-aux-markdown :global([data-rehype-pretty-code-fragment]),
+  .chatMarkdown :global([data-rehype-pretty-code-figure]),
+  .stream-aux-markdown :global([data-rehype-pretty-code-figure]) {
+    margin: 0.35rem 0;
+    padding: 0 !important;
+    border-radius: 0.375rem;
+    overflow: auto;
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+
+  .chatMarkdown :global(pre > code),
+  .stream-aux-markdown :global(pre > code),
+  .chatMarkdown :global(.shiki > code),
+  .stream-aux-markdown :global(.shiki > code) {
+    display: block;
+    padding: 0.55rem 0.7rem !important;
+    white-space: pre;
+  }
+
+  .chatMarkdown :global([data-rehype-pretty-code-fragment] pre),
+  .stream-aux-markdown :global([data-rehype-pretty-code-fragment] pre),
+  .chatMarkdown :global([data-rehype-pretty-code-figure] pre),
+  .stream-aux-markdown :global([data-rehype-pretty-code-figure] pre) {
+    margin: 0 !important;
+    border: 0 !important;
   }
 </style>

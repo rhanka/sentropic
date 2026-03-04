@@ -3569,7 +3569,7 @@
             <ChevronRight class="w-4 h-4" />
           </button>
           <button
-            class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+            class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
             on:click={() => void handleDeleteCommentThread()}
             title={$_('chat.comments.deleteThread')}
             aria-label={$_('chat.comments.deleteThread')}
@@ -3643,7 +3643,7 @@
                   </div>
                 {/if}
                 <div
-                  class="max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
+                  class="chat-user-bubble max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
                 >
                   {#if editingCommentId === c.id}
                     <div class="space-y-2">
@@ -3657,14 +3657,14 @@
                         class="flex items-center justify-end gap-2 text-[11px]"
                       >
                         <button
-                          class="rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
+                          class="chat-edit-action-secondary rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
                           type="button"
                           on:click={cancelEditComment}
                         >
                           {$_('common.cancel')}
                         </button>
                         <button
-                          class="rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
+                          class="chat-edit-action-primary rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
                           type="button"
                           on:click={() => void commitEditComment()}
                         >
@@ -3680,7 +3680,7 @@
                   class="mt-1 flex items-center justify-end gap-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <button
-                    class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                    class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                     on:click={async () => {
                       const text = c.content ?? '';
                       const ok = await copyToClipboard(
@@ -3701,7 +3701,7 @@
                   </button>
                   {#if canEdit && editingCommentId !== c.id}
                     <button
-                      class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                      class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                       on:click={() => startEditComment(c)}
                       type="button"
                       aria-label="Modifier"
@@ -3748,7 +3748,7 @@
                     class="mt-1 flex items-center gap-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <button
-                      class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                      class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                       on:click={async () => {
                         const text = c.content ?? '';
                         const ok = await copyToClipboard(
@@ -3788,7 +3788,7 @@
             {#if m.role === 'user'}
               <div class="flex flex-col items-end group">
                 <div
-                  class="max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
+                  class="chat-user-bubble max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
                 >
                   {#if editingMessageId === m.id}
                     <div class="space-y-2">
@@ -3801,14 +3801,14 @@
                         class="flex items-center justify-end gap-2 text-[11px]"
                       >
                         <button
-                          class="rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
+                          class="chat-edit-action-secondary rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
                           type="button"
                           on:click={cancelEditMessage}
                         >
                           {$_('common.cancel')}
                         </button>
                         <button
-                          class="rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
+                          class="chat-edit-action-primary rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
                           type="button"
                           on:click={() => void saveEditMessage(m.id)}
                         >
@@ -3825,7 +3825,7 @@
                 >
                   {#if hasCheckpointRollbackDelta(getCheckpointForUserMessage(m.id))}
                     <button
-                      class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                      class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                       on:click={() => openCheckpointPromptForMessage(m.id)}
                       type="button"
                       aria-label={$_('chat.checkpoints.restoreFromMessage')}
@@ -3835,7 +3835,7 @@
                     </button>
                   {/if}
                   <button
-                    class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                    class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                     on:click={async () => {
                       const text = m.content ?? '';
                       const ok = await copyToClipboard(
@@ -3855,7 +3855,7 @@
                     {/if}
                   </button>
                   <button
-                    class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                    class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                     on:click={() => startEditMessage(m)}
                     type="button"
                     aria-label="Modifier"
@@ -3899,7 +3899,7 @@
                       class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500"
                     >
                       <button
-                        class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                         on:click={async () => {
                           const text = m.content ?? '';
                           const ok = await copyToClipboard(
@@ -3919,7 +3919,7 @@
                         {/if}
                       </button>
                       <button
-                        class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                         on:click={() => void retryFromAssistant(m.id)}
                         type="button"
                         aria-label={$_('common.retry')}
@@ -3928,9 +3928,9 @@
                         <RotateCcw class="w-3.5 h-3.5" />
                       </button>
                       <button
-                        class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                         class:text-slate-900={isUp}
-                        class:bg-slate-100={isUp}
+                        class:chat-message-action-button-active={isUp}
                         on:click={() =>
                           void setFeedback(m.id, isUp ? 'clear' : 'up')}
                         type="button"
@@ -3943,9 +3943,9 @@
                         />
                       </button>
                       <button
-                        class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                         class:text-slate-900={isDown}
-                        class:bg-slate-100={isDown}
+                        class:chat-message-action-button-active={isDown}
                         on:click={() =>
                           void setFeedback(m.id, isDown ? 'clear' : 'down')}
                         type="button"
@@ -3981,7 +3981,7 @@
               <div class="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90"
+                  class="chat-tool-permission-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90"
                   on:click={() =>
                     void handleLocalToolPermissionDecision(
                       prompt,
@@ -3992,7 +3992,7 @@
                 </button>
                 <button
                   type="button"
-                  class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
+                  class="chat-tool-permission-choice rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
                   on:click={() =>
                     void handleLocalToolPermissionDecision(
                       prompt,
@@ -4003,7 +4003,7 @@
                 </button>
                 <button
                   type="button"
-                  class="rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 hover:bg-emerald-100"
+                  class="chat-tool-permission-choice rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 hover:bg-emerald-100"
                   on:click={() =>
                     void handleLocalToolPermissionDecision(
                       prompt,
@@ -4014,7 +4014,7 @@
                 </button>
                 <button
                   type="button"
-                  class="rounded border border-red-300 bg-red-50 px-2 py-1 text-[11px] text-red-700 hover:bg-red-100"
+                  class="chat-tool-permission-choice rounded border border-red-300 bg-red-50 px-2 py-1 text-[11px] text-red-700 hover:bg-red-100"
                   on:click={() =>
                     void handleLocalToolPermissionDecision(
                       prompt,
@@ -4040,7 +4040,7 @@
             <div class="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                class="chat-checkpoint-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
                 on:click={() => void confirmCheckpointPrompt()}
                 disabled={checkpointActionInFlight}
               >
@@ -4048,7 +4048,7 @@
               </button>
               <button
                 type="button"
-                class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                class="chat-checkpoint-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
                 on:click={() => void cancelCheckpointPrompt()}
                 disabled={checkpointActionInFlight}
               >
@@ -4084,7 +4084,7 @@
           </div>
           <div class="flex items-center gap-1">
             <button
-              class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+              class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
               type="button"
               disabled={todoRuntimeDeleteInFlight}
               on:click={() => void handleDeleteTodoRuntime()}
@@ -4165,11 +4165,11 @@
     </div>
   {/if}
 
-  <div class="p-2 border-t border-slate-200">
+  <div class="chat-composer-footer p-2 border-t border-slate-200">
     <div>
       <div class="relative">
         <div
-          class="relative w-full min-w-0 rounded px-2 text-xs composer-rich slim-scroll overflow-y-auto overflow-x-hidden"
+          class="chat-composer-surface relative w-full min-w-0 rounded px-2 text-xs composer-rich slim-scroll overflow-y-auto overflow-x-hidden"
           class:composer-single-line={!composerIsMultiline}
           class:bg-white={($workspaceCanComment && !commentThreadResolved) ||
             mode !== 'comments'}
@@ -4457,7 +4457,7 @@
         <div class="ml-auto flex items-center gap-2">
         {#if composerSteerReady && activeAssistantMessage}
           <button
-            class="rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-60"
+            class="chat-composer-stop-button rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-60"
             on:click={stopAssistantMessage}
             disabled={stoppingMessageId === activeAssistantMessage.id}
             type="button"
