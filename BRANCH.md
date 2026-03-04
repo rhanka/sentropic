@@ -365,7 +365,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] `test-e2e-vscode` (requires `E2E_SPEC`).
       - [x] Wire OpenVSCode host runtime test stack (`openvscode` + `e2e-vscode` runner; optional `mock-api-vscode` for targeted local debugging).
       - [x] Add/update VSCode-scoped Playwright specs under `e2e/tests/vscode/*.spec.ts`.
-      - [ ] Add GitHub CI workflow/job `e2e-vscode` with strict `paths` triggers and 7-day artifact retention.
+      - [x] Add GitHub CI workflow/job `e2e-vscode` with strict `paths` triggers and 7-day artifact retention.
       - [ ] Mark `e2e-vscode` as required check for impacted PR scope (repo settings / branch protection alignment).
   - [ ] Non-regression phase (after S6 DEV completion, before UAT)
     - [ ] Run scoped VSCode E2E:
