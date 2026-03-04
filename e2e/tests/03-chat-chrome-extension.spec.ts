@@ -1,9 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 test.describe.serial('Chat extension evolutions', () => {
+  const UI_BASE_URL = process.env.UI_BASE_URL || 'http://localhost:5173';
+  const EXTENSION_API_BASE_URL = new URL('/api/v1', UI_BASE_URL).toString().replace(/\/$/, '');
+  const EXTENSION_SESSION_TOKEN =
+    process.env.E2E_EXTENSION_SESSION_TOKEN || 'tok_e2e_runtime_session';
   const chatButtonSelector =
     'button[title="Chat / Jobs"], button[title="Chat / Jobs IA"], button[aria-label="Chat / Jobs"], button[aria-label="Chat / Jobs IA"]';
   const composerSelector = '[role="textbox"][aria-label="Composer"]';
+  const extensionSettingsButtonSelector = 'button[aria-label="Paramètres de l’extension"]';
 
   async function sendMessageAndWaitApi(page: any, composer: any, message: string) {
     const editable = page
@@ -16,6 +21,8 @@ test.describe.serial('Chat extension evolutions', () => {
     await page.keyboard.press('Control+A');
     await page.keyboard.press('Backspace');
     await page.keyboard.type(message);
+    const sendButton = page.getByTestId('chat-composer-send-button');
+    await expect(sendButton).toBeVisible({ timeout: 10_000 });
     const [req, res] = await Promise.all([
       page.waitForRequest((req: any) => req.method() === 'POST' && req.url().includes('/api/v1/chat/messages'), {
         timeout: 30_000
@@ -24,7 +31,7 @@ test.describe.serial('Chat extension evolutions', () => {
         const r = res.request();
         return r.method() === 'POST' && res.url().includes('/api/v1/chat/messages');
       }, { timeout: 30_000 }),
-      page.keyboard.press('Enter')
+      sendButton.click()
     ]);
     let requestBody: any = null;
     try {
@@ -39,14 +46,31 @@ test.describe.serial('Chat extension evolutions', () => {
     };
   }
 
+  async function ensureExtensionReady(page: any) {
+    const authRequiredTitle = page.getByText(
+      'Un token extension est requis avant d’utiliser cette zone.',
+    );
+    if ((await authRequiredTitle.count()) > 0 && (await authRequiredTitle.first().isVisible())) {
+      const openSettingsButton = page.getByRole('button', { name: 'Ouvrir les paramètres' });
+      await expect(openSettingsButton).toBeVisible({ timeout: 10_000 });
+      await openSettingsButton.click();
+      const tokenInput = page.locator('input[placeholder="tok_..."]');
+      await expect(tokenInput).toBeVisible({ timeout: 10_000 });
+      const settingsButton = page.locator(extensionSettingsButtonSelector);
+      await expect(settingsButton).toBeVisible({ timeout: 10_000 });
+      await settingsButton.click();
+    }
+  }
+
   async function mockExtensionRuntime(page: any) {
-    await page.addInitScript(() => {
+    await page.addInitScript(({ apiBaseUrl, appBaseUrl, sessionToken }) => {
       const state = {
         config: {
           profile: 'uat',
-          apiBaseUrl: 'http://localhost:8787/api/v1',
-          appBaseUrl: 'http://localhost:5173',
+          apiBaseUrl,
+          appBaseUrl,
           wsBaseUrl: '',
+          sessionToken,
           updatedAt: Date.now(),
         },
         permissions: [] as Array<{
@@ -146,7 +170,7 @@ test.describe.serial('Chat extension evolutions', () => {
           sendMessage,
         },
       };
-    });
+    }, { apiBaseUrl: EXTENSION_API_BASE_URL, appBaseUrl: UI_BASE_URL, sessionToken: EXTENSION_SESSION_TOKEN });
   }
 
   test('new session restricts visible tools to web + local tab scope in extension runtime', async ({ page }) => {
@@ -157,6 +181,7 @@ test.describe.serial('Chat extension evolutions', () => {
     const chatButton = page.locator(chatButtonSelector);
     await expect(chatButton).toBeVisible({ timeout: 10_000 });
     await chatButton.click();
+    await ensureExtensionReady(page);
 
     const composer = page.locator(composerSelector);
     await expect(composer).toBeVisible({ timeout: 10_000 });
@@ -189,12 +214,17 @@ test.describe.serial('Chat extension evolutions', () => {
     const chatButton = page.locator(chatButtonSelector);
     await expect(chatButton).toBeVisible({ timeout: 10_000 });
     await chatButton.click();
+    await ensureExtensionReady(page);
 
     const composer = page.locator(composerSelector);
     await expect(composer).toBeVisible({ timeout: 10_000 });
 
     const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
     await expect(menuButton).toBeVisible({ timeout: 10_000 });
+
+    const newSessionButton = page.locator('button[aria-label="Nouvelle session"]');
+    await expect(newSessionButton).toBeVisible({ timeout: 10_000 });
+    await newSessionButton.click();
 
     const firstRequest = await sendMessageAndWaitApi(
       page,
