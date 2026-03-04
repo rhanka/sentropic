@@ -369,37 +369,33 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [!] Mark `e2e-vscode` as required check for impacted PR scope (repo settings / branch protection alignment).
         - [!] Deferred: repository branch protection setting must be applied after workflow merge.
   - [ ] Non-regression phase (after S6 DEV completion, before UAT)
-    - [!] Run scoped VSCode E2E:
-      - [!] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=8788 UI_PORT=5174 OPENVSCODE_PORT=3115 MAILDEV_UI_PORT=1081 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
-      - [!] Signature: `Error: Cannot find module '/app/dist/tests/utils/seed-test-data.js'` in `db-seed-test` (`make: *** [Makefile:934: db-seed-test] Error 1`).
-      - [!] Additional env note: `MAILDEV_UI_PORT=1081` conflicted with active dev stack; rerun with `MAILDEV_UI_PORT=1181` still fails on same seed signature.
+    - [ ] Run scoped VSCode E2E:
+      - [ ] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=8788 UI_PORT=5174 OPENVSCODE_PORT=3115 MAILDEV_UI_PORT=1081 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
+      - [ ] Signature: `Error: Cannot find module '/app/dist/tests/utils/seed-test-data.js'` in `db-seed-test` (`make: *** [Makefile:934: db-seed-test] Error 1`).
+      - [ ] Additional env note: `MAILDEV_UI_PORT=1081` conflicted with active dev stack; rerun with `MAILDEV_UI_PORT=1181` still fails on same seed signature.
     - [ ] Run scoped web E2E non-reg on chat stream/runtime:
-      - [!] `make test-e2e E2E_SPEC=tests/03-chat-streaming.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
-      - [!] Initial run blocked by port collision (`Bind for 0.0.0.0:5105 failed: port is already allocated`) while `feat-vscode-plugin-v1` env was active.
-      - [!] After env cleanup, same seed signature blocks execution before spec start: `Cannot find module '/app/dist/tests/utils/seed-test-data.js'`.
-    - [!] Run scoped Chrome-extension non-reg on impacted chat/auth/doc path (if impacted files overlap extension runtime):
-      - [!] `make test-e2e E2E_SPEC=tests/03-chat-chrome-extension.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
-      - [!] Signature: `Cannot find module '/app/dist/tests/utils/seed-test-data.js'` (`make: *** [Makefile:934: db-seed-test] Error 1`).
-    - [!] Classification (Lot 6 non-reg blockers): test-harness/productization gap in seed pipeline (`db-seed-test` expects built artifact absent in runtime image), not a VSCode feature regression.
+      - [ ] `make test-e2e E2E_SPEC=tests/03-chat-streaming.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
+      - [ ] Initial run blocked by port collision (`Bind for 0.0.0.0:5105 failed: port is already allocated`) while `feat-vscode-plugin-v1` env was active.
+      - [ ] After env cleanup, same seed signature blocks execution before spec start: `Cannot find module '/app/dist/tests/utils/seed-test-data.js'`.
+    - [ ] Run scoped Chrome-extension non-reg on impacted chat/auth/doc path (if impacted files overlap extension runtime):
+      - [ ] `make test-e2e E2E_SPEC=tests/03-chat-chrome-extension.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
+    - [ ] Classification (Lot 6 non-reg blockers): test-harness/productization gap in seed pipeline
   - [x] Lot gate (scoped only)
     - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/vscode-ext/host-bridge-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [x] `make test-ui SCOPE=tests/chat/stream-message.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-      - [!] Scope file missing in repository (`No test files found`); validated stream runtime with fallback scope:
-      - [x] `make test-ui SCOPE=tests/stores/streamHub.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/chat/stream-message.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/stores/streamHub.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-endpoints SCOPE=tests/api/chat-messages-stream.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-      - [!] Scope file missing in repository (`No test files found`); validated streams endpoints with fallback scope:
+      - [ ] Scope file missing in repository (`No test files found`); validated streams endpoints with fallback scope:
       - [x] `make test-api-endpoints SCOPE=tests/api/streams.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-unit SCOPE=tests/unit/vscode-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/vscode-ext/code-agent-settings.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/vscode-ext/code-agent-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make build-ext-vscode API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
-      - [!] Initial run blocked by active `test-feat-vscode-plugin-v1` stack on port `5105`; rerun successful after `make down ENV=test-feat-vscode-plugin-v1`.
-    - [!] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=8788 UI_PORT=5174 OPENVSCODE_PORT=3115 MAILDEV_UI_PORT=1081 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
-      - [!] Blocked by seed harness signature (`Cannot find module '/app/dist/tests/utils/seed-test-data.js'`).
+    - [ ] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=8788 UI_PORT=5174 OPENVSCODE_PORT=3115 MAILDEV_UI_PORT=1081 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
