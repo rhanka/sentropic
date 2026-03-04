@@ -1882,7 +1882,7 @@
                           disabled={extensionConfigLoading ||
                             extensionConfigSaving ||
                             extensionConfigTesting}
-                        />
+                        ></textarea>
                       </div>
                       <div class="space-y-1">
                         <label
@@ -1899,7 +1899,7 @@
                           disabled={extensionConfigLoading ||
                             extensionConfigSaving ||
                             extensionConfigTesting}
-                        />
+                        ></textarea>
                         <p class="text-[11px] text-slate-500">
                           {$_('chat.extension.codeAgent.workspacePromptHint', {
                             values: {
@@ -1926,7 +1926,7 @@
                           disabled={extensionConfigLoading ||
                             extensionConfigSaving ||
                             extensionConfigTesting}
-                        />
+                        ></textarea>
                         <p class="text-[11px] text-slate-500">
                           {$_('chat.extension.codeAgent.instructionPatternsHint')}
                         </p>
