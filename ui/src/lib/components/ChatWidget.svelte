@@ -193,7 +193,8 @@
   let extensionProviderReadinessLoading = false;
   let extensionProviderReadinessError = '';
   let extensionConfigMenuWasOpen = false;
-  let extensionSettingsTab: 'endpoint' | 'permissions' = 'endpoint';
+  type ExtensionSettingsTab = 'server' | 'workspace' | 'tools';
+  let extensionSettingsTab: ExtensionSettingsTab = 'server';
   let extensionConfigMenuMaxHeightPx = 360;
   let extensionToolPermissionsLoading = false;
   let extensionToolPermissionsError = '';
@@ -257,6 +258,15 @@
   };
   const isExtensionPermissionsTabAvailable = () => {
     return !isSidePanelHost || isVsCodeExtensionRuntime();
+  };
+  const resolveDefaultExtensionSettingsTab = (): ExtensionSettingsTab => {
+    if (
+      isVsCodeExtensionRuntime() &&
+      !extensionConfigForm.workspaceScopeKey.trim()
+    ) {
+      return 'workspace';
+    }
+    return 'server';
   };
   $: isSidePanelHost = hostMode === 'sidepanel';
   $: isExtensionOverlayHost = !isSidePanelHost && isExtensionRuntime();
@@ -514,7 +524,7 @@
 
   const openExtensionSettingsMenu = (event?: Event) => {
     event?.stopPropagation();
-    extensionSettingsTab = 'endpoint';
+    extensionSettingsTab = resolveDefaultExtensionSettingsTab();
     showExtensionConfigMenu = true;
   };
 
@@ -672,38 +682,18 @@
     }
   };
 
-  const saveExtensionConfig = async () => {
+  const saveExtensionConfigPatch = async (
+    payloadPatch: Record<string, unknown>,
+  ) => {
     if (!isExtensionConfigAvailable()) return;
     if (extensionConfigSaving) return;
-    let nextWorkspacePrompt: string | undefined;
-    if (extensionCodeAgentPromptDraftMode === 'workspace') {
-      nextWorkspacePrompt = extensionCodeAgentPromptDraft;
-    } else if (
-      extensionCodeAgentPromptResetPending ||
-      extensionConfigForm.codeAgentPromptSource === 'workspace'
-    ) {
-      nextWorkspacePrompt = '';
-    }
-
     extensionConfigSaving = true;
     setExtensionConfigStatus($_('chat.extension.status.savingConfig'), 'info');
     try {
       const runtime = getExtensionRuntime();
       const response = (await runtime?.sendMessage?.({
         type: 'extension_config_set',
-        payload: {
-          profile: extensionConfigForm.profile,
-          apiBaseUrl: extensionConfigForm.apiBaseUrl,
-          appBaseUrl: extensionConfigForm.appBaseUrl,
-          wsBaseUrl: extensionConfigForm.wsBaseUrl,
-          sessionToken: extensionConfigForm.sessionToken,
-          ...(typeof nextWorkspacePrompt === 'string'
-            ? { codeAgentPromptWorkspace: nextWorkspacePrompt }
-            : {}),
-          instructionIncludePatterns: parseInstructionIncludePatterns(
-            extensionConfigForm.instructionIncludePatterns,
-          ),
-        },
+        payload: payloadPatch,
       })) as
         | {
             ok?: boolean;
@@ -739,6 +729,37 @@
     } finally {
       extensionConfigSaving = false;
     }
+  };
+
+  const saveExtensionServerConfig = async () => {
+    await saveExtensionConfigPatch({
+      profile: extensionConfigForm.profile,
+      apiBaseUrl: extensionConfigForm.apiBaseUrl,
+      appBaseUrl: extensionConfigForm.appBaseUrl,
+      wsBaseUrl: extensionConfigForm.wsBaseUrl,
+      sessionToken: extensionConfigForm.sessionToken,
+    });
+  };
+
+  const saveExtensionWorkspaceConfig = async () => {
+    let nextWorkspacePrompt: string | undefined;
+    if (extensionCodeAgentPromptDraftMode === 'workspace') {
+      nextWorkspacePrompt = extensionCodeAgentPromptDraft;
+    } else if (
+      extensionCodeAgentPromptResetPending ||
+      extensionConfigForm.codeAgentPromptSource === 'workspace'
+    ) {
+      nextWorkspacePrompt = '';
+    }
+
+    await saveExtensionConfigPatch({
+      ...(typeof nextWorkspacePrompt === 'string'
+        ? { codeAgentPromptWorkspace: nextWorkspacePrompt }
+        : {}),
+      instructionIncludePatterns: parseInstructionIncludePatterns(
+        extensionConfigForm.instructionIncludePatterns,
+      ),
+    });
   };
 
   const enableExtensionWorkspacePromptOverrideDraft = () => {
@@ -1090,14 +1111,17 @@
   $: if (
     isExtensionConfigAvailable() &&
     showExtensionConfigMenu &&
-    extensionSettingsTab === 'permissions' &&
+    extensionSettingsTab === 'tools' &&
     isExtensionPermissionsTabAvailable()
   ) {
     void loadExtensionToolPermissions();
   }
 
-  $: if (!isExtensionPermissionsTabAvailable() && extensionSettingsTab === 'permissions') {
-    extensionSettingsTab = 'endpoint';
+  $: if (
+    !isExtensionPermissionsTabAvailable() &&
+    extensionSettingsTab === 'tools'
+  ) {
+    extensionSettingsTab = 'server';
   }
 
   $: if (
@@ -1114,7 +1138,7 @@
   $: {
     if (extensionConfigMenuWasOpen && !showExtensionConfigMenu) {
       extensionAuthStatusLoaded = false;
-      extensionSettingsTab = 'endpoint';
+      extensionSettingsTab = resolveDefaultExtensionSettingsTab();
     }
     extensionConfigMenuWasOpen = showExtensionConfigMenu;
   }
@@ -1845,31 +1869,41 @@
                       <div class="flex items-center gap-1 rounded bg-slate-50 p-1">
                         <button
                           class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
-                          'endpoint'
+                          'server'
                             ? 'bg-white text-slate-900 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'}"
                           type="button"
-                          on:click={() => (extensionSettingsTab = 'endpoint')}
+                          on:click={() => (extensionSettingsTab = 'server')}
                         >
-                          {$_('chat.extension.settingsTabs.endpoint')}
+                          {$_('chat.extension.settingsTabs.server')}
+                        </button>
+                        <button
+                          class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
+                          'workspace'
+                            ? 'bg-white text-slate-900 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'}"
+                          type="button"
+                          on:click={() => (extensionSettingsTab = 'workspace')}
+                        >
+                          {$_('chat.extension.settingsTabs.workspace')}
                         </button>
                         {#if isExtensionPermissionsTabAvailable()}
                           <button
                             class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
-                            'permissions'
+                            'tools'
                               ? 'bg-white text-slate-900 shadow-sm'
                               : 'text-slate-500 hover:text-slate-700'}"
                             type="button"
-                            on:click={() => (extensionSettingsTab = 'permissions')}
+                            on:click={() => (extensionSettingsTab = 'tools')}
                           >
-                            {$_('chat.extension.settingsTabs.permissions')}
+                            {$_('chat.extension.settingsTabs.tools')}
                           </button>
                         {/if}
                       </div>
                     </div>
                     <div class="flex-1 min-h-0 overflow-auto slim-scroll space-y-2 p-2">
 
-                  {#if extensionSettingsTab === 'endpoint'}
+                  {#if extensionSettingsTab === 'server'}
                     <div class="text-xs font-semibold text-slate-700">
                       {$_('chat.extension.endpointConfiguration')}
                     </div>
@@ -1950,114 +1984,11 @@
                         {$_('chat.extension.sessionTokenHint')}
                       </p>
                     </div>
-                    <div class="border-t border-slate-200 pt-2 space-y-2">
-                      <div class="text-xs font-semibold text-slate-700">
-                        {$_('chat.extension.codeAgent.title')}
-                      </div>
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-[11px] text-slate-500">
-                          {$_('chat.extension.codeAgent.effectivePromptSource')}
-                        </span>
-                        <span
-                          class={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                            extensionConfigForm.codeAgentPromptSource === 'workspace'
-                              ? 'bg-primary/15 text-primary'
-                              : extensionConfigForm.codeAgentPromptSource === 'server'
-                                ? 'bg-slate-200 text-slate-700'
-                                : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {extensionConfigForm.codeAgentPromptSource === 'workspace'
-                            ? $_('chat.extension.codeAgent.sourceWorkspace')
-                            : extensionConfigForm.codeAgentPromptSource === 'server'
-                              ? $_('chat.extension.codeAgent.sourceServer')
-                              : $_('chat.extension.codeAgent.sourceDefault')}
-                        </span>
-                      </div>
-                      <div class="space-y-1">
-                        <label
-                          class="block text-[11px] text-slate-600"
-                          for="extension-config-code-agent-effective"
-                        >
-                          {$_('chat.extension.codeAgent.effectivePrompt')}
-                        </label>
-                        <textarea
-                          id="extension-config-code-agent-effective"
-                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                          bind:value={extensionCodeAgentPromptDraft}
-                          rows={5}
-                          readonly={extensionCodeAgentPromptDraftMode !== 'workspace'}
-                          disabled={extensionConfigLoading ||
-                            extensionConfigSaving ||
-                            extensionConfigTesting}
-                        ></textarea>
-                      </div>
-                      <p class="text-[11px] text-slate-500">
-                        {$_('chat.extension.codeAgent.workspacePromptHint', {
-                          values: {
-                            scope:
-                              extensionConfigForm.workspaceScopeLabel ||
-                              extensionConfigForm.workspaceScopeKey ||
-                              'workspace',
-                          },
-                        })}
-                      </p>
-                      {#if extensionCodeAgentPromptDraftMode !== 'workspace'}
-                        <button
-                          class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                          type="button"
-                          on:click={enableExtensionWorkspacePromptOverrideDraft}
-                          disabled={extensionConfigLoading ||
-                            extensionConfigSaving ||
-                            extensionConfigTesting}
-                        >
-                          {$_('chat.extension.codeAgent.createWorkspaceOverride')}
-                        </button>
-                      {:else}
-                        <div class="flex items-center gap-2">
-                          <button
-                            class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                            type="button"
-                            on:click={resetExtensionWorkspacePromptOverrideDraft}
-                            disabled={extensionConfigLoading ||
-                              extensionConfigSaving ||
-                              extensionConfigTesting}
-                          >
-                            {$_('chat.extension.codeAgent.resetWorkspaceOverride')}
-                          </button>
-                          <span class="text-[11px] text-slate-500">
-                            {extensionCodeAgentPromptResetPending
-                              ? $_('chat.extension.codeAgent.resetPending')
-                              : $_('chat.extension.codeAgent.workspaceOverrideActive')}
-                          </span>
-                        </div>
-                      {/if}
-                      <div class="space-y-1">
-                        <label
-                          class="block text-[11px] text-slate-600"
-                          for="extension-config-code-agent-patterns"
-                        >
-                          {$_('chat.extension.codeAgent.instructionPatterns')}
-                        </label>
-                        <textarea
-                          id="extension-config-code-agent-patterns"
-                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                          bind:value={extensionConfigForm.instructionIncludePatterns}
-                          rows={3}
-                          disabled={extensionConfigLoading ||
-                            extensionConfigSaving ||
-                            extensionConfigTesting}
-                        ></textarea>
-                        <p class="text-[11px] text-slate-500">
-                          {$_('chat.extension.codeAgent.instructionPatternsHint')}
-                        </p>
-                      </div>
-                    </div>
                     <div class="flex items-center gap-2 pt-1">
                       <button
                         class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
                         type="button"
-                        on:click={() => void saveExtensionConfig()}
+                        on:click={() => void saveExtensionServerConfig()}
                         disabled={extensionConfigLoading ||
                           extensionConfigSaving ||
                           extensionConfigTesting}
@@ -2193,7 +2124,153 @@
                         </div>
                       {/if}
                     </div>
-                  {:else}
+                  {:else if extensionSettingsTab === 'workspace'}
+                    <div class="text-xs font-semibold text-slate-700">
+                      {$_('chat.extension.workspaceConfiguration')}
+                    </div>
+                    <div class="space-y-1 rounded border border-slate-200 bg-slate-50 p-2">
+                      <div class="text-[11px] font-semibold text-slate-700">
+                        {$_('chat.extension.workspaceScope')}
+                      </div>
+                      <div class="text-[11px] text-slate-600 break-all">
+                        {extensionConfigForm.workspaceScopeLabel ||
+                          $_('chat.extension.workspaceScopeNotDetected')}
+                      </div>
+                      {#if extensionConfigForm.workspaceScopeKey}
+                        <div class="text-[11px] text-slate-500 break-all">
+                          {$_('chat.extension.workspaceScopeKey')}: {extensionConfigForm.workspaceScopeKey}
+                        </div>
+                      {/if}
+                    </div>
+                    <div class="border-t border-slate-200 pt-2 space-y-2">
+                      <div class="text-xs font-semibold text-slate-700">
+                        {$_('chat.extension.codeAgent.title')}
+                      </div>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-[11px] text-slate-500">
+                          {$_('chat.extension.codeAgent.effectivePromptSource')}
+                        </span>
+                        <span
+                          class={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                            extensionConfigForm.codeAgentPromptSource === 'workspace'
+                              ? 'bg-primary/15 text-primary'
+                              : extensionConfigForm.codeAgentPromptSource === 'server'
+                                ? 'bg-slate-200 text-slate-700'
+                                : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {extensionConfigForm.codeAgentPromptSource === 'workspace'
+                            ? $_('chat.extension.codeAgent.sourceWorkspace')
+                            : extensionConfigForm.codeAgentPromptSource === 'server'
+                              ? $_('chat.extension.codeAgent.sourceServer')
+                              : $_('chat.extension.codeAgent.sourceDefault')}
+                        </span>
+                      </div>
+                      <div class="space-y-1">
+                        <label
+                          class="block text-[11px] text-slate-600"
+                          for="extension-config-code-agent-effective"
+                        >
+                          {$_('chat.extension.codeAgent.effectivePrompt')}
+                        </label>
+                        <textarea
+                          id="extension-config-code-agent-effective"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                          bind:value={extensionCodeAgentPromptDraft}
+                          rows={5}
+                          readonly={extensionCodeAgentPromptDraftMode !== 'workspace'}
+                          disabled={extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        ></textarea>
+                      </div>
+                      <p class="text-[11px] text-slate-500">
+                        {$_('chat.extension.codeAgent.workspacePromptHint', {
+                          values: {
+                            scope:
+                              extensionConfigForm.workspaceScopeLabel ||
+                              extensionConfigForm.workspaceScopeKey ||
+                              'workspace',
+                          },
+                        })}
+                      </p>
+                      {#if extensionCodeAgentPromptDraftMode !== 'workspace'}
+                        <button
+                          class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          type="button"
+                          on:click={enableExtensionWorkspacePromptOverrideDraft}
+                          disabled={extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        >
+                          {$_('chat.extension.codeAgent.createWorkspaceOverride')}
+                        </button>
+                      {:else}
+                        <div class="flex items-center gap-2">
+                          <button
+                            class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            type="button"
+                            on:click={resetExtensionWorkspacePromptOverrideDraft}
+                            disabled={extensionConfigLoading ||
+                              extensionConfigSaving ||
+                              extensionConfigTesting}
+                          >
+                            {$_('chat.extension.codeAgent.resetWorkspaceOverride')}
+                          </button>
+                          <span class="text-[11px] text-slate-500">
+                            {extensionCodeAgentPromptResetPending
+                              ? $_('chat.extension.codeAgent.resetPending')
+                              : $_('chat.extension.codeAgent.workspaceOverrideActive')}
+                          </span>
+                        </div>
+                      {/if}
+                      <div class="space-y-1">
+                        <label
+                          class="block text-[11px] text-slate-600"
+                          for="extension-config-code-agent-patterns"
+                        >
+                          {$_('chat.extension.codeAgent.instructionPatterns')}
+                        </label>
+                        <textarea
+                          id="extension-config-code-agent-patterns"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                          bind:value={extensionConfigForm.instructionIncludePatterns}
+                          rows={3}
+                          disabled={extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        ></textarea>
+                        <p class="text-[11px] text-slate-500">
+                          {$_('chat.extension.codeAgent.instructionPatternsHint')}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 pt-1">
+                      <button
+                        class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                        type="button"
+                        on:click={() => void saveExtensionWorkspaceConfig()}
+                        disabled={extensionConfigLoading ||
+                          extensionConfigSaving ||
+                          extensionConfigTesting}
+                      >
+                        {$_('common.save')}
+                      </button>
+                    </div>
+                    {#if extensionConfigStatus}
+                      <div
+                        class={`rounded border px-2 py-1 text-[11px] ${
+                          extensionConfigStatusKind === 'ok'
+                            ? 'border-green-200 bg-green-50 text-green-700'
+                            : extensionConfigStatusKind === 'error'
+                              ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200'
+                              : 'border-slate-200 bg-slate-50 text-slate-600'
+                        }`}
+                      >
+                        {extensionConfigStatus}
+                      </div>
+                    {/if}
+                  {:else if extensionSettingsTab === 'tools'}
                     <div class="text-xs font-semibold text-slate-700">
                       {$_('chat.extension.permissions.title')}
                     </div>

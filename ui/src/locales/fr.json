@@ -925,10 +925,15 @@
     "extension": {
       "settingsTitle": "Paramètres de l’extension",
       "settingsTabs": {
-        "endpoint": "Endpoint serveur",
-        "permissions": "Permissions outils"
+        "server": "Serveur",
+        "workspace": "Workspace",
+        "tools": "Outils"
       },
       "endpointConfiguration": "Configuration du endpoint",
+      "workspaceConfiguration": "Configuration workspace",
+      "workspaceScope": "Scope projet détecté",
+      "workspaceScopeKey": "Clé du scope",
+      "workspaceScopeNotDetected": "Aucun scope projet détecté pour l’instant.",
       "apiBaseUrl": "URL API",
       "appBaseUrl": "URL app",
       "wsBaseUrlOptional": "URL WS (optionnel)",

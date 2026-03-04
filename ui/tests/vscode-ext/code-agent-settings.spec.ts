@@ -4,6 +4,16 @@ import en from '../../src/locales/en.json';
 import fr from '../../src/locales/fr.json';
 
 describe('vscode code-agent settings i18n contract', () => {
+  it('exposes split settings tab labels', () => {
+    expect(en.chat.extension.settingsTabs.server).toBeTruthy();
+    expect(en.chat.extension.settingsTabs.workspace).toBeTruthy();
+    expect(en.chat.extension.settingsTabs.tools).toBeTruthy();
+
+    expect(fr.chat.extension.settingsTabs.server).toBeTruthy();
+    expect(fr.chat.extension.settingsTabs.workspace).toBeTruthy();
+    expect(fr.chat.extension.settingsTabs.tools).toBeTruthy();
+  });
+
   it('exposes required EN labels for code-agent settings', () => {
     const codeAgent = en.chat.extension.codeAgent;
     expect(codeAgent.title).toBeTruthy();
