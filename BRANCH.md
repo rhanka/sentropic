@@ -323,13 +323,13 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] S6-7 Prompt editor contract (single effective prompt field + inheritance override/reset flow).
     - [x] S6-8 VSCode E2E lane + naming/CI contract (`build-ext-vscode`, `build-ext-chrome`, `test-e2e-vscode`, `docker-compose.e2e-vscode.yml`, strict CI paths, required check, 7-day artifacts, no compatibility aliases).
   - [ ] DEV phase (after all S6 spec subjects are validated)
-    - [ ] Step 1 — Implement S6-1 / BUG-L6-0 (VSCode streaming parity first; blocker).
-    - [ ] Step 2 — Implement S6-3 / BUG-L6-1 (checkpoint affordance contract + legacy footer eradication).
-      - [ ] Remove legacy composer checkpoint controls (`create checkpoint`, `restore latest`) and legacy `confirm()` restore path.
-      - [ ] Add message-scoped restore affordance (`UndoDot`) in user message actions (left of copy), visible only when bound checkpoint has effective code/object delta.
-      - [ ] On restore-affordance click, open restore banner (Chrome-style prompt), not native modal.
-      - [ ] On assistant `retry`, route through the same restore-banner gate when rollback is available; otherwise retry directly.
-    - [ ] Step 3 — Fix BUG-L6-2 then complete S6-7 (resolved prompt prefill + single effective editor behavior).
+    - [x] Step 1 — Implement S6-1 / BUG-L6-0 (VSCode streaming parity first; blocker).
+    - [x] Step 2 — Implement S6-3 / BUG-L6-1 (checkpoint affordance contract + legacy footer eradication).
+      - [x] Remove legacy composer checkpoint controls (`create checkpoint`, `restore latest`) and legacy `confirm()` restore path.
+      - [x] Add message-scoped restore affordance (`UndoDot`) in user message actions (left of copy), visible only when bound checkpoint has effective code/object delta.
+      - [x] On restore-affordance click, open restore banner (Chrome-style prompt), not native modal.
+      - [x] On assistant `retry`, route through the same restore-banner gate when rollback is available; otherwise retry directly.
+    - [x] Step 3 — Fix BUG-L6-2 then complete S6-7 (resolved prompt prefill + single effective editor behavior).
     - [ ] Step 4 — Implement S6-6 (settings split `Server | Workspace | Tools`).
     - [ ] Step 5 — Implement S6-4 (project fingerprint + server-side mapping runtime).
       - [ ] Compute VSCode `project_fingerprint` (git-based preferred, folder-based fallback) and resolve mapping via API.
@@ -384,6 +384,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] `make test-api-endpoints SCOPE=tests/api/chat-messages-stream.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-unit SCOPE=tests/unit/vscode-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/vscode-ext/code-agent-settings.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/vscode-ext/code-agent-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make build-ext-vscode API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
     - [ ] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=8788 UI_PORT=5174 OPENVSCODE_PORT=3115 MAILDEV_UI_PORT=1081 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
 
