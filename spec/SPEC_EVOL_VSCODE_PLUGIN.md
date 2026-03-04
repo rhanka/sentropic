@@ -210,6 +210,10 @@ Required behavior:
   - restore affordance is rendered only in the user message action row (same action cluster as edit/copy).
   - affordance is visible only when the bound checkpoint has an effective restorable code/object delta.
   - no code delta => no restore affordance and no restore banner.
+- Banner behavior (mandatory):
+  - clicking the restore affordance opens the restore banner (same Chrome-style prompt pattern), not a native `confirm()` modal.
+  - clicking assistant `retry` must use the same restore banner flow first when rollback is available.
+  - when rollback is not available, `retry` proceeds directly with no restore prompt.
 - Proposal content:
   - checkpoint label/time,
   - impacted artifact counts (`files`, `objects`),
