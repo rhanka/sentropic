@@ -326,6 +326,10 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - [ ] DEV phase (after all S6 spec subjects are validated)
     - [ ] Implement S6-1.
     - [ ] Implement S6-3.
+      - [ ] Remove legacy composer checkpoint controls (`create checkpoint`, `restore latest`) and legacy `confirm()` restore path.
+      - [ ] Add message-scoped restore affordance (`UndoDot`) in user message actions (left of copy), visible only when bound checkpoint has effective code/object delta.
+      - [ ] On restore-affordance click, open restore banner (Chrome-style prompt), not native modal.
+      - [ ] On assistant `retry`, route through the same restore-banner gate when rollback is available; otherwise retry directly.
     - [ ] Implement S6-4.
     - [ ] Implement S6-5.
   - [ ] Lot gate (scoped only)
@@ -374,6 +378,9 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] `history_analyze` can target one oversized tool result and return focused evidence,
       - [ ] heavy tool call is compacted/deferred with explicit reason when budget would overflow.
     - [ ] Validate checkpoint create/list/restore behavior.
+    - [ ] Validate restore banner appears on message restore action only when code/object delta exists.
+    - [ ] Validate assistant retry path triggers the same restore banner when rollback is available.
+    - [ ] Validate no native `confirm()` modal is used for checkpoint restore.
     - [ ] Validate code tools baseline behavior (`bash`, `ls`, `grep/rg`, file read/edit, git read) with permission policy checks.
     - [ ] Validate bash policy specifics:
       - [ ] `git add` and `git push` can resolve differently by mono/bigram rules,
