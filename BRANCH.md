@@ -335,12 +335,12 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Compute VSCode `project_fingerprint` (git-based preferred, folder-based fallback) and resolve mapping via API.
       - [x] Persist `project_fingerprint -> workspaceId` mapping in user-scoped settings (no new DB table).
       - [x] Handle multi-root active folder context in mapping/UI state.
-    - [ ] Step 6 — Implement S6-4b (UI after explicit validation).
-      - [ ] Reuse token-required blocking card pattern for project onboarding prompt (`New code base detected...`).
-      - [ ] Enforce token-first flow: project-workspace onboarding runs only after token connection succeeds.
-      - [ ] Enforce workspace typing: show/select only `code` workspaces in VSCode settings flow.
-      - [ ] Implement `Not now` fallback to last `code` workspace + open settings section.
-      - [ ] Enforce mandatory creation path when user has zero `code` workspaces.
+    - [x] Step 6 — Implement S6-4b (UI after explicit validation).
+      - [x] Reuse token-required blocking card pattern for project onboarding prompt (`New code base detected...`).
+      - [x] Enforce token-first flow: project-workspace onboarding runs only after token connection succeeds.
+      - [x] Enforce workspace typing: show/select only `code` workspaces in VSCode settings flow.
+      - [x] Implement `Not now` fallback to last `code` workspace + open settings section.
+      - [x] Enforce mandatory creation path when user has zero `code` workspaces.
     - [ ] Step 7 — Implement S6-8 (Make/Compose/CI lane + naming cutover).
     - [x] Implement S6-5.
       - [x] Build monolithic VSCode code-agent prompt baseline (adapted from Cursor prompt style, no runtime prompt-layer chain).

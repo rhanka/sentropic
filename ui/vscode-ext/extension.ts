@@ -57,7 +57,10 @@ const defaultConfig: TopAiRuntimeConfig = {
   instructionIncludePatterns: [...DEFAULT_INSTRUCTION_INCLUDE_PATTERNS],
   workspaceScopeKey: '',
   workspaceScopeLabel: '',
+  projectFingerprint: '',
   workspaceScopeWorkspaceId: '',
+  workspaceScopeLastWorkspaceId: '',
+  codeWorkspaces: [],
 };
 
 type RuntimeConfigPatchPayload = {
@@ -298,72 +301,169 @@ const writeProjectWorkspaceMappingsStore = async (
   await context.globalState.update(STATE_KEY_PROJECT_WORKSPACE_MAPPINGS, store);
 };
 
-const fetchProjectWorkspaceMappingRecord = async (params: {
+const upsertProjectWorkspaceMappingRecord = async (
+  context: vscode.ExtensionContext,
+  record: ProjectWorkspaceMappingRecord,
+): Promise<void> => {
+  const store = readProjectWorkspaceMappingsStore(context);
+  store.records[record.projectFingerprint] = record;
+  await writeProjectWorkspaceMappingsStore(context, store);
+};
+
+const normalizeProjectWorkspaceMappingRecord = (
+  payload: unknown,
+  fallbackProjectFingerprint: string,
+): ProjectWorkspaceMappingRecord | null => {
+  if (!payload || typeof payload !== 'object') return null;
+  const row = payload as Partial<ProjectWorkspaceMappingRecord>;
+  const codeWorkspaces = Array.isArray(row.codeWorkspaces)
+    ? row.codeWorkspaces
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object') return null;
+          const value = entry as Partial<CodeWorkspaceSummary>;
+          if (
+            typeof value.id !== 'string' ||
+            typeof value.name !== 'string' ||
+            (value.role !== 'viewer' &&
+              value.role !== 'commenter' &&
+              value.role !== 'editor' &&
+              value.role !== 'admin')
+          ) {
+            return null;
+          }
+          return {
+            id: value.id.trim(),
+            name: value.name.trim(),
+            role: value.role,
+          } as CodeWorkspaceSummary;
+        })
+        .filter((entry): entry is CodeWorkspaceSummary => Boolean(entry))
+    : [];
+  const mappedWorkspaceId =
+    typeof row.mappedWorkspaceId === 'string' && row.mappedWorkspaceId.trim().length > 0
+      ? row.mappedWorkspaceId.trim()
+      : null;
+  const mappedWorkspaceName =
+    typeof row.mappedWorkspaceName === 'string' && row.mappedWorkspaceName.trim().length > 0
+      ? row.mappedWorkspaceName.trim()
+      : null;
+  const lastWorkspaceId =
+    typeof row.lastWorkspaceId === 'string' && row.lastWorkspaceId.trim().length > 0
+      ? row.lastWorkspaceId.trim()
+      : null;
+  return {
+    projectFingerprint:
+      typeof row.projectFingerprint === 'string' && row.projectFingerprint.trim().length > 0
+        ? row.projectFingerprint.trim()
+        : fallbackProjectFingerprint,
+    mappedWorkspaceId,
+    mappedWorkspaceName,
+    lastWorkspaceId,
+    codeWorkspaces,
+    syncedAt: Date.now(),
+  };
+};
+
+const requestProjectWorkspaceMappingRecord = async (params: {
   apiBaseUrl: string;
   sessionToken: string;
   projectFingerprint: string;
+  method: 'GET' | 'PUT' | 'POST';
+  path:
+    | '/vscode-extension/workspace-mapping'
+    | '/vscode-extension/workspace-mapping/code-workspace'
+    | '/vscode-extension/workspace-mapping/not-now';
+  body?: Record<string, unknown>;
 }): Promise<ProjectWorkspaceMappingRecord | null> => {
   const apiBaseUrl = params.apiBaseUrl.replace(/\/$/, '');
-  const url = `${apiBaseUrl}/vscode-extension/workspace-mapping?project_fingerprint=${encodeURIComponent(
-    params.projectFingerprint,
-  )}`;
+  const url = new URL(`${apiBaseUrl}${params.path}`);
+  if (params.method === 'GET') {
+    url.searchParams.set('project_fingerprint', params.projectFingerprint);
+  }
   try {
-    const response = await fetch(url, {
-      method: 'GET',
+    const response = await fetch(url.toString(), {
+      method: params.method,
       headers: {
         Authorization: `Bearer ${params.sessionToken}`,
+        ...(params.method === 'GET' ? {} : { 'content-type': 'application/json' }),
       },
+      body:
+        params.method === 'GET' ? undefined : JSON.stringify(params.body ?? {}),
     });
     if (!response.ok) return null;
-    const payload = (await response.json()) as Partial<ProjectWorkspaceMappingRecord> | null;
-    if (!payload || typeof payload !== 'object') return null;
-    const codeWorkspaces = Array.isArray(payload.codeWorkspaces)
-      ? payload.codeWorkspaces
-          .map((entry) => {
-            if (!entry || typeof entry !== 'object') return null;
-            const row = entry as Partial<CodeWorkspaceSummary>;
-            if (
-              typeof row.id !== 'string' ||
-              typeof row.name !== 'string' ||
-              (row.role !== 'viewer' &&
-                row.role !== 'commenter' &&
-                row.role !== 'editor' &&
-                row.role !== 'admin')
-            ) {
-              return null;
-            }
-            return {
-              id: row.id.trim(),
-              name: row.name.trim(),
-              role: row.role,
-            } as CodeWorkspaceSummary;
-          })
-          .filter((entry): entry is CodeWorkspaceSummary => Boolean(entry))
-      : [];
-    const mappedWorkspaceId =
-      typeof payload.mappedWorkspaceId === 'string' && payload.mappedWorkspaceId.trim().length > 0
-        ? payload.mappedWorkspaceId.trim()
-        : null;
-    const mappedWorkspaceName =
-      typeof payload.mappedWorkspaceName === 'string' && payload.mappedWorkspaceName.trim().length > 0
-        ? payload.mappedWorkspaceName.trim()
-        : null;
-    const lastWorkspaceId =
-      typeof payload.lastWorkspaceId === 'string' && payload.lastWorkspaceId.trim().length > 0
-        ? payload.lastWorkspaceId.trim()
-        : null;
-    return {
-      projectFingerprint: params.projectFingerprint,
-      mappedWorkspaceId,
-      mappedWorkspaceName,
-      lastWorkspaceId,
-      codeWorkspaces,
-      syncedAt: Date.now(),
-    };
+    const payload = await response.json();
+    return normalizeProjectWorkspaceMappingRecord(payload, params.projectFingerprint);
   } catch {
     return null;
   }
 };
+
+const fetchProjectWorkspaceMappingRecord = async (params: {
+  apiBaseUrl: string;
+  sessionToken: string;
+  projectFingerprint: string;
+}): Promise<ProjectWorkspaceMappingRecord | null> =>
+  requestProjectWorkspaceMappingRecord({
+    apiBaseUrl: params.apiBaseUrl,
+    sessionToken: params.sessionToken,
+    projectFingerprint: params.projectFingerprint,
+    method: 'GET',
+    path: '/vscode-extension/workspace-mapping',
+  });
+
+const putProjectWorkspaceMappingRecord = async (params: {
+  apiBaseUrl: string;
+  sessionToken: string;
+  projectFingerprint: string;
+  workspaceId: string;
+}): Promise<ProjectWorkspaceMappingRecord | null> =>
+  requestProjectWorkspaceMappingRecord({
+    apiBaseUrl: params.apiBaseUrl,
+    sessionToken: params.sessionToken,
+    projectFingerprint: params.projectFingerprint,
+    method: 'PUT',
+    path: '/vscode-extension/workspace-mapping',
+    body: {
+      projectFingerprint: params.projectFingerprint,
+      workspaceId: params.workspaceId,
+    },
+  });
+
+const createProjectCodeWorkspaceMappingRecord = async (params: {
+  apiBaseUrl: string;
+  sessionToken: string;
+  projectFingerprint: string;
+  name?: string;
+}): Promise<ProjectWorkspaceMappingRecord | null> =>
+  requestProjectWorkspaceMappingRecord({
+    apiBaseUrl: params.apiBaseUrl,
+    sessionToken: params.sessionToken,
+    projectFingerprint: params.projectFingerprint,
+    method: 'POST',
+    path: '/vscode-extension/workspace-mapping/code-workspace',
+    body: {
+      projectFingerprint: params.projectFingerprint,
+      ...(typeof params.name === 'string' && params.name.trim().length > 0
+        ? { name: params.name.trim() }
+        : {}),
+    },
+  });
+
+const notNowProjectWorkspaceMappingRecord = async (params: {
+  apiBaseUrl: string;
+  sessionToken: string;
+  projectFingerprint: string;
+}): Promise<ProjectWorkspaceMappingRecord | null> =>
+  requestProjectWorkspaceMappingRecord({
+    apiBaseUrl: params.apiBaseUrl,
+    sessionToken: params.sessionToken,
+    projectFingerprint: params.projectFingerprint,
+    method: 'POST',
+    path: '/vscode-extension/workspace-mapping/not-now',
+    body: {
+      projectFingerprint: params.projectFingerprint,
+    },
+  });
 
 const getOrSyncProjectWorkspaceMapping = async (params: {
   context: vscode.ExtensionContext;
@@ -489,7 +589,10 @@ const readRuntimeConfig = async (
     instructionIncludePatterns,
     workspaceScopeKey,
     workspaceScopeLabel,
+    projectFingerprint,
     workspaceScopeWorkspaceId: projectWorkspaceMapping?.mappedWorkspaceId ?? '',
+    workspaceScopeLastWorkspaceId: projectWorkspaceMapping?.lastWorkspaceId ?? '',
+    codeWorkspaces: projectWorkspaceMapping?.codeWorkspaces ?? [],
   };
 };
 
@@ -1005,6 +1108,148 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
           runtimeConfig.sessionToken,
         );
         respond(true, result);
+        return;
+      }
+
+      if (command === 'runtime.workspace.mapping.get') {
+        const runtimeConfig = await readRuntimeConfig(this.context);
+        const requestPayload =
+          payload.payload && typeof payload.payload === 'object'
+            ? (payload.payload as { projectFingerprint?: unknown })
+            : {};
+        const projectFingerprint =
+          typeof requestPayload.projectFingerprint === 'string' &&
+          requestPayload.projectFingerprint.trim().length > 0
+            ? requestPayload.projectFingerprint.trim()
+            : runtimeConfig.projectFingerprint.trim();
+        if (!projectFingerprint) {
+          respond(false, undefined, 'Project scope is not detected yet.');
+          return;
+        }
+        if (!runtimeConfig.sessionToken.trim()) {
+          respond(true, runtimeConfig);
+          return;
+        }
+        const record = await fetchProjectWorkspaceMappingRecord({
+          apiBaseUrl: runtimeConfig.apiBaseUrl,
+          sessionToken: runtimeConfig.sessionToken,
+          projectFingerprint,
+        });
+        if (record) {
+          await upsertProjectWorkspaceMappingRecord(this.context, record);
+        }
+        respond(true, await readRuntimeConfig(this.context));
+        return;
+      }
+
+      if (command === 'runtime.workspace.mapping.set') {
+        const runtimeConfig = await readRuntimeConfig(this.context);
+        const requestPayload =
+          payload.payload && typeof payload.payload === 'object'
+            ? (payload.payload as { projectFingerprint?: unknown; workspaceId?: unknown })
+            : {};
+        const projectFingerprint =
+          typeof requestPayload.projectFingerprint === 'string' &&
+          requestPayload.projectFingerprint.trim().length > 0
+            ? requestPayload.projectFingerprint.trim()
+            : runtimeConfig.projectFingerprint.trim();
+        const workspaceId =
+          typeof requestPayload.workspaceId === 'string'
+            ? requestPayload.workspaceId.trim()
+            : '';
+        if (!projectFingerprint) {
+          respond(false, undefined, 'Project scope is not detected yet.');
+          return;
+        }
+        if (!workspaceId) {
+          respond(false, undefined, 'workspaceId is required.');
+          return;
+        }
+        if (!runtimeConfig.sessionToken.trim()) {
+          respond(false, undefined, 'Extension token is required.');
+          return;
+        }
+        const record = await putProjectWorkspaceMappingRecord({
+          apiBaseUrl: runtimeConfig.apiBaseUrl,
+          sessionToken: runtimeConfig.sessionToken,
+          projectFingerprint,
+          workspaceId,
+        });
+        if (!record) {
+          respond(false, undefined, 'Unable to map project to workspace.');
+          return;
+        }
+        await upsertProjectWorkspaceMappingRecord(this.context, record);
+        respond(true, await readRuntimeConfig(this.context));
+        return;
+      }
+
+      if (command === 'runtime.workspace.mapping.create') {
+        const runtimeConfig = await readRuntimeConfig(this.context);
+        const requestPayload =
+          payload.payload && typeof payload.payload === 'object'
+            ? (payload.payload as { projectFingerprint?: unknown; name?: unknown })
+            : {};
+        const projectFingerprint =
+          typeof requestPayload.projectFingerprint === 'string' &&
+          requestPayload.projectFingerprint.trim().length > 0
+            ? requestPayload.projectFingerprint.trim()
+            : runtimeConfig.projectFingerprint.trim();
+        const name =
+          typeof requestPayload.name === 'string' ? requestPayload.name.trim() : '';
+        if (!projectFingerprint) {
+          respond(false, undefined, 'Project scope is not detected yet.');
+          return;
+        }
+        if (!runtimeConfig.sessionToken.trim()) {
+          respond(false, undefined, 'Extension token is required.');
+          return;
+        }
+        const record = await createProjectCodeWorkspaceMappingRecord({
+          apiBaseUrl: runtimeConfig.apiBaseUrl,
+          sessionToken: runtimeConfig.sessionToken,
+          projectFingerprint,
+          ...(name ? { name } : {}),
+        });
+        if (!record) {
+          respond(false, undefined, 'Unable to create code workspace mapping.');
+          return;
+        }
+        await upsertProjectWorkspaceMappingRecord(this.context, record);
+        respond(true, await readRuntimeConfig(this.context));
+        return;
+      }
+
+      if (command === 'runtime.workspace.mapping.not_now') {
+        const runtimeConfig = await readRuntimeConfig(this.context);
+        const requestPayload =
+          payload.payload && typeof payload.payload === 'object'
+            ? (payload.payload as { projectFingerprint?: unknown })
+            : {};
+        const projectFingerprint =
+          typeof requestPayload.projectFingerprint === 'string' &&
+          requestPayload.projectFingerprint.trim().length > 0
+            ? requestPayload.projectFingerprint.trim()
+            : runtimeConfig.projectFingerprint.trim();
+        if (!projectFingerprint) {
+          respond(false, undefined, 'Project scope is not detected yet.');
+          return;
+        }
+        if (!runtimeConfig.sessionToken.trim()) {
+          respond(false, undefined, 'Extension token is required.');
+          return;
+        }
+        const record = await notNowProjectWorkspaceMappingRecord({
+          apiBaseUrl: runtimeConfig.apiBaseUrl,
+          sessionToken: runtimeConfig.sessionToken,
+          projectFingerprint,
+        });
+        if (!record) {
+          respond(false, undefined, 'Unable to apply workspace fallback.');
+          return;
+        }
+        await upsertProjectWorkspaceMappingRecord(this.context, record);
+        respond(true, await readRuntimeConfig(this.context));
         return;
       }
 
