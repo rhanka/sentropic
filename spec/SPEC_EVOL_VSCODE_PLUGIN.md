@@ -202,6 +202,14 @@ Required behavior:
     - style: same icon button style as other message actions.
   - **C. From assistant retry path**:
     - when user clicks retry under an assistant message and rollback is possible, show restore banner before rerun.
+- Legacy behavior eradication (mandatory):
+  - global checkpoint controls in composer/footer are forbidden (`Create checkpoint`, `Restore latest checkpoint`).
+  - restore action must not be exposed as a session-global "latest" shortcut.
+  - restore action is message-scoped only (anchored to a specific user message/checkpoint pair).
+- Message binding and visibility (mandatory):
+  - restore affordance is rendered only in the user message action row (same action cluster as edit/copy).
+  - affordance is visible only when the bound checkpoint has an effective restorable code/object delta.
+  - no code delta => no restore affordance and no restore banner.
 - Proposal content:
   - checkpoint label/time,
   - impacted artifact counts (`files`, `objects`),
@@ -379,6 +387,17 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - proxy mode is pass-through chained transport only (no persistent tracing/log instrumentation in nominal mode).
 - Degradation mode:
   - if host-stream channel fails, existing scoped polling fallback stays available.
+
+### 4.16 Lot 6 - Subject 3 (checkpoint UX strict contract)
+- Decision locked: eradicate legacy composer-level checkpoint UX.
+- Forbidden:
+  - composer/footer checkpoint buttons (`create`, `restore latest`),
+  - global session-level restore shortcut detached from message anchor.
+- Required:
+  - restore entrypoint sits on user-message actions only (`undo-dot` near edit/copy),
+  - restore always targets the checkpoint bound to that user message,
+  - visibility requires effective code/object delta (`hasCodeDelta=true` on bound checkpoint),
+  - when `hasCodeDelta=false`, no button, no banner, no restore prompt.
 
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
