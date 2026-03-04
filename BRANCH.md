@@ -315,7 +315,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
 - [ ] **Lot 6 — VSCode runtime parity (spec-first before UAT)**
   - [ ] Spec phase (interactive, subject-by-subject)
     - [x] S6-1 Streaming parity in VSCode host (SSE chained proxy, no server-side SSE rewrite, no duplicated render pipeline).
-    - [ ] S6-3 Checkpoint affordance placement + visibility gating (message actions only, code-delta only).
+    - [x] S6-3 Checkpoint affordance placement + visibility gating (message actions only, code-delta only; legacy composer/global checkpoint controls explicitly forbidden).
     - [ ] S6-4 Workspace-per-project model in VSCode mode.
     - [ ] S6-5 VSCode-specific system prompt profile.
   - [ ] Bug track (UAT-driven, no spec/dev lock before reproducible traces)
