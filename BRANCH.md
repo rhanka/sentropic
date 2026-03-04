@@ -318,12 +318,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] S6-3 Checkpoint affordance placement + visibility gating (message actions only, code-delta only; legacy composer/global checkpoint controls explicitly forbidden).
     - [x] S6-4 Workspace-per-project model in VSCode mode (server-side mapping only; UI not yet validated).
     - [x] S6-4b UI contract for project-workspace mapping (token-first flow, reused blocking card `New code base detected`, `code` workspace typing constraint, `Not now` fallback behavior).
-    - [ ] S6-5 VSCode-specific system prompt profile.
-  - [ ] Bug track (UAT-driven, no spec/dev lock before reproducible traces)
-    - [ ] B6-BUG1 Intermittent stall on `Step running: Status: awaiting_local_tool_results` in VSCode host runtime.
-      - [ ] Reproduce during UAT and capture deterministic signature (stream id, tool call id, active local tool, UI state).
-      - [ ] Collect evidence (`make logs-api`, extension host logs, webview console) before defining fix contract.
-      - [ ] Classify root cause (stream transport vs local tool callback vs backend pending-state timeout) before implementation.
+    - [x] S6-5 VSCode-specific system prompt profile (monolithic code-agent prompt; global/workspace overrides; instruction-file auto-load; direct cutover).
   - [ ] DEV phase (after all S6 spec subjects are validated)
     - [ ] Implement S6-1.
     - [ ] Implement S6-3.
@@ -342,6 +337,15 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Implement `Not now` fallback to last `code` workspace + open settings section.
       - [ ] Enforce mandatory creation path when user has zero `code` workspaces.
     - [ ] Implement S6-5.
+      - [ ] Build monolithic VSCode code-agent prompt baseline (adapted from Cursor prompt style, no runtime prompt-layer chain).
+      - [ ] Implement prompt resolution order: workspace override > global override > default.
+      - [ ] Reuse settings editing model with raw textarea for global + workspace prompt overrides.
+      - [ ] Auto-load instruction files when present: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`.
+      - [ ] Add settings input for custom instruction include patterns (regex/pattern list).
+      - [ ] Inject resolved instructions into monolithic code-agent prompt context.
+      - [ ] Keep existing tool runtime policy unchanged; no new permission model in S6-5.
+      - [ ] Enforce blocking validation error when resolved prompt is invalid.
+      - [ ] Apply direct cutover in VSCode mode (no feature flag).
   - [ ] Lot gate (scoped only)
     - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
@@ -350,6 +354,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make test-api-endpoints SCOPE=tests/api/chat-messages-stream.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-api-unit SCOPE=tests/unit/vscode-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/vscode-ext/code-agent-settings.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
@@ -366,6 +372,10 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] token save/reload in secure storage,
       - [ ] actionable connectivity errors when endpoint or token is invalid,
       - [ ] config save/reload.
+      - [ ] global code-agent prompt textarea can be edited/saved/reloaded.
+      - [ ] workspace override prompt textarea can be edited/saved/reloaded and takes precedence over global.
+      - [ ] custom instruction include patterns input persists and affects discovery.
+      - [ ] invalid prompt blocks execution with explicit actionable error.
   - [ ] Web app admin provider settings (`ENV=dev`, root workspace)
     - [ ] Open admin settings provider section and validate shared Codex connection lifecycle:
       - [ ] connect/configure provider as admin,
