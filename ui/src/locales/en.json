@@ -936,9 +936,16 @@
       "sessionTokenHint": "Paste the admin-issued VSCode extension token from web app settings.",
       "codeAgent": {
         "title": "Code agent prompt profile",
-        "globalPrompt": "Global code-agent prompt",
-        "workspacePrompt": "Workspace override prompt",
+        "effectivePromptSource": "Effective prompt source",
+        "sourceWorkspace": "Workspace override",
+        "sourceServer": "Server override",
+        "sourceDefault": "Default",
+        "effectivePrompt": "Effective code-agent prompt",
         "workspacePromptHint": "Applied to current workspace scope: {scope}",
+        "createWorkspaceOverride": "Create workspace override",
+        "resetWorkspaceOverride": "Reset to inherited prompt",
+        "workspaceOverrideActive": "Workspace override will be saved on this scope.",
+        "resetPending": "Workspace override removal will be applied on save.",
         "instructionPatterns": "Instruction include patterns",
         "instructionPatternsHint": "One glob/pattern per line (ex: AGENTS.md, .cursor/rules/*.mdc)."
       },

@@ -936,9 +936,16 @@
       "sessionTokenHint": "Collez le token VSCode généré par un administrateur dans les paramètres web.",
       "codeAgent": {
         "title": "Profil prompt agent code",
-        "globalPrompt": "Prompt agent code global",
-        "workspacePrompt": "Prompt override workspace",
+        "effectivePromptSource": "Source du prompt effectif",
+        "sourceWorkspace": "Override workspace",
+        "sourceServer": "Override serveur",
+        "sourceDefault": "Par défaut",
+        "effectivePrompt": "Prompt agent code effectif",
         "workspacePromptHint": "Appliqué au scope workspace courant : {scope}",
+        "createWorkspaceOverride": "Créer un override workspace",
+        "resetWorkspaceOverride": "Revenir à l’héritage",
+        "workspaceOverrideActive": "L’override workspace sera enregistré sur ce scope.",
+        "resetPending": "La suppression de l’override workspace sera appliquée à l’enregistrement.",
         "instructionPatterns": "Patterns d’inclusion instructions",
         "instructionPatternsHint": "Un glob/pattern par ligne (ex : AGENTS.md, .cursor/rules/*.mdc)."
       },
