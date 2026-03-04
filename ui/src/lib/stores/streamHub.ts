@@ -246,8 +246,13 @@ class StreamHub {
       await this.pollOverlayStreams(baseUrl);
     this.pollInFlight = false;
 
-    // Keep polling only while extension polling mode is still active.
-    if (!this.currentUrl?.startsWith('ext-poll:')) return;
+    // Keep polling only while polling transport mode is still active.
+    // Supports both Chrome extension fallback (`ext-poll:`) and VSCode webview (`vscode-poll:`).
+    if (
+      !this.currentUrl?.startsWith('ext-poll:') &&
+      !this.currentUrl?.startsWith('vscode-poll:')
+    )
+      return;
     if (!getStoreValue(isAuthenticated) || this.subs.size === 0) return;
 
     let nextDelayMs = 1000;
