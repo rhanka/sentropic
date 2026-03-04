@@ -319,6 +319,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] S6-4 Workspace-per-project model in VSCode mode (server-side mapping only; UI not yet validated).
     - [x] S6-4b UI contract for project-workspace mapping (token-first flow, reused blocking card `New code base detected`, `code` workspace typing constraint, `Not now` fallback behavior).
     - [x] S6-5 VSCode-specific system prompt profile (monolithic code-agent prompt; global/workspace overrides; instruction-file auto-load; direct cutover).
+    - [x] S6-6 Settings split contract (tabs `Server | Workspace | Tools`; no silent workspace creation).
+    - [x] S6-7 Prompt editor contract (single effective prompt field + inheritance override/reset flow).
   - [ ] DEV phase (after all S6 spec subjects are validated)
     - [ ] Implement S6-1.
     - [ ] Implement S6-3.
@@ -346,6 +348,11 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Keep existing tool runtime policy unchanged; no new permission model in S6-5.
       - [x] Enforce blocking validation error when resolved prompt is invalid.
       - [x] Apply direct cutover in VSCode mode (no feature flag).
+    - [ ] BUG-L6-0 SSE streaming blocker: VSCode chat must render incremental stream events (no full-message flush).
+    - [ ] BUG-L6-1 Legacy checkpoint controls still visible in VSCode composer footer.
+    - [ ] BUG-L6-2 Prompt editor prefill regression: resolved effective prompt must never be blank.
+    - [ ] Implement S6-6 (settings split `Server | Workspace | Tools`).
+    - [ ] Implement S6-7 (single prompt editor with inheritance override/reset).
   - [ ] Lot gate (scoped only)
     - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
