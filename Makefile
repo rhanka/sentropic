@@ -285,8 +285,8 @@ build-ext-vscode: up-ui ## Build VSCode extension package to ui/static/vscode-ex
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui sh -lc 'test -f /app/static/vscode-extension/top-ai-ideas-vscode-extension.vsix && test -f /app/vscode-ext/dist/extension.js'
 	@echo "✅ VSCode extension package built in ui/static/vscode-extension"
 
-.PHONY: dev-vscode-ext
-dev-vscode-ext: up-ui ## Watch and rebuild VSCode extension package
+.PHONY: dev-ext-vscode
+dev-ext-vscode: up-ui ## Watch and rebuild VSCode extension package
 	@echo "👀 Watching VSCode Extension..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run dev:vscode-ext
 
