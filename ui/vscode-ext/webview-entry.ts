@@ -225,6 +225,8 @@ const installBridgeApiFetchProxy = (state: RuntimeState): void => {
       if (init?.headers) {
         new Headers(init.headers).forEach((value, key) => headers.set(key, value));
       }
+      // Host runtime is the single source of truth for auth; avoid forwarding stale/duplicate auth headers.
+      headers.delete('authorization');
       const headersObject: Record<string, string> = {};
       headers.forEach((value, key) => {
         headersObject[key] = value;

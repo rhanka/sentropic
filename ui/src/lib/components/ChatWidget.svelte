@@ -2,6 +2,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import type { ContextProvider } from '$lib/core/context-provider';
   import { _ } from 'svelte-i18n';
+  import { initApiClient } from '$lib/core/api-client';
   import { queueStore, loadJobs, updateJob, addJob } from '$lib/stores/queue';
   import { apiGet, apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
@@ -520,6 +521,17 @@
     };
   };
 
+  const syncExtensionApiClientConfig = (
+    config: ExtensionRuntimeConfig,
+  ): void => {
+    if (!isExtensionConfigAvailable()) return;
+    initApiClient({
+      baseUrl: config.apiBaseUrl,
+      isBrowser: true,
+      authToken: config.sessionToken || undefined,
+    });
+  };
+
   const loadExtensionConfig = async () => {
     if (!isExtensionConfigAvailable()) return;
     if (extensionConfigLoading) return;
@@ -543,6 +555,7 @@
         return;
       }
       extensionConfigForm = normalizeExtensionConfig(response.config);
+      syncExtensionApiClientConfig(extensionConfigForm);
       extensionConfigLoaded = true;
       setExtensionConfigStatus($_('chat.extension.status.configLoaded'), 'info');
     } catch (error) {
@@ -586,6 +599,7 @@
         return;
       }
       extensionConfigForm = normalizeExtensionConfig(response.config);
+      syncExtensionApiClientConfig(extensionConfigForm);
       extensionConfigLoaded = true;
       extensionAuthStatusLoaded = false;
       extensionAuthConnected = false;
