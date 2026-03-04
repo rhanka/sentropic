@@ -1,3 +1,9 @@
+export type TopAiCodeWorkspaceSummary = {
+  id: string;
+  name: string;
+  role: 'viewer' | 'commenter' | 'editor' | 'admin';
+};
+
 export type TopAiRuntimeConfig = {
   apiBaseUrl: string;
   appBaseUrl: string;
@@ -12,7 +18,10 @@ export type TopAiRuntimeConfig = {
   instructionIncludePatterns: string[];
   workspaceScopeKey: string;
   workspaceScopeLabel: string;
+  projectFingerprint: string;
   workspaceScopeWorkspaceId: string;
+  workspaceScopeLastWorkspaceId: string;
+  codeWorkspaces: TopAiCodeWorkspaceSummary[];
 };
 
 export type TopAiVsCodeCommand =

@@ -37,7 +37,14 @@ type TopAiRuntimeConfig = {
   instructionIncludePatterns?: string[];
   workspaceScopeKey?: string;
   workspaceScopeLabel?: string;
+  projectFingerprint?: string;
   workspaceScopeWorkspaceId?: string;
+  workspaceScopeLastWorkspaceId?: string;
+  codeWorkspaces?: Array<{
+    id: string;
+    name: string;
+    role: 'viewer' | 'commenter' | 'editor' | 'admin';
+  }>;
   updatedAt?: number;
 };
 
@@ -54,7 +61,14 @@ type PersistedRuntimeConfig = {
   instructionIncludePatterns?: string[];
   workspaceScopeKey?: string;
   workspaceScopeLabel?: string;
+  projectFingerprint?: string;
   workspaceScopeWorkspaceId?: string;
+  workspaceScopeLastWorkspaceId?: string;
+  codeWorkspaces?: Array<{
+    id: string;
+    name: string;
+    role: 'viewer' | 'commenter' | 'editor' | 'admin';
+  }>;
   updatedAt?: number;
 };
 
@@ -89,7 +103,10 @@ const DEFAULT_RUNTIME_CONFIG: Required<TopAiRuntimeConfig> = {
   instructionIncludePatterns: [],
   workspaceScopeKey: '',
   workspaceScopeLabel: '',
+  projectFingerprint: '',
   workspaceScopeWorkspaceId: '',
+  workspaceScopeLastWorkspaceId: '',
+  codeWorkspaces: [],
   updatedAt: Date.now(),
 };
 
@@ -110,6 +127,36 @@ type ExtensionMessage = {
   type?: unknown;
   payload?: unknown;
 };
+
+type CodeWorkspaceSummary = {
+  id: string;
+  name: string;
+  role: 'viewer' | 'commenter' | 'editor' | 'admin';
+};
+
+const isCodeWorkspaceSummary = (entry: unknown): entry is CodeWorkspaceSummary => {
+  if (!entry || typeof entry !== 'object') return false;
+  const row = entry as { id?: unknown; name?: unknown; role?: unknown };
+  return (
+    typeof row.id === 'string' &&
+    typeof row.name === 'string' &&
+    (row.role === 'viewer' ||
+      row.role === 'commenter' ||
+      row.role === 'editor' ||
+      row.role === 'admin')
+  );
+};
+
+const normalizeCodeWorkspaces = (value: unknown): CodeWorkspaceSummary[] =>
+  Array.isArray(value)
+    ? value
+        .filter((entry): entry is CodeWorkspaceSummary => isCodeWorkspaceSummary(entry))
+        .map((entry) => ({
+          id: entry.id.trim(),
+          name: entry.name.trim(),
+          role: entry.role,
+        }))
+    : [];
 
 const root = document.getElementById('topai-vscode-root');
 if (!root) {
@@ -164,7 +211,11 @@ const normalizeRuntimeConfig = (
     : DEFAULT_RUNTIME_CONFIG.instructionIncludePatterns;
   const workspaceScopeKey = raw?.workspaceScopeKey?.trim() || '';
   const workspaceScopeLabel = raw?.workspaceScopeLabel?.trim() || '';
+  const projectFingerprint = raw?.projectFingerprint?.trim() || '';
   const workspaceScopeWorkspaceId = raw?.workspaceScopeWorkspaceId?.trim() || '';
+  const workspaceScopeLastWorkspaceId =
+    raw?.workspaceScopeLastWorkspaceId?.trim() || '';
+  const codeWorkspaces = normalizeCodeWorkspaces(raw?.codeWorkspaces);
 
   return {
     profile,
@@ -181,7 +232,10 @@ const normalizeRuntimeConfig = (
     instructionIncludePatterns,
     workspaceScopeKey,
     workspaceScopeLabel,
+    projectFingerprint,
     workspaceScopeWorkspaceId,
+    workspaceScopeLastWorkspaceId,
+    codeWorkspaces,
     updatedAt:
       typeof raw?.updatedAt === 'number' ? raw.updatedAt : Date.now(),
   };
@@ -233,10 +287,21 @@ const loadPersistedRuntimeConfig = (): PersistedRuntimeConfig => {
         typeof parsed.workspaceScopeLabel === 'string'
           ? parsed.workspaceScopeLabel
           : undefined,
+      projectFingerprint:
+        typeof parsed.projectFingerprint === 'string'
+          ? parsed.projectFingerprint
+          : undefined,
       workspaceScopeWorkspaceId:
         typeof parsed.workspaceScopeWorkspaceId === 'string'
           ? parsed.workspaceScopeWorkspaceId
           : undefined,
+      workspaceScopeLastWorkspaceId:
+        typeof parsed.workspaceScopeLastWorkspaceId === 'string'
+          ? parsed.workspaceScopeLastWorkspaceId
+          : undefined,
+      codeWorkspaces: Array.isArray(parsed.codeWorkspaces)
+        ? normalizeCodeWorkspaces(parsed.codeWorkspaces)
+        : undefined,
       updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : undefined,
     };
   } catch {
@@ -258,7 +323,10 @@ const persistRuntimeConfig = (config: Required<TopAiRuntimeConfig>): void => {
     instructionIncludePatterns: config.instructionIncludePatterns,
     workspaceScopeKey: config.workspaceScopeKey,
     workspaceScopeLabel: config.workspaceScopeLabel,
+    projectFingerprint: config.projectFingerprint,
     workspaceScopeWorkspaceId: config.workspaceScopeWorkspaceId,
+    workspaceScopeLastWorkspaceId: config.workspaceScopeLastWorkspaceId,
+    codeWorkspaces: config.codeWorkspaces,
     updatedAt: config.updatedAt,
   };
   localStorage.setItem(RUNTIME_CONFIG_STORAGE_KEY, JSON.stringify(persisted));
@@ -284,6 +352,8 @@ const applyApiRuntimeConfig = (
   initNavigation(createExtensionNavigation(config.apiBaseUrl));
   if (config.workspaceScopeWorkspaceId.trim().length > 0) {
     localStorage.setItem(WORKSPACE_SCOPE_STORAGE_KEY, config.workspaceScopeWorkspaceId);
+  } else {
+    localStorage.removeItem(WORKSPACE_SCOPE_STORAGE_KEY);
   }
 };
 
@@ -483,10 +553,21 @@ const normalizeConfigSetPayload = (
       typeof raw.workspaceScopeLabel === 'string'
         ? raw.workspaceScopeLabel
         : current.workspaceScopeLabel,
+    projectFingerprint:
+      typeof raw.projectFingerprint === 'string'
+        ? raw.projectFingerprint
+        : current.projectFingerprint,
     workspaceScopeWorkspaceId:
       typeof raw.workspaceScopeWorkspaceId === 'string'
         ? raw.workspaceScopeWorkspaceId
         : current.workspaceScopeWorkspaceId,
+    workspaceScopeLastWorkspaceId:
+      typeof raw.workspaceScopeLastWorkspaceId === 'string'
+        ? raw.workspaceScopeLastWorkspaceId
+        : current.workspaceScopeLastWorkspaceId,
+    codeWorkspaces: Array.isArray(raw.codeWorkspaces)
+      ? normalizeCodeWorkspaces(raw.codeWorkspaces)
+      : current.codeWorkspaces,
     codexSignInUrl: current.codexSignInUrl,
     updatedAt: Date.now(),
   });
@@ -578,7 +659,11 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
           instructionIncludePatterns: state.config.instructionIncludePatterns,
           workspaceScopeKey: state.config.workspaceScopeKey,
           workspaceScopeLabel: state.config.workspaceScopeLabel,
+          projectFingerprint: state.config.projectFingerprint,
           workspaceScopeWorkspaceId: state.config.workspaceScopeWorkspaceId,
+          workspaceScopeLastWorkspaceId:
+            state.config.workspaceScopeLastWorkspaceId,
+          codeWorkspaces: state.config.codeWorkspaces,
           updatedAt: state.config.updatedAt,
         },
       };
@@ -629,7 +714,11 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
           instructionIncludePatterns: state.config.instructionIncludePatterns,
           workspaceScopeKey: state.config.workspaceScopeKey,
           workspaceScopeLabel: state.config.workspaceScopeLabel,
+          projectFingerprint: state.config.projectFingerprint,
           workspaceScopeWorkspaceId: state.config.workspaceScopeWorkspaceId,
+          workspaceScopeLastWorkspaceId:
+            state.config.workspaceScopeLastWorkspaceId,
+          codeWorkspaces: state.config.codeWorkspaces,
           updatedAt: state.config.updatedAt,
         },
       };
@@ -674,6 +763,132 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
             ? undefined
             : `HTTP ${response.status}: ${response.statusText}`,
         };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+
+    if (type === 'extension_workspace_mapping_refresh') {
+      if (!state.bridge) {
+        return { ok: false, error: 'Workspace mapping runtime is unavailable.' };
+      }
+      try {
+        const synced = await state.bridge.request<Partial<TopAiRuntimeConfig>>(
+          'runtime.workspace.mapping.get',
+          {
+            projectFingerprint: state.config.projectFingerprint,
+          },
+        );
+        state.config = normalizeRuntimeConfig({
+          ...state.config,
+          ...(synced ?? {}),
+          updatedAt: Date.now(),
+        });
+        persistRuntimeConfig(state.config);
+        applyApiRuntimeConfig(state.config);
+        return { ok: true, config: state.config };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+
+    if (type === 'extension_workspace_mapping_set') {
+      if (!state.bridge) {
+        return { ok: false, error: 'Workspace mapping runtime is unavailable.' };
+      }
+      const requestPayload =
+        message.payload && typeof message.payload === 'object'
+          ? (message.payload as { workspaceId?: unknown })
+          : {};
+      const workspaceId =
+        typeof requestPayload.workspaceId === 'string'
+          ? requestPayload.workspaceId.trim()
+          : '';
+      if (!workspaceId) {
+        return { ok: false, error: 'workspaceId is required.' };
+      }
+      try {
+        const synced = await state.bridge.request<Partial<TopAiRuntimeConfig>>(
+          'runtime.workspace.mapping.set',
+          {
+            projectFingerprint: state.config.projectFingerprint,
+            workspaceId,
+          },
+        );
+        state.config = normalizeRuntimeConfig({
+          ...state.config,
+          ...(synced ?? {}),
+          updatedAt: Date.now(),
+        });
+        persistRuntimeConfig(state.config);
+        applyApiRuntimeConfig(state.config);
+        return { ok: true, config: state.config };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+
+    if (type === 'extension_workspace_mapping_create') {
+      if (!state.bridge) {
+        return { ok: false, error: 'Workspace mapping runtime is unavailable.' };
+      }
+      const requestPayload =
+        message.payload && typeof message.payload === 'object'
+          ? (message.payload as { name?: unknown })
+          : {};
+      const name = typeof requestPayload.name === 'string' ? requestPayload.name.trim() : '';
+      try {
+        const synced = await state.bridge.request<Partial<TopAiRuntimeConfig>>(
+          'runtime.workspace.mapping.create',
+          {
+            projectFingerprint: state.config.projectFingerprint,
+            ...(name ? { name } : {}),
+          },
+        );
+        state.config = normalizeRuntimeConfig({
+          ...state.config,
+          ...(synced ?? {}),
+          updatedAt: Date.now(),
+        });
+        persistRuntimeConfig(state.config);
+        applyApiRuntimeConfig(state.config);
+        return { ok: true, config: state.config };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+
+    if (type === 'extension_workspace_mapping_not_now') {
+      if (!state.bridge) {
+        return { ok: false, error: 'Workspace mapping runtime is unavailable.' };
+      }
+      try {
+        const synced = await state.bridge.request<Partial<TopAiRuntimeConfig>>(
+          'runtime.workspace.mapping.not_now',
+          {
+            projectFingerprint: state.config.projectFingerprint,
+          },
+        );
+        state.config = normalizeRuntimeConfig({
+          ...state.config,
+          ...(synced ?? {}),
+          updatedAt: Date.now(),
+        });
+        persistRuntimeConfig(state.config);
+        applyApiRuntimeConfig(state.config);
+        return { ok: true, config: state.config };
       } catch (error) {
         return {
           ok: false,
