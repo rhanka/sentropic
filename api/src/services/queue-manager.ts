@@ -31,6 +31,7 @@ import {
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
+import type { VsCodeCodeAgentRuntimePayload } from './chat-service';
 import type { StreamEventType } from './openai';
 import {
   deleteObject,
@@ -341,6 +342,7 @@ export interface ChatMessageJobData {
     description: string;
     parameters: Record<string, unknown>;
   }>;
+  vscodeCodeAgent?: VsCodeCodeAgentRuntimePayload;
   resumeFrom?: {
     previousResponseId: string;
     toolOutputs: Array<{ callId: string; output: string }>;
@@ -2407,6 +2409,7 @@ export class QueueManager {
       contexts,
       tools,
       localToolDefinitions,
+      vscodeCodeAgent,
       resumeFrom,
       locale,
     } = data;
@@ -2420,6 +2423,7 @@ export class QueueManager {
       contexts,
       tools,
       localToolDefinitions,
+      vscodeCodeAgent,
       resumeFrom,
       locale,
       signal
