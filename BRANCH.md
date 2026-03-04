@@ -315,13 +315,16 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
 - [ ] **Lot 6 — VSCode runtime parity (spec-first before UAT)**
   - [ ] Spec phase (interactive, subject-by-subject)
     - [x] S6-1 Streaming parity in VSCode host (SSE chained proxy, no server-side SSE rewrite, no duplicated render pipeline).
-    - [ ] S6-2 `awaiting_local_tool_results` deadlock handling contract.
     - [ ] S6-3 Checkpoint affordance placement + visibility gating (message actions only, code-delta only).
     - [ ] S6-4 Workspace-per-project model in VSCode mode.
     - [ ] S6-5 VSCode-specific system prompt profile.
+  - [ ] Bug track (UAT-driven, no spec/dev lock before reproducible traces)
+    - [ ] B6-BUG1 Intermittent stall on `Step running: Status: awaiting_local_tool_results` in VSCode host runtime.
+      - [ ] Reproduce during UAT and capture deterministic signature (stream id, tool call id, active local tool, UI state).
+      - [ ] Collect evidence (`make logs-api`, extension host logs, webview console) before defining fix contract.
+      - [ ] Classify root cause (stream transport vs local tool callback vs backend pending-state timeout) before implementation.
   - [ ] DEV phase (after all S6 spec subjects are validated)
     - [ ] Implement S6-1.
-    - [ ] Implement S6-2.
     - [ ] Implement S6-3.
     - [ ] Implement S6-4.
     - [ ] Implement S6-5.
