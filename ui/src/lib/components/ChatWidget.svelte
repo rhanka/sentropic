@@ -35,6 +35,11 @@
     upsertLocalToolPermissionPolicy,
     type LocalToolPermissionPolicyEntry,
   } from '$lib/stores/localTools';
+  import {
+    DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+    resolveCodeAgentPromptProfile,
+    type CodeAgentPromptSource,
+  } from '$lib/vscode/code-agent-profile';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -110,8 +115,11 @@
     appBaseUrl: string;
     wsBaseUrl: string;
     sessionToken: string;
+    codeAgentPromptDefault: string;
     codeAgentPromptGlobal: string;
     codeAgentPromptWorkspace: string;
+    codeAgentPromptEffective: string;
+    codeAgentPromptSource: CodeAgentPromptSource;
     instructionIncludePatterns: string;
     workspaceScopeKey: string;
     workspaceScopeLabel: string;
@@ -141,8 +149,11 @@
       appBaseUrl: 'http://localhost:5173',
       wsBaseUrl: '',
       sessionToken: '',
+      codeAgentPromptDefault: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
       codeAgentPromptGlobal: '',
       codeAgentPromptWorkspace: '',
+      codeAgentPromptEffective: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+      codeAgentPromptSource: 'default',
       instructionIncludePatterns: '',
     },
     prod: {
@@ -150,8 +161,11 @@
       appBaseUrl: 'https://top-ai-ideas.sent-tech.ca',
       wsBaseUrl: '',
       sessionToken: '',
+      codeAgentPromptDefault: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
       codeAgentPromptGlobal: '',
       codeAgentPromptWorkspace: '',
+      codeAgentPromptEffective: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+      codeAgentPromptSource: 'default',
       instructionIncludePatterns: '',
     },
   };
@@ -211,6 +225,9 @@
   let extensionPermissionDraftOrigin = '';
   let extensionPermissionDraftPathPattern = '';
   let extensionPermissionDraftPolicy: 'allow' | 'deny' = 'allow';
+  let extensionCodeAgentPromptDraft = DEFAULT_EXTENSION_CONFIGS.uat.codeAgentPromptEffective;
+  let extensionCodeAgentPromptDraftMode: 'inherit' | 'workspace' = 'inherit';
+  let extensionCodeAgentPromptResetPending = false;
   let extensionConfigForm: ExtensionRuntimeConfig = {
     profile: 'uat',
     ...DEFAULT_EXTENSION_CONFIGS.uat,
@@ -533,6 +550,26 @@
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0);
 
+  const syncExtensionCodeAgentPromptDraftFromConfig = (
+    config: ExtensionRuntimeConfig,
+  ) => {
+    extensionCodeAgentPromptDraft = config.codeAgentPromptEffective;
+    extensionCodeAgentPromptDraftMode =
+      config.codeAgentPromptSource === 'workspace' ? 'workspace' : 'inherit';
+    extensionCodeAgentPromptResetPending = false;
+  };
+
+  const getExtensionCodeAgentInheritedPrompt = (
+    config: ExtensionRuntimeConfig,
+  ): string => {
+    const profile = resolveCodeAgentPromptProfile({
+      workspaceOverride: '',
+      serverOverride: config.codeAgentPromptGlobal,
+      defaultPrompt: config.codeAgentPromptDefault,
+    });
+    return profile.effectivePrompt;
+  };
+
   const normalizeExtensionConfig = (
     raw?: Partial<ExtensionRuntimeConfig> | null,
   ): ExtensionRuntimeConfig => {
@@ -542,8 +579,26 @@
     const appBaseUrl = raw?.appBaseUrl?.trim() || defaults.appBaseUrl;
     const wsBaseUrl = raw?.wsBaseUrl?.trim() || '';
     const sessionToken = raw?.sessionToken?.trim() || '';
+    const codeAgentPromptDefault =
+      raw?.codeAgentPromptDefault?.trim() || defaults.codeAgentPromptDefault;
     const codeAgentPromptGlobal = raw?.codeAgentPromptGlobal ?? '';
     const codeAgentPromptWorkspace = raw?.codeAgentPromptWorkspace ?? '';
+    const promptProfile = resolveCodeAgentPromptProfile({
+      workspaceOverride: codeAgentPromptWorkspace,
+      serverOverride: codeAgentPromptGlobal,
+      defaultPrompt: codeAgentPromptDefault,
+    });
+    const codeAgentPromptEffective =
+      typeof raw?.codeAgentPromptEffective === 'string' &&
+      raw.codeAgentPromptEffective.trim().length > 0
+        ? raw.codeAgentPromptEffective
+        : promptProfile.effectivePrompt;
+    const codeAgentPromptSource =
+      raw?.codeAgentPromptSource === 'workspace' ||
+      raw?.codeAgentPromptSource === 'server' ||
+      raw?.codeAgentPromptSource === 'default'
+        ? raw.codeAgentPromptSource
+        : promptProfile.source;
     const instructionIncludePatterns = formatInstructionIncludePatterns(
       raw?.instructionIncludePatterns,
     );
@@ -555,8 +610,11 @@
       appBaseUrl,
       wsBaseUrl,
       sessionToken,
+      codeAgentPromptDefault,
       codeAgentPromptGlobal,
       codeAgentPromptWorkspace,
+      codeAgentPromptEffective,
+      codeAgentPromptSource,
       instructionIncludePatterns,
       workspaceScopeKey,
       workspaceScopeLabel,
@@ -599,6 +657,7 @@
         return;
       }
       extensionConfigForm = normalizeExtensionConfig(response.config);
+      syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
       syncExtensionApiClientConfig(extensionConfigForm);
       extensionConfigLoaded = true;
       setExtensionConfigStatus($_('chat.extension.status.configLoaded'), 'info');
@@ -616,6 +675,16 @@
   const saveExtensionConfig = async () => {
     if (!isExtensionConfigAvailable()) return;
     if (extensionConfigSaving) return;
+    let nextWorkspacePrompt: string | undefined;
+    if (extensionCodeAgentPromptDraftMode === 'workspace') {
+      nextWorkspacePrompt = extensionCodeAgentPromptDraft;
+    } else if (
+      extensionCodeAgentPromptResetPending ||
+      extensionConfigForm.codeAgentPromptSource === 'workspace'
+    ) {
+      nextWorkspacePrompt = '';
+    }
+
     extensionConfigSaving = true;
     setExtensionConfigStatus($_('chat.extension.status.savingConfig'), 'info');
     try {
@@ -628,8 +697,9 @@
           appBaseUrl: extensionConfigForm.appBaseUrl,
           wsBaseUrl: extensionConfigForm.wsBaseUrl,
           sessionToken: extensionConfigForm.sessionToken,
-          codeAgentPromptGlobal: extensionConfigForm.codeAgentPromptGlobal,
-          codeAgentPromptWorkspace: extensionConfigForm.codeAgentPromptWorkspace,
+          ...(typeof nextWorkspacePrompt === 'string'
+            ? { codeAgentPromptWorkspace: nextWorkspacePrompt }
+            : {}),
           instructionIncludePatterns: parseInstructionIncludePatterns(
             extensionConfigForm.instructionIncludePatterns,
           ),
@@ -648,6 +718,7 @@
         return;
       }
       extensionConfigForm = normalizeExtensionConfig(response.config);
+      syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
       syncExtensionApiClientConfig(extensionConfigForm);
       extensionConfigLoaded = true;
       extensionAuthStatusLoaded = false;
@@ -668,6 +739,22 @@
     } finally {
       extensionConfigSaving = false;
     }
+  };
+
+  const enableExtensionWorkspacePromptOverrideDraft = () => {
+    if (extensionCodeAgentPromptDraftMode === 'workspace') return;
+    extensionCodeAgentPromptDraftMode = 'workspace';
+    extensionCodeAgentPromptResetPending = false;
+    extensionCodeAgentPromptDraft = extensionConfigForm.codeAgentPromptEffective;
+  };
+
+  const resetExtensionWorkspacePromptOverrideDraft = () => {
+    extensionCodeAgentPromptDraftMode = 'inherit';
+    extensionCodeAgentPromptResetPending =
+      extensionConfigForm.codeAgentPromptSource === 'workspace';
+    extensionCodeAgentPromptDraft = getExtensionCodeAgentInheritedPrompt(
+      extensionConfigForm,
+    );
   };
 
   const loadExtensionAuthStatus = async () => {
@@ -1867,50 +1954,84 @@
                       <div class="text-xs font-semibold text-slate-700">
                         {$_('chat.extension.codeAgent.title')}
                       </div>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-[11px] text-slate-500">
+                          {$_('chat.extension.codeAgent.effectivePromptSource')}
+                        </span>
+                        <span
+                          class={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                            extensionConfigForm.codeAgentPromptSource === 'workspace'
+                              ? 'bg-primary/15 text-primary'
+                              : extensionConfigForm.codeAgentPromptSource === 'server'
+                                ? 'bg-slate-200 text-slate-700'
+                                : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {extensionConfigForm.codeAgentPromptSource === 'workspace'
+                            ? $_('chat.extension.codeAgent.sourceWorkspace')
+                            : extensionConfigForm.codeAgentPromptSource === 'server'
+                              ? $_('chat.extension.codeAgent.sourceServer')
+                              : $_('chat.extension.codeAgent.sourceDefault')}
+                        </span>
+                      </div>
                       <div class="space-y-1">
                         <label
                           class="block text-[11px] text-slate-600"
-                          for="extension-config-code-agent-global"
+                          for="extension-config-code-agent-effective"
                         >
-                          {$_('chat.extension.codeAgent.globalPrompt')}
+                          {$_('chat.extension.codeAgent.effectivePrompt')}
                         </label>
                         <textarea
-                          id="extension-config-code-agent-global"
+                          id="extension-config-code-agent-effective"
                           class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                          bind:value={extensionConfigForm.codeAgentPromptGlobal}
+                          bind:value={extensionCodeAgentPromptDraft}
                           rows={5}
+                          readonly={extensionCodeAgentPromptDraftMode !== 'workspace'}
                           disabled={extensionConfigLoading ||
                             extensionConfigSaving ||
                             extensionConfigTesting}
                         ></textarea>
                       </div>
-                      <div class="space-y-1">
-                        <label
-                          class="block text-[11px] text-slate-600"
-                          for="extension-config-code-agent-workspace"
-                        >
-                          {$_('chat.extension.codeAgent.workspacePrompt')}
-                        </label>
-                        <textarea
-                          id="extension-config-code-agent-workspace"
-                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                          bind:value={extensionConfigForm.codeAgentPromptWorkspace}
-                          rows={5}
+                      <p class="text-[11px] text-slate-500">
+                        {$_('chat.extension.codeAgent.workspacePromptHint', {
+                          values: {
+                            scope:
+                              extensionConfigForm.workspaceScopeLabel ||
+                              extensionConfigForm.workspaceScopeKey ||
+                              'workspace',
+                          },
+                        })}
+                      </p>
+                      {#if extensionCodeAgentPromptDraftMode !== 'workspace'}
+                        <button
+                          class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          type="button"
+                          on:click={enableExtensionWorkspacePromptOverrideDraft}
                           disabled={extensionConfigLoading ||
                             extensionConfigSaving ||
                             extensionConfigTesting}
-                        ></textarea>
-                        <p class="text-[11px] text-slate-500">
-                          {$_('chat.extension.codeAgent.workspacePromptHint', {
-                            values: {
-                              scope:
-                                extensionConfigForm.workspaceScopeLabel ||
-                                extensionConfigForm.workspaceScopeKey ||
-                                'workspace',
-                            },
-                          })}
-                        </p>
-                      </div>
+                        >
+                          {$_('chat.extension.codeAgent.createWorkspaceOverride')}
+                        </button>
+                      {:else}
+                        <div class="flex items-center gap-2">
+                          <button
+                            class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            type="button"
+                            on:click={resetExtensionWorkspacePromptOverrideDraft}
+                            disabled={extensionConfigLoading ||
+                              extensionConfigSaving ||
+                              extensionConfigTesting}
+                          >
+                            {$_('chat.extension.codeAgent.resetWorkspaceOverride')}
+                          </button>
+                          <span class="text-[11px] text-slate-500">
+                            {extensionCodeAgentPromptResetPending
+                              ? $_('chat.extension.codeAgent.resetPending')
+                              : $_('chat.extension.codeAgent.workspaceOverrideActive')}
+                          </span>
+                        </div>
+                      {/if}
                       <div class="space-y-1">
                         <label
                           class="block text-[11px] text-slate-600"

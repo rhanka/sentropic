@@ -13,6 +13,11 @@ import {
   createWindowVsCodeBridgeTransport,
   type VsCodeBridge,
 } from './vscode-bridge';
+import {
+  DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+  resolveCodeAgentPromptProfile,
+  type CodeAgentPromptSource,
+} from '../src/lib/vscode/code-agent-profile';
 
 import en from '../src/locales/en.json';
 import fr from '../src/locales/fr.json';
@@ -24,8 +29,11 @@ type TopAiRuntimeConfig = {
   wsBaseUrl?: string;
   sessionToken?: string;
   codexSignInUrl?: string;
+  codeAgentPromptDefault?: string;
   codeAgentPromptGlobal?: string;
   codeAgentPromptWorkspace?: string;
+  codeAgentPromptEffective?: string;
+  codeAgentPromptSource?: CodeAgentPromptSource;
   instructionIncludePatterns?: string[];
   workspaceScopeKey?: string;
   workspaceScopeLabel?: string;
@@ -37,8 +45,11 @@ type PersistedRuntimeConfig = {
   apiBaseUrl?: string;
   appBaseUrl?: string;
   wsBaseUrl?: string;
+  codeAgentPromptDefault?: string;
   codeAgentPromptGlobal?: string;
   codeAgentPromptWorkspace?: string;
+  codeAgentPromptEffective?: string;
+  codeAgentPromptSource?: CodeAgentPromptSource;
   instructionIncludePatterns?: string[];
   workspaceScopeKey?: string;
   workspaceScopeLabel?: string;
@@ -67,8 +78,11 @@ const DEFAULT_RUNTIME_CONFIG: Required<TopAiRuntimeConfig> = {
   wsBaseUrl: '',
   sessionToken: '',
   codexSignInUrl: 'https://chatgpt.com/auth/login?next=/codex',
+  codeAgentPromptDefault: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
   codeAgentPromptGlobal: '',
   codeAgentPromptWorkspace: '',
+  codeAgentPromptEffective: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+  codeAgentPromptSource: 'default',
   instructionIncludePatterns: [],
   workspaceScopeKey: '',
   workspaceScopeLabel: '',
@@ -117,8 +131,27 @@ const normalizeRuntimeConfig = (
   const sessionToken = raw?.sessionToken?.trim() || '';
   const codexSignInUrl =
     raw?.codexSignInUrl?.trim() || DEFAULT_RUNTIME_CONFIG.codexSignInUrl;
+  const codeAgentPromptDefault =
+    raw?.codeAgentPromptDefault?.trim() ||
+    DEFAULT_RUNTIME_CONFIG.codeAgentPromptDefault;
   const codeAgentPromptGlobal = raw?.codeAgentPromptGlobal ?? '';
   const codeAgentPromptWorkspace = raw?.codeAgentPromptWorkspace ?? '';
+  const promptProfile = resolveCodeAgentPromptProfile({
+    workspaceOverride: codeAgentPromptWorkspace,
+    serverOverride: codeAgentPromptGlobal,
+    defaultPrompt: codeAgentPromptDefault,
+  });
+  const codeAgentPromptEffective =
+    typeof raw?.codeAgentPromptEffective === 'string' &&
+    raw.codeAgentPromptEffective.trim().length > 0
+      ? raw.codeAgentPromptEffective
+      : promptProfile.effectivePrompt;
+  const codeAgentPromptSource =
+    raw?.codeAgentPromptSource === 'workspace' ||
+    raw?.codeAgentPromptSource === 'server' ||
+    raw?.codeAgentPromptSource === 'default'
+      ? raw.codeAgentPromptSource
+      : promptProfile.source;
   const instructionIncludePatterns = Array.isArray(raw?.instructionIncludePatterns)
     ? raw.instructionIncludePatterns
         .filter((entry): entry is string => typeof entry === 'string')
@@ -135,8 +168,11 @@ const normalizeRuntimeConfig = (
     wsBaseUrl,
     sessionToken,
     codexSignInUrl,
+    codeAgentPromptDefault,
     codeAgentPromptGlobal,
     codeAgentPromptWorkspace,
+    codeAgentPromptEffective,
+    codeAgentPromptSource,
     instructionIncludePatterns,
     workspaceScopeKey,
     workspaceScopeLabel,
@@ -155,6 +191,10 @@ const loadPersistedRuntimeConfig = (): PersistedRuntimeConfig => {
       apiBaseUrl: typeof parsed.apiBaseUrl === 'string' ? parsed.apiBaseUrl : undefined,
       appBaseUrl: typeof parsed.appBaseUrl === 'string' ? parsed.appBaseUrl : undefined,
       wsBaseUrl: typeof parsed.wsBaseUrl === 'string' ? parsed.wsBaseUrl : undefined,
+      codeAgentPromptDefault:
+        typeof parsed.codeAgentPromptDefault === 'string'
+          ? parsed.codeAgentPromptDefault
+          : undefined,
       codeAgentPromptGlobal:
         typeof parsed.codeAgentPromptGlobal === 'string'
           ? parsed.codeAgentPromptGlobal
@@ -162,6 +202,16 @@ const loadPersistedRuntimeConfig = (): PersistedRuntimeConfig => {
       codeAgentPromptWorkspace:
         typeof parsed.codeAgentPromptWorkspace === 'string'
           ? parsed.codeAgentPromptWorkspace
+          : undefined,
+      codeAgentPromptEffective:
+        typeof parsed.codeAgentPromptEffective === 'string'
+          ? parsed.codeAgentPromptEffective
+          : undefined,
+      codeAgentPromptSource:
+        parsed.codeAgentPromptSource === 'workspace' ||
+        parsed.codeAgentPromptSource === 'server' ||
+        parsed.codeAgentPromptSource === 'default'
+          ? parsed.codeAgentPromptSource
           : undefined,
       instructionIncludePatterns: Array.isArray(parsed.instructionIncludePatterns)
         ? parsed.instructionIncludePatterns.filter(
@@ -190,8 +240,11 @@ const persistRuntimeConfig = (config: Required<TopAiRuntimeConfig>): void => {
     apiBaseUrl: config.apiBaseUrl,
     appBaseUrl: config.appBaseUrl,
     wsBaseUrl: config.wsBaseUrl,
+    codeAgentPromptDefault: config.codeAgentPromptDefault,
     codeAgentPromptGlobal: config.codeAgentPromptGlobal,
     codeAgentPromptWorkspace: config.codeAgentPromptWorkspace,
+    codeAgentPromptEffective: config.codeAgentPromptEffective,
+    codeAgentPromptSource: config.codeAgentPromptSource,
     instructionIncludePatterns: config.instructionIncludePatterns,
     workspaceScopeKey: config.workspaceScopeKey,
     workspaceScopeLabel: config.workspaceScopeLabel,
@@ -391,6 +444,10 @@ const normalizeConfigSetPayload = (
       typeof raw.sessionToken === 'string'
         ? raw.sessionToken
         : current.sessionToken,
+    codeAgentPromptDefault:
+      typeof raw.codeAgentPromptDefault === 'string'
+        ? raw.codeAgentPromptDefault
+        : current.codeAgentPromptDefault,
     codeAgentPromptGlobal:
       typeof raw.codeAgentPromptGlobal === 'string'
         ? raw.codeAgentPromptGlobal
@@ -495,8 +552,11 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
           appBaseUrl: state.config.appBaseUrl,
           wsBaseUrl: state.config.wsBaseUrl,
           sessionToken: state.config.sessionToken,
+          codeAgentPromptDefault: state.config.codeAgentPromptDefault,
           codeAgentPromptGlobal: state.config.codeAgentPromptGlobal,
           codeAgentPromptWorkspace: state.config.codeAgentPromptWorkspace,
+          codeAgentPromptEffective: state.config.codeAgentPromptEffective,
+          codeAgentPromptSource: state.config.codeAgentPromptSource,
           instructionIncludePatterns: state.config.instructionIncludePatterns,
           workspaceScopeKey: state.config.workspaceScopeKey,
           workspaceScopeLabel: state.config.workspaceScopeLabel,
@@ -516,6 +576,7 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
             appBaseUrl: nextConfig.appBaseUrl,
             wsBaseUrl: nextConfig.wsBaseUrl,
             sessionToken: nextConfig.sessionToken,
+            codeAgentPromptDefault: nextConfig.codeAgentPromptDefault,
             codeAgentPromptGlobal: nextConfig.codeAgentPromptGlobal,
             codeAgentPromptWorkspace: nextConfig.codeAgentPromptWorkspace,
             instructionIncludePatterns: nextConfig.instructionIncludePatterns,
@@ -541,8 +602,11 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
           appBaseUrl: state.config.appBaseUrl,
           wsBaseUrl: state.config.wsBaseUrl,
           sessionToken: state.config.sessionToken,
+          codeAgentPromptDefault: state.config.codeAgentPromptDefault,
           codeAgentPromptGlobal: state.config.codeAgentPromptGlobal,
           codeAgentPromptWorkspace: state.config.codeAgentPromptWorkspace,
+          codeAgentPromptEffective: state.config.codeAgentPromptEffective,
+          codeAgentPromptSource: state.config.codeAgentPromptSource,
           instructionIncludePatterns: state.config.instructionIncludePatterns,
           workspaceScopeKey: state.config.workspaceScopeKey,
           workspaceScopeLabel: state.config.workspaceScopeLabel,
