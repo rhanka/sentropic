@@ -403,6 +403,49 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - visibility requires effective code/object delta (`hasCodeDelta=true` on bound checkpoint),
   - when `hasCodeDelta=false`, no button, no banner, no restore prompt.
 
+### 4.17 Lot 6 - Subject 4 (workspace-per-project in VSCode, with validated UI flow)
+- Decision locked: option B (`project_fingerprint -> workspaceId`) stored server-side in user-scoped settings (no new DB table in BR-05).
+
+- Fingerprint contract:
+  - preferred source: git root + normalized remote URL,
+  - fallback source: normalized workspace folder URI/path hash.
+
+- Workspace typing constraint:
+  - VSCode mapping only targets workspaces typed as `code`.
+  - if no `code` workspace exists for the user, creation of a `code` workspace is mandatory before chat usage continues.
+
+- Token-first sequencing (mandatory):
+  - when token is missing/invalid, show existing blocking screen (`An extension token is required before...`) and route operator to settings.
+  - after successful token connection, immediately fetch `code` workspaces + mapping state and resolve project association.
+
+- Resolution contract (post-token):
+  - extension computes `project_fingerprint` and requests mapping resolution,
+  - if mapping exists and user still has access, auto-select mapped workspace,
+  - if mapping missing, enter project-onboarding prompt flow,
+  - if mapped workspace is no longer accessible, invalidate mapping and enter project-onboarding prompt flow.
+
+- UI contract (mandatory, locked):
+  - reuse the same blocking card pattern as token-required screen for project onboarding prompt.
+  - onboarding message:
+    - title: `New code base detected`,
+    - body: `A workspace creation is recommended.`
+  - actions:
+    - `Create code workspace`,
+    - `Use existing code workspace` (only if at least one `code` workspace exists),
+    - `Not now` (only if at least one `code` workspace exists).
+  - `Not now` behavior:
+    - fallback to last used `code` workspace,
+    - open settings workspace section for explicit operator choice.
+  - if zero `code` workspace:
+    - onboarding is blocking,
+    - only creation path is allowed.
+  - settings behavior:
+    - workspace selector for VSCode mode lists only `code` workspaces.
+
+- API/behavior constraints:
+  - no schema migration for BR-05 (settings-based persistence),
+  - workspace selection for VSCode requests must prefer resolved project mapping over generic default workspace fallback.
+
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
 - Claude Code: auto compact near context limits + explicit manual compaction command.

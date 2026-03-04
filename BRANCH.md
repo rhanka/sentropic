@@ -316,7 +316,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - [ ] Spec phase (interactive, subject-by-subject)
     - [x] S6-1 Streaming parity in VSCode host (SSE chained proxy, no server-side SSE rewrite, no duplicated render pipeline).
     - [x] S6-3 Checkpoint affordance placement + visibility gating (message actions only, code-delta only; legacy composer/global checkpoint controls explicitly forbidden).
-    - [ ] S6-4 Workspace-per-project model in VSCode mode.
+    - [x] S6-4 Workspace-per-project model in VSCode mode (server-side mapping only; UI not yet validated).
+    - [x] S6-4b UI contract for project-workspace mapping (token-first flow, reused blocking card `New code base detected`, `code` workspace typing constraint, `Not now` fallback behavior).
     - [ ] S6-5 VSCode-specific system prompt profile.
   - [ ] Bug track (UAT-driven, no spec/dev lock before reproducible traces)
     - [ ] B6-BUG1 Intermittent stall on `Step running: Status: awaiting_local_tool_results` in VSCode host runtime.
@@ -331,6 +332,15 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] On restore-affordance click, open restore banner (Chrome-style prompt), not native modal.
       - [ ] On assistant `retry`, route through the same restore-banner gate when rollback is available; otherwise retry directly.
     - [ ] Implement S6-4.
+      - [ ] Compute VSCode `project_fingerprint` (git-based preferred, folder-based fallback) and resolve mapping via API.
+      - [ ] Persist `project_fingerprint -> workspaceId` mapping in user-scoped settings (no new DB table).
+      - [ ] Handle multi-root active folder context in mapping/UI state.
+    - [ ] Implement S6-4b (UI after explicit validation)
+      - [ ] Reuse token-required blocking card pattern for project onboarding prompt (`New code base detected...`).
+      - [ ] Enforce token-first flow: project-workspace onboarding runs only after token connection succeeds.
+      - [ ] Enforce workspace typing: show/select only `code` workspaces in VSCode settings flow.
+      - [ ] Implement `Not now` fallback to last `code` workspace + open settings section.
+      - [ ] Enforce mandatory creation path when user has zero `code` workspaces.
     - [ ] Implement S6-5.
   - [ ] Lot gate (scoped only)
     - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
@@ -381,6 +391,12 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] Validate restore banner appears on message restore action only when code/object delta exists.
     - [ ] Validate assistant retry path triggers the same restore banner when rollback is available.
     - [ ] Validate no native `confirm()` modal is used for checkpoint restore.
+    - [ ] Validate VSCode project-workspace mapping behavior (backend/runtime path only).
+    - [ ] Validate VSCode project-workspace UI flow (only after S6-4b validation).
+      - [ ] Token-missing path shows token-required screen first and routes to settings.
+      - [ ] After token connect, unmatched project shows reused blocking card (`New code base detected...`).
+      - [ ] `Not now` appears only when at least one `code` workspace exists, falls back to last `code` workspace, and opens settings.
+      - [ ] With zero `code` workspaces, creation is mandatory (no bypass).
     - [ ] Validate code tools baseline behavior (`bash`, `ls`, `grep/rg`, file read/edit, git read) with permission policy checks.
     - [ ] Validate bash policy specifics:
       - [ ] `git add` and `git push` can resolve differently by mono/bigram rules,
