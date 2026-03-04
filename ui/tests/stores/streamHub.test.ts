@@ -518,8 +518,11 @@ describe('streamHub', () => {
       const callback = vi.fn();
       streamHub.setStream('test-key-vscode', 'stream-vscode-1', callback);
 
-      await vi.advanceTimersByTimeAsync(220);
-      await vi.advanceTimersByTimeAsync(260);
+      // First poll starts quickly, subsequent polls are scheduled dynamically.
+      // Advance in bounded windows to avoid timing flakiness across environments.
+      for (let i = 0; i < 8; i += 1) {
+        await vi.advanceTimersByTimeAsync(250);
+      }
 
       expect(global.EventSource).not.toHaveBeenCalled();
       expect(fetchMock).toHaveBeenCalled();
