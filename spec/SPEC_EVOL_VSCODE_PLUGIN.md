@@ -558,6 +558,78 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - editing an inherited prompt must trigger explicit creation of workspace override,
   - reset action (`Revenir à l’héritage`) removes workspace override and rehydrates inherited value.
 
+### 4.21 Lot 6 - Subject 8 (VSCode E2E runtime lane, naming cutover, CI contract)
+- Decision locked from interactive review:
+  - no backward-compatibility aliases for renamed targets,
+  - CI primary mode = real stack (`api + ui`), mock mode reserved for targeted local/debug scenarios,
+  - dedicated VSCode E2E environment lane (`e2e-vscode-*`),
+  - strict path-based CI trigger, required status check, 7-day artifact retention,
+  - scoped execution required (`E2E_SPEC` file-level), no grouped/global runs.
+
+- Naming cutover contract (direct migration, no alias):
+  - canonical build targets:
+    - `build-ext-vscode` (replaces `vscode-ext`),
+    - `build-ext-chrome` (replaces `build-ext`).
+  - canonical VSCode E2E targets:
+    - `up-e2e-vscode`,
+    - `down-e2e-vscode`,
+    - `ps-e2e-vscode`,
+    - `logs-e2e-vscode`,
+    - `test-e2e-vscode`.
+  - removed targets must fail fast with explicit guidance in release notes/docs (no silent fallback path).
+
+- Environment lane contract:
+  - new lane naming: `ENV=e2e-vscode-<branch>`.
+  - default dedicated ports for this lane:
+    - `API_PORT=8788`,
+    - `UI_PORT=5174`,
+    - `OPENVSCODE_PORT=3115`.
+  - lane isolation goal:
+    - avoid collisions with `dev` and regular `e2e` lanes,
+    - keep VSCode runtime diagnostics independent from web E2E diagnostics.
+
+- Docker compose contract:
+  - add dedicated file `docker-compose.e2e-vscode.yml`.
+  - service set:
+    - `openvscode` (OpenVSCode server host),
+    - `e2e-vscode` (Playwright runner),
+    - optional `mock-api-vscode` (targeted deterministic stream debugging),
+    - reuse base `api`, `ui`, `postgres` from existing compose stack.
+  - `openvscode` is mandatory host for VSCode runtime tests (no `code-server` variant in BR-05).
+
+- CI contract (`e2e-vscode` workflow/job):
+  - strict path trigger:
+    - `ui/vscode-ext/**`,
+    - `ui/src/lib/components/ChatWidget.svelte`,
+    - `ui/src/lib/components/ChatPanel.svelte`,
+    - `ui/src/lib/stores/streamHub.ts`,
+    - `ui/src/lib/utils/api.ts`,
+    - `api/src/routes/api/chat.ts`,
+    - `api/src/routes/api/streams.ts`,
+    - `Makefile`,
+    - `docker-compose*.yml`,
+    - `e2e/tests/vscode/**`.
+  - required check policy:
+    - `e2e-vscode` is blocking for impacted PRs.
+  - execution mode:
+    - primary = real mode (`api + ui`),
+    - mock mode not part of required default CI path.
+  - artifact retention:
+    - traces, screenshots, videos, and OpenVSCode logs retained for 7 days.
+
+- Test contract:
+  - `test-e2e-vscode` requires `E2E_SPEC` and runs file-scoped VSCode specs only.
+  - pass criteria for streaming parity:
+    - incremental rendering observed in VSCode host timeline,
+    - ordered stream consumption without full-message-only flush behavior,
+    - no persistent auth/CORS regression in VSCode path.
+
+- Non-regression contract (mandatory):
+  - when touching VSCode bridge/stream/auth code, execute:
+    - at least one VSCode scoped E2E (`test-e2e-vscode`),
+    - at least one web scoped E2E (`test-e2e`) on impacted chat/stream area,
+    - scoped API/UI tests tied to modified files.
+
 
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
