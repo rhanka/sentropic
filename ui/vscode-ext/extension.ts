@@ -182,17 +182,19 @@ const performRuntimeHttpRequest = async (
     throw new Error('runtime.http.request rejects cross-origin targets.');
   }
 
-  const requestHeaders: Record<string, string> = {
-    ...(payload.headers ?? {}),
-  };
-
+  const normalizedHeaders = new Headers(payload.headers ?? {});
+  // Always canonicalize Authorization from runtime config to avoid duplicate/malformed JWT headers.
+  normalizedHeaders.delete('authorization');
   if (runtimeConfig.sessionToken.trim()) {
-    requestHeaders.Authorization = `Bearer ${runtimeConfig.sessionToken.trim()}`;
+    normalizedHeaders.set(
+      'authorization',
+      `Bearer ${runtimeConfig.sessionToken.trim()}`,
+    );
   }
 
   const response = await fetch(targetUrl.toString(), {
     method,
-    headers: requestHeaders,
+    headers: normalizedHeaders,
     body:
       typeof payload.bodyText === 'string' && method !== 'GET' && method !== 'HEAD'
         ? payload.bodyText
