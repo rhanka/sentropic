@@ -123,6 +123,7 @@
     instructionIncludePatterns: string;
     workspaceScopeKey: string;
     workspaceScopeLabel: string;
+    workspaceScopeWorkspaceId: string;
     updatedAt?: number;
   };
   type ExtensionConfigStatusKind = 'info' | 'ok' | 'error';
@@ -155,6 +156,7 @@
       codeAgentPromptEffective: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
       codeAgentPromptSource: 'default',
       instructionIncludePatterns: '',
+      workspaceScopeWorkspaceId: '',
     },
     prod: {
       apiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca/api/v1',
@@ -167,6 +169,7 @@
       codeAgentPromptEffective: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
       codeAgentPromptSource: 'default',
       instructionIncludePatterns: '',
+      workspaceScopeWorkspaceId: '',
     },
   };
   let displayMode: DisplayMode = 'floating';
@@ -234,6 +237,7 @@
     ...DEFAULT_EXTENSION_CONFIGS.uat,
     workspaceScopeKey: '',
     workspaceScopeLabel: '',
+    workspaceScopeWorkspaceId: '',
   };
   let isPluginMode = false;
   const isExtensionRuntime = () => {
@@ -614,6 +618,8 @@
     );
     const workspaceScopeKey = raw?.workspaceScopeKey?.trim() || '';
     const workspaceScopeLabel = raw?.workspaceScopeLabel?.trim() || '';
+    const workspaceScopeWorkspaceId =
+      raw?.workspaceScopeWorkspaceId?.trim() || '';
     return {
       profile,
       apiBaseUrl,
@@ -628,6 +634,7 @@
       instructionIncludePatterns,
       workspaceScopeKey,
       workspaceScopeLabel,
+      workspaceScopeWorkspaceId,
       updatedAt:
         typeof raw?.updatedAt === 'number' ? raw.updatedAt : Date.now(),
     };
@@ -2139,6 +2146,11 @@
                       {#if extensionConfigForm.workspaceScopeKey}
                         <div class="text-[11px] text-slate-500 break-all">
                           {$_('chat.extension.workspaceScopeKey')}: {extensionConfigForm.workspaceScopeKey}
+                        </div>
+                      {/if}
+                      {#if extensionConfigForm.workspaceScopeWorkspaceId}
+                        <div class="text-[11px] text-slate-500 break-all">
+                          {$_('chat.extension.workspaceMappedWorkspace')}: {extensionConfigForm.workspaceScopeWorkspaceId}
                         </div>
                       {/if}
                     </div>

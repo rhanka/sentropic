@@ -933,6 +933,7 @@
       "workspaceConfiguration": "Workspace configuration",
       "workspaceScope": "Detected project scope",
       "workspaceScopeKey": "Scope key",
+      "workspaceMappedWorkspace": "Mapped workspace",
       "workspaceScopeNotDetected": "No project scope detected yet.",
       "apiBaseUrl": "API Base URL",
       "appBaseUrl": "App Base URL",

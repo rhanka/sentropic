@@ -37,6 +37,7 @@ type TopAiRuntimeConfig = {
   instructionIncludePatterns?: string[];
   workspaceScopeKey?: string;
   workspaceScopeLabel?: string;
+  workspaceScopeWorkspaceId?: string;
   updatedAt?: number;
 };
 
@@ -53,6 +54,7 @@ type PersistedRuntimeConfig = {
   instructionIncludePatterns?: string[];
   workspaceScopeKey?: string;
   workspaceScopeLabel?: string;
+  workspaceScopeWorkspaceId?: string;
   updatedAt?: number;
 };
 
@@ -63,6 +65,7 @@ declare global {
 }
 
 const RUNTIME_CONFIG_STORAGE_KEY = 'topai.vscode.runtime.config';
+const WORKSPACE_SCOPE_STORAGE_KEY = 'workspaceScopeId';
 const buildEnv = (import.meta as ImportMeta & {
   env?: Record<string, string | undefined>;
 }).env;
@@ -86,6 +89,7 @@ const DEFAULT_RUNTIME_CONFIG: Required<TopAiRuntimeConfig> = {
   instructionIncludePatterns: [],
   workspaceScopeKey: '',
   workspaceScopeLabel: '',
+  workspaceScopeWorkspaceId: '',
   updatedAt: Date.now(),
 };
 
@@ -160,6 +164,7 @@ const normalizeRuntimeConfig = (
     : DEFAULT_RUNTIME_CONFIG.instructionIncludePatterns;
   const workspaceScopeKey = raw?.workspaceScopeKey?.trim() || '';
   const workspaceScopeLabel = raw?.workspaceScopeLabel?.trim() || '';
+  const workspaceScopeWorkspaceId = raw?.workspaceScopeWorkspaceId?.trim() || '';
 
   return {
     profile,
@@ -176,6 +181,7 @@ const normalizeRuntimeConfig = (
     instructionIncludePatterns,
     workspaceScopeKey,
     workspaceScopeLabel,
+    workspaceScopeWorkspaceId,
     updatedAt:
       typeof raw?.updatedAt === 'number' ? raw.updatedAt : Date.now(),
   };
@@ -227,6 +233,10 @@ const loadPersistedRuntimeConfig = (): PersistedRuntimeConfig => {
         typeof parsed.workspaceScopeLabel === 'string'
           ? parsed.workspaceScopeLabel
           : undefined,
+      workspaceScopeWorkspaceId:
+        typeof parsed.workspaceScopeWorkspaceId === 'string'
+          ? parsed.workspaceScopeWorkspaceId
+          : undefined,
       updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : undefined,
     };
   } catch {
@@ -248,6 +258,7 @@ const persistRuntimeConfig = (config: Required<TopAiRuntimeConfig>): void => {
     instructionIncludePatterns: config.instructionIncludePatterns,
     workspaceScopeKey: config.workspaceScopeKey,
     workspaceScopeLabel: config.workspaceScopeLabel,
+    workspaceScopeWorkspaceId: config.workspaceScopeWorkspaceId,
     updatedAt: config.updatedAt,
   };
   localStorage.setItem(RUNTIME_CONFIG_STORAGE_KEY, JSON.stringify(persisted));
@@ -271,6 +282,9 @@ const applyApiRuntimeConfig = (
     authToken: config.sessionToken || undefined,
   });
   initNavigation(createExtensionNavigation(config.apiBaseUrl));
+  if (config.workspaceScopeWorkspaceId.trim().length > 0) {
+    localStorage.setItem(WORKSPACE_SCOPE_STORAGE_KEY, config.workspaceScopeWorkspaceId);
+  }
 };
 
 const installBridgeApiFetchProxy = (state: RuntimeState): void => {
@@ -469,6 +483,10 @@ const normalizeConfigSetPayload = (
       typeof raw.workspaceScopeLabel === 'string'
         ? raw.workspaceScopeLabel
         : current.workspaceScopeLabel,
+    workspaceScopeWorkspaceId:
+      typeof raw.workspaceScopeWorkspaceId === 'string'
+        ? raw.workspaceScopeWorkspaceId
+        : current.workspaceScopeWorkspaceId,
     codexSignInUrl: current.codexSignInUrl,
     updatedAt: Date.now(),
   });
@@ -560,6 +578,7 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
           instructionIncludePatterns: state.config.instructionIncludePatterns,
           workspaceScopeKey: state.config.workspaceScopeKey,
           workspaceScopeLabel: state.config.workspaceScopeLabel,
+          workspaceScopeWorkspaceId: state.config.workspaceScopeWorkspaceId,
           updatedAt: state.config.updatedAt,
         },
       };
@@ -610,6 +629,7 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
           instructionIncludePatterns: state.config.instructionIncludePatterns,
           workspaceScopeKey: state.config.workspaceScopeKey,
           workspaceScopeLabel: state.config.workspaceScopeLabel,
+          workspaceScopeWorkspaceId: state.config.workspaceScopeWorkspaceId,
           updatedAt: state.config.updatedAt,
         },
       };
