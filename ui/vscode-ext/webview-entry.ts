@@ -24,6 +24,11 @@ type TopAiRuntimeConfig = {
   wsBaseUrl?: string;
   sessionToken?: string;
   codexSignInUrl?: string;
+  codeAgentPromptGlobal?: string;
+  codeAgentPromptWorkspace?: string;
+  instructionIncludePatterns?: string[];
+  workspaceScopeKey?: string;
+  workspaceScopeLabel?: string;
   updatedAt?: number;
 };
 
@@ -32,6 +37,11 @@ type PersistedRuntimeConfig = {
   apiBaseUrl?: string;
   appBaseUrl?: string;
   wsBaseUrl?: string;
+  codeAgentPromptGlobal?: string;
+  codeAgentPromptWorkspace?: string;
+  instructionIncludePatterns?: string[];
+  workspaceScopeKey?: string;
+  workspaceScopeLabel?: string;
   updatedAt?: number;
 };
 
@@ -57,6 +67,11 @@ const DEFAULT_RUNTIME_CONFIG: Required<TopAiRuntimeConfig> = {
   wsBaseUrl: '',
   sessionToken: '',
   codexSignInUrl: 'https://chatgpt.com/auth/login?next=/codex',
+  codeAgentPromptGlobal: '',
+  codeAgentPromptWorkspace: '',
+  instructionIncludePatterns: [],
+  workspaceScopeKey: '',
+  workspaceScopeLabel: '',
   updatedAt: Date.now(),
 };
 
@@ -102,6 +117,16 @@ const normalizeRuntimeConfig = (
   const sessionToken = raw?.sessionToken?.trim() || '';
   const codexSignInUrl =
     raw?.codexSignInUrl?.trim() || DEFAULT_RUNTIME_CONFIG.codexSignInUrl;
+  const codeAgentPromptGlobal = raw?.codeAgentPromptGlobal ?? '';
+  const codeAgentPromptWorkspace = raw?.codeAgentPromptWorkspace ?? '';
+  const instructionIncludePatterns = Array.isArray(raw?.instructionIncludePatterns)
+    ? raw.instructionIncludePatterns
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+    : DEFAULT_RUNTIME_CONFIG.instructionIncludePatterns;
+  const workspaceScopeKey = raw?.workspaceScopeKey?.trim() || '';
+  const workspaceScopeLabel = raw?.workspaceScopeLabel?.trim() || '';
 
   return {
     profile,
@@ -110,6 +135,11 @@ const normalizeRuntimeConfig = (
     wsBaseUrl,
     sessionToken,
     codexSignInUrl,
+    codeAgentPromptGlobal,
+    codeAgentPromptWorkspace,
+    instructionIncludePatterns,
+    workspaceScopeKey,
+    workspaceScopeLabel,
     updatedAt:
       typeof raw?.updatedAt === 'number' ? raw.updatedAt : Date.now(),
   };
@@ -125,6 +155,28 @@ const loadPersistedRuntimeConfig = (): PersistedRuntimeConfig => {
       apiBaseUrl: typeof parsed.apiBaseUrl === 'string' ? parsed.apiBaseUrl : undefined,
       appBaseUrl: typeof parsed.appBaseUrl === 'string' ? parsed.appBaseUrl : undefined,
       wsBaseUrl: typeof parsed.wsBaseUrl === 'string' ? parsed.wsBaseUrl : undefined,
+      codeAgentPromptGlobal:
+        typeof parsed.codeAgentPromptGlobal === 'string'
+          ? parsed.codeAgentPromptGlobal
+          : undefined,
+      codeAgentPromptWorkspace:
+        typeof parsed.codeAgentPromptWorkspace === 'string'
+          ? parsed.codeAgentPromptWorkspace
+          : undefined,
+      instructionIncludePatterns: Array.isArray(parsed.instructionIncludePatterns)
+        ? parsed.instructionIncludePatterns.filter(
+            (entry): entry is string =>
+              typeof entry === 'string' && entry.trim().length > 0,
+          )
+        : undefined,
+      workspaceScopeKey:
+        typeof parsed.workspaceScopeKey === 'string'
+          ? parsed.workspaceScopeKey
+          : undefined,
+      workspaceScopeLabel:
+        typeof parsed.workspaceScopeLabel === 'string'
+          ? parsed.workspaceScopeLabel
+          : undefined,
       updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : undefined,
     };
   } catch {
@@ -138,6 +190,11 @@ const persistRuntimeConfig = (config: Required<TopAiRuntimeConfig>): void => {
     apiBaseUrl: config.apiBaseUrl,
     appBaseUrl: config.appBaseUrl,
     wsBaseUrl: config.wsBaseUrl,
+    codeAgentPromptGlobal: config.codeAgentPromptGlobal,
+    codeAgentPromptWorkspace: config.codeAgentPromptWorkspace,
+    instructionIncludePatterns: config.instructionIncludePatterns,
+    workspaceScopeKey: config.workspaceScopeKey,
+    workspaceScopeLabel: config.workspaceScopeLabel,
     updatedAt: config.updatedAt,
   };
   localStorage.setItem(RUNTIME_CONFIG_STORAGE_KEY, JSON.stringify(persisted));
@@ -334,6 +391,27 @@ const normalizeConfigSetPayload = (
       typeof raw.sessionToken === 'string'
         ? raw.sessionToken
         : current.sessionToken,
+    codeAgentPromptGlobal:
+      typeof raw.codeAgentPromptGlobal === 'string'
+        ? raw.codeAgentPromptGlobal
+        : current.codeAgentPromptGlobal,
+    codeAgentPromptWorkspace:
+      typeof raw.codeAgentPromptWorkspace === 'string'
+        ? raw.codeAgentPromptWorkspace
+        : current.codeAgentPromptWorkspace,
+    instructionIncludePatterns: Array.isArray(raw.instructionIncludePatterns)
+      ? raw.instructionIncludePatterns.filter(
+          (entry): entry is string => typeof entry === 'string',
+        )
+      : current.instructionIncludePatterns,
+    workspaceScopeKey:
+      typeof raw.workspaceScopeKey === 'string'
+        ? raw.workspaceScopeKey
+        : current.workspaceScopeKey,
+    workspaceScopeLabel:
+      typeof raw.workspaceScopeLabel === 'string'
+        ? raw.workspaceScopeLabel
+        : current.workspaceScopeLabel,
     codexSignInUrl: current.codexSignInUrl,
     updatedAt: Date.now(),
   });
@@ -417,6 +495,11 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
           appBaseUrl: state.config.appBaseUrl,
           wsBaseUrl: state.config.wsBaseUrl,
           sessionToken: state.config.sessionToken,
+          codeAgentPromptGlobal: state.config.codeAgentPromptGlobal,
+          codeAgentPromptWorkspace: state.config.codeAgentPromptWorkspace,
+          instructionIncludePatterns: state.config.instructionIncludePatterns,
+          workspaceScopeKey: state.config.workspaceScopeKey,
+          workspaceScopeLabel: state.config.workspaceScopeLabel,
           updatedAt: state.config.updatedAt,
         },
       };
@@ -433,6 +516,9 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
             appBaseUrl: nextConfig.appBaseUrl,
             wsBaseUrl: nextConfig.wsBaseUrl,
             sessionToken: nextConfig.sessionToken,
+            codeAgentPromptGlobal: nextConfig.codeAgentPromptGlobal,
+            codeAgentPromptWorkspace: nextConfig.codeAgentPromptWorkspace,
+            instructionIncludePatterns: nextConfig.instructionIncludePatterns,
           },
         );
         state.config = normalizeRuntimeConfig({
@@ -455,6 +541,11 @@ const installExtensionRuntimeShim = (state: RuntimeState): void => {
           appBaseUrl: state.config.appBaseUrl,
           wsBaseUrl: state.config.wsBaseUrl,
           sessionToken: state.config.sessionToken,
+          codeAgentPromptGlobal: state.config.codeAgentPromptGlobal,
+          codeAgentPromptWorkspace: state.config.codeAgentPromptWorkspace,
+          instructionIncludePatterns: state.config.instructionIncludePatterns,
+          workspaceScopeKey: state.config.workspaceScopeKey,
+          workspaceScopeLabel: state.config.workspaceScopeLabel,
           updatedAt: state.config.updatedAt,
         },
       };
@@ -677,8 +768,8 @@ const bootstrapRuntimeState = async (): Promise<RuntimeState> => {
 
   const persisted = loadPersistedRuntimeConfig();
   const config = normalizeRuntimeConfig({
-    ...hostConfig,
     ...persisted,
+    ...hostConfig,
     sessionToken:
       hostConfig.sessionToken?.trim() ||
       DEFAULT_RUNTIME_CONFIG.sessionToken,

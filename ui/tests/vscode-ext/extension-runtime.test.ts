@@ -13,6 +13,11 @@ const createRuntimeConfig = (
   wsBaseUrl: '',
   sessionToken: 'session-token-1',
   codexSignInUrl: 'https://chatgpt.com/auth/login?next=/codex',
+  codeAgentPromptGlobal: '',
+  codeAgentPromptWorkspace: '',
+  instructionIncludePatterns: [],
+  workspaceScopeKey: '/repo',
+  workspaceScopeLabel: 'repo',
   ...overrides,
 });
 

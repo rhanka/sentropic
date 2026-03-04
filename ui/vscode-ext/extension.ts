@@ -12,6 +12,7 @@ const VIEW_ID = 'topai.chatView';
 const VIEW_CONTAINER_ID = 'topai';
 const SECRET_SESSION_TOKEN_KEY = 'topai.sessionToken';
 const STATE_KEY_RUNTIME_CONFIG = 'topai.runtimeConfig';
+const STATE_KEY_WORKSPACE_PROMPT_OVERRIDES = 'topai.workspacePromptOverrides';
 
 declare const __TOPAI_DEFAULT_API_BASE_URL__: string | undefined;
 declare const __TOPAI_DEFAULT_APP_BASE_URL__: string | undefined;
@@ -20,6 +21,18 @@ const DEFAULT_API_BASE_URL =
   __TOPAI_DEFAULT_API_BASE_URL__ || 'http://localhost:8787/api/v1';
 const DEFAULT_APP_BASE_URL =
   __TOPAI_DEFAULT_APP_BASE_URL__ || 'http://localhost:5173';
+const DEFAULT_INSTRUCTION_INCLUDE_PATTERNS = [
+  'AGENTS.md',
+  'CLAUDE.md',
+  'GEMINI.md',
+  '.cursor/rules/*.mdc',
+  '.github/copilot-instructions.md',
+  '.github/instructions/*.instructions.md',
+];
+const INSTRUCTION_DISCOVERY_EXCLUDE_GLOB =
+  '{**/node_modules/**,**/.git/**,**/dist/**,**/build/**}';
+const INSTRUCTION_DISCOVERY_MAX_FILES = 16;
+const INSTRUCTION_DISCOVERY_MAX_FILE_CHARS = 12_000;
 
 const defaultConfig: TopAiRuntimeConfig = {
   apiBaseUrl: DEFAULT_API_BASE_URL,
@@ -27,6 +40,11 @@ const defaultConfig: TopAiRuntimeConfig = {
   wsBaseUrl: '',
   sessionToken: '',
   codexSignInUrl: 'https://chatgpt.com/auth/login?next=/codex',
+  codeAgentPromptGlobal: '',
+  codeAgentPromptWorkspace: '',
+  instructionIncludePatterns: [...DEFAULT_INSTRUCTION_INCLUDE_PATTERNS],
+  workspaceScopeKey: '',
+  workspaceScopeLabel: '',
 };
 
 type RuntimeConfigPatchPayload = {
@@ -34,12 +52,96 @@ type RuntimeConfigPatchPayload = {
   appBaseUrl?: string;
   wsBaseUrl?: string;
   sessionToken?: string;
+  codeAgentPromptGlobal?: string;
+  codeAgentPromptWorkspace?: string;
+  instructionIncludePatterns?: string[];
+};
+
+type WorkspacePromptOverrideMap = Record<string, string>;
+type VsCodeInstructionFile = {
+  path: string;
+  content: string;
+};
+type VsCodeCodeAgentPayload = {
+  source: 'vscode';
+  workspaceKey?: string;
+  workspaceLabel?: string;
+  promptGlobalOverride?: string;
+  promptWorkspaceOverride?: string;
+  instructionIncludePatterns?: string[];
+  instructionFiles?: VsCodeInstructionFile[];
 };
 
 const normalizeConfigString = (value: unknown, fallback = ''): string => {
   if (typeof value !== 'string') return fallback;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : fallback;
+};
+
+const normalizeInstructionIncludePatterns = (value: unknown): string[] => {
+  const rawItems = Array.isArray(value)
+    ? value
+    : (typeof value === 'string' ? value.split(/\r?\n|,/g) : []);
+  const deduped: string[] = [];
+  for (const entry of rawItems) {
+    const pattern = typeof entry === 'string' ? entry.trim() : '';
+    if (!pattern) continue;
+    if (deduped.includes(pattern)) continue;
+    deduped.push(pattern);
+  }
+  return deduped.length > 0
+    ? deduped.slice(0, 64)
+    : [...DEFAULT_INSTRUCTION_INCLUDE_PATTERNS];
+};
+
+const resolveWorkspaceScope = (): {
+  workspaceScopeKey: string;
+  workspaceScopeLabel: string;
+} => {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    return {
+      workspaceScopeKey: '',
+      workspaceScopeLabel: '',
+    };
+  }
+  const fsPath = folder.uri.fsPath || folder.uri.toString();
+  const workspaceScopeKey =
+    process.platform === 'win32' ? fsPath.toLowerCase() : fsPath;
+  return {
+    workspaceScopeKey,
+    workspaceScopeLabel: folder.name || fsPath,
+  };
+};
+
+const readWorkspacePromptOverrideMap = (
+  context: vscode.ExtensionContext,
+): WorkspacePromptOverrideMap => {
+  const raw = context.globalState.get<WorkspacePromptOverrideMap>(
+    STATE_KEY_WORKSPACE_PROMPT_OVERRIDES,
+    {},
+  );
+  if (!raw || typeof raw !== 'object') return {};
+  const out: WorkspacePromptOverrideMap = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof key !== 'string' || !key.trim()) continue;
+    if (typeof value !== 'string') continue;
+    out[key] = value;
+  }
+  return out;
+};
+
+const buildInstructionDiscoveryPatterns = (
+  includePatterns: string[],
+): string[] => {
+  const deduped: string[] = [];
+  for (const pattern of includePatterns) {
+    const normalized = pattern.trim();
+    if (!normalized) continue;
+    if (deduped.includes(normalized)) continue;
+    deduped.push(normalized);
+  }
+  return deduped;
 };
 
 const readRuntimeConfig = async (
@@ -65,6 +167,19 @@ const readRuntimeConfig = async (
       config.get<string>('wsBaseUrl', defaultConfig.wsBaseUrl),
     defaultConfig.wsBaseUrl,
   );
+  const codeAgentPromptGlobal =
+    typeof persisted.codeAgentPromptGlobal === 'string'
+      ? persisted.codeAgentPromptGlobal
+      : defaultConfig.codeAgentPromptGlobal;
+  const instructionIncludePatterns = normalizeInstructionIncludePatterns(
+    persisted.instructionIncludePatterns,
+  );
+  const { workspaceScopeKey, workspaceScopeLabel } = resolveWorkspaceScope();
+  const workspacePromptOverrides = readWorkspacePromptOverrideMap(context);
+  const codeAgentPromptWorkspace =
+    workspaceScopeKey && typeof workspacePromptOverrides[workspaceScopeKey] === 'string'
+      ? workspacePromptOverrides[workspaceScopeKey]
+      : defaultConfig.codeAgentPromptWorkspace;
 
   const secretToken = await context.secrets.get(SECRET_SESSION_TOKEN_KEY);
   const fallbackSettingToken = normalizeConfigString(
@@ -78,6 +193,11 @@ const readRuntimeConfig = async (
     wsBaseUrl,
     sessionToken: normalizeConfigString(secretToken, fallbackSettingToken),
     codexSignInUrl: defaultConfig.codexSignInUrl,
+    codeAgentPromptGlobal,
+    codeAgentPromptWorkspace,
+    instructionIncludePatterns,
+    workspaceScopeKey,
+    workspaceScopeLabel,
   };
 };
 
@@ -102,6 +222,14 @@ const saveRuntimeConfigPatch = async (
   if (typeof payload.wsBaseUrl === 'string') {
     next.wsBaseUrl = payload.wsBaseUrl.trim();
   }
+  if (typeof payload.codeAgentPromptGlobal === 'string') {
+    next.codeAgentPromptGlobal = payload.codeAgentPromptGlobal;
+  }
+  if (Array.isArray(payload.instructionIncludePatterns)) {
+    next.instructionIncludePatterns = normalizeInstructionIncludePatterns(
+      payload.instructionIncludePatterns,
+    );
+  }
 
   if (typeof payload.sessionToken === 'string') {
     const token = payload.sessionToken.trim();
@@ -109,6 +237,20 @@ const saveRuntimeConfigPatch = async (
       await context.secrets.store(SECRET_SESSION_TOKEN_KEY, token);
     } else {
       await context.secrets.delete(SECRET_SESSION_TOKEN_KEY);
+    }
+  }
+
+  if (typeof payload.codeAgentPromptWorkspace === 'string') {
+    const { workspaceScopeKey } = resolveWorkspaceScope();
+    if (workspaceScopeKey) {
+      const map = readWorkspacePromptOverrideMap(context);
+      const nextValue = payload.codeAgentPromptWorkspace;
+      if (nextValue.trim().length > 0) {
+        map[workspaceScopeKey] = nextValue;
+      } else {
+        delete map[workspaceScopeKey];
+      }
+      await context.globalState.update(STATE_KEY_WORKSPACE_PROMPT_OVERRIDES, map);
     }
   }
 
@@ -152,6 +294,100 @@ const testApiConnectivity = async (
   }
 };
 
+const shouldInjectVsCodeCodeAgentPayload = (
+  method: string,
+  pathname: string,
+): boolean => {
+  if (method !== 'POST' && method !== 'PATCH') return false;
+  return /\/api\/v1\/chat\/messages(?:\/[^/]+\/(?:retry|tool-results))?$/.test(
+    pathname,
+  );
+};
+
+const listVsCodeInstructionFiles = async (
+  runtimeConfig: TopAiRuntimeConfig,
+): Promise<VsCodeInstructionFile[]> => {
+  const patterns = buildInstructionDiscoveryPatterns(
+    runtimeConfig.instructionIncludePatterns,
+  );
+  if (patterns.length === 0) return [];
+
+  const decoder = new TextDecoder();
+  const files: VsCodeInstructionFile[] = [];
+  const seen = new Set<string>();
+
+  for (const pattern of patterns) {
+    if (files.length >= INSTRUCTION_DISCOVERY_MAX_FILES) break;
+    const uris = await vscode.workspace.findFiles(
+      pattern,
+      INSTRUCTION_DISCOVERY_EXCLUDE_GLOB,
+      INSTRUCTION_DISCOVERY_MAX_FILES,
+    );
+    for (const uri of uris) {
+      if (files.length >= INSTRUCTION_DISCOVERY_MAX_FILES) break;
+      const relativePath = vscode.workspace.asRelativePath(uri, false);
+      if (!relativePath || seen.has(relativePath)) continue;
+      try {
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        const content = decoder.decode(bytes).trim();
+        if (!content) continue;
+        files.push({
+          path: relativePath,
+          content: content.slice(0, INSTRUCTION_DISCOVERY_MAX_FILE_CHARS),
+        });
+        seen.add(relativePath);
+      } catch {
+        // ignore unreadable files and continue
+      }
+    }
+  }
+  return files;
+};
+
+const injectVsCodeCodeAgentIntoBody = async (
+  runtimeConfig: TopAiRuntimeConfig,
+  targetUrl: URL,
+  method: string,
+  bodyText: string | undefined,
+): Promise<string | undefined> => {
+  if (!shouldInjectVsCodeCodeAgentPayload(method, targetUrl.pathname)) {
+    return bodyText;
+  }
+
+  const sourceBody = typeof bodyText === 'string' && bodyText.trim() ? bodyText : '{}';
+  let parsed: Record<string, unknown>;
+  try {
+    const raw = JSON.parse(sourceBody);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return bodyText;
+    }
+    parsed = raw as Record<string, unknown>;
+  } catch {
+    return bodyText;
+  }
+
+  const instructionFiles = await listVsCodeInstructionFiles(runtimeConfig);
+  const payload: VsCodeCodeAgentPayload = {
+    source: 'vscode',
+    ...(runtimeConfig.workspaceScopeKey
+      ? { workspaceKey: runtimeConfig.workspaceScopeKey }
+      : {}),
+    ...(runtimeConfig.workspaceScopeLabel
+      ? { workspaceLabel: runtimeConfig.workspaceScopeLabel }
+      : {}),
+    ...(runtimeConfig.codeAgentPromptGlobal.trim()
+      ? { promptGlobalOverride: runtimeConfig.codeAgentPromptGlobal }
+      : {}),
+    ...(runtimeConfig.codeAgentPromptWorkspace.trim()
+      ? { promptWorkspaceOverride: runtimeConfig.codeAgentPromptWorkspace }
+      : {}),
+    instructionIncludePatterns: runtimeConfig.instructionIncludePatterns,
+    instructionFiles,
+  };
+  parsed.vscodeCodeAgent = payload;
+  return JSON.stringify(parsed);
+};
+
 const performRuntimeHttpRequest = async (
   runtimeConfig: TopAiRuntimeConfig,
   payload: {
@@ -192,12 +428,27 @@ const performRuntimeHttpRequest = async (
     );
   }
 
+  const nextBodyText = await injectVsCodeCodeAgentIntoBody(
+    runtimeConfig,
+    targetUrl,
+    method,
+    payload.bodyText,
+  );
+  if (
+    typeof nextBodyText === 'string' &&
+    method !== 'GET' &&
+    method !== 'HEAD' &&
+    !normalizedHeaders.has('content-type')
+  ) {
+    normalizedHeaders.set('content-type', 'application/json');
+  }
+
   const response = await fetch(targetUrl.toString(), {
     method,
     headers: normalizedHeaders,
     body:
-      typeof payload.bodyText === 'string' && method !== 'GET' && method !== 'HEAD'
-        ? payload.bodyText
+      typeof nextBodyText === 'string' && method !== 'GET' && method !== 'HEAD'
+        ? nextBodyText
         : undefined,
   });
 
@@ -535,6 +786,12 @@ export const activate = (context: vscode.ExtensionContext): void => {
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration('topai')) return;
+      void provider.refresh();
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
       void provider.refresh();
     }),
   );
