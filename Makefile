@@ -636,6 +636,10 @@ up-e2e-vscode: ## Start VSCode E2E stack (api/ui/e2e/openvscode)
 down-e2e-vscode: ## Stop VSCode E2E stack
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml down
 
+.PHONY: ps-e2e-vscode
+ps-e2e-vscode: ## Show VSCode E2E services
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml ps
+
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
