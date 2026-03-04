@@ -275,8 +275,8 @@ dev-ext: up-ui ## Watch build Chrome extension
 	@echo "👀 Watching Chrome Extension..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run dev:ext
 
-.PHONY: vscode-ext
-vscode-ext: up-ui ## Build VSCode extension package to ui/static/vscode-extension
+.PHONY: build-ext-vscode
+build-ext-vscode: up-ui ## Build VSCode extension package to ui/static/vscode-extension
 	@echo "📦 Syncing UI dependencies in container..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm install --include=dev
 	@echo "🧩 Building VSCode Extension package..."

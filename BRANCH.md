@@ -139,7 +139,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `2`, `4.13`, `4.14`, `7.1` (BR05 foreground-only boundary), and reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
   - [x] Restore minimal VSCode extension packaging pipeline:
     - [x] add `ui/vscode-ext` packaging scripts/assets required to produce `.vsix`,
-    - [x] add `make vscode-ext` target (and optional `make dev-vscode-ext`) under `BR05-EX1`.
+    - [x] add `make build-ext-vscode` target (and optional `make dev-vscode-ext`) under `BR05-EX1`.
   - [x] Restore VSCode extension download distribution:
     - [x] API endpoint `/api/v1/vscode-extension/download`,
     - [x] UI settings card for `.vsix` download metadata.
@@ -175,7 +175,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/utils/vscode-extension-download.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/vscode-ext/extension-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [x] `make vscode-ext API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 REGISTRY=local ENV=feat-vscode-plugin-v1`
+    - [x] `make build-ext-vscode API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 REGISTRY=local ENV=feat-vscode-plugin-v1`
     - [!] Initial run failed with port conflicts (`5105`/`1005`) because `test-feat-vscode-plugin-v1` containers were already running; validated successful rerun on free ports (`API=8715`, `UI=5115`, `MAILDEV=1015`) with same command scope.
 
 - [x] **Lot 1.1 — Theme parity (VSCode host + web app)**
@@ -353,7 +353,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Enforce blocking validation error when resolved prompt is invalid.
       - [x] Apply direct cutover in VSCode mode (no feature flag).
       - [ ] Make naming cutover (no alias compatibility):
-        - [ ] rename `vscode-ext` -> `build-ext-vscode`,
+        - [x] rename `vscode-ext` -> `build-ext-vscode`,
         - [x] rename `build-ext` -> `build-ext-chrome`,
         - [ ] migrate all internal references (docs/BRANCH/tests/scripts) to canonical names.
       - [ ] Add VSCode E2E compose lane: `docker-compose.e2e-vscode.yml`.
