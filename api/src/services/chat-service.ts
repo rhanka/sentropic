@@ -89,6 +89,30 @@ export type LocalToolDefinitionInput = {
   parameters: Record<string, unknown>;
 };
 
+export type VsCodeCodeAgentInstructionFile = {
+  path: string;
+  content: string;
+};
+
+export type VsCodeCodeAgentRuntimePayload = {
+  source?: 'vscode' | null;
+  workspaceKey?: string | null;
+  workspaceLabel?: string | null;
+  promptGlobalOverride?: string | null;
+  promptWorkspaceOverride?: string | null;
+  instructionIncludePatterns?: string[];
+  instructionFiles?: VsCodeCodeAgentInstructionFile[];
+};
+
+type NormalizedVsCodeCodeAgentRuntimePayload = {
+  workspaceKey: string | null;
+  workspaceLabel: string | null;
+  promptGlobalOverride: string | null;
+  promptWorkspaceOverride: string | null;
+  instructionIncludePatterns: string[];
+  instructionFiles: VsCodeCodeAgentInstructionFile[];
+};
+
 export type ChatResumeFromToolOutputs = {
   previousResponseId: string;
   toolOutputs: Array<{ callId: string; output: string }>;
@@ -100,6 +124,7 @@ type AwaitingLocalToolState = {
   pendingToolCallIds: string[];
   baseToolOutputs: Array<{ callId: string; output: string }>;
   localToolDefinitions: LocalToolDefinitionInput[];
+  vscodeCodeAgent: NormalizedVsCodeCodeAgentRuntimePayload | null;
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -130,6 +155,9 @@ const CONTEXT_SUMMARY_SYSTEM_MARKER_END = '[CONTEXT_COMPACT_SUMMARY_END]';
 const CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS = 1;
 const CONTEXT_BUDGET_SOFT_ZONE_CODE = 'context_budget_risk';
 const CONTEXT_BUDGET_HARD_ZONE_CODE = 'context_budget_blocked';
+const VSCODE_CODE_AGENT_INSTRUCTION_FILES_MAX = 16;
+const VSCODE_CODE_AGENT_INSTRUCTION_CONTENT_MAX_CHARS = 12_000;
+const VSCODE_CODE_AGENT_INSTRUCTION_BLOCK_MAX_CHARS = 48_000;
 
 type SessionTodoRuntimeTask = {
   id: string;
@@ -671,6 +699,134 @@ export class ChatService {
     return tools;
   }
 
+  private normalizeVsCodeCodeAgentPayload(
+    input?: VsCodeCodeAgentRuntimePayload | null,
+  ): NormalizedVsCodeCodeAgentRuntimePayload | null {
+    if (!input || typeof input !== 'object') return null;
+    const raw = input as Record<string, unknown>;
+    const source =
+      typeof input.source === 'string'
+        ? input.source
+        : (typeof raw.source === 'string' ? raw.source : null);
+    if (source && source !== 'vscode') return null;
+
+    const normalizeNullable = (value: unknown): string | null => {
+      if (typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    };
+
+    const instructionIncludePatternsRaw = Array.isArray(input.instructionIncludePatterns)
+      ? input.instructionIncludePatterns
+      : (Array.isArray(raw.instruction_include_patterns)
+          ? (raw.instruction_include_patterns as string[])
+          : []);
+    const instructionIncludePatterns = Array.isArray(instructionIncludePatternsRaw)
+      ? instructionIncludePatternsRaw
+          .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+          .filter((entry) => entry.length > 0)
+          .slice(0, 64)
+      : [];
+
+    const instructionFilesRaw = Array.isArray(input.instructionFiles)
+      ? input.instructionFiles
+      : (Array.isArray(raw.instruction_files)
+          ? (raw.instruction_files as VsCodeCodeAgentInstructionFile[])
+          : []);
+    const instructionFiles = Array.isArray(instructionFilesRaw)
+      ? instructionFilesRaw
+          .map((entry) => {
+            const path = typeof entry?.path === 'string' ? entry.path.trim() : '';
+            const content = typeof entry?.content === 'string' ? entry.content : '';
+            if (!path || !content.trim()) return null;
+            return {
+              path: path.slice(0, 512),
+              content: this.safeTruncate(
+                content.trim(),
+                VSCODE_CODE_AGENT_INSTRUCTION_CONTENT_MAX_CHARS,
+              ),
+            };
+          })
+          .filter((entry): entry is VsCodeCodeAgentInstructionFile => entry !== null)
+          .slice(0, VSCODE_CODE_AGENT_INSTRUCTION_FILES_MAX)
+      : [];
+
+    const payload: NormalizedVsCodeCodeAgentRuntimePayload = {
+      workspaceKey: normalizeNullable(input.workspaceKey ?? raw.workspace_key),
+      workspaceLabel: normalizeNullable(
+        input.workspaceLabel ?? raw.workspace_label,
+      ),
+      promptGlobalOverride: normalizeNullable(
+        input.promptGlobalOverride ?? raw.prompt_global_override,
+      ),
+      promptWorkspaceOverride: normalizeNullable(
+        input.promptWorkspaceOverride ?? raw.prompt_workspace_override,
+      ),
+      instructionIncludePatterns,
+      instructionFiles,
+    };
+
+    const hasSignal = Boolean(
+      payload.workspaceKey ||
+        payload.workspaceLabel ||
+        payload.promptGlobalOverride ||
+        payload.promptWorkspaceOverride ||
+        payload.instructionIncludePatterns.length > 0 ||
+        payload.instructionFiles.length > 0 ||
+        source === 'vscode',
+    );
+    return hasSignal ? payload : null;
+  }
+
+  private renderVsCodeInstructionFilesBlock(
+    payload: NormalizedVsCodeCodeAgentRuntimePayload,
+  ): string {
+    const lines: string[] = [];
+    if (payload.workspaceLabel || payload.workspaceKey) {
+      lines.push(
+        `Workspace: ${payload.workspaceLabel || payload.workspaceKey || 'unknown'}`,
+      );
+    }
+    if (payload.instructionIncludePatterns.length > 0) {
+      lines.push(
+        `Instruction patterns: ${payload.instructionIncludePatterns.join(', ')}`,
+      );
+    }
+
+    if (payload.instructionFiles.length === 0) {
+      lines.push('Aucun fichier d’instructions projet détecté.');
+      return lines.join('\n');
+    }
+
+    lines.push('Fichiers d’instructions projet chargés:');
+    for (const file of payload.instructionFiles) {
+      lines.push(`--- ${file.path} ---`);
+      lines.push(file.content);
+    }
+
+    return this.safeTruncate(
+      lines.join('\n'),
+      VSCODE_CODE_AGENT_INSTRUCTION_BLOCK_MAX_CHARS,
+    );
+  }
+
+  private resolveVsCodeMonolithicPromptTemplate(
+    payload: NormalizedVsCodeCodeAgentRuntimePayload,
+  ): string {
+    const defaultTemplate = this.getPromptTemplate('chat_vscode_code_agent');
+    const resolvedTemplate =
+      payload.promptWorkspaceOverride ??
+      payload.promptGlobalOverride ??
+      defaultTemplate;
+    const normalized = resolvedTemplate.trim();
+    if (!normalized) {
+      throw new Error(
+        'VSCode code-agent prompt is invalid: resolved prompt is empty. Open extension settings and provide a non-empty global/workspace prompt.',
+      );
+    }
+    return normalized;
+  }
+
   private extractAwaitingLocalToolState(
     events: Array<{
       eventType: string;
@@ -742,7 +898,10 @@ export class ChatService {
         previousResponseId,
         pendingToolCallIds,
         baseToolOutputs,
-        localToolDefinitions
+        localToolDefinitions,
+        vscodeCodeAgent: this.normalizeVsCodeCodeAgentPayload(
+          data.vscode_code_agent as VsCodeCodeAgentRuntimePayload,
+        ),
       };
     }
 
@@ -757,6 +916,7 @@ export class ChatService {
     readyToResume: boolean;
     waitingForToolCallIds: string[];
     localToolDefinitions: LocalToolDefinitionInput[];
+    vscodeCodeAgent?: NormalizedVsCodeCodeAgentRuntimePayload | null;
     resumeFrom?: ChatResumeFromToolOutputs;
   }> {
     const toolCallId = String(options.toolCallId ?? '').trim();
@@ -821,7 +981,8 @@ export class ChatService {
       return {
         readyToResume: false,
         waitingForToolCallIds,
-        localToolDefinitions: awaitingState.localToolDefinitions
+        localToolDefinitions: awaitingState.localToolDefinitions,
+        vscodeCodeAgent: awaitingState.vscodeCodeAgent,
       };
     }
 
@@ -844,6 +1005,7 @@ export class ChatService {
       readyToResume: true,
       waitingForToolCallIds: [],
       localToolDefinitions: awaitingState.localToolDefinitions,
+      vscodeCodeAgent: awaitingState.vscodeCodeAgent,
       resumeFrom: {
         previousResponseId: awaitingState.previousResponseId,
         toolOutputs
@@ -1680,6 +1842,7 @@ export class ChatService {
     contexts?: Array<{ contextType: string; contextId: string }>;
     tools?: string[];
     localToolDefinitions?: LocalToolDefinitionInput[];
+    vscodeCodeAgent?: VsCodeCodeAgentRuntimePayload | null;
     resumeFrom?: ChatResumeFromToolOutputs;
     locale?: string;
     signal?: AbortSignal;
@@ -2235,14 +2398,53 @@ Règles :
         : `OUTILS ACTIFS POUR CETTE REPONSE :\n- Aucun outil actif.`;
     contextBlock += `\n\n${activeToolsBlock}`;
 
-    const basePrompt = this.getPromptTemplate('chat_system_base')
-      || "Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.\n\n{{CONTEXT_BLOCK}}\n\n{{DOCUMENTS_BLOCK}}\n\n{{AUTOMATION_BLOCK}}";
-    const automationBlock = this.getPromptTemplate('chat_conversation_auto');
-    const systemPrompt = this.renderTemplate(basePrompt, {
-      CONTEXT_BLOCK: contextBlock,
-      DOCUMENTS_BLOCK: documentsBlock,
-      AUTOMATION_BLOCK: automationBlock
-    }).trim();
+    const vscodeCodeAgentPayload = this.normalizeVsCodeCodeAgentPayload(
+      options.vscodeCodeAgent,
+    );
+    const systemPrompt = (() => {
+      if (vscodeCodeAgentPayload) {
+        const template = this.resolveVsCodeMonolithicPromptTemplate(
+          vscodeCodeAgentPayload,
+        );
+        const instructionFilesBlock =
+          this.renderVsCodeInstructionFilesBlock(vscodeCodeAgentPayload);
+        const hasInstructionPlaceholder = template.includes(
+          '{{INSTRUCTION_FILES_BLOCK}}',
+        );
+        const hasContextPlaceholder = template.includes('{{CONTEXT_BLOCK}}');
+        const hasDocumentsPlaceholder = template.includes('{{DOCUMENTS_BLOCK}}');
+        let rendered = this.renderTemplate(template, {
+          INSTRUCTION_FILES_BLOCK: instructionFilesBlock,
+          CONTEXT_BLOCK: contextBlock,
+          DOCUMENTS_BLOCK: documentsBlock,
+        }).trim();
+        if (!hasInstructionPlaceholder && instructionFilesBlock.trim()) {
+          rendered = `${rendered}\n\nContexte projet (fichiers d’instructions):\n${instructionFilesBlock}`.trim();
+        }
+        if (!hasContextPlaceholder && contextBlock.trim()) {
+          rendered = `${rendered}\n\nContexte runtime:\n${contextBlock}`.trim();
+        }
+        if (!hasDocumentsPlaceholder && documentsBlock.trim()) {
+          rendered = `${rendered}\n\nDocuments:\n${documentsBlock}`.trim();
+        }
+        if (!rendered) {
+          throw new Error(
+            'VSCode code-agent prompt is invalid: rendered prompt is empty. Update extension settings (global/workspace prompt).',
+          );
+        }
+        return rendered;
+      }
+
+      const basePrompt =
+        this.getPromptTemplate('chat_system_base') ||
+        "Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.\n\n{{CONTEXT_BLOCK}}\n\n{{DOCUMENTS_BLOCK}}\n\n{{AUTOMATION_BLOCK}}";
+      const automationBlock = this.getPromptTemplate('chat_conversation_auto');
+      return this.renderTemplate(basePrompt, {
+        CONTEXT_BLOCK: contextBlock,
+        DOCUMENTS_BLOCK: documentsBlock,
+        AUTOMATION_BLOCK: automationBlock,
+      }).trim();
+    })();
     const STEER_PROMPT_MAX_MESSAGES = 8;
     const STEER_REASONING_REPLAY_MAX_CHARS = 6000;
     const STEER_REASONING_EXCERPT_MAX_CHARS = 1800;
@@ -4027,7 +4229,26 @@ Règles :
             base_tool_outputs: responseToolOutputs.map((item) => ({
               call_id: item.call_id,
               output: item.output
-            }))
+            })),
+            vscode_code_agent: vscodeCodeAgentPayload
+              ? {
+                  source: 'vscode',
+                  workspace_key: vscodeCodeAgentPayload.workspaceKey,
+                  workspace_label: vscodeCodeAgentPayload.workspaceLabel,
+                  prompt_global_override:
+                    vscodeCodeAgentPayload.promptGlobalOverride,
+                  prompt_workspace_override:
+                    vscodeCodeAgentPayload.promptWorkspaceOverride,
+                  instruction_include_patterns:
+                    vscodeCodeAgentPayload.instructionIncludePatterns,
+                  instruction_files: vscodeCodeAgentPayload.instructionFiles.map(
+                    (file) => ({
+                      path: file.path,
+                      content: file.content,
+                    }),
+                  ),
+                }
+              : undefined
           },
           streamSeq,
           options.assistantMessageId

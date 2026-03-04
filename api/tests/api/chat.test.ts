@@ -196,6 +196,20 @@ describe('Chat API Endpoints', () => {
               },
             },
           ],
+          vscodeCodeAgent: {
+            source: 'vscode',
+            workspaceKey: '/repo',
+            workspaceLabel: 'repo',
+            promptGlobalOverride: 'GLOBAL_PROMPT',
+            promptWorkspaceOverride: 'WORKSPACE_PROMPT',
+            instructionIncludePatterns: ['AGENTS.md'],
+            instructionFiles: [
+              {
+                path: 'AGENTS.md',
+                content: 'Prefer rg before grep.',
+              },
+            ],
+          },
         },
       );
 
@@ -220,6 +234,13 @@ describe('Chat API Endpoints', () => {
         expect.objectContaining({ name: 'tab_read' }),
         expect.objectContaining({ name: 'tab_action' }),
       ]);
+      expect(data.vscodeCodeAgent).toEqual(
+        expect.objectContaining({
+          source: 'vscode',
+          workspaceKey: '/repo',
+          promptWorkspaceOverride: 'WORKSPACE_PROMPT',
+        }),
+      );
     });
 
     it('should return 401 without authentication', async () => {
@@ -264,6 +285,15 @@ describe('Chat API Endpoints', () => {
               parameters: { type: 'object', properties: {}, required: [] }
             }
           ],
+          vscodeCodeAgent: {
+            source: 'vscode',
+            workspaceKey: '/repo',
+            promptWorkspaceOverride: 'WS_PROMPT',
+            instructionIncludePatterns: ['AGENTS.md'],
+            instructionFiles: [
+              { path: 'AGENTS.md', content: 'Use scoped commands.' },
+            ],
+          },
           resumeFrom: {
             previousResponseId: 'resp_local_1',
             toolOutputs: [{ callId: 'call_local_1', output: '{"ok":true}' }]
@@ -298,6 +328,13 @@ describe('Chat API Endpoints', () => {
         expect(data.resumeFrom).toBeTruthy();
         expect((data.resumeFrom as any).previousResponseId).toBe('resp_local_1');
         expect(Array.isArray((data.resumeFrom as any).toolOutputs)).toBe(true);
+        expect(data.vscodeCodeAgent).toEqual(
+          expect.objectContaining({
+            source: 'vscode',
+            workspaceKey: '/repo',
+            promptWorkspaceOverride: 'WS_PROMPT',
+          }),
+        );
       } finally {
         acceptSpy.mockRestore();
       }
