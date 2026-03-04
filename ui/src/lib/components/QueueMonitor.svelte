@@ -177,7 +177,7 @@
                   <div class="flex items-center gap-2 mb-1">
                     <StatusIcon class="w-5 h-5 {job.status === 'processing' ? 'animate-spin' : ''}" />
                     <span class="font-medium text-sm">{getTypeLabel(job.type)}</span>
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {getStatusColor(job.status)}">
+                    <span class="queue-status-badge inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {getStatusColor(job.status)} {job.status === 'completed' ? 'queue-status-badge-completed' : ''}">
                       {getStatusLabel(job.status)}
                     </span>
                   </div>
@@ -230,7 +230,7 @@
                   {/if}
                   {#if job.status === 'pending' || job.status === 'processing'}
                     <button
-                      class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                      class="chat-danger-action-button p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                       on:click={() => handleCancelJob(job.id)}
                       title={$_('queueMonitor.actions.cancel')}
                     >
@@ -247,7 +247,7 @@
                       <RotateCcw class="w-4 h-4" />
                     </button>
                     <button
-                      class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                      class="chat-danger-action-button p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                       on:click={() => handleDeleteJob(job.id)}
                       title={$_('queueMonitor.actions.delete')}
                     >
