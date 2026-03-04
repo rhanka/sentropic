@@ -260,8 +260,8 @@ build-ui-image: ## Build the UI Docker image for production
 build-ui: ## Build the SvelteKit UI (static)
 	TARGET=development $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run ui npm run build
 
-.PHONY: build-ext
-build-ext: up-ui ## Build Chrome extension to ui/chrome-ext/dist
+.PHONY: build-ext-chrome
+build-ext-chrome: up-ui ## Build Chrome extension to ui/chrome-ext/dist
 	@echo "📦 Syncing UI dependencies in container..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm install --include=dev
 	@echo "🧩 Building Chrome Extension..."

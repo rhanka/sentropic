@@ -354,7 +354,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Apply direct cutover in VSCode mode (no feature flag).
       - [ ] Make naming cutover (no alias compatibility):
         - [ ] rename `vscode-ext` -> `build-ext-vscode`,
-        - [ ] rename `build-ext` -> `build-ext-chrome`,
+        - [x] rename `build-ext` -> `build-ext-chrome`,
         - [ ] migrate all internal references (docs/BRANCH/tests/scripts) to canonical names.
       - [ ] Add VSCode E2E compose lane: `docker-compose.e2e-vscode.yml`.
       - [ ] Add Make lane targets:
