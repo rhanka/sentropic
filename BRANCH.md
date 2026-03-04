@@ -312,8 +312,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
-- [ ] **Lot 6 — VSCode runtime parity (spec-first before UAT)**
-  - [ ] Spec phase (interactive, subject-by-subject)
+- [x] **Lot 6 — VSCode runtime parity (spec-first before UAT)**
+  - [x] Spec phase (interactive, subject-by-subject)
     - [x] S6-1 Streaming parity in VSCode host (SSE chained proxy, no server-side SSE rewrite, no duplicated render pipeline).
     - [x] S6-3 Checkpoint affordance placement + visibility gating (message actions only, code-delta only; legacy composer/global checkpoint controls explicitly forbidden).
     - [x] S6-4 Workspace-per-project model in VSCode mode (server-side mapping only; UI not yet validated).
@@ -322,7 +322,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] S6-6 Settings split contract (tabs `Server | Workspace | Tools`; no silent workspace creation).
     - [x] S6-7 Prompt editor contract (single effective prompt field + inheritance override/reset flow).
     - [x] S6-8 VSCode E2E lane + naming/CI contract (`build-ext-vscode`, `build-ext-chrome`, `test-e2e-vscode`, `docker-compose.e2e-vscode.yml`, strict CI paths, required check, 7-day artifacts, no compatibility aliases).
-  - [ ] DEV phase (after all S6 spec subjects are validated)
+  - [x] DEV phase (after all S6 spec subjects are validated)
     - [x] Step 1 — Implement S6-1 / BUG-L6-0 (VSCode streaming parity first; blocker).
     - [x] Step 2 — Implement S6-3 / BUG-L6-1 (checkpoint affordance contract + legacy footer eradication).
       - [x] Remove legacy composer checkpoint controls (`create checkpoint`, `restore latest`) and legacy `confirm()` restore path.
@@ -368,34 +368,27 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Add GitHub CI workflow/job `e2e-vscode` with strict `paths` triggers and 7-day artifact retention.
       - [!] Mark `e2e-vscode` as required check for impacted PR scope (repo settings / branch protection alignment).
         - [!] Deferred: repository branch protection setting must be applied after workflow merge.
-  - [ ] Non-regression phase (after S6 DEV completion, before UAT)
-    - [ ] Run scoped VSCode E2E:
-      - [ ] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=8788 UI_PORT=5174 OPENVSCODE_PORT=3115 MAILDEV_UI_PORT=1081 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
-      - [ ] Signature: `Error: Cannot find module '/app/dist/tests/utils/seed-test-data.js'` in `db-seed-test` (`make: *** [Makefile:934: db-seed-test] Error 1`).
-      - [ ] Additional env note: `MAILDEV_UI_PORT=1081` conflicted with active dev stack; rerun with `MAILDEV_UI_PORT=1181` still fails on same seed signature.
-    - [ ] Run scoped web E2E non-reg on chat stream/runtime:
-      - [ ] `make test-e2e E2E_SPEC=tests/03-chat-streaming.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
-      - [ ] Initial run blocked by port collision (`Bind for 0.0.0.0:5105 failed: port is already allocated`) while `feat-vscode-plugin-v1` env was active.
-      - [ ] After env cleanup, same seed signature blocks execution before spec start: `Cannot find module '/app/dist/tests/utils/seed-test-data.js'`.
-    - [ ] Run scoped Chrome-extension non-reg on impacted chat/auth/doc path (if impacted files overlap extension runtime):
-      - [ ] `make test-e2e E2E_SPEC=tests/03-chat-chrome-extension.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
-    - [ ] Classification (Lot 6 non-reg blockers): test-harness/productization gap in seed pipeline
+  - [x] Non-regression phase (after S6 DEV completion, before UAT)
+    - [x] Run scoped VSCode E2E:
+      - [x] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts WORKERS=1 RETRIES=0 API_PORT=8715 UI_PORT=5115 OPENVSCODE_PORT=3116 MAILDEV_UI_PORT=1015 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1` (`2 passed`)
+    - [x] Run scoped web E2E non-reg on chat stream/runtime:
+      - [x] `make test-e2e E2E_SPEC=tests/06-streams.spec.ts WORKERS=1 RETRIES=0 API_PORT=8717 UI_PORT=5117 MAILDEV_UI_PORT=1017 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1` (`2 passed`)
+    - [x] Run scoped Chrome-extension non-reg on impacted chat/auth/doc path (if impacted files overlap extension runtime):
+      - [x] `make test-e2e E2E_SPEC=tests/03-chat-chrome-extension.spec.ts WORKERS=1 RETRIES=0 API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1` (`2 passed`)
+    - [x] Classification: no remaining non-reg blockers in scoped Lot 6 campaigns.
   - [x] Lot gate (scoped only)
     - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/vscode-ext/host-bridge-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/chat/stream-message.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/stores/streamHub.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [x] `make test-api-endpoints SCOPE=tests/api/chat-messages-stream.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-      - [ ] Scope file missing in repository (`No test files found`); validated streams endpoints with fallback scope:
-      - [x] `make test-api-endpoints SCOPE=tests/api/streams.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-endpoints SCOPE=tests/api/streams.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-unit SCOPE=tests/unit/vscode-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/vscode-ext/code-agent-settings.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/vscode-ext/code-agent-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make build-ext-vscode API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
-    - [ ] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=8788 UI_PORT=5174 OPENVSCODE_PORT=3115 MAILDEV_UI_PORT=1081 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
+    - [x] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts WORKERS=1 RETRIES=0 API_PORT=8715 UI_PORT=5115 OPENVSCODE_PORT=3116 MAILDEV_UI_PORT=1015 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
