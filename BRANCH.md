@@ -336,26 +336,26 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Enforce workspace typing: show/select only `code` workspaces in VSCode settings flow.
       - [ ] Implement `Not now` fallback to last `code` workspace + open settings section.
       - [ ] Enforce mandatory creation path when user has zero `code` workspaces.
-    - [ ] Implement S6-5.
-      - [ ] Build monolithic VSCode code-agent prompt baseline (adapted from Cursor prompt style, no runtime prompt-layer chain).
-      - [ ] Implement prompt resolution order: workspace override > global override > default.
-      - [ ] Reuse settings editing model with raw textarea for global + workspace prompt overrides.
-      - [ ] Auto-load instruction files when present: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`.
-      - [ ] Add settings input for custom instruction include patterns (regex/pattern list).
-      - [ ] Inject resolved instructions into monolithic code-agent prompt context.
-      - [ ] Keep existing tool runtime policy unchanged; no new permission model in S6-5.
-      - [ ] Enforce blocking validation error when resolved prompt is invalid.
-      - [ ] Apply direct cutover in VSCode mode (no feature flag).
+    - [x] Implement S6-5.
+      - [x] Build monolithic VSCode code-agent prompt baseline (adapted from Cursor prompt style, no runtime prompt-layer chain).
+      - [x] Implement prompt resolution order: workspace override > global override > default.
+      - [x] Reuse settings editing model with raw textarea for global + workspace prompt overrides.
+      - [x] Auto-load instruction files when present: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`.
+      - [x] Add settings input for custom instruction include patterns (regex/pattern list).
+      - [x] Inject resolved instructions into monolithic code-agent prompt context.
+      - [x] Keep existing tool runtime policy unchanged; no new permission model in S6-5.
+      - [x] Enforce blocking validation error when resolved prompt is invalid.
+      - [x] Apply direct cutover in VSCode mode (no feature flag).
   - [ ] Lot gate (scoped only)
-    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/vscode-ext/host-bridge-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/vscode-ext/host-bridge-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make test-ui SCOPE=tests/chat/stream-message.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] `make test-api-endpoints SCOPE=tests/api/chat-messages-stream.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-api-unit SCOPE=tests/unit/vscode-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] `make test-ui SCOPE=tests/vscode-ext/code-agent-settings.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-api-unit SCOPE=tests/unit/vscode-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] `make test-ui SCOPE=tests/vscode-ext/code-agent-settings.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
