@@ -612,20 +612,25 @@ class StreamHub {
     const streamIds = this.getTrackedStreamIds();
 
     if (isVsCodeWebviewRuntime()) {
-      const connectionKey = JSON.stringify({
-        baseUrl,
-        workspaceId: scopedWorkspaceId ?? null,
-        streamIds,
-      });
-      const pollUrl = `vscode-poll:${connectionKey}`;
-      if (this.currentUrl !== pollUrl) {
-        this.close();
-        this.currentUrl = pollUrl;
+      const runtime = (globalThis as typeof globalThis & {
+        chrome?: { runtime?: { connect?: (options: { name: string }) => RuntimePortLike } };
+      }).chrome?.runtime;
+      if (!runtime?.connect) {
+        const connectionKey = JSON.stringify({
+          baseUrl,
+          workspaceId: scopedWorkspaceId ?? null,
+          streamIds,
+        });
+        const pollUrl = `vscode-poll:${connectionKey}`;
+        if (this.currentUrl !== pollUrl) {
+          this.close();
+          this.currentUrl = pollUrl;
+        }
+        if (!this.pollTimer && !this.pollInFlight) {
+          void this.runOverlayPoll(baseUrl);
+        }
+        return;
       }
-      if (!this.pollTimer && !this.pollInFlight) {
-        void this.runOverlayPoll(baseUrl);
-      }
-      return;
     }
 
     if (isExtensionHost()) {
