@@ -331,10 +331,10 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] On assistant `retry`, route through the same restore-banner gate when rollback is available; otherwise retry directly.
     - [x] Step 3 — Fix BUG-L6-2 then complete S6-7 (resolved prompt prefill + single effective editor behavior).
     - [x] Step 4 — Implement S6-6 (settings split `Server | Workspace | Tools`).
-    - [ ] Step 5 — Implement S6-4 (project fingerprint + server-side mapping runtime).
-      - [ ] Compute VSCode `project_fingerprint` (git-based preferred, folder-based fallback) and resolve mapping via API.
-      - [ ] Persist `project_fingerprint -> workspaceId` mapping in user-scoped settings (no new DB table).
-      - [ ] Handle multi-root active folder context in mapping/UI state.
+    - [x] Step 5 — Implement S6-4 (project fingerprint + server-side mapping runtime).
+      - [x] Compute VSCode `project_fingerprint` (git-based preferred, folder-based fallback) and resolve mapping via API.
+      - [x] Persist `project_fingerprint -> workspaceId` mapping in user-scoped settings (no new DB table).
+      - [x] Handle multi-root active folder context in mapping/UI state.
     - [ ] Step 6 — Implement S6-4b (UI after explicit validation).
       - [ ] Reuse token-required blocking card pattern for project onboarding prompt (`New code base detected...`).
       - [ ] Enforce token-first flow: project-workspace onboarding runs only after token connection succeeds.

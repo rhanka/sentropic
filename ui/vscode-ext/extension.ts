@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import { createHash } from 'crypto';
+import { promises as fs } from 'fs';
+import path from 'path';
 import {
   createTopAiVsCodeRequestHandler,
   type RuntimeHttpRequestResult,
@@ -17,6 +20,8 @@ const VIEW_CONTAINER_ID = 'topai';
 const SECRET_SESSION_TOKEN_KEY = 'topai.sessionToken';
 const STATE_KEY_RUNTIME_CONFIG = 'topai.runtimeConfig';
 const STATE_KEY_WORKSPACE_PROMPT_OVERRIDES = 'topai.workspacePromptOverrides';
+const STATE_KEY_PROJECT_WORKSPACE_MAPPINGS = 'topai.projectWorkspaceMappings';
+const PROJECT_WORKSPACE_MAPPING_SYNC_TTL_MS = 60_000;
 
 declare const __TOPAI_DEFAULT_API_BASE_URL__: string | undefined;
 declare const __TOPAI_DEFAULT_APP_BASE_URL__: string | undefined;
@@ -52,6 +57,7 @@ const defaultConfig: TopAiRuntimeConfig = {
   instructionIncludePatterns: [...DEFAULT_INSTRUCTION_INCLUDE_PATTERNS],
   workspaceScopeKey: '',
   workspaceScopeLabel: '',
+  workspaceScopeWorkspaceId: '',
 };
 
 type RuntimeConfigPatchPayload = {
@@ -78,6 +84,29 @@ type VsCodeCodeAgentPayload = {
   instructionIncludePatterns?: string[];
   instructionFiles?: VsCodeInstructionFile[];
 };
+type WorkspaceScopeInfo = {
+  workspaceScopeKey: string;
+  workspaceScopeLabel: string;
+  projectFingerprint: string;
+};
+type CodeWorkspaceSummary = {
+  id: string;
+  name: string;
+  role: 'viewer' | 'commenter' | 'editor' | 'admin';
+};
+type ProjectWorkspaceMappingRecord = {
+  projectFingerprint: string;
+  mappedWorkspaceId: string | null;
+  mappedWorkspaceName: string | null;
+  lastWorkspaceId: string | null;
+  codeWorkspaces: CodeWorkspaceSummary[];
+  syncedAt: number;
+};
+type ProjectWorkspaceMappingsStore = {
+  records: Record<string, ProjectWorkspaceMappingRecord>;
+};
+
+const projectWorkspaceSyncInFlight = new Map<string, Promise<ProjectWorkspaceMappingRecord | null>>();
 
 const normalizeConfigString = (value: unknown, fallback = ''): string => {
   if (typeof value !== 'string') return fallback;
@@ -101,23 +130,80 @@ const normalizeInstructionIncludePatterns = (value: unknown): string[] => {
     : [...DEFAULT_INSTRUCTION_INCLUDE_PATTERNS];
 };
 
-const resolveWorkspaceScope = (): {
-  workspaceScopeKey: string;
-  workspaceScopeLabel: string;
-} => {
-  const folder = vscode.workspace.workspaceFolders?.[0];
+const normalizeWorkspacePath = (value: string): string =>
+  process.platform === 'win32' ? value.toLowerCase() : value;
+
+const selectActiveWorkspaceFolder = (): vscode.WorkspaceFolder | null => {
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  if (folders.length === 0) return null;
+  const activeUri = vscode.window.activeTextEditor?.document?.uri;
+  if (activeUri) {
+    const activeFolder = vscode.workspace.getWorkspaceFolder(activeUri);
+    if (activeFolder) return activeFolder;
+  }
+  return folders[0];
+};
+
+const readGitOriginUrl = async (workspaceFsPath: string): Promise<string | null> => {
+  const gitEntryPath = path.join(workspaceFsPath, '.git');
+  try {
+    const stat = await fs.stat(gitEntryPath);
+    let gitDirPath = gitEntryPath;
+    if (stat.isFile()) {
+      const fileContent = await fs.readFile(gitEntryPath, 'utf8');
+      const match = fileContent.match(/gitdir:\s*(.+)/i);
+      if (match?.[1]) {
+        const resolvedPath = path.resolve(workspaceFsPath, match[1].trim());
+        gitDirPath = resolvedPath;
+      }
+    }
+    const configPath = path.join(gitDirPath, 'config');
+    const configContent = await fs.readFile(configPath, 'utf8');
+    const lines = configContent.split(/\r?\n/);
+    let inOriginSection = false;
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (line.startsWith('[') && line.endsWith(']')) {
+        inOriginSection = line.toLowerCase() === '[remote "origin"]';
+        continue;
+      }
+      if (!inOriginSection) continue;
+      const match = line.match(/^url\s*=\s*(.+)$/i);
+      if (!match?.[1]) continue;
+      return match[1].trim();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const computeProjectFingerprint = async (
+  workspaceFsPath: string,
+): Promise<string> => {
+  const normalizedPath = normalizeWorkspacePath(workspaceFsPath);
+  const originUrl = await readGitOriginUrl(workspaceFsPath);
+  const seed = originUrl
+    ? `git:${originUrl.trim().toLowerCase()}`
+    : `path:${normalizedPath}`;
+  return createHash('sha256').update(seed).digest('hex').slice(0, 40);
+};
+
+const resolveWorkspaceScope = async (): Promise<WorkspaceScopeInfo> => {
+  const folder = selectActiveWorkspaceFolder();
   if (!folder) {
     return {
       workspaceScopeKey: '',
       workspaceScopeLabel: '',
+      projectFingerprint: '',
     };
   }
   const fsPath = folder.uri.fsPath || folder.uri.toString();
-  const workspaceScopeKey =
-    process.platform === 'win32' ? fsPath.toLowerCase() : fsPath;
+  const workspaceScopeKey = normalizeWorkspacePath(fsPath);
   return {
     workspaceScopeKey,
     workspaceScopeLabel: folder.name || fsPath,
+    projectFingerprint: await computeProjectFingerprint(fsPath),
   };
 };
 
@@ -136,6 +222,188 @@ const readWorkspacePromptOverrideMap = (
     out[key] = value;
   }
   return out;
+};
+
+const readProjectWorkspaceMappingsStore = (
+  context: vscode.ExtensionContext,
+): ProjectWorkspaceMappingsStore => {
+  const raw = context.globalState.get<ProjectWorkspaceMappingsStore>(
+    STATE_KEY_PROJECT_WORKSPACE_MAPPINGS,
+    { records: {} },
+  );
+  if (!raw || typeof raw !== 'object') return { records: {} };
+  const sourceRecords =
+    raw.records && typeof raw.records === 'object'
+      ? raw.records
+      : {};
+  const records: Record<string, ProjectWorkspaceMappingRecord> = {};
+  for (const [fingerprint, value] of Object.entries(sourceRecords)) {
+    if (typeof fingerprint !== 'string' || fingerprint.trim().length < 8) continue;
+    if (!value || typeof value !== 'object') continue;
+    const record = value as Partial<ProjectWorkspaceMappingRecord>;
+    const mappedWorkspaceId =
+      typeof record.mappedWorkspaceId === 'string' && record.mappedWorkspaceId.trim().length > 0
+        ? record.mappedWorkspaceId.trim()
+        : null;
+    const mappedWorkspaceName =
+      typeof record.mappedWorkspaceName === 'string' && record.mappedWorkspaceName.trim().length > 0
+        ? record.mappedWorkspaceName.trim()
+        : null;
+    const lastWorkspaceId =
+      typeof record.lastWorkspaceId === 'string' && record.lastWorkspaceId.trim().length > 0
+        ? record.lastWorkspaceId.trim()
+        : null;
+    const codeWorkspaces = Array.isArray(record.codeWorkspaces)
+      ? record.codeWorkspaces
+          .map((entry) => {
+            if (!entry || typeof entry !== 'object') return null;
+            const row = entry as Partial<CodeWorkspaceSummary>;
+            if (
+              typeof row.id !== 'string' ||
+              typeof row.name !== 'string' ||
+              (row.role !== 'viewer' &&
+                row.role !== 'commenter' &&
+                row.role !== 'editor' &&
+                row.role !== 'admin')
+            ) {
+              return null;
+            }
+            return {
+              id: row.id.trim(),
+              name: row.name.trim(),
+              role: row.role,
+            } as CodeWorkspaceSummary;
+          })
+          .filter((entry): entry is CodeWorkspaceSummary => Boolean(entry))
+      : [];
+    records[fingerprint] = {
+      projectFingerprint: fingerprint,
+      mappedWorkspaceId,
+      mappedWorkspaceName,
+      lastWorkspaceId,
+      codeWorkspaces,
+      syncedAt:
+        typeof record.syncedAt === 'number' && Number.isFinite(record.syncedAt)
+          ? record.syncedAt
+          : 0,
+    };
+  }
+  return { records };
+};
+
+const writeProjectWorkspaceMappingsStore = async (
+  context: vscode.ExtensionContext,
+  store: ProjectWorkspaceMappingsStore,
+): Promise<void> => {
+  await context.globalState.update(STATE_KEY_PROJECT_WORKSPACE_MAPPINGS, store);
+};
+
+const fetchProjectWorkspaceMappingRecord = async (params: {
+  apiBaseUrl: string;
+  sessionToken: string;
+  projectFingerprint: string;
+}): Promise<ProjectWorkspaceMappingRecord | null> => {
+  const apiBaseUrl = params.apiBaseUrl.replace(/\/$/, '');
+  const url = `${apiBaseUrl}/vscode-extension/workspace-mapping?project_fingerprint=${encodeURIComponent(
+    params.projectFingerprint,
+  )}`;
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${params.sessionToken}`,
+      },
+    });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as Partial<ProjectWorkspaceMappingRecord> | null;
+    if (!payload || typeof payload !== 'object') return null;
+    const codeWorkspaces = Array.isArray(payload.codeWorkspaces)
+      ? payload.codeWorkspaces
+          .map((entry) => {
+            if (!entry || typeof entry !== 'object') return null;
+            const row = entry as Partial<CodeWorkspaceSummary>;
+            if (
+              typeof row.id !== 'string' ||
+              typeof row.name !== 'string' ||
+              (row.role !== 'viewer' &&
+                row.role !== 'commenter' &&
+                row.role !== 'editor' &&
+                row.role !== 'admin')
+            ) {
+              return null;
+            }
+            return {
+              id: row.id.trim(),
+              name: row.name.trim(),
+              role: row.role,
+            } as CodeWorkspaceSummary;
+          })
+          .filter((entry): entry is CodeWorkspaceSummary => Boolean(entry))
+      : [];
+    const mappedWorkspaceId =
+      typeof payload.mappedWorkspaceId === 'string' && payload.mappedWorkspaceId.trim().length > 0
+        ? payload.mappedWorkspaceId.trim()
+        : null;
+    const mappedWorkspaceName =
+      typeof payload.mappedWorkspaceName === 'string' && payload.mappedWorkspaceName.trim().length > 0
+        ? payload.mappedWorkspaceName.trim()
+        : null;
+    const lastWorkspaceId =
+      typeof payload.lastWorkspaceId === 'string' && payload.lastWorkspaceId.trim().length > 0
+        ? payload.lastWorkspaceId.trim()
+        : null;
+    return {
+      projectFingerprint: params.projectFingerprint,
+      mappedWorkspaceId,
+      mappedWorkspaceName,
+      lastWorkspaceId,
+      codeWorkspaces,
+      syncedAt: Date.now(),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const getOrSyncProjectWorkspaceMapping = async (params: {
+  context: vscode.ExtensionContext;
+  apiBaseUrl: string;
+  sessionToken: string;
+  projectFingerprint: string;
+}): Promise<ProjectWorkspaceMappingRecord | null> => {
+  const { context, apiBaseUrl, sessionToken, projectFingerprint } = params;
+  if (!projectFingerprint.trim()) return null;
+  const store = readProjectWorkspaceMappingsStore(context);
+  const cached = store.records[projectFingerprint];
+  const cacheFresh =
+    cached &&
+    Date.now() - cached.syncedAt < PROJECT_WORKSPACE_MAPPING_SYNC_TTL_MS;
+  if (cacheFresh) return cached;
+  if (!sessionToken.trim()) return cached ?? null;
+
+  const inflightKey = `${projectFingerprint}:${apiBaseUrl}`;
+  const existingInflight = projectWorkspaceSyncInFlight.get(inflightKey);
+  if (existingInflight) return existingInflight;
+
+  const syncPromise = (async () => {
+    const fetched = await fetchProjectWorkspaceMappingRecord({
+      apiBaseUrl,
+      sessionToken,
+      projectFingerprint,
+    });
+    if (!fetched) return cached ?? null;
+    const nextStore = readProjectWorkspaceMappingsStore(context);
+    nextStore.records[projectFingerprint] = fetched;
+    await writeProjectWorkspaceMappingsStore(context, nextStore);
+    return fetched;
+  })();
+
+  projectWorkspaceSyncInFlight.set(inflightKey, syncPromise);
+  try {
+    return await syncPromise;
+  } finally {
+    projectWorkspaceSyncInFlight.delete(inflightKey);
+  }
 };
 
 const buildInstructionDiscoveryPatterns = (
@@ -181,7 +449,8 @@ const readRuntimeConfig = async (
   const instructionIncludePatterns = normalizeInstructionIncludePatterns(
     persisted.instructionIncludePatterns,
   );
-  const { workspaceScopeKey, workspaceScopeLabel } = resolveWorkspaceScope();
+  const { workspaceScopeKey, workspaceScopeLabel, projectFingerprint } =
+    await resolveWorkspaceScope();
   const workspacePromptOverrides = readWorkspacePromptOverrideMap(context);
   const codeAgentPromptWorkspace =
     workspaceScopeKey && typeof workspacePromptOverrides[workspaceScopeKey] === 'string'
@@ -198,12 +467,19 @@ const readRuntimeConfig = async (
     config.get<string>('sessionToken', ''),
     '',
   );
+  const sessionToken = normalizeConfigString(secretToken, fallbackSettingToken);
+  const projectWorkspaceMapping = await getOrSyncProjectWorkspaceMapping({
+    context,
+    apiBaseUrl,
+    sessionToken,
+    projectFingerprint,
+  });
 
   return {
     apiBaseUrl,
     appBaseUrl,
     wsBaseUrl,
-    sessionToken: normalizeConfigString(secretToken, fallbackSettingToken),
+    sessionToken,
     codexSignInUrl: defaultConfig.codexSignInUrl,
     codeAgentPromptDefault: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
     codeAgentPromptGlobal,
@@ -213,6 +489,7 @@ const readRuntimeConfig = async (
     instructionIncludePatterns,
     workspaceScopeKey,
     workspaceScopeLabel,
+    workspaceScopeWorkspaceId: projectWorkspaceMapping?.mappedWorkspaceId ?? '',
   };
 };
 
@@ -256,7 +533,7 @@ const saveRuntimeConfigPatch = async (
   }
 
   if (typeof payload.codeAgentPromptWorkspace === 'string') {
-    const { workspaceScopeKey } = resolveWorkspaceScope();
+    const { workspaceScopeKey } = await resolveWorkspaceScope();
     if (workspaceScopeKey) {
       const map = readWorkspacePromptOverrideMap(context);
       const nextValue = payload.codeAgentPromptWorkspace;
@@ -403,6 +680,21 @@ const injectVsCodeCodeAgentIntoBody = async (
   return JSON.stringify(parsed);
 };
 
+const shouldAppendWorkspaceScopeQuery = (pathname: string): boolean => {
+  if (!pathname.startsWith('/api/v1/')) return false;
+  if (pathname.startsWith('/api/v1/auth/')) return false;
+  if (pathname === '/api/v1/workspaces' || pathname.startsWith('/api/v1/workspaces/')) {
+    return false;
+  }
+  if (
+    pathname === '/api/v1/vscode-extension/workspace-mapping' ||
+    pathname.startsWith('/api/v1/vscode-extension/workspace-mapping/')
+  ) {
+    return false;
+  }
+  return true;
+};
+
 const performRuntimeHttpRequest = async (
   runtimeConfig: TopAiRuntimeConfig,
   payload: {
@@ -431,6 +723,16 @@ const performRuntimeHttpRequest = async (
 
   if (apiBaseOrigin && targetUrl.origin !== apiBaseOrigin) {
     throw new Error('runtime.http.request rejects cross-origin targets.');
+  }
+  if (
+    runtimeConfig.workspaceScopeWorkspaceId.trim().length > 0 &&
+    shouldAppendWorkspaceScopeQuery(targetUrl.pathname) &&
+    !targetUrl.searchParams.has('workspace_id')
+  ) {
+    targetUrl.searchParams.set(
+      'workspace_id',
+      runtimeConfig.workspaceScopeWorkspaceId.trim(),
+    );
   }
 
   const normalizedHeaders = new Headers(payload.headers ?? {});
