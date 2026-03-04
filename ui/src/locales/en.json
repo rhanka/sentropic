@@ -934,6 +934,14 @@
       "wsBaseUrlOptional": "WS Base URL (optional)",
       "sessionToken": "Extension token",
       "sessionTokenHint": "Paste the admin-issued VSCode extension token from web app settings.",
+      "codeAgent": {
+        "title": "Code agent prompt profile",
+        "globalPrompt": "Global code-agent prompt",
+        "workspacePrompt": "Workspace override prompt",
+        "workspacePromptHint": "Applied to current workspace scope: {scope}",
+        "instructionPatterns": "Instruction include patterns",
+        "instructionPatternsHint": "One glob/pattern per line (ex: AGENTS.md, .cursor/rules/*.mdc)."
+      },
       "testApi": "Test API",
       "permissions": {
         "title": "Tool permissions",

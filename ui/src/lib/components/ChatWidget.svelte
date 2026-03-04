@@ -110,6 +110,11 @@
     appBaseUrl: string;
     wsBaseUrl: string;
     sessionToken: string;
+    codeAgentPromptGlobal: string;
+    codeAgentPromptWorkspace: string;
+    instructionIncludePatterns: string;
+    workspaceScopeKey: string;
+    workspaceScopeLabel: string;
     updatedAt?: number;
   };
   type ExtensionConfigStatusKind = 'info' | 'ok' | 'error';
@@ -129,19 +134,25 @@
   const EXTENSION_CONFIG_UPDATED_EVENT = 'topai:extension-config-updated';
   const DEFAULT_EXTENSION_CONFIGS: Record<
     ExtensionProfile,
-    Omit<ExtensionRuntimeConfig, 'profile' | 'updatedAt'>
+    Omit<ExtensionRuntimeConfig, 'profile' | 'updatedAt' | 'workspaceScopeKey' | 'workspaceScopeLabel'>
   > = {
     uat: {
       apiBaseUrl: 'http://localhost:8787/api/v1',
       appBaseUrl: 'http://localhost:5173',
       wsBaseUrl: '',
       sessionToken: '',
+      codeAgentPromptGlobal: '',
+      codeAgentPromptWorkspace: '',
+      instructionIncludePatterns: '',
     },
     prod: {
       apiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca/api/v1',
       appBaseUrl: 'https://top-ai-ideas.sent-tech.ca',
       wsBaseUrl: '',
       sessionToken: '',
+      codeAgentPromptGlobal: '',
+      codeAgentPromptWorkspace: '',
+      instructionIncludePatterns: '',
     },
   };
   let displayMode: DisplayMode = 'floating';
@@ -203,7 +214,8 @@
   let extensionConfigForm: ExtensionRuntimeConfig = {
     profile: 'uat',
     ...DEFAULT_EXTENSION_CONFIGS.uat,
-    sessionToken: '',
+    workspaceScopeKey: '',
+    workspaceScopeLabel: '',
   };
   let isPluginMode = false;
   const isExtensionRuntime = () => {
@@ -501,6 +513,26 @@
     role: payload.role as User['role'],
   });
 
+  const formatInstructionIncludePatterns = (value: unknown): string => {
+    if (Array.isArray(value)) {
+      return value
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+        .join('\n');
+    }
+    if (typeof value === 'string') {
+      return value.trim();
+    }
+    return '';
+  };
+
+  const parseInstructionIncludePatterns = (value: string): string[] =>
+    value
+      .split(/\r?\n|,/g)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+
   const normalizeExtensionConfig = (
     raw?: Partial<ExtensionRuntimeConfig> | null,
   ): ExtensionRuntimeConfig => {
@@ -510,12 +542,24 @@
     const appBaseUrl = raw?.appBaseUrl?.trim() || defaults.appBaseUrl;
     const wsBaseUrl = raw?.wsBaseUrl?.trim() || '';
     const sessionToken = raw?.sessionToken?.trim() || '';
+    const codeAgentPromptGlobal = raw?.codeAgentPromptGlobal ?? '';
+    const codeAgentPromptWorkspace = raw?.codeAgentPromptWorkspace ?? '';
+    const instructionIncludePatterns = formatInstructionIncludePatterns(
+      raw?.instructionIncludePatterns,
+    );
+    const workspaceScopeKey = raw?.workspaceScopeKey?.trim() || '';
+    const workspaceScopeLabel = raw?.workspaceScopeLabel?.trim() || '';
     return {
       profile,
       apiBaseUrl,
       appBaseUrl,
       wsBaseUrl,
       sessionToken,
+      codeAgentPromptGlobal,
+      codeAgentPromptWorkspace,
+      instructionIncludePatterns,
+      workspaceScopeKey,
+      workspaceScopeLabel,
       updatedAt:
         typeof raw?.updatedAt === 'number' ? raw.updatedAt : Date.now(),
     };
@@ -584,6 +628,11 @@
           appBaseUrl: extensionConfigForm.appBaseUrl,
           wsBaseUrl: extensionConfigForm.wsBaseUrl,
           sessionToken: extensionConfigForm.sessionToken,
+          codeAgentPromptGlobal: extensionConfigForm.codeAgentPromptGlobal,
+          codeAgentPromptWorkspace: extensionConfigForm.codeAgentPromptWorkspace,
+          instructionIncludePatterns: parseInstructionIncludePatterns(
+            extensionConfigForm.instructionIncludePatterns,
+          ),
         },
       })) as
         | {
@@ -1813,6 +1862,75 @@
                       <p class="text-[11px] text-slate-500">
                         {$_('chat.extension.sessionTokenHint')}
                       </p>
+                    </div>
+                    <div class="border-t border-slate-200 pt-2 space-y-2">
+                      <div class="text-xs font-semibold text-slate-700">
+                        {$_('chat.extension.codeAgent.title')}
+                      </div>
+                      <div class="space-y-1">
+                        <label
+                          class="block text-[11px] text-slate-600"
+                          for="extension-config-code-agent-global"
+                        >
+                          {$_('chat.extension.codeAgent.globalPrompt')}
+                        </label>
+                        <textarea
+                          id="extension-config-code-agent-global"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                          bind:value={extensionConfigForm.codeAgentPromptGlobal}
+                          rows={5}
+                          disabled={extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        />
+                      </div>
+                      <div class="space-y-1">
+                        <label
+                          class="block text-[11px] text-slate-600"
+                          for="extension-config-code-agent-workspace"
+                        >
+                          {$_('chat.extension.codeAgent.workspacePrompt')}
+                        </label>
+                        <textarea
+                          id="extension-config-code-agent-workspace"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                          bind:value={extensionConfigForm.codeAgentPromptWorkspace}
+                          rows={5}
+                          disabled={extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        />
+                        <p class="text-[11px] text-slate-500">
+                          {$_('chat.extension.codeAgent.workspacePromptHint', {
+                            values: {
+                              scope:
+                                extensionConfigForm.workspaceScopeLabel ||
+                                extensionConfigForm.workspaceScopeKey ||
+                                'workspace',
+                            },
+                          })}
+                        </p>
+                      </div>
+                      <div class="space-y-1">
+                        <label
+                          class="block text-[11px] text-slate-600"
+                          for="extension-config-code-agent-patterns"
+                        >
+                          {$_('chat.extension.codeAgent.instructionPatterns')}
+                        </label>
+                        <textarea
+                          id="extension-config-code-agent-patterns"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                          bind:value={extensionConfigForm.instructionIncludePatterns}
+                          rows={3}
+                          disabled={extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        />
+                        <p class="text-[11px] text-slate-500">
+                          {$_('chat.extension.codeAgent.instructionPatternsHint')}
+                        </p>
+                      </div>
                     </div>
                     <div class="flex items-center gap-2 pt-1">
                       <button
