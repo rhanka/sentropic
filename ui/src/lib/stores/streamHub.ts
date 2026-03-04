@@ -20,6 +20,16 @@ const isExtensionHost = (): boolean => {
   return Boolean(runtime?.id);
 };
 
+const isVsCodeWebviewRuntime = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const runtime = (
+    globalThis as typeof globalThis & {
+      __TOPAI_VSCODE_RUNTIME__?: Record<string, unknown>;
+    }
+  ).__TOPAI_VSCODE_RUNTIME__;
+  return Boolean(runtime && typeof runtime === 'object');
+};
+
 export type StreamHubEvent =
   | { type: 'job_update'; jobId: string; data: any }
   | { type: 'organization_update'; organizationId: string; data: any }
@@ -595,6 +605,23 @@ class StreamHub {
     const baseUrl = getApiBaseUrl() ?? API_BASE_URL;
     const scopedWorkspaceId = getScopedWorkspaceIdForUser();
     const streamIds = this.getTrackedStreamIds();
+
+    if (isVsCodeWebviewRuntime()) {
+      const connectionKey = JSON.stringify({
+        baseUrl,
+        workspaceId: scopedWorkspaceId ?? null,
+        streamIds,
+      });
+      const pollUrl = `vscode-poll:${connectionKey}`;
+      if (this.currentUrl !== pollUrl) {
+        this.close();
+        this.currentUrl = pollUrl;
+      }
+      if (!this.pollTimer && !this.pollInFlight) {
+        void this.runOverlayPoll(baseUrl);
+      }
+      return;
+    }
 
     if (isExtensionHost()) {
       const connectionKey = JSON.stringify({
