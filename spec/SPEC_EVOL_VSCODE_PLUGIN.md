@@ -496,8 +496,8 @@ This section locks the implementation contract for the immediate Lot-1 increment
     - `agent_chat`: generic chat-oriented profile.
   - Routing matrix:
     - VSCode source + `code` workspace -> default `agent_code` on new sessions.
-    - Web/Chrome source + `code` workspace -> `agent_chat`.
-    - non-`code` workspace (all sources) -> existing classic chat agent path.
+    - Web/Chrome source + `code` workspace -> `agent_code`.
+    - non-`code` workspace (all sources) -> `agent_chat` (existing classic behavior).
   - BR-05 does not require a multi-agent selector UI.
     - Session routing must still be explicit in request contract (no implicit “always inject code-agent payload” behavior).
   - Settings ownership:
