@@ -446,6 +446,73 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - no schema migration for BR-05 (settings-based persistence),
   - workspace selection for VSCode requests must prefer resolved project mapping over generic default workspace fallback.
 
+### 4.18 Lot 6 - Subject 5 (VSCode code-agent prompt profile, monolithic)
+- Decision locked from interactive option review:
+  - `1A`: monolithic prompt model,
+  - `2C`: global + workspace override,
+  - `3`: instruction files auto-load + user regex extension,
+  - `4`: keep existing tool-permission/runtime policy unchanged,
+  - `5A`: single `code` agent path (no selector),
+  - `6`: raw textarea settings editing,
+  - `7A`: invalid prompt blocks execution,
+  - `8A`: direct cutover (no feature-flag rollout).
+
+- Baseline source for prompt style (to adapt for our runtime):
+  - Cursor prompt corpus reference:
+    - `https://github.com/rhanka/system-prompts-and-models-of-ai-tools/blob/main/Cursor%20Prompts/Chat%20Prompt.txt`
+
+- Prompt model contract (monolithic):
+  - VSCode mode uses one effective prompt body dedicated to code tasks (`agent code` semantics).
+  - No runtime multi-layer prompt chaining (`base -> vscode -> agent`) in BR-05.
+  - The monolithic prompt must explicitly include:
+    - coding-task behavior (analyze/plan/edit/test),
+    - existing tool usage guidance,
+    - current repo workflow constraints.
+
+- Override contract (`2C`):
+  - Resolution order: `workspace override` -> `global override` -> `default monolithic prompt`.
+  - Workspace override is optional and full-text (not fragment patching).
+  - Global and workspace prompt values are editable in settings as raw textarea fields.
+
+- Project instruction ingestion contract (`3`):
+  - Auto-load default patterns when present:
+    - `AGENTS.md`
+    - `CLAUDE.md`
+    - `GEMINI.md`
+    - `.cursor/rules/*.mdc`
+    - `.github/copilot-instructions.md`
+    - `.github/instructions/*.instructions.md`
+  - Add settings input for custom include patterns (regex/pattern list) to extend/restrict discovery.
+  - Ingested instruction content is injected as contextual block into the monolithic code-agent prompt payload.
+
+- Tool policy contract (`4`):
+  - No change to current runtime tool authorization/permission model.
+  - No new tool policy layer introduced by S6-5.
+  - The prompt can describe tool usage expectations, but cannot bypass policy enforcement.
+
+- Agent selection contract (`5A`):
+  - No multi-agent selector UI in BR-05 for VSCode path.
+  - Behavior is “single code-agent profile” forkable by editing prompt content (global/workspace overrides).
+
+- Validation/failure contract (`7A`):
+  - If resolved prompt is invalid (empty/parse-invalid), message execution is blocked.
+  - UI must surface explicit actionable validation error in settings/runtime.
+
+- Activation contract (`8A`):
+  - Direct cutover once merged: VSCode runtime uses this S6-5 prompt pipeline by default.
+  - Web app and Chrome extension behavior stay unchanged unless explicitly wired elsewhere.
+
+- Test contract (scoped):
+  - API:
+    - prompt resolution order (`workspace > global > default`),
+    - invalid prompt blocks execution with explicit error.
+  - UI:
+    - global/workspace textarea save/reload behavior,
+    - custom pattern input persistence.
+  - Integration:
+    - instruction discovery from default files + custom patterns,
+    - VSCode chat path uses resolved monolithic prompt.
+
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
 - Claude Code: auto compact near context limits + explicit manual compaction command.
