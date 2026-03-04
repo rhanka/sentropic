@@ -408,9 +408,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Add scoped API/UI tests for enrollment lifecycle and RBAC.
     - [!] BUG-L6-6 — Agent separation in VSCode mode: runtime currently injects code-agent payload on all chat calls, so workspace chat sessions default to code-agent behavior instead of explicit agent routing.
       - [ ] Define and apply explicit runtime routing with canonical names:
-        - [ ] `agent_code` for VSCode code sessions (default on new VSCode session),
-        - [ ] `agent_chat` for generic chat sessions,
-        - [ ] non-code workspace path keeps existing classic chat agent behavior.
+        - [ ] `agent_code` for sessions bound to `code` workspaces (default on new VSCode session + web/chrome when current workspace is `code`),
+        - [ ] `agent_chat` for sessions on non-`code` workspaces (classic chat behavior).
       - [ ] Stop unconditional code-agent payload injection on every VSCode chat call.
       - [ ] Add session-level agent mode marker in VSCode runtime contract (no ambiguity at request time).
       - [ ] Clarify settings ownership:
