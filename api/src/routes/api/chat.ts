@@ -28,6 +28,21 @@ const localToolDefinitionInput = z.object({
   parameters: z.record(z.string(), z.unknown())
 });
 
+const vscodeCodeAgentInstructionInput = z.object({
+  path: z.string().min(1).max(512),
+  content: z.string().min(1).max(200_000),
+});
+
+const vscodeCodeAgentInput = z.object({
+  source: z.literal('vscode').optional(),
+  workspaceKey: z.string().min(1).max(256).optional(),
+  workspaceLabel: z.string().min(1).max(512).optional(),
+  promptGlobalOverride: z.string().max(200_000).optional(),
+  promptWorkspaceOverride: z.string().max(200_000).optional(),
+  instructionIncludePatterns: z.array(z.string().min(1).max(256)).max(64).optional(),
+  instructionFiles: z.array(vscodeCodeAgentInstructionInput).max(64).optional(),
+});
+
 const createMessageInput = z.object({
   sessionId: z.string().optional(),
   content: z.string().min(1),
@@ -40,7 +55,8 @@ const createMessageInput = z.object({
   sessionTitle: z.string().optional(),
   contexts: z.array(chatContextInput).optional(),
   tools: z.array(z.string()).optional(),
-  localToolDefinitions: z.array(localToolDefinitionInput).max(32).optional()
+  localToolDefinitions: z.array(localToolDefinitionInput).max(32).optional(),
+  vscodeCodeAgent: vscodeCodeAgentInput.optional(),
 });
 
 const feedbackInput = z.object({
@@ -54,6 +70,7 @@ const editMessageInput = z.object({
 const retryMessageInput = z.object({
   providerId: z.enum(['openai', 'gemini']).optional(),
   model: z.string().min(1).optional(),
+  vscodeCodeAgent: vscodeCodeAgentInput.optional(),
 });
 
 const createSessionInput = z.object({
@@ -69,7 +86,8 @@ const createCheckpointInput = z.object({
 
 const toolResultInput = z.object({
   toolCallId: z.string().min(1),
-  result: z.unknown()
+  result: z.unknown(),
+  vscodeCodeAgent: vscodeCodeAgentInput.optional(),
 });
 
 const steerInput = z.object({
@@ -616,6 +634,7 @@ chatRouter.post('/messages/:id/retry', requireWorkspaceAccessRole(), async (c) =
         assistantMessageId: created.assistantMessageId,
         providerId: created.providerId,
         model: created.model,
+        vscodeCodeAgent: payload.data.vscodeCodeAgent ?? undefined,
         locale: requestLocale
       },
       { workspaceId: user.workspaceId }
@@ -675,6 +694,7 @@ chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', cr
     contexts: body.contexts ?? undefined,
     tools: body.tools ?? undefined,
     localToolDefinitions: body.localToolDefinitions ?? undefined,
+    vscodeCodeAgent: body.vscodeCodeAgent ?? undefined,
     locale: requestLocale
   }, { workspaceId: user.workspaceId });
 
@@ -733,6 +753,8 @@ chatRouter.post(
           sessionId: msg.sessionId,
           assistantMessageId: messageId,
           localToolDefinitions: accepted.localToolDefinitions,
+          vscodeCodeAgent:
+            accepted.vscodeCodeAgent ?? body.vscodeCodeAgent ?? undefined,
           resumeFrom: accepted.resumeFrom,
           locale: requestLocale
         },
