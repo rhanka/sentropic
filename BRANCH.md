@@ -359,7 +359,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Add VSCode E2E compose lane: `docker-compose.e2e-vscode.yml`.
       - [ ] Add Make lane targets:
         - [x] `up-e2e-vscode`,
-        - [ ] `down-e2e-vscode`,
+        - [x] `down-e2e-vscode`,
         - [ ] `ps-e2e-vscode`,
         - [ ] `logs-e2e-vscode`,
         - [ ] `test-e2e-vscode` (requires `E2E_SPEC`).
