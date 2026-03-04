@@ -312,7 +312,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
-- [x] **Lot 6 — VSCode runtime parity (spec-first before UAT)**
+- [ ] **Lot 6 — VSCode runtime parity (spec-first before UAT)**
   - [x] Spec phase (interactive, subject-by-subject)
     - [x] S6-1 Streaming parity in VSCode host (SSE chained proxy, no server-side SSE rewrite, no duplicated render pipeline).
     - [x] S6-3 Checkpoint affordance placement + visibility gating (message actions only, code-delta only; legacy composer/global checkpoint controls explicitly forbidden).
@@ -389,6 +389,11 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make test-ui SCOPE=tests/vscode-ext/code-agent-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make build-ext-vscode API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
     - [x] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts WORKERS=1 RETRIES=0 API_PORT=8715 UI_PORT=5115 OPENVSCODE_PORT=3116 MAILDEV_UI_PORT=1015 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
+  - [ ] Bug backlog (Lot 6)
+    - [!] BUG-L6-3 — VSCode local-tools permission banner: `allow_always` action is not effectively persisted/applied (user intent: sticky allow should suppress repeated asks on equivalent calls).
+    - [!] BUG-L6-4 — VSCode code-workspace default naming: on create, default workspace name should derive from git `origin` repository name when available (fallback to folder-based naming if no origin).
+    - [!] BUG-L6-5 — VSCode Codex enrollment semantics: “connected” state is currently token-session based and can appear successful while provider enrollment/readiness is not actually completed.
+    - [!] BUG-L6-6 — Agent separation in VSCode mode: runtime currently injects code-agent payload on all chat calls, so workspace chat sessions default to code-agent behavior instead of distinct chat-vs-code agent routing.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
@@ -400,6 +405,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] Build package on standard dev ports: `make build-ext-vscode`.
     - [ ] Install generated `.vsix` in VSCode.
     - [ ] Open plugin panel and validate real ChatWidget mount in a dockable side panel (not editor tab).
+    - [x] Validate live streaming in VSCode chat (progressive updates visible without manual conversation switching).
     - [ ] Open settings wheel in widget header and validate:
       - [ ] endpoint/token bootstrap fields,
       - [ ] token save/reload in secure storage,
