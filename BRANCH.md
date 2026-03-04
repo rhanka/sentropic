@@ -59,7 +59,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
 ## Feedback Loop
 - `BR05-EX1` — `attention`
   - Path: `Makefile`
-  - Reason: add/restore `make vscode-ext` and optional `make dev-vscode-ext` targets required for VSCode plugin build/distribution.
+  - Reason: add/restore extension build targets and migrate naming to canonical `build-ext-vscode` / `build-ext-chrome` + `e2e-vscode` lane targets.
   - Impact: build orchestration only for BR-05 scope.
   - Rollback: revert target block if packaging strategy changes.
 - `BR05-FL1` — `attention`
@@ -321,23 +321,27 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] S6-5 VSCode-specific system prompt profile (monolithic code-agent prompt; global/workspace overrides; instruction-file auto-load; direct cutover).
     - [x] S6-6 Settings split contract (tabs `Server | Workspace | Tools`; no silent workspace creation).
     - [x] S6-7 Prompt editor contract (single effective prompt field + inheritance override/reset flow).
+    - [x] S6-8 VSCode E2E lane + naming/CI contract (`build-ext-vscode`, `build-ext-chrome`, `test-e2e-vscode`, `docker-compose.e2e-vscode.yml`, strict CI paths, required check, 7-day artifacts, no compatibility aliases).
   - [ ] DEV phase (after all S6 spec subjects are validated)
-    - [ ] Implement S6-1.
-    - [ ] Implement S6-3.
+    - [ ] Step 1 — Implement S6-1 / BUG-L6-0 (VSCode streaming parity first; blocker).
+    - [ ] Step 2 — Implement S6-3 / BUG-L6-1 (checkpoint affordance contract + legacy footer eradication).
       - [ ] Remove legacy composer checkpoint controls (`create checkpoint`, `restore latest`) and legacy `confirm()` restore path.
       - [ ] Add message-scoped restore affordance (`UndoDot`) in user message actions (left of copy), visible only when bound checkpoint has effective code/object delta.
       - [ ] On restore-affordance click, open restore banner (Chrome-style prompt), not native modal.
       - [ ] On assistant `retry`, route through the same restore-banner gate when rollback is available; otherwise retry directly.
-    - [ ] Implement S6-4.
+    - [ ] Step 3 — Fix BUG-L6-2 then complete S6-7 (resolved prompt prefill + single effective editor behavior).
+    - [ ] Step 4 — Implement S6-6 (settings split `Server | Workspace | Tools`).
+    - [ ] Step 5 — Implement S6-4 (project fingerprint + server-side mapping runtime).
       - [ ] Compute VSCode `project_fingerprint` (git-based preferred, folder-based fallback) and resolve mapping via API.
       - [ ] Persist `project_fingerprint -> workspaceId` mapping in user-scoped settings (no new DB table).
       - [ ] Handle multi-root active folder context in mapping/UI state.
-    - [ ] Implement S6-4b (UI after explicit validation)
+    - [ ] Step 6 — Implement S6-4b (UI after explicit validation).
       - [ ] Reuse token-required blocking card pattern for project onboarding prompt (`New code base detected...`).
       - [ ] Enforce token-first flow: project-workspace onboarding runs only after token connection succeeds.
       - [ ] Enforce workspace typing: show/select only `code` workspaces in VSCode settings flow.
       - [ ] Implement `Not now` fallback to last `code` workspace + open settings section.
       - [ ] Enforce mandatory creation path when user has zero `code` workspaces.
+    - [ ] Step 7 — Implement S6-8 (Make/Compose/CI lane + naming cutover).
     - [x] Implement S6-5.
       - [x] Build monolithic VSCode code-agent prompt baseline (adapted from Cursor prompt style, no runtime prompt-layer chain).
       - [x] Implement prompt resolution order: workspace override > global override > default.
@@ -348,11 +352,28 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Keep existing tool runtime policy unchanged; no new permission model in S6-5.
       - [x] Enforce blocking validation error when resolved prompt is invalid.
       - [x] Apply direct cutover in VSCode mode (no feature flag).
-    - [ ] BUG-L6-0 SSE streaming blocker: VSCode chat must render incremental stream events (no full-message flush).
-    - [ ] BUG-L6-1 Legacy checkpoint controls still visible in VSCode composer footer.
-    - [ ] BUG-L6-2 Prompt editor prefill regression: resolved effective prompt must never be blank.
-    - [ ] Implement S6-6 (settings split `Server | Workspace | Tools`).
-    - [ ] Implement S6-7 (single prompt editor with inheritance override/reset).
+      - [ ] Make naming cutover (no alias compatibility):
+        - [ ] rename `vscode-ext` -> `build-ext-vscode`,
+        - [ ] rename `build-ext` -> `build-ext-chrome`,
+        - [ ] migrate all internal references (docs/BRANCH/tests/scripts) to canonical names.
+      - [ ] Add VSCode E2E compose lane: `docker-compose.e2e-vscode.yml`.
+      - [ ] Add Make lane targets:
+        - [ ] `up-e2e-vscode`,
+        - [ ] `down-e2e-vscode`,
+        - [ ] `ps-e2e-vscode`,
+        - [ ] `logs-e2e-vscode`,
+        - [ ] `test-e2e-vscode` (requires `E2E_SPEC`).
+      - [ ] Wire OpenVSCode host runtime test stack (`openvscode` + `e2e-vscode` runner; optional `mock-api-vscode` for targeted local debugging).
+      - [ ] Add/update VSCode-scoped Playwright specs under `e2e/tests/vscode/*.spec.ts`.
+      - [ ] Add GitHub CI workflow/job `e2e-vscode` with strict `paths` triggers and 7-day artifact retention.
+      - [ ] Mark `e2e-vscode` as required check for impacted PR scope (repo settings / branch protection alignment).
+  - [ ] Non-regression phase (after S6 DEV completion, before UAT)
+    - [ ] Run scoped VSCode E2E:
+      - [ ] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=8788 UI_PORT=5174 OPENVSCODE_PORT=3115 MAILDEV_UI_PORT=1081 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
+    - [ ] Run scoped web E2E non-reg on chat stream/runtime:
+      - [ ] `make test-e2e E2E_SPEC=tests/03-chat-streaming.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
+    - [ ] Run scoped Chrome-extension non-reg on impacted chat/auth/doc path (if impacted files overlap extension runtime):
+      - [ ] `make test-e2e E2E_SPEC=tests/03-chat-chrome-extension.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
   - [ ] Lot gate (scoped only)
     - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
@@ -363,6 +384,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] `make test-api-endpoints SCOPE=tests/api/chat-messages-stream.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-unit SCOPE=tests/unit/vscode-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-ui SCOPE=tests/vscode-ext/code-agent-settings.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make build-ext-vscode API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
+    - [ ] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=8788 UI_PORT=5174 OPENVSCODE_PORT=3115 MAILDEV_UI_PORT=1081 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
@@ -371,7 +394,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] download CTA points to valid `.vsix`,
       - [ ] explicit error message if missing config/package.
   - [ ] VSCode plugin (`ENV=dev`, root workspace)
-    - [ ] Build package on standard dev ports: `make vscode-ext`.
+    - [ ] Build package on standard dev ports: `make build-ext-vscode`.
     - [ ] Install generated `.vsix` in VSCode.
     - [ ] Open plugin panel and validate real ChatWidget mount in a dockable side panel (not editor tab).
     - [ ] Open settings wheel in widget header and validate:
@@ -449,7 +472,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - [ ] Scoped UI tests (file-by-file, impacted files only)
   - [ ] Scoped E2E tests (file-by-file, impacted files only)
     - [ ] `make build-api build-ui-image API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
-    - [ ] `make test-e2e E2E_SPEC=tests/03-chat-vscode-extension.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
+    - [ ] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=8788 UI_PORT=5174 OPENVSCODE_PORT=3115 MAILDEV_UI_PORT=1081 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
+    - [ ] `make test-e2e E2E_SPEC=tests/03-chat-streaming.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=e2e-feat-vscode-plugin-v1`
   - [ ] Final gate:
     - [ ] create/update PR with `BRANCH.md` as source body,
     - [ ] verify CI,
