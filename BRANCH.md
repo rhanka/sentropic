@@ -330,7 +330,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] On restore-affordance click, open restore banner (Chrome-style prompt), not native modal.
       - [x] On assistant `retry`, route through the same restore-banner gate when rollback is available; otherwise retry directly.
     - [x] Step 3 — Fix BUG-L6-2 then complete S6-7 (resolved prompt prefill + single effective editor behavior).
-    - [ ] Step 4 — Implement S6-6 (settings split `Server | Workspace | Tools`).
+    - [x] Step 4 — Implement S6-6 (settings split `Server | Workspace | Tools`).
     - [ ] Step 5 — Implement S6-4 (project fingerprint + server-side mapping runtime).
       - [ ] Compute VSCode `project_fingerprint` (git-based preferred, folder-based fallback) and resolve mapping via API.
       - [ ] Persist `project_fingerprint -> workspaceId` mapping in user-scoped settings (no new DB table).
