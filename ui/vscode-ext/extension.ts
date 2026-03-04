@@ -6,6 +6,10 @@ import {
   type TopAiVsCodeCommand,
 } from './host-handler';
 import { createVsCodeLocalToolsRuntime } from './local-tools';
+import {
+  DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+  resolveCodeAgentPromptProfile,
+} from '../src/lib/vscode/code-agent-profile';
 
 const COMMAND_OPEN_PANEL = 'topai.openPanel';
 const VIEW_ID = 'topai.chatView';
@@ -40,8 +44,11 @@ const defaultConfig: TopAiRuntimeConfig = {
   wsBaseUrl: '',
   sessionToken: '',
   codexSignInUrl: 'https://chatgpt.com/auth/login?next=/codex',
+  codeAgentPromptDefault: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
   codeAgentPromptGlobal: '',
   codeAgentPromptWorkspace: '',
+  codeAgentPromptEffective: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+  codeAgentPromptSource: 'default',
   instructionIncludePatterns: [...DEFAULT_INSTRUCTION_INCLUDE_PATTERNS],
   workspaceScopeKey: '',
   workspaceScopeLabel: '',
@@ -180,6 +187,11 @@ const readRuntimeConfig = async (
     workspaceScopeKey && typeof workspacePromptOverrides[workspaceScopeKey] === 'string'
       ? workspacePromptOverrides[workspaceScopeKey]
       : defaultConfig.codeAgentPromptWorkspace;
+  const promptProfile = resolveCodeAgentPromptProfile({
+    workspaceOverride: codeAgentPromptWorkspace,
+    serverOverride: codeAgentPromptGlobal,
+    defaultPrompt: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+  });
 
   const secretToken = await context.secrets.get(SECRET_SESSION_TOKEN_KEY);
   const fallbackSettingToken = normalizeConfigString(
@@ -193,8 +205,11 @@ const readRuntimeConfig = async (
     wsBaseUrl,
     sessionToken: normalizeConfigString(secretToken, fallbackSettingToken),
     codexSignInUrl: defaultConfig.codexSignInUrl,
+    codeAgentPromptDefault: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
     codeAgentPromptGlobal,
     codeAgentPromptWorkspace,
+    codeAgentPromptEffective: promptProfile.effectivePrompt,
+    codeAgentPromptSource: promptProfile.source,
     instructionIncludePatterns,
     workspaceScopeKey,
     workspaceScopeLabel,
