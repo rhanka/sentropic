@@ -1,0 +1,47 @@
+services:
+  openvscode:
+    image: gitpod/openvscode-server:latest
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "3000"
+      - --without-connection-token
+      - --telemetry-level
+      - off
+    environment:
+      - OPENVSCODE_SERVER_ROOT=/home/.openvscode-server
+    ports:
+      - "${OPENVSCODE_PORT:-3115}:3000"
+    volumes:
+      - ./:/workspace:rw
+      - openvscode_data:/home/.openvscode-server
+    depends_on:
+      - api
+      - ui
+
+  e2e-vscode:
+    network_mode: host
+    image: ${REGISTRY}/${E2E_IMAGE_NAME:-top-ai-ideas-e2e}:${E2E_VERSION:-latest}
+    build:
+      context: ./e2e
+      dockerfile: Dockerfile
+    environment:
+      - API_BASE_URL=${API_BASE_URL:-http://localhost:${API_PORT:-8787}}
+      - UI_BASE_URL=${UI_BASE_URL:-http://localhost:${UI_PORT:-5173}}
+      - OPENVSCODE_BASE_URL=${OPENVSCODE_BASE_URL:-http://localhost:${OPENVSCODE_PORT:-3115}}
+      - MAILDEV_API_URL=${MAILDEV_API_URL:-http://localhost:${MAILDEV_UI_PORT:-1080}}
+    volumes:
+      - ./e2e/tests:/app/tests
+      - ./e2e/helpers:/app/helpers
+      - ./e2e/.auth:/app/.auth
+      - ./e2e/test-results:/app/test-results
+    depends_on:
+      - postgres
+      - api
+      - ui
+      - openvscode
+    command: sleep 1800
+
+volumes:
+  openvscode_data:
