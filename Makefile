@@ -558,6 +558,26 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	@echo "🛑 Stopping services..."
 	# @$(DOCKER_COMPOSE) down
 
+.PHONY: test-e2e-vscode
+test-e2e-vscode: up-e2e-vscode wait-ready db-seed-test e2e-set-queue ## Run VSCode E2E lane (requires E2E_SPEC)
+	@if [ -z "$$E2E_SPEC" ]; then \
+	  echo "❌ E2E_SPEC is required (example: tests/vscode/01-vscode-chat-streaming.spec.ts)"; \
+	  exit 2; \
+	fi
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml run --rm --no-deps \
+	  -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES -e OPENVSCODE_BASE_URL="http://localhost:$${OPENVSCODE_PORT:-3115}" \
+	  e2e-vscode sh -lc ' \
+	    workers="$${WORKERS:-2}"; \
+	    retries="$${RETRIES:-1}"; \
+	    max_fail="$${MAX_FAILURES:-}"; \
+	    extra=""; \
+	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
+	    spec_path="$${E2E_SPEC#e2e/}"; \
+	    echo "▶ Running VSCode scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
+	    npx playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra'
+	@echo "🛑 Stopping VSCode E2E services..."
+	# @$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml down
+
 .PHONY: test-smoke
 test-smoke: up wait-ready ## Run smoke tests (quick E2E subset)
 	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e npx playwright test --grep "devrait charger"
