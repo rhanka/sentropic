@@ -4,6 +4,11 @@ export type TopAiRuntimeConfig = {
   wsBaseUrl: string;
   sessionToken: string;
   codexSignInUrl: string;
+  codeAgentPromptGlobal: string;
+  codeAgentPromptWorkspace: string;
+  instructionIncludePatterns: string[];
+  workspaceScopeKey: string;
+  workspaceScopeLabel: string;
 };
 
 export type TopAiVsCodeCommand =
