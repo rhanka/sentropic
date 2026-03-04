@@ -43,5 +43,14 @@ services:
       - openvscode
     command: sleep 1800
 
+  mock-api-vscode:
+    image: hashicorp/http-echo:1.0.0
+    profiles: ["mock-vscode"]
+    command:
+      - -listen=:8789
+      - -text={"ok":true,"source":"mock-api-vscode"}
+    ports:
+      - "${MOCK_API_VSCODE_PORT:-8789}:8789"
+
 volumes:
   openvscode_data:
