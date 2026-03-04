@@ -452,7 +452,7 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - `2C`: global + workspace override,
   - `3`: instruction files auto-load + user regex extension,
   - `4`: keep existing tool-permission/runtime policy unchanged,
-  - `5A`: single `code` agent path (no selector),
+  - `5B`: explicit dual-agent routing (`agent_code` / `agent_chat`) with deterministic defaults,
   - `6`: raw textarea settings editing,
   - `7A`: invalid prompt blocks execution,
   - `8A`: direct cutover (no feature-flag rollout).
@@ -490,9 +490,19 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - No new tool policy layer introduced by S6-5.
   - The prompt can describe tool usage expectations, but cannot bypass policy enforcement.
 
-- Agent selection contract (`5A`):
-  - No multi-agent selector UI in BR-05 for VSCode path.
-  - Behavior is “single code-agent profile” forkable by editing prompt content (global/workspace overrides).
+- Agent routing contract (`5B`):
+  - Canonical names:
+    - `agent_code`: coding-oriented runtime prompt profile,
+    - `agent_chat`: generic chat-oriented profile.
+  - Routing matrix:
+    - VSCode source + `code` workspace -> default `agent_code` on new sessions.
+    - Web/Chrome source + `code` workspace -> `agent_chat`.
+    - non-`code` workspace (all sources) -> existing classic chat agent path.
+  - BR-05 does not require a multi-agent selector UI.
+    - Session routing must still be explicit in request contract (no implicit “always inject code-agent payload” behavior).
+  - Settings ownership:
+    - VSCode `Workspace` prompt editor modifies `agent_code` override only.
+    - `agent_chat` remains managed by standard workspace chat prompt settings.
 
 - Validation/failure contract (`7A`):
   - If resolved prompt is invalid (empty/parse-invalid), message execution is blocked.
@@ -629,6 +639,44 @@ This section locks the implementation contract for the immediate Lot-1 increment
     - at least one VSCode scoped E2E (`test-e2e-vscode`),
     - at least one web scoped E2E (`test-e2e`) on impacted chat/stream area,
     - scoped API/UI tests tied to modified files.
+
+### 4.22 Lot 6 - UAT bug-fix backlog (post-style pass)
+
+#### 4.22.1 BUG-L6-3 (`allow_always` permission behavior)
+- User contract:
+  - clicking `Always` in permission banner must:
+    - persist allow policy,
+    - close banner immediately,
+    - prevent immediate re-prompt for equivalent tool call scope.
+- Policy merge contract:
+  - workspace `deny` remains hard upper bound,
+  - persisted user `allow` must override workspace `ask`,
+  - fallback to `ask` only when no explicit user allow/deny policy is resolved.
+- Test contract:
+  - runtime unit: precedence matrix (`deny > user allow/deny > ask` fallback),
+  - UI/store bridge: `allow_always` closes banner and next equivalent execution does not reopen prompt.
+
+#### 4.22.2 BUG-L6-4 (default `code` workspace naming)
+- Creation default when no explicit user name:
+  - primary: repository name extracted from git `origin` URL,
+  - fallback-1: active workspace folder name,
+  - fallback-2: deterministic fingerprint suffix.
+- Naming normalization:
+  - trim + sanitize unsafe characters for workspace label,
+  - preserve deterministic suffixing for collisions (`name`, `name (2)`, ...).
+- Goal:
+  - avoid opaque default names such as raw fingerprint-only labels when origin/folder context exists.
+
+#### 4.22.3 BUG-L6-5 (Codex enrollment semantics in web app admin settings)
+- Current mismatch to fix:
+  - manual toggle (`Marquer connecté` / `Marquer déconnecté`) is not a real provider enrollment lifecycle.
+- Required contract:
+  - admin settings expose real Codex enrollment flow (`start/status/complete/disconnect`) with verifiable backend state.
+  - readiness exposed to clients must derive from verified enrollment state, not from manual boolean toggles.
+  - VSCode plugin consumes this backend readiness as source of truth.
+- Compatibility requirement:
+  - preserve RBAC (`admin` mutates; non-admin read-only).
+  - align with federation roadmap intent in `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md` (provider SSO lifecycle).
 
 
 ## 5) Industry alignment snapshot (for implementation framing)
