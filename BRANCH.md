@@ -341,7 +341,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Enforce workspace typing: show/select only `code` workspaces in VSCode settings flow.
       - [x] Implement `Not now` fallback to last `code` workspace + open settings section.
       - [x] Enforce mandatory creation path when user has zero `code` workspaces.
-    - [ ] Step 7 — Implement S6-8 (Make/Compose/CI lane + naming cutover).
+    - [x] Step 7 — Implement S6-8 (Make/Compose/CI lane + naming cutover).
     - [x] Implement S6-5.
       - [x] Build monolithic VSCode code-agent prompt baseline (adapted from Cursor prompt style, no runtime prompt-layer chain).
       - [x] Implement prompt resolution order: workspace override > global override > default.
@@ -352,12 +352,12 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Keep existing tool runtime policy unchanged; no new permission model in S6-5.
       - [x] Enforce blocking validation error when resolved prompt is invalid.
       - [x] Apply direct cutover in VSCode mode (no feature flag).
-      - [ ] Make naming cutover (no alias compatibility):
+      - [x] Make naming cutover (no alias compatibility):
         - [x] rename `vscode-ext` -> `build-ext-vscode`,
         - [x] rename `build-ext` -> `build-ext-chrome`,
         - [x] migrate all internal references (docs/BRANCH/tests/scripts) to canonical names.
       - [x] Add VSCode E2E compose lane: `docker-compose.e2e-vscode.yml`.
-      - [ ] Add Make lane targets:
+      - [x] Add Make lane targets:
         - [x] `up-e2e-vscode`,
         - [x] `down-e2e-vscode`,
         - [x] `ps-e2e-vscode`,
@@ -366,7 +366,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Wire OpenVSCode host runtime test stack (`openvscode` + `e2e-vscode` runner; optional `mock-api-vscode` for targeted local debugging).
       - [x] Add/update VSCode-scoped Playwright specs under `e2e/tests/vscode/*.spec.ts`.
       - [x] Add GitHub CI workflow/job `e2e-vscode` with strict `paths` triggers and 7-day artifact retention.
-      - [ ] Mark `e2e-vscode` as required check for impacted PR scope (repo settings / branch protection alignment).
+      - [!] Mark `e2e-vscode` as required check for impacted PR scope (repo settings / branch protection alignment).
+        - [!] Deferred: repository branch protection setting must be applied after workflow merge.
   - [ ] Non-regression phase (after S6 DEV completion, before UAT)
     - [ ] Run scoped VSCode E2E:
       - [ ] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=8788 UI_PORT=5174 OPENVSCODE_PORT=3115 MAILDEV_UI_PORT=1081 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
