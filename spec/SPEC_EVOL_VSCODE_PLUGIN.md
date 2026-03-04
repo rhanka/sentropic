@@ -365,6 +365,21 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - applies first to chat bootstrap/runtime endpoints (`models/catalog`, sessions, messages, stream entrypoint),
   - preserves current token bootstrap UX from Lot 1.
 
+### 4.15 Lot 6 - Subject 1 (streaming parity in VSCode host)
+- Decision locked: use host-side chained proxy for streaming, with no API SSE rewrite.
+- Source of truth for streaming remains API SSE (`/streams/sse`); no duplicate server-side streaming path.
+- Host bridge behavior:
+  - extension host consumes upstream SSE events as-is,
+  - forwards each event immediately to webview (no app-level buffering/batching),
+  - preserves event ordering and event types expected by `streamHub`.
+- Webview behavior:
+  - reuses existing `streamHub` pipeline and `StreamMessage` rendering path unchanged,
+  - keeps existing Gemini smooth-stream handling (delta smoothing) untouched.
+- Performance constraint:
+  - proxy mode is pass-through chained transport only (no persistent tracing/log instrumentation in nominal mode).
+- Degradation mode:
+  - if host-stream channel fails, existing scoped polling fallback stays available.
+
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
 - Claude Code: auto compact near context limits + explicit manual compaction command.

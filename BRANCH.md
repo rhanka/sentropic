@@ -312,6 +312,28 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
+- [ ] **Lot 6 — VSCode runtime parity (spec-first before UAT)**
+  - [ ] Spec phase (interactive, subject-by-subject)
+    - [x] S6-1 Streaming parity in VSCode host (SSE chained proxy, no server-side SSE rewrite, no duplicated render pipeline).
+    - [ ] S6-2 `awaiting_local_tool_results` deadlock handling contract.
+    - [ ] S6-3 Checkpoint affordance placement + visibility gating (message actions only, code-delta only).
+    - [ ] S6-4 Workspace-per-project model in VSCode mode.
+    - [ ] S6-5 VSCode-specific system prompt profile.
+  - [ ] DEV phase (after all S6 spec subjects are validated)
+    - [ ] Implement S6-1.
+    - [ ] Implement S6-2.
+    - [ ] Implement S6-3.
+    - [ ] Implement S6-4.
+    - [ ] Implement S6-5.
+  - [ ] Lot gate (scoped only)
+    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/vscode-ext/host-bridge-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-ui SCOPE=tests/chat/stream-message.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] `make test-api-endpoints SCOPE=tests/api/chat-messages-stream.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
     - [ ] Open `/settings` and validate VSCode download card:
