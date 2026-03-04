@@ -9,7 +9,7 @@ The extension also exposes **local Chrome tools** (tab reading via DOM or screen
 ### Constraints
 
 - **Manifest V3** — no remotely hosted code; the full UI bundle is packaged inside the extension.
-- **Docker-first** — build pipeline uses `make build-ext`, no npm on the host.
+- **Docker-first** — build pipeline uses `make build-ext-chrome`, no npm on the host.
 - **Shadow DOM** — CSS isolation from the host page.
 - **Dedicated extension authentication** — extension uses its own token pair (access + refresh), stored in extension storage and injected by the background proxy.
 
