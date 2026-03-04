@@ -12,6 +12,7 @@ export type TopAiRuntimeConfig = {
   instructionIncludePatterns: string[];
   workspaceScopeKey: string;
   workspaceScopeLabel: string;
+  workspaceScopeWorkspaceId: string;
 };
 
 export type TopAiVsCodeCommand =

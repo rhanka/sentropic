@@ -22,6 +22,7 @@ const createRuntimeConfig = (
   instructionIncludePatterns: [],
   workspaceScopeKey: '/repo',
   workspaceScopeLabel: 'repo',
+  workspaceScopeWorkspaceId: 'ws_1',
   ...overrides,
 });
 

@@ -933,6 +933,7 @@
       "workspaceConfiguration": "Configuration workspace",
       "workspaceScope": "Scope projet détecté",
       "workspaceScopeKey": "Clé du scope",
+      "workspaceMappedWorkspace": "Workspace mappé",
       "workspaceScopeNotDetected": "Aucun scope projet détecté pour l’instant.",
       "apiBaseUrl": "URL API",
       "appBaseUrl": "URL app",
