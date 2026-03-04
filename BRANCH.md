@@ -358,7 +358,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] migrate all internal references (docs/BRANCH/tests/scripts) to canonical names.
       - [x] Add VSCode E2E compose lane: `docker-compose.e2e-vscode.yml`.
       - [ ] Add Make lane targets:
-        - [ ] `up-e2e-vscode`,
+        - [x] `up-e2e-vscode`,
         - [ ] `down-e2e-vscode`,
         - [ ] `ps-e2e-vscode`,
         - [ ] `logs-e2e-vscode`,
