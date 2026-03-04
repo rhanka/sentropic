@@ -361,7 +361,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] `up-e2e-vscode`,
         - [x] `down-e2e-vscode`,
         - [x] `ps-e2e-vscode`,
-        - [ ] `logs-e2e-vscode`,
+        - [x] `logs-e2e-vscode`,
         - [ ] `test-e2e-vscode` (requires `E2E_SPEC`).
       - [x] Wire OpenVSCode host runtime test stack (`openvscode` + `e2e-vscode` runner; optional `mock-api-vscode` for targeted local debugging).
       - [ ] Add/update VSCode-scoped Playwright specs under `e2e/tests/vscode/*.spec.ts`.
