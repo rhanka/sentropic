@@ -513,6 +513,52 @@ This section locks the implementation contract for the immediate Lot-1 increment
     - instruction discovery from default files + custom patterns,
     - VSCode chat path uses resolved monolithic prompt.
 
+### 4.19 Lot 6 - Subject 6 (settings split: `Server | Workspace | Tools`)
+- Decision locked from interactive review:
+  - `1B`: default tab behavior is context-driven,
+  - `2B`: save model is per-tab actions,
+  - `3B`: workspace creation goes through web app flow (no inline create in plugin),
+  - `4A`: workspace switch requires explicit confirmation before apply.
+
+- Tab contract:
+  - `Server` tab:
+    - endpoint fields (`apiBaseUrl`, `appBaseUrl`, `wsBaseUrl`), extension token, connectivity statuses,
+    - server save/test actions stay scoped to server data only.
+  - `Workspace` tab:
+    - shows detected project scope/fingerprint and current mapped `code` workspace,
+    - contains workspace selection/change actions and workspace creation entrypoint,
+    - no silent workspace creation is allowed.
+  - `Tools` tab:
+    - contains VSCode runtime tool permission controls and visibility for active policy.
+
+- Default tab behavior (`1B`):
+  - if current project is unmapped, open `Workspace` tab first,
+  - otherwise open `Server` tab by default.
+
+- Save model (`2B`):
+  - each tab owns its own save action and validation lifecycle,
+  - avoid cross-tab overwrite/collision from global save.
+
+- Workspace creation flow (`3B`):
+  - plugin opens targeted web app flow for creating `code` workspace,
+  - on return/refresh, plugin re-fetches mappings and resumes onboarding decision.
+
+- Workspace switch flow (`4A`):
+  - selection does not apply silently,
+  - explicit confirmation step is mandatory before remapping/apply.
+
+### 4.20 Lot 6 - Subject 7 (prompt editor UX in split settings)
+- Decision locked from interactive review:
+  - `5A`: prompt editor lives in `Workspace` tab (workspace-scope first-class UX).
+
+- Prompt editor contract:
+  - single editable field for effective code-agent prompt (no dual global/workspace textareas in plugin settings UI),
+  - field is prefilled with resolved effective prompt (`workspace override > server override > default`),
+  - source badge is mandatory (`Workspace override`, `Server override`, `Default`),
+  - editing an inherited prompt must trigger explicit creation of workspace override,
+  - reset action (`Revenir à l’héritage`) removes workspace override and rehydrates inherited value.
+
+
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
 - Claude Code: auto compact near context limits + explicit manual compaction command.
