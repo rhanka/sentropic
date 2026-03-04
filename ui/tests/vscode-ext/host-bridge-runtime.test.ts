@@ -22,7 +22,16 @@ const createRuntimeConfig = (
   instructionIncludePatterns: [],
   workspaceScopeKey: '/repo',
   workspaceScopeLabel: 'repo',
+  projectFingerprint: 'fp_repo_1',
   workspaceScopeWorkspaceId: 'ws_1',
+  workspaceScopeLastWorkspaceId: 'ws_1',
+  codeWorkspaces: [
+    {
+      id: 'ws_1',
+      name: 'Code Workspace',
+      role: 'admin',
+    },
+  ],
   ...overrides,
 });
 

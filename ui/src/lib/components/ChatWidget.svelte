@@ -109,6 +109,11 @@
 
   type DisplayMode = 'floating' | 'docked';
   type ExtensionProfile = 'uat' | 'prod';
+  type ExtensionCodeWorkspaceSummary = {
+    id: string;
+    name: string;
+    role: 'viewer' | 'commenter' | 'editor' | 'admin';
+  };
   type ExtensionRuntimeConfig = {
     profile: ExtensionProfile;
     apiBaseUrl: string;
@@ -123,7 +128,10 @@
     instructionIncludePatterns: string;
     workspaceScopeKey: string;
     workspaceScopeLabel: string;
+    projectFingerprint: string;
     workspaceScopeWorkspaceId: string;
+    workspaceScopeLastWorkspaceId: string;
+    codeWorkspaces: ExtensionCodeWorkspaceSummary[];
     updatedAt?: number;
   };
   type ExtensionConfigStatusKind = 'info' | 'ok' | 'error';
@@ -156,7 +164,10 @@
       codeAgentPromptEffective: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
       codeAgentPromptSource: 'default',
       instructionIncludePatterns: '',
+      projectFingerprint: '',
       workspaceScopeWorkspaceId: '',
+      workspaceScopeLastWorkspaceId: '',
+      codeWorkspaces: [],
     },
     prod: {
       apiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca/api/v1',
@@ -169,7 +180,10 @@
       codeAgentPromptEffective: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
       codeAgentPromptSource: 'default',
       instructionIncludePatterns: '',
+      projectFingerprint: '',
       workspaceScopeWorkspaceId: '',
+      workspaceScopeLastWorkspaceId: '',
+      codeWorkspaces: [],
     },
   };
   let displayMode: DisplayMode = 'floating';
@@ -232,12 +246,20 @@
   let extensionCodeAgentPromptDraft = DEFAULT_EXTENSION_CONFIGS.uat.codeAgentPromptEffective;
   let extensionCodeAgentPromptDraftMode: 'inherit' | 'workspace' = 'inherit';
   let extensionCodeAgentPromptResetPending = false;
+  let extensionWorkspaceSelectionDraft = '';
+  let extensionWorkspaceSelectionSaving = false;
+  let extensionWorkspaceOnboardingBusy = false;
+  let extensionWorkspaceOnboardingError = '';
+  let extensionWorkspaceOnboardingRequired = false;
   let extensionConfigForm: ExtensionRuntimeConfig = {
     profile: 'uat',
     ...DEFAULT_EXTENSION_CONFIGS.uat,
     workspaceScopeKey: '',
     workspaceScopeLabel: '',
+    projectFingerprint: '',
     workspaceScopeWorkspaceId: '',
+    workspaceScopeLastWorkspaceId: '',
+    codeWorkspaces: [],
   };
   let isPluginMode = false;
   const isExtensionRuntime = () => {
@@ -573,6 +595,28 @@
     extensionCodeAgentPromptResetPending = false;
   };
 
+  const syncExtensionWorkspaceSelectionFromConfig = (
+    config: ExtensionRuntimeConfig,
+  ) => {
+    const preferredId = config.workspaceScopeWorkspaceId.trim();
+    if (
+      preferredId &&
+      config.codeWorkspaces.some((workspace) => workspace.id === preferredId)
+    ) {
+      extensionWorkspaceSelectionDraft = preferredId;
+      return;
+    }
+    if (
+      extensionWorkspaceSelectionDraft &&
+      config.codeWorkspaces.some(
+        (workspace) => workspace.id === extensionWorkspaceSelectionDraft,
+      )
+    ) {
+      return;
+    }
+    extensionWorkspaceSelectionDraft = config.codeWorkspaces[0]?.id ?? '';
+  };
+
   const getExtensionCodeAgentInheritedPrompt = (
     config: ExtensionRuntimeConfig,
   ): string => {
@@ -618,8 +662,34 @@
     );
     const workspaceScopeKey = raw?.workspaceScopeKey?.trim() || '';
     const workspaceScopeLabel = raw?.workspaceScopeLabel?.trim() || '';
+    const projectFingerprint = raw?.projectFingerprint?.trim() || '';
     const workspaceScopeWorkspaceId =
       raw?.workspaceScopeWorkspaceId?.trim() || '';
+    const workspaceScopeLastWorkspaceId =
+      raw?.workspaceScopeLastWorkspaceId?.trim() || '';
+    const codeWorkspaces = Array.isArray(raw?.codeWorkspaces)
+      ? raw.codeWorkspaces
+          .map((entry) => {
+            if (!entry || typeof entry !== 'object') return null;
+            const row = entry as Partial<ExtensionCodeWorkspaceSummary>;
+            if (
+              typeof row.id !== 'string' ||
+              typeof row.name !== 'string' ||
+              (row.role !== 'viewer' &&
+                row.role !== 'commenter' &&
+                row.role !== 'editor' &&
+                row.role !== 'admin')
+            ) {
+              return null;
+            }
+            return {
+              id: row.id.trim(),
+              name: row.name.trim(),
+              role: row.role,
+            } as ExtensionCodeWorkspaceSummary;
+          })
+          .filter((entry): entry is ExtensionCodeWorkspaceSummary => Boolean(entry))
+      : [];
     return {
       profile,
       apiBaseUrl,
@@ -634,7 +704,10 @@
       instructionIncludePatterns,
       workspaceScopeKey,
       workspaceScopeLabel,
+      projectFingerprint,
       workspaceScopeWorkspaceId,
+      workspaceScopeLastWorkspaceId,
+      codeWorkspaces,
       updatedAt:
         typeof raw?.updatedAt === 'number' ? raw.updatedAt : Date.now(),
     };
@@ -649,6 +722,13 @@
       isBrowser: true,
       authToken: config.sessionToken || undefined,
     });
+    if (typeof localStorage !== 'undefined') {
+      if (config.workspaceScopeWorkspaceId.trim().length > 0) {
+        localStorage.setItem('workspaceScopeId', config.workspaceScopeWorkspaceId);
+      } else {
+        localStorage.removeItem('workspaceScopeId');
+      }
+    }
   };
 
   const loadExtensionConfig = async () => {
@@ -675,8 +755,10 @@
       }
       extensionConfigForm = normalizeExtensionConfig(response.config);
       syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
+      syncExtensionWorkspaceSelectionFromConfig(extensionConfigForm);
       syncExtensionApiClientConfig(extensionConfigForm);
       extensionConfigLoaded = true;
+      extensionWorkspaceOnboardingError = '';
       setExtensionConfigStatus($_('chat.extension.status.configLoaded'), 'info');
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -716,8 +798,10 @@
       }
       extensionConfigForm = normalizeExtensionConfig(response.config);
       syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
+      syncExtensionWorkspaceSelectionFromConfig(extensionConfigForm);
       syncExtensionApiClientConfig(extensionConfigForm);
       extensionConfigLoaded = true;
+      extensionWorkspaceOnboardingError = '';
       extensionAuthStatusLoaded = false;
       extensionAuthConnected = false;
       extensionAuthUser = null;
@@ -767,6 +851,146 @@
         extensionConfigForm.instructionIncludePatterns,
       ),
     });
+  };
+
+  const refreshExtensionWorkspaceMapping = async (): Promise<boolean> => {
+    if (!isExtensionConfigAvailable()) return false;
+    const runtime = getExtensionRuntime();
+    const response = (await runtime?.sendMessage?.({
+      type: 'extension_workspace_mapping_refresh',
+    })) as
+      | {
+          ok?: boolean;
+          config?: Partial<ExtensionRuntimeConfig>;
+          error?: string;
+        }
+      | undefined;
+    if (!response?.ok || !response?.config) {
+      extensionWorkspaceOnboardingError =
+        response?.error ?? $_('chat.extension.workspaceFlow.mappingRefreshFailed');
+      return false;
+    }
+    extensionConfigForm = normalizeExtensionConfig(response.config);
+    syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
+    syncExtensionWorkspaceSelectionFromConfig(extensionConfigForm);
+    syncExtensionApiClientConfig(extensionConfigForm);
+    extensionWorkspaceOnboardingError = '';
+    return true;
+  };
+
+  const applyExtensionWorkspaceSelection = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionWorkspaceSelectionSaving) return;
+    const workspaceId = extensionWorkspaceSelectionDraft.trim();
+    if (!workspaceId) {
+      extensionWorkspaceOnboardingError = $_(
+        'chat.extension.workspaceFlow.selectWorkspaceRequired',
+      );
+      return;
+    }
+    extensionWorkspaceSelectionSaving = true;
+    extensionWorkspaceOnboardingError = '';
+    try {
+      const runtime = getExtensionRuntime();
+      const response = (await runtime?.sendMessage?.({
+        type: 'extension_workspace_mapping_set',
+        payload: {
+          workspaceId,
+        },
+      })) as
+        | {
+            ok?: boolean;
+            config?: Partial<ExtensionRuntimeConfig>;
+            error?: string;
+          }
+        | undefined;
+      if (!response?.ok || !response?.config) {
+        extensionWorkspaceOnboardingError =
+          response?.error ?? $_('chat.extension.workspaceFlow.mappingSetFailed');
+        return;
+      }
+      extensionConfigForm = normalizeExtensionConfig(response.config);
+      syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
+      syncExtensionWorkspaceSelectionFromConfig(extensionConfigForm);
+      syncExtensionApiClientConfig(extensionConfigForm);
+      setExtensionConfigStatus($_('chat.extension.workspaceFlow.mappingSetSuccess'), 'ok');
+    } catch (error) {
+      extensionWorkspaceOnboardingError =
+        error instanceof Error ? error.message : String(error);
+    } finally {
+      extensionWorkspaceSelectionSaving = false;
+    }
+  };
+
+  const createExtensionCodeWorkspace = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionWorkspaceOnboardingBusy) return;
+    extensionWorkspaceOnboardingBusy = true;
+    extensionWorkspaceOnboardingError = '';
+    try {
+      const runtime = getExtensionRuntime();
+      const response = (await runtime?.sendMessage?.({
+        type: 'extension_workspace_mapping_create',
+      })) as
+        | {
+            ok?: boolean;
+            config?: Partial<ExtensionRuntimeConfig>;
+            error?: string;
+          }
+        | undefined;
+      if (!response?.ok || !response?.config) {
+        extensionWorkspaceOnboardingError =
+          response?.error ?? $_('chat.extension.workspaceFlow.createFailed');
+        return;
+      }
+      extensionConfigForm = normalizeExtensionConfig(response.config);
+      syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
+      syncExtensionWorkspaceSelectionFromConfig(extensionConfigForm);
+      syncExtensionApiClientConfig(extensionConfigForm);
+      extensionSettingsTab = 'workspace';
+      setExtensionConfigStatus($_('chat.extension.workspaceFlow.createSuccess'), 'ok');
+    } catch (error) {
+      extensionWorkspaceOnboardingError =
+        error instanceof Error ? error.message : String(error);
+    } finally {
+      extensionWorkspaceOnboardingBusy = false;
+    }
+  };
+
+  const deferExtensionWorkspaceMapping = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionWorkspaceOnboardingBusy) return;
+    extensionWorkspaceOnboardingBusy = true;
+    extensionWorkspaceOnboardingError = '';
+    try {
+      const runtime = getExtensionRuntime();
+      const response = (await runtime?.sendMessage?.({
+        type: 'extension_workspace_mapping_not_now',
+      })) as
+        | {
+            ok?: boolean;
+            config?: Partial<ExtensionRuntimeConfig>;
+            error?: string;
+          }
+        | undefined;
+      if (!response?.ok || !response?.config) {
+        extensionWorkspaceOnboardingError =
+          response?.error ?? $_('chat.extension.workspaceFlow.notNowFailed');
+        return;
+      }
+      extensionConfigForm = normalizeExtensionConfig(response.config);
+      syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
+      syncExtensionWorkspaceSelectionFromConfig(extensionConfigForm);
+      syncExtensionApiClientConfig(extensionConfigForm);
+      extensionSettingsTab = 'workspace';
+      showExtensionConfigMenu = true;
+      setExtensionConfigStatus($_('chat.extension.workspaceFlow.notNowSuccess'), 'ok');
+    } catch (error) {
+      extensionWorkspaceOnboardingError =
+        error instanceof Error ? error.message : String(error);
+    } finally {
+      extensionWorkspaceOnboardingBusy = false;
+    }
   };
 
   const enableExtensionWorkspacePromptOverrideDraft = () => {
@@ -844,6 +1068,7 @@
       setUser(user);
       setExtensionAuthStatus($_('chat.extension.status.connected'), 'ok');
       extensionAuthStatusLoaded = true;
+      void refreshExtensionWorkspaceMapping();
       void loadExtensionProviderReadiness();
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -904,6 +1129,7 @@
       setUser(user);
       setExtensionAuthStatus($_('chat.extension.status.connectedSuccess'), 'ok');
       extensionAuthStatusLoaded = true;
+      void refreshExtensionWorkspaceMapping();
       void loadExtensionProviderReadiness();
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -1141,6 +1367,19 @@
 
   $: extensionAuthRequired =
     isExtensionConfigAvailable() && extensionConfigForm.sessionToken.trim().length === 0;
+
+  $: extensionWorkspaceOnboardingRequired =
+    isExtensionConfigAvailable() &&
+    isVsCodeExtensionRuntime() &&
+    !extensionAuthRequired &&
+    extensionAuthConnected &&
+    extensionConfigForm.projectFingerprint.trim().length > 0 &&
+    extensionConfigForm.workspaceScopeWorkspaceId.trim().length === 0;
+
+  $: if (!extensionWorkspaceOnboardingRequired) {
+    extensionWorkspaceOnboardingBusy = false;
+    extensionWorkspaceOnboardingError = '';
+  }
 
   $: {
     if (extensionConfigMenuWasOpen && !showExtensionConfigMenu) {
@@ -2154,6 +2393,58 @@
                         </div>
                       {/if}
                     </div>
+                    <div class="space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
+                      <div class="text-[11px] font-semibold text-slate-700">
+                        {$_('chat.extension.workspaceFlow.title')}
+                      </div>
+                      {#if extensionConfigForm.codeWorkspaces.length === 0}
+                        <div class="text-[11px] text-slate-500">
+                          {$_('chat.extension.workspaceFlow.noCodeWorkspace')}
+                        </div>
+                      {:else}
+                        <div class="space-y-1">
+                          <label
+                            class="block text-[11px] text-slate-600"
+                            for="extension-workspace-selection"
+                          >
+                            {$_('chat.extension.workspaceFlow.selectorLabel')}
+                          </label>
+                          <select
+                            id="extension-workspace-selection"
+                            class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                            bind:value={extensionWorkspaceSelectionDraft}
+                            disabled={extensionConfigLoading ||
+                              extensionConfigSaving ||
+                              extensionConfigTesting ||
+                              extensionWorkspaceSelectionSaving}
+                          >
+                            {#each extensionConfigForm.codeWorkspaces as workspace (workspace.id)}
+                              <option value={workspace.id}>
+                                {workspace.name} ({workspace.role})
+                              </option>
+                            {/each}
+                          </select>
+                          <div class="flex items-center gap-2">
+                            <button
+                              class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                              type="button"
+                              on:click={() => void applyExtensionWorkspaceSelection()}
+                              disabled={extensionConfigLoading ||
+                                extensionConfigSaving ||
+                                extensionConfigTesting ||
+                                extensionWorkspaceSelectionSaving}
+                            >
+                              {$_('chat.extension.workspaceFlow.applySelection')}
+                            </button>
+                          </div>
+                        </div>
+                      {/if}
+                      {#if extensionWorkspaceOnboardingError}
+                        <div class="text-[11px] text-rose-700">
+                          {extensionWorkspaceOnboardingError}
+                        </div>
+                      {/if}
+                    </div>
                     <div class="border-t border-slate-200 pt-2 space-y-2">
                       <div class="text-xs font-semibold text-slate-700">
                         {$_('chat.extension.codeAgent.title')}
@@ -2469,6 +2760,53 @@
               >
                 {$_('chat.extension.authRequired.openSettings')}
               </button>
+            </div>
+          </div>
+        {:else if extensionWorkspaceOnboardingRequired}
+          <div class="h-full min-h-0 flex items-center justify-center px-4 py-6">
+            <div
+              class="w-full max-w-md rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 space-y-3"
+            >
+              <div>{$_('chat.extension.workspaceFlow.onboardingTitle')}</div>
+              <div class="text-xs text-slate-500">
+                {$_('chat.extension.workspaceFlow.onboardingDescription')}
+              </div>
+              <div class="space-y-2">
+                <button
+                  class="w-full rounded bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                  type="button"
+                  on:click={() => void createExtensionCodeWorkspace()}
+                  disabled={extensionWorkspaceOnboardingBusy}
+                >
+                  {$_('chat.extension.workspaceFlow.createWorkspace')}
+                </button>
+                {#if extensionConfigForm.codeWorkspaces.length > 0}
+                  <button
+                    class="w-full rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    type="button"
+                    on:click={() => {
+                      extensionSettingsTab = 'workspace';
+                      showExtensionConfigMenu = true;
+                    }}
+                    disabled={extensionWorkspaceOnboardingBusy}
+                  >
+                    {$_('chat.extension.workspaceFlow.useExisting')}
+                  </button>
+                  <button
+                    class="w-full rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    type="button"
+                    on:click={() => void deferExtensionWorkspaceMapping()}
+                    disabled={extensionWorkspaceOnboardingBusy}
+                  >
+                    {$_('chat.extension.workspaceFlow.notNow')}
+                  </button>
+                {/if}
+              </div>
+              {#if extensionWorkspaceOnboardingError}
+                <div class="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200">
+                  {extensionWorkspaceOnboardingError}
+                </div>
+              {/if}
             </div>
           </div>
         {:else}

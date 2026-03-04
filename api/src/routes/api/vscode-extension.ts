@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../../db/client';
+import { workspaceMemberships, workspaces } from '../../db/schema';
 import { sql } from 'drizzle-orm';
 import { env } from '../../config/env';
 import { getUserWorkspaces } from '../../services/workspace-access';
+import { createId } from '../../utils/id';
+import { requireEditor } from '../../middleware/rbac';
 
 const DEFAULT_EXTENSION_VERSION = '0.1.0';
 const DEFAULT_EXTENSION_SOURCE = 'ui/vscode-ext';
@@ -76,6 +79,15 @@ const projectFingerprintSchema = z
 const mappingUpdateSchema = z.object({
   projectFingerprint: projectFingerprintSchema,
   workspaceId: z.string().trim().min(1),
+});
+
+const mappingCreateCodeWorkspaceSchema = z.object({
+  projectFingerprint: projectFingerprintSchema,
+  name: z.string().trim().min(1).max(128).optional(),
+});
+
+const mappingNotNowSchema = z.object({
+  projectFingerprint: projectFingerprintSchema,
 });
 
 const parseWorkspaceState = (
@@ -166,11 +178,6 @@ const sanitizeWorkspaceState = (
     return keep;
   });
 
-  if (normalizedCodeWorkspaceIds.length === 0 && workspaces.length > 0) {
-    changed = true;
-    normalizedCodeWorkspaceIds.push(...workspaces.map((workspace) => workspace.id));
-  }
-
   const codeIdSet = new Set(normalizedCodeWorkspaceIds);
   const normalizedMappings: Record<string, string> = {};
   for (const [fingerprint, workspaceId] of Object.entries(state.mappings)) {
@@ -231,6 +238,17 @@ const buildWorkspaceMappingSnapshot = (input: {
   };
 };
 
+const listCodeWorkspacesForUser = async (
+  userId: string,
+): Promise<CodeWorkspace[]> => {
+  const workspaceRows = await getUserWorkspaces(userId);
+  return workspaceRows.map((workspace) => ({
+    id: workspace.id,
+    name: workspace.name,
+    role: workspace.role,
+  }));
+};
+
 vscodeExtensionRouter.get('/download', async (c) => {
   const config = readConfig();
 
@@ -279,12 +297,7 @@ vscodeExtensionRouter.get('/workspace-mapping', async (c) => {
     return c.json({ message: 'Invalid project_fingerprint query parameter.' }, 400);
   }
 
-  const workspaceRows = await getUserWorkspaces(user.userId);
-  const workspaces: CodeWorkspace[] = workspaceRows.map((workspace) => ({
-    id: workspace.id,
-    name: workspace.name,
-    role: workspace.role,
-  }));
+  const workspaces = await listCodeWorkspacesForUser(user.userId);
   const state = await readWorkspaceState(user.userId);
   const sanitized = sanitizeWorkspaceState(state, workspaces);
   if (sanitized.changed) {
@@ -312,12 +325,7 @@ vscodeExtensionRouter.put('/workspace-mapping', async (c) => {
   }
 
   const payload = parsedBody.data;
-  const workspaceRows = await getUserWorkspaces(user.userId);
-  const workspaces: CodeWorkspace[] = workspaceRows.map((workspace) => ({
-    id: workspace.id,
-    name: workspace.name,
-    role: workspace.role,
-  }));
+  const workspaces = await listCodeWorkspacesForUser(user.userId);
   const targetWorkspace = workspaces.find(
     (workspace) => workspace.id === payload.workspaceId,
   );
@@ -327,17 +335,140 @@ vscodeExtensionRouter.put('/workspace-mapping', async (c) => {
 
   const state = await readWorkspaceState(user.userId);
   const sanitized = sanitizeWorkspaceState(state, workspaces);
-  const codeWorkspaceIds = sanitized.state.codeWorkspaceIds.includes(targetWorkspace.id)
-    ? [...sanitized.state.codeWorkspaceIds]
-    : [...sanitized.state.codeWorkspaceIds, targetWorkspace.id];
+  if (!sanitized.state.codeWorkspaceIds.includes(targetWorkspace.id)) {
+    return c.json({ message: 'Workspace is not registered as code workspace.' }, 404);
+  }
   const nextState: VsCodeProjectWorkspaceState = {
     version: 1,
     mappings: {
       ...sanitized.state.mappings,
       [payload.projectFingerprint]: targetWorkspace.id,
     },
-    codeWorkspaceIds,
+    codeWorkspaceIds: [...sanitized.state.codeWorkspaceIds],
     lastWorkspaceId: targetWorkspace.id,
+    updatedAt: new Date().toISOString(),
+  };
+  await writeWorkspaceState(user.userId, nextState);
+
+  return c.json(
+    buildWorkspaceMappingSnapshot({
+      projectFingerprint: payload.projectFingerprint,
+      state: nextState,
+      workspaces,
+    }),
+  );
+});
+
+vscodeExtensionRouter.post(
+  '/workspace-mapping/code-workspace',
+  requireEditor,
+  async (c) => {
+    const user = c.get('user') as { userId?: string } | undefined;
+    if (!user?.userId) {
+      return c.json({ message: 'Authentication required' }, 401);
+    }
+
+    const parsedBody = mappingCreateCodeWorkspaceSchema.safeParse(
+      await c.req.json().catch(() => null),
+    );
+    if (!parsedBody.success) {
+      return c.json(
+        { message: 'Invalid payload.', errors: parsedBody.error.flatten() },
+        400,
+      );
+    }
+
+    const payload = parsedBody.data;
+    const now = new Date();
+    const workspaceId = createId();
+    const workspaceName =
+      payload.name?.trim() ||
+      `Code workspace ${payload.projectFingerprint.slice(0, 8)}`;
+
+    await db.transaction(async (tx) => {
+      await tx.insert(workspaces).values({
+        id: workspaceId,
+        ownerUserId: user.userId!,
+        name: workspaceName,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await tx.insert(workspaceMemberships).values({
+        workspaceId,
+        userId: user.userId!,
+        role: 'admin',
+        createdAt: now,
+      });
+    });
+
+    const codeWorkspaces = await listCodeWorkspacesForUser(user.userId);
+    const state = await readWorkspaceState(user.userId);
+    const sanitized = sanitizeWorkspaceState(state, codeWorkspaces);
+    const codeWorkspaceIds = sanitized.state.codeWorkspaceIds.includes(workspaceId)
+      ? [...sanitized.state.codeWorkspaceIds]
+      : [...sanitized.state.codeWorkspaceIds, workspaceId];
+    const nextState: VsCodeProjectWorkspaceState = {
+      version: 1,
+      mappings: {
+        ...sanitized.state.mappings,
+        [payload.projectFingerprint]: workspaceId,
+      },
+      codeWorkspaceIds,
+      lastWorkspaceId: workspaceId,
+      updatedAt: new Date().toISOString(),
+    };
+    await writeWorkspaceState(user.userId, nextState);
+
+    return c.json(
+      buildWorkspaceMappingSnapshot({
+        projectFingerprint: payload.projectFingerprint,
+        state: nextState,
+        workspaces: codeWorkspaces,
+      }),
+      201,
+    );
+  },
+);
+
+vscodeExtensionRouter.post('/workspace-mapping/not-now', async (c) => {
+  const user = c.get('user') as { userId?: string } | undefined;
+  if (!user?.userId) {
+    return c.json({ message: 'Authentication required' }, 401);
+  }
+
+  const parsedBody = mappingNotNowSchema.safeParse(
+    await c.req.json().catch(() => null),
+  );
+  if (!parsedBody.success) {
+    return c.json({ message: 'Invalid payload.', errors: parsedBody.error.flatten() }, 400);
+  }
+
+  const payload = parsedBody.data;
+  const workspaces = await listCodeWorkspacesForUser(user.userId);
+  const state = await readWorkspaceState(user.userId);
+  const sanitized = sanitizeWorkspaceState(state, workspaces);
+  const codeWorkspaceIds = sanitized.state.codeWorkspaceIds;
+  if (codeWorkspaceIds.length === 0) {
+    return c.json(
+      { message: 'No code workspace available for fallback.' },
+      409,
+    );
+  }
+
+  const codeIdSet = new Set(codeWorkspaceIds);
+  const fallbackWorkspaceId =
+    sanitized.state.lastWorkspaceId && codeIdSet.has(sanitized.state.lastWorkspaceId)
+      ? sanitized.state.lastWorkspaceId
+      : codeWorkspaceIds[0];
+  const nextState: VsCodeProjectWorkspaceState = {
+    version: 1,
+    mappings: {
+      ...sanitized.state.mappings,
+      [payload.projectFingerprint]: fallbackWorkspaceId,
+    },
+    codeWorkspaceIds: [...codeWorkspaceIds],
+    lastWorkspaceId: fallbackWorkspaceId,
     updatedAt: new Date().toISOString(),
   };
   await writeWorkspaceState(user.userId, nextState);

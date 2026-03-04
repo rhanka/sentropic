@@ -45,8 +45,7 @@ describe('VSCode project/workspace mapping API', () => {
     expect(payload.projectFingerprint).toBe('repo.main.001');
     expect(payload.mappedWorkspaceId).toBeNull();
     expect(payload.mappedWorkspaceName).toBeNull();
-    expect(payload.codeWorkspaces.length).toBeGreaterThanOrEqual(1);
-    expect(payload.codeWorkspaces.some((workspace) => workspace.id === editor.workspaceId)).toBe(true);
+    expect(payload.codeWorkspaces).toEqual([]);
   });
 
   it('persists project mapping updates for accessible workspaces only', async () => {
@@ -64,6 +63,24 @@ describe('VSCode project/workspace mapping API', () => {
       role: 'editor',
       createdAt: new Date(),
     });
+    await db.run(sql`
+      INSERT INTO settings (key, user_id, value, description, updated_at)
+      VALUES (
+        'vscode_project_workspace_state_v1',
+        ${editor.id},
+        ${JSON.stringify({
+          version: 1,
+          mappings: {},
+          codeWorkspaceIds: [workspaceId],
+          lastWorkspaceId: workspaceId,
+          updatedAt: new Date().toISOString(),
+        })},
+        'test mapping state',
+        ${new Date().toISOString()}
+      )
+      ON CONFLICT (user_id, key) WHERE user_id IS NOT NULL
+      DO UPDATE SET value = EXCLUDED.value, description = EXCLUDED.description, updated_at = EXCLUDED.updated_at
+    `);
 
     const putResponse = await authenticatedRequest(
       app,
@@ -128,5 +145,82 @@ describe('VSCode project/workspace mapping API', () => {
     });
 
     await db.delete(workspaces).where(eq(workspaces.id, outsiderWorkspaceId));
+  });
+
+  it('creates a code workspace and maps current project in one call', async () => {
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/vscode-extension/workspace-mapping/code-workspace',
+      editor.sessionToken!,
+      {
+        projectFingerprint: 'repo.main.004',
+        name: 'My Code Base',
+      },
+    );
+
+    expect(response.status).toBe(201);
+    const payload = (await response.json()) as {
+      mappedWorkspaceId: string | null;
+      mappedWorkspaceName: string | null;
+      codeWorkspaces: Array<{ id: string; name: string; role: string }>;
+    };
+    expect(payload.mappedWorkspaceId).toBeTruthy();
+    expect(payload.mappedWorkspaceName).toBe('My Code Base');
+    expect(payload.codeWorkspaces.some((workspace) => workspace.id === payload.mappedWorkspaceId)).toBe(true);
+  });
+
+  it('supports not-now fallback to last registered code workspace', async () => {
+    const codeWorkspaceId = crypto.randomUUID();
+    await db.insert(workspaces).values({
+      id: codeWorkspaceId,
+      ownerUserId: editor.id,
+      name: 'Code Workspace C',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(workspaceMemberships).values({
+      workspaceId: codeWorkspaceId,
+      userId: editor.id,
+      role: 'editor',
+      createdAt: new Date(),
+    });
+    await db.run(sql`
+      INSERT INTO settings (key, user_id, value, description, updated_at)
+      VALUES (
+        'vscode_project_workspace_state_v1',
+        ${editor.id},
+        ${JSON.stringify({
+          version: 1,
+          mappings: {},
+          codeWorkspaceIds: [codeWorkspaceId],
+          lastWorkspaceId: codeWorkspaceId,
+          updatedAt: new Date().toISOString(),
+        })},
+        'test mapping state',
+        ${new Date().toISOString()}
+      )
+      ON CONFLICT (user_id, key) WHERE user_id IS NOT NULL
+      DO UPDATE SET value = EXCLUDED.value, description = EXCLUDED.description, updated_at = EXCLUDED.updated_at
+    `);
+
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/vscode-extension/workspace-mapping/not-now',
+      editor.sessionToken!,
+      {
+        projectFingerprint: 'repo.main.005',
+      },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      projectFingerprint: 'repo.main.005',
+      mappedWorkspaceId: codeWorkspaceId,
+      mappedWorkspaceName: 'Code Workspace C',
+    });
+
+    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, codeWorkspaceId));
+    await db.delete(workspaces).where(eq(workspaces.id, codeWorkspaceId));
   });
 });

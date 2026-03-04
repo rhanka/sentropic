@@ -47,4 +47,18 @@ describe('vscode code-agent settings i18n contract', () => {
     expect(codeAgent.instructionPatterns).toBeTruthy();
     expect(codeAgent.instructionPatternsHint).toBeTruthy();
   });
+
+  it('exposes workspace onboarding labels for EN and FR', () => {
+    expect(en.chat.extension.workspaceFlow.onboardingTitle).toBeTruthy();
+    expect(en.chat.extension.workspaceFlow.onboardingDescription).toBeTruthy();
+    expect(en.chat.extension.workspaceFlow.createWorkspace).toBeTruthy();
+    expect(en.chat.extension.workspaceFlow.useExisting).toBeTruthy();
+    expect(en.chat.extension.workspaceFlow.notNow).toBeTruthy();
+
+    expect(fr.chat.extension.workspaceFlow.onboardingTitle).toBeTruthy();
+    expect(fr.chat.extension.workspaceFlow.onboardingDescription).toBeTruthy();
+    expect(fr.chat.extension.workspaceFlow.createWorkspace).toBeTruthy();
+    expect(fr.chat.extension.workspaceFlow.useExisting).toBeTruthy();
+    expect(fr.chat.extension.workspaceFlow.notNow).toBeTruthy();
+  });
 });
