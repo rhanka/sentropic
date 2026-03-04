@@ -221,7 +221,7 @@ const runWatch = async () => {
   packageVsix();
 
   console.log(
-    '👀 Watching VSCode host sources (extension.ts). Re-run dev-vscode-ext after webview (Svelte) changes.'
+    '👀 Watching VSCode host sources (extension.ts). Re-run dev-ext-vscode after webview (Svelte) changes.'
   );
   nodeProcess.stdin.resume();
 };

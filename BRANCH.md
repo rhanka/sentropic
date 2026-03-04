@@ -139,7 +139,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `2`, `4.13`, `4.14`, `7.1` (BR05 foreground-only boundary), and reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
   - [x] Restore minimal VSCode extension packaging pipeline:
     - [x] add `ui/vscode-ext` packaging scripts/assets required to produce `.vsix`,
-    - [x] add `make build-ext-vscode` target (and optional `make dev-vscode-ext`) under `BR05-EX1`.
+    - [x] add `make build-ext-vscode` target (and optional `make dev-ext-vscode`) under `BR05-EX1`.
   - [x] Restore VSCode extension download distribution:
     - [x] API endpoint `/api/v1/vscode-extension/download`,
     - [x] UI settings card for `.vsix` download metadata.
@@ -355,7 +355,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Make naming cutover (no alias compatibility):
         - [x] rename `vscode-ext` -> `build-ext-vscode`,
         - [x] rename `build-ext` -> `build-ext-chrome`,
-        - [ ] migrate all internal references (docs/BRANCH/tests/scripts) to canonical names.
+        - [x] migrate all internal references (docs/BRANCH/tests/scripts) to canonical names.
       - [ ] Add VSCode E2E compose lane: `docker-compose.e2e-vscode.yml`.
       - [ ] Add Make lane targets:
         - [ ] `up-e2e-vscode`,
