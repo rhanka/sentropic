@@ -51,7 +51,6 @@
     Copy,
     Pencil,
     RotateCcw,
-    BookmarkPlus,
     UndoDot,
     Check,
     Paperclip,
@@ -117,6 +116,12 @@
     anchorSequence: number;
     messageCount: number;
     createdAt: string;
+  };
+  type PendingCheckpointPrompt = {
+    kind: 'restore' | 'retry';
+    checkpoint: ChatCheckpoint;
+    userMessageId: string;
+    assistantMessageId?: string;
   };
 
   type ChatMessage = {
@@ -1004,7 +1009,9 @@
   let sessionDocsUploading = false;
   let sessionDocsError: string | null = null;
   let sessionCheckpoints: ChatCheckpoint[] = [];
+  let checkpointsByAnchorMessageId = new Map<string, ChatCheckpoint>();
   let checkpointActionInFlight = false;
+  let pendingCheckpointPrompt: PendingCheckpointPrompt | null = null;
   let sessionDocsKey = '';
   let sessionDocsSseKey = '';
   let sessionTitlesSseKey = '';
@@ -2262,6 +2269,84 @@
     }
   };
 
+  const getCheckpointForUserMessage = (
+    userMessageId: string,
+  ): ChatCheckpoint | null => {
+    const id = String(userMessageId ?? '').trim();
+    if (!id) return null;
+    return checkpointsByAnchorMessageId.get(id) ?? null;
+  };
+
+  const getHighestMessageSequence = (): number => {
+    let max = 0;
+    for (const message of messages) {
+      const sequence = Number((message as any)?.sequence ?? 0);
+      if (Number.isFinite(sequence) && sequence > max) max = sequence;
+    }
+    return max;
+  };
+
+  const hasCheckpointRollbackDelta = (
+    checkpoint: ChatCheckpoint | null | undefined,
+  ): boolean => {
+    if (!checkpoint) return false;
+    const anchorSequence = Number(checkpoint.anchorSequence ?? 0);
+    if (!Number.isFinite(anchorSequence) || anchorSequence <= 0) return false;
+    return getHighestMessageSequence() > anchorSequence;
+  };
+
+  const applyCheckpointRestore = async (
+    checkpoint: ChatCheckpoint,
+  ): Promise<boolean> => {
+    if (!sessionId || checkpointActionInFlight) return false;
+    checkpointActionInFlight = true;
+    errorMsg = null;
+    try {
+      await apiPost(
+        `/chat/sessions/${sessionId}/checkpoints/${checkpoint.id}/restore`,
+        {},
+      );
+      await loadMessages(sessionId, { scrollToBottom: true, silent: true });
+      await loadCheckpoints(sessionId);
+      return true;
+    } catch (e) {
+      errorMsg = formatApiError(e, $_('chat.errors.checkpointRestore'));
+      return false;
+    } finally {
+      checkpointActionInFlight = false;
+    }
+  };
+
+  const openCheckpointPromptForMessage = (userMessageId: string) => {
+    const checkpoint = getCheckpointForUserMessage(userMessageId);
+    if (!checkpoint || !hasCheckpointRollbackDelta(checkpoint)) return;
+    pendingCheckpointPrompt = {
+      kind: 'restore',
+      checkpoint,
+      userMessageId,
+    };
+  };
+
+  const confirmCheckpointPrompt = async () => {
+    const prompt = pendingCheckpointPrompt;
+    if (!prompt) return;
+    const restored = await applyCheckpointRestore(prompt.checkpoint);
+    pendingCheckpointPrompt = null;
+    if (!restored) return;
+    if (prompt.kind === 'retry') {
+      await retryMessage(prompt.userMessageId);
+    }
+  };
+
+  const cancelCheckpointPrompt = async () => {
+    const prompt = pendingCheckpointPrompt;
+    pendingCheckpointPrompt = null;
+    if (!prompt) return;
+    if (prompt.kind === 'retry') {
+      await retryMessage(prompt.userMessageId);
+    }
+  };
+
   const retryFromAssistant = async (assistantMessageId: string) => {
     const idx = messages.findIndex((m) => m.id === assistantMessageId);
     if (idx <= 0) return;
@@ -2269,6 +2354,16 @@
       .reverse()
       .find((m) => m.role === 'user');
     if (!previousUser) return;
+    const checkpoint = getCheckpointForUserMessage(previousUser.id);
+    if (checkpoint && hasCheckpointRollbackDelta(checkpoint)) {
+      pendingCheckpointPrompt = {
+        kind: 'retry',
+        checkpoint,
+        userMessageId: previousUser.id,
+        assistantMessageId,
+      };
+      return;
+    }
     await retryMessage(previousUser.id);
   };
 
@@ -2610,6 +2705,7 @@
   const loadCheckpoints = async (id: string) => {
     if (!id) {
       sessionCheckpoints = [];
+      checkpointsByAnchorMessageId = new Map();
       return;
     }
     try {
@@ -2617,43 +2713,31 @@
         `/chat/sessions/${id}/checkpoints?limit=20`,
       );
       sessionCheckpoints = Array.isArray(res.checkpoints) ? res.checkpoints : [];
+      const map = new Map<string, ChatCheckpoint>();
+      for (const checkpoint of sessionCheckpoints) {
+        const anchorId = String(checkpoint.anchorMessageId ?? '').trim();
+        if (!anchorId || map.has(anchorId)) continue;
+        map.set(anchorId, checkpoint);
+      }
+      checkpointsByAnchorMessageId = map;
     } catch {
       sessionCheckpoints = [];
+      checkpointsByAnchorMessageId = new Map();
     }
   };
 
-  const createCheckpoint = async () => {
-    if (!sessionId || checkpointActionInFlight) return;
-    checkpointActionInFlight = true;
-    errorMsg = null;
+  const createTurnCheckpoint = async (
+    targetSessionId: string,
+    anchorMessageId: string,
+  ) => {
+    if (!targetSessionId || !anchorMessageId) return;
     try {
-      await apiPost(`/chat/sessions/${sessionId}/checkpoints`, {});
-      await loadCheckpoints(sessionId);
-    } catch (e) {
-      errorMsg = formatApiError(e, $_('chat.errors.checkpointCreate'));
-    } finally {
-      checkpointActionInFlight = false;
-    }
-  };
-
-  const restoreLatestCheckpoint = async () => {
-    if (!sessionId || checkpointActionInFlight) return;
-    const latest = sessionCheckpoints[0];
-    if (!latest) return;
-    if (!confirm($_('chat.checkpoints.confirmRestoreLatest'))) return;
-    checkpointActionInFlight = true;
-    errorMsg = null;
-    try {
-      await apiPost(
-        `/chat/sessions/${sessionId}/checkpoints/${latest.id}/restore`,
-        {},
-      );
-      await loadMessages(sessionId, { scrollToBottom: true, silent: true });
-      await loadCheckpoints(sessionId);
-    } catch (e) {
-      errorMsg = formatApiError(e, $_('chat.errors.checkpointRestore'));
-    } finally {
-      checkpointActionInFlight = false;
+      await apiPost(`/chat/sessions/${targetSessionId}/checkpoints`, {
+        anchorMessageId,
+      });
+      await loadCheckpoints(targetSessionId);
+    } catch {
+      // checkpoint creation is best-effort and must not block chat flow
     }
   };
 
@@ -3110,6 +3194,8 @@
       messages = [...messages, userMsg, assistantMsg];
       followBottom = true;
       scheduleScrollToBottom({ force: true });
+
+      void createTurnCheckpoint(res.sessionId, userMsg.id);
 
       // Fallback: si SSE rate les events (connection pas prête), on rattrape via polling queue.
       // On évite ainsi un "Préparation…" bloqué alors que le job est déjà terminé.
@@ -3737,6 +3823,17 @@
                 <div
                   class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
+                  {#if hasCheckpointRollbackDelta(getCheckpointForUserMessage(m.id))}
+                    <button
+                      class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                      on:click={() => openCheckpointPromptForMessage(m.id)}
+                      type="button"
+                      aria-label={$_('chat.checkpoints.restoreFromMessage')}
+                      title={$_('chat.checkpoints.restoreFromMessage')}
+                    >
+                      <UndoDot class="w-3.5 h-3.5" />
+                    </button>
+                  {/if}
                   <button
                     class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                     on:click={async () => {
@@ -3929,6 +4026,38 @@
               </div>
             </div>
           {/each}
+        {/if}
+        {#if pendingCheckpointPrompt}
+          <div class="rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
+            <div class="text-xs font-semibold text-slate-700">
+              {pendingCheckpointPrompt.kind === 'retry'
+                ? $_('chat.checkpoints.confirmRestoreBeforeRetry')
+                : $_('chat.checkpoints.confirmRestoreBeforeAction')}
+            </div>
+            <div class="text-[11px] text-slate-600">
+              {$_('chat.checkpoints.confirmRestoreDetails')}
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                on:click={() => void confirmCheckpointPrompt()}
+                disabled={checkpointActionInFlight}
+              >
+                {$_('chat.checkpoints.restoreCta')}
+              </button>
+              <button
+                type="button"
+                class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                on:click={() => void cancelCheckpointPrompt()}
+                disabled={checkpointActionInFlight}
+              >
+                {pendingCheckpointPrompt.kind === 'retry'
+                  ? $_('chat.checkpoints.retryWithoutRestore')
+                  : $_('chat.checkpoints.continueWithoutRestore')}
+              </button>
+            </div>
+          </div>
         {/if}
         {#if errorMsg}
           <div
@@ -4302,26 +4431,6 @@
               </div>
             </svelte:fragment>
           </MenuPopover>
-          <button
-            class="rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            type="button"
-            on:click={() => void createCheckpoint()}
-            disabled={!sessionId || checkpointActionInFlight}
-            aria-label={$_('chat.checkpoints.create')}
-            title={$_('chat.checkpoints.create')}
-          >
-            <BookmarkPlus class="w-4 h-4" />
-          </button>
-          <button
-            class="rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            type="button"
-            on:click={() => void restoreLatestCheckpoint()}
-            disabled={!sessionId || sessionCheckpoints.length === 0 || checkpointActionInFlight}
-            aria-label={$_('chat.checkpoints.restoreLatest')}
-            title={$_('chat.checkpoints.restoreLatest')}
-          >
-            <UndoDot class="w-4 h-4" />
-          </button>
           <select
             id="chat-model-selection"
             value={selectedModelSelectionKey}

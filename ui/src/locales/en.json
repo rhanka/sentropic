@@ -1034,7 +1034,14 @@
     "checkpoints": {
       "create": "Create checkpoint",
       "restoreLatest": "Restore latest checkpoint",
-      "confirmRestoreLatest": "Restore latest checkpoint? Recent messages will be removed."
+      "confirmRestoreLatest": "Restore latest checkpoint? Recent messages will be removed.",
+      "restoreFromMessage": "Restore from this point",
+      "confirmRestoreBeforeAction": "Restore to this checkpoint before continuing?",
+      "confirmRestoreBeforeRetry": "Restore to this checkpoint before retrying?",
+      "confirmRestoreDetails": "Recent messages after this point will be removed.",
+      "restoreCta": "Yes, restore",
+      "continueWithoutRestore": "No, continue",
+      "retryWithoutRestore": "No, retry without restore"
     },
     "composer": {
       "ariaLabel": "Composer",
