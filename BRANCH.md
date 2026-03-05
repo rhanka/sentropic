@@ -452,11 +452,15 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] `file_edit` first authorization must propose workspace-global scope `*` (not per-file spam), and `allow_always` must persist equivalent scope.
       - [x] Add scoped runtime tests for in-workspace/outside-workspace/sensitive-path/write-scope behavior.
         - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] BUG-L6-10 — Git tool surface is split (`git_status`/`git_diff`) instead of unified policy-governed `git`.
-      - [ ] Introduce one `git` tool contract for status/diff/ls-files + mutating actions.
-      - [ ] Default allow baseline read-only actions; ask for mutating/high-impact actions (including first `commit` authorization).
-      - [ ] Enforce `-C` workspace scope guard (outside workspace requires explicit permission).
-      - [ ] Add scoped runtime/UI tests for tool contract and policy gating.
+    - [x] BUG-L6-10 — Git tool surface is split (`git_status`/`git_diff`) instead of unified policy-governed `git`.
+      - [x] Introduce one `git` tool contract for status/diff/ls-files + mutating actions.
+      - [x] Default allow baseline read-only actions; ask for mutating/high-impact actions (including first `commit` authorization).
+      - [x] Enforce `-C` workspace scope guard (outside workspace requires explicit permission).
+      - [x] Add scoped runtime/UI tests for tool contract and policy gating.
+        - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-ui SCOPE=tests/stores/localTools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] BUG-L6-11 — Bash permission key format/operator UX mismatch.
       - [x] Keep permission keys readable in policy UX (`bash:git add` style, no underscore placeholder format).
       - [x] Ensure matching/persistence remains deterministic with readable keys.

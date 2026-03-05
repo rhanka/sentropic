@@ -17,8 +17,7 @@ export const VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS = new Set<string>([
   'rg',
   'file_read',
   'file_edit',
-  'git_status',
-  'git_diff',
+  'git',
 ]);
 
 export const isExtensionRestrictedToolsetMode = (input: {

@@ -236,8 +236,10 @@
     'rg',
     'file_read',
     'file_edit',
-    'git_status',
-    'git_diff',
+    'git',
+    'git:*',
+    'git:commit',
+    'git:push',
   ];
   type ExtensionBashRuleMode = 'wildcard' | 'mono' | 'bigram' | 'manual';
   let extensionPermissionDraftToolName = 'tab_action:*';

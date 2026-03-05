@@ -1176,13 +1176,9 @@
         "label": "Code: edit file",
         "description": "Edit/write files with explicit permission checks"
       },
-      "localCodeGitStatus": {
-        "label": "Code: git status",
-        "description": "Inspect git status (read-only)"
-      },
-      "localCodeGitDiff": {
-        "label": "Code: git diff",
-        "description": "Inspect git diff (read-only)"
+      "localCodeGit": {
+        "label": "Code: git",
+        "description": "Run git actions (status/diff/ls-files/add/commit/push/...) with policy checks"
       },
       "organizationRead": { "label": "Organization (read)" },
       "organizationUpdate": { "label": "Organization (edit)" },

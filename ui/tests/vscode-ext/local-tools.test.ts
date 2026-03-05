@@ -30,6 +30,7 @@ const createRuntime = async (workspaceRoot: string, state: RuntimeState) => {
 describe('vscode local tools runtime', () => {
   let workspaceRoot = '';
   let outsideFilePath = '';
+  let outsideRepoPath = '';
 
   beforeEach(async () => {
     workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'topai-vscode-tools-'));
@@ -42,6 +43,8 @@ describe('vscode local tools runtime', () => {
     );
     outsideFilePath = path.join(path.dirname(workspaceRoot), `outside-${Date.now()}.txt`);
     await fs.writeFile(outsideFilePath, 'outside-line-1\noutside-line-2\n', 'utf8');
+    outsideRepoPath = path.join(path.dirname(workspaceRoot), `outside-git-${Date.now()}`);
+    await fs.mkdir(outsideRepoPath, { recursive: true });
   });
 
   afterEach(async () => {
@@ -50,6 +53,9 @@ describe('vscode local tools runtime', () => {
     }
     if (outsideFilePath) {
       await fs.rm(outsideFilePath, { force: true });
+    }
+    if (outsideRepoPath) {
+      await fs.rm(outsideRepoPath, { recursive: true, force: true });
     }
   });
 
@@ -328,5 +334,50 @@ describe('vscode local tools runtime', () => {
     });
     expect(second.ok).toBe(true);
     await expect(fs.stat(deleteDir)).rejects.toThrow();
+  });
+
+  it('supports unified git tool with read-only default allow and mutating ask', async () => {
+    const runtime = await createRuntime(workspaceRoot, createState());
+    const readOnly = await runtime.execute({
+      toolCallId: 'git-status-1',
+      name: 'git',
+      args: { action: 'status' },
+    });
+    expect(readOnly.ok).toBe(false);
+    expect(String(readOnly.error ?? '')).not.toBe('permission_required');
+
+    const mutating = await runtime.execute({
+      toolCallId: 'git-commit-1',
+      name: 'git',
+      args: { action: 'commit', message: 'chore: noop' },
+    });
+    expect(mutating.ok).toBe(false);
+    expect(mutating.error).toBe('permission_required');
+  });
+
+  it('asks for git cwd outside workspace and resumes after allow_once', async () => {
+    const runtime = await createRuntime(workspaceRoot, createState());
+    const outsideRelative = `../${path.basename(outsideRepoPath)}`;
+
+    const first = await runtime.execute({
+      toolCallId: 'git-outside-1',
+      name: 'git',
+      args: { action: 'status', cwd: outsideRelative },
+    });
+    expect(first.ok).toBe(false);
+    expect(first.error).toBe('permission_required');
+
+    await runtime.decide({
+      requestId: first.permissionRequest?.requestId,
+      decision: 'allow_once',
+    });
+
+    const second = await runtime.execute({
+      toolCallId: 'git-outside-1',
+      name: 'git',
+      args: { action: 'status', cwd: outsideRelative },
+    });
+    expect(second.ok).toBe(false);
+    expect(String(second.error ?? '')).not.toBe('permission_required');
   });
 });

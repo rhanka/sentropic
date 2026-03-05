@@ -48,13 +48,12 @@ describe('localTools store', () => {
       'bash',
       'file_edit',
       'file_read',
-      'git_diff',
-      'git_status',
+      'git',
       'ls',
       'rg',
     ]);
     expect(isLocalToolName('bash')).toBe(true);
-    expect(isLocalToolName('git_status')).toBe(true);
+    expect(isLocalToolName('git')).toBe(true);
   });
 
   it('executes a local tool successfully and stores completed state', async () => {

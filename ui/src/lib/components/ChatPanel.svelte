@@ -1365,17 +1365,10 @@
       icon: Pencil,
     },
     {
-      id: 'git_status',
-      label: $_('chat.tools.localCodeGitStatus.label'),
-      description: $_('chat.tools.localCodeGitStatus.description'),
-      toolIds: ['git_status'],
-      icon: GitBranch,
-    },
-    {
-      id: 'git_diff',
-      label: $_('chat.tools.localCodeGitDiff.label'),
-      description: $_('chat.tools.localCodeGitDiff.description'),
-      toolIds: ['git_diff'],
+      id: 'git',
+      label: $_('chat.tools.localCodeGit.label'),
+      description: $_('chat.tools.localCodeGit.description'),
+      toolIds: ['git'],
       icon: GitBranch,
     },
   ];
@@ -1387,8 +1380,7 @@
     'rg',
     'file_read',
     'file_edit',
-    'git_status',
-    'git_diff',
+    'git',
   ]);
   const LOCAL_TOOL_TOGGLE_IDS = new Set([
     ...CHROME_LOCAL_TOOL_TOGGLE_IDS,
