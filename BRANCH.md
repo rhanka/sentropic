@@ -467,11 +467,12 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Ensure `allow_always` + `pathPattern=*` correctly prevents repeated equivalent prompts.
       - [x] Add scoped runtime tests for wildcard policy persistence + resolution order.
         - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] BUG-L6-17 — Outside-workspace read-path flow is hard-failing instead of ask+authorizable.
-      - [ ] For `ls`/`rg`/`file_read` on outside paths (`..`, absolute), emit permission request (`ask`) instead of immediate execution-time failure.
-      - [ ] Keep default allow only for in-workspace paths; outside paths must remain explicit user authorization.
-      - [ ] Persist user `allow_always` decisions for outside-path scope and reuse them on equivalent requests.
-      - [ ] Add scoped runtime tests for `..`/absolute outside-path request lifecycle (`ask` -> allow/deny -> resume).
+    - [x] BUG-L6-17 — Outside-workspace read-path flow is hard-failing instead of ask+authorizable.
+      - [x] For `ls`/`rg`/`file_read` on outside paths (`..`, absolute), emit permission request (`ask`) instead of immediate execution-time failure.
+      - [x] Keep default allow only for in-workspace paths; outside paths must remain explicit user authorization.
+      - [x] Persist user `allow_always` decisions for outside-path scope and reuse them on equivalent requests.
+      - [x] Add scoped runtime tests for `..`/absolute outside-path request lifecycle (`ask` -> allow/deny -> resume).
+        - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] BUG-L6-18 — Bash `rm -rf` is hard-denied, must be ask-only (user-authorizable).
       - [ ] Remove hard deny on `rm -rf` in default workspace policy path.
       - [ ] Keep `rm -rf` as mandatory permission prompt (`ask`) with no silent default allow.
