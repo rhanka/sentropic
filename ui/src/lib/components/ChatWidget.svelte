@@ -231,6 +231,7 @@
     'bash:*',
     'bash:git add',
     'bash:git push',
+    'bash:rm -rf',
     'ls',
     'rg',
     'file_read',
@@ -238,10 +239,16 @@
     'git_status',
     'git_diff',
   ];
+  type ExtensionBashRuleMode = 'wildcard' | 'mono' | 'bigram' | 'manual';
   let extensionPermissionDraftToolName = 'tab_action:*';
   let extensionPermissionDraftOrigin = '';
   let extensionPermissionDraftPathPattern = '';
   let extensionPermissionDraftPolicy: 'allow' | 'deny' = 'allow';
+  let extensionPermissionBashMode: ExtensionBashRuleMode = 'wildcard';
+  let extensionPermissionBashMono = 'git';
+  let extensionPermissionBashBigramFirst = 'git';
+  let extensionPermissionBashBigramSecond = 'add';
+  let extensionPermissionBashManual = 'bash:*';
   let extensionCodeAgentPromptDraft = DEFAULT_EXTENSION_CONFIGS.uat.codeAgentPromptEffective;
   let extensionCodeAgentPromptDraftMode: 'inherit' | 'workspace' = 'inherit';
   let extensionCodeAgentPromptResetPending = false;
@@ -281,6 +288,32 @@
       ? VSCODE_EXTENSION_PERMISSION_TOOL_OPTIONS
       : CHROME_EXTENSION_PERMISSION_TOOL_OPTIONS;
   };
+  const normalizeBashPolicyToken = (value: string): string =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+  const buildExtensionBashPolicyToolName = (): string => {
+    if (extensionPermissionBashMode === 'wildcard') return 'bash:*';
+    if (extensionPermissionBashMode === 'mono') {
+      const mono = normalizeBashPolicyToken(extensionPermissionBashMono);
+      return mono ? `bash:${mono}` : 'bash:*';
+    }
+    if (extensionPermissionBashMode === 'bigram') {
+      const first = normalizeBashPolicyToken(extensionPermissionBashBigramFirst);
+      const second = normalizeBashPolicyToken(extensionPermissionBashBigramSecond);
+      if (!first) return 'bash:*';
+      if (!second) return `bash:${first}`;
+      return `bash:${first} ${second}`;
+    }
+    const manual = normalizeBashPolicyToken(extensionPermissionBashManual);
+    return manual.startsWith('bash:') ? manual : `bash:${manual}`;
+  };
+  const applyExtensionBashPolicyDraft = () => {
+    extensionPermissionDraftToolName = buildExtensionBashPolicyToolName();
+  };
+  const isBashPermissionToolName = (value: string): boolean =>
+    value.trim().toLowerCase().startsWith('bash:');
   const isExtensionPermissionsTabAvailable = () => {
     return !isSidePanelHost || isVsCodeExtensionRuntime();
   };
@@ -2579,19 +2612,111 @@
                     <div class="text-[11px] text-slate-500">
                       {$_('chat.extension.permissions.description')}
                     </div>
+                    {#if isVsCodeExtensionRuntime()}
+                      <div class="space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
+                        <div class="text-[11px] font-semibold text-slate-600">
+                          {$_('chat.extension.permissions.bashBuilderTitle')}
+                        </div>
+                        <div class="text-[11px] text-slate-500">
+                          {$_('chat.extension.permissions.bashBuilderDescription')}
+                        </div>
+                        <div class="grid grid-cols-1 gap-2">
+                          <label class="text-[11px] text-slate-600" for="extension-bash-mode">
+                            {$_('chat.extension.permissions.bashModeLabel')}
+                          </label>
+                          <select
+                            id="extension-bash-mode"
+                            class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                            bind:value={extensionPermissionBashMode}
+                          >
+                            <option value="wildcard">
+                              {$_('chat.extension.permissions.bashModeWildcard')}
+                            </option>
+                            <option value="mono">
+                              {$_('chat.extension.permissions.bashModeMono')}
+                            </option>
+                            <option value="bigram">
+                              {$_('chat.extension.permissions.bashModeBigram')}
+                            </option>
+                            <option value="manual">
+                              {$_('chat.extension.permissions.bashModeManual')}
+                            </option>
+                          </select>
+                          {#if extensionPermissionBashMode === 'mono'}
+                            <input
+                              class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                              type="text"
+                              bind:value={extensionPermissionBashMono}
+                              placeholder="git"
+                            />
+                          {:else if extensionPermissionBashMode === 'bigram'}
+                            <div class="grid grid-cols-2 gap-2">
+                              <input
+                                class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                                type="text"
+                                bind:value={extensionPermissionBashBigramFirst}
+                                placeholder="git"
+                              />
+                              <input
+                                class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                                type="text"
+                                bind:value={extensionPermissionBashBigramSecond}
+                                placeholder="add"
+                              />
+                            </div>
+                          {:else if extensionPermissionBashMode === 'manual'}
+                            <input
+                              class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                              type="text"
+                              bind:value={extensionPermissionBashManual}
+                              placeholder="bash:rm -rf"
+                            />
+                          {/if}
+                          <div class="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                            {$_('chat.extension.permissions.bashPreviewLabel')}:
+                            <span class="font-mono">{buildExtensionBashPolicyToolName()}</span>
+                          </div>
+                          <div class="text-[11px] text-slate-500">
+                            {$_('chat.extension.permissions.bashPrecedenceHint')}
+                          </div>
+                          <button
+                            class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                            type="button"
+                            on:click={applyExtensionBashPolicyDraft}
+                          >
+                            {$_('chat.extension.permissions.bashUseBuilderCta')}
+                          </button>
+                        </div>
+                      </div>
+                    {/if}
                     <div class="space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
                       <div class="text-[11px] font-semibold text-slate-600">
                         {$_('chat.extension.permissions.addTitle')}
                       </div>
                       <div class="grid grid-cols-1 gap-2">
-                        <select
-                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                          bind:value={extensionPermissionDraftToolName}
-                        >
-                          {#each getExtensionPermissionToolOptions() as option}
-                            <option value={option}>{option}</option>
-                          {/each}
-                        </select>
+                        {#if isVsCodeExtensionRuntime()}
+                          <input
+                            class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                            type="text"
+                            bind:value={extensionPermissionDraftToolName}
+                            list="vscode-extension-tool-options"
+                            placeholder="bash:git add | file_edit | ls"
+                          />
+                          <datalist id="vscode-extension-tool-options">
+                            {#each getExtensionPermissionToolOptions() as option}
+                              <option value={option}></option>
+                            {/each}
+                          </datalist>
+                        {:else}
+                          <select
+                            class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                            bind:value={extensionPermissionDraftToolName}
+                          >
+                            {#each getExtensionPermissionToolOptions() as option}
+                              <option value={option}>{option}</option>
+                            {/each}
+                          </select>
+                        {/if}
                         <input
                           class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                           type="text"
@@ -2600,7 +2725,8 @@
                             ? 'vscode://workspace | *'
                             : 'https://example.com | https://* | *.example.com | *'}
                         />
-                        {#if isVsCodeExtensionRuntime()}
+                        {#if isVsCodeExtensionRuntime() &&
+                          !isBashPermissionToolName(extensionPermissionDraftToolName)}
                           <input
                             class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                             type="text"

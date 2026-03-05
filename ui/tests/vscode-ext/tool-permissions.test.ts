@@ -88,4 +88,54 @@ describe('vscode extension tool permissions bridge', () => {
       },
     });
   });
+
+  it('accepts readable bash bigram selectors through the bridge', async () => {
+    const sendMessage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        item: {
+          toolName: 'bash:rm -rf',
+          origin: 'vscode://workspace',
+          policy: 'deny',
+          updatedAt: '2026-03-03T00:00:02.000Z',
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        items: [
+          {
+            toolName: 'bash:rm -rf',
+            origin: 'vscode://workspace',
+            policy: 'deny',
+            updatedAt: '2026-03-03T00:00:02.000Z',
+          },
+        ],
+      });
+
+    (globalThis as any).chrome = {
+      runtime: {
+        id: 'topai.vscode.runtime',
+        sendMessage,
+      },
+    };
+
+    const updated = await upsertLocalToolPermissionPolicy({
+      toolName: 'bash:rm -rf',
+      origin: 'vscode://workspace',
+      policy: 'deny',
+    });
+    expect(updated).toMatchObject({
+      toolName: 'bash:rm -rf',
+      policy: 'deny',
+    });
+
+    const listed = await listLocalToolPermissionPolicies();
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({
+      toolName: 'bash:rm -rf',
+      origin: 'vscode://workspace',
+      policy: 'deny',
+    });
+  });
 });
