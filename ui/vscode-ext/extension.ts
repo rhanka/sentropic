@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { createHash } from 'crypto';
 import { promises as fs } from 'fs';
+import os from 'os';
 import path from 'path';
 import {
   createTopAiVsCodeRequestHandler,
@@ -14,7 +15,6 @@ import {
   type VsCodeSseProxyMessage,
 } from './stream-proxy';
 import {
-  DEFAULT_VSCODE_CODE_AGENT_PROMPT,
   resolveCodeAgentPromptProfile,
 } from '../src/lib/vscode/code-agent-profile';
 
@@ -53,10 +53,10 @@ const defaultConfig: TopAiRuntimeConfig = {
   wsBaseUrl: '',
   sessionToken: '',
   codexSignInUrl: 'https://chatgpt.com/auth/login?next=/codex',
-  codeAgentPromptDefault: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+  codeAgentPromptDefault: '',
   codeAgentPromptGlobal: '',
   codeAgentPromptWorkspace: '',
-  codeAgentPromptEffective: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+  codeAgentPromptEffective: '',
   codeAgentPromptSource: 'default',
   instructionIncludePatterns: [...DEFAULT_INSTRUCTION_INCLUDE_PATTERNS],
   workspaceScopeKey: '',
@@ -82,6 +82,16 @@ type VsCodeInstructionFile = {
   path: string;
   content: string;
 };
+type VsCodeCodeAgentSystemContext = {
+  workingDirectory?: string;
+  isGitRepo?: boolean;
+  gitBranch?: string;
+  platform?: string;
+  osVersion?: string;
+  shell?: string;
+  clientDateIso?: string;
+  clientTimezone?: string;
+};
 type VsCodeCodeAgentPayload = {
   source: 'vscode';
   workspaceKey?: string;
@@ -90,6 +100,7 @@ type VsCodeCodeAgentPayload = {
   promptWorkspaceOverride?: string;
   instructionIncludePatterns?: string[];
   instructionFiles?: VsCodeInstructionFile[];
+  systemContext?: VsCodeCodeAgentSystemContext;
 };
 type WorkspaceScopeInfo = {
   workspaceScopeKey: string;
@@ -152,19 +163,25 @@ const selectActiveWorkspaceFolder = (): vscode.WorkspaceFolder | null => {
   return folders[0];
 };
 
-const readGitOriginUrl = async (workspaceFsPath: string): Promise<string | null> => {
+const resolveGitDirPath = async (workspaceFsPath: string): Promise<string | null> => {
   const gitEntryPath = path.join(workspaceFsPath, '.git');
   try {
     const stat = await fs.stat(gitEntryPath);
-    let gitDirPath = gitEntryPath;
-    if (stat.isFile()) {
-      const fileContent = await fs.readFile(gitEntryPath, 'utf8');
-      const match = fileContent.match(/gitdir:\s*(.+)/i);
-      if (match?.[1]) {
-        const resolvedPath = path.resolve(workspaceFsPath, match[1].trim());
-        gitDirPath = resolvedPath;
-      }
-    }
+    if (stat.isDirectory()) return gitEntryPath;
+    if (!stat.isFile()) return null;
+    const fileContent = await fs.readFile(gitEntryPath, 'utf8');
+    const match = fileContent.match(/gitdir:\s*(.+)/i);
+    if (!match?.[1]) return null;
+    return path.resolve(workspaceFsPath, match[1].trim());
+  } catch {
+    return null;
+  }
+};
+
+const readGitOriginUrl = async (workspaceFsPath: string): Promise<string | null> => {
+  const gitDirPath = await resolveGitDirPath(workspaceFsPath);
+  if (!gitDirPath) return null;
+  try {
     const configPath = path.join(gitDirPath, 'config');
     const configContent = await fs.readFile(configPath, 'utf8');
     const lines = configContent.split(/\r?\n/);
@@ -181,6 +198,25 @@ const readGitOriginUrl = async (workspaceFsPath: string): Promise<string | null>
       return match[1].trim();
     }
     return null;
+  } catch {
+    return null;
+  }
+};
+
+const readGitBranch = async (workspaceFsPath: string): Promise<string | null> => {
+  const gitDirPath = await resolveGitDirPath(workspaceFsPath);
+  if (!gitDirPath) return null;
+  try {
+    const headPath = path.join(gitDirPath, 'HEAD');
+    const headContent = (await fs.readFile(headPath, 'utf8')).trim();
+    if (!headContent) return null;
+    if (!headContent.startsWith('ref:')) {
+      return headContent.slice(0, 12);
+    }
+    const refPath = headContent.replace(/^ref:\s*/i, '').trim();
+    if (!refPath) return null;
+    const match = refPath.match(/refs\/heads\/(.+)$/i);
+    return match?.[1]?.trim() || refPath.split('/').pop()?.trim() || null;
   } catch {
     return null;
   }
@@ -550,6 +586,32 @@ const buildInstructionDiscoveryPatterns = (
   return deduped;
 };
 
+const fetchCodeAgentPromptDefault = async (params: {
+  apiBaseUrl: string;
+  sessionToken: string;
+}): Promise<string> => {
+  const token = params.sessionToken.trim();
+  if (!token) return '';
+  const normalizedBase = params.apiBaseUrl.replace(/\/$/, '');
+  const targetUrl = `${normalizedBase}/vscode-extension/code-agent-prompt-profile`;
+  try {
+    const response = await fetch(targetUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) return '';
+    const payload = (await response.json()) as {
+      defaultPrompt?: unknown;
+    };
+    if (typeof payload.defaultPrompt !== 'string') return '';
+    return payload.defaultPrompt.trim();
+  } catch {
+    return '';
+  }
+};
+
 const readRuntimeConfig = async (
   context: vscode.ExtensionContext,
 ): Promise<TopAiRuntimeConfig> => {
@@ -587,11 +649,6 @@ const readRuntimeConfig = async (
     workspaceScopeKey && typeof workspacePromptOverrides[workspaceScopeKey] === 'string'
       ? workspacePromptOverrides[workspaceScopeKey]
       : defaultConfig.codeAgentPromptWorkspace;
-  const promptProfile = resolveCodeAgentPromptProfile({
-    workspaceOverride: codeAgentPromptWorkspace,
-    serverOverride: codeAgentPromptGlobal,
-    defaultPrompt: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
-  });
 
   const secretToken = await context.secrets.get(SECRET_SESSION_TOKEN_KEY);
   const fallbackSettingToken = normalizeConfigString(
@@ -599,6 +656,15 @@ const readRuntimeConfig = async (
     '',
   );
   const sessionToken = normalizeConfigString(secretToken, fallbackSettingToken);
+  const codeAgentPromptDefault = await fetchCodeAgentPromptDefault({
+    apiBaseUrl,
+    sessionToken,
+  });
+  const promptProfile = resolveCodeAgentPromptProfile({
+    workspaceOverride: codeAgentPromptWorkspace,
+    serverOverride: codeAgentPromptGlobal,
+    defaultPrompt: codeAgentPromptDefault,
+  });
   const projectWorkspaceMapping = await getOrSyncProjectWorkspaceMapping({
     context,
     apiBaseUrl,
@@ -612,7 +678,7 @@ const readRuntimeConfig = async (
     wsBaseUrl,
     sessionToken,
     codexSignInUrl: defaultConfig.codexSignInUrl,
-    codeAgentPromptDefault: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+    codeAgentPromptDefault,
     codeAgentPromptGlobal,
     codeAgentPromptWorkspace,
     codeAgentPromptEffective: promptProfile.effectivePrompt,
@@ -770,6 +836,34 @@ const listVsCodeInstructionFiles = async (
   return files;
 };
 
+const buildVsCodeSystemContext = async (
+  runtimeConfig: TopAiRuntimeConfig,
+): Promise<VsCodeCodeAgentSystemContext> => {
+  const workingDirectory = runtimeConfig.workspaceScopeKey.trim();
+  const branch = workingDirectory ? await readGitBranch(workingDirectory) : null;
+  const isGitRepo = workingDirectory
+    ? Boolean(await resolveGitDirPath(workingDirectory))
+    : false;
+  const timezone = (() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    } catch {
+      return '';
+    }
+  })();
+  const shell = (process.env.SHELL || process.env.ComSpec || '').trim();
+  return {
+    ...(workingDirectory ? { workingDirectory } : {}),
+    isGitRepo,
+    ...(branch ? { gitBranch: branch } : {}),
+    platform: process.platform,
+    osVersion: `${os.type()} ${os.release()}`,
+    ...(shell ? { shell } : {}),
+    clientDateIso: new Date().toISOString(),
+    ...(timezone ? { clientTimezone: timezone } : {}),
+  };
+};
+
 const injectVsCodeCodeAgentIntoBody = async (
   runtimeConfig: TopAiRuntimeConfig,
   targetUrl: URL,
@@ -792,6 +886,7 @@ const injectVsCodeCodeAgentIntoBody = async (
   }
 
   const instructionFiles = await listVsCodeInstructionFiles(runtimeConfig);
+  const systemContext = await buildVsCodeSystemContext(runtimeConfig);
   const payload: VsCodeCodeAgentPayload = {
     source: 'vscode',
     ...(runtimeConfig.workspaceScopeKey
@@ -808,6 +903,7 @@ const injectVsCodeCodeAgentIntoBody = async (
       : {}),
     instructionIncludePatterns: runtimeConfig.instructionIncludePatterns,
     instructionFiles,
+    systemContext,
   };
   parsed.vscodeCodeAgent = payload;
   return JSON.stringify(parsed);

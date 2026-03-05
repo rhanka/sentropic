@@ -157,7 +157,7 @@ describe('VSCode code-agent prompt profile', () => {
         'getPromptTemplate',
       )
       .mockImplementation((id: string) =>
-        id === 'chat_vscode_code_agent' ? '' : getPromptTemplate(id),
+        id === 'chat_code_agent' ? '' : getPromptTemplate(id),
       );
 
     try {

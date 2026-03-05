@@ -14,7 +14,6 @@ import {
   type VsCodeBridge,
 } from './vscode-bridge';
 import {
-  DEFAULT_VSCODE_CODE_AGENT_PROMPT,
   resolveCodeAgentPromptProfile,
   type CodeAgentPromptSource,
 } from '../src/lib/vscode/code-agent-profile';
@@ -95,10 +94,10 @@ const DEFAULT_RUNTIME_CONFIG: Required<TopAiRuntimeConfig> = {
   wsBaseUrl: '',
   sessionToken: '',
   codexSignInUrl: 'https://chatgpt.com/auth/login?next=/codex',
-  codeAgentPromptDefault: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+  codeAgentPromptDefault: '',
   codeAgentPromptGlobal: '',
   codeAgentPromptWorkspace: '',
-  codeAgentPromptEffective: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+  codeAgentPromptEffective: '',
   codeAgentPromptSource: 'default',
   instructionIncludePatterns: [],
   workspaceScopeKey: '',
