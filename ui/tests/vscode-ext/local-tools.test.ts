@@ -301,4 +301,32 @@ describe('vscode local tools runtime', () => {
     expect(pushResult.ok).toBe(false);
     expect(pushResult.error).toBe('permission_required');
   });
+
+  it('requires explicit permission for rm -rf instead of hard deny', async () => {
+    const runtime = await createRuntime(workspaceRoot, createState());
+    const deleteDir = path.join(workspaceRoot, 'delete-me');
+    await fs.mkdir(deleteDir, { recursive: true });
+    await fs.writeFile(path.join(deleteDir, 'temp.txt'), 'data', 'utf8');
+
+    const first = await runtime.execute({
+      toolCallId: 'bash-rm-rf-1',
+      name: 'bash',
+      args: { command: 'rm -rf delete-me' },
+    });
+    expect(first.ok).toBe(false);
+    expect(first.error).toBe('permission_required');
+
+    await runtime.decide({
+      requestId: first.permissionRequest?.requestId,
+      decision: 'allow_once',
+    });
+
+    const second = await runtime.execute({
+      toolCallId: 'bash-rm-rf-1',
+      name: 'bash',
+      args: { command: 'rm -rf delete-me' },
+    });
+    expect(second.ok).toBe(true);
+    await expect(fs.stat(deleteDir)).rejects.toThrow();
+  });
 });
