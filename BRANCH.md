@@ -462,10 +462,11 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Ensure matching/persistence remains deterministic with readable keys.
       - [x] Add scoped tests for policy normalization + matching behavior.
         - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] BUG-L6-12 — `file_edit` policy pattern `*` does not apply reliably after allow.
-      - [ ] Reproduce and fix `file_edit` policy matching for wildcard path pattern `*`.
-      - [ ] Ensure `allow_always` + `pathPattern=*` correctly prevents repeated equivalent prompts.
-      - [ ] Add scoped runtime tests for wildcard policy persistence + resolution order.
+    - [x] BUG-L6-12 — `file_edit` policy pattern `*` does not apply reliably after allow.
+      - [x] Reproduce and fix `file_edit` policy matching for wildcard path pattern `*`.
+      - [x] Ensure `allow_always` + `pathPattern=*` correctly prevents repeated equivalent prompts.
+      - [x] Add scoped runtime tests for wildcard policy persistence + resolution order.
+        - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] BUG-L6-17 — Outside-workspace read-path flow is hard-failing instead of ask+authorizable.
       - [ ] For `ls`/`rg`/`file_read` on outside paths (`..`, absolute), emit permission request (`ask`) instead of immediate execution-time failure.
       - [ ] Keep default allow only for in-workspace paths; outside paths must remain explicit user authorization.
