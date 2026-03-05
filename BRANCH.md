@@ -479,11 +479,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Ensure `allow_always`/`deny_always` persistence applies to `rm -rf` with same policy engine.
       - [x] Add scoped tests validating `rm -rf` prompt behavior (not hard deny) and decision persistence.
         - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] BUG-L6-19 — VSCode tools policy UI cannot author bash bigram rules (currently path-centric).
-      - [ ] Define dedicated bash policy editor UX (readable selectors for mono/bigram commands).
-      - [ ] Support manual entry examples such as `bash:git add`, `bash:git push`, `bash:rm -rf`.
-      - [ ] Support allow/deny with deterministic matching and clear precedence preview.
-      - [ ] Add scoped UI/runtime tests for selector parsing + persistence + evaluation.
+    - [x] BUG-L6-19 — VSCode tools policy UI cannot author bash bigram rules (currently path-centric).
+      - [x] Define dedicated bash policy editor UX (readable selectors for mono/bigram commands).
+      - [x] Support manual entry examples such as `bash:git add`, `bash:git push`, `bash:rm -rf`.
+      - [x] Support allow/deny with deterministic matching and clear precedence preview.
+      - [x] Add scoped UI/runtime tests for selector parsing + persistence + evaluation.
+        - [x] `make test-ui SCOPE=tests/vscode-ext/tool-permissions.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] BUG-L6-7 — VSCode settings showed an empty effective code-agent prompt after removing local fallback.
       - [x] Add instance-managed prompt profile endpoint (`/api/v1/vscode-extension/code-agent-prompt-profile`).
       - [x] Load the instance-managed default prompt in VSCode runtime config (`runtime.config.get` path).
