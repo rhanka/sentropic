@@ -268,4 +268,37 @@ describe('vscode local tools runtime', () => {
       'b-updated',
     );
   });
+
+  it('supports readable bash bigram policy keys with deterministic matching', async () => {
+    const runtime = await createRuntime(workspaceRoot, createState());
+
+    await expect(
+      runtime.upsertPolicy({
+        toolName: 'bash:echo alpha',
+        origin: 'vscode://workspace',
+        policy: 'allow',
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      item: {
+        toolName: 'bash:echo alpha',
+        policy: 'allow',
+      },
+    });
+
+    const addResult = await runtime.execute({
+      toolCallId: 'bash-policy-add-1',
+      name: 'bash',
+      args: { command: 'echo alpha notes.txt' },
+    });
+    expect(addResult.ok).toBe(true);
+
+    const pushResult = await runtime.execute({
+      toolCallId: 'bash-policy-push-1',
+      name: 'bash',
+      args: { command: 'echo beta notes.txt' },
+    });
+    expect(pushResult.ok).toBe(false);
+    expect(pushResult.error).toBe('permission_required');
+  });
 });

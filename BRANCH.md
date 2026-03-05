@@ -457,10 +457,11 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Default allow baseline read-only actions; ask for mutating/high-impact actions (including first `commit` authorization).
       - [ ] Enforce `-C` workspace scope guard (outside workspace requires explicit permission).
       - [ ] Add scoped runtime/UI tests for tool contract and policy gating.
-    - [ ] BUG-L6-11 — Bash permission key format/operator UX mismatch.
-      - [ ] Keep permission keys readable in policy UX (`bash:git add` style, no underscore placeholder format).
-      - [ ] Ensure matching/persistence remains deterministic with readable keys.
-      - [ ] Add scoped tests for policy normalization + matching behavior.
+    - [x] BUG-L6-11 — Bash permission key format/operator UX mismatch.
+      - [x] Keep permission keys readable in policy UX (`bash:git add` style, no underscore placeholder format).
+      - [x] Ensure matching/persistence remains deterministic with readable keys.
+      - [x] Add scoped tests for policy normalization + matching behavior.
+        - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] BUG-L6-12 — `file_edit` policy pattern `*` does not apply reliably after allow.
       - [ ] Reproduce and fix `file_edit` policy matching for wildcard path pattern `*`.
       - [ ] Ensure `allow_always` + `pathPattern=*` correctly prevents repeated equivalent prompts.
