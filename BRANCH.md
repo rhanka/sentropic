@@ -322,14 +322,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] S6-6 Settings split contract (tabs `Server | Workspace | Tools`; no silent workspace creation).
     - [x] S6-7 Prompt editor contract (single effective prompt field + inheritance override/reset flow).
     - [x] S6-8 VSCode E2E lane + naming/CI contract (`build-ext-vscode`, `build-ext-chrome`, `test-e2e-vscode`, `docker-compose.e2e-vscode.yml`, strict CI paths, required check, 7-day artifacts, no compatibility aliases).
-    - [ ] S6-9 VSCode tool-permission UX/policy hardening contract:
-      - [ ] human-readable permission origin/details (no raw `vscode://workspace` only),
-      - [ ] `allow_always` close+resume guarantee,
-      - [ ] read-path scope (`workspace default`, outside-path explicit ask; `.env*` hard deny),
-      - [ ] write-path scope (first prompt proposes workspace-global `*` grant),
-      - [ ] unified `git` tool policy contract and `-C` scope guard,
-      - [ ] git mutating actions require explicit permission (including first `commit`),
-      - [ ] bash policy key readability contract (`bash:<mono|bigram>`, no underscore placeholder format).
+    - [x] S6-9 VSCode tool-permission UX/policy hardening contract:
+      - [x] human-readable permission origin/details (no raw `vscode://workspace` only),
+      - [x] `allow_always` close+resume guarantee,
+      - [x] read-path scope (`workspace default`, outside-path explicit ask; `.env*` hard deny),
+      - [x] write-path scope (first prompt proposes workspace-global `*` grant),
+      - [x] unified `git` tool policy contract and `-C` scope guard,
+      - [x] git mutating actions require explicit permission (including first `commit`),
+      - [x] bash policy key readability contract (`bash:<mono|bigram>`, no underscore placeholder format).
   - [x] DEV phase (after all S6 spec subjects are validated)
     - [x] Step 1 — Implement S6-1 / BUG-L6-0 (VSCode streaming parity first; blocker).
     - [x] Step 2 — Implement S6-3 / BUG-L6-1 (checkpoint affordance contract + legacy footer eradication).
@@ -417,11 +417,15 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts ENV=dev`
         - [x] `make test-ui SCOPE=tests/vscode-ext/bash-policy-banner.test.ts ENV=dev`
         - [x] `make test-ui SCOPE=tests/stores/streamHub.test.ts ENV=dev`
-    - [ ] BUG-L6-14 — Gemini local-tools handoff is unstable (`awaiting_external_result` can persist and the run appears stuck).
-      - [ ] Reproduce with scoped Gemini tool sequence and capture full stream timeline.
-      - [ ] Validate Gemini continuation contract after local tool results (tool-output handback path).
-      - [ ] Ensure local tool result forwarding always clears pending state and resumes generation.
-      - [ ] Add scoped tests for Gemini local-tools continuation parity.
+    - [x] BUG-L6-14 — Gemini local-tools handoff is unstable (`awaiting_external_result` can persist and the run appears stuck).
+      - [x] Reproduce with scoped Gemini tool sequence and capture full stream timeline.
+      - [x] Validate Gemini continuation contract after local tool results (tool-output handback path).
+      - [x] Ensure local tool result forwarding always clears pending state and resumes generation.
+      - [x] Add scoped tests for Gemini local-tools continuation parity.
+        - [x] `make test-api-unit SCOPE=tests/unit/gemini-tool-handoff.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] BUG-L6-15 — `plan` tool is not available in VSCode runtime toolset.
       - [x] Include `plan` in VSCode restricted/new-session allowed toolset.
       - [x] Validate toggle visibility + request payload includes `plan`.
@@ -432,6 +436,12 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Apply big-bang provider runtime split per `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`.
       - [ ] Remove mixed-provider implementation paths (no compatibility fallback).
       - [ ] Revalidate OpenAI/Gemini local-tools continuation parity in scoped chat tests.
+        - [ ] `make test-api-unit SCOPE=tests/unit/gemini-response-schema.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [ ] `make test-api-unit SCOPE=tests/unit/gemini-tool-handoff.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [ ] `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] BUG-L6-5 — Codex enrollment from web-app settings is not a real SSO enrollment flow.
       - [x] Implement actual enrollment lifecycle (start/status/complete/disconnect) with verifiable backend state.
       - [x] Ensure UI state is bound to real provider readiness (not local/manual toggle semantics).

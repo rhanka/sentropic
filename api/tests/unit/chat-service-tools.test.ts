@@ -21,13 +21,13 @@ import { todoOrchestrationService } from '../../src/services/todo-orchestration'
 
 // Mock OpenAI streaming to keep unit tests deterministic and fast.
 // IMPORTANT: this must be declared before importing chatService.
-vi.mock('../../src/services/openai', () => {
+vi.mock('../../src/services/llm-runtime', () => {
   return {
     callOpenAIResponseStream: vi.fn(),
   };
 });
 
-import { callOpenAIResponseStream } from '../../src/services/openai';
+import { callOpenAIResponseStream } from '../../src/services/llm-runtime';
 import { chatService } from '../../src/services/chat-service';
 
 type StreamEvent = { type: string; data: unknown };
@@ -329,7 +329,11 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     expect(accepted.waitingForToolCallIds).toEqual([]);
     expect(accepted.resumeFrom?.previousResponseId).toBe('resp_local_pause_1');
     expect(accepted.resumeFrom?.toolOutputs).toEqual([
-      expect.objectContaining({ callId: 'call_local_tab_info_1' })
+      expect.objectContaining({
+        callId: 'call_local_tab_info_1',
+        name: 'tab_info',
+        args: {},
+      })
     ]);
   });
 
@@ -377,6 +381,103 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
 
     expect(seenToolNames).toContain('tab_read');
     expect(seenToolNames).toContain('web_search');
+  });
+
+  it('should strip local tool metadata from OpenAI resume rawInput', async () => {
+    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const seenRawInputs: unknown[] = [];
+
+    mock.mockReset();
+    mock.mockImplementation((opts: any) => {
+      seenRawInputs.push(opts?.rawInput ?? null);
+      if (!opts?.rawInput) {
+        return stream([
+          { type: 'status', data: { response_id: 'resp_resume_openai_1' } },
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: 'call_local_file_read_1',
+              name: 'file_read',
+              args: '{"path":"README.md"}'
+            }
+          },
+          { type: 'done', data: {} }
+        ]);
+      }
+
+      return stream([
+        { type: 'content_delta', data: { delta: 'resumed' } },
+        { type: 'done', data: {} }
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'read local file',
+      primaryContextType: 'folder',
+      primaryContextId: folderId,
+      model: 'gpt-5.2'
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      localToolDefinitions: [
+        {
+          name: 'file_read',
+          description: 'Read a local file',
+          parameters: {
+            type: 'object',
+            properties: {
+              path: { type: 'string' }
+            },
+            required: ['path']
+          }
+        }
+      ]
+    });
+
+    const accepted = await chatService.acceptLocalToolResult({
+      assistantMessageId: msg.assistantMessageId,
+      toolCallId: 'call_local_file_read_1',
+      result: { content: 'hello' }
+    });
+
+    expect(accepted.readyToResume).toBe(true);
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      resumeFrom: accepted.resumeFrom,
+      localToolDefinitions: [
+        {
+          name: 'file_read',
+          description: 'Read a local file',
+          parameters: {
+            type: 'object',
+            properties: {
+              path: { type: 'string' }
+            },
+            required: ['path']
+          }
+        }
+      ]
+    });
+
+    const resumedRawInput = [...seenRawInputs].reverse().find((item) => item !== null);
+
+    expect(resumedRawInput).toEqual([
+      {
+        type: 'function_call_output',
+        call_id: 'call_local_file_read_1',
+        output: '{"status":"completed","content":"hello"}',
+      },
+    ]);
   });
 
 it('should evaluate reasoning effort with gemini-2.5-flash-lite when provider is gemini', async () => {
