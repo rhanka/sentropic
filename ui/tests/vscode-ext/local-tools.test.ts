@@ -161,4 +161,38 @@ describe('vscode local tools runtime', () => {
     expect(second.ok).toBe(true);
     expect(String((second.result as any)?.stdout ?? '')).toContain('lot3');
   });
+
+  it('supports allow_always immediate resume and persistence for equivalent bash calls', async () => {
+    const runtime = await createRuntime(workspaceRoot, createState());
+
+    const first = await runtime.execute({
+      toolCallId: 'bash-always-1',
+      name: 'bash',
+      args: { command: 'echo keep' },
+    });
+
+    expect(first.ok).toBe(false);
+    expect(first.error).toBe('permission_required');
+
+    await runtime.decide({
+      requestId: first.permissionRequest?.requestId,
+      decision: 'allow_always',
+    });
+
+    const resumed = await runtime.execute({
+      toolCallId: 'bash-always-1',
+      name: 'bash',
+      args: { command: 'echo keep' },
+    });
+    expect(resumed.ok).toBe(true);
+    expect(String((resumed.result as any)?.stdout ?? '')).toContain('keep');
+
+    const persisted = await runtime.execute({
+      toolCallId: 'bash-always-2',
+      name: 'bash',
+      args: { command: 'echo keep' },
+    });
+    expect(persisted.ok).toBe(true);
+    expect(String((persisted.result as any)?.stdout ?? '')).toContain('keep');
+  });
 });
