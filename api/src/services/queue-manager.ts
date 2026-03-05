@@ -32,7 +32,7 @@ import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
 import type { VsCodeCodeAgentRuntimePayload } from './chat-service';
-import type { StreamEventType } from './openai';
+import type { StreamEventType } from './llm-runtime';
 import {
   deleteObject,
   getDocumentsBucketName,

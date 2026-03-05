@@ -312,7 +312,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
-- [ ] **Lot 6 — VSCode runtime parity (spec-first before UAT)**
+- [x] **Lot 6 — VSCode runtime parity (spec-first before UAT)**
   - [x] Spec phase (interactive, subject-by-subject)
     - [x] S6-1 Streaming parity in VSCode host (SSE chained proxy, no server-side SSE rewrite, no duplicated render pipeline).
     - [x] S6-3 Checkpoint affordance placement + visibility gating (message actions only, code-delta only; legacy composer/global checkpoint controls explicitly forbidden).
@@ -397,7 +397,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make test-ui SCOPE=tests/vscode-ext/code-agent-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] `make build-ext-vscode API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
     - [x] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts WORKERS=1 RETRIES=0 API_PORT=8715 UI_PORT=5115 OPENVSCODE_PORT=3116 MAILDEV_UI_PORT=1015 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
-  - [ ] Bug backlog (Lot 6)
+  - [x] Bug backlog (Lot 6)
     - [x] BUG-L6-3 — VSCode code-workspace default naming: on create, default workspace name should derive from git `origin` repository name when available (fallback to active folder name, then fingerprint suffix fallback).
       - [x] Extract repository name from origin URL (`owner/repo(.git)` -> `repo`) in extension runtime payload.
       - [x] Pass suggested default name to workspace creation endpoint when user does not provide one.
@@ -432,16 +432,16 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Add scoped UI/runtime tests for `plan` availability in VSCode sessions.
         - [x] `make test-ui SCOPE=tests/utils/chat-tool-scope.test.ts ENV=dev`
         - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts ENV=dev`
-    - [ ] BUG-L6-16 — Provider runtime ownership is structurally mixed (`openai.ts` contains Gemini paths), causing handoff/continuation fragility.
-      - [ ] Apply big-bang provider runtime split per `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`.
-      - [ ] Remove mixed-provider implementation paths (no compatibility fallback).
-      - [ ] Revalidate OpenAI/Gemini local-tools continuation parity in scoped chat tests.
-        - [ ] `make test-api-unit SCOPE=tests/unit/gemini-response-schema.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-        - [ ] `make test-api-unit SCOPE=tests/unit/gemini-tool-handoff.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-        - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-        - [ ] `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-        - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-        - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] BUG-L6-16 — Provider runtime ownership is structurally mixed (`openai.ts` contains Gemini paths), causing handoff/continuation fragility.
+      - [x] Apply big-bang provider runtime split per `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`.
+      - [x] Remove mixed-provider implementation paths (no compatibility fallback).
+      - [x] Revalidate OpenAI/Gemini local-tools continuation parity in scoped chat tests.
+        - [x] `make test-api-unit SCOPE=tests/unit/gemini-response-schema.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-api-unit SCOPE=tests/unit/gemini-tool-handoff.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] BUG-L6-5 — Codex enrollment from web-app settings is not a real SSO enrollment flow.
       - [x] Implement actual enrollment lifecycle (start/status/complete/disconnect) with verifiable backend state.
       - [x] Ensure UI state is bound to real provider readiness (not local/manual toggle semantics).

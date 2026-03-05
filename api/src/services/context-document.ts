@@ -1,8 +1,8 @@
 import { defaultPrompts } from '../config/default-prompts';
 import { executeWithToolsStream } from './tools';
-import { callOpenAIResponseStream } from './openai';
+import { callOpenAIResponseStream } from './llm-runtime';
 import { getNextSequence, writeStreamEvent } from './stream-service';
-import type { StreamEventType } from './openai';
+import type { StreamEventType } from './llm-runtime';
 
 const FORCED_DOCUMENT_MODEL = 'gpt-5-nano';
 const WORDS_FULL_CONTENT_LIMIT = 10_000;

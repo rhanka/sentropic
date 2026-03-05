@@ -1,7 +1,7 @@
 import { env } from '../config/env';
 import fetch from "node-fetch";
-import { callOpenAIResponseStream } from './openai';
-import type { StreamEventType } from './openai';
+import { callOpenAIResponseStream } from './llm-runtime';
+import type { StreamEventType } from './llm-runtime';
 import type OpenAI from 'openai';
 import { generateStreamId, getNextSequence, writeStreamEvent } from './stream-service';
 import { toolService } from './tool-service';

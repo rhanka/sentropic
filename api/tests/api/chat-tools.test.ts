@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-vi.mock('../../src/services/openai', () => ({
+vi.mock('../../src/services/llm-runtime', () => ({
   callOpenAIResponseStream: vi.fn(),
   callOpenAI: vi.fn()
 }));
@@ -30,7 +30,7 @@ import {
 } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
-import { callOpenAIResponseStream } from '../../src/services/openai';
+import { callOpenAIResponseStream } from '../../src/services/llm-runtime';
 import { generateCommentResolutionProposal } from '../../src/services/context-comments';
 
 const openAIStreamMock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
