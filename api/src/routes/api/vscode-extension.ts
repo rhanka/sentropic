@@ -84,6 +84,7 @@ const mappingUpdateSchema = z.object({
 const mappingCreateCodeWorkspaceSchema = z.object({
   projectFingerprint: projectFingerprintSchema,
   name: z.string().trim().min(1).max(128).optional(),
+  repositoryName: z.string().trim().min(1).max(128).optional(),
 });
 
 const mappingNotNowSchema = z.object({
@@ -139,6 +140,12 @@ const parseWorkspaceState = (
   } catch {
     return defaultWorkspaceState();
   }
+};
+
+const normalizeWorkspaceNameCandidate = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().slice(0, 128);
+  return normalized.length > 0 ? normalized : null;
 };
 
 const readWorkspaceState = async (
@@ -382,7 +389,8 @@ vscodeExtensionRouter.post(
     const now = new Date();
     const workspaceId = createId();
     const workspaceName =
-      payload.name?.trim() ||
+      normalizeWorkspaceNameCandidate(payload.name) ||
+      normalizeWorkspaceNameCandidate(payload.repositoryName) ||
       `Code workspace ${payload.projectFingerprint.slice(0, 8)}`;
 
     await db.transaction(async (tx) => {

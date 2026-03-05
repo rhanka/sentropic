@@ -170,6 +170,25 @@ describe('VSCode project/workspace mapping API', () => {
     expect(payload.codeWorkspaces.some((workspace) => workspace.id === payload.mappedWorkspaceId)).toBe(true);
   });
 
+  it('uses repository name as default workspace name when explicit name is omitted', async () => {
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/vscode-extension/workspace-mapping/code-workspace',
+      editor.sessionToken!,
+      {
+        projectFingerprint: 'repo.main.004b',
+        repositoryName: 'top-ai-ideas-fullstack',
+      },
+    );
+
+    expect(response.status).toBe(201);
+    const payload = (await response.json()) as {
+      mappedWorkspaceName: string | null;
+    };
+    expect(payload.mappedWorkspaceName).toBe('top-ai-ideas-fullstack');
+  });
+
   it('supports not-now fallback to last registered code workspace', async () => {
     const codeWorkspaceId = crypto.randomUUID();
     await db.insert(workspaces).values({
