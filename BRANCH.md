@@ -459,6 +459,21 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Reproduce and fix `file_edit` policy matching for wildcard path pattern `*`.
       - [ ] Ensure `allow_always` + `pathPattern=*` correctly prevents repeated equivalent prompts.
       - [ ] Add scoped runtime tests for wildcard policy persistence + resolution order.
+    - [ ] BUG-L6-17 — Outside-workspace read-path flow is hard-failing instead of ask+authorizable.
+      - [ ] For `ls`/`rg`/`file_read` on outside paths (`..`, absolute), emit permission request (`ask`) instead of immediate execution-time failure.
+      - [ ] Keep default allow only for in-workspace paths; outside paths must remain explicit user authorization.
+      - [ ] Persist user `allow_always` decisions for outside-path scope and reuse them on equivalent requests.
+      - [ ] Add scoped runtime tests for `..`/absolute outside-path request lifecycle (`ask` -> allow/deny -> resume).
+    - [ ] BUG-L6-18 — Bash `rm -rf` is hard-denied, must be ask-only (user-authorizable).
+      - [ ] Remove hard deny on `rm -rf` in default workspace policy path.
+      - [ ] Keep `rm -rf` as mandatory permission prompt (`ask`) with no silent default allow.
+      - [ ] Ensure `allow_always`/`deny_always` persistence applies to `rm -rf` with same policy engine.
+      - [ ] Add scoped tests validating `rm -rf` prompt behavior (not hard deny) and decision persistence.
+    - [ ] BUG-L6-19 — VSCode tools policy UI cannot author bash bigram rules (currently path-centric).
+      - [ ] Define dedicated bash policy editor UX (readable selectors for mono/bigram commands).
+      - [ ] Support manual entry examples such as `bash:git add`, `bash:git push`, `bash:rm -rf`.
+      - [ ] Support allow/deny with deterministic matching and clear precedence preview.
+      - [ ] Add scoped UI/runtime tests for selector parsing + persistence + evaluation.
     - [x] BUG-L6-7 — VSCode settings showed an empty effective code-agent prompt after removing local fallback.
       - [x] Add instance-managed prompt profile endpoint (`/api/v1/vscode-extension/code-agent-prompt-profile`).
       - [x] Load the instance-managed default prompt in VSCode runtime config (`runtime.config.get` path).
