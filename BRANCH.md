@@ -420,10 +420,12 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Validate Gemini continuation contract after local tool results (tool-output handback path).
       - [ ] Ensure local tool result forwarding always clears pending state and resumes generation.
       - [ ] Add scoped tests for Gemini local-tools continuation parity.
-    - [ ] BUG-L6-15 — `plan` tool is not available in VSCode runtime toolset.
-      - [ ] Include `plan` in VSCode restricted/new-session allowed toolset.
-      - [ ] Validate toggle visibility + request payload includes `plan`.
-      - [ ] Add scoped UI/runtime tests for `plan` availability in VSCode sessions.
+    - [x] BUG-L6-15 — `plan` tool is not available in VSCode runtime toolset.
+      - [x] Include `plan` in VSCode restricted/new-session allowed toolset.
+      - [x] Validate toggle visibility + request payload includes `plan`.
+      - [x] Add scoped UI/runtime tests for `plan` availability in VSCode sessions.
+        - [x] `make test-ui SCOPE=tests/utils/chat-tool-scope.test.ts ENV=dev`
+        - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts ENV=dev`
     - [ ] BUG-L6-16 — Provider runtime ownership is structurally mixed (`openai.ts` contains Gemini paths), causing handoff/continuation fragility.
       - [ ] Apply big-bang provider runtime split per `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`.
       - [ ] Remove mixed-provider implementation paths (no compatibility fallback).
@@ -436,7 +438,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Replace current base prompt with the agreed enriched profile.
       - [ ] Add scoped tests for baseline prompt rendering and override behavior.
     - [ ] BUG-L6-8 — VSCode permission banner wording is not user-actionable (`vscode://workspace` raw origin + missing request details).
-      - [ ] Show readable origin label (`Current VSCode workspace` + workspace context).
+      - [ ] remove readable origin label, which is useless (on se fiche du vs code workspace origin)
       - [ ] Show actionable details per request (operation, command/path/scope).
       - [ ] Add scoped UI test(s) for permission banner content rendering.
     - [ ] BUG-L6-9 — Path-scope policy mismatch on code tools.
