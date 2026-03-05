@@ -436,9 +436,13 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Implement actual enrollment lifecycle (start/status/complete/disconnect) with verifiable backend state.
       - [ ] Ensure UI state is bound to real provider readiness (not local/manual toggle semantics).
       - [ ] Add scoped API/UI tests.
-    - [ ] BUG-L6-6 — Code-agent base prompt is not aligned with the requested enriched baseline profile.
-      - [ ] Replace current base prompt with the agreed enriched profile.
-      - [ ] Add scoped tests for baseline prompt rendering and override behavior.
+    - [x] BUG-L6-6 — Code-agent base prompt is not aligned with the requested enriched baseline profile.
+      - [x] Replace current base prompt with the agreed enriched profile.
+      - [x] Add scoped tests for baseline prompt rendering and override behavior.
+        - [x] `make test-api-unit SCOPE=tests/unit/vscode-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-api-endpoints SCOPE=tests/api/vscode-extension-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] BUG-L6-8 — VSCode permission banner wording is not user-actionable (`vscode://workspace` raw origin + missing request details).
       - [x] remove readable origin label, which is useless (on se fiche du vs code workspace origin)
       - [x] Show actionable details per request (operation, command/path/scope).
