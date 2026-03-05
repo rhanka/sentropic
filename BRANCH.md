@@ -407,6 +407,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Ensure `allow_always` click closes permission banner in current run.
       - [ ] Ensure pending command continues immediately after `allow_always`.
       - [ ] Add scoped tests for close + resume behavior.
+    - [x] BUG-L6-13 — Local tools approval sequencing in one assistant run is not strict (multiple pending approvals can appear before first approval is resolved).
+      - [x] Enforce single active local tool execution per assistant run (strict sequential gating).
+      - [x] While one approval is pending, do not surface/execute the next local tool call.
+      - [x] After approval/result for current call, continue with next pending local tool call in order.
+      - [x] Add scoped UI/runtime tests for sequential permission flow in a single run.
+        - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts ENV=dev`
+        - [x] `make test-ui SCOPE=tests/vscode-ext/bash-policy-banner.test.ts ENV=dev`
+        - [x] `make test-ui SCOPE=tests/stores/streamHub.test.ts ENV=dev`
     - [ ] BUG-L6-5 — Codex enrollment from web-app settings is not a real SSO enrollment flow.
       - [ ] Implement actual enrollment lifecycle (start/status/complete/disconnect) with verifiable backend state.
       - [ ] Ensure UI state is bound to real provider readiness (not local/manual toggle semantics).

@@ -755,15 +755,68 @@
       : new Error('Unknown local tool result forwarding error');
   };
 
+  const hasPendingPermissionPromptForStream = (
+    streamId: string,
+    exceptToolCallId?: string,
+  ): boolean =>
+    pendingLocalToolPermissionPrompts.some(
+      (item) =>
+        item.streamId === streamId &&
+        (!exceptToolCallId || item.toolCallId !== exceptToolCallId),
+    );
+
+  const hasInFlightToolForStream = (
+    streamId: string,
+    exceptToolCallId?: string,
+  ): boolean => {
+    for (const inFlightToolCallId of localToolInFlight) {
+      if (exceptToolCallId && inFlightToolCallId === exceptToolCallId) continue;
+      const state = localToolStatesById.get(inFlightToolCallId);
+      if (!state) continue;
+      if (state.streamId === streamId) return true;
+    }
+    return false;
+  };
+
+  const getNextPendingToolCallIdForStream = (
+    streamId: string,
+  ): string | null => {
+    const pending = Array.from(localToolStatesById.entries())
+      .filter(([_, state]) => state.streamId === streamId && !state.executed)
+      .sort(([, a], [, b]) => {
+        if (a.firstSeenAt !== b.firstSeenAt) {
+          return a.firstSeenAt - b.firstSeenAt;
+        }
+        return a.lastSequence - b.lastSequence;
+      });
+    return pending[0]?.[0] ?? null;
+  };
+
+  const scheduleNextToolForStream = (streamId: string, delayMs = 80) => {
+    const nextToolCallId = getNextPendingToolCallIdForStream(streamId);
+    if (!nextToolCallId) return;
+    scheduleBufferedLocalToolExecution(nextToolCallId, delayMs);
+  };
+
   const tryExecuteBufferedLocalTool = async (toolCallId: string) => {
     const localToolState = localToolStatesById.get(toolCallId);
     if (!localToolState || localToolState.executed) return;
     if (localToolInFlight.has(toolCallId)) return;
     if (!isLocalToolRuntimeAvailable()) return;
+    const firstPendingToolCallId = getNextPendingToolCallIdForStream(
+      localToolState.streamId,
+    );
+    if (firstPendingToolCallId && firstPendingToolCallId !== toolCallId) return;
+    if (hasPendingPermissionPromptForStream(localToolState.streamId, toolCallId))
+      return;
+    if (hasInFlightToolForStream(localToolState.streamId, toolCallId)) return;
 
     if (!localToolState.argsText.trim() && localToolState.name === 'tab_type') {
       const elapsed = Date.now() - localToolState.firstSeenAt;
-      if (elapsed < 1500) return;
+      if (elapsed < 1500) {
+        scheduleBufferedLocalToolExecution(toolCallId, 200);
+        return;
+      }
       localToolState.executed = true;
       localToolStatesById.set(toolCallId, localToolState);
       try {
@@ -781,11 +834,15 @@
           `Failed to forward missing-args error for ${localToolState.name} (${toolCallId}): ${reason}`,
         );
       }
+      scheduleNextToolForStream(localToolState.streamId);
       return;
     }
 
     const parsed = parseBufferedToolArgs(localToolState.argsText);
-    if (!parsed.ready) return;
+    if (!parsed.ready) {
+      scheduleBufferedLocalToolExecution(toolCallId, 120);
+      return;
+    }
 
     localToolState.executed = true;
     localToolStatesById.set(toolCallId, localToolState);
@@ -841,6 +898,7 @@
       }
     } finally {
       localToolInFlight.delete(toolCallId);
+      scheduleNextToolForStream(localToolState.streamId);
     }
   };
 
@@ -907,6 +965,7 @@
       }
     } finally {
       localToolPermissionRetriesInFlight.delete(prompt.toolCallId);
+      scheduleNextToolForStream(prompt.streamId);
     }
   };
 
