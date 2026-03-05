@@ -1176,13 +1176,9 @@
         "label": "Code: éditer fichier",
         "description": "Modifier/écrire des fichiers avec contrôle d'autorisation"
       },
-      "localCodeGitStatus": {
-        "label": "Code: git status",
-        "description": "Inspecter l'état git (lecture seule)"
-      },
-      "localCodeGitDiff": {
-        "label": "Code: git diff",
-        "description": "Inspecter le diff git (lecture seule)"
+      "localCodeGit": {
+        "label": "Code: git",
+        "description": "Exécuter des actions git (status/diff/ls-files/add/commit/push/...) avec contrôle de politique"
       },
       "organizationRead": { "label": "Organisation (lecture)" },
       "organizationUpdate": { "label": "Organisation (édition)" },
