@@ -322,6 +322,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] S6-6 Settings split contract (tabs `Server | Workspace | Tools`; no silent workspace creation).
     - [x] S6-7 Prompt editor contract (single effective prompt field + inheritance override/reset flow).
     - [x] S6-8 VSCode E2E lane + naming/CI contract (`build-ext-vscode`, `build-ext-chrome`, `test-e2e-vscode`, `docker-compose.e2e-vscode.yml`, strict CI paths, required check, 7-day artifacts, no compatibility aliases).
+    - [ ] S6-9 VSCode tool-permission UX/policy hardening contract:
+      - [ ] human-readable permission origin/details (no raw `vscode://workspace` only),
+      - [ ] `allow_always` close+resume guarantee,
+      - [ ] read-path scope (`workspace default`, outside-path explicit ask; `.env*` hard deny),
+      - [ ] write-path scope (first prompt proposes workspace-global `*` grant),
+      - [ ] unified `git` tool policy contract and `-C` scope guard,
+      - [ ] git mutating actions require explicit permission (including first `commit`),
+      - [ ] bash policy key readability contract (`bash:<mono|bigram>`, no underscore placeholder format).
   - [x] DEV phase (after all S6 spec subjects are validated)
     - [x] Step 1 — Implement S6-1 / BUG-L6-0 (VSCode streaming parity first; blocker).
     - [x] Step 2 — Implement S6-3 / BUG-L6-1 (checkpoint affordance contract + legacy footer eradication).
@@ -406,6 +414,28 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] BUG-L6-6 — Code-agent base prompt is not aligned with the requested enriched baseline profile.
       - [ ] Replace current base prompt with the agreed enriched profile.
       - [ ] Add scoped tests for baseline prompt rendering and override behavior.
+    - [ ] BUG-L6-8 — VSCode permission banner wording is not user-actionable (`vscode://workspace` raw origin + missing request details).
+      - [ ] Show readable origin label (`Current VSCode workspace` + workspace context).
+      - [ ] Show actionable details per request (operation, command/path/scope).
+      - [ ] Add scoped UI test(s) for permission banner content rendering.
+    - [ ] BUG-L6-9 — Path-scope policy mismatch on code tools.
+      - [ ] Read tools (`ls`/`rg`/`file_read`) default-allow only in workspace scope; outside-path requests must ask explicitly.
+      - [ ] Sensitive paths policy: `.env*` hard deny; other sensitive paths explicit ask.
+      - [ ] `file_edit` first authorization must propose workspace-global scope `*` (not per-file spam), and `allow_always` must persist equivalent scope.
+      - [ ] Add scoped runtime tests for in-workspace/outside-workspace/sensitive-path/write-scope behavior.
+    - [ ] BUG-L6-10 — Git tool surface is split (`git_status`/`git_diff`) instead of unified policy-governed `git`.
+      - [ ] Introduce one `git` tool contract for status/diff/ls-files + mutating actions.
+      - [ ] Default allow baseline read-only actions; ask for mutating/high-impact actions (including first `commit` authorization).
+      - [ ] Enforce `-C` workspace scope guard (outside workspace requires explicit permission).
+      - [ ] Add scoped runtime/UI tests for tool contract and policy gating.
+    - [ ] BUG-L6-11 — Bash permission key format/operator UX mismatch.
+      - [ ] Keep permission keys readable in policy UX (`bash:git add` style, no underscore placeholder format).
+      - [ ] Ensure matching/persistence remains deterministic with readable keys.
+      - [ ] Add scoped tests for policy normalization + matching behavior.
+    - [ ] BUG-L6-12 — `file_edit` policy pattern `*` does not apply reliably after allow.
+      - [ ] Reproduce and fix `file_edit` policy matching for wildcard path pattern `*`.
+      - [ ] Ensure `allow_always` + `pathPattern=*` correctly prevents repeated equivalent prompts.
+      - [ ] Add scoped runtime tests for wildcard policy persistence + resolution order.
     - [x] BUG-L6-7 — VSCode settings showed an empty effective code-agent prompt after removing local fallback.
       - [x] Add instance-managed prompt profile endpoint (`/api/v1/vscode-extension/code-agent-prompt-profile`).
       - [x] Load the instance-managed default prompt in VSCode runtime config (`runtime.config.get` path).

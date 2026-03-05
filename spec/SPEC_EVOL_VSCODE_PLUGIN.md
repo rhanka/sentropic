@@ -678,6 +678,51 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - preserve RBAC (`admin` mutates; non-admin read-only).
   - align with federation roadmap intent in `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md` (provider SSO lifecycle).
 
+#### 4.22.4 BUG-L6-8 (permission prompt readability in VSCode runtime)
+- Current mismatch:
+  - prompt origin `vscode://workspace` is technical and not operator-readable.
+- Required contract:
+  - permission banner must display a human-readable origin label:
+    - `Current VSCode workspace` + resolved workspace label/path context when available.
+  - permission banner must display actionable request details:
+    - tool intent (operation),
+    - target path/scope when relevant,
+    - command preview for shell/git operations.
+- UX objective:
+  - operator can understand exactly what is being authorized without decoding internal origin identifiers.
+
+#### 4.22.5 BUG-L6-9 (file path-scope authorization contract)
+- Read tools (`file_read`, `ls`, `rg`) default behavior:
+  - allowed by default only inside current workspace scope,
+  - sensitive paths policy:
+    - `.env*` is strict `deny` (no interactive override in v1),
+    - other sensitive paths remain `ask` (explicit user decision required).
+- Outside-workspace access:
+  - requests targeting `../` or absolute paths outside workspace must not execute silently,
+  - runtime must emit explicit permission request allowing user `once` / `always` decision for that path scope.
+- Write tool (`file_edit`) scope contract:
+  - first authorization request in workspace mode must propose workspace-global scope (`*`) to avoid per-file prompt spam,
+  - `allow_always` must persist a reusable workspace-scoped grant and avoid repeated prompts for equivalent writes.
+
+#### 4.22.6 BUG-L6-10 (git tool model simplification)
+- Replace split read-only git tools contract (`git_status`, `git_diff`) with one unified `git` tool contract.
+- Default policy:
+  - allow by default: `git status`, `git diff`, `git ls-files` (read-only baseline),
+  - ask-by-default: mutating commands (`commit`, `push`, `rebase`, `reset`, `checkout`, and other non-baseline actions), including first-time `commit` authorization.
+- `-C` scoping contract:
+  - default allow only when target stays within current workspace (including subfolders),
+  - outside-workspace `-C` requires explicit permission prompt.
+- Migration note:
+  - existing policy entries and tool toggles must be migrated to unified `git` semantics without silent privilege widening.
+
+#### 4.22.7 BUG-L6-11 (bash permission key normalization UX)
+- Permission keys for `bash` must stay human-readable and action-readable.
+- Contract:
+  - use canonical `bash:<mono|bigram>` labels without underscore substitution,
+  - preserve deterministic matching for policy evaluation while keeping UI strings readable.
+- Objective:
+  - operator-facing policy table remains understandable and editable.
+
 
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
@@ -749,13 +794,16 @@ Policy model (locked from options):
 - Config editability:
   - provide an editable rule list for mono and bigram entries (decision + optional scope/filter),
   - quick operator edits should not require raw JSON editing.
+- Key normalization contract:
+  - store/display bash policy selectors in readable format (`bash:git add`, `bash:npm run`, etc.),
+  - no underscore placeholder format in operator-facing identifiers.
 
 ### 8.2 `ls`
 - Intent: list directory entries quickly.
 - Input: `path`, optional depth, optional `include_hidden`.
 - Output: normalized entry list (name, type, size, mtime).
 - Guards:
-  - workspace/path scope restrictions,
+  - workspace/path scope restrictions with explicit outside-workspace permission prompt,
   - bounded recursion depth (default bounded mode, no unbounded recursion),
   - hidden entries excluded by default unless explicitly requested.
 
@@ -767,7 +815,7 @@ Policy model (locked from options):
   - use `rg` by default, fallback to `grep` only when needed,
   - bounded result volume (max matches/files/snippet size),
   - continuation/pagination contract for long result sets,
-  - path scope restrictions.
+  - path scope restrictions with explicit outside-workspace permission prompt.
 
 ### 8.4 `file_read`
 - Intent: read file content for analysis.
@@ -778,7 +826,9 @@ Policy model (locked from options):
 - Guards:
   - windowed bounded reads are default,
   - full-read allowed only when explicitly requested and still bounded by caps,
-  - sensitive-path policy (deny/mask for secrets-configured paths),
+  - sensitive-path policy:
+    - `.env*` => hard deny,
+    - other sensitive paths => explicit permission prompt (no silent allow),
   - binary-file rejection path.
 
 ### 8.5 `file_edit` (multi-mode)
@@ -791,27 +841,25 @@ Policy model (locked from options):
 - Guards:
   - default decision = `ask` (Chrome-style confirmation banner),
   - protected-path denylist + validation guards,
+  - first write-authorization request should propose workspace-global scope (`*`) to reduce repeated prompts,
   - path-pattern authorization profile to reduce repeated prompts (e.g. allow `api/*` scope),
   - explicit path-pattern grants are policy-governed and auditable.
 
-### 8.6 `git_status`
-- Intent: inspect working tree status.
-- Input: optional path filter.
-- Output: staged/unstaged/untracked summary.
+### 8.6 `git` (unified contract)
+- Intent: execute bounded git operations through one tool surface.
+- Input:
+  - command/action (`status`, `diff`, `ls-files`, `commit`, `push`, ...),
+  - optional refs/paths/options (including optional `-C`).
+- Output:
+  - operation-specific payload (status summary, diff, command output, diagnostics),
+  - bounded text output with truncation metadata when needed.
 - Guards:
-  - read-only git interaction only,
-  - default decision = allow.
+  - default allow: read-only baseline actions (`status`, `diff`, `ls-files`),
+  - default ask: mutating/high-impact actions (`commit`, `push`, `rebase`, `reset`, `checkout`, others), with first-time `commit` authorization required,
+  - `-C` target must remain in current workspace for default allow; otherwise explicit permission prompt,
+  - no silent widening from legacy `git_status`/`git_diff` migration.
 
-### 8.7 `git_diff`
-- Intent: inspect content changes.
-- Input: optional path + ref range.
-- Output: bounded diff payload.
-- Guards:
-  - bounded diff payload (size/hunks/files),
-  - scope restrictions to allowed workspace refs/paths,
-  - read-only git interaction.
-
-### 8.8 `history_analyze`
+### 8.7 `history_analyze`
 - Intent: targeted question-answering on conversation history.
 - Input: `question`, optional range selectors, optional tool-target selectors.
 - Output:
@@ -819,11 +867,14 @@ Policy model (locked from options):
   - optional structured mode: `answer`, `evidence`, `coverage`, optional `confidence`.
 - Guards: read-only, no hidden-reasoning leakage, explicit `insufficient_coverage` signaling.
 
-### 8.9 Non-shell policy engine (shared)
+### 8.8 Non-shell policy engine (shared)
 - Apply a unified `deny/ask/allow` policy engine across non-shell tools where relevant.
 - Precedence: `deny > ask > allow`.
 - Scope merge: user defaults + workspace safety override.
   - workspace policy is an upper safety bound and cannot be weakened by user-level rules.
+- Prompt UX contract:
+  - permission prompts must expose human-readable origin + actionable details (operation + target scope),
+  - technical identifiers remain internal and should not be the only visible context.
 
 ## 9) Risks
 - Missing object adapters can cause partial restores in v1; this must be explicit in UI/API responses.
