@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  completeCodexProviderEnrollmentWith,
+  disconnectCodexProviderEnrollmentWith,
   fetchProviderConnectionsWith,
-  saveCodexProviderConnectionWith,
+  startCodexProviderEnrollmentWith,
   type ProviderConnectionState,
 } from '../../src/lib/utils/provider-connections-api';
 
@@ -13,6 +15,9 @@ describe('provider connections admin utils', () => {
         providerId: 'codex',
         label: 'Codex',
         ready: true,
+        connectionStatus: 'connected',
+        enrollmentId: null,
+        enrollmentUrl: null,
         managedBy: 'admin_settings',
         accountLabel: 'admin@example.com',
         updatedAt: '2026-03-03T12:00:00.000Z',
@@ -36,11 +41,43 @@ describe('provider connections admin utils', () => {
     expect(result).toEqual([]);
   });
 
-  it('sends codex connection payload to admin endpoint', async () => {
+  it('starts codex enrollment via admin endpoint', async () => {
+    const provider: ProviderConnectionState = {
+      providerId: 'codex',
+      label: 'Codex',
+      ready: false,
+      connectionStatus: 'pending',
+      enrollmentId: 'enroll_1',
+      enrollmentUrl: 'https://chatgpt.com/auth?next=/codex&state=enroll_1',
+      managedBy: 'none',
+      accountLabel: 'ops@example.com',
+      updatedAt: '2026-03-03T12:00:00.000Z',
+      updatedByUserId: 'user_admin',
+      canConfigure: true,
+    };
+    const requester = vi.fn().mockResolvedValue({ provider });
+
+    const result = await startCodexProviderEnrollmentWith(
+      {
+        accountLabel: 'ops@example.com',
+      },
+      requester,
+    );
+
+    expect(requester).toHaveBeenCalledWith('/settings/provider-connections/codex/enrollment/start', {
+      accountLabel: 'ops@example.com',
+    });
+    expect(result).toEqual(provider);
+  });
+
+  it('completes codex enrollment via admin endpoint', async () => {
     const provider: ProviderConnectionState = {
       providerId: 'codex',
       label: 'Codex',
       ready: true,
+      connectionStatus: 'connected',
+      enrollmentId: null,
+      enrollmentUrl: null,
       managedBy: 'admin_settings',
       accountLabel: 'ops@example.com',
       updatedAt: '2026-03-03T12:00:00.000Z',
@@ -49,18 +86,42 @@ describe('provider connections admin utils', () => {
     };
     const requester = vi.fn().mockResolvedValue({ provider });
 
-    const result = await saveCodexProviderConnectionWith(
+    const result = await completeCodexProviderEnrollmentWith(
       {
-        connected: true,
+        enrollmentId: 'enroll_1',
         accountLabel: 'ops@example.com',
       },
       requester,
     );
 
-    expect(requester).toHaveBeenCalledWith('/settings/provider-connections/codex', {
-      connected: true,
+    expect(requester).toHaveBeenCalledWith('/settings/provider-connections/codex/enrollment/complete', {
+      enrollmentId: 'enroll_1',
       accountLabel: 'ops@example.com',
     });
+    expect(result).toEqual(provider);
+  });
+
+  it('disconnects codex enrollment via admin endpoint', async () => {
+    const provider: ProviderConnectionState = {
+      providerId: 'codex',
+      label: 'Codex',
+      ready: false,
+      connectionStatus: 'disconnected',
+      enrollmentId: null,
+      enrollmentUrl: null,
+      managedBy: 'none',
+      accountLabel: null,
+      updatedAt: '2026-03-03T12:00:00.000Z',
+      updatedByUserId: 'user_admin',
+      canConfigure: true,
+    };
+    const requester = vi.fn().mockResolvedValue({ provider });
+
+    const result = await disconnectCodexProviderEnrollmentWith(requester);
+
+    expect(requester).toHaveBeenCalledWith(
+      '/settings/provider-connections/codex/enrollment/disconnect',
+    );
     expect(result).toEqual(provider);
   });
 });

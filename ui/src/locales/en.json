@@ -587,16 +587,20 @@
       "codex": {
         "accountLabel": "Codex account label (optional)",
         "accountPlaceholder": "admin@example.com",
-        "connect": "Mark connected",
-        "disconnect": "Mark disconnected"
+        "startEnrollment": "Start sign-in",
+        "completeEnrollment": "Finalize sign-in",
+        "disconnect": "Disconnect",
+        "pendingHint": "Enrollment is pending. Complete sign-in after authenticating in the opened Codex page."
       },
       "toasts": {
+        "codexEnrollmentStarted": "Codex sign-in started. Finish authentication in the opened page, then finalize.",
         "codexConnected": "Codex provider marked as connected.",
         "codexDisconnected": "Codex provider marked as disconnected."
       },
       "errors": {
         "load": "Unable to load provider connections.",
-        "save": "Unable to update provider connection."
+        "save": "Unable to update provider connection.",
+        "missingEnrollment": "No pending Codex enrollment found. Start sign-in first."
       }
     },
     "chromeExtension": {
