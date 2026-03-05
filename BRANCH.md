@@ -439,10 +439,13 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] BUG-L6-6 — Code-agent base prompt is not aligned with the requested enriched baseline profile.
       - [ ] Replace current base prompt with the agreed enriched profile.
       - [ ] Add scoped tests for baseline prompt rendering and override behavior.
-    - [ ] BUG-L6-8 — VSCode permission banner wording is not user-actionable (`vscode://workspace` raw origin + missing request details).
-      - [ ] remove readable origin label, which is useless (on se fiche du vs code workspace origin)
-      - [ ] Show actionable details per request (operation, command/path/scope).
-      - [ ] Add scoped UI test(s) for permission banner content rendering.
+    - [x] BUG-L6-8 — VSCode permission banner wording is not user-actionable (`vscode://workspace` raw origin + missing request details).
+      - [x] remove readable origin label, which is useless (on se fiche du vs code workspace origin)
+      - [x] Show actionable details per request (operation, command/path/scope).
+      - [x] Add scoped UI test(s) for permission banner content rendering.
+        - [x] `make test-ui SCOPE=tests/vscode-ext/bash-policy-banner.test.ts ENV=dev`
+        - [x] `make lint-ui ENV=dev`
+        - [x] `make typecheck-ui ENV=dev`
     - [ ] BUG-L6-9 — Path-scope policy mismatch on code tools.
       - [ ] Read tools (`ls`/`rg`/`file_read`) default-allow only in workspace scope; outside-path requests must ask explicitly.
       - [ ] Sensitive paths policy: `.env*` hard deny; other sensitive paths explicit ask.

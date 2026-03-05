@@ -969,6 +969,42 @@
     }
   };
 
+  const resolvePermissionPromptDetails = (
+    prompt: LocalToolPermissionPrompt,
+  ): Array<{ label: string; value: string }> => {
+    const details =
+      prompt.request.details && typeof prompt.request.details === 'object'
+        ? (prompt.request.details as Record<string, unknown>)
+        : null;
+    if (!details) return [];
+
+    const rows: Array<{ label: string; value: string }> = [];
+    const operation = String(details.operation ?? '').trim();
+    const command = String(details.command ?? '').trim();
+    const pathValue = String(details.path ?? '').trim();
+    const scope = String(details.scope ?? '').trim().toLowerCase();
+
+    if (operation) {
+      rows.push({ label: $_('chat.tools.permissions.actionLabel'), value: operation });
+    }
+    if (command) {
+      rows.push({ label: $_('chat.tools.permissions.commandLabel'), value: command });
+    }
+    if (pathValue) {
+      rows.push({ label: $_('chat.tools.permissions.pathLabel'), value: pathValue });
+    }
+    if (scope) {
+      rows.push({
+        label: $_('chat.tools.permissions.scopeLabel'),
+        value:
+          scope === 'outside_workspace'
+            ? $_('chat.tools.permissions.scopeOutsideWorkspace')
+            : $_('chat.tools.permissions.scopeWorkspace'),
+      });
+    }
+    return rows;
+  };
+
   const scheduleBufferedLocalToolExecution = (
     toolCallId: string,
     delayMs = 120,
@@ -4033,10 +4069,20 @@
                 {$_('chat.tools.permissions.promptDescription', {
                   values: {
                     tool: prompt.request.toolName,
-                    origin: prompt.request.origin,
                   },
                 })}
               </div>
+              {#if resolvePermissionPromptDetails(prompt).length > 0}
+                <div class="space-y-1">
+                  {#each resolvePermissionPromptDetails(prompt) as detail}
+                    <div class="text-[11px] text-slate-600 break-all">
+                      <span class="font-semibold text-slate-700">{detail.label}:</span>
+                      {' '}
+                      {detail.value}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
               <div class="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
