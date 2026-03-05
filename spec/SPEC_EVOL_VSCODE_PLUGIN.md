@@ -682,14 +682,14 @@ This section locks the implementation contract for the immediate Lot-1 increment
 - Current mismatch:
   - prompt origin `vscode://workspace` is technical and not operator-readable.
 - Required contract:
-  - permission banner must display a human-readable origin label:
-    - `Current VSCode workspace` + resolved workspace label/path context when available.
+  - permission banner must not expose raw/technical origin labels (`vscode://workspace`).
+  - origin label is optional and non-blocking; the decision UX must stay actionable without origin semantics.
   - permission banner must display actionable request details:
     - tool intent (operation),
     - target path/scope when relevant,
     - command preview for shell/git operations.
 - UX objective:
-  - operator can understand exactly what is being authorized without decoding internal origin identifiers.
+  - operator can understand exactly what is being authorized from action details only (no origin decoding needed).
 
 #### 4.22.5 BUG-L6-9 (file path-scope authorization contract)
 - Read tools (`file_read`, `ls`, `rg`) default behavior:
@@ -737,6 +737,59 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - scoped UI test: VSCode settings/chat tool toggles include `plan`,
   - scoped runtime test: new VSCode session sends `plan` in enabled tool list,
   - scoped chat test: `plan` tool call is reachable from VSCode conversation flow.
+
+#### 4.22.9 BUG-L6-17 (outside-workspace read paths must be ask-authorizable, not hard fail)
+- Current mismatch:
+  - read-path requests outside workspace (`../`, absolute outside root) can fail directly in execution path instead of entering explicit permission flow.
+- Required contract:
+  - for `ls` / `rg` / `file_read`, in-workspace path remains default allow.
+  - outside-workspace path must enter permission prompt (`ask`) with actionable target details.
+  - outside-workspace grant/reject decisions (`allow_once`, `allow_always`, `deny_once`, `deny_always`) must persist and be reused consistently for equivalent scope.
+- Guardrails:
+  - `.env*` remains hard-deny regardless of location.
+  - no silent privilege widening to unrestricted filesystem access.
+- Test contract:
+  - scoped runtime tests covering:
+    - `../` request => prompt => allow resumes execution,
+    - absolute outside path => prompt => deny blocks execution,
+    - `allow_always` outside-path scope suppresses repeated equivalent prompts.
+
+#### 4.22.10 BUG-L6-18 (`rm -rf` policy must be ask-only, not hard deny)
+- Current mismatch:
+  - bash policy currently hard-denies `rm -rf`, preventing explicit user authorization in cases where destructive cleanup is intentionally required.
+- Required contract:
+  - remove hard deny decision for `rm -rf` from default workspace bash decision matrix.
+  - keep `rm -rf` in mandatory confirmation path (`ask`) by default.
+  - user decisions (`allow_once` / `allow_always` / deny variants) must flow through the same persisted policy engine as other bash selectors.
+- Safety constraints:
+  - still no silent default allow for `rm -rf`.
+  - workspace/user `deny` policy remains absolute upper bound.
+- Test contract:
+  - scoped runtime tests verify:
+    - `rm -rf` triggers prompt (not immediate deny),
+    - `allow_once` executes pending command,
+    - `allow_always` persists and suppresses equivalent re-prompts.
+
+#### 4.22.11 BUG-L6-19 (bash policy configuration UX supports only path-centric input)
+- Current mismatch:
+  - current tools-policy UI is path-pattern centric and does not expose explicit bash selector authoring for mono/bigram command rules.
+- Required contract:
+  - add a dedicated `Bash rules` editor in VSCode `Tools` settings (separate from path-pattern controls).
+  - support manual readable selectors for mono/bigram commands:
+    - `bash:git add`,
+    - `bash:git push`,
+    - `bash:rm -rf`,
+    - and additional operator-entered selectors.
+  - provide quick presets for common selectors (e.g. `git add`, `git push`, `rm -rf`) to reduce manual typing.
+  - each rule row exposes:
+    - `selector`,
+    - `policy` (`allow` / `deny`),
+    - optional `scope` / `origin` fields when relevant.
+  - keep runtime decision engine unchanged:
+    - same precedence (`deny > ask > allow`),
+    - same persistence model,
+    - no privilege widening.
+  - add an effective-match preview before save so operator can validate normalization/matching deterministically.
 
 
 ## 5) Industry alignment snapshot (for implementation framing)
