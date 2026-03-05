@@ -352,7 +352,6 @@ const defaultWorkspaceDecision = (
     'git push',
     'git reset',
     'git clean',
-    'rm -rf',
     'sudo rm',
     'sudo chmod',
     'sudo chown',
@@ -366,7 +365,7 @@ const defaultWorkspaceDecision = (
     const bigram = tokens.length > 1 ? `${tokens[0]} ${tokens[1]}` : mono;
 
     if (denyBigrams.has(bigram)) return 'deny';
-    if (mono === 'rm' && tokens.includes('-rf')) return 'deny';
+    if (mono === 'rm' && tokens.includes('-rf')) return 'ask';
     if (mono === 'curl' || mono === 'wget') {
       if (segment.includes('|')) return 'deny';
       return 'ask';
