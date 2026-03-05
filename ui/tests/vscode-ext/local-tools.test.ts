@@ -29,6 +29,7 @@ const createRuntime = async (workspaceRoot: string, state: RuntimeState) => {
 
 describe('vscode local tools runtime', () => {
   let workspaceRoot = '';
+  let outsideFilePath = '';
 
   beforeEach(async () => {
     workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'topai-vscode-tools-'));
@@ -39,11 +40,16 @@ describe('vscode local tools runtime', () => {
       Array.from({ length: 25 }, (_, i) => `foo-${i + 1}`).join('\n'),
       'utf8',
     );
+    outsideFilePath = path.join(path.dirname(workspaceRoot), `outside-${Date.now()}.txt`);
+    await fs.writeFile(outsideFilePath, 'outside-line-1\noutside-line-2\n', 'utf8');
   });
 
   afterEach(async () => {
     if (workspaceRoot) {
       await fs.rm(workspaceRoot, { recursive: true, force: true });
+    }
+    if (outsideFilePath) {
+      await fs.rm(outsideFilePath, { force: true });
     }
   });
 
@@ -194,5 +200,72 @@ describe('vscode local tools runtime', () => {
     });
     expect(persisted.ok).toBe(true);
     expect(String((persisted.result as any)?.stdout ?? '')).toContain('keep');
+  });
+
+  it('prompts for outside-workspace file_read and resumes after allow_once', async () => {
+    const runtime = await createRuntime(workspaceRoot, createState());
+    const outsidePath = `../${path.basename(outsideFilePath)}`;
+
+    const first = await runtime.execute({
+      toolCallId: 'outside-read-1',
+      name: 'file_read',
+      args: { path: outsidePath, full: true },
+    });
+
+    expect(first.ok).toBe(false);
+    expect(first.error).toBe('permission_required');
+    expect(String(first.permissionRequest?.details?.path ?? '')).toContain('outside:');
+
+    await runtime.decide({
+      requestId: first.permissionRequest?.requestId,
+      decision: 'allow_once',
+    });
+
+    const second = await runtime.execute({
+      toolCallId: 'outside-read-1',
+      name: 'file_read',
+      args: { path: outsidePath, full: true },
+    });
+    expect(second.ok).toBe(true);
+    expect(String((second.result as any)?.content ?? '')).toContain('outside-line-1');
+  });
+
+  it('uses workspace-wide "*" policy for file_edit allow_always and reuses it on equivalent edits', async () => {
+    const runtime = await createRuntime(workspaceRoot, createState());
+    await fs.writeFile(path.join(workspaceRoot, 'edit-a.txt'), 'a\n', 'utf8');
+    await fs.writeFile(path.join(workspaceRoot, 'edit-b.txt'), 'b\n', 'utf8');
+
+    const first = await runtime.execute({
+      toolCallId: 'edit-wildcard-1',
+      name: 'file_edit',
+      args: { mode: 'write', path: 'edit-a.txt', content: 'a-updated\n' },
+    });
+
+    expect(first.ok).toBe(false);
+    expect(first.error).toBe('permission_required');
+    expect(first.permissionRequest?.details?.path).toBe('*');
+
+    await runtime.decide({
+      requestId: first.permissionRequest?.requestId,
+      decision: 'allow_always',
+    });
+
+    const resumed = await runtime.execute({
+      toolCallId: 'edit-wildcard-1',
+      name: 'file_edit',
+      args: { mode: 'write', path: 'edit-a.txt', content: 'a-updated\n' },
+    });
+    expect(resumed.ok).toBe(true);
+
+    const second = await runtime.execute({
+      toolCallId: 'edit-wildcard-2',
+      name: 'file_edit',
+      args: { mode: 'write', path: 'edit-b.txt', content: 'b-updated\n' },
+    });
+    expect(second.ok).toBe(true);
+
+    await expect(fs.readFile(path.join(workspaceRoot, 'edit-b.txt'), 'utf8')).resolves.toContain(
+      'b-updated',
+    );
   });
 });

@@ -79,6 +79,17 @@ type RuntimeDeps = {
   updateGlobalState: (key: string, value: unknown) => Thenable<void>;
 };
 
+type ResolvedPathTarget = {
+  absolutePath: string;
+  inWorkspace: boolean;
+  relativePath: string | null;
+};
+
+type PermissionPathInfo = {
+  scopePath: string | null;
+  outsideWorkspace: boolean;
+};
+
 const STORAGE_KEY_POLICIES = 'topai.vscode.localToolPolicies.v1';
 const ORIGIN_VSCODE_WORKSPACE = 'vscode://workspace';
 const TOOL_NAME_REGEX = /^[a-z0-9:_* -]{1,96}$/i;
@@ -144,6 +155,11 @@ const normalizePathPattern = (raw: string | null | undefined): string | null => 
     .trim()
     .replace(/\\/g, '/');
   if (!value) return null;
+  if (value.startsWith('outside:')) {
+    const outside = value.slice('outside:'.length).trim();
+    if (!outside || outside.includes('//')) return null;
+    return `outside:${outside.toLowerCase()}`;
+  }
   if (value.startsWith('/')) return null;
   if (value.includes('..')) return null;
   if (value.includes('//')) return null;
@@ -284,14 +300,36 @@ const tokenize = (segment: string): string[] =>
     .filter((token) => token.length > 0)
     .map((token) => token.toLowerCase());
 
-const resolveRealPath = async (workspaceRoot: string, inputPath?: string): Promise<string> => {
+const resolvePathTarget = (
+  workspaceRoot: string,
+  inputPath?: string,
+): ResolvedPathTarget => {
   const candidate = inputPath?.trim() || '.';
   const resolved = path.resolve(workspaceRoot, candidate);
   const rootResolved = path.resolve(workspaceRoot);
-  if (!resolved.startsWith(rootResolved)) {
+  const inWorkspace =
+    resolved === rootResolved || resolved.startsWith(`${rootResolved}${path.sep}`);
+  const relativePath = inWorkspace
+    ? (path.relative(rootResolved, resolved) || '.').replace(/\\/g, '/')
+    : null;
+  return {
+    absolutePath: resolved,
+    inWorkspace,
+    relativePath,
+  };
+};
+
+const resolveRealPath = (
+  workspaceRoot: string,
+  inputPath: string | undefined,
+  allowOutsideWorkspace = false,
+): string => {
+  const candidate = inputPath?.trim() || '.';
+  const target = resolvePathTarget(workspaceRoot, candidate);
+  if (!target.inWorkspace && !allowOutsideWorkspace) {
     throw new Error(`Path outside workspace is not allowed: ${candidate}`);
   }
-  return resolved;
+  return target.absolutePath;
 };
 
 const defaultWorkspaceDecision = (
@@ -454,10 +492,10 @@ export class VsCodeLocalToolsRuntime {
     return `bash:${bigram}`;
   }
 
-  private async resolvePermissionTargetPath(
+  private resolvePermissionPathInfo(
     name: VsCodeLocalToolName,
     args: Record<string, unknown>,
-  ): Promise<string | null> {
+  ): PermissionPathInfo {
     if (
       name !== 'ls' &&
       name !== 'rg' &&
@@ -465,7 +503,10 @@ export class VsCodeLocalToolsRuntime {
       name !== 'file_edit' &&
       name !== 'git_diff'
     ) {
-      return null;
+      return {
+        scopePath: null,
+        outsideWorkspace: false,
+      };
     }
     const workspaceRoot = this.getWorkspaceRootOrThrow();
     const rawPath =
@@ -474,16 +515,30 @@ export class VsCodeLocalToolsRuntime {
         : name === 'ls' || name === 'rg'
           ? '.'
           : '';
-    if (!rawPath) return null;
-    const resolved = await resolveRealPath(workspaceRoot, rawPath);
-    const relative = path.relative(workspaceRoot, resolved) || '.';
-    return relative.replace(/\\/g, '/');
+    if (!rawPath) {
+      return {
+        scopePath: null,
+        outsideWorkspace: false,
+      };
+    }
+    const target = resolvePathTarget(workspaceRoot, rawPath);
+    if (target.inWorkspace) {
+      return {
+        scopePath: target.relativePath ?? '.',
+        outsideWorkspace: false,
+      };
+    }
+    return {
+      scopePath: `outside:${target.absolutePath.replace(/\\/g, '/')}`.toLowerCase(),
+      outsideWorkspace: true,
+    };
   }
 
   private async evaluatePermission(input: {
     toolCallId: string;
     name: VsCodeLocalToolName;
     args: Record<string, unknown>;
+    pathInfo: PermissionPathInfo;
   }): Promise<
     | { allowed: true }
     | { allowed: false; denied: true; reason: string }
@@ -491,10 +546,7 @@ export class VsCodeLocalToolsRuntime {
   > {
     const origin = ORIGIN_VSCODE_WORKSPACE;
     const permissionToolName = this.buildPermissionToolName(input.name, input.args);
-    let targetPath: string | null = null;
-    try {
-      targetPath = await this.resolvePermissionTargetPath(input.name, input.args);
-    } catch {}
+    const targetPath = input.pathInfo.scopePath;
 
     if (this.oneTimeAllowByToolCallId.has(input.toolCallId)) {
       this.oneTimeAllowByToolCallId.delete(input.toolCallId);
@@ -512,7 +564,17 @@ export class VsCodeLocalToolsRuntime {
       };
     }
 
-    const workspaceDecision = defaultWorkspaceDecision(input.name, input.args);
+    let workspaceDecision = defaultWorkspaceDecision(input.name, input.args);
+    if (
+      input.pathInfo.outsideWorkspace &&
+      (input.name === 'ls' ||
+        input.name === 'rg' ||
+        input.name === 'file_read' ||
+        input.name === 'file_edit' ||
+        input.name === 'git_diff')
+    ) {
+      workspaceDecision = 'ask';
+    }
     const userPolicy = this.resolveUserPolicy(
       permissionToolName,
       origin,
@@ -533,20 +595,27 @@ export class VsCodeLocalToolsRuntime {
     if (effective === 'allow') return { allowed: true };
 
     const requestId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const requestPathPattern =
+      input.name === 'file_edit' && !input.pathInfo.outsideWorkspace
+        ? '*'
+        : targetPath;
     const request: PendingPermissionRequest = {
       requestId,
       toolCallId: input.toolCallId,
       toolName: permissionToolName,
       origin,
-      pathPattern: targetPath,
+      pathPattern: requestPathPattern,
       details:
         input.name === 'bash'
           ? {
+              operation: 'bash',
               command: typeof input.args.command === 'string' ? input.args.command : '',
             }
-          : targetPath
+          : requestPathPattern
             ? {
-                path: targetPath,
+                operation: input.name,
+                path: requestPathPattern,
+                scope: input.pathInfo.outsideWorkspace ? 'outside_workspace' : 'workspace',
               }
             : undefined,
     };
@@ -603,10 +672,15 @@ export class VsCodeLocalToolsRuntime {
     };
   }
 
-  private async runLs(workspaceRoot: string, args: Record<string, unknown>): Promise<unknown> {
+  private async runLs(
+    workspaceRoot: string,
+    args: Record<string, unknown>,
+    allowOutsideWorkspace = false,
+  ): Promise<unknown> {
     const targetPath = await resolveRealPath(
       workspaceRoot,
       typeof args.path === 'string' ? args.path : undefined,
+      allowOutsideWorkspace,
     );
     const includeHidden = Boolean(args.includeHidden);
     const depth = clamp(
@@ -638,19 +712,30 @@ export class VsCodeLocalToolsRuntime {
       return rows;
     };
 
+    const displayPathTarget = resolvePathTarget(
+      workspaceRoot,
+      typeof args.path === 'string' ? args.path : '.',
+    );
     return {
-      path: path.relative(workspaceRoot, targetPath) || '.',
+      path: displayPathTarget.inWorkspace
+        ? displayPathTarget.relativePath || '.'
+        : `outside:${displayPathTarget.absolutePath.replace(/\\/g, '/')}`,
       entries: (await walk(targetPath, 0)).slice(0, 500),
       truncated: false,
     };
   }
 
-  private async runRg(workspaceRoot: string, args: Record<string, unknown>): Promise<unknown> {
+  private async runRg(
+    workspaceRoot: string,
+    args: Record<string, unknown>,
+    allowOutsideWorkspace = false,
+  ): Promise<unknown> {
     const pattern = typeof args.pattern === 'string' ? args.pattern.trim() : '';
     if (!pattern) throw new Error('rg: pattern is required');
     const targetPath = await resolveRealPath(
       workspaceRoot,
       typeof args.path === 'string' ? args.path : undefined,
+      allowOutsideWorkspace,
     );
     const maxResults = clamp(
       typeof args.maxResults === 'number' ? Math.floor(args.maxResults) : 200,
@@ -703,9 +788,15 @@ export class VsCodeLocalToolsRuntime {
       .filter((line) => line.trim().length > 0);
     const paged = lines.slice(offset, offset + maxResults);
     const nextOffset = offset + maxResults < lines.length ? offset + maxResults : null;
+    const displayPathTarget = resolvePathTarget(
+      workspaceRoot,
+      typeof args.path === 'string' ? args.path : '.',
+    );
     return {
       pattern,
-      path: path.relative(workspaceRoot, targetPath) || '.',
+      path: displayPathTarget.inWorkspace
+        ? displayPathTarget.relativePath || '.'
+        : `outside:${displayPathTarget.absolutePath.replace(/\\/g, '/')}`,
       offset,
       results: paged,
       nextOffset,
@@ -714,16 +805,28 @@ export class VsCodeLocalToolsRuntime {
     };
   }
 
-  private async runFileRead(workspaceRoot: string, args: Record<string, unknown>): Promise<unknown> {
+  private async runFileRead(
+    workspaceRoot: string,
+    args: Record<string, unknown>,
+    allowOutsideWorkspace = false,
+  ): Promise<unknown> {
     const targetPath = await resolveRealPath(
       workspaceRoot,
       typeof args.path === 'string' ? args.path : undefined,
+      allowOutsideWorkspace,
     );
     const raw = await fs.readFile(targetPath, 'utf8');
     const full = Boolean(args.full);
+    const displayPathTarget = resolvePathTarget(
+      workspaceRoot,
+      typeof args.path === 'string' ? args.path : '.',
+    );
+    const displayPath = displayPathTarget.inWorkspace
+      ? displayPathTarget.relativePath || '.'
+      : `outside:${displayPathTarget.absolutePath.replace(/\\/g, '/')}`;
     if (full) {
       return {
-        path: path.relative(workspaceRoot, targetPath) || '.',
+        path: displayPath,
         content: truncate(raw, MAX_FILE_READ_CHARS),
         truncated: raw.length > MAX_FILE_READ_CHARS,
       };
@@ -744,7 +847,7 @@ export class VsCodeLocalToolsRuntime {
     const endIndex = Math.min(startIndex + lineCount, lines.length);
     const selected = lines.slice(startIndex, endIndex).join('\n');
     return {
-      path: path.relative(workspaceRoot, targetPath) || '.',
+      path: displayPath,
       startLine,
       lineCount,
       content: selected,
@@ -752,7 +855,11 @@ export class VsCodeLocalToolsRuntime {
     };
   }
 
-  private async runFileEdit(workspaceRoot: string, args: Record<string, unknown>): Promise<unknown> {
+  private async runFileEdit(
+    workspaceRoot: string,
+    args: Record<string, unknown>,
+    allowOutsideWorkspace = false,
+  ): Promise<unknown> {
     const mode = typeof args.mode === 'string' ? args.mode.trim().toLowerCase() : 'write';
     if (mode === 'apply_patch') {
       const patchText = typeof args.patch === 'string' ? args.patch : '';
@@ -794,15 +901,22 @@ export class VsCodeLocalToolsRuntime {
     const targetPath = await resolveRealPath(
       workspaceRoot,
       typeof args.path === 'string' ? args.path : undefined,
+      allowOutsideWorkspace,
     );
     const previous = await fs.readFile(targetPath, 'utf8').catch(() => '');
 
     if (mode === 'write') {
       const content = typeof args.content === 'string' ? args.content : '';
       await fs.writeFile(targetPath, content, 'utf8');
+      const displayPathTarget = resolvePathTarget(
+        workspaceRoot,
+        typeof args.path === 'string' ? args.path : '.',
+      );
       return {
         mode,
-        path: path.relative(workspaceRoot, targetPath) || '.',
+        path: displayPathTarget.inWorkspace
+          ? displayPathTarget.relativePath || '.'
+          : `outside:${displayPathTarget.absolutePath.replace(/\\/g, '/')}`,
         bytesWritten: Buffer.byteLength(content, 'utf8'),
       };
     }
@@ -818,9 +932,15 @@ export class VsCodeLocalToolsRuntime {
         ? previous.split(find).join(replace)
         : previous.replace(find, replace);
       await fs.writeFile(targetPath, next, 'utf8');
+      const displayPathTarget = resolvePathTarget(
+        workspaceRoot,
+        typeof args.path === 'string' ? args.path : '.',
+      );
       return {
         mode,
-        path: path.relative(workspaceRoot, targetPath) || '.',
+        path: displayPathTarget.inWorkspace
+          ? displayPathTarget.relativePath || '.'
+          : `outside:${displayPathTarget.absolutePath.replace(/\\/g, '/')}`,
         changed: next !== previous,
         replaceAll,
       };
@@ -840,11 +960,15 @@ export class VsCodeLocalToolsRuntime {
     };
   }
 
-  private async runGitDiff(workspaceRoot: string, args: Record<string, unknown>): Promise<unknown> {
+  private async runGitDiff(
+    workspaceRoot: string,
+    args: Record<string, unknown>,
+    allowOutsideWorkspace = false,
+  ): Promise<unknown> {
     const ref = typeof args.ref === 'string' ? args.ref.trim() : '';
     const targetPath =
       typeof args.path === 'string' && args.path.trim().length > 0
-        ? await resolveRealPath(workspaceRoot, args.path)
+        ? await resolveRealPath(workspaceRoot, args.path, allowOutsideWorkspace)
         : null;
     const gitArgs = ['diff'];
     if (ref) gitArgs.push(ref);
@@ -866,15 +990,26 @@ export class VsCodeLocalToolsRuntime {
   private async executeTool(input: {
     name: VsCodeLocalToolName;
     args: Record<string, unknown>;
+    allowOutsideWorkspace?: boolean;
   }): Promise<unknown> {
     const workspaceRoot = this.getWorkspaceRootOrThrow();
     if (input.name === 'bash') return this.runBash(workspaceRoot, input.args);
-    if (input.name === 'ls') return this.runLs(workspaceRoot, input.args);
-    if (input.name === 'rg') return this.runRg(workspaceRoot, input.args);
-    if (input.name === 'file_read') return this.runFileRead(workspaceRoot, input.args);
-    if (input.name === 'file_edit') return this.runFileEdit(workspaceRoot, input.args);
+    if (input.name === 'ls') {
+      return this.runLs(workspaceRoot, input.args, Boolean(input.allowOutsideWorkspace));
+    }
+    if (input.name === 'rg') {
+      return this.runRg(workspaceRoot, input.args, Boolean(input.allowOutsideWorkspace));
+    }
+    if (input.name === 'file_read') {
+      return this.runFileRead(workspaceRoot, input.args, Boolean(input.allowOutsideWorkspace));
+    }
+    if (input.name === 'file_edit') {
+      return this.runFileEdit(workspaceRoot, input.args, Boolean(input.allowOutsideWorkspace));
+    }
     if (input.name === 'git_status') return this.runGitStatus(workspaceRoot);
-    if (input.name === 'git_diff') return this.runGitDiff(workspaceRoot, input.args);
+    if (input.name === 'git_diff') {
+      return this.runGitDiff(workspaceRoot, input.args, Boolean(input.allowOutsideWorkspace));
+    }
     throw new Error(`Unsupported local tool: ${input.name}`);
   }
 
@@ -899,10 +1034,12 @@ export class VsCodeLocalToolsRuntime {
       return { ok: false, error: `Unknown local tool: ${rawName}` };
     }
 
+    const pathInfo = this.resolvePermissionPathInfo(rawName, args);
     const permission = await this.evaluatePermission({
       toolCallId,
       name: rawName,
       args,
+      pathInfo,
     });
 
     if (!permission.allowed) {
@@ -920,6 +1057,7 @@ export class VsCodeLocalToolsRuntime {
       const result = await this.executeTool({
         name: rawName,
         args,
+        allowOutsideWorkspace: pathInfo.outsideWorkspace,
       });
       return {
         ok: true,
