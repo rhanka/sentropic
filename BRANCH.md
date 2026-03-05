@@ -406,6 +406,13 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] BUG-L6-6 — Code-agent base prompt is not aligned with the requested enriched baseline profile.
       - [ ] Replace current base prompt with the agreed enriched profile.
       - [ ] Add scoped tests for baseline prompt rendering and override behavior.
+    - [x] BUG-L6-7 — VSCode settings showed an empty effective code-agent prompt after removing local fallback.
+      - [x] Add instance-managed prompt profile endpoint (`/api/v1/vscode-extension/code-agent-prompt-profile`).
+      - [x] Load the instance-managed default prompt in VSCode runtime config (`runtime.config.get` path).
+      - [x] Add scoped test-validation for instance prompt source (no local fallback):
+        - [x] `make test-api-endpoints SCOPE=tests/api/vscode-extension-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-api-unit SCOPE=tests/unit/vscode-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-ui SCOPE=tests/vscode-ext/code-agent-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)

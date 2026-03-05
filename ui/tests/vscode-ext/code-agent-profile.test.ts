@@ -1,12 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  DEFAULT_VSCODE_CODE_AGENT_PROMPT,
-  resolveCodeAgentPromptProfile,
-} from '../../src/lib/vscode/code-agent-profile';
+import { resolveCodeAgentPromptProfile } from '../../src/lib/vscode/code-agent-profile';
 
 describe('vscode code-agent profile resolver', () => {
-  it('falls back to default prompt when overrides are empty', () => {
+  it('uses the instance-managed default prompt when overrides are empty', () => {
+    const resolved = resolveCodeAgentPromptProfile({
+      workspaceOverride: '',
+      serverOverride: '',
+      defaultPrompt: 'INSTANCE_MANAGED_DEFAULT_PROMPT',
+    });
+
+    expect(resolved.source).toBe('default');
+    expect(resolved.effectivePrompt).toBe('INSTANCE_MANAGED_DEFAULT_PROMPT');
+    expect(resolved.inheritedPrompt).toBe('INSTANCE_MANAGED_DEFAULT_PROMPT');
+  });
+
+  it('does not reintroduce a local fallback prompt when default is unavailable', () => {
     const resolved = resolveCodeAgentPromptProfile({
       workspaceOverride: '',
       serverOverride: '',
@@ -14,8 +23,8 @@ describe('vscode code-agent profile resolver', () => {
     });
 
     expect(resolved.source).toBe('default');
-    expect(resolved.effectivePrompt).toBe(DEFAULT_VSCODE_CODE_AGENT_PROMPT);
-    expect(resolved.inheritedPrompt).toBe(DEFAULT_VSCODE_CODE_AGENT_PROMPT);
+    expect(resolved.effectivePrompt).toBe('');
+    expect(resolved.inheritedPrompt).toBe('');
   });
 
   it('prefers server override when workspace override is empty', () => {
