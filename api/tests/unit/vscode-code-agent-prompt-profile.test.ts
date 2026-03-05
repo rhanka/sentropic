@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 
-vi.mock('../../src/services/openai', () => {
+vi.mock('../../src/services/llm-runtime', () => {
   return {
     callOpenAI: vi.fn(),
     callOpenAIResponseStream: vi.fn(),
@@ -17,7 +17,7 @@ import {
   workspaceMemberships,
   workspaces,
 } from '../../src/db/schema';
-import { callOpenAIResponseStream } from '../../src/services/openai';
+import { callOpenAIResponseStream } from '../../src/services/llm-runtime';
 import { chatService } from '../../src/services/chat-service';
 import type { VsCodeCodeAgentRuntimePayload } from '../../src/services/chat-service';
 import { createId } from '../../src/utils/id';

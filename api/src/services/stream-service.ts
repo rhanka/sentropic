@@ -2,7 +2,7 @@ import { db, pool } from '../db/client';
 import { chatStreamEvents } from '../db/schema';
 import { createId } from '../utils/id';
 import { sql, eq, and, gt } from 'drizzle-orm';
-import type { StreamEventType } from './openai';
+import type { StreamEventType } from './llm-runtime';
 
 const DEFAULT_SEQUENCE_RETRY_ATTEMPTS = 6;
 

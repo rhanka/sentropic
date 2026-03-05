@@ -21,7 +21,7 @@ import { createId } from '../../src/utils/id';
 const mockCallOpenAI = vi.fn();
 const mockCallOpenAIResponseStream = vi.fn();
 
-vi.mock('../../src/services/openai', async () => {
+vi.mock('../../src/services/llm-runtime', async () => {
   return {
     callOpenAI: (args: any) => mockCallOpenAI(args),
     callOpenAIResponseStream: (args: any) => mockCallOpenAIResponseStream(args),

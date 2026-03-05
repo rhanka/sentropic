@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/services/openai', () => {
+vi.mock('../../src/services/llm-runtime', () => {
   return {
     callOpenAI: vi.fn(),
     callOpenAIResponseStream: vi.fn(),
@@ -10,7 +10,7 @@ vi.mock('../../src/services/openai', () => {
 import { app } from '../../src/app';
 import { chatService } from '../../src/services/chat-service';
 import { queueManager } from '../../src/services/queue-manager';
-import { callOpenAIResponseStream } from '../../src/services/openai';
+import { callOpenAIResponseStream } from '../../src/services/llm-runtime';
 import {
   authenticatedRequest,
   cleanupAuthData,

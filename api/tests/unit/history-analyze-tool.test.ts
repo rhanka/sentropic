@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 
-vi.mock('../../src/services/openai', () => ({
+vi.mock('../../src/services/llm-runtime', () => ({
   callOpenAI: vi.fn(),
 }));
 
@@ -10,7 +10,7 @@ import { chatMessages, chatSessions, users, workspaces, workspaceMemberships } f
 import { createId } from '../../src/utils/id';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
 import { toolService } from '../../src/services/tool-service';
-import { callOpenAI } from '../../src/services/openai';
+import { callOpenAI } from '../../src/services/llm-runtime';
 
 const mockedCallOpenAI = vi.mocked(callOpenAI);
 
