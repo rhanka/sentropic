@@ -4,6 +4,7 @@ import { db } from '../../db/client';
 import { workspaceMemberships, workspaces } from '../../db/schema';
 import { sql } from 'drizzle-orm';
 import { env } from '../../config/env';
+import { defaultPrompts } from '../../config/default-prompts';
 import { getUserWorkspaces } from '../../services/workspace-access';
 import { createId } from '../../utils/id';
 import { requireEditor } from '../../middleware/rbac';
@@ -23,6 +24,31 @@ const readConfig = () => {
     version: version || DEFAULT_EXTENSION_VERSION,
     source: source || DEFAULT_EXTENSION_SOURCE,
   };
+};
+
+const getDefaultCodeAgentPromptTemplate = (): string =>
+  defaultPrompts.find((prompt) => prompt.id === 'chat_code_agent')?.content?.trim() || '';
+
+const readConfiguredCodeAgentPromptTemplate = async (): Promise<string | null> => {
+  const promptsRecord = (await db.get(
+    sql`SELECT value FROM settings WHERE key = 'prompts' AND user_id IS NULL`,
+  )) as { value?: string } | undefined;
+  if (!promptsRecord?.value) return null;
+  try {
+    const parsed = JSON.parse(promptsRecord.value) as Record<string, unknown>;
+    const entry = parsed?.chat_code_agent;
+    if (typeof entry === 'string' && entry.trim().length > 0) {
+      return entry.trim();
+    }
+    if (!entry || typeof entry !== 'object') return null;
+    const content = (entry as { content?: unknown }).content;
+    if (typeof content === 'string' && content.trim().length > 0) {
+      return content.trim();
+    }
+    return null;
+  } catch {
+    return null;
+  }
 };
 
 const normalizeHttpUrl = (value: string): string | null => {
@@ -289,6 +315,28 @@ vscodeExtensionRouter.get('/download', async (c) => {
     version: config.version,
     source: config.source,
     downloadUrl: resolvedDownloadUrl,
+  });
+});
+
+vscodeExtensionRouter.get('/code-agent-prompt-profile', async (c) => {
+  const configuredPrompt = await readConfiguredCodeAgentPromptTemplate();
+  const defaultPrompt =
+    configuredPrompt ?? getDefaultCodeAgentPromptTemplate();
+
+  if (!defaultPrompt) {
+    return c.json(
+      {
+        message:
+          'VSCode code-agent prompt is unavailable: chat_code_agent is missing from instance configuration.',
+      },
+      503,
+    );
+  }
+
+  return c.json({
+    promptId: 'chat_code_agent',
+    defaultPrompt,
+    source: configuredPrompt ? 'settings' : 'default',
   });
 });
 

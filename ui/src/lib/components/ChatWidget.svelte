@@ -36,7 +36,6 @@
     type LocalToolPermissionPolicyEntry,
   } from '$lib/stores/localTools';
   import {
-    DEFAULT_VSCODE_CODE_AGENT_PROMPT,
     resolveCodeAgentPromptProfile,
     type CodeAgentPromptSource,
   } from '$lib/vscode/code-agent-profile';
@@ -158,10 +157,10 @@
       appBaseUrl: 'http://localhost:5173',
       wsBaseUrl: '',
       sessionToken: '',
-      codeAgentPromptDefault: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+      codeAgentPromptDefault: '',
       codeAgentPromptGlobal: '',
       codeAgentPromptWorkspace: '',
-      codeAgentPromptEffective: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+      codeAgentPromptEffective: '',
       codeAgentPromptSource: 'default',
       instructionIncludePatterns: '',
       projectFingerprint: '',
@@ -174,10 +173,10 @@
       appBaseUrl: 'https://top-ai-ideas.sent-tech.ca',
       wsBaseUrl: '',
       sessionToken: '',
-      codeAgentPromptDefault: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+      codeAgentPromptDefault: '',
       codeAgentPromptGlobal: '',
       codeAgentPromptWorkspace: '',
-      codeAgentPromptEffective: DEFAULT_VSCODE_CODE_AGENT_PROMPT,
+      codeAgentPromptEffective: '',
       codeAgentPromptSource: 'default',
       instructionIncludePatterns: '',
       projectFingerprint: '',

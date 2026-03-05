@@ -94,6 +94,17 @@ export type VsCodeCodeAgentInstructionFile = {
   content: string;
 };
 
+export type VsCodeCodeAgentSystemContext = {
+  workingDirectory?: string | null;
+  isGitRepo?: boolean | null;
+  gitBranch?: string | null;
+  platform?: string | null;
+  osVersion?: string | null;
+  shell?: string | null;
+  clientDateIso?: string | null;
+  clientTimezone?: string | null;
+};
+
 export type VsCodeCodeAgentRuntimePayload = {
   source?: 'vscode' | null;
   workspaceKey?: string | null;
@@ -102,6 +113,18 @@ export type VsCodeCodeAgentRuntimePayload = {
   promptWorkspaceOverride?: string | null;
   instructionIncludePatterns?: string[];
   instructionFiles?: VsCodeCodeAgentInstructionFile[];
+  systemContext?: VsCodeCodeAgentSystemContext | null;
+};
+
+type NormalizedVsCodeCodeAgentSystemContext = {
+  workingDirectory: string | null;
+  isGitRepo: boolean | null;
+  gitBranch: string | null;
+  platform: string | null;
+  osVersion: string | null;
+  shell: string | null;
+  clientDateIso: string | null;
+  clientTimezone: string | null;
 };
 
 type NormalizedVsCodeCodeAgentRuntimePayload = {
@@ -111,6 +134,7 @@ type NormalizedVsCodeCodeAgentRuntimePayload = {
   promptWorkspaceOverride: string | null;
   instructionIncludePatterns: string[];
   instructionFiles: VsCodeCodeAgentInstructionFile[];
+  systemContext: NormalizedVsCodeCodeAgentSystemContext | null;
 };
 
 export type ChatResumeFromToolOutputs = {
@@ -158,6 +182,7 @@ const CONTEXT_BUDGET_HARD_ZONE_CODE = 'context_budget_blocked';
 const VSCODE_CODE_AGENT_INSTRUCTION_FILES_MAX = 16;
 const VSCODE_CODE_AGENT_INSTRUCTION_CONTENT_MAX_CHARS = 12_000;
 const VSCODE_CODE_AGENT_INSTRUCTION_BLOCK_MAX_CHARS = 48_000;
+const VSCODE_CODE_AGENT_SYSTEM_CONTEXT_FIELD_MAX_CHARS = 512;
 
 type SessionTodoRuntimeTask = {
   id: string;
@@ -715,6 +740,14 @@ export class ChatService {
       const trimmed = value.trim();
       return trimmed.length > 0 ? trimmed : null;
     };
+    const normalizeBoundedNullable = (
+      value: unknown,
+      maxChars = VSCODE_CODE_AGENT_SYSTEM_CONTEXT_FIELD_MAX_CHARS,
+    ): string | null => {
+      const normalized = normalizeNullable(value);
+      if (!normalized) return null;
+      return normalized.slice(0, maxChars);
+    };
 
     const instructionIncludePatternsRaw = Array.isArray(input.instructionIncludePatterns)
       ? input.instructionIncludePatterns
@@ -751,6 +784,51 @@ export class ChatService {
           .slice(0, VSCODE_CODE_AGENT_INSTRUCTION_FILES_MAX)
       : [];
 
+    const systemContextRaw =
+      asRecord(input.systemContext) ??
+      asRecord(raw.system_context) ??
+      null;
+    const systemContext: NormalizedVsCodeCodeAgentSystemContext | null =
+      systemContextRaw
+        ? {
+            workingDirectory: normalizeBoundedNullable(
+              systemContextRaw.workingDirectory ?? systemContextRaw.working_directory,
+            ),
+            isGitRepo:
+              typeof (systemContextRaw.isGitRepo ?? systemContextRaw.is_git_repo) ===
+              'boolean'
+                ? Boolean(
+                    systemContextRaw.isGitRepo ?? systemContextRaw.is_git_repo,
+                  )
+                : null,
+            gitBranch: normalizeBoundedNullable(
+              systemContextRaw.gitBranch ?? systemContextRaw.git_branch,
+            ),
+            platform: normalizeBoundedNullable(systemContextRaw.platform),
+            osVersion: normalizeBoundedNullable(
+              systemContextRaw.osVersion ?? systemContextRaw.os_version,
+            ),
+            shell: normalizeBoundedNullable(systemContextRaw.shell),
+            clientDateIso: normalizeBoundedNullable(
+              systemContextRaw.clientDateIso ?? systemContextRaw.client_date_iso,
+            ),
+            clientTimezone: normalizeBoundedNullable(
+              systemContextRaw.clientTimezone ?? systemContextRaw.client_timezone,
+            ),
+          }
+        : null;
+    const hasSystemContextSignal = Boolean(
+      systemContext &&
+        (systemContext.workingDirectory ||
+          systemContext.isGitRepo !== null ||
+          systemContext.gitBranch ||
+          systemContext.platform ||
+          systemContext.osVersion ||
+          systemContext.shell ||
+          systemContext.clientDateIso ||
+          systemContext.clientTimezone),
+    );
+
     const payload: NormalizedVsCodeCodeAgentRuntimePayload = {
       workspaceKey: normalizeNullable(input.workspaceKey ?? raw.workspace_key),
       workspaceLabel: normalizeNullable(
@@ -764,6 +842,7 @@ export class ChatService {
       ),
       instructionIncludePatterns,
       instructionFiles,
+      systemContext: hasSystemContextSignal ? systemContext : null,
     };
 
     const hasSignal = Boolean(
@@ -773,6 +852,7 @@ export class ChatService {
         payload.promptWorkspaceOverride ||
         payload.instructionIncludePatterns.length > 0 ||
         payload.instructionFiles.length > 0 ||
+        payload.systemContext ||
         source === 'vscode',
     );
     return hasSignal ? payload : null;
@@ -810,10 +890,61 @@ export class ChatService {
     );
   }
 
+  private renderVsCodeBranchInfoBlock(
+    payload: NormalizedVsCodeCodeAgentRuntimePayload,
+  ): string {
+    const workspace = payload.workspaceLabel || payload.workspaceKey || 'unknown';
+    return `Workspace scope: ${workspace}`;
+  }
+
+  private renderVsCodeSystemContextBlock(
+    payload: NormalizedVsCodeCodeAgentRuntimePayload,
+  ): string {
+    const context = payload.systemContext;
+    const serverDateIso = new Date().toISOString();
+    const serverTimezone = (() => {
+      try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown';
+      } catch {
+        return 'unknown';
+      }
+    })();
+    const clientDateIso = context?.clientDateIso;
+    const today = clientDateIso
+      ? clientDateIso.slice(0, 10)
+      : serverDateIso.slice(0, 10);
+    const lines = [
+      '<env>',
+      `Working directory: ${
+        context?.workingDirectory ||
+        payload.workspaceKey ||
+        payload.workspaceLabel ||
+        'unknown'
+      }`,
+      `Is directory a git repo: ${
+        context?.isGitRepo === true
+          ? 'Yes'
+          : context?.isGitRepo === false
+            ? 'No'
+            : 'Unknown'
+      }`,
+      ...(context?.gitBranch ? [`Git branch: ${context.gitBranch}`] : []),
+      `Platform: ${context?.platform || 'unknown'}`,
+      `OS Version: ${context?.osVersion || 'unknown'}`,
+      ...(context?.shell ? [`Shell: ${context.shell}`] : []),
+      `Today's date: ${today}`,
+      ...(context?.clientTimezone ? [`Timezone: ${context.clientTimezone}`] : []),
+      `Server date: ${serverDateIso}`,
+      `Server timezone: ${serverTimezone}`,
+      '</env>',
+    ];
+    return lines.join('\n');
+  }
+
   private resolveVsCodeMonolithicPromptTemplate(
     payload: NormalizedVsCodeCodeAgentRuntimePayload,
   ): string {
-    const defaultTemplate = this.getPromptTemplate('chat_vscode_code_agent');
+    const defaultTemplate = this.getPromptTemplate('chat_code_agent');
     const resolvedTemplate =
       payload.promptWorkspaceOverride ??
       payload.promptGlobalOverride ??
@@ -2408,24 +2539,37 @@ Règles :
         );
         const instructionFilesBlock =
           this.renderVsCodeInstructionFilesBlock(vscodeCodeAgentPayload);
+        const branchInfoBlock =
+          this.renderVsCodeBranchInfoBlock(vscodeCodeAgentPayload);
+        const systemContextBlock =
+          this.renderVsCodeSystemContextBlock(vscodeCodeAgentPayload);
         const hasInstructionPlaceholder = template.includes(
           '{{INSTRUCTION_FILES_BLOCK}}',
         );
+        const hasBranchInfoPlaceholder = template.includes(
+          '{{BRANCH_INFO_BLOCK}}',
+        );
+        const hasSystemContextPlaceholder = template.includes(
+          '{{SYSTEM_CONTEXT_BLOCK}}',
+        );
         const hasContextPlaceholder = template.includes('{{CONTEXT_BLOCK}}');
-        const hasDocumentsPlaceholder = template.includes('{{DOCUMENTS_BLOCK}}');
         let rendered = this.renderTemplate(template, {
           INSTRUCTION_FILES_BLOCK: instructionFilesBlock,
+          BRANCH_INFO_BLOCK: branchInfoBlock,
+          SYSTEM_CONTEXT_BLOCK: systemContextBlock,
           CONTEXT_BLOCK: contextBlock,
-          DOCUMENTS_BLOCK: documentsBlock,
         }).trim();
         if (!hasInstructionPlaceholder && instructionFilesBlock.trim()) {
           rendered = `${rendered}\n\nContexte projet (fichiers d’instructions):\n${instructionFilesBlock}`.trim();
         }
+        if (!hasBranchInfoPlaceholder && branchInfoBlock.trim()) {
+          rendered = `${rendered}\n\nContexte de branche:\n${branchInfoBlock}`.trim();
+        }
+        if (!hasSystemContextPlaceholder && systemContextBlock.trim()) {
+          rendered = `${rendered}\n\nSystem context:\n${systemContextBlock}`.trim();
+        }
         if (!hasContextPlaceholder && contextBlock.trim()) {
           rendered = `${rendered}\n\nContexte runtime:\n${contextBlock}`.trim();
-        }
-        if (!hasDocumentsPlaceholder && documentsBlock.trim()) {
-          rendered = `${rendered}\n\nDocuments:\n${documentsBlock}`.trim();
         }
         if (!rendered) {
           throw new Error(
@@ -4247,6 +4391,23 @@ Règles :
                       content: file.content,
                     }),
                   ),
+                  system_context: vscodeCodeAgentPayload.systemContext
+                    ? {
+                        working_directory:
+                          vscodeCodeAgentPayload.systemContext.workingDirectory,
+                        is_git_repo:
+                          vscodeCodeAgentPayload.systemContext.isGitRepo,
+                        git_branch:
+                          vscodeCodeAgentPayload.systemContext.gitBranch,
+                        platform: vscodeCodeAgentPayload.systemContext.platform,
+                        os_version: vscodeCodeAgentPayload.systemContext.osVersion,
+                        shell: vscodeCodeAgentPayload.systemContext.shell,
+                        client_date_iso:
+                          vscodeCodeAgentPayload.systemContext.clientDateIso,
+                        client_timezone:
+                          vscodeCodeAgentPayload.systemContext.clientTimezone,
+                      }
+                    : undefined,
                 }
               : undefined
           },

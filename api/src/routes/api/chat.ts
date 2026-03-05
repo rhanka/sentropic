@@ -33,6 +33,17 @@ const vscodeCodeAgentInstructionInput = z.object({
   content: z.string().min(1).max(200_000),
 });
 
+const vscodeCodeAgentSystemContextInput = z.object({
+  workingDirectory: z.string().min(1).max(512).optional(),
+  isGitRepo: z.boolean().optional(),
+  gitBranch: z.string().min(1).max(256).optional(),
+  platform: z.string().min(1).max(64).optional(),
+  osVersion: z.string().min(1).max(256).optional(),
+  shell: z.string().min(1).max(128).optional(),
+  clientDateIso: z.string().min(1).max(128).optional(),
+  clientTimezone: z.string().min(1).max(128).optional(),
+});
+
 const vscodeCodeAgentInput = z.object({
   source: z.literal('vscode').optional(),
   workspaceKey: z.string().min(1).max(256).optional(),
@@ -41,6 +52,7 @@ const vscodeCodeAgentInput = z.object({
   promptWorkspaceOverride: z.string().max(200_000).optional(),
   instructionIncludePatterns: z.array(z.string().min(1).max(256)).max(64).optional(),
   instructionFiles: z.array(vscodeCodeAgentInstructionInput).max(64).optional(),
+  systemContext: vscodeCodeAgentSystemContextInput.optional(),
 });
 
 const createMessageInput = z.object({
