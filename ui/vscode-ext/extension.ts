@@ -94,6 +94,7 @@ type VsCodeCodeAgentPayload = {
 type WorkspaceScopeInfo = {
   workspaceScopeKey: string;
   workspaceScopeLabel: string;
+  repositoryName: string;
   projectFingerprint: string;
 };
 type CodeWorkspaceSummary = {
@@ -196,20 +197,41 @@ const computeProjectFingerprint = async (
   return createHash('sha256').update(seed).digest('hex').slice(0, 40);
 };
 
+const deriveRepositoryName = (input: {
+  originUrl: string | null;
+  workspaceLabel: string;
+}): string => {
+  const rawOrigin = (input.originUrl ?? '').trim();
+  if (!rawOrigin) return input.workspaceLabel;
+  const normalized = rawOrigin
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '');
+  const lastSegment = normalized.split(/[/:]/).pop() ?? '';
+  const repositoryName = lastSegment.replace(/\.git$/i, '').trim();
+  return repositoryName.length > 0 ? repositoryName : input.workspaceLabel;
+};
+
 const resolveWorkspaceScope = async (): Promise<WorkspaceScopeInfo> => {
   const folder = selectActiveWorkspaceFolder();
   if (!folder) {
     return {
       workspaceScopeKey: '',
       workspaceScopeLabel: '',
+      repositoryName: '',
       projectFingerprint: '',
     };
   }
   const fsPath = folder.uri.fsPath || folder.uri.toString();
   const workspaceScopeKey = normalizeWorkspacePath(fsPath);
+  const workspaceScopeLabel = folder.name || fsPath;
+  const originUrl = await readGitOriginUrl(fsPath);
   return {
     workspaceScopeKey,
-    workspaceScopeLabel: folder.name || fsPath,
+    workspaceScopeLabel,
+    repositoryName: deriveRepositoryName({
+      originUrl,
+      workspaceLabel: workspaceScopeLabel,
+    }),
     projectFingerprint: await computeProjectFingerprint(fsPath),
   };
 };
@@ -438,6 +460,7 @@ const createProjectCodeWorkspaceMappingRecord = async (params: {
   sessionToken: string;
   projectFingerprint: string;
   name?: string;
+  repositoryName?: string;
 }): Promise<ProjectWorkspaceMappingRecord | null> =>
   requestProjectWorkspaceMappingRecord({
     apiBaseUrl: params.apiBaseUrl,
@@ -449,6 +472,10 @@ const createProjectCodeWorkspaceMappingRecord = async (params: {
       projectFingerprint: params.projectFingerprint,
       ...(typeof params.name === 'string' && params.name.trim().length > 0
         ? { name: params.name.trim() }
+        : {}),
+      ...(typeof params.repositoryName === 'string' &&
+      params.repositoryName.trim().length > 0
+        ? { repositoryName: params.repositoryName.trim() }
         : {}),
     },
   });
@@ -752,7 +779,6 @@ const injectVsCodeCodeAgentIntoBody = async (
   if (!shouldInjectVsCodeCodeAgentPayload(method, targetUrl.pathname)) {
     return bodyText;
   }
-
   const sourceBody = typeof bodyText === 'string' && bodyText.trim() ? bodyText : '{}';
   let parsed: Record<string, unknown>;
   try {
@@ -1280,9 +1306,14 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
 
       if (command === 'runtime.workspace.mapping.create') {
         const runtimeConfig = await readRuntimeConfig(this.context);
+        const workspaceScope = await resolveWorkspaceScope();
         const requestPayload =
           payload.payload && typeof payload.payload === 'object'
-            ? (payload.payload as { projectFingerprint?: unknown; name?: unknown })
+            ? (payload.payload as {
+                projectFingerprint?: unknown;
+                name?: unknown;
+                repositoryName?: unknown;
+              })
             : {};
         const projectFingerprint =
           typeof requestPayload.projectFingerprint === 'string' &&
@@ -1291,6 +1322,10 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
             : runtimeConfig.projectFingerprint.trim();
         const name =
           typeof requestPayload.name === 'string' ? requestPayload.name.trim() : '';
+        const repositoryName =
+          typeof requestPayload.repositoryName === 'string'
+            ? requestPayload.repositoryName.trim()
+            : workspaceScope.repositoryName.trim();
         if (!projectFingerprint) {
           respond(false, undefined, 'Project scope is not detected yet.');
           return;
@@ -1304,6 +1339,7 @@ class TopAiChatViewProvider implements vscode.WebviewViewProvider {
           sessionToken: runtimeConfig.sessionToken,
           projectFingerprint,
           ...(name ? { name } : {}),
+          ...(repositoryName ? { repositoryName } : {}),
         });
         if (!record) {
           respond(false, undefined, 'Unable to create code workspace mapping.');

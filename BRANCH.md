@@ -390,32 +390,22 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] `make build-ext-vscode API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=feat-vscode-plugin-v1`
     - [x] `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts WORKERS=1 RETRIES=0 API_PORT=8715 UI_PORT=5115 OPENVSCODE_PORT=3116 MAILDEV_UI_PORT=1015 REGISTRY=local ENV=e2e-vscode-feat-vscode-plugin-v1`
   - [ ] Bug backlog (Lot 6)
-    - [!] BUG-L6-3 — VSCode local-tools permission banner: `allow_always` action is not effectively persisted/applied (user intent: sticky allow should suppress repeated asks on equivalent calls and close the banner immediately).
-      - [ ] Update local-tools merge precedence so persisted `allow` can override workspace `ask` while preserving workspace `deny` upper bound.
-      - [ ] Ensure `allow_always` click closes permission banner in current run and avoids immediate re-prompt on equivalent call.
-      - [ ] Add scoped tests:
-        - [ ] unit (`ui/vscode-ext/local-tools.ts`) for precedence + persistence,
-        - [ ] UI/store bridge test for banner close behavior on `allow_always`.
-    - [!] BUG-L6-4 — VSCode code-workspace default naming: on create, default workspace name should derive from git `origin` repository name when available (fallback to active folder name, then fingerprint suffix fallback).
-      - [ ] Extract repository name from origin URL (`owner/repo(.git)` -> `repo`) in extension runtime payload.
-      - [ ] Pass suggested default name to workspace creation endpoint when user does not provide one.
-      - [ ] Keep backend fallback deterministic if no suggestion is available.
-      - [ ] Add scoped tests (origin present / no origin / malformed origin).
-    - [!] BUG-L6-5 — VSCode Codex enrollment semantics: “connected” state is currently token-session based and can appear successful while provider enrollment/readiness is not actually completed.
-      - [ ] Replace web-app admin manual toggle (`Marquer connecté/déconnecté`) with real provider enrollment lifecycle (start/status/complete/disconnect).
-      - [ ] Persist verifiable connection state (not manual boolean only) and expose actionable status in settings.
-      - [ ] Align VSCode readiness display with real provider enrollment status from backend.
-      - [ ] Add scoped API/UI tests for enrollment lifecycle and RBAC.
-    - [!] BUG-L6-6 — Agent separation in VSCode mode: runtime currently injects code-agent payload on all chat calls, so workspace chat sessions default to code-agent behavior instead of explicit agent routing.
-      - [ ] Define and apply explicit runtime routing with canonical names:
-        - [ ] `agent_code` for sessions bound to `code` workspaces (default on new VSCode session + web/chrome when current workspace is `code`),
-        - [ ] `agent_chat` for sessions on non-`code` workspaces (classic chat behavior).
-      - [ ] Stop unconditional code-agent payload injection on every VSCode chat call.
-      - [ ] Add session-level agent mode marker in VSCode runtime contract (no ambiguity at request time).
-      - [ ] Clarify settings ownership:
-        - [ ] VSCode `Workspace` prompt editor modifies `agent_code` override only,
-        - [ ] `agent_chat` remains managed by standard workspace chat prompt settings.
-      - [ ] Add scoped tests for routing matrix and default new-session behavior.
+    - [x] BUG-L6-3 — VSCode code-workspace default naming: on create, default workspace name should derive from git `origin` repository name when available (fallback to active folder name, then fingerprint suffix fallback).
+      - [x] Extract repository name from origin URL (`owner/repo(.git)` -> `repo`) in extension runtime payload.
+      - [x] Pass suggested default name to workspace creation endpoint when user does not provide one.
+      - [x] Keep backend fallback deterministic if no suggestion is available.
+      - [x] Add scoped tests (origin present / no origin / malformed origin).
+    - [ ] BUG-L6-4 — VSCode local-tools permission banner: `allow_always` does not close the banner and does not execute the pending command.
+      - [ ] Ensure `allow_always` click closes permission banner in current run.
+      - [ ] Ensure pending command continues immediately after `allow_always`.
+      - [ ] Add scoped tests for close + resume behavior.
+    - [ ] BUG-L6-5 — Codex enrollment from web-app settings is not a real SSO enrollment flow.
+      - [ ] Implement actual enrollment lifecycle (start/status/complete/disconnect) with verifiable backend state.
+      - [ ] Ensure UI state is bound to real provider readiness (not local/manual toggle semantics).
+      - [ ] Add scoped API/UI tests.
+    - [ ] BUG-L6-6 — Code-agent base prompt is not aligned with the requested enriched baseline profile.
+      - [ ] Replace current base prompt with the agreed enriched profile.
+      - [ ] Add scoped tests for baseline prompt rendering and override behavior.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
