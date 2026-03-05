@@ -5,8 +5,10 @@ import { db } from '../../db/client';
 import { sql } from 'drizzle-orm';
 import { createSession, revokeSession } from '../../services/session-manager';
 import {
+  completeCodexEnrollment,
+  disconnectCodexEnrollment,
   listProviderConnections,
-  updateCodexConnection,
+  startCodexEnrollment,
 } from '../../services/provider-connections';
 
 const settingsSchema = z.object({
@@ -15,8 +17,12 @@ const settingsSchema = z.object({
   generationLimits: z.record(z.any()).default({})
 });
 
-const providerConnectionUpdateSchema = z.object({
-  connected: z.boolean(),
+const codexEnrollmentStartSchema = z.object({
+  accountLabel: z.string().trim().max(120).optional().nullable(),
+});
+
+const codexEnrollmentCompleteSchema = z.object({
+  enrollmentId: z.string().trim().min(1),
   accountLabel: z.string().trim().max(120).optional().nullable(),
 });
 
@@ -176,32 +182,56 @@ settingsRouter.get('/provider-connections', async (c) => {
   return c.json({ providers });
 });
 
-settingsRouter.put(
-  '/provider-connections/:providerId',
-  zValidator('json', providerConnectionUpdateSchema),
+settingsRouter.post(
+  '/provider-connections/codex/enrollment/start',
+  zValidator('json', codexEnrollmentStartSchema),
   async (c) => {
-    const providerId = c.req.param('providerId');
-    if (providerId !== 'codex') {
-      return c.json(
-        { message: 'Only codex provider connection is configurable in BR05.' },
-        400,
-      );
-    }
-
     const user = c.get('user') as { userId?: string } | undefined;
     if (!user?.userId) {
       return c.json({ message: 'Authentication required' }, 401);
     }
-
     const payload = c.req.valid('json');
-    const provider = await updateCodexConnection({
-      connected: payload.connected,
+    const provider = await startCodexEnrollment({
       accountLabel: payload.accountLabel ?? null,
       updatedByUserId: user.userId,
     });
     return c.json({ provider });
   },
 );
+
+settingsRouter.post(
+  '/provider-connections/codex/enrollment/complete',
+  zValidator('json', codexEnrollmentCompleteSchema),
+  async (c) => {
+    const user = c.get('user') as { userId?: string } | undefined;
+    if (!user?.userId) {
+      return c.json({ message: 'Authentication required' }, 401);
+    }
+    const payload = c.req.valid('json');
+    try {
+      const provider = await completeCodexEnrollment({
+        enrollmentId: payload.enrollmentId,
+        accountLabel: payload.accountLabel ?? null,
+        updatedByUserId: user.userId,
+      });
+      return c.json({ provider });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Enrollment completion failed';
+      return c.json({ message }, 400);
+    }
+  },
+);
+
+settingsRouter.post('/provider-connections/codex/enrollment/disconnect', async (c) => {
+  const user = c.get('user') as { userId?: string } | undefined;
+  if (!user?.userId) {
+    return c.json({ message: 'Authentication required' }, 401);
+  }
+  const provider = await disconnectCodexEnrollment({
+    updatedByUserId: user.userId,
+  });
+  return c.json({ provider });
+});
 
 settingsRouter.get('/', async (c) => {
   // Récupérer les paramètres depuis le système clé-valeur

@@ -432,10 +432,16 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Apply big-bang provider runtime split per `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`.
       - [ ] Remove mixed-provider implementation paths (no compatibility fallback).
       - [ ] Revalidate OpenAI/Gemini local-tools continuation parity in scoped chat tests.
-    - [ ] BUG-L6-5 — Codex enrollment from web-app settings is not a real SSO enrollment flow.
-      - [ ] Implement actual enrollment lifecycle (start/status/complete/disconnect) with verifiable backend state.
-      - [ ] Ensure UI state is bound to real provider readiness (not local/manual toggle semantics).
-      - [ ] Add scoped API/UI tests.
+    - [x] BUG-L6-5 — Codex enrollment from web-app settings is not a real SSO enrollment flow.
+      - [x] Implement actual enrollment lifecycle (start/status/complete/disconnect) with verifiable backend state.
+      - [x] Ensure UI state is bound to real provider readiness (not local/manual toggle semantics).
+      - [x] Add scoped API/UI tests.
+        - [x] `make test-api-endpoints SCOPE=tests/api/provider-connections-admin.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-ui SCOPE=tests/settings/provider-connections-admin.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [x] BUG-L6-6 — Code-agent base prompt is not aligned with the requested enriched baseline profile.
       - [x] Replace current base prompt with the agreed enriched profile.
       - [x] Add scoped tests for baseline prompt rendering and override behavior.
