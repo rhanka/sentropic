@@ -446,11 +446,12 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] `make test-ui SCOPE=tests/vscode-ext/bash-policy-banner.test.ts ENV=dev`
         - [x] `make lint-ui ENV=dev`
         - [x] `make typecheck-ui ENV=dev`
-    - [ ] BUG-L6-9 — Path-scope policy mismatch on code tools.
-      - [ ] Read tools (`ls`/`rg`/`file_read`) default-allow only in workspace scope; outside-path requests must ask explicitly.
-      - [ ] Sensitive paths policy: `.env*` hard deny; other sensitive paths explicit ask.
-      - [ ] `file_edit` first authorization must propose workspace-global scope `*` (not per-file spam), and `allow_always` must persist equivalent scope.
-      - [ ] Add scoped runtime tests for in-workspace/outside-workspace/sensitive-path/write-scope behavior.
+    - [x] BUG-L6-9 — Path-scope policy mismatch on code tools.
+      - [x] Read tools (`ls`/`rg`/`file_read`) default-allow only in workspace scope; outside-path requests must ask explicitly.
+      - [x] Sensitive paths policy: `.env*` hard deny; other sensitive paths explicit ask.
+      - [x] `file_edit` first authorization must propose workspace-global scope `*` (not per-file spam), and `allow_always` must persist equivalent scope.
+      - [x] Add scoped runtime tests for in-workspace/outside-workspace/sensitive-path/write-scope behavior.
+        - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] BUG-L6-10 — Git tool surface is split (`git_status`/`git_diff`) instead of unified policy-governed `git`.
       - [ ] Introduce one `git` tool contract for status/diff/ls-files + mutating actions.
       - [ ] Default allow baseline read-only actions; ask for mutating/high-impact actions (including first `commit` authorization).
