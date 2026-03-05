@@ -2,7 +2,7 @@ import { and, asc, desc, eq, sql, inArray, isNotNull, gt, or } from 'drizzle-orm
 import { db, pool } from '../db/client';
 import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
 import { createId } from '../utils/id';
-import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './openai';
+import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './llm-runtime';
 import {
   getModelCatalogPayload,
   inferProviderFromModelId,
@@ -139,14 +139,28 @@ type NormalizedVsCodeCodeAgentRuntimePayload = {
 
 export type ChatResumeFromToolOutputs = {
   previousResponseId: string;
-  toolOutputs: Array<{ callId: string; output: string }>;
+  toolOutputs: Array<{
+    callId: string;
+    output: string;
+    name?: string;
+    args?: unknown;
+  }>;
 };
 
 type AwaitingLocalToolState = {
   sequence: number;
   previousResponseId: string;
-  pendingToolCallIds: string[];
-  baseToolOutputs: Array<{ callId: string; output: string }>;
+  pendingLocalToolCalls: Array<{
+    id: string;
+    name: string;
+    args: unknown;
+  }>;
+  baseToolOutputs: Array<{
+    callId: string;
+    output: string;
+    name?: string;
+    args?: unknown;
+  }>;
   localToolDefinitions: LocalToolDefinitionInput[];
   vscodeCodeAgent: NormalizedVsCodeCodeAgentRuntimePayload | null;
 };
@@ -157,6 +171,17 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
 };
 
 const isValidToolName = (value: string): boolean => /^[a-zA-Z0-9_-]{1,64}$/.test(value);
+
+const parseToolCallArgs = (value: unknown): unknown => {
+  if (typeof value !== 'string') return value ?? {};
+  const trimmed = value.trim();
+  if (!trimmed) return {};
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return {};
+  }
+};
 
 type TodoRuntimeToolName = 'plan';
 type TodoRuntimeToolOperation = 'create' | 'update_plan' | 'update_task';
@@ -975,7 +1000,11 @@ export class ChatService {
         typeof data.previous_response_id === 'string' ? data.previous_response_id : '';
       if (!previousResponseId) return null;
 
-      const pendingToolCallIds: string[] = [];
+      const pendingLocalToolCalls: Array<{
+        id: string;
+        name: string;
+        args: unknown;
+      }> = [];
       const pendingRaw = Array.isArray(data.pending_local_tool_calls)
         ? data.pending_local_tool_calls
         : [];
@@ -983,11 +1012,24 @@ export class ChatService {
         const rec = asRecord(item);
         const toolCallId =
           rec && typeof rec.tool_call_id === 'string' ? rec.tool_call_id.trim() : '';
-        if (!toolCallId || pendingToolCallIds.includes(toolCallId)) continue;
-        pendingToolCallIds.push(toolCallId);
+        const name =
+          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
+        const args = rec ? rec.args : {};
+        if (
+          !toolCallId ||
+          pendingLocalToolCalls.some((entry) => entry.id === toolCallId)
+        ) {
+          continue;
+        }
+        pendingLocalToolCalls.push({ id: toolCallId, name, args });
       }
 
-      const baseToolOutputs: Array<{ callId: string; output: string }> = [];
+      const baseToolOutputs: Array<{
+        callId: string;
+        output: string;
+        name?: string;
+        args?: unknown;
+      }> = [];
       const outputsRaw = Array.isArray(data.base_tool_outputs)
         ? data.base_tool_outputs
         : [];
@@ -998,7 +1040,14 @@ export class ChatService {
         const output =
           rec && typeof rec.output === 'string' ? rec.output : '';
         if (!callId) continue;
-        baseToolOutputs.push({ callId, output });
+        const name =
+          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
+        baseToolOutputs.push({
+          callId,
+          output,
+          ...(name ? { name } : {}),
+          ...(rec && 'args' in rec ? { args: rec.args } : {}),
+        });
       }
 
       const localToolDefinitions: LocalToolDefinitionInput[] = [];
@@ -1022,12 +1071,12 @@ export class ChatService {
         localToolDefinitions.push({ name, description, parameters });
       }
 
-      if (pendingToolCallIds.length === 0) return null;
+      if (pendingLocalToolCalls.length === 0) return null;
 
       return {
         sequence: event.sequence,
         previousResponseId,
-        pendingToolCallIds,
+        pendingLocalToolCalls,
         baseToolOutputs,
         localToolDefinitions,
         vscodeCodeAgent: this.normalizeVsCodeCodeAgentPayload(
@@ -1060,7 +1109,7 @@ export class ChatService {
     if (!awaitingState) {
       throw new Error('No pending local tool call found for this assistant message');
     }
-    if (!awaitingState.pendingToolCallIds.includes(toolCallId)) {
+    if (!awaitingState.pendingLocalToolCalls.some((entry) => entry.id === toolCallId)) {
       throw new Error(`Tool call ${toolCallId} is not pending for this assistant message`);
     }
 
@@ -1092,7 +1141,7 @@ export class ChatService {
     );
 
     const followupEvents = await readStreamEvents(options.assistantMessageId, awaitingState.sequence);
-    const pendingSet = new Set(awaitingState.pendingToolCallIds);
+    const pendingSet = new Set(awaitingState.pendingLocalToolCalls.map((entry) => entry.id));
     const collectedByToolCallId = new Map<string, string>();
     for (const event of followupEvents) {
       if (event.eventType !== 'tool_call_result') continue;
@@ -1105,9 +1154,9 @@ export class ChatService {
       collectedByToolCallId.set(id, output);
     }
 
-    const waitingForToolCallIds = awaitingState.pendingToolCallIds.filter(
-      (id) => !collectedByToolCallId.has(id)
-    );
+    const waitingForToolCallIds = awaitingState.pendingLocalToolCalls
+      .map((entry) => entry.id)
+      .filter((id) => !collectedByToolCallId.has(id));
     if (waitingForToolCallIds.length > 0) {
       return {
         readyToResume: false,
@@ -1122,15 +1171,27 @@ export class ChatService {
       if (!item.callId) continue;
       dedupedOutputs.set(item.callId, item.output);
     }
-    for (const id of awaitingState.pendingToolCallIds) {
+    for (const id of awaitingState.pendingLocalToolCalls.map((entry) => entry.id)) {
       const output = collectedByToolCallId.get(id);
       if (!output) continue;
       dedupedOutputs.set(id, output);
     }
-    const toolOutputs = Array.from(dedupedOutputs.entries()).map(([callId, output]) => ({
-      callId,
-      output
-    }));
+    const pendingById = new Map(
+      awaitingState.pendingLocalToolCalls.map((entry) => [entry.id, entry] as const)
+    );
+    const baseById = new Map(
+      awaitingState.baseToolOutputs.map((entry) => [entry.callId, entry] as const)
+    );
+    const toolOutputs = Array.from(dedupedOutputs.entries()).map(([callId, output]) => {
+      const pending = pendingById.get(callId);
+      const base = baseById.get(callId);
+      return {
+        callId,
+        output,
+        ...(pending?.name ? { name: pending.name } : base?.name ? { name: base.name } : {}),
+        ...(pending ? { args: pending.args } : base && 'args' in base ? { args: base.args } : {}),
+      };
+    });
 
     return {
       readyToResume: true,
@@ -2701,7 +2762,7 @@ Règles :
       ? options.resumeFrom!.toolOutputs.map((item) => ({
           type: 'function_call_output',
           call_id: item.callId,
-          output: item.output
+          output: item.output,
         }))
       : null;
     const steerHistoryMessages: string[] = [];
@@ -3246,8 +3307,16 @@ Règles :
 
       // Exécuter les tool calls et ajouter les résultats à la conversation
       const toolResults: Array<{ role: 'tool'; content: string; tool_call_id: string }> = [];
-      const responseToolOutputs: Array<{ type: 'function_call_output'; call_id: string; output: string }> = [];
-      const pendingLocalToolCalls: Array<{ id: string; name: string }> = [];
+      const responseToolOutputs: Array<{
+        type: 'function_call_output';
+        call_id: string;
+        output: string;
+      }> = [];
+      const pendingLocalToolCalls: Array<{
+        id: string;
+        name: string;
+        args: unknown;
+      }> = [];
       const orgByFolderId = new Map<string, string | null>();
       const getOrganizationIdForFolder = async (folderId: string): Promise<string | null> => {
         if (orgByFolderId.has(folderId)) return orgByFolderId.get(folderId) ?? null;
@@ -3332,7 +3401,11 @@ Règles :
         if (options.signal?.aborted) throw new Error('AbortError');
         const toolName = String(toolCall.name || '').trim();
         if (toolName && localToolNames.has(toolName)) {
-          pendingLocalToolCalls.push({ id: toolCall.id, name: toolName });
+          pendingLocalToolCalls.push({
+            id: toolCall.id,
+            name: toolName,
+            args: parseToolCallArgs(toolCall.args),
+          });
           await writeStreamEvent(
             options.assistantMessageId,
             'tool_call_result',
@@ -4253,7 +4326,7 @@ Règles :
           responseToolOutputs.push({
             type: 'function_call_output',
             call_id: toolCall.id,
-            output: JSON.stringify(result)
+            output: JSON.stringify(result),
           });
         } catch (error) {
           const errorResult = {
@@ -4280,7 +4353,7 @@ Règles :
           responseToolOutputs.push({
             type: 'function_call_output',
             call_id: toolCall.id,
-            output: JSON.stringify(errorResult)
+            output: JSON.stringify(errorResult),
           });
           executedTools.push({
             toolCallId: toolCall.id,
@@ -4359,7 +4432,8 @@ Règles :
             previous_response_id: previousResponseId,
             pending_local_tool_calls: pendingLocalToolCalls.map((item) => ({
               tool_call_id: item.id,
-              name: item.name
+              name: item.name,
+              args: item.args,
             })),
             local_tool_definitions: localTools.map((tool) => ({
               name: tool.type === 'function' ? tool.function.name : '',
@@ -4372,7 +4446,7 @@ Règles :
             })),
             base_tool_outputs: responseToolOutputs.map((item) => ({
               call_id: item.call_id,
-              output: item.output
+              output: item.output,
             })),
             vscode_code_agent: vscodeCodeAgentPayload
               ? {
