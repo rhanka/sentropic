@@ -415,6 +415,19 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts ENV=dev`
         - [x] `make test-ui SCOPE=tests/vscode-ext/bash-policy-banner.test.ts ENV=dev`
         - [x] `make test-ui SCOPE=tests/stores/streamHub.test.ts ENV=dev`
+    - [ ] BUG-L6-14 — Gemini local-tools handoff is unstable (`awaiting_external_result` can persist and the run appears stuck).
+      - [ ] Reproduce with scoped Gemini tool sequence and capture full stream timeline.
+      - [ ] Validate Gemini continuation contract after local tool results (tool-output handback path).
+      - [ ] Ensure local tool result forwarding always clears pending state and resumes generation.
+      - [ ] Add scoped tests for Gemini local-tools continuation parity.
+    - [ ] BUG-L6-15 — `plan` tool is not available in VSCode runtime toolset.
+      - [ ] Include `plan` in VSCode restricted/new-session allowed toolset.
+      - [ ] Validate toggle visibility + request payload includes `plan`.
+      - [ ] Add scoped UI/runtime tests for `plan` availability in VSCode sessions.
+    - [ ] BUG-L6-16 — Provider runtime ownership is structurally mixed (`openai.ts` contains Gemini paths), causing handoff/continuation fragility.
+      - [ ] Apply big-bang provider runtime split per `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`.
+      - [ ] Remove mixed-provider implementation paths (no compatibility fallback).
+      - [ ] Revalidate OpenAI/Gemini local-tools continuation parity in scoped chat tests.
     - [ ] BUG-L6-5 — Codex enrollment from web-app settings is not a real SSO enrollment flow.
       - [ ] Implement actual enrollment lifecycle (start/status/complete/disconnect) with verifiable backend state.
       - [ ] Ensure UI state is bound to real provider readiness (not local/manual toggle semantics).
