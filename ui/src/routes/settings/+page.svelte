@@ -18,8 +18,10 @@
     type VsCodeExtensionDownloadMetadata,
   } from '$lib/utils/vscode-extension-download';
   import {
+    completeCodexProviderEnrollment,
+    disconnectCodexProviderEnrollment,
     fetchProviderConnections,
-    saveCodexProviderConnection,
+    startCodexProviderEnrollment,
     type ProviderConnectionState,
   } from '$lib/utils/provider-connections-api';
   import { emitUserAISettingsUpdated } from '$lib/utils/user-ai-settings-events';
@@ -369,29 +371,84 @@
     }
   };
 
-  const updateCodexProviderConnection = async (connected: boolean) => {
+  const syncCodexProviderInList = (updatedProvider: ProviderConnectionState) => {
+    providerConnections = providerConnections.map((provider) =>
+      provider.providerId === 'codex' ? updatedProvider : provider,
+    );
+    if (!providerConnections.some((provider) => provider.providerId === 'codex')) {
+      providerConnections = [updatedProvider, ...providerConnections];
+    }
+    codexConnectionAccountLabel = updatedProvider.accountLabel || '';
+  };
+
+  const startCodexProviderConnection = async () => {
     isSavingCodexProviderConnection = true;
     providerConnectionsError = '';
     try {
-      const updatedProvider = await saveCodexProviderConnection({
-        connected,
+      const updatedProvider = await startCodexProviderEnrollment({
         accountLabel: codexConnectionAccountLabel.trim() || null,
       });
-      providerConnections = providerConnections.map((provider) =>
-        provider.providerId === 'codex' ? updatedProvider : provider,
-      );
-      if (!providerConnections.some((provider) => provider.providerId === 'codex')) {
-        providerConnections = [updatedProvider, ...providerConnections];
+      syncCodexProviderInList(updatedProvider);
+      const enrollmentUrl = updatedProvider.enrollmentUrl;
+      if (enrollmentUrl) {
+        window.open(enrollmentUrl, '_blank', 'noopener,noreferrer');
       }
-      codexConnectionAccountLabel = updatedProvider.accountLabel || '';
       addToast({
         type: 'success',
-        message: connected
-          ? get(_)('settings.providerConnections.toasts.codexConnected')
-          : get(_)('settings.providerConnections.toasts.codexDisconnected'),
+        message: get(_)('settings.providerConnections.toasts.codexEnrollmentStarted'),
       });
     } catch (error) {
       console.error('Failed to update codex provider connection:', error);
+      providerConnectionsError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.providerConnections.errors.save');
+    } finally {
+      isSavingCodexProviderConnection = false;
+    }
+  };
+
+  const completeCodexProviderConnection = async () => {
+    const codex = codexProviderConnection();
+    if (!codex?.enrollmentId) {
+      providerConnectionsError = get(_)('settings.providerConnections.errors.missingEnrollment');
+      return;
+    }
+    isSavingCodexProviderConnection = true;
+    providerConnectionsError = '';
+    try {
+      const updatedProvider = await completeCodexProviderEnrollment({
+        enrollmentId: codex.enrollmentId,
+        accountLabel: codexConnectionAccountLabel.trim() || null,
+      });
+      syncCodexProviderInList(updatedProvider);
+      addToast({
+        type: 'success',
+        message: get(_)('settings.providerConnections.toasts.codexConnected'),
+      });
+    } catch (error) {
+      console.error('Failed to complete codex provider enrollment:', error);
+      providerConnectionsError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.providerConnections.errors.save');
+    } finally {
+      isSavingCodexProviderConnection = false;
+    }
+  };
+
+  const disconnectCodexProviderConnection = async () => {
+    isSavingCodexProviderConnection = true;
+    providerConnectionsError = '';
+    try {
+      const updatedProvider = await disconnectCodexProviderEnrollment();
+      syncCodexProviderInList(updatedProvider);
+      addToast({
+        type: 'success',
+        message: get(_)('settings.providerConnections.toasts.codexDisconnected'),
+      });
+    } catch (error) {
+      console.error('Failed to disconnect codex provider connection:', error);
       providerConnectionsError =
         error instanceof Error
           ? error.message
@@ -1141,20 +1198,35 @@
             <button
               type="button"
               class="rounded bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
-              on:click={() => updateCodexProviderConnection(true)}
+              on:click={startCodexProviderConnection}
               disabled={isSavingCodexProviderConnection}
             >
-              {$_('settings.providerConnections.codex.connect')}
+              {$_('settings.providerConnections.codex.startEnrollment')}
             </button>
+            {#if codexProviderConnection()?.connectionStatus === 'pending'}
+              <button
+                type="button"
+                class="rounded border border-emerald-300 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                on:click={completeCodexProviderConnection}
+                disabled={isSavingCodexProviderConnection}
+              >
+                {$_('settings.providerConnections.codex.completeEnrollment')}
+              </button>
+            {/if}
             <button
               type="button"
               class="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-              on:click={() => updateCodexProviderConnection(false)}
+              on:click={disconnectCodexProviderConnection}
               disabled={isSavingCodexProviderConnection}
             >
               {$_('settings.providerConnections.codex.disconnect')}
             </button>
           </div>
+          {#if codexProviderConnection()?.connectionStatus === 'pending'}
+            <p class="text-xs text-amber-700">
+              {$_('settings.providerConnections.codex.pendingHint')}
+            </p>
+          {/if}
         </div>
       {/if}
     {/if}

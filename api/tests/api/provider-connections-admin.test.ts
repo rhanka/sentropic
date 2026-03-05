@@ -54,25 +54,61 @@ describe('provider connections admin API', () => {
     );
   });
 
-  it('updates codex provider connection in admin route and exposes readiness to authenticated clients', async () => {
-    const updateResponse = await authenticatedRequest(
+  it('starts and completes codex enrollment in admin route, then exposes readiness to authenticated clients', async () => {
+    const startResponse = await authenticatedRequest(
       app,
-      'PUT',
-      '/api/v1/settings/provider-connections/codex',
+      'POST',
+      '/api/v1/settings/provider-connections/codex/enrollment/start',
       admin.sessionToken!,
       {
-        connected: true,
         accountLabel: 'admin@example.com',
       },
     );
 
-    expect(updateResponse.status).toBe(200);
-    await expect(updateResponse.json()).resolves.toMatchObject({
+    expect(startResponse.status).toBe(200);
+    const startPayload = (await startResponse.json()) as {
+      provider: {
+        providerId: string;
+        ready: boolean;
+        connectionStatus: string;
+        enrollmentId: string | null;
+        enrollmentUrl: string | null;
+        accountLabel: string | null;
+      };
+    };
+
+    expect(startPayload).toMatchObject({
+      provider: {
+        providerId: 'codex',
+        ready: false,
+        connectionStatus: 'pending',
+        accountLabel: 'admin@example.com',
+      },
+    });
+    expect(startPayload.provider.enrollmentId).toBeTruthy();
+    expect(startPayload.provider.enrollmentUrl).toContain(startPayload.provider.enrollmentId!);
+
+    const completeResponse = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/settings/provider-connections/codex/enrollment/complete',
+      admin.sessionToken!,
+      {
+        enrollmentId: startPayload.provider.enrollmentId,
+        accountLabel: 'admin@example.com',
+      },
+    );
+
+    expect(completeResponse.status).toBe(200);
+    await expect(completeResponse.json()).resolves.toMatchObject({
       provider: {
         providerId: 'codex',
         ready: true,
+        connectionStatus: 'connected',
         managedBy: 'admin_settings',
         accountLabel: 'admin@example.com',
+        enrollmentId: null,
+        enrollmentUrl: null,
       },
     });
 
@@ -95,14 +131,58 @@ describe('provider connections admin API', () => {
     });
   });
 
-  it('rejects codex provider connection updates for non-admin users', async () => {
+  it('disconnects codex enrollment in admin route', async () => {
+    const startResponse = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/settings/provider-connections/codex/enrollment/start',
+      admin.sessionToken!,
+      {
+        accountLabel: 'admin@example.com',
+      },
+    );
+    const startPayload = (await startResponse.json()) as {
+      provider: { enrollmentId: string | null };
+    };
+
+    await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/settings/provider-connections/codex/enrollment/complete',
+      admin.sessionToken!,
+      {
+        enrollmentId: startPayload.provider.enrollmentId,
+        accountLabel: 'admin@example.com',
+      },
+    );
+
     const response = await authenticatedRequest(
       app,
-      'PUT',
-      '/api/v1/settings/provider-connections/codex',
+      'POST',
+      '/api/v1/settings/provider-connections/codex/enrollment/disconnect',
+      admin.sessionToken!,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      provider: {
+        providerId: 'codex',
+        ready: false,
+        connectionStatus: 'disconnected',
+        managedBy: 'none',
+        accountLabel: null,
+      },
+    });
+  });
+
+  it('rejects codex enrollment start for non-admin users', async () => {
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/settings/provider-connections/codex/enrollment/start',
       editor.sessionToken!,
       {
-        connected: true,
+        accountLabel: 'editor@example.com',
       },
     );
 

@@ -587,16 +587,20 @@
       "codex": {
         "accountLabel": "Libellé compte Codex (optionnel)",
         "accountPlaceholder": "admin@example.com",
-        "connect": "Marquer connecté",
-        "disconnect": "Marquer déconnecté"
+        "startEnrollment": "Démarrer la connexion",
+        "completeEnrollment": "Finaliser la connexion",
+        "disconnect": "Déconnecter",
+        "pendingHint": "Inscription en attente. Finalisez la connexion après authentification dans la page Codex ouverte."
       },
       "toasts": {
+        "codexEnrollmentStarted": "Connexion Codex démarrée. Terminez l’authentification dans la page ouverte puis finalisez.",
         "codexConnected": "Provider Codex marqué comme connecté.",
         "codexDisconnected": "Provider Codex marqué comme déconnecté."
       },
       "errors": {
         "load": "Impossible de charger les connexions providers.",
-        "save": "Impossible de mettre à jour la connexion provider."
+        "save": "Impossible de mettre à jour la connexion provider.",
+        "missingEnrollment": "Aucune connexion Codex en attente. Démarrez d’abord la connexion."
       }
     },
     "chromeExtension": {
