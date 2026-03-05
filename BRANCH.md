@@ -473,11 +473,12 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Persist user `allow_always` decisions for outside-path scope and reuse them on equivalent requests.
       - [x] Add scoped runtime tests for `..`/absolute outside-path request lifecycle (`ask` -> allow/deny -> resume).
         - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] BUG-L6-18 — Bash `rm -rf` is hard-denied, must be ask-only (user-authorizable).
-      - [ ] Remove hard deny on `rm -rf` in default workspace policy path.
-      - [ ] Keep `rm -rf` as mandatory permission prompt (`ask`) with no silent default allow.
-      - [ ] Ensure `allow_always`/`deny_always` persistence applies to `rm -rf` with same policy engine.
-      - [ ] Add scoped tests validating `rm -rf` prompt behavior (not hard deny) and decision persistence.
+    - [x] BUG-L6-18 — Bash `rm -rf` is hard-denied, must be ask-only (user-authorizable).
+      - [x] Remove hard deny on `rm -rf` in default workspace policy path.
+      - [x] Keep `rm -rf` as mandatory permission prompt (`ask`) with no silent default allow.
+      - [x] Ensure `allow_always`/`deny_always` persistence applies to `rm -rf` with same policy engine.
+      - [x] Add scoped tests validating `rm -rf` prompt behavior (not hard deny) and decision persistence.
+        - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] BUG-L6-19 — VSCode tools policy UI cannot author bash bigram rules (currently path-centric).
       - [ ] Define dedicated bash policy editor UX (readable selectors for mono/bigram commands).
       - [ ] Support manual entry examples such as `bash:git add`, `bash:git push`, `bash:rm -rf`.
