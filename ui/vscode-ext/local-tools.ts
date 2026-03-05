@@ -12,6 +12,7 @@ export type VsCodeLocalToolName =
   | 'rg'
   | 'file_read'
   | 'file_edit'
+  | 'git'
   | 'git_status'
   | 'git_diff';
 
@@ -115,6 +116,7 @@ const isToolName = (value: string): value is VsCodeLocalToolName => {
     value === 'rg' ||
     value === 'file_read' ||
     value === 'file_edit' ||
+    value === 'git' ||
     value === 'git_status' ||
     value === 'git_diff'
   );
@@ -332,11 +334,22 @@ const resolveRealPath = (
   return target.absolutePath;
 };
 
+const resolveGitAction = (args: Record<string, unknown>): string => {
+  const actionRaw = typeof args.action === 'string' ? args.action.trim().toLowerCase() : '';
+  if (!actionRaw) return 'status';
+  return actionRaw.replace(/\s+/g, '_');
+};
+
 const defaultWorkspaceDecision = (
   toolName: VsCodeLocalToolName,
   args: Record<string, unknown>,
 ): CommandDecision => {
   if (toolName === 'file_edit') return 'ask';
+  if (toolName === 'git') {
+    const action = resolveGitAction(args);
+    if (action === 'status' || action === 'diff' || action === 'ls_files') return 'allow';
+    return 'ask';
+  }
   if (toolName === 'git_status') return 'allow';
   if (toolName === 'git_diff') return 'allow';
   if (toolName === 'ls' || toolName === 'rg' || toolName === 'file_read') return 'allow';
@@ -479,6 +492,9 @@ export class VsCodeLocalToolsRuntime {
   }
 
   private buildPermissionToolName(name: VsCodeLocalToolName, args: Record<string, unknown>): string {
+    if (name === 'git') {
+      return `git:${resolveGitAction(args)}`;
+    }
     if (name !== 'bash') return name;
     const command = typeof args.command === 'string' ? args.command.trim() : '';
     if (!command) return 'bash';
@@ -500,6 +516,7 @@ export class VsCodeLocalToolsRuntime {
       name !== 'rg' &&
       name !== 'file_read' &&
       name !== 'file_edit' &&
+      name !== 'git' &&
       name !== 'git_diff'
     ) {
       return {
@@ -509,7 +526,9 @@ export class VsCodeLocalToolsRuntime {
     }
     const workspaceRoot = this.getWorkspaceRootOrThrow();
     const rawPath =
-      typeof args.path === 'string'
+      typeof args.cwd === 'string'
+        ? args.cwd
+        : typeof args.path === 'string'
         ? args.path
         : name === 'ls' || name === 'rg'
           ? '.'
@@ -570,6 +589,7 @@ export class VsCodeLocalToolsRuntime {
         input.name === 'rg' ||
         input.name === 'file_read' ||
         input.name === 'file_edit' ||
+        input.name === 'git' ||
         input.name === 'git_diff')
     ) {
       workspaceDecision = 'ask';
@@ -948,42 +968,215 @@ export class VsCodeLocalToolsRuntime {
     throw new Error(`file_edit: unsupported mode ${mode}`);
   }
 
-  private async runGitStatus(workspaceRoot: string): Promise<unknown> {
-    const { stdout } = await execFile('git', ['status', '--short', '--branch'], {
-      cwd: workspaceRoot,
-      timeout: 10_000,
-      maxBuffer: 256 * 1024,
-    });
-    return {
-      output: truncate(String(stdout ?? '')),
-    };
-  }
-
-  private async runGitDiff(
+  private async runGit(
     workspaceRoot: string,
     args: Record<string, unknown>,
     allowOutsideWorkspace = false,
   ): Promise<unknown> {
-    const ref = typeof args.ref === 'string' ? args.ref.trim() : '';
-    const targetPath =
-      typeof args.path === 'string' && args.path.trim().length > 0
-        ? await resolveRealPath(workspaceRoot, args.path, allowOutsideWorkspace)
-        : null;
-    const gitArgs = ['diff'];
-    if (ref) gitArgs.push(ref);
-    if (targetPath) {
-      gitArgs.push('--', path.relative(workspaceRoot, targetPath) || '.');
-    }
-    const { stdout } = await execFile('git', gitArgs, {
-      cwd: workspaceRoot,
-      timeout: 10_000,
-      maxBuffer: 512 * 1024,
-    });
-    return {
-      ref: ref || null,
-      path: targetPath ? path.relative(workspaceRoot, targetPath) || '.' : null,
-      diff: truncate(String(stdout ?? '')),
+    const action = resolveGitAction(args);
+    const timeoutMs = withTimeoutMs(args, 10_000, 1_000, 30_000);
+    const cwd =
+      typeof args.cwd === 'string' && args.cwd.trim().length > 0
+        ? resolveRealPath(workspaceRoot, args.cwd, allowOutsideWorkspace)
+        : workspaceRoot;
+    const outputPathToScope = (rawPath: string | null): string | null => {
+      if (!rawPath) return null;
+      const target = resolvePathTarget(workspaceRoot, rawPath);
+      return target.inWorkspace
+        ? target.relativePath || '.'
+        : `outside:${target.absolutePath.replace(/\\/g, '/')}`;
     };
+
+    if (action === 'status') {
+      const { stdout } = await execFile('git', ['status', '--short', '--branch'], {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 256 * 1024,
+      });
+      return {
+        action,
+        output: truncate(String(stdout ?? '')),
+      };
+    }
+
+    if (action === 'diff') {
+      const ref = typeof args.ref === 'string' ? args.ref.trim() : '';
+      const rawPath = typeof args.path === 'string' ? args.path.trim() : '';
+      const targetPath = rawPath
+        ? resolveRealPath(workspaceRoot, rawPath, allowOutsideWorkspace)
+        : null;
+      const gitArgs = ['diff'];
+      if (ref) gitArgs.push(ref);
+      if (targetPath) {
+        const inCwdPath = path.relative(cwd, targetPath) || '.';
+        gitArgs.push('--', inCwdPath);
+      }
+      const { stdout } = await execFile('git', gitArgs, {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 512 * 1024,
+      });
+      return {
+        action,
+        ref: ref || null,
+        path: outputPathToScope(rawPath || null),
+        diff: truncate(String(stdout ?? '')),
+      };
+    }
+
+    if (action === 'ls_files') {
+      const rawPath = typeof args.path === 'string' ? args.path.trim() : '';
+      const targetPath = rawPath
+        ? resolveRealPath(workspaceRoot, rawPath, allowOutsideWorkspace)
+        : null;
+      const gitArgs = ['ls-files'];
+      if (targetPath) {
+        const inCwdPath = path.relative(cwd, targetPath) || '.';
+        gitArgs.push('--', inCwdPath);
+      }
+      const { stdout } = await execFile('git', gitArgs, {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 512 * 1024,
+      });
+      return {
+        action,
+        path: outputPathToScope(rawPath || null),
+        output: truncate(String(stdout ?? '')),
+      };
+    }
+
+    if (action === 'add') {
+      const rawPath = typeof args.path === 'string' ? args.path.trim() : '';
+      const pathList = Array.isArray(args.paths)
+        ? args.paths.map((entry) => String(entry ?? '').trim()).filter(Boolean)
+        : [];
+      const targets = rawPath ? [rawPath] : pathList;
+      if (targets.length === 0) {
+        throw new Error('git(add): path or paths is required');
+      }
+      const gitArgs = ['add'];
+      for (const target of targets) {
+        const resolved = resolveRealPath(workspaceRoot, target, allowOutsideWorkspace);
+        gitArgs.push(path.relative(cwd, resolved) || '.');
+      }
+      const { stdout } = await execFile('git', gitArgs, {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 256 * 1024,
+      });
+      return {
+        action,
+        output: truncate(String(stdout ?? '')),
+      };
+    }
+
+    if (action === 'commit') {
+      const message = typeof args.message === 'string' ? args.message.trim() : '';
+      if (!message) throw new Error('git(commit): message is required');
+      const gitArgs = ['commit', '-m', message];
+      if (Boolean(args.noVerify)) gitArgs.push('--no-verify');
+      const { stdout, stderr } = await execFile('git', gitArgs, {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 512 * 1024,
+      });
+      return {
+        action,
+        output: truncate(String(stdout ?? '')),
+        error: truncate(String(stderr ?? '')),
+      };
+    }
+
+    if (action === 'push') {
+      const remote = typeof args.remote === 'string' ? args.remote.trim() : '';
+      const branch = typeof args.branch === 'string' ? args.branch.trim() : '';
+      const gitArgs = ['push'];
+      if (Boolean(args.forceWithLease)) gitArgs.push('--force-with-lease');
+      if (remote) gitArgs.push(remote);
+      if (branch) gitArgs.push(branch);
+      const { stdout, stderr } = await execFile('git', gitArgs, {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 512 * 1024,
+      });
+      return {
+        action,
+        output: truncate(String(stdout ?? '')),
+        error: truncate(String(stderr ?? '')),
+      };
+    }
+
+    if (action === 'reset') {
+      const mode = typeof args.mode === 'string' ? args.mode.trim() : '--mixed';
+      const target = typeof args.target === 'string' ? args.target.trim() : 'HEAD';
+      const safeMode = ['--soft', '--mixed', '--hard'].includes(mode) ? mode : '--mixed';
+      const { stdout, stderr } = await execFile('git', ['reset', safeMode, target], {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 256 * 1024,
+      });
+      return {
+        action,
+        mode: safeMode,
+        target,
+        output: truncate(String(stdout ?? '')),
+        error: truncate(String(stderr ?? '')),
+      };
+    }
+
+    if (action === 'checkout') {
+      const target = typeof args.target === 'string' ? args.target.trim() : '';
+      if (!target) throw new Error('git(checkout): target is required');
+      const { stdout, stderr } = await execFile('git', ['checkout', target], {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 256 * 1024,
+      });
+      return {
+        action,
+        target,
+        output: truncate(String(stdout ?? '')),
+        error: truncate(String(stderr ?? '')),
+      };
+    }
+
+    if (action === 'rebase') {
+      const target = typeof args.target === 'string' ? args.target.trim() : '';
+      if (!target) throw new Error('git(rebase): target is required');
+      const { stdout, stderr } = await execFile('git', ['rebase', target], {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 512 * 1024,
+      });
+      return {
+        action,
+        target,
+        output: truncate(String(stdout ?? '')),
+        error: truncate(String(stderr ?? '')),
+      };
+    }
+
+    if (action === 'clean') {
+      const flags = typeof args.flags === 'string' ? args.flags.trim() : '-fd';
+      const flagTokens = flags
+        .split(/\s+/g)
+        .map((token) => token.trim())
+        .filter(Boolean);
+      const { stdout, stderr } = await execFile('git', ['clean', ...flagTokens], {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: 256 * 1024,
+      });
+      return {
+        action,
+        flags: flagTokens,
+        output: truncate(String(stdout ?? '')),
+        error: truncate(String(stderr ?? '')),
+      };
+    }
+
+    throw new Error(`git: unsupported action ${action}`);
   }
 
   private async executeTool(input: {
@@ -1005,9 +1198,16 @@ export class VsCodeLocalToolsRuntime {
     if (input.name === 'file_edit') {
       return this.runFileEdit(workspaceRoot, input.args, Boolean(input.allowOutsideWorkspace));
     }
-    if (input.name === 'git_status') return this.runGitStatus(workspaceRoot);
+    if (input.name === 'git') {
+      return this.runGit(workspaceRoot, input.args, Boolean(input.allowOutsideWorkspace));
+    }
+    if (input.name === 'git_status') return this.runGit(workspaceRoot, { action: 'status' });
     if (input.name === 'git_diff') {
-      return this.runGitDiff(workspaceRoot, input.args, Boolean(input.allowOutsideWorkspace));
+      return this.runGit(
+        workspaceRoot,
+        { action: 'diff', ...input.args },
+        Boolean(input.allowOutsideWorkspace),
+      );
     }
     throw new Error(`Unsupported local tool: ${input.name}`);
   }

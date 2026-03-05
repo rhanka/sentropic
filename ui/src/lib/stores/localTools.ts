@@ -14,6 +14,7 @@ export type LocalToolName =
   | 'rg'
   | 'file_read'
   | 'file_edit'
+  | 'git'
   | 'git_status'
   | 'git_diff';
 
@@ -237,22 +238,40 @@ const VSCODE_LOCAL_TOOL_DEFINITIONS: ReadonlyArray<LocalToolDefinition> = [
     },
   },
   {
-    name: 'git_status',
-    description: 'Inspect workspace git status (read-only).',
-    parameters: {
-      type: 'object',
-      properties: {},
-      required: [],
-    },
-  },
-  {
-    name: 'git_diff',
-    description: 'Inspect workspace git diff (read-only).',
+    name: 'git',
+    description:
+      'Run git actions (status, diff, ls_files, add, commit, push, reset, checkout, rebase, clean) with policy gating.',
     parameters: {
       type: 'object',
       properties: {
+        action: {
+          type: 'string',
+          enum: [
+            'status',
+            'diff',
+            'ls_files',
+            'add',
+            'commit',
+            'push',
+            'reset',
+            'checkout',
+            'rebase',
+            'clean',
+          ],
+        },
         ref: { type: 'string' },
         path: { type: 'string' },
+        paths: { type: 'array', items: { type: 'string' } },
+        message: { type: 'string' },
+        remote: { type: 'string' },
+        branch: { type: 'string' },
+        target: { type: 'string' },
+        mode: { type: 'string' },
+        flags: { type: 'string' },
+        cwd: { type: 'string' },
+        forceWithLease: { type: 'boolean' },
+        noVerify: { type: 'boolean' },
+        timeoutMs: { type: 'integer', minimum: 1000, maximum: 30000 },
       },
       required: [],
     },
@@ -273,6 +292,7 @@ const LOCAL_TOOL_NAMES: ReadonlySet<LocalToolName> = new Set([
   'rg',
   'file_read',
   'file_edit',
+  'git',
   'git_status',
   'git_diff',
 ]);
