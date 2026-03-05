@@ -11,6 +11,7 @@ export const EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS = new Set<string>([
 ]);
 
 export const VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS = new Set<string>([
+  'plan',
   'bash',
   'ls',
   'rg',

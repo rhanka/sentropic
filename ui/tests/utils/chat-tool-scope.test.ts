@@ -116,6 +116,7 @@ describe('chat-tool-scope', () => {
 
   it('supports custom allowed set for vscode code-tool restricted mode', () => {
     const toggles: ChatToolScopeToggle[] = [
+      { id: 'plan', toolIds: ['plan'] },
       { id: 'bash', toolIds: ['bash'] },
       { id: 'ls', toolIds: ['ls'] },
       { id: 'web_search', toolIds: ['web_search'] },
@@ -127,19 +128,20 @@ describe('chat-tool-scope', () => {
       restrictedMode: true,
       allowedToolIds: VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
     });
-    expect(visible).toEqual(['bash', 'ls']);
+    expect(visible).toEqual(['plan', 'bash', 'ls']);
 
     const enabled = computeEnabledToolIds({
       toolToggles: toggles,
       restrictedMode: true,
       allowedToolIds: VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
       toolEnabledById: {
+        plan: true,
         bash: true,
         ls: true,
         web_search: true,
         documents: true,
       },
     });
-    expect(enabled).toEqual(['bash', 'ls']);
+    expect(enabled).toEqual(['plan', 'bash', 'ls']);
   });
 });
