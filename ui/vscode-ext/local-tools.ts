@@ -81,7 +81,7 @@ type RuntimeDeps = {
 
 const STORAGE_KEY_POLICIES = 'topai.vscode.localToolPolicies.v1';
 const ORIGIN_VSCODE_WORKSPACE = 'vscode://workspace';
-const TOOL_NAME_REGEX = /^[a-z0-9:_*-]{1,96}$/i;
+const TOOL_NAME_REGEX = /^[a-z0-9:_* -]{1,96}$/i;
 const MAX_OUTPUT_CHARS = 12_000;
 const MAX_FILE_READ_CHARS = 64_000;
 const MAX_RG_RESULTS = 400;
@@ -123,7 +123,10 @@ const toolPatternToRegex = (pattern: string): RegExp => {
 };
 
 const normalizeToolPattern = (raw: string): string | null => {
-  const value = raw.trim().toLowerCase();
+  const value = raw
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
   if (!value || !TOOL_NAME_REGEX.test(value) || value.includes('**')) return null;
   return value;
 };
@@ -340,11 +343,10 @@ const mergeDecision = (
   workspaceDecision: CommandDecision,
   userDecision: CommandDecision | null,
 ): CommandDecision => {
-  const combined: CommandDecision[] = [workspaceDecision];
-  if (userDecision) combined.push(userDecision);
-  if (combined.includes('deny')) return 'deny';
-  if (combined.includes('ask')) return 'ask';
-  return 'allow';
+  if (workspaceDecision === 'deny' || userDecision === 'deny') return 'deny';
+  if (userDecision === 'allow') return 'allow';
+  if (workspaceDecision === 'allow') return 'allow';
+  return 'ask';
 };
 
 const toCommandDecisionFromPolicy = (
@@ -489,9 +491,10 @@ export class VsCodeLocalToolsRuntime {
   > {
     const origin = ORIGIN_VSCODE_WORKSPACE;
     const permissionToolName = this.buildPermissionToolName(input.name, input.args);
-    const targetPath = await this.resolvePermissionTargetPath(input.name, input.args).catch(
-      () => null,
-    );
+    let targetPath: string | null = null;
+    try {
+      targetPath = await this.resolvePermissionTargetPath(input.name, input.args);
+    } catch {}
 
     if (this.oneTimeAllowByToolCallId.has(input.toolCallId)) {
       this.oneTimeAllowByToolCallId.delete(input.toolCallId);
@@ -519,7 +522,6 @@ export class VsCodeLocalToolsRuntime {
       workspaceDecision,
       toCommandDecisionFromPolicy(userPolicy),
     );
-
     if (effective === 'deny') {
       return {
         allowed: false,
@@ -528,9 +530,7 @@ export class VsCodeLocalToolsRuntime {
       };
     }
 
-    if (effective === 'allow') {
-      return { allowed: true };
-    }
+    if (effective === 'allow') return { allowed: true };
 
     const requestId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const request: PendingPermissionRequest = {
@@ -938,7 +938,6 @@ export class VsCodeLocalToolsRuntime {
     const requestId = String(input.requestId ?? '').trim();
     const decision = String(input.decision ?? '').trim().toLowerCase();
     if (!requestId) return { ok: false, error: 'requestId is required.' };
-
     if (
       decision !== 'allow_once' &&
       decision !== 'deny_once' &&
@@ -949,7 +948,9 @@ export class VsCodeLocalToolsRuntime {
     }
 
     const pending = this.pendingRequests.get(requestId);
-    if (!pending) return { ok: false, error: 'Unknown tool permission request.' };
+    if (!pending) {
+      return { ok: false, error: 'Unknown tool permission request.' };
+    }
     this.pendingRequests.delete(requestId);
 
     if (decision === 'allow_once') {
@@ -958,6 +959,10 @@ export class VsCodeLocalToolsRuntime {
     }
     if (decision === 'deny_once') {
       return { ok: true };
+    }
+
+    if (decision === 'allow_always') {
+      this.oneTimeAllowByToolCallId.add(pending.toolCallId);
     }
 
     const entries = this.getPolicies().filter(
