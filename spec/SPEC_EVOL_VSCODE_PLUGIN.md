@@ -723,6 +723,21 @@ This section locks the implementation contract for the immediate Lot-1 increment
 - Objective:
   - operator-facing policy table remains understandable and editable.
 
+#### 4.22.8 BUG-L6-15 (`plan` tool accessibility in VSCode runtime)
+- Current mismatch:
+  - VSCode restricted/new-session toolset excludes `plan`, so session plan progression is unavailable from plugin runtime.
+- Required contract:
+  - include `plan` in VSCode restricted/new-session allowed toolset defaults.
+  - keep `plan` visible/controllable in VSCode tool toggle surface under the same policy model as other VSCode tools.
+  - ensure outbound chat payload includes `plan` when enabled, so backend runtime can expose the tool in generation.
+- Non-regression constraints:
+  - no privilege widening for non-VSCode surfaces,
+  - keep existing permission/runtime rules for local tools unchanged.
+- Test contract:
+  - scoped UI test: VSCode settings/chat tool toggles include `plan`,
+  - scoped runtime test: new VSCode session sends `plan` in enabled tool list,
+  - scoped chat test: `plan` tool call is reachable from VSCode conversation flow.
+
 
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.

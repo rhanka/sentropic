@@ -126,3 +126,9 @@ W2:
 - Provider SDK/API instability across releases.
 - SSO edge-cases with account linking and duplicate identities.
 - Regression risk in streaming/tool-call orchestration when introducing adapters.
+
+## 10) Split note (runtime vs auth)
+
+- This document stays focused on authentication/federation roadmap concerns.
+- Runtime ownership split (`openai.ts` vs Gemini paths, big-bang cutover) is specified in:
+  - `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`
