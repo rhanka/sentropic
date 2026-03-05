@@ -16,7 +16,7 @@ import {
 import { createId } from '../utils/id';
 import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 import { extractDocumentInfoFromDocument } from './document-text';
-import { callOpenAI } from './openai';
+import { callOpenAI } from './llm-runtime';
 import { defaultPrompts } from '../config/default-prompts';
 import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from './context-comments';
 import { hasWorkspaceRole } from './workspace-access';

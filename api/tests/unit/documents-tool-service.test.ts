@@ -20,7 +20,7 @@ vi.mock('../../src/services/document-text', async () => {
 });
 
 const mockCallOpenAI = vi.fn();
-vi.mock('../../src/services/openai', async () => {
+vi.mock('../../src/services/llm-runtime', async () => {
   return {
     callOpenAI: (args: any) => mockCallOpenAI(args),
   };

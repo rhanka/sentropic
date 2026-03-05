@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 
-vi.mock('../../src/services/openai', () => {
+vi.mock('../../src/services/llm-runtime', () => {
   return {
     callOpenAI: vi.fn(),
     callOpenAIResponseStream: vi.fn(),
@@ -19,7 +19,7 @@ import {
 } from '../../src/db/schema';
 import { createId } from '../../src/utils/id';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
-import { callOpenAI, callOpenAIResponseStream } from '../../src/services/openai';
+import { callOpenAI, callOpenAIResponseStream } from '../../src/services/llm-runtime';
 import { chatService } from '../../src/services/chat-service';
 
 type StreamEvent = { type: string; data: unknown };
