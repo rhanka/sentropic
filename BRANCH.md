@@ -403,10 +403,12 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Pass suggested default name to workspace creation endpoint when user does not provide one.
       - [x] Keep backend fallback deterministic if no suggestion is available.
       - [x] Add scoped tests (origin present / no origin / malformed origin).
-    - [ ] BUG-L6-4 — VSCode local-tools permission banner: `allow_always` does not close the banner and does not execute the pending command.
-      - [ ] Ensure `allow_always` click closes permission banner in current run.
-      - [ ] Ensure pending command continues immediately after `allow_always`.
-      - [ ] Add scoped tests for close + resume behavior.
+    - [x] BUG-L6-4 — VSCode local-tools permission banner: `allow_always` does not close the banner and does not execute the pending command.
+      - [x] Ensure `allow_always` click closes permission banner in current run.
+      - [x] Ensure pending command continues immediately after `allow_always`.
+      - [x] Add scoped tests for close + resume behavior.
+        - [x] `make test-ui SCOPE=tests/vscode-ext/local-tools.test.ts ENV=dev`
+        - [x] `make test-ui SCOPE=tests/vscode-ext/bash-policy-banner.test.ts ENV=dev`
     - [x] BUG-L6-13 — Local tools approval sequencing in one assistant run is not strict (multiple pending approvals can appear before first approval is resolved).
       - [x] Enforce single active local tool execution per assistant run (strict sequential gating).
       - [x] While one approval is pending, do not surface/execute the next local tool call.
