@@ -26,6 +26,7 @@
   export let smoothContentStreaming = false;
   export let smoothChunkThreshold = 80;
   export let acknowledgementText: string | undefined = undefined;
+  export let showRuntimeInlinePreview = true;
   // eslint-disable-next-line no-unused-vars
   export let onTerminal: ((t: 'done' | 'error') => void) | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
@@ -791,13 +792,13 @@
           <Streamdown content={displayContent} />
         </div>
       {:else}
-        {#if showStartup}
+        {#if showStartup && showRuntimeInlinePreview}
           <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
             <Loader2 class="w-3.5 h-3.5 animate-spin" />
             <span>{$_('stream.preparing')}</span>
           </div>
         {/if}
-        {#if hasSteps && !hasContent}
+        {#if hasSteps && !hasContent && showRuntimeInlinePreview}
           <div class="text-[11px] text-slate-500">{$_('stream.stepRunning', { values: { title: st.stepTitle || $_('stream.inProgress') } })}</div>
           {#if st.auxText}
             <div
