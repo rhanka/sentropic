@@ -631,6 +631,21 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [ ] UI tests for bootstrap-driven session hydration,
         - [ ] E2E reload/open-new-tab tests proving reasoning/tools history survives without frontend `stream-events` calls,
         - [x] remove or rewrite frontend tests tied only to the old `stream-events` contract.
+    - [ ] BUG-L6-32 — Local dev lacks a safe Playwright navigation/debug harness on top of the real `ENV=dev` stack.
+      - [ ] Consolidate dev helper services into `docker-compose.dev.yml` only:
+        - [ ] migrate `openvscode-dev` from `docker-compose.dev-vscode.yml` into `docker-compose.dev.yml`,
+        - [ ] add `playwright-dev` under a dedicated compose profile,
+        - [ ] keep `make dev` unchanged (no helper profile auto-start),
+        - [ ] keep CI / test / e2e overlays unchanged.
+      - [ ] Refactor `Makefile` dev helper targets:
+        - [ ] preserve `up-dev-vscode`, `down-dev-vscode`, `ps-dev-vscode`, `logs-dev-vscode`,
+        - [ ] add `up-dev-playwright`, `down-dev-playwright`, `ps-dev-playwright`, `logs-dev-playwright`, `shell-dev-playwright`,
+        - [ ] add `test-e2e-dev E2E_SPEC=...` with no seed/reset/global-setup side effects.
+      - [ ] Add dedicated Playwright dev config/spec lane:
+        - [ ] `e2e/playwright.dev.config.ts`,
+        - [ ] `e2e/tests/dev/*`,
+        - [ ] manual `storageState` only, fail fast if missing.
+      - [ ] Use the dev Playwright harness to debug BR05 reload/runtime issues without mutating Demo workspace data beyond manual navigation.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
