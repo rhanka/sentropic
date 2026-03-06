@@ -59,7 +59,48 @@ services:
       exit 0
     restart: "no"
 
+  openvscode-dev:
+    profiles: ["vscode"]
+    image: gitpod/openvscode-server:latest
+    working_dir: /workspace
+    entrypoint:
+      - /bin/sh
+      - /workspace/scripts/openvscode-dev-entrypoint.sh
+    environment:
+      - OPENVSCODE_SERVER_ROOT=/home/.openvscode-server
+    ports:
+      - "${OPENVSCODE_PORT:-3114}:3000"
+    volumes:
+      - ./:/workspace:rw
+      - openvscode_dev_data:/home/.openvscode-server
+    depends_on:
+      - api
+      - ui
+
+  playwright-dev:
+    profiles: ["playwright"]
+    image: ${REGISTRY}/${E2E_IMAGE_NAME:-top-ai-ideas-e2e}:${E2E_VERSION:-latest}
+    build:
+      context: ./e2e
+      dockerfile: Dockerfile
+    environment:
+      - UI_BASE_URL=${PLAYWRIGHT_DEV_UI_BASE_URL:-http://ui:5173}
+      - API_BASE_URL=${PLAYWRIGHT_DEV_API_BASE_URL:-http://api:8787}
+      - MAILDEV_API_URL=${PLAYWRIGHT_DEV_MAILDEV_API_URL:-http://maildev:1080}
+    volumes:
+      - ./e2e/tests:/app/tests
+      - ./e2e/helpers:/app/helpers
+      - ./e2e/.auth:/app/.auth
+      - ./e2e/test-results:/app/test-results
+      - ./e2e/playwright.dev.config.ts:/app/playwright.dev.config.ts:ro
+    depends_on:
+      - api
+      - ui
+      - maildev
+    command: sleep infinity
+
 volumes:
   api_node_modules:
   ui_node_modules:
   minio_data:
+  openvscode_dev_data:
