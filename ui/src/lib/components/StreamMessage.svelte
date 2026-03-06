@@ -22,6 +22,7 @@
   export let historySource: 'none' | 'stream' | 'chat' = 'none';
   export let historyLimit = 2000;
   export let historyPending: boolean = false;
+  export let subscriptionMode: 'live' | 'passive' = 'live';
   export let smoothContentStreaming = false;
   export let smoothChunkThreshold = 80;
   export let acknowledgementText: string | undefined = undefined;
@@ -536,6 +537,7 @@
   };
 
   const hydrateHistory = async () => {
+    if (subscriptionMode === 'passive') return;
     if (!streamId) return;
     if (initialEvents && initialEvents.length > 0) {
       applyEvents(initialEvents as any);
@@ -645,9 +647,11 @@
   };
 
   $: if (streamId && streamId !== subscribedTo) {
-    unsubscribe();
-    reset();
-    void subscribe(streamId);
+    if (subscriptionMode === 'live') {
+      unsubscribe();
+      reset();
+      void subscribe(streamId);
+    }
   }
 
   onDestroy(() => {
@@ -673,6 +677,7 @@
   // mais il n'a pas de sens pour les jobs (sinon on voit le waiter pendant les états pending).
   $: showDetailLoader =
     variant === 'chat' &&
+    subscriptionMode === 'live' &&
     (historyPending || detailLoading) &&
     !detailLoaded &&
     !hasSteps &&
@@ -682,6 +687,10 @@
   // Si le parent injecte les events après coup (batch), on les applique sans re-fetch
   $: if (initialEvents && initialEvents !== lastInitialEventsRef) {
     lastInitialEventsRef = initialEvents;
+    if (subscriptionMode === 'passive') {
+      unsubscribe();
+      reset();
+    }
     if (initialEvents.length > 0) applyEvents(initialEvents as any);
     detailLoaded = true;
     detailLoading = false;
