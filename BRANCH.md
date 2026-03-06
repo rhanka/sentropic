@@ -518,6 +518,24 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] `make test-api-endpoints SCOPE=tests/api/vscode-extension-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
         - [x] `make test-api-unit SCOPE=tests/unit/vscode-code-agent-prompt-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
         - [x] `make test-ui SCOPE=tests/vscode-ext/code-agent-profile.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] BUG-L6-20 — VSCode dark-mode visual parity gaps remain in runtime chrome.
+      - [x] Align `Plan` runtime panel background with dark anthracite token (no light gray surface in dark mode).
+      - [x] Align LLM model selector dropdown/list background with dark theme tokens.
+      - [x] Remove red stroke treatment from trash icons in dark mode; use the same neutral action chroma as sibling icon buttons.
+      - [x] Recheck hover/focus states for all related dark-mode controls after color harmonization.
+    - [ ] BUG-L6-21 — VSCode delete actions still rely on native `confirm()` instead of a webview-safe confirmation flow.
+      - [ ] Replace native confirm dialogs for conversation delete / plan delete with the same in-panel confirmation-banner pattern already used elsewhere.
+      - [ ] Anchor the confirmation UI to the relevant surface (conversation header or plan header), not a browser modal.
+      - [ ] Keep one pending delete confirmation at a time per surface, with explicit `Supprimer` / `Annuler` actions.
+      - [ ] Ensure the confirmation flow works in VSCode webview and web app without divergence.
+    - [ ] BUG-L6-22 — Checkpoint restore affordance still appears when no effective code/object delta exists.
+      - [ ] Revalidate delta-detection gate before rendering the checkpoint action.
+      - [ ] Ensure no checkpoint CTA is shown when rollback payload is empty / semantically unchanged.
+      - [ ] Add scoped tests for no-delta visibility gating.
+    - [ ] BUG-L6-23 — Checkpoint hover lacks rollback preview of modified files/objects.
+      - [ ] Add hover/inspection payload listing changed files and/or domain objects since that checkpoint.
+      - [ ] Keep the preview compact by default, with precise changed-item names in the hover content.
+      - [ ] Ensure the preview works in both VSCode and web app hosts.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
