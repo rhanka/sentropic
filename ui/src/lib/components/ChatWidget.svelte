@@ -62,6 +62,7 @@
   let chatSessionId: string | null = null;
   let chatLoadingSessions = false;
   let activeChatSession: ChatSession | null = null;
+  let pendingChatSessionDeleteConfirm = false;
   let commentContext: {
     type: 'organization' | 'folder' | 'usecase' | 'executive_summary';
     id?: string;
@@ -1552,6 +1553,7 @@
   $: activeChatSession = chatSessionId
     ? chatSessions.find((s) => s.id === chatSessionId) ?? null
     : null;
+  $: if (!chatSessionId) pendingChatSessionDeleteConfirm = false;
 
   $: activeJobsCount = $queueStore.jobs.filter(
     (job) => job.status === 'pending' || job.status === 'processing',
@@ -1737,11 +1739,13 @@
 
   const handleSelectSession = async (id: string) => {
     if (id === chatSessionId) return;
+    pendingChatSessionDeleteConfirm = false;
     chatSessionId = id;
     await chatPanelRef?.selectSession?.(id);
   };
 
   const handleNewSession = () => {
+    pendingChatSessionDeleteConfirm = false;
     chatPanelRef?.newSession?.();
     chatSessionId = null;
   };
@@ -3050,7 +3054,7 @@
                 </button>
                 <button
                   class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
-                  on:click={() => chatPanelRef?.deleteCurrentSession?.()}
+                  on:click={() => (pendingChatSessionDeleteConfirm = true)}
                   title={$_('chat.sessions.delete')}
                   aria-label={$_('chat.sessions.delete')}
                   type="button"
@@ -3060,6 +3064,34 @@
                 </button>
               </div>
             </div>
+            {#if pendingChatSessionDeleteConfirm && chatSessionId}
+              <div class="border-b border-slate-100 px-3 py-2">
+                <div class="chat-delete-confirm-surface rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
+                  <div class="text-xs font-semibold text-slate-700">
+                    {$_('chat.sessions.confirmDelete')}
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button
+                      class="chat-delete-confirm-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90"
+                      type="button"
+                      on:click={async () => {
+                        pendingChatSessionDeleteConfirm = false;
+                        await chatPanelRef?.deleteCurrentSession?.();
+                      }}
+                    >
+                      {$_('common.delete')}
+                    </button>
+                    <button
+                      class="chat-delete-confirm-choice rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
+                      type="button"
+                      on:click={() => (pendingChatSessionDeleteConfirm = false)}
+                    >
+                      {$_('common.cancel')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            {/if}
             <div class="flex-1 min-h-0 overflow-hidden">
               <ChatPanel
                 bind:this={chatPanelRef}
@@ -3110,6 +3142,25 @@
 
   .topai-vscode-dark :global([data-testid='todo-runtime-panel'] .border-slate-400) {
     border-color: #64748b;
+  }
+
+  .topai-vscode-dark :global(.chat-delete-confirm-surface) {
+    background-color: #1b1d22;
+    border-color: #2c313a;
+  }
+
+  .topai-vscode-dark :global(.chat-delete-confirm-surface .text-slate-700) {
+    color: #e5e7eb;
+  }
+
+  .topai-vscode-dark :global(.chat-delete-confirm-choice.border) {
+    border-color: #475569;
+    color: #cbd5e1;
+  }
+
+  .topai-vscode-dark :global(.chat-delete-confirm-choice.border:hover) {
+    background-color: #2b313d;
+    color: #f8fafc;
   }
 
   .topai-vscode-dark :global(.chat-danger-action-button) {

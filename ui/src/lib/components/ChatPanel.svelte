@@ -610,6 +610,7 @@
   let defaultProviderIdForNewSession: ModelProviderId = 'openai';
   let defaultModelIdForNewSession = 'gpt-4.1-nano';
   let selectedModelSelectionKey = 'openai::gpt-4.1-nano';
+  let pendingTodoRuntimeDeleteConfirm = false;
   let input = draft;
   let commentInput = '';
   let commentMessages: CommentItem[] = [];
@@ -2727,6 +2728,7 @@
     todoRuntimePanel = null;
     todoRuntimeCollapsed = false;
     composerSteerAck = null;
+    pendingTodoRuntimeDeleteConfirm = false;
   };
 
   const getActiveAssistantStreamId = (): string | null => {
@@ -2747,7 +2749,6 @@
 
   const handleDeleteTodoRuntime = async () => {
     if (!todoRuntimePanel?.todoId || todoRuntimeDeleteInFlight) return;
-    if (!confirm($_('chat.todoRuntimePanel.confirmDelete'))) return;
     todoRuntimeDeleteInFlight = true;
     try {
       await apiPatch(`/todos/${encodeURIComponent(todoRuntimePanel.todoId)}`, {
@@ -3072,7 +3073,6 @@
 
   export const deleteCurrentSession = async () => {
     if (!sessionId) return;
-    if (!confirm($_('chat.sessions.confirmDelete'))) return;
     errorMsg = null;
     try {
       await apiDelete(`/chat/sessions/${sessionId}`);
@@ -4302,7 +4302,7 @@
               class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
               type="button"
               disabled={todoRuntimeDeleteInFlight}
-              on:click={() => void handleDeleteTodoRuntime()}
+              on:click={() => (pendingTodoRuntimeDeleteConfirm = true)}
               aria-label={$_('chat.todoRuntimePanel.delete')}
               title={$_('chat.todoRuntimePanel.delete')}
               data-testid="todo-runtime-delete-button"
@@ -4331,6 +4331,31 @@
         </div>
         {#if !todoRuntimeCollapsed}
           <div class="mt-2 max-h-28 overflow-y-auto slim-scroll space-y-2 text-[11px] text-slate-700">
+            {#if pendingTodoRuntimeDeleteConfirm}
+              <div class="chat-delete-confirm-surface rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
+                <div class="text-xs font-semibold text-slate-700">
+                  {$_('chat.todoRuntimePanel.confirmDelete')}
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    class="chat-delete-confirm-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                    on:click={() => void handleDeleteTodoRuntime()}
+                    disabled={todoRuntimeDeleteInFlight}
+                  >
+                    {$_('common.delete')}
+                  </button>
+                  <button
+                    type="button"
+                    class="chat-delete-confirm-choice rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                    on:click={() => (pendingTodoRuntimeDeleteConfirm = false)}
+                    disabled={todoRuntimeDeleteInFlight}
+                  >
+                    {$_('common.cancel')}
+                  </button>
+                </div>
+              </div>
+            {/if}
             {#if todoRuntimePanel.conflictMessage}
               <div class="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
                 {todoRuntimePanel.conflictMessage}
