@@ -572,6 +572,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Keep `e2e-vscode` hermetic and unchanged; `dev-vscode` is for human webview inspection only.
       - [x] Validate the new lane wiring with:
         - [x] `make ps-dev-vscode OPENVSCODE_PORT=3114 API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080 REGISTRY=local ENV=dev`
+    - [x] BUG-L6-27 — OpenVSCode dev loses the extension token after a browser refresh.
+      - [x] Persist the session token in the extension runtime state as a fallback when the OpenVSCode dev lane does not reliably round-trip `context.secrets`.
+      - [x] Keep `context.secrets` as the primary store; fallback only when the secret store does not repopulate the runtime bootstrap.
+      - [x] Rehydrate the token on refresh before rebuilding the webview runtime payload.
+      - [x] Add a focused unit test for token precedence (`secret` > persisted runtime state > setting fallback).
+      - [x] Validate the fallback logic with:
+        - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-ui SCOPE=tests/vscode-ext/session-token-persistence.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)

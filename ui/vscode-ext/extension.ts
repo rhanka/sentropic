@@ -17,6 +17,7 @@ import {
 import {
   resolveCodeAgentPromptProfile,
 } from '../src/lib/vscode/code-agent-profile';
+import { resolvePersistedVsCodeSessionToken } from './session-token-persistence';
 
 const COMMAND_OPEN_PANEL = 'topai.openPanel';
 const VIEW_ID = 'topai.chatView';
@@ -651,11 +652,17 @@ const readRuntimeConfig = async (
       : defaultConfig.codeAgentPromptWorkspace;
 
   const secretToken = await context.secrets.get(SECRET_SESSION_TOKEN_KEY);
+  const persistedToken =
+    typeof persisted.sessionToken === 'string' ? persisted.sessionToken : '';
   const fallbackSettingToken = normalizeConfigString(
     config.get<string>('sessionToken', ''),
     '',
   );
-  const sessionToken = normalizeConfigString(secretToken, fallbackSettingToken);
+  const sessionToken = resolvePersistedVsCodeSessionToken({
+    secretToken,
+    persistedToken,
+    settingToken: fallbackSettingToken,
+  });
   const codeAgentPromptDefault = await fetchCodeAgentPromptDefault({
     apiBaseUrl,
     sessionToken,
@@ -725,6 +732,7 @@ const saveRuntimeConfigPatch = async (
 
   if (typeof payload.sessionToken === 'string') {
     const token = payload.sessionToken.trim();
+    next.sessionToken = token;
     if (token.length > 0) {
       await context.secrets.store(SECRET_SESSION_TOKEN_KEY, token);
     } else {
