@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { hasCheckpointMutationDelta } from '../../src/lib/utils/checkpointDelta';
+import {
+  getCheckpointMutationPreviewItems,
+  hasCheckpointMutationDelta,
+} from '../../src/lib/utils/checkpointDelta';
 
 describe('checkpointDelta', () => {
   it('does not expose checkpoint restore for read-only assistant turns', () => {
@@ -110,5 +113,48 @@ describe('checkpointDelta', () => {
         ]),
       ),
     ).toBe(true);
+  });
+
+  it('builds a compact preview list from file and object mutations', () => {
+    const preview = getCheckpointMutationPreviewItems(
+      { anchorSequence: 1 },
+      [
+        { id: 'user-1', role: 'user', sequence: 1 },
+        { id: 'assistant-1', role: 'assistant', sequence: 2 },
+        { id: 'assistant-2', role: 'assistant', sequence: 3 },
+      ],
+      new Map([
+        [
+          'assistant-1',
+          [
+            {
+              eventType: 'tool_call_start',
+              sequence: 10,
+              data: {
+                tool_call_id: 'call-write',
+                name: 'file_edit',
+                args: '{"mode":"edit","path":"src/lib/chat.ts"}',
+              },
+            },
+          ],
+        ],
+        [
+          'assistant-2',
+          [
+            {
+              eventType: 'tool_call_start',
+              sequence: 11,
+              data: {
+                tool_call_id: 'call-update',
+                name: 'folder_update',
+                args: '{"folderId":"fld_123","updates":[{"field":"name","value":"Code"}]}',
+              },
+            },
+          ],
+        ],
+      ]),
+    );
+
+    expect(preview).toEqual(['src/lib/chat.ts', 'folder update: fld_123']);
   });
 });

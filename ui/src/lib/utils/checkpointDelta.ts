@@ -85,9 +85,14 @@ const isMutatingToolCall = (toolName: string, argsText: string): boolean => {
   return MUTATING_TOOL_NAME_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
 };
 
-const hasMutatingToolEvent = (
+type ParsedToolCall = {
+  name: string;
+  argsText: string;
+};
+
+const collectToolCallsFromEvents = (
   events: CheckpointStreamEventLike[],
-): boolean => {
+): ParsedToolCall[] => {
   const toolCalls = new Map<string, { name: string; argsText: string }>();
 
   for (const event of events) {
@@ -132,9 +137,76 @@ const hasMutatingToolEvent = (
   }
 
   for (const toolCall of toolCalls.values()) {
-    if (isMutatingToolCall(toolCall.name, toolCall.argsText)) return true;
+    if (!toolCall.name.trim()) continue;
   }
-  return false;
+  return [...toolCalls.values()];
+};
+
+const humanizeDomainMutationLabel = (
+  toolName: string,
+  argsText: string,
+): string | null => {
+  const record = parseArgsRecord(argsText);
+  const entity = toolName.replace(/_(create|update|delete)$/i, '');
+  const label = entity.replace(/_/g, ' ').trim();
+  if (!label) return null;
+  const idCandidate =
+    String(
+      record?.id ??
+        record?.folderId ??
+        record?.useCaseId ??
+        record?.organizationId ??
+        record?.workspaceId ??
+        '',
+    ).trim();
+  const action = toolName.split('_').slice(-1)[0];
+  return idCandidate ? `${label} ${action}: ${idCandidate}` : `${label} ${action}`;
+};
+
+const getGitMutationPreviewItems = (argsText: string): string[] => {
+  const record = parseArgsRecord(argsText);
+  const action = String(record?.action ?? '').trim().toLowerCase();
+  if (!action || READ_ONLY_GIT_ACTIONS.has(action)) return [];
+  const paths = Array.isArray(record?.paths)
+    ? record.paths.map((value) => String(value ?? '').trim()).filter(Boolean)
+    : [];
+  const path = String(record?.path ?? '').trim();
+  const labels = [...paths, ...(path ? [path] : [])];
+  if (labels.length > 0) {
+    return labels.map((value) => `git ${action}: ${value}`);
+  }
+  return [`git ${action}`];
+};
+
+const getBashMutationPreviewItems = (argsText: string): string[] => {
+  const record = parseArgsRecord(argsText);
+  const command = String(record?.command ?? '').trim();
+  if (!command || !isMutatingBashCommand(argsText)) return [];
+  const normalized = command.replace(/\s+/g, ' ');
+  const pathMatch =
+    normalized.match(/\b(?:mv|cp|rm|mkdir|touch|chmod|chown)\s+([^\s]+)/i) ??
+    normalized.match(/\bsed\s+-i(?:\s+['"][^'"]*['"])?\s+([^\s]+)/i);
+  if (pathMatch?.[1]) {
+    return [pathMatch[1]];
+  }
+  return [normalized.length > 72 ? `${normalized.slice(0, 69)}...` : normalized];
+};
+
+const getToolCallPreviewItems = (
+  toolName: string,
+  argsText: string,
+): string[] => {
+  const normalized = toolName.trim().toLowerCase();
+  if (!isMutatingToolCall(normalized, argsText)) return [];
+  if (normalized === 'file_edit') {
+    const record = parseArgsRecord(argsText);
+    const path = String(record?.path ?? '').trim();
+    return path ? [path] : ['file edit'];
+  }
+  if (normalized === 'git') return getGitMutationPreviewItems(argsText);
+  if (normalized === 'bash') return getBashMutationPreviewItems(argsText);
+  const domainLabel = humanizeDomainMutationLabel(normalized, argsText);
+  return domainLabel ? [domainLabel] : [normalized.replace(/_/g, ' ')];
 };
 
 export const hasCheckpointMutationDelta = (
@@ -157,8 +229,42 @@ export const hasCheckpointMutationDelta = (
     if (!streamId) continue;
     const events = initialEventsByMessageId.get(streamId) ?? [];
     if (events.length === 0) continue;
-    if (hasMutatingToolEvent(events)) return true;
+    for (const toolCall of collectToolCallsFromEvents(events)) {
+      if (isMutatingToolCall(toolCall.name, toolCall.argsText)) return true;
+    }
   }
 
   return false;
+};
+
+export const getCheckpointMutationPreviewItems = (
+  checkpoint: CheckpointSummaryLike | null | undefined,
+  messages: CheckpointMessageLike[],
+  initialEventsByMessageId: Map<string, CheckpointStreamEventLike[]>,
+): string[] => {
+  if (!checkpoint) return [];
+  const anchorSequence = Number(checkpoint.anchorSequence ?? 0);
+  if (!Number.isFinite(anchorSequence) || anchorSequence <= 0) return [];
+
+  const items = new Set<string>();
+  const assistantMessagesAfterAnchor = messages.filter((message) => {
+    if (message.role !== 'assistant') return false;
+    const sequence = Number(message.sequence ?? 0);
+    return Number.isFinite(sequence) && sequence > anchorSequence;
+  });
+
+  for (const message of assistantMessagesAfterAnchor) {
+    const streamId = String(message._streamId ?? message.id ?? '').trim();
+    if (!streamId) continue;
+    const events = initialEventsByMessageId.get(streamId) ?? [];
+    if (events.length === 0) continue;
+    for (const toolCall of collectToolCallsFromEvents(events)) {
+      for (const item of getToolCallPreviewItems(toolCall.name, toolCall.argsText)) {
+        items.add(item);
+        if (items.size >= 8) return [...items];
+      }
+    }
+  }
+
+  return [...items];
 };

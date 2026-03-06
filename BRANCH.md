@@ -532,10 +532,10 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Revalidate delta-detection gate before rendering the checkpoint action.
       - [x] Ensure no checkpoint CTA is shown when rollback payload is empty / semantically unchanged.
       - [x] Add scoped tests for no-delta visibility gating.
-    - [ ] BUG-L6-23 — Checkpoint hover lacks rollback preview of modified files/objects.
-      - [ ] Add hover/inspection payload listing changed files and/or domain objects since that checkpoint.
-      - [ ] Keep the preview compact by default, with precise changed-item names in the hover content.
-      - [ ] Ensure the preview works in both VSCode and web app hosts.
+    - [x] BUG-L6-23 — Checkpoint hover lacks rollback preview of modified files/objects.
+      - [x] Add hover/inspection payload listing changed files and/or domain objects since that checkpoint.
+      - [x] Keep the preview compact by default, with precise changed-item names in the hover content.
+      - [x] Ensure the preview works in both VSCode and web app hosts.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
