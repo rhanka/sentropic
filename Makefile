@@ -292,19 +292,62 @@ dev-ext-vscode: up-ui ## Watch and rebuild VSCode extension package
 
 .PHONY: up-dev-vscode
 up-dev-vscode: build-ext-vscode ## Start OpenVSCode mounted dev lane on top of the standard dev stack
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.dev-vscode.yml up -d openvscode-dev
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile vscode up -d openvscode-dev
 
 .PHONY: down-dev-vscode
 down-dev-vscode: ## Stop OpenVSCode mounted dev lane
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.dev-vscode.yml down
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile vscode stop openvscode-dev >/dev/null 2>&1 || true
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile vscode rm -f openvscode-dev >/dev/null 2>&1 || true
 
 .PHONY: ps-dev-vscode
 ps-dev-vscode: ## Show OpenVSCode mounted dev lane services
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.dev-vscode.yml ps
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile vscode ps openvscode-dev
 
 .PHONY: logs-dev-vscode
 logs-dev-vscode: ## Stream OpenVSCode mounted dev lane logs
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.dev-vscode.yml logs -f openvscode-dev
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile vscode logs -f openvscode-dev
+
+.PHONY: up-dev-playwright
+up-dev-playwright: ## Start Playwright dev helper on top of the standard dev stack
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright up -d playwright-dev
+
+.PHONY: down-dev-playwright
+down-dev-playwright: ## Stop Playwright dev helper
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright stop playwright-dev >/dev/null 2>&1 || true
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright rm -f playwright-dev >/dev/null 2>&1 || true
+
+.PHONY: ps-dev-playwright
+ps-dev-playwright: ## Show Playwright dev helper
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright ps playwright-dev
+
+.PHONY: logs-dev-playwright
+logs-dev-playwright: ## Stream Playwright dev helper logs
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright logs -f playwright-dev
+
+.PHONY: shell-dev-playwright
+shell-dev-playwright: up-dev-playwright ## Open a shell inside the Playwright dev helper
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec playwright-dev sh
+
+.PHONY: test-e2e-dev
+test-e2e-dev: up-dev-playwright ## Run scoped Playwright against ENV=dev without seed/reset/global setup
+	@if [ -z "$$E2E_SPEC" ]; then \
+	  echo "❌ E2E_SPEC is required (example: tests/dev/01-chat-bootstrap-reload.spec.ts)"; \
+	  exit 2; \
+	fi
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec -T playwright-dev sh -lc ' \
+	  test -f /app/.auth/dev-state.json || { \
+	    echo "❌ Missing /app/.auth/dev-state.json. Record a manual dev storageState before using test-e2e-dev."; \
+	    exit 2; \
+	  }; \
+	  workers="$${WORKERS:-1}"; \
+	  retries="$${RETRIES:-0}"; \
+	  max_fail="$${MAX_FAILURES:-}"; \
+	  extra=""; \
+	  if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
+	  spec_path="$${E2E_SPEC#e2e/}"; \
+	  echo "▶ Running scoped Playwright (dev): $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
+	  npx playwright test --config playwright.dev.config.ts "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra; \
+	'
 
 update-%:
 	@echo "🔒 Updating $* ..."
