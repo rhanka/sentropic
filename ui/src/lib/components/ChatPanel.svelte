@@ -4429,7 +4429,6 @@
                     status={item.isTerminal ? 'completed' : 'processing'}
                     finalContent={item.segment.content}
                     smoothContentStreaming={isGeminiModel(m.model)}
-                    historySource="none"
                     subscriptionMode="passive"
                     initialEvents={item.segment.events}
                   />
@@ -4508,7 +4507,6 @@
                     streamId={item.key}
                     status={item.message._localStatus ??
                       (item.message.content ? 'completed' : 'processing')}
-                    historySource="none"
                     subscriptionMode="passive"
                     initialEvents={item.segment.events}
                     showRuntimeInlinePreview={item.isActiveRuntimeSegment}

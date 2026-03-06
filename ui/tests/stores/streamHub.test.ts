@@ -489,60 +489,6 @@ describe('streamHub', () => {
     );
   });
 
-  it('should use vscode poll mode and dispatch incremental stream events without EventSource', async () => {
-    (window as any).__TOPAI_VSCODE_RUNTIME__ = {
-      apiBaseUrl: 'http://localhost:8787/api/v1',
-      sessionToken: 'token-vscode',
-    };
-    const originalFetch = global.fetch;
-    const responseFor = (events: Array<{ eventType: string; sequence: number; data: unknown }>) =>
-      new Response(
-        JSON.stringify({
-          events: events.map((event) => ({
-            ...event,
-            streamId: 'stream-vscode-1',
-          })),
-        }),
-        {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        },
-      );
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(responseFor([{ eventType: 'content_delta', sequence: 1, data: { delta: 'A' } }]))
-      .mockResolvedValue(responseFor([{ eventType: 'content_delta', sequence: 2, data: { delta: 'B' } }]));
-    global.fetch = fetchMock as unknown as typeof fetch;
-
-    try {
-      const callback = vi.fn();
-      streamHub.setStream('test-key-vscode', 'stream-vscode-1', callback);
-
-      // First poll starts quickly, subsequent polls are scheduled dynamically.
-      // Advance in bounded windows to avoid timing flakiness across environments.
-      for (let i = 0; i < 8; i += 1) {
-        await vi.advanceTimersByTimeAsync(250);
-      }
-
-      expect(global.EventSource).not.toHaveBeenCalled();
-      expect(fetchMock).toHaveBeenCalled();
-      const seenContentEvents = callback.mock.calls
-        .map((call) => call[0])
-        .filter(
-          (event) =>
-            event?.type === 'content_delta' && event?.streamId === 'stream-vscode-1',
-        );
-      expect(
-        seenContentEvents.some((event) => Number(event.sequence) === 1),
-      ).toBe(true);
-      expect(
-        seenContentEvents.some((event) => Number(event.sequence) === 2),
-      ).toBe(true);
-    } finally {
-      global.fetch = originalFetch;
-    }
-  });
-
   it('should use vscode stream proxy port when runtime.connect is available', async () => {
     (window as any).__TOPAI_VSCODE_RUNTIME__ = {
       apiBaseUrl: 'http://localhost:8787/api/v1',

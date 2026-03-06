@@ -15,6 +15,7 @@ export interface Job {
   id: string;
   type: JobType;
   data: any;
+  streamId: string;
   result?: any;
   status: JobStatus;
   createdAt: string;
@@ -57,6 +58,32 @@ export const fetchJobStatus = async (jobId: string): Promise<Job | null> => {
   try {
     const data = await apiGet<Job>(`/queue/jobs/${jobId}`);
     return data;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      if (error.status === 404 || error.status === 401 || error.status === 403 || error.status === 429) {
+        return null;
+      }
+    }
+    throw error;
+  }
+};
+
+export type JobStreamBootstrapEvent = {
+  eventType: string;
+  data: unknown;
+  sequence: number;
+  createdAt?: string;
+};
+
+export const fetchJobStreamBootstrap = async (
+  jobId: string,
+  limit = 500,
+): Promise<{ jobId: string; streamId: string; events: JobStreamBootstrapEvent[] } | null> => {
+  try {
+    const data = await apiGet<{ jobId: string; streamId: string; events: JobStreamBootstrapEvent[] }>(
+      `/queue/jobs/${jobId}/stream-bootstrap?limit=${Math.max(1, limit)}`,
+    );
+    return data ?? null;
   } catch (error) {
     if (error instanceof ApiError) {
       if (error.status === 404 || error.status === 401 || error.status === 403 || error.status === 429) {

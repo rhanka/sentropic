@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql, inArray, isNotNull, gt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, sql, inArray, gt, or } from 'drizzle-orm';
 import { db, pool } from '../db/client';
 import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue } from '../db/schema';
 import { createId } from '../utils/id';
@@ -1511,12 +1511,7 @@ export class ChatService {
       workspaceId,
     });
     const assistantMessageIds = messages
-      .filter(
-        (message) =>
-          message.role === 'assistant' &&
-          typeof message.content === 'string' &&
-          message.content.trim().length > 0,
-      )
+      .filter((message) => message.role === 'assistant')
       .map((message) => String(message.id ?? '').trim())
       .filter((messageId) => messageId.length > 0);
     const assistantDetailsByMessageId =
@@ -1861,62 +1856,6 @@ export class ChatService {
       providerId: selectedProviderId,
       model: selectedModel
     };
-  }
-
-  async listStreamEventsForSession(options: {
-    sessionId: string;
-    userId: string;
-    limitMessages?: number;
-    limitEventsPerMessage?: number;
-  }): Promise<Array<{ messageId: string; events: Array<{ eventType: string; data: unknown; sequence: number; createdAt: Date }> }>> {
-    const session = await this.getSessionForUser(options.sessionId, options.userId);
-    if (!session) throw new Error('Session not found');
-
-    const limitMessages = Math.max(1, Math.min(50, options.limitMessages ?? 20));
-    const limitEventsPerMessage = Math.max(10, Math.min(20000, options.limitEventsPerMessage ?? 5000));
-
-    // Derniers messages assistant finalisés
-    const assistantRows = await db
-      .select({ id: chatMessages.id })
-      .from(chatMessages)
-      .where(
-        and(
-          eq(chatMessages.sessionId, options.sessionId),
-          eq(chatMessages.role, 'assistant'),
-          isNotNull(chatMessages.content)
-        )
-      )
-      .orderBy(desc(chatMessages.sequence))
-      .limit(limitMessages);
-
-    const messageIds = assistantRows.map((r) => r.id).filter(Boolean);
-    if (messageIds.length === 0) return [];
-
-    const rows = await db
-      .select({
-        streamId: chatStreamEvents.streamId,
-        eventType: chatStreamEvents.eventType,
-        data: chatStreamEvents.data,
-        sequence: chatStreamEvents.sequence,
-        createdAt: chatStreamEvents.createdAt
-      })
-      .from(chatStreamEvents)
-      .where(inArray(chatStreamEvents.streamId, messageIds))
-      .orderBy(chatStreamEvents.streamId, chatStreamEvents.sequence);
-
-    const byId = new Map<string, Array<{ eventType: string; data: unknown; sequence: number; createdAt: Date }>>();
-    for (const r of rows) {
-      const sid = r.streamId;
-      if (!sid) continue;
-      const arr = byId.get(sid) ?? [];
-      if (arr.length < limitEventsPerMessage) {
-        arr.push({ eventType: r.eventType, data: r.data, sequence: r.sequence, createdAt: r.createdAt });
-      }
-      byId.set(sid, arr);
-    }
-
-    // Garder l'ordre "le plus récent d'abord" côté messages, mais les events restent triés
-    return messageIds.map((id) => ({ messageId: id, events: byId.get(id) ?? [] }));
   }
 
   private async getNextMessageSequence(sessionId: string): Promise<number> {
