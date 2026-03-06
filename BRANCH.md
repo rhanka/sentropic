@@ -606,6 +606,26 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] `make test-ui SCOPE=tests/utils/chat-run-projection.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
         - [x] `make test-ui SCOPE=tests/utils/chat-steer.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
         - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] BUG-L6-31 — Chat session reload still depends on fragmented frontend reads (`messages` + `checkpoints` + `documents` + `stream-events`) instead of one coherent bootstrap snapshot.
+      - [ ] Add `GET /api/v1/chat/sessions/:id/bootstrap` returning:
+        - [ ] `messages`,
+        - [ ] `todoRuntime`,
+        - [ ] `checkpoints`,
+        - [ ] `documents`,
+        - [ ] `assistantDetailsByMessageId` for finalized assistant messages.
+      - [ ] Cut `ChatPanel` over to the bootstrap endpoint for normal session loading.
+      - [ ] Remove chat-session frontend reads of:
+        - [ ] `GET /api/v1/chat/sessions/:id/stream-events`,
+        - [ ] `GET /api/v1/chat/messages/:id/stream-events`.
+      - [ ] Remove `StreamMessage` chat-mode historical hydration through `stream-events`.
+      - [ ] Remove product chat-history replay dependence on `GET /api/v1/streams/events/:streamId` in frontend runtime code.
+      - [ ] Keep SSE live transport unchanged for active runs.
+      - [ ] Keep persisted `chat_stream_events` and backend internal replay logic unchanged.
+      - [ ] Update scoped tests:
+        - [ ] API tests for `GET /api/v1/chat/sessions/:id/bootstrap`,
+        - [ ] UI tests for bootstrap-driven session hydration,
+        - [ ] E2E reload/open-new-tab tests proving reasoning/tools history survives without frontend `stream-events` calls,
+        - [ ] remove or rewrite frontend tests tied only to the old `stream-events` contract.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
@@ -682,6 +702,10 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] `spec/TOOLS.md`
   - [ ] Merge durable reuse rules from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md` into durable specs then delete the mini-spec file.
   - [ ] Ensure removed fake features are not described as delivered behavior.
+  - [ ] Remove legacy documentation of frontend `stream-events` rehydration paths and replace it with:
+    - [ ] `session bootstrap` as the normal session-read contract,
+    - [ ] SSE as the live-update contract,
+    - [ ] persisted `chat_stream_events` as internal runtime journal only.
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint

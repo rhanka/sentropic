@@ -871,6 +871,98 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - no new reasoning/tools visual language,
   - no migration of historical data.
 
+### 4.24 Lot 6 - Session bootstrap cutover (`stream-events` removed from frontend contract)
+- Goal:
+  - replace the fragmented chat-session reload flow (`messages` + `checkpoints` + `documents` + `stream-events`) with one coherent bootstrap payload,
+  - remove all direct frontend reads of `stream-events`,
+  - keep SSE live transport and persisted `chat_stream_events` as internal runtime mechanisms.
+
+- Problem statement:
+  - current session reload is split across several APIs, which introduces:
+    - visible latency,
+    - synchronization races,
+    - inconsistent partial UI states,
+    - duplicated reconstruction logic in the frontend,
+    - fragile replay behavior for reasoning/tools history.
+  - `stream-events` are a technical journal, not a stable frontend read model.
+
+- Decision locked:
+  - frontend must no longer call:
+    - `GET /api/v1/chat/sessions/:id/stream-events`,
+    - `GET /api/v1/chat/messages/:id/stream-events`,
+    - `GET /api/v1/streams/events/:streamId`
+    for normal chat/session history rendering.
+  - SSE live stays unchanged for active runs.
+  - persisted `chat_stream_events` stay unchanged and continue to power backend runtime recovery/replay logic.
+
+- New frontend contract:
+  - introduce one bootstrap endpoint for chat session loading:
+    - `GET /api/v1/chat/sessions/:id/bootstrap`
+  - this endpoint must return a coherent snapshot for one session, including:
+    - `messages`,
+    - `todoRuntime`,
+    - `checkpoints`,
+    - `documents`,
+    - `assistantDetailsByMessageId` (or equivalent name) for finalized assistant messages.
+
+- Assistant details contract:
+  - the bootstrap payload must provide the historical assistant runtime details needed by the chat UI without any extra `stream-events` call.
+  - for BR-05, the acceptable payload shape is:
+    - one entry per assistant message id,
+    - each entry contains the full ordered persisted event list required to reconstruct reasoning/tool segments.
+  - the frontend may still project multi-step assistant runs from that embedded snapshot in BR-05,
+    but it must no longer fetch raw event journals directly through dedicated `stream-events` endpoints.
+  - later optimization may replace embedded event lists with already projected backend segments, but that is not required for this cutover.
+
+- Live/runtime split:
+  - historical reconstruction:
+    - comes exclusively from the session bootstrap payload.
+  - live continuation for the currently active run:
+    - still comes from SSE / host stream bridge.
+  - once bootstrap is loaded, reload/open-in-new-tab must not require any extra historical replay endpoint.
+
+- Frontend scope:
+  - `ChatPanel` must load a session through the bootstrap endpoint only.
+  - `StreamMessage` chat-mode history hydration must not call `stream-events` anymore.
+  - `streamHub` must stop using `GET /streams/events/:streamId` for product chat history replay.
+  - Queue/job/productive non-chat stream consumers may remain separate if they are not part of chat session bootstrap.
+
+- Backend scope:
+  - keep `chat_stream_events` persistence unchanged.
+  - keep internal backend reads of stream events where runtime logic still depends on them:
+    - local-tool resume,
+    - steer consumption,
+    - interrupted/finalized run recovery.
+  - remove frontend-facing dependence on raw event replay routes from the chat/session contract.
+
+- API cutover constraints:
+  - direct cutover only; no dual frontend path.
+  - once bootstrap is adopted in chat session UI, the old frontend codepaths to `stream-events` must be removed, not feature-flagged.
+  - API routes may temporarily remain present until all frontend consumers are removed, but they are no longer part of the supported chat/session UI contract.
+
+- Performance contract:
+  - one session load = one bootstrap request for chat data (plus live SSE only if a run is active).
+  - no extra round-trips for checkpoints/documents/reasoning replay during normal session open.
+  - bootstrap must be fast enough for coding sessions where assistant histories can be large.
+
+- Tests impact:
+  - update UI tests to assert bootstrap-driven hydration instead of `stream-events` replay calls.
+  - update API tests to cover:
+    - `GET /api/v1/chat/sessions/:id/bootstrap`,
+    - payload completeness/coherence,
+    - historical reasoning/tools presence in bootstrap.
+  - update E2E tests to validate:
+    - reload/open-new-tab preserves reasoning/tools history,
+    - no extra chat-history replay request to `stream-events` is needed.
+  - remove or rewrite frontend-facing tests whose only purpose was the old `stream-events` contract.
+
+- Docs cutover:
+  - documentation must stop describing `stream-events` endpoints as part of the normal chat UI rehydration path.
+  - durable docs must describe:
+    - `session bootstrap` as the session-read contract,
+    - SSE as the live-update contract,
+    - persisted stream events as an internal runtime journal.
+
 
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
