@@ -19,8 +19,8 @@ const GEMINI_MODELS: ModelCatalogEntry[] = [
   },
   {
     providerId: 'gemini',
-    modelId: 'gemini-2.5-flash-lite',
-    label: 'Gemini 2.5 Flash Lite',
+    modelId: 'gemini-3.1-flash-lite',
+    label: 'Gemini 3.1 Flash Lite',
     reasoningTier: 'standard',
     supportsTools: true,
     supportsStreaming: true,

@@ -3,8 +3,9 @@ import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
 import { chatGenerationTraces, chatMessages, chatSessions, organizations, folders, settings, useCases, workspaces } from '../../src/db/schema';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { createTestId } from '../utils/test-helpers';
+import { settingsService } from '../../src/services/settings';
 
 describe('Me API', () => {
   afterEach(async () => {
@@ -69,14 +70,6 @@ describe('Me API', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].value).toBe('gemini-3.1-pro-preview-customtools');
 
-    const globalDefaultModelRows = await db
-      .select()
-      .from(settings)
-      .where(and(isNull(settings.userId), eq(settings.key, 'default_model')));
-    if (globalDefaultModelRows.length > 0) {
-      expect(globalDefaultModelRows[0].value).toBe('gpt-4.1-nano');
-    }
-
     const anotherUser = await createAuthenticatedUser('editor');
     const anotherSettings = await authenticatedRequest(
       app,
@@ -88,6 +81,49 @@ describe('Me API', () => {
     const anotherData = await anotherSettings.json();
     expect(anotherData.defaultProviderId).toBe('openai');
     expect(anotherData.defaultModel).toBe('gpt-4.1-nano');
+  });
+
+  it('migrates legacy stored user defaults on read', async () => {
+    const user = await createAuthenticatedUser('editor');
+
+    await settingsService.set('default_provider_id', 'openai', 'legacy provider', {
+      userId: user.id,
+    });
+    await settingsService.set('default_model', 'gpt-5.2', 'legacy model', {
+      userId: user.id,
+    });
+
+    const openaiResponse = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/me/ai-settings',
+      user.sessionToken!
+    );
+    expect(openaiResponse.status).toBe(200);
+    const openaiData = await openaiResponse.json();
+    expect(openaiData.defaultProviderId).toBe('openai');
+    expect(openaiData.defaultModel).toBe('gpt-5.4');
+
+    await settingsService.set('default_provider_id', 'gemini', 'legacy provider', {
+      userId: user.id,
+    });
+    await settingsService.set(
+      'default_model',
+      'gemini-2.5-flash-lite',
+      'legacy model',
+      { userId: user.id }
+    );
+
+    const geminiResponse = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/me/ai-settings',
+      user.sessionToken!
+    );
+    expect(geminiResponse.status).toBe(200);
+    const geminiData = await geminiResponse.json();
+    expect(geminiData.defaultProviderId).toBe('gemini');
+    expect(geminiData.defaultModel).toBe('gemini-3.1-flash-lite');
   });
 
   it('should delete user workspace data on DELETE /me', async () => {
@@ -181,4 +217,3 @@ describe('Me API', () => {
     expect(t.workspaceId).toBeNull();
   });
 });
-

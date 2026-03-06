@@ -1,6 +1,9 @@
 import OpenAI from 'openai';
 import { providerRegistry } from '../provider-registry';
-import { inferProviderFromModelId, resolveDefaultSelection } from '../model-catalog';
+import {
+  inferProviderFromModelIdWithLegacy,
+  resolveDefaultSelection,
+} from '../model-catalog';
 import {
   resolveProviderCredential,
   type ResolvedProviderCredential
@@ -46,7 +49,7 @@ const resolveRuntimeSelection = async (input: {
   ]);
 
   const requestedModel = (input.model ?? '').trim() || aiSettings.defaultModel;
-  const inferredProvider = inferProviderFromModelId(
+  const inferredProvider = inferProviderFromModelIdWithLegacy(
     models.map((entry) => ({
       provider_id: entry.providerId,
       model_id: entry.modelId,
@@ -927,7 +930,7 @@ export async function* callOpenAIResponseStream(
     // OpenAI supports (notably for gpt-5-nano): minimal|low|medium|high.
     // App-level accepts: none|low|medium|high|xhigh.
     // Map to avoid 400s:
-    // - none  -> minimal (ONLY for gpt-5-nano; gpt-5.2 appears to accept "none")
+    // - none  -> minimal (ONLY for gpt-5-nano; current gpt-5 models appear to accept "none")
     // - xhigh -> high
     // - low/medium/high passthrough
     if (effort === 'none') return selectedModel.startsWith('gpt-5-nano') ? 'minimal' : 'none';
