@@ -523,11 +523,11 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Align LLM model selector dropdown/list background with dark theme tokens.
       - [x] Remove red stroke treatment from trash icons in dark mode; use the same neutral action chroma as sibling icon buttons.
       - [x] Recheck hover/focus states for all related dark-mode controls after color harmonization.
-    - [ ] BUG-L6-21 — VSCode delete actions still rely on native `confirm()` instead of a webview-safe confirmation flow.
-      - [ ] Replace native confirm dialogs for conversation delete / plan delete with the same in-panel confirmation-banner pattern already used elsewhere.
-      - [ ] Anchor the confirmation UI to the relevant surface (conversation header or plan header), not a browser modal.
-      - [ ] Keep one pending delete confirmation at a time per surface, with explicit `Supprimer` / `Annuler` actions.
-      - [ ] Ensure the confirmation flow works in VSCode webview and web app without divergence.
+    - [x] BUG-L6-21 — VSCode delete actions still rely on native `confirm()` instead of a webview-safe confirmation flow.
+      - [x] Replace native confirm dialogs for conversation delete / plan delete with the same in-panel confirmation-banner pattern already used elsewhere.
+      - [x] Anchor the confirmation UI to the relevant surface (conversation header or plan header), not a browser modal.
+      - [x] Keep one pending delete confirmation at a time per surface, with explicit `Supprimer` / `Annuler` actions.
+      - [x] Ensure the confirmation flow works in VSCode webview and web app without divergence.
     - [ ] BUG-L6-22 — Checkpoint restore affordance still appears when no effective code/object delta exists.
       - [ ] Revalidate delta-detection gate before rendering the checkpoint action.
       - [ ] Ensure no checkpoint CTA is shown when rollback payload is empty / semantically unchanged.
