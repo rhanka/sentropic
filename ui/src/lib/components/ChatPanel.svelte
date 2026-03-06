@@ -88,6 +88,11 @@
     postChatSteer,
   } from '$lib/utils/chat-steer';
   import {
+    filterPermissionPromptsForPendingStream,
+    parsePendingLocalToolCallsFromStatusPayload,
+    shouldResetLocalToolStateForFreshRound,
+  } from '$lib/utils/localToolStreamSync';
+  import {
     EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
     VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
     computeEnabledToolIds,
@@ -695,6 +700,29 @@
         .map((message) => message._streamId ?? message.id),
     );
 
+  const isKnownAssistantStream = (streamId: string): boolean =>
+    messages.some(
+      (message) =>
+        message.role === 'assistant' &&
+        (message._streamId ?? message.id) === streamId &&
+        getMessageStatus(message) !== 'failed',
+    );
+
+  const clearLocalToolStateForStream = (streamId: string) => {
+    for (const [toolCallId, state] of localToolStatesById.entries()) {
+      if (state.streamId !== streamId) continue;
+      const timerId = localToolExecutionTimersById.get(toolCallId);
+      if (timerId) clearTimeout(timerId);
+      localToolExecutionTimersById.delete(toolCallId);
+      localToolStatesById.delete(toolCallId);
+      localToolInFlight.delete(toolCallId);
+      localToolPermissionRetriesInFlight.delete(toolCallId);
+    }
+    pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
+      (prompt) => prompt.streamId !== streamId,
+    );
+  };
+
   const resetLocalToolInterceptionState = () => {
     localToolExecutionTimersById.forEach((timerId) => clearTimeout(timerId));
     localToolExecutionTimersById.clear();
@@ -1033,14 +1061,21 @@
 
     const previous = localToolStatesById.get(toolCallId);
     if (previous && sequence <= previous.lastSequence) return;
+    const isFreshRound = shouldResetLocalToolStateForFreshRound(
+      previous,
+      sequence,
+    );
 
     localToolStatesById.set(toolCallId, {
       streamId,
       name: toolNameRaw,
-      argsText: previous ? `${previous.argsText}${argsChunk}` : argsChunk,
+      argsText:
+        previous && !isFreshRound
+          ? `${previous.argsText}${argsChunk}`
+          : argsChunk,
       lastSequence: sequence,
       firstSeenAt: previous?.firstSeenAt ?? Date.now(),
-      executed: previous?.executed ?? false,
+      executed: isFreshRound ? false : (previous?.executed ?? false),
     });
     scheduleBufferedLocalToolExecution(toolCallId);
   };
@@ -1067,13 +1102,96 @@
     scheduleBufferedLocalToolExecution(toolCallId);
   };
 
+  const handleLocalToolStatusEvent = (event: StreamHubEvent) => {
+    const streamId = String((event as any)?.streamId ?? '').trim();
+    if (!streamId || !isKnownAssistantStream(streamId)) return;
+
+    const data = (event as any)?.data;
+    const state = String(data?.state ?? '').trim();
+    const sequenceRaw = Number((event as any)?.sequence);
+    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : 0;
+
+    if (state === 'awaiting_local_tool_results') {
+      const pendingCalls = parsePendingLocalToolCallsFromStatusPayload(
+        streamId,
+        sequence,
+        data,
+        isLocalToolName,
+      );
+      const pendingToolCallIds = new Set(
+        pendingCalls.map((call) => call.toolCallId),
+      );
+      pendingLocalToolPermissionPrompts = filterPermissionPromptsForPendingStream(
+        pendingLocalToolPermissionPrompts,
+        streamId,
+        pendingToolCallIds,
+      );
+
+      for (const call of pendingCalls) {
+        const previous = localToolStatesById.get(call.toolCallId);
+        const isFreshRound = shouldResetLocalToolStateForFreshRound(
+          previous,
+          sequence,
+        );
+        localToolStatesById.set(call.toolCallId, {
+          streamId,
+          name: call.name as LocalToolName,
+          argsText:
+            previous &&
+            !isFreshRound &&
+            previous.argsText.trim().length > 0
+              ? previous.argsText
+              : call.argsText,
+          lastSequence: Math.max(previous?.lastSequence ?? 0, call.sequence),
+          firstSeenAt: previous?.firstSeenAt ?? Date.now(),
+          executed: isFreshRound ? false : (previous?.executed ?? false),
+        });
+      }
+
+      scheduleNextToolForStream(streamId, 0);
+      return;
+    }
+
+    if (state === 'local_tool_result_received') {
+      const toolCallId = String(data?.tool_call_id ?? '').trim();
+      if (!toolCallId) return;
+      const timerId = localToolExecutionTimersById.get(toolCallId);
+      if (timerId) clearTimeout(timerId);
+      localToolExecutionTimersById.delete(toolCallId);
+      pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
+        (prompt) => prompt.toolCallId !== toolCallId,
+      );
+      localToolStatesById.delete(toolCallId);
+      localToolInFlight.delete(toolCallId);
+      localToolPermissionRetriesInFlight.delete(toolCallId);
+      return;
+    }
+
+    if (state === 'response_created') {
+      pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
+        (prompt) => prompt.streamId !== streamId,
+      );
+    }
+  };
+
   const handleLocalToolStreamEvent = (event: StreamHubEvent) => {
+    const streamId = String((event as any)?.streamId ?? '').trim();
+    if (!streamId) return;
+
+    if (event.type === 'status') {
+      handleLocalToolStatusEvent(event);
+      return;
+    }
+
+    if (event.type === 'done' || event.type === 'error') {
+      clearLocalToolStateForStream(streamId);
+      return;
+    }
+
     if (event.type !== 'tool_call_start' && event.type !== 'tool_call_delta')
       return;
     if (!isLocalToolRuntimeAvailable()) return;
 
-    const streamId = String((event as any)?.streamId ?? '').trim();
-    if (!streamId) return;
     const localToolEligibleStreamIds = getLocalToolEligibleStreamIds();
     if (!localToolEligibleStreamIds.has(streamId)) return;
 
