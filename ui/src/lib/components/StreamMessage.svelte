@@ -19,7 +19,7 @@
   export let initialEvents:
     | Array<{ eventType: string; data: unknown; sequence: number; createdAt?: string }>
     | undefined = undefined;
-  export let historySource: 'none' | 'stream' | 'chat' = 'none';
+  export let historySource: 'none' | 'stream' = 'none';
   export let historyLimit = 2000;
   export let historyPending: boolean = false;
   export let subscriptionMode: 'live' | 'passive' = 'live';
@@ -552,11 +552,6 @@
       if (historySource === 'stream') {
         const res = await apiGet<{ streamId: string; events: Array<{ eventType: string; data: any; sequence: number; createdAt?: string }> }>(
           `/streams/events/${encodeURIComponent(streamId)}?limit=${historyLimit}`
-        );
-        applyEvents((res as any)?.events ?? []);
-      } else if (historySource === 'chat') {
-        const res = await apiGet<{ messageId: string; streamId: string; events: Array<{ eventType: string; data: any; sequence: number; createdAt?: string }> }>(
-          `/chat/messages/${encodeURIComponent(streamId)}/stream-events?limit=${historyLimit}`
         );
         applyEvents((res as any)?.events ?? []);
       }
