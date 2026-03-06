@@ -595,12 +595,17 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Validate the web dark-theme stylesheet with:
         - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
     - [ ] BUG-L6-30 — One assistant run that alternates visible answer chunks and reasoning/tool phases is still rendered as one assistant bubble instead of a linear multi-step timeline.
-      - [ ] Project each continuous visible assistant span as its own assistant bubble while keeping one backend run.
-      - [ ] Project reasoning/tool phases linearly between assistant bubbles with the same expandable UI used today.
-      - [ ] Insert steering user messages in the same linear timeline, after the last emitted assistant bubble of the active run and before the resumed reasoning/tool phase.
-      - [ ] Keep retry on the last assistant bubble only; retry restarts from the latest effective user message, including the latest applicable steering message.
-      - [ ] Make the segmentation deterministic from persisted events so live rendering, reload, and reopened history reconstruct the same projected timeline.
+      - [x] Project each continuous visible assistant span as its own assistant bubble while keeping one backend run.
+      - [x] Project reasoning/tool phases linearly between assistant bubbles with the same expandable UI used today.
+      - [x] Insert steering user messages in the same linear timeline, after the last emitted assistant bubble of the active run and before the resumed reasoning/tool phase.
+      - [x] Keep retry on the last assistant bubble only; retry restarts from the latest effective user message, including the latest applicable steering message.
+      - [x] Make the segmentation deterministic from persisted events so live rendering, reload, and reopened history reconstruct the same projected timeline.
       - [ ] Keep session preview based on the last visible message only (never reasoning/tool content).
+      - [x] Add scoped validation for the projection path:
+        - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-ui SCOPE=tests/utils/chat-run-projection.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-ui SCOPE=tests/utils/chat-steer.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)

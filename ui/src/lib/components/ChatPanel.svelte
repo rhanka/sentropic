@@ -108,6 +108,14 @@
     getCheckpointMutationPreviewItems,
     hasCheckpointMutationDelta,
   } from '$lib/utils/checkpointDelta';
+  import {
+    appendLiveProjectionEvent,
+    countLinkedSteerMessages,
+    getLinkedSteerMessageIds,
+    mergeProjectionHistoryEvents,
+    projectAssistantRunSegments,
+    type ProjectedRunSegment,
+  } from '$lib/utils/chat-run-projection';
 
   type ChatSession = {
     id: string;
@@ -156,6 +164,29 @@
     sequence: number;
     createdAt?: string;
   };
+  type ProjectedTimelineItem =
+    | {
+        kind: 'message';
+        key: string;
+        message: LocalMessage;
+      }
+    | {
+        kind: 'assistant-segment';
+        key: string;
+        message: LocalMessage;
+        streamId: string;
+        segment: ProjectedRunSegment;
+        isLastAssistantSegment: boolean;
+        isTerminal: boolean;
+      }
+    | {
+        kind: 'runtime-segment';
+        key: string;
+        message: LocalMessage;
+        streamId: string;
+        segment: ProjectedRunSegment;
+        acknowledgementText?: string;
+      };
   type TodoRuntimeTask = {
     id?: string;
     title: string;
@@ -666,6 +697,7 @@
   let commentThreadIndex = -1;
   let hasPreviousThread = false;
   let hasNextThread = false;
+  let projectedTimelineItems: ProjectedTimelineItem[] = [];
 
   const getMessageStatus = (m: LocalMessage) =>
     m._localStatus ?? (m.content ? 'completed' : 'processing');
@@ -681,6 +713,7 @@
   };
   $: activeAssistantMessage =
     [...messages].reverse().find((m) => isAssistantMessageInProgress(m)) ?? null;
+  $: projectedTimelineItems = buildProjectedTimeline(messages);
   $: composerSteerStreamId = activeAssistantMessage
     ? (activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null)
     : null;
@@ -1207,6 +1240,20 @@
     handleLocalToolCallDelta(event);
   };
 
+  const handleProjectionStreamEvent = (event: StreamHubEvent) => {
+    const streamId = String((event as any)?.streamId ?? '').trim();
+    if (!streamId || !isTrackedAssistantStreamId(streamId)) return;
+    const sequence = Number((event as any)?.sequence);
+    if (!Number.isFinite(sequence)) return;
+    appendProjectedLiveEvent(streamId, {
+      eventType: String((event as any)?.type ?? '').trim(),
+      data: (event as any)?.data ?? {},
+      sequence,
+      createdAt: undefined,
+    });
+    scheduleScrollToBottom();
+  };
+
   $: commentPlaceholder = !$workspaceCanComment
     ? $_('chat.comments.placeholder.disabledViewer')
     : commentThreadResolved
@@ -1249,6 +1296,7 @@
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
+  let projectedStreamEventsById = new Map<string, StreamEvent[]>();
   let streamDetailsLoading = false;
   let todoRuntimePanel: TodoRuntimePanelState | null = null;
   let todoRuntimeCollapsed = false;
@@ -1272,6 +1320,210 @@
     origin: string;
     title: string | null;
   } | null = null;
+  let projectionHubKey = '';
+
+  const isTrackedAssistantStreamId = (streamId: string): boolean =>
+    messages.some(
+      (message) =>
+        message.role === 'assistant' && (message._streamId ?? message.id) === streamId,
+    );
+
+  const mergeProjectedHistoryForStream = (
+    streamId: string,
+    events: readonly StreamEvent[],
+  ) => {
+    if (!streamId) return;
+    projectedStreamEventsById = new Map(projectedStreamEventsById);
+    projectedStreamEventsById.set(
+      streamId,
+      mergeProjectionHistoryEvents(
+        projectedStreamEventsById.get(streamId) ?? [],
+        events,
+      ),
+    );
+  };
+
+  const appendProjectedLiveEvent = (streamId: string, event: StreamEvent) => {
+    if (!streamId) return;
+    projectedStreamEventsById = new Map(projectedStreamEventsById);
+    projectedStreamEventsById.set(
+      streamId,
+      appendLiveProjectionEvent(
+        projectedStreamEventsById.get(streamId) ?? [],
+        event,
+      ),
+    );
+  };
+
+  const getProjectionEventsForMessage = (message: LocalMessage): StreamEvent[] => {
+    const streamId = message._streamId ?? message.id;
+    const projected = projectedStreamEventsById.get(streamId);
+    if (projected && projected.length > 0) return projected;
+    const hydrated = initialEventsByMessageId.get(streamId);
+    if (hydrated && hydrated.length > 0) return hydrated;
+    return [];
+  };
+
+  const buildFallbackProjectedSegments = (
+    message: LocalMessage,
+  ): ProjectedRunSegment[] => {
+    if (typeof message.content === 'string' && message.content.trim().length > 0) {
+      return [
+        {
+          id: `assistant:fallback:${message.id}`,
+          kind: 'assistant',
+          events: [],
+          content: message.content,
+          steerCountBefore: 0,
+        },
+      ];
+    }
+    if (message._localStatus === 'processing') {
+      return [
+        {
+          id: `runtime:fallback:${message.id}`,
+          kind: 'runtime',
+          events: [
+            {
+              eventType: 'status',
+              sequence: 1,
+              data: { state: 'started' },
+            },
+          ],
+          content: '',
+          steerCountBefore: 0,
+        },
+      ];
+    }
+    return [];
+  };
+
+  const buildProjectedTimeline = (
+    timeline: readonly LocalMessage[],
+  ): ProjectedTimelineItem[] => {
+    const steerIdsByAssistantId = new Map<string, string[]>();
+    const skippedSteerIds = new Set<string>();
+
+    for (let index = 0; index < timeline.length; index += 1) {
+      const message = timeline[index];
+      if (message.role !== 'assistant') continue;
+      const linkedSteerCount = countLinkedSteerMessages(
+        getProjectionEventsForMessage(message),
+      );
+      if (linkedSteerCount <= 0) continue;
+      const linkedIds = getLinkedSteerMessageIds(timeline, index, linkedSteerCount);
+      if (linkedIds.length === 0) continue;
+      steerIdsByAssistantId.set(message.id, linkedIds);
+      for (const linkedId of linkedIds) skippedSteerIds.add(linkedId);
+    }
+
+    const projected: ProjectedTimelineItem[] = [];
+
+    for (const message of timeline) {
+      if (skippedSteerIds.has(message.id)) continue;
+      if (message.role !== 'assistant') {
+        projected.push({
+          kind: 'message',
+          key: `message:${message.id}`,
+          message,
+        });
+        continue;
+      }
+
+      const streamId = message._streamId ?? message.id;
+      const segments =
+        projectAssistantRunSegments(getProjectionEventsForMessage(message)).length > 0
+          ? projectAssistantRunSegments(getProjectionEventsForMessage(message))
+          : buildFallbackProjectedSegments(message);
+      const linkedSteers = (steerIdsByAssistantId.get(message.id) ?? [])
+        .map((steerId) => timeline.find((entry) => entry.id === steerId) ?? null)
+        .filter((entry): entry is LocalMessage => entry !== null);
+
+      const assistantIndexes = segments
+        .map((segment, index) => (segment.kind === 'assistant' ? index : -1))
+        .filter((index) => index >= 0);
+      const lastAssistantIndex =
+        assistantIndexes.length > 0
+          ? assistantIndexes[assistantIndexes.length - 1]
+          : -1;
+      const lastRuntimeIndex = (() => {
+        for (let index = segments.length - 1; index >= 0; index -= 1) {
+          if (segments[index]?.kind === 'runtime') return index;
+        }
+        return -1;
+      })();
+      const isTerminal =
+        (message._localStatus ?? (message.content ? 'completed' : 'processing')) ===
+        'completed';
+      let steerCursor = 0;
+
+      for (let index = 0; index < segments.length; index += 1) {
+        const segment = segments[index];
+        if (!segment) continue;
+
+        if (segment.kind === 'runtime') {
+          let steerCountToInsert = segment.steerCountBefore;
+          if (
+            steerCountToInsert === 0 &&
+            index === lastRuntimeIndex &&
+            !isTerminal &&
+            steerCursor < linkedSteers.length
+          ) {
+            steerCountToInsert = linkedSteers.length - steerCursor;
+          }
+          if (steerCountToInsert > 0) {
+            const nextSteers = linkedSteers.slice(
+              steerCursor,
+              steerCursor + steerCountToInsert,
+            );
+            steerCursor += nextSteers.length;
+            for (const steerMessage of nextSteers) {
+              projected.push({
+                kind: 'message',
+                key: `message:${steerMessage.id}`,
+                message: steerMessage,
+              });
+            }
+          }
+
+          projected.push({
+            kind: 'runtime-segment',
+            key: `${message.id}:${segment.id}:${segment.events.at(-1)?.sequence ?? 0}`,
+            message,
+            streamId,
+            segment,
+            acknowledgementText:
+              composerSteerAck?.streamId === streamId && index === lastRuntimeIndex
+                ? composerSteerAck.message
+                : undefined,
+          });
+          continue;
+        }
+
+        projected.push({
+          kind: 'assistant-segment',
+          key: `${message.id}:${segment.id}:${segment.events.at(-1)?.sequence ?? segment.content.length}`,
+          message,
+          streamId,
+          segment,
+          isLastAssistantSegment: index === lastAssistantIndex,
+          isTerminal,
+        });
+      }
+
+      if (steerCursor < linkedSteers.length) {
+        for (const steerMessage of linkedSteers.slice(steerCursor)) {
+          projected.push({
+            kind: 'message',
+            key: `message:${steerMessage.id}`,
+            message: steerMessage,
+          });
+        }
+      }
+    }
+
+    return projected;
+  };
 
   let lastDraftApplied = draft;
   $: if (draft !== lastDraftApplied && draft !== input) {
@@ -2993,6 +3245,7 @@
         _streamId: m.id,
         _localStatus: m.content ? 'completed' : undefined,
       }));
+      projectedStreamEventsById = new Map();
       const runtimeSnapshot = asRuntimeRecord(res.todoRuntime);
       if (runtimeSnapshot) {
         handleTodoRuntimeToolResult({
@@ -3035,7 +3288,9 @@
           for (const item of (hist as any)?.streams ?? []) {
             const mid = String(item?.messageId ?? '').trim();
             if (!mid) continue;
-            map.set(mid, (item as any)?.events ?? []);
+            const events = (item as any)?.events ?? [];
+            map.set(mid, events);
+            mergeProjectedHistoryForStream(mid, events);
           }
           initialEventsByMessageId = map;
         } catch {
@@ -3560,6 +3815,10 @@
     streamHub.set(localToolsHubKey, (event: StreamHubEvent) => {
       handleLocalToolStreamEvent(event);
     });
+    projectionHubKey = `chat-projection:${Math.random().toString(36).slice(2)}`;
+    streamHub.set(projectionHubKey, (event: StreamHubEvent) => {
+      handleProjectionStreamEvent(event);
+    });
     if (mode !== 'ai') return;
     sessionDocsSseKey = `chat-documents:${Math.random().toString(36).slice(2)}`;
     streamHub.setJobUpdates(sessionDocsSseKey, (ev: StreamHubEvent) => {
@@ -3638,6 +3897,8 @@
     commentHubKey = '';
     if (localToolsHubKey) streamHub.delete(localToolsHubKey);
     localToolsHubKey = '';
+    if (projectionHubKey) streamHub.delete(projectionHubKey);
+    projectionHubKey = '';
     resetLocalToolInterceptionState();
     if (handleDocumentClick) {
       document.removeEventListener('click', handleDocumentClick);
@@ -4017,8 +4278,9 @@
         {:else if messages.length === 0}
           <div class="text-xs text-slate-500">{$_('chat.chat.empty')}</div>
         {:else}
-          {#each messages as m (m.id)}
-            {#if m.role === 'user'}
+          {#each projectedTimelineItems as item (item.key)}
+            {#if item.kind === 'message' && item.message.role === 'user'}
+              {@const m = item.message}
               <div class="flex flex-col items-end group">
                 <div
                   class="chat-user-bubble max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
@@ -4098,36 +4360,25 @@
                   </button>
                 </div>
               </div>
-            {:else if m.role === 'assistant'}
-              {@const sid = m._streamId ?? m.id}
-              {@const initEvents = initialEventsByMessageId.get(sid)}
-              {@const showDetailWaiter =
-                !!m.content && streamDetailsLoading && initEvents === undefined}
+            {:else if item.kind === 'assistant-segment'}
+              {@const m = item.message}
               {@const isUp = m.feedbackVote === 1}
               {@const isDown = m.feedbackVote === -1}
-              {@const isTerminal =
-                (m._localStatus ?? (m.content ? 'completed' : 'processing')) ===
-                'completed'}
               <div class="flex justify-start group">
                 <div class="max-w-[85%] w-full">
-                  <StreamMessage
-                    variant="chat"
-                    streamId={sid}
-                    status={m._localStatus ??
-                      (m.content ? 'completed' : 'processing')}
-                    finalContent={m.content ?? null}
-                    smoothContentStreaming={isGeminiModel(m.model)}
-                    historySource="stream"
-                    initialEvents={initEvents}
-                    historyPending={showDetailWaiter}
-                    acknowledgementText={composerSteerAck?.streamId === sid
-                      ? composerSteerAck.message
-                      : undefined}
-                    onStreamEvent={() => scheduleScrollToBottom()}
-                    onTodoRuntime={handleTodoRuntimeToolResult}
-                    onTerminal={(t) => void handleAssistantTerminal(sid, t)}
-                  />
-                  {#if isTerminal}
+                  {#key item.key}
+                    <StreamMessage
+                      variant="chat"
+                      streamId={item.key}
+                      status={item.isTerminal ? 'completed' : 'processing'}
+                      finalContent={item.segment.content}
+                      smoothContentStreaming={isGeminiModel(m.model)}
+                      historySource="none"
+                      subscriptionMode="passive"
+                      initialEvents={item.segment.events}
+                    />
+                  {/key}
+                  {#if item.isTerminal && item.isLastAssistantSegment}
                     <div
                       class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500"
                     >
@@ -4139,13 +4390,13 @@
                             text,
                             renderMarkdownWithRefs(text),
                           );
-                          if (ok) markCopied(m.id);
+                          if (ok) markCopied(item.key);
                         }}
                         type="button"
                         aria-label={$_('common.copy')}
                         title={$_('common.copy')}
                       >
-                        {#if isCopied(m.id)}
+                        {#if isCopied(item.key)}
                           <Check class="w-3.5 h-3.5 text-slate-900" />
                         {:else}
                           <Copy class="w-3.5 h-3.5" />
@@ -4192,6 +4443,24 @@
                       </button>
                     </div>
                   {/if}
+                </div>
+              </div>
+            {:else if item.kind === 'runtime-segment'}
+              <div class="flex justify-start">
+                <div class="max-w-[85%] w-full">
+                  {#key item.key}
+                    <StreamMessage
+                      variant="chat"
+                      streamId={item.key}
+                      status={item.message._localStatus ??
+                        (item.message.content ? 'completed' : 'processing')}
+                      historySource="none"
+                      subscriptionMode="passive"
+                      initialEvents={item.segment.events}
+                      acknowledgementText={item.acknowledgementText}
+                      onTodoRuntime={handleTodoRuntimeToolResult}
+                    />
+                  {/key}
                 </div>
               </div>
             {/if}
