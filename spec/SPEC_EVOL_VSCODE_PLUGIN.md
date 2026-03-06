@@ -791,6 +791,86 @@ This section locks the implementation contract for the immediate Lot-1 increment
     - no privilege widening.
   - add an effective-match preview before save so operator can validate normalization/matching deterministically.
 
+### 4.23 Lot 6 - Multi-step assistant-run projection in the chat timeline
+- Goal:
+  - keep `1 backend run = 1 backend run`,
+  - project that single run in the UI as a linear sequence of visible assistant steps and reasoning/tool steps, as if several assistant turns had happened consecutively.
+
+- Scope:
+  - shared chat rendering on web app, Chrome extension, and VSCode host,
+  - no DB migration,
+  - no provider/runtime transport contract change,
+  - no redesign of the current reasoning/tools expandable block.
+
+- Terminology:
+  - `assistant-visible step` = one continuous span of assistant text visible to the user,
+  - `runtime-hidden step` = one continuous span of non-visible runtime activity (`reasoning`, tool calls, `awaiting_*`, status churn, etc.),
+  - `projected timeline` = ordered alternation of those steps as rendered in chat.
+
+- Projection contract:
+  - one assistant bubble maps to one `assistant-visible step`,
+  - one reasoning/tools block maps to one `runtime-hidden step`,
+  - the rendered order stays strictly linear:
+    - assistant bubble,
+    - reasoning/tools block,
+    - assistant bubble,
+    - reasoning/tools block,
+    - ...
+  - if a run starts with reasoning/tools before any assistant text, the projected timeline may start with a reasoning/tools block,
+  - no empty assistant bubble is ever created for a pure runtime-hidden step.
+
+- Segmentation algorithm:
+  - segment on transitions between:
+    - visible assistant output,
+    - hidden runtime activity,
+  - do not segment on paragraphs, sentence boundaries, markdown structure, or token cadence,
+  - when visible assistant output resumes after a hidden runtime step, start a new assistant bubble,
+  - while the run is still active, the last incomplete reasoning/tools step remains attached at the bottom of the current projected timeline,
+  - once the run is finished, all projected steps become immutable and must not be merged back together on reload.
+
+- Reasoning/tools rendering:
+  - reuse the exact current reasoning/tools expandable UI,
+  - split it per projected runtime-hidden step only,
+  - do not introduce a second display mode,
+  - do not summarize or collapse earlier steps differently from the current single-step contract.
+
+- Steering linearization:
+  - steering is not a side channel,
+  - each steering user message must be inserted into the same linear conversation timeline:
+    - after the last assistant bubble already emitted by the active run,
+    - before the runtime-hidden step that resumes with that steering context,
+  - if several steering messages occur during one active run, each one is inserted in chronological order before the next resumed runtime-hidden step.
+
+- Retry contract:
+  - retry remains available only on the last assistant bubble of the active/completed run,
+  - retry scope = regenerate the current run from the last effective user intent,
+  - the last effective user intent includes the latest applicable steering message,
+  - when retry is triggered:
+    - all projected assistant-visible and runtime-hidden steps belonging to the current run are discarded,
+    - the conversation restarts from the preserved user-side history ending with the latest effective steering/user message,
+  - if a run has not emitted any assistant-visible step yet, there is no retry affordance for that run.
+
+- Reconstruction and persistence:
+  - projected segmentation must be deterministic from persisted stream/chat events,
+  - the same run must reconstruct to the same projected timeline:
+    - during live streaming,
+    - after page reload,
+    - when reopening an existing session/history,
+  - no projected sub-step is stored as a first-class database entity; projection is derived at render time.
+
+- Session preview contract:
+  - session preview/excerpt uses the last visible message only,
+  - never use reasoning/tools content in the session preview,
+  - fallback order:
+    - last assistant-visible step if one exists,
+    - otherwise last user message.
+
+- Non-goals:
+  - no per-sub-step retry,
+  - no backend split of one run into multiple runs,
+  - no new reasoning/tools visual language,
+  - no migration of historical data.
+
 
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
