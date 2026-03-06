@@ -2065,7 +2065,6 @@
         : 'topai-chat-widget-shell fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg'}
       style={isSidePanelHost ? '' : isDocked ? `width: ${dockWidthCss};` : ''}
       class:hidden={!isVisible}
-      class:topai-vscode-dark={isVsCodeExtensionRuntime()}
       class:overflow-hidden={!showExtensionConfigMenu}
       class:overflow-visible={showExtensionConfigMenu}
     >
@@ -3108,67 +3107,3 @@
     </div>
   {/if}
 </div>
-
-<style>
-  .topai-vscode-dark :global(#chat-model-selection) {
-    border: 1px solid #2c313a;
-    border-radius: 0.375rem;
-    background-color: #1b1d22;
-    color: #e5e7eb;
-    color-scheme: dark;
-    padding: 0.125rem 0.5rem;
-  }
-
-  .topai-vscode-dark :global(#chat-model-selection option),
-  .topai-vscode-dark :global(#chat-model-selection optgroup) {
-    background-color: #1b1d22;
-    color: #e5e7eb;
-  }
-
-  .topai-vscode-dark :global([data-testid='todo-runtime-panel']) {
-    background-color: #1b1d22;
-    border-color: #2c313a;
-  }
-
-  .topai-vscode-dark :global([data-testid='todo-runtime-panel'] .text-slate-700),
-  .topai-vscode-dark :global([data-testid='todo-runtime-panel'] .text-slate-600) {
-    color: #e5e7eb;
-  }
-
-  .topai-vscode-dark :global([data-testid='todo-runtime-panel'] .text-slate-500),
-  .topai-vscode-dark :global([data-testid='todo-runtime-panel'] .text-slate-400) {
-    color: #94a3b8;
-  }
-
-  .topai-vscode-dark :global([data-testid='todo-runtime-panel'] .border-slate-400) {
-    border-color: #64748b;
-  }
-
-  .topai-vscode-dark :global(.chat-delete-confirm-surface) {
-    background-color: #1b1d22;
-    border-color: #2c313a;
-  }
-
-  .topai-vscode-dark :global(.chat-delete-confirm-surface .text-slate-700) {
-    color: #e5e7eb;
-  }
-
-  .topai-vscode-dark :global(.chat-delete-confirm-choice.border) {
-    border-color: #475569;
-    color: #cbd5e1;
-  }
-
-  .topai-vscode-dark :global(.chat-delete-confirm-choice.border:hover) {
-    background-color: #2b313d;
-    color: #f8fafc;
-  }
-
-  .topai-vscode-dark :global(.chat-danger-action-button) {
-    color: #94a3b8 !important;
-  }
-
-  .topai-vscode-dark :global(.chat-danger-action-button:hover) {
-    color: #e5e7eb !important;
-    background-color: #2b313d !important;
-  }
-</style>
