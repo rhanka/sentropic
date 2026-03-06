@@ -83,10 +83,7 @@
     GitBranch
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
-  import {
-    insertSteerMessageInTimeline,
-    postChatSteer,
-  } from '$lib/utils/chat-steer';
+  import { postChatSteer } from '$lib/utils/chat-steer';
   import {
     filterPermissionPromptsForPendingStream,
     parsePendingLocalToolCallsFromStatusPayload,
@@ -156,6 +153,8 @@
   type LocalMessage = ChatMessage & {
     _localStatus?: 'processing' | 'completed' | 'failed';
     _streamId?: string;
+    _optimisticSteerTargetAssistantId?: string;
+    _optimisticSteerSubmittedAtMs?: number;
   };
 
   type StreamEvent = {
@@ -699,6 +698,7 @@
   let hasPreviousThread = false;
   let hasNextThread = false;
   let projectedTimelineItems: ProjectedTimelineItem[] = [];
+  let optimisticSteerMessages: LocalMessage[] = [];
 
   const getMessageStatus = (m: LocalMessage) =>
     m._localStatus ?? (m.content ? 'completed' : 'processing');
@@ -718,6 +718,7 @@
     projectionEventsVersion;
     initialEventsByMessageId;
     composerSteerAck;
+    optimisticSteerMessages;
     projectedTimelineItems = buildProjectedTimeline(messages);
   }
   $: composerSteerStreamId = activeAssistantMessage
@@ -1257,6 +1258,9 @@
       sequence,
       createdAt: undefined,
     });
+    if (event.type === 'done' || event.type === 'error') {
+      void handleAssistantTerminal(streamId, event.type);
+    }
     scheduleScrollToBottom();
   };
 
@@ -1411,11 +1415,25 @@
     timeline: readonly LocalMessage[],
   ): ProjectedTimelineItem[] => {
     const steerIdsByAssistantId = new Map<string, string[]>();
+    const optimisticSteersByAssistantId = new Map<string, LocalMessage[]>();
     const skippedSteerIds = new Set<string>();
+
+    for (const steerMessage of optimisticSteerMessages) {
+      const assistantId = String(
+        steerMessage._optimisticSteerTargetAssistantId ?? '',
+      ).trim();
+      if (!assistantId) continue;
+      const existing = optimisticSteersByAssistantId.get(assistantId) ?? [];
+      existing.push(steerMessage);
+      optimisticSteersByAssistantId.set(assistantId, existing);
+    }
 
     for (let index = 0; index < timeline.length; index += 1) {
       const message = timeline[index];
       if (message.role !== 'assistant') continue;
+      if ((optimisticSteersByAssistantId.get(message.id)?.length ?? 0) > 0) {
+        continue;
+      }
       const projectionEvents = getProjectionEventsForMessage(message);
       const segments = projectAssistantRunSegments(projectionEvents);
       const linkedSteerCount = countLinkedSteerMessages(projectionEvents);
@@ -1458,6 +1476,12 @@
       const linkedSteers = (steerIdsByAssistantId.get(message.id) ?? [])
         .map((steerId) => timeline.find((entry) => entry.id === steerId) ?? null)
         .filter((entry): entry is LocalMessage => entry !== null);
+      const optimisticSteers = optimisticSteersByAssistantId.get(message.id) ?? [];
+      const combinedSteers = [...linkedSteers, ...optimisticSteers].sort(
+        (left, right) =>
+          Number(left._optimisticSteerSubmittedAtMs ?? 0) -
+          Number(right._optimisticSteerSubmittedAtMs ?? 0),
+      );
 
       const assistantIndexes = segments
         .map((segment, index) => (segment.kind === 'assistant' ? index : -1))
@@ -1487,12 +1511,12 @@
             steerCountToInsert === 0 &&
             index === lastRuntimeIndex &&
             !isTerminal &&
-            steerCursor < linkedSteers.length
+            steerCursor < combinedSteers.length
           ) {
-            steerCountToInsert = linkedSteers.length - steerCursor;
+            steerCountToInsert = combinedSteers.length - steerCursor;
           }
           if (steerCountToInsert > 0) {
-            const nextSteers = linkedSteers.slice(
+            const nextSteers = combinedSteers.slice(
               steerCursor,
               steerCursor + steerCountToInsert,
             );
@@ -1532,8 +1556,8 @@
         });
       }
 
-      if (steerCursor < linkedSteers.length) {
-        for (const steerMessage of linkedSteers.slice(steerCursor)) {
+      if (steerCursor < combinedSteers.length) {
+        for (const steerMessage of combinedSteers.slice(steerCursor)) {
           projected.push({
             kind: 'message',
             key: `message:${steerMessage.id}`,
@@ -2795,7 +2819,6 @@
         {},
       );
       await loadMessages(sessionId, { scrollToBottom: true, silent: true });
-      await loadCheckpoints(sessionId);
       return true;
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.checkpointRestore'));
@@ -3071,13 +3094,11 @@
       content: steerText,
       createdAt: nowIso,
       _localStatus: 'completed',
+      _optimisticSteerTargetAssistantId:
+        activeAssistantMessage?.id ?? targetStreamId,
+      _optimisticSteerSubmittedAtMs: Date.now(),
     };
-    const activeAssistantId = activeAssistantMessage?.id ?? targetStreamId;
-    messages = insertSteerMessageInTimeline(
-      messages,
-      localSteerMessage,
-      activeAssistantId,
-    );
+    optimisticSteerMessages = [...optimisticSteerMessages, localSteerMessage];
     followBottom = true;
     scheduleScrollToBottom({ force: true });
     input = '';
@@ -3087,6 +3108,9 @@
     try {
       await postChatSteer(apiPost, targetStreamId, steerText);
     } catch (e) {
+      optimisticSteerMessages = optimisticSteerMessages.filter(
+        (message) => message.id !== localSteerMessage.id,
+      );
       errorMsg = formatApiError(e, $_('chat.steer.error'));
     } finally {
       composerSteerInFlight = false;
@@ -3190,27 +3214,47 @@
     todoRuntimePanel = next;
   };
 
+  const applySessionCheckpoints = (items: ChatCheckpoint[]) => {
+    sessionCheckpoints = items;
+    const map = new Map<string, ChatCheckpoint>();
+    for (const checkpoint of sessionCheckpoints) {
+      const anchorId = String(checkpoint.anchorMessageId ?? '').trim();
+      if (!anchorId || map.has(anchorId)) continue;
+      map.set(anchorId, checkpoint);
+    }
+    checkpointsByAnchorMessageId = map;
+  };
+
+  const applyInitialAssistantDetails = (
+    details: Record<string, StreamEvent[]> | undefined,
+  ) => {
+    const map = new Map<string, StreamEvent[]>();
+    for (const [messageId, events] of Object.entries(details ?? {})) {
+      const normalizedId = String(messageId ?? '').trim();
+      if (!normalizedId) continue;
+      map.set(
+        normalizedId,
+        Array.isArray(events) ? (events as StreamEvent[]) : [],
+      );
+    }
+    initialEventsByMessageId = map;
+    streamDetailsLoading = false;
+  };
+
   const loadCheckpoints = async (id: string) => {
     if (!id) {
-      sessionCheckpoints = [];
-      checkpointsByAnchorMessageId = new Map();
+      applySessionCheckpoints([]);
       return;
     }
     try {
       const res = await apiGet<{ checkpoints?: ChatCheckpoint[] }>(
         `/chat/sessions/${id}/checkpoints?limit=20`,
       );
-      sessionCheckpoints = Array.isArray(res.checkpoints) ? res.checkpoints : [];
-      const map = new Map<string, ChatCheckpoint>();
-      for (const checkpoint of sessionCheckpoints) {
-        const anchorId = String(checkpoint.anchorMessageId ?? '').trim();
-        if (!anchorId || map.has(anchorId)) continue;
-        map.set(anchorId, checkpoint);
-      }
-      checkpointsByAnchorMessageId = map;
+      applySessionCheckpoints(
+        Array.isArray(res.checkpoints) ? res.checkpoints : [],
+      );
     } catch {
-      sessionCheckpoints = [];
-      checkpointsByAnchorMessageId = new Map();
+      applySessionCheckpoints([]);
     }
   };
 
@@ -3257,8 +3301,11 @@
         sessionId: string;
         messages: ChatMessage[];
         todoRuntime?: Record<string, unknown> | null;
+        checkpoints?: ChatCheckpoint[];
+        documents?: ContextDocumentItem[];
+        assistantDetailsByMessageId?: Record<string, StreamEvent[]>;
       }>(
-        `/chat/sessions/${id}/messages`,
+        `/chat/sessions/${id}/bootstrap`,
       );
       const raw = res.messages ?? [];
       messages = raw.map((m) => ({
@@ -3266,10 +3313,17 @@
         _streamId: m.id,
         _localStatus: m.content ? 'completed' : undefined,
       }));
+      optimisticSteerMessages = [];
       if (!opts?.silent || sessionId !== id) {
         projectedStreamEventsById = new Map();
         projectionEventsVersion += 1;
       }
+      applyInitialAssistantDetails(res.assistantDetailsByMessageId);
+      applySessionCheckpoints(
+        Array.isArray(res.checkpoints) ? res.checkpoints : [],
+      );
+      sessionDocs = Array.isArray(res.documents) ? res.documents : [];
+      sessionDocsError = null;
       const runtimeSnapshot = asRuntimeRecord(res.todoRuntime);
       if (runtimeSnapshot) {
         handleTodoRuntimeToolResult({
@@ -3294,38 +3348,10 @@
       }
       if (opts?.scrollToBottom !== false)
         scheduleScrollToBottom({ force: true });
-      await loadCheckpoints(id);
-
-      // Hydratation batch (Option C) en arrière-plan: ne doit pas bloquer l'affichage des messages
-      initialEventsByMessageId = new Map();
-      streamDetailsLoading = true;
-      void (async () => {
-        try {
-          const hist = await apiGet<{
-            sessionId: string;
-            streams: Array<{ messageId: string; events: StreamEvent[] }>;
-          }>(
-            `/chat/sessions/${id}/stream-events?limitMessages=20&limitEvents=10000`,
-          );
-          if (sessionId !== id) return;
-          const map = new Map<string, StreamEvent[]>();
-          for (const item of (hist as any)?.streams ?? []) {
-            const mid = String(item?.messageId ?? '').trim();
-            if (!mid) continue;
-            const events = (item as any)?.events ?? [];
-            map.set(mid, events);
-            mergeProjectedHistoryForStream(mid, events);
-          }
-          initialEventsByMessageId = map;
-        } catch {
-          initialEventsByMessageId = new Map();
-        } finally {
-          if (sessionId === id) streamDetailsLoading = false;
-        }
-      })();
 
       // Le scroll est exécuté via afterUpdate (une fois le DOM réellement rendu).
     } catch (e) {
+      streamDetailsLoading = false;
       errorMsg = formatApiError(e, $_('chat.errors.loadMessages'));
     } finally {
       if (shouldShowLoader) loadingMessages = false;
@@ -3334,6 +3360,9 @@
 
   export const selectSession = async (id: string) => {
     sessionId = id;
+    optimisticSteerMessages = [];
+    sessionDocs = [];
+    sessionDocsError = null;
     resetTodoRuntimePanel();
     resetLocalToolInterceptionState();
     await loadMessages(id, { scrollToBottom: true });
@@ -3350,7 +3379,10 @@
     sessionId = null;
     messages = [];
     sessionCheckpoints = [];
+    sessionDocs = [];
+    sessionDocsError = null;
     initialEventsByMessageId = new Map();
+    optimisticSteerMessages = [];
     resetTodoRuntimePanel();
     resetLocalToolInterceptionState();
     selectedProviderId = defaultProviderIdForNewSession;
@@ -3366,7 +3398,10 @@
       await apiDelete(`/chat/sessions/${sessionId}`);
       sessionId = null;
       messages = [];
+      sessionDocs = [];
+      sessionDocsError = null;
       initialEventsByMessageId = new Map();
+      optimisticSteerMessages = [];
       resetTodoRuntimePanel();
       resetLocalToolInterceptionState();
       await loadSessions();
@@ -3768,8 +3803,6 @@
       const key = sessionId ? `chat_session:${sessionId}` : '';
       if (key && key !== sessionDocsKey) {
         sessionDocsKey = key;
-        sessionDocs = [];
-        void loadSessionDocs();
       }
       if (!key && sessionDocsKey) {
         sessionDocsKey = '';

@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql, inArray, isNotNull, gt, or } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
+import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue } from '../db/schema';
 import { createId } from '../utils/id';
 import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './llm-runtime';
 import {
@@ -170,6 +170,12 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
   return value as Record<string, unknown>;
 };
 
+const getDataString = (data: unknown, key: string): string | null => {
+  const record = asRecord(data);
+  const value = record?.[key];
+  return typeof value === 'string' ? value : null;
+};
+
 const isValidToolName = (value: string): boolean => /^[a-zA-Z0-9_-]{1,64}$/.test(value);
 
 const parseToolCallArgs = (value: unknown): unknown => {
@@ -243,6 +249,28 @@ type ChatCheckpointSummary = {
   anchorSequence: number;
   messageCount: number;
   createdAt: string;
+};
+
+type ChatBootstrapStreamEvent = {
+  eventType: string;
+  data: unknown;
+  sequence: number;
+  createdAt: Date;
+};
+
+type ChatSessionDocumentItem = {
+  id: string;
+  context_type: 'chat_session';
+  context_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  status: 'uploaded' | 'processing' | 'ready' | 'failed';
+  summary?: string | null;
+  summary_lang?: string | null;
+  created_at?: Date;
+  updated_at?: Date | null;
+  job_id?: string | null;
 };
 
 const normalizeTodoRuntimeStatus = (value: unknown): string =>
@@ -1341,10 +1369,10 @@ export class ChatService {
       .orderBy(asc(chatMessages.sequence));
 
     let todoRuntime: Record<string, unknown> | null = null;
-    const sessionWorkspaceId =
-      typeof session.workspaceId === 'string' && session.workspaceId.trim().length > 0
-        ? session.workspaceId
-        : (await ensureWorkspaceForUser(userId, { createIfMissing: false })).workspaceId;
+    const sessionWorkspaceId = await this.resolveSessionWorkspaceId(
+      session,
+      userId,
+    );
     if (sessionWorkspaceId) {
       const role = (await getWorkspaceRole(userId, sessionWorkspaceId)) ?? 'viewer';
       todoRuntime = await todoOrchestrationService.getSessionTodoRuntime(
@@ -1356,6 +1384,150 @@ export class ChatService {
     return {
       messages,
       todoRuntime,
+    };
+  }
+
+  private async resolveSessionWorkspaceId(
+    session: { workspaceId?: string | null },
+    userId: string,
+  ): Promise<string | null> {
+    if (
+      typeof session.workspaceId === 'string' &&
+      session.workspaceId.trim().length > 0
+    ) {
+      return session.workspaceId;
+    }
+    return (await ensureWorkspaceForUser(userId, { createIfMissing: false }))
+      .workspaceId;
+  }
+
+  private async listSessionDocuments(options: {
+    sessionId: string;
+    workspaceId: string | null;
+  }): Promise<ChatSessionDocumentItem[]> {
+    if (!options.workspaceId) return [];
+
+    const rows = await db
+      .select()
+      .from(contextDocuments)
+      .where(
+        and(
+          eq(contextDocuments.workspaceId, options.workspaceId),
+          eq(contextDocuments.contextType, 'chat_session'),
+          eq(contextDocuments.contextId, options.sessionId),
+        ),
+      )
+      .orderBy(desc(contextDocuments.createdAt));
+
+    const jobIds = rows
+      .map((row) => row.jobId)
+      .filter((value): value is string => typeof value === 'string' && value.length > 0);
+    const jobById = new Map<string, { status: string | null }>();
+    if (jobIds.length > 0) {
+      const jobRows = await db
+        .select({ id: jobQueue.id, status: jobQueue.status })
+        .from(jobQueue)
+        .where(
+          and(
+            eq(jobQueue.workspaceId, options.workspaceId),
+            inArray(jobQueue.id, jobIds),
+          ),
+        );
+      for (const job of jobRows) {
+        jobById.set(job.id, { status: job.status ?? null });
+      }
+    }
+
+    return rows.map((row) => ({
+      status: (
+        (row.status === 'uploaded' || row.status === 'processing') &&
+        row.jobId &&
+        jobById.get(row.jobId)?.status === 'failed'
+          ? 'failed'
+          : row.status
+      ) as ChatSessionDocumentItem['status'],
+      id: row.id,
+      context_type: 'chat_session',
+      context_id: row.contextId,
+      filename: row.filename,
+      mime_type: row.mimeType,
+      size_bytes: row.sizeBytes,
+      summary: getDataString(row.data, 'summary'),
+      summary_lang: getDataString(row.data, 'summaryLang'),
+      job_id: row.jobId,
+      created_at: row.createdAt,
+      updated_at: row.updatedAt,
+    }));
+  }
+
+  private async listAssistantDetailsByMessageId(
+    messageIds: readonly string[],
+  ): Promise<Record<string, ChatBootstrapStreamEvent[]>> {
+    if (messageIds.length === 0) return {};
+
+    const rows = await db
+      .select({
+        streamId: chatStreamEvents.streamId,
+        eventType: chatStreamEvents.eventType,
+        data: chatStreamEvents.data,
+        sequence: chatStreamEvents.sequence,
+        createdAt: chatStreamEvents.createdAt,
+      })
+      .from(chatStreamEvents)
+      .where(inArray(chatStreamEvents.streamId, [...messageIds]))
+      .orderBy(chatStreamEvents.streamId, chatStreamEvents.sequence);
+
+    const out: Record<string, ChatBootstrapStreamEvent[]> = {};
+    for (const row of rows) {
+      const messageId = String(row.streamId ?? '').trim();
+      if (!messageId) continue;
+      if (!out[messageId]) out[messageId] = [];
+      out[messageId].push({
+        eventType: row.eventType,
+        data: row.data,
+        sequence: row.sequence,
+        createdAt: row.createdAt,
+      });
+    }
+    return out;
+  }
+
+  async getSessionBootstrap(options: { sessionId: string; userId: string }) {
+    const session = await this.getSessionForUser(options.sessionId, options.userId);
+    if (!session) throw new Error('Session not found');
+
+    const [{ messages, todoRuntime }, checkpoints, workspaceId] = await Promise.all([
+      this.listMessages(options.sessionId, options.userId),
+      this.listCheckpoints({
+        sessionId: options.sessionId,
+        userId: options.userId,
+        limit: 20,
+      }),
+      this.resolveSessionWorkspaceId(session, options.userId),
+    ]);
+
+    const documents = await this.listSessionDocuments({
+      sessionId: options.sessionId,
+      workspaceId,
+    });
+    const assistantMessageIds = messages
+      .filter(
+        (message) =>
+          message.role === 'assistant' &&
+          typeof message.content === 'string' &&
+          message.content.trim().length > 0,
+      )
+      .map((message) => String(message.id ?? '').trim())
+      .filter((messageId) => messageId.length > 0);
+    const assistantDetailsByMessageId =
+      await this.listAssistantDetailsByMessageId(assistantMessageIds);
+
+    return {
+      messages,
+      todoRuntime,
+      checkpoints,
+      documents,
+      assistantDetailsByMessageId,
     };
   }
 
