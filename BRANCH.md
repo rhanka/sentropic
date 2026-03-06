@@ -528,10 +528,10 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Anchor the confirmation UI to the relevant surface (conversation header or plan header), not a browser modal.
       - [x] Keep one pending delete confirmation at a time per surface, with explicit `Supprimer` / `Annuler` actions.
       - [x] Ensure the confirmation flow works in VSCode webview and web app without divergence.
-    - [ ] BUG-L6-22 — Checkpoint restore affordance still appears when no effective code/object delta exists.
-      - [ ] Revalidate delta-detection gate before rendering the checkpoint action.
-      - [ ] Ensure no checkpoint CTA is shown when rollback payload is empty / semantically unchanged.
-      - [ ] Add scoped tests for no-delta visibility gating.
+    - [x] BUG-L6-22 — Checkpoint restore affordance still appears when no effective code/object delta exists.
+      - [x] Revalidate delta-detection gate before rendering the checkpoint action.
+      - [x] Ensure no checkpoint CTA is shown when rollback payload is empty / semantically unchanged.
+      - [x] Add scoped tests for no-delta visibility gating.
     - [ ] BUG-L6-23 — Checkpoint hover lacks rollback preview of modified files/objects.
       - [ ] Add hover/inspection payload listing changed files and/or domain objects since that checkpoint.
       - [ ] Keep the preview compact by default, with precise changed-item names in the hover content.

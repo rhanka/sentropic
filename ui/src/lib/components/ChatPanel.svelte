@@ -104,6 +104,7 @@
     USER_AI_SETTINGS_UPDATED_EVENT,
     type UserAISettingsUpdatedPayload,
   } from '$lib/utils/user-ai-settings-events';
+  import { hasCheckpointMutationDelta } from '$lib/utils/checkpointDelta';
 
   type ChatSession = {
     id: string;
@@ -2483,22 +2484,14 @@
     return checkpointsByAnchorMessageId.get(id) ?? null;
   };
 
-  const getHighestMessageSequence = (): number => {
-    let max = 0;
-    for (const message of messages) {
-      const sequence = Number((message as any)?.sequence ?? 0);
-      if (Number.isFinite(sequence) && sequence > max) max = sequence;
-    }
-    return max;
-  };
-
   const hasCheckpointRollbackDelta = (
     checkpoint: ChatCheckpoint | null | undefined,
   ): boolean => {
-    if (!checkpoint) return false;
-    const anchorSequence = Number(checkpoint.anchorSequence ?? 0);
-    if (!Number.isFinite(anchorSequence) || anchorSequence <= 0) return false;
-    return getHighestMessageSequence() > anchorSequence;
+    return hasCheckpointMutationDelta(
+      checkpoint,
+      messages,
+      initialEventsByMessageId,
+    );
   };
 
   const applyCheckpointRestore = async (
