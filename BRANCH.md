@@ -536,6 +536,21 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Add hover/inspection payload listing changed files and/or domain objects since that checkpoint.
       - [x] Keep the preview compact by default, with precise changed-item names in the hover content.
       - [x] Ensure the preview works in both VSCode and web app hosts.
+    - [ ] BUG-L6-24 — OpenAI default model cutover from `gpt-5.2` to `gpt-5.4`.
+      - [ ] Replace exposed/default OpenAI catalog reference `gpt-5.2` with `gpt-5.4` (no legacy `gpt-5.2` kept in active catalog/defaults).
+      - [ ] Auto-migrate persisted default model selections equal to `gpt-5.2` onto the new provider default `gpt-5.4` at read/resolve time.
+      - [ ] Leave all other persisted model selections unchanged.
+      - [ ] Keep historical traces/treatments already stored as `gpt-5.2` unchanged for sincerity; only new default selection/exposed catalog moves to `gpt-5.4`.
+      - [ ] Revalidate shared runtime + settings UI behavior when the stored model no longer exists in catalog.
+      - [ ] Add scoped API/UI tests for catalog exposure + automatic fallback migration path.
+    - [ ] BUG-L6-25 — Gemini default light model cutover from `gemini-2.5-flash-lite` to `gemini-3.1-flash-lite`.
+      - [ ] Replace exposed/default Gemini light-model catalog reference `gemini-2.5-flash-lite` with `gemini-3.1-flash-lite`.
+      - [ ] Move the reasoning-effort evaluator path from `gemini-2.5-flash-lite` to `gemini-3.1-flash-lite`.
+      - [ ] Auto-migrate persisted default model selections equal to `gemini-2.5-flash-lite` onto `gemini-3.1-flash-lite` at read/resolve time.
+      - [ ] Leave all other persisted Gemini selections unchanged.
+      - [ ] Keep historical traces/treatments already stored as `gemini-2.5-flash-lite` unchanged for sincerity; only new default selection/exposed catalog/evaluator path moves to `gemini-3.1-flash-lite`.
+      - [ ] Revalidate reasoning-effort traces/status labels and shared runtime behavior after the cutover.
+      - [ ] Add scoped API/UI/unit tests for catalog exposure + evaluator selection + automatic fallback migration path.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
