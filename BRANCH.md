@@ -62,6 +62,11 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - Reason: add/restore extension build targets and migrate naming to canonical `build-ext-vscode` / `build-ext-chrome` + `e2e-vscode` lane targets.
   - Impact: build orchestration only for BR-05 scope.
   - Rollback: revert target block if packaging strategy changes.
+- `BR05-EX2` — `attention`
+  - Path: `docker-compose.dev-vscode.yml`
+  - Reason: add a dedicated OpenVSCode dev-inspection lane mounted on the unpacked extension to debug the VSCode webview without a reinstall cycle.
+  - Impact: dev-only tooling lane; no product/runtime behavior change outside local development orchestration.
+  - Rollback: remove the compose overlay and related make targets if the inspection strategy changes.
 - `BR05-FL1` — `attention`
   - Topic: strict selective recovery from backup branch.
   - Requirement: no residual fake UI/contracts (`plan/tools/summary/checkpoint` shell) must survive Lot 1.
@@ -560,6 +565,13 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] `make exec-api CMD='npx vitest run tests/api/ai-settings.test.ts -t "migrates legacy stored global defaults on read" --maxWorkers=1' API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
         - [x] `make exec-api CMD='npx vitest run tests/api/chat-message-actions.test.ts -t "migrates the legacy Gemini light model id on retry" --maxWorkers=1' API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
         - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] BUG-L6-26 — OpenVSCode is only wired for `e2e-vscode`; add a dedicated mounted `dev-vscode` inspection lane.
+      - [x] Add `docker-compose.dev-vscode.yml` overlay on top of the standard dev stack (`docker-compose.yml` + `docker-compose.dev.yml`).
+      - [x] Mount the unpacked VSCode extension source/build directly into the OpenVSCode extensions directory to avoid reinstalling the VSIX on every rebuild.
+      - [x] Add Make targets `up-dev-vscode`, `down-dev-vscode`, `ps-dev-vscode`, `logs-dev-vscode`.
+      - [x] Keep `e2e-vscode` hermetic and unchanged; `dev-vscode` is for human webview inspection only.
+      - [x] Validate the new lane wiring with:
+        - [x] `make ps-dev-vscode OPENVSCODE_PORT=3114 API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080 REGISTRY=local ENV=dev`
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
