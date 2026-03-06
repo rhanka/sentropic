@@ -1,0 +1,20 @@
+services:
+  openvscode-dev:
+    image: gitpod/openvscode-server:latest
+    working_dir: /workspace
+    entrypoint:
+      - /bin/sh
+      - /workspace/scripts/openvscode-dev-entrypoint.sh
+    environment:
+      - OPENVSCODE_SERVER_ROOT=/home/.openvscode-server
+    ports:
+      - "${OPENVSCODE_PORT:-3114}:3000"
+    volumes:
+      - ./:/workspace:rw
+      - openvscode_dev_data:/home/.openvscode-server
+    depends_on:
+      - api
+      - ui
+
+volumes:
+  openvscode_dev_data:

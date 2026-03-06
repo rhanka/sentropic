@@ -290,6 +290,22 @@ dev-ext-vscode: up-ui ## Watch and rebuild VSCode extension package
 	@echo "👀 Watching VSCode Extension..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run dev:vscode-ext
 
+.PHONY: up-dev-vscode
+up-dev-vscode: build-ext-vscode ## Start OpenVSCode mounted dev lane on top of the standard dev stack
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.dev-vscode.yml up -d openvscode-dev
+
+.PHONY: down-dev-vscode
+down-dev-vscode: ## Stop OpenVSCode mounted dev lane
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.dev-vscode.yml down
+
+.PHONY: ps-dev-vscode
+ps-dev-vscode: ## Show OpenVSCode mounted dev lane services
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.dev-vscode.yml ps
+
+.PHONY: logs-dev-vscode
+logs-dev-vscode: ## Stream OpenVSCode mounted dev lane logs
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.dev-vscode.yml logs -f openvscode-dev
+
 update-%:
 	@echo "🔒 Updating $* ..."
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec $* sh -lc "npm update"
