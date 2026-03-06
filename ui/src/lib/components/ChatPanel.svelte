@@ -186,6 +186,7 @@
         streamId: string;
         segment: ProjectedRunSegment;
         acknowledgementText?: string;
+        isActiveRuntimeSegment: boolean;
       };
   type TodoRuntimeTask = {
     id?: string;
@@ -1415,10 +1416,19 @@
     for (let index = 0; index < timeline.length; index += 1) {
       const message = timeline[index];
       if (message.role !== 'assistant') continue;
-      const linkedSteerCount = countLinkedSteerMessages(
-        getProjectionEventsForMessage(message),
-      );
+      const projectionEvents = getProjectionEventsForMessage(message);
+      const segments = projectAssistantRunSegments(projectionEvents);
+      const linkedSteerCount = countLinkedSteerMessages(projectionEvents);
       if (linkedSteerCount <= 0) continue;
+      const firstRuntimeSegmentWithSteer = segments.findIndex(
+        (segment) => segment.kind === 'runtime' && segment.steerCountBefore > 0,
+      );
+      const hasAssistantVisibleBeforeSteer =
+        firstRuntimeSegmentWithSteer > 0 &&
+        segments
+          .slice(0, firstRuntimeSegmentWithSteer)
+          .some((segment) => segment.kind === 'assistant');
+      if (!hasAssistantVisibleBeforeSteer) continue;
       const linkedIds = getLinkedSteerMessageIds(timeline, index, linkedSteerCount);
       if (linkedIds.length === 0) continue;
       steerIdsByAssistantId.set(message.id, linkedIds);
@@ -1502,6 +1512,7 @@
             message,
             streamId,
             segment,
+            isActiveRuntimeSegment: !isTerminal && index === segments.length - 1,
             acknowledgementText:
               composerSteerAck?.streamId === streamId && index === lastRuntimeIndex
                 ? composerSteerAck.message
@@ -3255,7 +3266,10 @@
         _streamId: m.id,
         _localStatus: m.content ? 'completed' : undefined,
       }));
-      projectedStreamEventsById = new Map();
+      if (!opts?.silent || sessionId !== id) {
+        projectedStreamEventsById = new Map();
+        projectionEventsVersion += 1;
+      }
       const runtimeSnapshot = asRuntimeRecord(res.todoRuntime);
       if (runtimeSnapshot) {
         handleTodoRuntimeToolResult({
@@ -3291,7 +3305,7 @@
             sessionId: string;
             streams: Array<{ messageId: string; events: StreamEvent[] }>;
           }>(
-            `/chat/sessions/${id}/stream-events?limitMessages=20&limitEvents=2000`,
+            `/chat/sessions/${id}/stream-events?limitMessages=20&limitEvents=10000`,
           );
           if (sessionId !== id) return;
           const map = new Map<string, StreamEvent[]>();
@@ -4464,6 +4478,7 @@
                     historySource="none"
                     subscriptionMode="passive"
                     initialEvents={item.segment.events}
+                    showRuntimeInlinePreview={item.isActiveRuntimeSegment}
                     acknowledgementText={item.acknowledgementText}
                     onTodoRuntime={handleTodoRuntimeToolResult}
                   />
