@@ -328,6 +328,14 @@ logs-dev-playwright: ## Stream Playwright dev helper logs
 shell-dev-playwright: up-dev-playwright ## Open a shell inside the Playwright dev helper
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec playwright-dev sh
 
+.PHONY: record-dev-playwright-auth
+record-dev-playwright-auth: up-dev-playwright ## Record a reusable Playwright storageState against ENV=dev
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec -T playwright-dev sh -lc ' \
+	  email="$${DEV_PLAYWRIGHT_AUTH_EMAIL:-admin@sent-tech.ca}"; \
+	  echo "▶ Recording Playwright dev auth for $$email"; \
+	  npx playwright test --config playwright.dev.config.ts tests/dev/00-record-auth.spec.ts --workers=1 --retries=0 --reporter=list --grep "$$email"; \
+	'
+
 .PHONY: test-e2e-dev
 test-e2e-dev: up-dev-playwright ## Run scoped Playwright against ENV=dev without seed/reset/global setup
 	@if [ -z "$$E2E_SPEC" ]; then \
