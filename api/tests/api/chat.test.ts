@@ -456,15 +456,19 @@ describe('Chat API Endpoints', () => {
         'Concentre la réponse sur les trois priorités.',
       );
 
-      const eventsResponse = await authenticatedRequest(
+      const bootstrapResponse = await authenticatedRequest(
         app,
         'GET',
-        `/api/v1/chat/messages/${assistantMessageId}/stream-events`,
+        `/api/v1/chat/sessions/${sessionId}/bootstrap`,
         user.sessionToken!,
       );
-      expect(eventsResponse.status).toBe(200);
-      const eventsBody = await eventsResponse.json();
-      const events = Array.isArray(eventsBody.events) ? eventsBody.events : [];
+      expect(bootstrapResponse.status).toBe(200);
+      const bootstrapBody = await bootstrapResponse.json();
+      const events = Array.isArray(
+        bootstrapBody?.assistantDetailsByMessageId?.[assistantMessageId],
+      )
+        ? bootstrapBody.assistantDetailsByMessageId[assistantMessageId]
+        : [];
       const steerStatusEvent = events.find(
         (event: any) =>
           event?.eventType === 'status' &&
@@ -543,7 +547,7 @@ describe('Chat API Endpoints', () => {
         },
       );
       expect(createResponse.status).toBe(200);
-      const { assistantMessageId } = await createResponse.json();
+      const { assistantMessageId, sessionId } = await createResponse.json();
 
       const payloads = Array.from({ length: 8 }, (_, index) => ({
         message: `Steer batch ${index + 1}`,
@@ -564,15 +568,19 @@ describe('Chat API Endpoints', () => {
       const statuses = responses.map((response) => response.status);
       expect(statuses.every((status) => status === 200)).toBe(true);
 
-      const eventsResponse = await authenticatedRequest(
+      const bootstrapResponse = await authenticatedRequest(
         app,
         'GET',
-        `/api/v1/chat/messages/${assistantMessageId}/stream-events`,
+        `/api/v1/chat/sessions/${sessionId}/bootstrap`,
         user.sessionToken!,
       );
-      expect(eventsResponse.status).toBe(200);
-      const eventsBody = await eventsResponse.json();
-      const events = Array.isArray(eventsBody.events) ? eventsBody.events : [];
+      expect(bootstrapResponse.status).toBe(200);
+      const bootstrapBody = await bootstrapResponse.json();
+      const events = Array.isArray(
+        bootstrapBody?.assistantDetailsByMessageId?.[assistantMessageId],
+      )
+        ? bootstrapBody.assistantDetailsByMessageId[assistantMessageId]
+        : [];
       const steerEvents = events.filter(
         (event: any) =>
           event?.eventType === 'status' &&
@@ -695,81 +703,6 @@ describe('Chat API Endpoints', () => {
     });
   });
 
-  describe('GET /api/v1/chat/sessions/:id/stream-events', () => {
-    it('should return stream events structure for a session', async () => {
-      const createResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: 'Test message'
-      });
-      const { sessionId } = await createResponse.json();
-
-      const response = await authenticatedRequest(app, 'GET', `/api/v1/chat/sessions/${sessionId}/stream-events`, user.sessionToken!);
-
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      expect(data.sessionId).toBe(sessionId);
-      expect(data.streams).toBeDefined();
-      expect(Array.isArray(data.streams)).toBe(true);
-    });
-
-    it('should respect limitMessages and limitEventsPerMessage parameters', async () => {
-      const createResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: 'Test'
-      });
-      const { sessionId } = await createResponse.json();
-
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/chat/sessions/${sessionId}/stream-events?limitMessages=1&limitEventsPerMessage=5`,
-        user.sessionToken!
-      );
-
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      expect(data.streams).toBeDefined();
-    });
-  });
-
-  describe('GET /api/v1/chat/messages/:id/stream-events', () => {
-    it('should return stream events structure for a specific message', async () => {
-      const createResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: 'Test message'
-      });
-      const { assistantMessageId } = await createResponse.json();
-
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/chat/messages/${assistantMessageId}/stream-events`,
-        user.sessionToken!
-      );
-
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      expect(data.messageId).toBe(assistantMessageId);
-      expect(data.streamId).toBe(assistantMessageId);
-      expect(data.events).toBeDefined();
-      expect(Array.isArray(data.events)).toBe(true);
-    });
-
-    it('should respect sinceSequence and limit parameters', async () => {
-      const createResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: 'Test'
-      });
-      const { assistantMessageId } = await createResponse.json();
-
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/chat/messages/${assistantMessageId}/stream-events?sinceSequence=0&limit=10`,
-        user.sessionToken!
-      );
-
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      expect(data.events.length).toBeLessThanOrEqual(10);
-    });
-  });
 
   describe('DELETE /api/v1/chat/sessions/:id', () => {
     it('should delete a session with cascade', async () => {
@@ -840,61 +773,4 @@ describe('Chat API Endpoints', () => {
     });
   });
 
-  describe('GET /api/v1/chat/sessions/:id/stream-events', () => {
-    it('should return 401 without authentication', async () => {
-      const createResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: 'Test message'
-      });
-      const { sessionId } = await createResponse.json();
-
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/chat/sessions/${sessionId}/stream-events`,
-        null // Pas de token
-      );
-
-      expect(response.status).toBe(401);
-    });
-
-    it('should return error for non-existent session', async () => {
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        '/api/v1/chat/sessions/non-existent-id/stream-events',
-        user.sessionToken!
-      );
-
-      expect([404, 500]).toContain(response.status);
-    });
-  });
-
-  describe('GET /api/v1/chat/messages/:id/stream-events', () => {
-    it('should return 404 for non-existent message', async () => {
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        '/api/v1/chat/messages/non-existent-message-id/stream-events',
-        user.sessionToken!
-      );
-
-      expect(response.status).toBe(404);
-    });
-
-    it('should return 401 without authentication', async () => {
-      const createResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: 'Test message'
-      });
-      const { assistantMessageId } = await createResponse.json();
-
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/chat/messages/${assistantMessageId}/stream-events`,
-        null // Pas de token
-      );
-
-      expect(response.status).toBe(401);
-    });
-  });
 });

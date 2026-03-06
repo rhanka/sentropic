@@ -92,8 +92,6 @@ class StreamHub {
   private extensionPort: RuntimePortLike | null = null;
   private extensionPortOnMessage: ((message: any) => void) | null = null;
   private extensionPortOnDisconnect: (() => void) | null = null;
-  private pollTimer: ReturnType<typeof setTimeout> | null = null;
-  private pollInFlight = false;
   private currentUrl: string | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   // Cache des events vus (pour "replay" à l'inscription, sans reconnect)
@@ -220,151 +218,7 @@ class StreamHub {
       }
       this.extensionPort = null;
     }
-    if (this.pollTimer) {
-      clearTimeout(this.pollTimer);
-      this.pollTimer = null;
-    }
-    this.pollInFlight = false;
     this.currentUrl = null;
-  }
-
-  private scheduleOverlayPoll(baseUrl: string, delayMs: number) {
-    if (this.pollTimer) {
-      clearTimeout(this.pollTimer);
-      this.pollTimer = null;
-    }
-    this.pollTimer = setTimeout(() => {
-      this.pollTimer = null;
-      void this.runOverlayPoll(baseUrl);
-    }, delayMs);
-  }
-
-  private async runOverlayPoll(baseUrl: string) {
-    if (this.pollInFlight) return;
-    this.pollInFlight = true;
-    const { streamCount, eventCount, hadError } =
-      await this.pollOverlayStreams(baseUrl);
-    this.pollInFlight = false;
-
-    // Keep polling only while polling transport mode is still active.
-    // Supports both Chrome extension fallback (`ext-poll:`) and VSCode webview (`vscode-poll:`).
-    if (
-      !this.currentUrl?.startsWith('ext-poll:') &&
-      !this.currentUrl?.startsWith('vscode-poll:')
-    )
-      return;
-    if (!getStoreValue(isAuthenticated) || this.subs.size === 0) return;
-
-    let nextDelayMs = 1000;
-    if (streamCount > 0) {
-      // Near-real-time while active stream subscriptions exist.
-      if (hadError) nextDelayMs = 600;
-      else if (eventCount > 0) nextDelayMs = 120;
-      else nextDelayMs = 180;
-    }
-    this.scheduleOverlayPoll(baseUrl, nextDelayMs);
-  }
-
-  private async pollOverlayStreams(
-    baseUrl: string
-  ): Promise<{ streamCount: number; eventCount: number; hadError: boolean }> {
-    const streamIds = this.getTrackedStreamIds();
-
-    if (streamIds.length === 0) {
-      return { streamCount: 0, eventCount: 0, hadError: false };
-    }
-
-    const scoped = getScopedWorkspaceIdForUser();
-    let eventCount = 0;
-    let hadError = false;
-
-    await Promise.all(
-      streamIds.map(async (streamId) => {
-        const prev = this.streamHistoryById.get(streamId) ?? [];
-        const last = prev.length > 0 ? (prev[prev.length - 1] as any) : null;
-        const sinceSequence = Number.isFinite(last?.sequence)
-          ? Number(last.sequence)
-          : undefined;
-
-        const endpoint =
-          `/streams/events/${encodeURIComponent(streamId)}` +
-          `?limit=400${sinceSequence !== undefined ? `&sinceSequence=${sinceSequence}` : ''}`;
-        const url = new URL(`${baseUrl}${endpoint}`, window.location.origin);
-        if (scoped) url.searchParams.set('workspace_id', scoped);
-
-        try {
-          const payload = await this.fetchJsonThroughBestEffort(url.toString());
-          if (!payload) {
-            hadError = true;
-            return;
-          }
-          const events = Array.isArray(payload?.events) ? payload.events : [];
-          for (const evt of events) {
-            if (!evt?.eventType) continue;
-            if (!Number.isFinite(evt?.sequence)) continue;
-            this.dispatch({
-              type: evt.eventType,
-              streamId,
-              sequence: evt.sequence,
-              data: evt.data,
-            });
-            eventCount += 1;
-          }
-        } catch {
-          hadError = true;
-        }
-      })
-    );
-
-    return { streamCount: streamIds.length, eventCount, hadError };
-  }
-
-  private async fetchJsonThroughBestEffort(url: string): Promise<any | null> {
-    if (isExtensionHost()) {
-      const runtime = (globalThis as typeof globalThis & {
-        chrome?: {
-          runtime?: {
-            sendMessage?: (message: unknown) => Promise<any>;
-          };
-        };
-      }).chrome?.runtime;
-
-      if (runtime?.sendMessage) {
-        try {
-          const response = await runtime.sendMessage({
-            type: 'proxy_api_fetch',
-            payload: {
-              url,
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              authMode: 'extension',
-            },
-          });
-          if (!response?.ok) return null;
-          const status = Number(response?.status ?? 0);
-          if (!Number.isFinite(status) || status < 200 || status >= 300) return null;
-          const bodyText = String(response?.bodyText ?? '');
-          return JSON.parse(bodyText);
-        } catch {
-          return null;
-        }
-      }
-    }
-
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-      });
-      if (!response.ok) return null;
-      return await response.json();
-    } catch {
-      return null;
-    }
   }
 
   private getTrackedStreamIds(): string[] {
@@ -616,19 +470,8 @@ class StreamHub {
         chrome?: { runtime?: { connect?: (options: { name: string }) => RuntimePortLike } };
       }).chrome?.runtime;
       if (!runtime?.connect) {
-        const connectionKey = JSON.stringify({
-          baseUrl,
-          workspaceId: scopedWorkspaceId ?? null,
-          streamIds,
-        });
-        const pollUrl = `vscode-poll:${connectionKey}`;
-        if (this.currentUrl !== pollUrl) {
-          this.close();
-          this.currentUrl = pollUrl;
-        }
-        if (!this.pollTimer && !this.pollInFlight) {
-          void this.runOverlayPoll(baseUrl);
-        }
+        this.close();
+        this.scheduleReconnect();
         return;
       }
     }
@@ -653,15 +496,8 @@ class StreamHub {
         this.currentUrl = extensionUrl;
         return;
       }
-
-      const pollUrl = `ext-poll:${connectionKey}`;
-      if (this.currentUrl !== pollUrl) {
-        this.close();
-        this.currentUrl = pollUrl;
-      }
-      if (!this.pollTimer && !this.pollInFlight) {
-        void this.runOverlayPoll(baseUrl);
-      }
+      this.close();
+      this.scheduleReconnect();
       return;
     }
 

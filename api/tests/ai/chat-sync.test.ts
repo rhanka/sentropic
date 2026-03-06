@@ -32,7 +32,7 @@ describe('Chat AI - Complete Integration', () => {
 
       expect(response.status).toBe(200);
       const data = await response.json();
-      const { jobId, assistantMessageId } = data;
+      const { jobId, assistantMessageId, sessionId } = data;
       expect(jobId).toBeDefined();
       expect(assistantMessageId).toBeDefined();
 
@@ -99,7 +99,7 @@ describe('Chat AI - Complete Integration', () => {
 
       expect(chatResponse.status).toBe(200);
       const chatData = await chatResponse.json();
-      const { jobId, assistantMessageId } = chatData;
+      const { jobId, assistantMessageId, sessionId } = chatData;
 
       // Attendre la complétion du job
       let jobCompleted = false;
@@ -123,20 +123,19 @@ describe('Chat AI - Complete Integration', () => {
 
       expect(jobCompleted).toBe(true);
 
-      // Vérifier les stream events pour voir si des tool calls ont été effectués
-      const streamEventsRes = await authenticatedRequest(
+      const bootstrapRes = await authenticatedRequest(
         app,
         'GET',
-        `/api/v1/chat/messages/${assistantMessageId}/stream-events`,
+        `/api/v1/chat/sessions/${sessionId}/bootstrap`,
         user.sessionToken!
       );
-
-      expect(streamEventsRes.status).toBe(200);
-      const streamEvents = await streamEventsRes.json();
+      expect(bootstrapRes.status).toBe(200);
+      const streamEvents = await bootstrapRes.json();
+      const assistantDetails = streamEvents?.assistantDetailsByMessageId?.[assistantMessageId];
       
       // Il devrait y avoir des events (tool calls ou content)
-      expect(streamEvents.events).toBeDefined();
-      expect(Array.isArray(streamEvents.events)).toBe(true);
+      expect(assistantDetails).toBeDefined();
+      expect(Array.isArray(assistantDetails)).toBe(true);
     }, 15000);
 
     it('should handle web_extract tool calls correctly (no empty URLs)', async () => {
