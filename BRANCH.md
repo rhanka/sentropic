@@ -646,7 +646,13 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] `e2e/tests/dev/*`,
         - [x] manual `storageState` only, fail fast if missing.
       - [ ] Use the dev Playwright harness to debug BR05 reload/runtime issues without mutating Demo workspace data beyond manual navigation.
-        - [ ] Current blocker: `.auth/dev-state.json` is not present yet.
+        - [ ] Phase 1 — Unblock quickly with the real dev admin account already present in DB:
+          - [x] record `.auth/dev-state.json` from `admin@sent-tech.ca`,
+          - [x] use that state only for manual-navigation / reload-debug scoped specs against `ENV=dev`.
+        - [ ] Phase 2 — Isolate the harness on a dedicated dev-only user once the lane is validated:
+          - [ ] create and enroll `ai-demo-user@sent-tech.ca` through the real product flow,
+          - [ ] grant the minimal required access on `Demo Workspace`,
+          - [ ] switch `playwright.dev.config.ts` to the dedicated `ai-demo-user@sent-tech.ca` storage state.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
