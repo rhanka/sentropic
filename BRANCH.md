@@ -536,21 +536,30 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Add hover/inspection payload listing changed files and/or domain objects since that checkpoint.
       - [x] Keep the preview compact by default, with precise changed-item names in the hover content.
       - [x] Ensure the preview works in both VSCode and web app hosts.
-    - [ ] BUG-L6-24 — OpenAI default model cutover from `gpt-5.2` to `gpt-5.4`.
-      - [ ] Replace exposed/default OpenAI catalog reference `gpt-5.2` with `gpt-5.4` (no legacy `gpt-5.2` kept in active catalog/defaults).
-      - [ ] Auto-migrate persisted default model selections equal to `gpt-5.2` onto the new provider default `gpt-5.4` at read/resolve time.
-      - [ ] Leave all other persisted model selections unchanged.
-      - [ ] Keep historical traces/treatments already stored as `gpt-5.2` unchanged for sincerity; only new default selection/exposed catalog moves to `gpt-5.4`.
-      - [ ] Revalidate shared runtime + settings UI behavior when the stored model no longer exists in catalog.
-      - [ ] Add scoped API/UI tests for catalog exposure + automatic fallback migration path.
-    - [ ] BUG-L6-25 — Gemini default light model cutover from `gemini-2.5-flash-lite` to `gemini-3.1-flash-lite`.
-      - [ ] Replace exposed/default Gemini light-model catalog reference `gemini-2.5-flash-lite` with `gemini-3.1-flash-lite`.
-      - [ ] Move the reasoning-effort evaluator path from `gemini-2.5-flash-lite` to `gemini-3.1-flash-lite`.
-      - [ ] Auto-migrate persisted default model selections equal to `gemini-2.5-flash-lite` onto `gemini-3.1-flash-lite` at read/resolve time.
-      - [ ] Leave all other persisted Gemini selections unchanged.
-      - [ ] Keep historical traces/treatments already stored as `gemini-2.5-flash-lite` unchanged for sincerity; only new default selection/exposed catalog/evaluator path moves to `gemini-3.1-flash-lite`.
-      - [ ] Revalidate reasoning-effort traces/status labels and shared runtime behavior after the cutover.
-      - [ ] Add scoped API/UI/unit tests for catalog exposure + evaluator selection + automatic fallback migration path.
+    - [x] BUG-L6-24 — OpenAI default model cutover from `gpt-5.2` to `gpt-5.4`.
+      - [x] Replace exposed/default OpenAI catalog reference `gpt-5.2` with `gpt-5.4` (no legacy `gpt-5.2` kept in active catalog/defaults).
+      - [x] Auto-migrate persisted default model selections equal to `gpt-5.2` onto the new provider default `gpt-5.4` at read/resolve time.
+      - [x] Leave all other persisted model selections unchanged.
+      - [x] Keep historical traces/treatments already stored as `gpt-5.2` unchanged for sincerity; only new default selection/exposed catalog moves to `gpt-5.4`.
+      - [x] Revalidate shared runtime + settings UI behavior when the stored model no longer exists in catalog.
+      - [x] Add scoped API/UI tests for catalog exposure + automatic fallback migration path.
+        - [x] `make test-api-endpoints SCOPE=tests/api/models.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make exec-api CMD='npx vitest run tests/api/me.test.ts -t "migrates legacy stored user defaults on read" --maxWorkers=1' API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-api-unit SCOPE=tests/unit/model-selection-legacy.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-ui SCOPE=tests/utils/user-ai-settings-events.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-ui SCOPE=tests/utils/model-display.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] BUG-L6-25 — Gemini default light model cutover from `gemini-2.5-flash-lite` to `gemini-3.1-flash-lite`.
+      - [x] Replace exposed/default Gemini light-model catalog reference `gemini-2.5-flash-lite` with `gemini-3.1-flash-lite`.
+      - [x] Move the reasoning-effort evaluator path from `gemini-2.5-flash-lite` to `gemini-3.1-flash-lite`.
+      - [x] Auto-migrate persisted default model selections equal to `gemini-2.5-flash-lite` onto `gemini-3.1-flash-lite` at read/resolve time.
+      - [x] Leave all other persisted Gemini selections unchanged.
+      - [x] Keep historical traces/treatments already stored as `gemini-2.5-flash-lite` unchanged for sincerity; only new default selection/exposed catalog/evaluator path moves to `gemini-3.1-flash-lite`.
+      - [x] Revalidate reasoning-effort traces/status labels and shared runtime behavior after the cutover.
+      - [x] Add scoped API/UI/unit tests for catalog exposure + evaluator selection + automatic fallback migration path.
+        - [x] `make test-api-endpoints SCOPE=tests/api/models.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make exec-api CMD='npx vitest run tests/api/ai-settings.test.ts -t "migrates legacy stored global defaults on read" --maxWorkers=1' API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make exec-api CMD='npx vitest run tests/api/chat-message-actions.test.ts -t "migrates the legacy Gemini light model id on retry" --maxWorkers=1' API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+        - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
