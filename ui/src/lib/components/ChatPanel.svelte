@@ -713,7 +713,12 @@
   };
   $: activeAssistantMessage =
     [...messages].reverse().find((m) => isAssistantMessageInProgress(m)) ?? null;
-  $: projectedTimelineItems = buildProjectedTimeline(messages);
+  $: {
+    projectionEventsVersion;
+    initialEventsByMessageId;
+    composerSteerAck;
+    projectedTimelineItems = buildProjectedTimeline(messages);
+  }
   $: composerSteerStreamId = activeAssistantMessage
     ? (activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null)
     : null;
@@ -1297,6 +1302,7 @@
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
   let projectedStreamEventsById = new Map<string, StreamEvent[]>();
+  let projectionEventsVersion = 0;
   let streamDetailsLoading = false;
   let todoRuntimePanel: TodoRuntimePanelState | null = null;
   let todoRuntimeCollapsed = false;
@@ -1341,6 +1347,7 @@
         events,
       ),
     );
+    projectionEventsVersion += 1;
   };
 
   const appendProjectedLiveEvent = (streamId: string, event: StreamEvent) => {
@@ -1353,6 +1360,7 @@
         event,
       ),
     );
+    projectionEventsVersion += 1;
   };
 
   const getProjectionEventsForMessage = (message: LocalMessage): StreamEvent[] => {
@@ -1431,9 +1439,11 @@
       }
 
       const streamId = message._streamId ?? message.id;
+      const projectionEvents = getProjectionEventsForMessage(message);
+      const projectedSegments = projectAssistantRunSegments(projectionEvents);
       const segments =
-        projectAssistantRunSegments(getProjectionEventsForMessage(message)).length > 0
-          ? projectAssistantRunSegments(getProjectionEventsForMessage(message))
+        projectedSegments.length > 0
+          ? projectedSegments
           : buildFallbackProjectedSegments(message);
       const linkedSteers = (steerIdsByAssistantId.get(message.id) ?? [])
         .map((steerId) => timeline.find((entry) => entry.id === steerId) ?? null)
@@ -1488,7 +1498,7 @@
 
           projected.push({
             kind: 'runtime-segment',
-            key: `${message.id}:${segment.id}:${segment.events.at(-1)?.sequence ?? 0}`,
+            key: `${message.id}:${segment.id}`,
             message,
             streamId,
             segment,
@@ -1502,7 +1512,7 @@
 
         projected.push({
           kind: 'assistant-segment',
-          key: `${message.id}:${segment.id}:${segment.events.at(-1)?.sequence ?? segment.content.length}`,
+          key: `${message.id}:${segment.id}`,
           message,
           streamId,
           segment,
@@ -4366,18 +4376,16 @@
               {@const isDown = m.feedbackVote === -1}
               <div class="flex justify-start group">
                 <div class="max-w-[85%] w-full">
-                  {#key item.key}
-                    <StreamMessage
-                      variant="chat"
-                      streamId={item.key}
-                      status={item.isTerminal ? 'completed' : 'processing'}
-                      finalContent={item.segment.content}
-                      smoothContentStreaming={isGeminiModel(m.model)}
-                      historySource="none"
-                      subscriptionMode="passive"
-                      initialEvents={item.segment.events}
-                    />
-                  {/key}
+                  <StreamMessage
+                    variant="chat"
+                    streamId={item.key}
+                    status={item.isTerminal ? 'completed' : 'processing'}
+                    finalContent={item.segment.content}
+                    smoothContentStreaming={isGeminiModel(m.model)}
+                    historySource="none"
+                    subscriptionMode="passive"
+                    initialEvents={item.segment.events}
+                  />
                   {#if item.isTerminal && item.isLastAssistantSegment}
                     <div
                       class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500"
@@ -4448,19 +4456,17 @@
             {:else if item.kind === 'runtime-segment'}
               <div class="flex justify-start">
                 <div class="max-w-[85%] w-full">
-                  {#key item.key}
-                    <StreamMessage
-                      variant="chat"
-                      streamId={item.key}
-                      status={item.message._localStatus ??
-                        (item.message.content ? 'completed' : 'processing')}
-                      historySource="none"
-                      subscriptionMode="passive"
-                      initialEvents={item.segment.events}
-                      acknowledgementText={item.acknowledgementText}
-                      onTodoRuntime={handleTodoRuntimeToolResult}
-                    />
-                  {/key}
+                  <StreamMessage
+                    variant="chat"
+                    streamId={item.key}
+                    status={item.message._localStatus ??
+                      (item.message.content ? 'completed' : 'processing')}
+                    historySource="none"
+                    subscriptionMode="passive"
+                    initialEvents={item.segment.events}
+                    acknowledgementText={item.acknowledgementText}
+                    onTodoRuntime={handleTodoRuntimeToolResult}
+                  />
                 </div>
               </div>
             {/if}

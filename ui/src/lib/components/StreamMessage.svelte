@@ -104,6 +104,7 @@
   let detailLoading = false;
   let detailLoaded = false;
   let lastInitialEventsRef: unknown = null;
+  let lastInitialEventCount = 0;
   let smoothedContentText = '';
   let smoothPendingText = '';
   let smoothTimer: ReturnType<typeof setTimeout> | null = null;
@@ -643,6 +644,7 @@
     detailLoading = false;
     detailLoaded = false;
     lastInitialEventsRef = null;
+    lastInitialEventCount = 0;
     terminalNotified = false;
   };
 
@@ -688,10 +690,24 @@
   $: if (initialEvents && initialEvents !== lastInitialEventsRef) {
     lastInitialEventsRef = initialEvents;
     if (subscriptionMode === 'passive') {
-      unsubscribe();
-      reset();
+      const shouldReplayFromScratch =
+        initialEvents.length < lastInitialEventCount ||
+        (initialEvents.length > 0 &&
+          st.lastSeq > 0 &&
+          Number(initialEvents[0]?.sequence ?? 0) > st.lastSeq);
+      if (shouldReplayFromScratch) {
+        unsubscribe();
+        reset();
+      }
     }
-    if (initialEvents.length > 0) applyEvents(initialEvents as any);
+    if (initialEvents.length > 0) {
+      const nextEvents =
+        subscriptionMode === 'passive' && st.lastSeq > 0
+          ? initialEvents.filter((event) => Number(event.sequence) > st.lastSeq)
+          : initialEvents;
+      if (nextEvents.length > 0) applyEvents(nextEvents as any);
+    }
+    lastInitialEventCount = initialEvents.length;
     detailLoaded = true;
     detailLoading = false;
   }
@@ -722,7 +738,7 @@
         </button>
       </div>
     {/if}
-    {#if hasSteps && (hasContent || !!finalContent || (variant === 'job' && isTerminalStatus(status)))}
+    {#if hasSteps}
       <div class="flex items-center justify-between gap-2 mt-0.5">
         <div class="text-[11px] text-slate-500">
           {#if st.sawReasoning}{$_('stream.reasoning')} {Math.max(0, Math.floor(durationMs / 60000))}m{String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, '0')}s{/if}
