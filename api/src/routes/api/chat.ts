@@ -326,6 +326,23 @@ chatRouter.get('/sessions/:id/messages', async (c) => {
   return c.json({ sessionId, messages: result.messages, todoRuntime: result.todoRuntime });
 });
 
+chatRouter.get('/sessions/:id/bootstrap', async (c) => {
+  const user = c.get('user');
+  const sessionId = c.req.param('id');
+  const result = await chatService.getSessionBootstrap({
+    sessionId,
+    userId: user.userId,
+  });
+  return c.json({
+    sessionId,
+    messages: result.messages,
+    todoRuntime: result.todoRuntime,
+    checkpoints: result.checkpoints,
+    documents: result.documents,
+    assistantDetailsByMessageId: result.assistantDetailsByMessageId,
+  });
+});
+
 chatRouter.get('/sessions/:id/checkpoints', requireWorkspaceAccessRole(), async (c) => {
   const user = c.get('user');
   const sessionId = c.req.param('id');
