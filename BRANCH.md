@@ -621,6 +621,11 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Remove product chat-history replay dependence on `GET /api/v1/streams/events/:streamId` in frontend runtime code.
       - [x] Keep SSE live transport unchanged for active runs.
       - [x] Keep persisted `chat_stream_events` and backend internal replay logic unchanged.
+      - [ ] Complete the big-bang cutover by removing public frontend-facing `stream-events` routes:
+        - [ ] migrate `streamHub` away from `/api/v1/streams/events/:streamId`,
+        - [ ] delete `GET /api/v1/chat/sessions/:id/stream-events`, `GET /api/v1/chat/messages/:id/stream-events`, and `GET /api/v1/streams/events/:streamId`,
+        - [ ] rewrite affected tests,
+        - [ ] revalidate session reload + SSE live.
       - [ ] Update scoped tests:
         - [x] API tests for `GET /api/v1/chat/sessions/:id/bootstrap`,
         - [ ] UI tests for bootstrap-driven session hydration,
