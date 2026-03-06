@@ -4,7 +4,7 @@ import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
-import { readStreamEvents, writeStreamEventWithSequenceRetry } from '../../services/stream-service';
+import { writeStreamEventWithSequenceRetry } from '../../services/stream-service';
 import { db } from '../../db/client';
 import { chatMessages, chatSessions, extensionToolPermissions } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
@@ -392,30 +392,6 @@ chatRouter.post(
 );
 
 /**
- * GET /api/v1/chat/sessions/:id/stream-events
- * Optimisation batch (Option C): relecture des events pour les N derniers messages assistant d'une session.
- */
-chatRouter.get('/sessions/:id/stream-events', async (c) => {
-  const user = c.get('user');
-  const sessionId = c.req.param('id');
-
-  const url = new URL(c.req.url);
-  const limitMessagesRaw = url.searchParams.get('limitMessages');
-  const limitEventsRaw = url.searchParams.get('limitEvents');
-  const limitMessages = limitMessagesRaw ? Number(limitMessagesRaw) : undefined;
-  const limitEventsPerMessage = limitEventsRaw ? Number(limitEventsRaw) : undefined;
-
-  const streams = await chatService.listStreamEventsForSession({
-    sessionId,
-    userId: user.userId,
-    limitMessages: Number.isFinite(limitMessages as number) ? (limitMessages as number) : undefined,
-    limitEventsPerMessage: Number.isFinite(limitEventsPerMessage as number) ? (limitEventsPerMessage as number) : undefined
-  });
-
-  return c.json({ sessionId, streams });
-});
-
-/**
  * DELETE /api/v1/chat/sessions/:id
  * Supprime une session + cascade (messages, contexts, stream events)
  */
@@ -424,27 +400,6 @@ chatRouter.delete('/sessions/:id', async (c) => {
   const sessionId = c.req.param('id');
   await chatService.deleteSession(sessionId, user.userId);
   return c.json({ ok: true });
-});
-
-/**
- * GET /api/v1/chat/messages/:id/stream-events
- * Relecture des events (option C) pour reconstruire reasoning/tools d'une session.
- * streamId == messageId pour le chat.
- */
-chatRouter.get('/messages/:id/stream-events', async (c) => {
-  const user = c.get('user');
-  const messageId = c.req.param('id');
-  const msg = await chatService.getMessageForUser(messageId, user.userId);
-  if (!msg) return c.json({ error: 'Message not found' }, 404);
-
-  const url = new URL(c.req.url);
-  const sinceSequenceRaw = url.searchParams.get('sinceSequence');
-  const limitRaw = url.searchParams.get('limit');
-  const sinceSequence = sinceSequenceRaw ? Number(sinceSequenceRaw) : undefined;
-  const limit = limitRaw ? Number(limitRaw) : 2000;
-
-  const events = await readStreamEvents(messageId, Number.isFinite(sinceSequence as number) ? sinceSequence : undefined, Number.isFinite(limit) ? limit : 2000);
-  return c.json({ messageId, streamId: messageId, events });
 });
 
 /**

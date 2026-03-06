@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
-  import { apiGet } from '$lib/utils/api';
   import { ChevronDown, Loader2 } from '@lucide/svelte';
   import { Streamdown } from 'svelte-streamdown';
   import { _ } from 'svelte-i18n';
@@ -19,8 +18,6 @@
   export let initialEvents:
     | Array<{ eventType: string; data: unknown; sequence: number; createdAt?: string }>
     | undefined = undefined;
-  export let historySource: 'none' | 'stream' = 'none';
-  export let historyLimit = 2000;
   export let historyPending: boolean = false;
   export let subscriptionMode: 'live' | 'passive' = 'live';
   export let smoothContentStreaming = false;
@@ -546,21 +543,8 @@
       detailLoaded = true;
       return;
     }
-    if (historySource === 'none') return;
-    try {
-      detailLoading = true;
-      if (historySource === 'stream') {
-        const res = await apiGet<{ streamId: string; events: Array<{ eventType: string; data: any; sequence: number; createdAt?: string }> }>(
-          `/streams/events/${encodeURIComponent(streamId)}?limit=${historyLimit}`
-        );
-        applyEvents((res as any)?.events ?? []);
-      }
-      detailLoaded = true;
-    } catch {
-      // ignore
-    } finally {
-      detailLoading = false;
-    }
+    detailLoaded = false;
+    detailLoading = false;
   };
 
   const makeKey = () => `streamMessage2:${streamId}:${Math.random().toString(36).slice(2)}`;

@@ -46,7 +46,7 @@ describe('Chat summary contract endpoint', () => {
     vi.clearAllMocks();
   });
 
-  it('exposes context budget status events in message stream endpoint', async () => {
+  it('exposes context budget status events in session bootstrap assistant details', async () => {
     mockedCallOpenAIResponseStream.mockImplementation(() =>
       stream([
         { type: 'content_delta', data: { delta: 'Réponse test budget.' } },
@@ -73,16 +73,17 @@ describe('Chat summary contract endpoint', () => {
       model: 'gpt-4.1-nano',
     });
 
-    const eventsResponse = await authenticatedRequest(
+    const bootstrapResponse = await authenticatedRequest(
       app,
       'GET',
-      `/api/v1/chat/messages/${payload.assistantMessageId}/stream-events`,
+      `/api/v1/chat/sessions/${payload.sessionId}/bootstrap`,
       user.sessionToken!,
     );
-    expect(eventsResponse.status).toBe(200);
-    const eventsPayload = await eventsResponse.json();
-    const statusEvents = Array.isArray(eventsPayload.events)
-      ? eventsPayload.events.filter((event: any) => event.eventType === 'status')
+    expect(bootstrapResponse.status).toBe(200);
+    const bootstrapPayload = await bootstrapResponse.json();
+    const assistantDetails = bootstrapPayload?.assistantDetailsByMessageId?.[payload.assistantMessageId];
+    const statusEvents = Array.isArray(assistantDetails)
+      ? assistantDetails.filter((event: any) => event.eventType === 'status')
       : [];
     const states = statusEvents.map((event: any) => String(event.data?.state ?? ''));
     expect(states).toContain('context_budget_update');

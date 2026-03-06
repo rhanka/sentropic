@@ -622,15 +622,15 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Keep SSE live transport unchanged for active runs.
       - [x] Keep persisted `chat_stream_events` and backend internal replay logic unchanged.
       - [ ] Complete the big-bang cutover by removing public frontend-facing `stream-events` routes:
-        - [ ] migrate `streamHub` away from `/api/v1/streams/events/:streamId`,
-        - [ ] delete `GET /api/v1/chat/sessions/:id/stream-events`, `GET /api/v1/chat/messages/:id/stream-events`, and `GET /api/v1/streams/events/:streamId`,
-        - [ ] rewrite affected tests,
+        - [x] migrate `streamHub` away from `/api/v1/streams/events/:streamId`,
+        - [x] delete `GET /api/v1/chat/sessions/:id/stream-events`, `GET /api/v1/chat/messages/:id/stream-events`, and `GET /api/v1/streams/events/:streamId`,
+        - [x] rewrite affected tests,
         - [ ] revalidate session reload + SSE live.
       - [ ] Update scoped tests:
         - [x] API tests for `GET /api/v1/chat/sessions/:id/bootstrap`,
         - [ ] UI tests for bootstrap-driven session hydration,
         - [ ] E2E reload/open-new-tab tests proving reasoning/tools history survives without frontend `stream-events` calls,
-        - [ ] remove or rewrite frontend tests tied only to the old `stream-events` contract.
+        - [x] remove or rewrite frontend tests tied only to the old `stream-events` contract.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)

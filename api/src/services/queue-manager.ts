@@ -381,6 +381,7 @@ export interface Job {
   id: string;
   type: JobType;
   data: JobData;
+  streamId: string;
   result?: unknown;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   workspaceId?: string;
@@ -388,6 +389,47 @@ export interface Job {
   startedAt?: string;
   completedAt?: string;
   error?: string;
+}
+
+export function getPublicJobStreamId(job: Pick<Job, 'id' | 'type' | 'data'>): string {
+  const rawData = (job.data ?? {}) as unknown as Record<string, unknown>;
+  if (job?.type === 'organization_enrich' && (job.data as OrganizationEnrichJobData | undefined)?.organizationId) {
+    return `organization_${(job.data as OrganizationEnrichJobData).organizationId}`;
+  }
+  if (job?.type === 'usecase_list' && ((job.data as UseCaseListJobData | undefined)?.folderId || rawData.folder_id)) {
+    const folderId =
+      (job.data as UseCaseListJobData).folderId ??
+      String(rawData.folder_id ?? '');
+    return `folder_${folderId}`;
+  }
+  if (job?.type === 'matrix_generate' && ((job.data as MatrixGenerateJobData | undefined)?.folderId || rawData.folder_id)) {
+    const folderId =
+      (job.data as MatrixGenerateJobData).folderId ??
+      String(rawData.folder_id ?? '');
+    return `matrix_${folderId}`;
+  }
+  if (job?.type === 'usecase_detail' && ((job.data as UseCaseDetailJobData | undefined)?.useCaseId || rawData.use_case_id)) {
+    const useCaseId =
+      (job.data as UseCaseDetailJobData).useCaseId ??
+      String(rawData.use_case_id ?? '');
+    return `usecase_${useCaseId}`;
+  }
+  if (job?.type === 'executive_summary' && ((job.data as ExecutiveSummaryJobData | undefined)?.folderId || rawData.folder_id)) {
+    const folderId =
+      (job.data as ExecutiveSummaryJobData).folderId ??
+      String(rawData.folder_id ?? '');
+    return `folder_${folderId}`;
+  }
+  if (job?.type === 'document_summary' && ((job.data as DocumentSummaryJobData | undefined)?.documentId || rawData.document_id)) {
+    const documentId =
+      (job.data as DocumentSummaryJobData).documentId ??
+      String(rawData.document_id ?? '');
+    return `document_${documentId}`;
+  }
+  if (job?.type === 'chat_message' && typeof (job.data as { assistantMessageId?: unknown })?.assistantMessageId === 'string') {
+    return String((job.data as { assistantMessageId: string }).assistantMessageId);
+  }
+  return `job_${job.id}`;
 }
 
 export class QueueManager {
@@ -2443,7 +2485,7 @@ export class QueueManager {
     if (!result || result.length === 0) return null;
     
     const row = result[0];
-    return {
+    const job = {
       id: row.id,
       type: row.type as JobType,
       data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
@@ -2458,6 +2500,11 @@ export class QueueManager {
       startedAt: row.startedAt || undefined,
       completedAt: row.completedAt || undefined,
       error: row.error || undefined
+    } satisfies Omit<Job, 'streamId'>;
+
+    return {
+      ...job,
+      streamId: getPublicJobStreamId(job),
     };
   }
 
@@ -2471,7 +2518,8 @@ export class QueueManager {
       .where(opts?.workspaceId ? eq(jobQueue.workspaceId, opts.workspaceId) : undefined)
       .orderBy(desc(jobQueue.createdAt));
     
-    return results.map((row) => ({
+    return results.map((row) => {
+      const job = {
       id: row.id,
       type: row.type as JobType,
       data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
@@ -2483,7 +2531,13 @@ export class QueueManager {
       startedAt: row.startedAt || undefined,
       completedAt: row.completedAt || undefined,
       error: row.error || undefined
-    }));
+      } satisfies Omit<Job, 'streamId'>;
+
+      return {
+        ...job,
+        streamId: getPublicJobStreamId(job),
+      };
+    });
   }
 
   async findLatestDocxJobBySource(params: {
@@ -2600,6 +2654,11 @@ export class QueueManager {
       id: row.id,
       type: row.type as JobType,
       data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
+      streamId: getPublicJobStreamId({
+        id: row.id,
+        type: row.type as JobType,
+        data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
+      }),
       result: parseJsonField(row.result),
       status: row.status as Job['status'],
       workspaceId: row.workspaceId,

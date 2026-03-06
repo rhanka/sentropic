@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import { requireRole } from '../../middleware/rbac';
 import { getWorkspaceRole } from '../../services/workspace-access';
 import { ADMIN_WORKSPACE_ID } from '../../db/schema';
+import { readStreamEvents } from '../../services/stream-service';
 
 const queueRouter = new Hono();
 
@@ -59,6 +60,40 @@ queueRouter.get('/jobs/:id', async (c) => {
   } catch (error) {
     console.error('Error fetching job status:', error);
     return c.json({ message: 'Failed to fetch job status' }, 500);
+  }
+});
+
+queueRouter.get('/jobs/:id/stream-bootstrap', async (c) => {
+  try {
+    const jobId = c.req.param('id');
+    const targetWorkspaceId = await resolveTargetWorkspaceId(c);
+    const job = await queueManager.getJobStatus(jobId);
+
+    if (!job) {
+      return c.json({ message: 'Job not found' }, 404);
+    }
+
+    if (job.workspaceId && job.workspaceId !== targetWorkspaceId) {
+      return c.json({ message: 'Job not found' }, 404);
+    }
+
+    const limitRaw = Number(c.req.query('limit') || '500');
+    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(5000, Math.floor(limitRaw))) : 500;
+    const events = await readStreamEvents(job.streamId, undefined, limit);
+
+    return c.json({
+      jobId: job.id,
+      streamId: job.streamId,
+      events: events.map((event) => ({
+        eventType: event.eventType,
+        data: event.data,
+        sequence: event.sequence,
+        createdAt: event.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error('Error fetching job stream bootstrap:', error);
+    return c.json({ message: 'Failed to fetch job stream bootstrap' }, 500);
   }
 });
 
