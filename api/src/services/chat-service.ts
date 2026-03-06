@@ -5,7 +5,7 @@ import { createId } from '../utils/id';
 import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './llm-runtime';
 import {
   getModelCatalogPayload,
-  inferProviderFromModelId,
+  inferProviderFromModelIdWithLegacy,
   resolveDefaultSelection,
 } from './model-catalog';
 import { getNextSequence, readStreamEvents, writeStreamEvent } from './stream-service';
@@ -630,7 +630,7 @@ const compactConversationContext = async (input: {
     providerId: input.providerId,
     model:
       input.providerId === 'gemini'
-        ? 'gemini-2.5-flash-lite'
+        ? 'gemini-3.1-flash-lite'
         : 'gpt-4.1-nano',
     userId: input.userId,
     workspaceId: input.workspaceId,
@@ -1639,7 +1639,7 @@ export class ChatService {
       settingsService.getAISettings({ userId: options.userId }),
       getModelCatalogPayload({ userId: options.userId }),
     ]);
-    const inferredProviderId = inferProviderFromModelId(
+    const inferredProviderId = inferProviderFromModelIdWithLegacy(
       catalog.models,
       options.model
     );
@@ -1808,7 +1808,10 @@ export class ChatService {
       settingsService.getAISettings({ userId: input.userId }),
       getModelCatalogPayload({ userId: input.userId }),
     ]);
-    const inferredProviderId = inferProviderFromModelId(catalog.models, input.model);
+    const inferredProviderId = inferProviderFromModelIdWithLegacy(
+      catalog.models,
+      input.model
+    );
     const resolvedSelection = resolveDefaultSelection(
       {
         providerId:
@@ -2774,7 +2777,7 @@ Règles :
       settingsService.getAISettings({ userId: options.userId }),
       getModelCatalogPayload({ userId: options.userId }),
     ]);
-    const inferredProviderId = inferProviderFromModelId(
+    const inferredProviderId = inferProviderFromModelIdWithLegacy(
       catalog.models,
       options.model || assistantRow.model || null
     );
@@ -2793,7 +2796,7 @@ Règles :
 
     // Reasoning-effort evaluation (best effort):
     // - OpenAI gpt-5* keeps its existing evaluator behavior.
-    // - Gemini provider uses gemini-2.5-flash-lite for the same classification intent.
+    // - Gemini provider uses gemini-3.1-flash-lite for the same classification intent.
     const isGpt5 = typeof selectedModel === 'string' && selectedModel.startsWith('gpt-5');
     const shouldEvaluateReasoningEffort =
       isGpt5 || selectedProviderId === 'gemini';
@@ -2801,7 +2804,7 @@ Règles :
       selectedProviderId === 'gemini' ? 'gemini' : 'openai';
     const evaluatorModel =
       selectedProviderId === 'gemini'
-        ? 'gemini-2.5-flash-lite'
+        ? 'gemini-3.1-flash-lite'
         : 'gpt-4.1-nano';
     let reasoningEffortForThisMessage: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | undefined;
     // Default fallback if evaluator fails: medium.

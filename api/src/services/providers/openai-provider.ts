@@ -32,8 +32,8 @@ export type OpenAIStreamGenerateRequest =
 const OPENAI_MODELS: ModelCatalogEntry[] = [
   {
     providerId: 'openai',
-    modelId: 'gpt-5.2',
-    label: 'GPT-5.2',
+    modelId: 'gpt-5.4',
+    label: 'GPT-5.4',
     reasoningTier: 'advanced',
     supportsTools: true,
     supportsStreaming: true,

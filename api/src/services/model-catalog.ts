@@ -1,6 +1,7 @@
 import { providerRegistry } from './provider-registry';
 import { isProviderId, type ModelCatalogEntry, type ProviderId } from './provider-runtime';
 import { settingsService } from './settings';
+import { findLegacyModelCutoverRule, normalizeLegacyModelSelection } from './model-selection-legacy';
 
 export type ModelSelectionPair = {
   provider_id: ProviderId;
@@ -89,6 +90,16 @@ export const inferProviderFromModelId = (
   return matches[0].provider_id;
 };
 
+export const inferProviderFromModelIdWithLegacy = (
+  models: CatalogModel[],
+  modelId: string | null | undefined
+): ProviderId | null => {
+  const currentProvider = inferProviderFromModelId(models, modelId);
+  if (currentProvider) return currentProvider;
+
+  return findLegacyModelCutoverRule(modelId)?.providerId ?? null;
+};
+
 export const resolveDefaultSelection = (
   input: {
     providerId?: string | null;
@@ -96,14 +107,18 @@ export const resolveDefaultSelection = (
   },
   models: CatalogModel[]
 ): ModelSelectionPair => {
-  const inferredProviderId = inferProviderFromModelId(models, input.modelId);
+  const normalizedInput = normalizeLegacyModelSelection(input);
+  const inferredProviderId = inferProviderFromModelIdWithLegacy(
+    models,
+    normalizedInput.modelId
+  );
 
   const providerId =
-    input.providerId && isProviderId(input.providerId)
-      ? input.providerId
+    normalizedInput.providerId && isProviderId(normalizedInput.providerId)
+      ? normalizedInput.providerId
       : inferredProviderId || FALLBACK_DEFAULT.provider_id;
 
-  const targetModelId = input.modelId || '';
+  const targetModelId = normalizedInput.modelId || '';
   const exact = findModel(models, providerId, targetModelId);
   if (exact) {
     return {

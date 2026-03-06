@@ -21,6 +21,6 @@ describe('model display utils', () => {
   });
 
   it('keeps non-Gemini model identifiers unchanged', () => {
-    expect(formatCompactModelLabel('gpt-5.2')).toBe('gpt-5.2');
+    expect(formatCompactModelLabel('gpt-5.4')).toBe('gpt-5.4');
   });
 });
