@@ -104,7 +104,10 @@
     USER_AI_SETTINGS_UPDATED_EVENT,
     type UserAISettingsUpdatedPayload,
   } from '$lib/utils/user-ai-settings-events';
-  import { hasCheckpointMutationDelta } from '$lib/utils/checkpointDelta';
+  import {
+    getCheckpointMutationPreviewItems,
+    hasCheckpointMutationDelta,
+  } from '$lib/utils/checkpointDelta';
 
   type ChatSession = {
     id: string;
@@ -2494,6 +2497,19 @@
     );
   };
 
+  const getCheckpointPreviewTitle = (userMessageId: string): string => {
+    const checkpoint = getCheckpointForUserMessage(userMessageId);
+    const baseTitle = $_('chat.checkpoints.restoreFromMessage');
+    if (!checkpoint) return baseTitle;
+    const previewItems = getCheckpointMutationPreviewItems(
+      checkpoint,
+      messages,
+      initialEventsByMessageId,
+    );
+    if (previewItems.length === 0) return baseTitle;
+    return `${baseTitle}\n${previewItems.join('\n')}`;
+  };
+
   const applyCheckpointRestore = async (
     checkpoint: ChatCheckpoint,
   ): Promise<boolean> => {
@@ -4027,7 +4043,7 @@
                       on:click={() => openCheckpointPromptForMessage(m.id)}
                       type="button"
                       aria-label={$_('chat.checkpoints.restoreFromMessage')}
-                      title={$_('chat.checkpoints.restoreFromMessage')}
+                      title={getCheckpointPreviewTitle(m.id)}
                     >
                       <UndoDot class="w-3.5 h-3.5" />
                     </button>
