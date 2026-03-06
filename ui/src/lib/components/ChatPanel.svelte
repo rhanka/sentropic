@@ -3272,6 +3272,21 @@
     modelCatalogModels.find((entry) => entry.model_id === selectedModelId) ??
     null;
 
+  const getSelectedModelLabel = (): string =>
+    fallbackSelectedModelOption()?.label ?? selectedModelId;
+
+  const getLongestVisibleModelLabelLength = (): number => {
+    const labels = modelCatalogGroups.flatMap((group) =>
+      group.models.map((modelOption) => modelOption.label),
+    );
+
+    if (labels.length === 0) {
+      labels.push(getSelectedModelLabel());
+    }
+
+    return labels.reduce((max, label) => Math.max(max, label.length), 0);
+  };
+
   $: modelCatalogGroups = modelCatalogProviders
     .map((provider) => ({
       provider,
@@ -3300,6 +3315,10 @@
   }
 
   $: selectedModelSelectionKey = `${selectedProviderId}::${selectedModelId}`;
+  $: selectedModelWidthCh = Math.max(
+    getLongestVisibleModelLabelLength() + 4,
+    18,
+  );
 
   const sendMessage = async () => {
     const text = input.trim();
@@ -4684,7 +4703,8 @@
             id="chat-model-selection"
             value={selectedModelSelectionKey}
             on:change={handleModelSelectionChange}
-            class="min-w-[220px] bg-transparent px-0 py-0 text-[11px] text-slate-700 focus:outline-none"
+            class="w-auto px-2 py-0.5 text-[11px] text-slate-700 focus:outline-none"
+            style={`width:${selectedModelWidthCh}ch;min-width:${selectedModelWidthCh}ch;`}
           >
             {#if modelCatalogGroups.length === 0 && fallbackSelectedModelOption()}
               <option value={`${fallbackSelectedModelOption()?.provider_id ?? selectedProviderId}::${fallbackSelectedModelOption()?.model_id ?? selectedModelId}`}>

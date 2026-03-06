@@ -580,6 +580,20 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Validate the fallback logic with:
         - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
         - [x] `make test-ui SCOPE=tests/vscode-ext/session-token-persistence.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] BUG-L6-28 — VSCode host theming still hardcodes dark surfaces instead of following actual light/dark host mode.
+      - [x] Remove the component-level `topai-vscode-dark` override that forced dark styling for all VSCode runtimes, including light OpenVSCode themes.
+      - [x] Move model-selector, composer footer, plan panel, and delete-confirm styling to `app.css` using native VSCode theme classes and variables.
+      - [x] Keep the model-selector chevron visible in dark hosts and size the selector to the longest visible model label.
+      - [x] Raise the unchecked Plan checkbox outline contrast in dark VSCode hosts.
+      - [x] Keep dark/high-contrast host parity while letting light hosts fall back to their natural light palette.
+      - [x] Validate the theme rewire with:
+        - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [x] BUG-L6-29 — Web app / Chrome dark theme misses the same custom dark surfaces already handled for VSCode hosts.
+      - [x] Apply the dark-theme custom overrides to `topai-theme-dark` for primary bubbles, composer footer/input, model selector, plan panel, danger actions, and settings tabs/badges.
+      - [x] Reuse the same anthracite family and selector/chevron treatment as the VSCode host path instead of maintaining divergent component-local dark styles.
+      - [x] Keep the same anthracite family used in VSCode dark mode so host parity remains visually coherent across web/chrome/vscode.
+      - [x] Validate the web dark-theme stylesheet with:
+        - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
