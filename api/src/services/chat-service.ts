@@ -1701,7 +1701,7 @@ export class ChatService {
     if (!session) throw new Error('Session not found');
 
     const limitMessages = Math.max(1, Math.min(50, options.limitMessages ?? 20));
-    const limitEventsPerMessage = Math.max(10, Math.min(5000, options.limitEventsPerMessage ?? 2000));
+    const limitEventsPerMessage = Math.max(10, Math.min(20000, options.limitEventsPerMessage ?? 5000));
 
     // Derniers messages assistant finalisés
     const assistantRows = await db
