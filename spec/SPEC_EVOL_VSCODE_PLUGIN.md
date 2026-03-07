@@ -1067,20 +1067,29 @@ This section locks the implementation contract for the immediate Lot-1 increment
     - SSE as the live-update contract,
     - persisted stream events as an internal runtime journal only.
 
-### 4.26 Lot 6 - Adaptive runtime-details rendering by workspace type
+### 4.26 Lot 6 - Converged runtime-details history with workspace-specific live presentation
 - Goal:
   - keep large-history hydration perceptibly progressive,
-  - avoid paying the same runtime-details rendering cost in every workspace type,
-  - keep code workspaces optimized for observability while non-code workspaces stay optimized for lightweight reading.
+  - avoid a permanent code/non-code fork in the historical chat contract,
+  - keep the only workspace-specific difference on the active run presentation.
 
 - Decision locked:
-  - runtime-details rendering policy depends on the active workspace type, not on the host (`web`, `chrome`, `vscode`),
+  - history/runtime-details transport is identical for code and non-code workspaces,
   - the same projected timeline structure is used everywhere,
-  - only the default expansion policy and runtime-body mounting strategy change.
+  - workspace type differences are limited to the live active run presentation,
+  - host (`web`, `chrome`, `vscode`) must not create a second historical chat contract.
 
-- Code workspace policy:
-  - reasoning/tools blocks are expanded by default,
-  - `history` may embed runtime details eagerly so coding sessions expose the full chain immediately,
+- Shared history policy:
+  - `history` must use the same `summary + on-demand per-message runtime details` contract for every workspace type,
+  - reloading a code-workspace session must therefore rehydrate collapsed runtime summaries first, exactly like a non-code session,
+  - the first expand of one assistant turn must call a dedicated per-message details route (message-scoped, not session-wide),
+  - once fetched, that body is cached locally for subsequent collapse/expand cycles in the same session view,
+  - collapsed runtime blocks must stay cheap to mount even when reasoning/tool payloads are large,
+  - a collapsed block may show only summary metadata that is already present in the `history` item payload.
+
+- Code workspace live policy:
+  - only the active run differs from non-code behavior,
+  - reasoning/tools for the active run are expanded by default,
   - while an assistant-visible content segment is actively streaming, the same active step must not also render as a duplicated runtime-inline stream,
   - one active step = one visible stream source.
 
@@ -1094,24 +1103,20 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - a code-workspace conversation opened on web keeps code-workspace behavior but must not gain VSCode local tools,
   - a non-code workspace opened in VSCode keeps non-code conversation behavior but may still expose VSCode local tool capabilities separately.
 
-- Non-code workspace policy:
-  - reasoning/tools blocks are collapsed by default,
-  - `history` must not preload the heavy runtime-details body for those collapsed blocks,
-  - the first expand of one assistant turn must call a dedicated per-message details route (message-scoped, not session-wide) to fetch the reconstructed runtime details for that turn only,
-  - once fetched, that body is cached locally for subsequent collapse/expand cycles in the same session view,
-  - collapsed runtime blocks must stay cheap to mount even when reasoning/tool payloads are large,
-  - a collapsed block may show only summary metadata that is already present in the `history` item payload.
+- Non-code live policy:
+  - the active run keeps the compact inline runtime preview behavior,
+  - active reasoning/tools blocks remain collapsed by default while the run is in flight.
 
 - Shared constraints:
-  - reload/open-new-tab preserve the same projected step order and derive the same default expand/collapse behavior from workspace type,
+  - reload/open-new-tab preserve the same projected step order in every workspace type,
+  - history must not diverge between code and non-code sessions,
   - no duplicate runtime step may remain visible once assistant-visible streaming has taken over the same active step,
-  - performance work must not create a second alternate timeline contract,
-  - the on-demand runtime-details fetch must reuse the same backend reconstruction semantics as the eager code-workspace path.
+  - performance work must not create a second alternate timeline contract.
 
 - Performance expectation:
   - large-history session open must visibly progress item by item,
-  - non-code workspaces must avoid both eager runtime-body transport and eager markdown/runtime-body mounting for collapsed runtime steps,
-  - code workspaces may render runtime bodies eagerly because observability takes precedence there.
+  - all workspaces must avoid eager runtime-body transport and eager markdown/runtime-body mounting for collapsed historical runtime steps,
+  - code-workspace observability must come from the active run presentation, not from a heavier historical hydration contract.
 
 
 ## 5) Industry alignment snapshot (for implementation framing)
