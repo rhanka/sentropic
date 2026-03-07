@@ -145,6 +145,7 @@
   };
   const DISPLAY_MODE_STORAGE_KEY = 'chatWidgetDisplayMode';
   const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
+  const HANDOFF_STORAGE_KEY = 'topai:chatwidget-handoff-state';
   const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
   const OPEN_OVERLAY_EVENT = 'topai:open-overlay';
   const OPEN_CHAT_EVENT = 'topai:open-chat';
@@ -494,6 +495,39 @@
     chatDraft = state.draft ?? '';
   };
 
+  const readPersistedHandoffState = (): ChatWidgetHandoffState | null => {
+    if (!isBrowser) return null;
+    try {
+      const raw = localStorage.getItem(HANDOFF_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Partial<ChatWidgetHandoffState> | null;
+      if (!parsed || typeof parsed !== 'object') return null;
+      return {
+        activeTab:
+          parsed.activeTab === 'queue' || parsed.activeTab === 'comments'
+            ? parsed.activeTab
+            : 'chat',
+        chatSessionId:
+          typeof parsed.chatSessionId === 'string' ? parsed.chatSessionId : null,
+        draft: typeof parsed.draft === 'string' ? parsed.draft : '',
+        commentThreadId:
+          typeof parsed.commentThreadId === 'string' ? parsed.commentThreadId : null,
+        commentSectionKey:
+          typeof parsed.commentSectionKey === 'string'
+            ? parsed.commentSectionKey
+            : null,
+        displayMode:
+          parsed.displayMode === 'docked' ? 'docked' : 'floating',
+        isOpen: Boolean(parsed.isOpen),
+        updatedAt:
+          typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
+        source: parsed.source === 'sidepanel' ? 'sidepanel' : 'content',
+      };
+    } catch {
+      return null;
+    }
+  };
+
   let lastHandoffStateFingerprint = '';
   const publishHandoffStateIfChanged = () => {
     if (!isBrowser || !isBrowserReady) return;
@@ -511,6 +545,7 @@
     });
     if (fingerprint === lastHandoffStateFingerprint) return;
     lastHandoffStateFingerprint = fingerprint;
+    localStorage.setItem(HANDOFF_STORAGE_KEY, JSON.stringify(payload));
     window.dispatchEvent(
       new CustomEvent<ChatWidgetHandoffState>(HANDOFF_EVENT, {
         detail: payload,
@@ -1769,7 +1804,7 @@
 
   onMount(async () => {
     isBrowserReady = true;
-    applyInitialState(initialState);
+    applyInitialState(initialState ?? readPersistedHandoffState());
     if (isExtensionOverlayHost) {
       displayMode = 'floating';
     }
