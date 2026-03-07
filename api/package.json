@@ -42,7 +42,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.980.0",
-    "@hono/node-server": "^1.19.9",
+    "@hono/node-server": "1.19.11",
     "@hono/zod-validator": "^0.7.6",
     "@simplewebauthn/server": "^13.2.2",
     "better-queue": "^3.8.12",
@@ -72,7 +72,7 @@
     "@vitest/ui": "^4.0.18",
     "drizzle-kit": "^0.28.1",
     "eslint": "^10.0.2",
-    "hono": "^4.12.3",
+    "hono": "4.12.5",
     "prettier": "^3.2.5",
     "tsx": "^4.7.2",
     "typescript": "^5.4.5",
