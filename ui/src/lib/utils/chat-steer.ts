@@ -81,8 +81,8 @@ export const insertSteerMessageInTimeline = <T extends TimelineMessageLike>(
     return [...timeline, steerMessage];
   }
   return [
-    ...timeline.slice(0, assistantIndex),
+    ...timeline.slice(0, assistantIndex + 1),
     steerMessage,
-    ...timeline.slice(assistantIndex),
+    ...timeline.slice(assistantIndex + 1),
   ];
 };
