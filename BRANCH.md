@@ -631,6 +631,9 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [ ] UI tests for bootstrap-driven session hydration,
         - [ ] E2E reload/open-new-tab tests proving reasoning/tools history survives without frontend `stream-events` calls,
         - [x] remove or rewrite frontend tests tied only to the old `stream-events` contract.
+    - [x] BUG-L6-33 — API prebuild is no longer blocked by current Hono security advisories before BR05 E2E can run.
+      - [x] Refresh `api` lock resolution to latest non-breaking Hono patch line (`hono`, `@hono/node-server`) and rerun `make build-api`.
+      - [x] Re-run the blocked BR05 E2E checks only after the API image builds cleanly again.
     - [x] FEAT-L6-32 — Provide a safe local Playwright navigation/debug harness on top of the real `ENV=dev` stack.
       - [x] Consolidate dev helper services into `docker-compose.dev.yml` only:
         - [x] migrate `openvscode-dev` from `docker-compose.dev-vscode.yml` into `docker-compose.dev.yml`,
