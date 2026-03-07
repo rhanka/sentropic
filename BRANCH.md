@@ -660,9 +660,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] In non-code workspaces, keep the active run collapsed with compact inline preview.
       - [ ] On first expand in any workspace, fetch runtime details through one targeted per-message route (message-scoped, not session-wide).
       - [ ] Cache the first-expanded runtime body locally so repeated collapse/expand does not refetch or remount the full payload.
-    - [ ] BUG-L6-38 — Non-code workspaces no longer show progressive streaming/runtime updates while a run is in progress.
-      - [ ] Verify code/non-code mode divergence stays limited to active-run presentation only, not to historical hydration or live event processing.
-      - [ ] Restore live incremental content, live reasoning header updates, and active-step preview in non-code workspaces.
+    - [x] BUG-L6-38 — Non-code workspaces no longer show progressive streaming/runtime updates while a run is in progress.
+      - [x] Verify code/non-code mode divergence stays limited to active-run presentation only, not to historical hydration or live event processing.
+      - [x] Restore live incremental content, live reasoning header updates, and active-step preview in non-code workspaces.
+    - [ ] BUG-L6-41 — Active non-code runs still surface the `Préparation` state too late instead of showing it immediately after the user message is submitted.
+    - [ ] BUG-L6-42 — Active-run projection still reorders user bubbles incorrectly when the run completes and when the next user message is appended.
+    - [ ] BUG-L6-40 — Historical/runtime flow still contains residual code-vs-non-code forks instead of one converged chat pipeline.
+      - [ ] Remove any remaining historical transport/render branching between code and non-code workspaces.
+      - [ ] Keep the only workspace-type difference on active-run presentation (expanded live runtime in code, compact live preview in non-code).
     - [ ] BUG-L6-39 — Workspace switch shows redundant loading states and makes session titles appear to refresh too slowly.
       - [x] Confirm session-title generation is not retriggered on workspace switch when titles already exist.
       - [x] Collapse the double loader (`loadingSessions` + `loadingMessages`) into an immediate session-list refresh + background message hydration.
