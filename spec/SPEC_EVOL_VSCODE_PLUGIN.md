@@ -985,20 +985,19 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - response format:
     - `application/x-ndjson`
   - order:
-    - newest timeline items first,
-    - reverse chronological pagination using a cursor (`before=...`),
-    - default page size `10`.
+    - the full session history is streamed in reverse conversational order (`newest -> oldest`),
+    - no pagination contract is exposed in BR-05.
   - `bootstrap` must leave the supported frontend contract once this cutover is done.
 
 - NDJSON contract:
-  - first line of each page:
+  - first line of the stream:
     - `type: "session_meta"`
     - includes the current session-level metadata needed to render the thread shell:
       - session identity/title,
       - `todoRuntime`,
       - `documents`,
       - `checkpoints`,
-      - pagination metadata (`hasMore`, `nextBefore`, page limit).
+      - hydration metadata only (no paging cursor required).
   - following lines:
     - `type: "timeline_item"`
     - each item is already reconstructed backend-side, not a raw SQL message row and not raw `stream-events`.
@@ -1017,9 +1016,15 @@ This section locks the implementation contract for the immediate Lot-1 increment
 
 - Frontend contract:
   - the frontend must render progressively as NDJSON lines arrive.
-  - no client-side buffering gate is required before first paint.
-  - scrolling upward loads the next page (`before=...`) and prepends it without breaking the visible anchor.
-  - the frontend must not maintain a second separate historical reconstruction path once `history` is adopted.
+  - the first visible item during hydration is therefore the newest item of the session.
+  - each received `timeline_item` must be staged off-DOM first.
+  - the UI must flush the staged items as a block:
+    - when the staged block now overflows the viewport, or
+    - when the NDJSON stream ends.
+  - block flush must prepend the staged items above the already rendered items so reading order stays chronological while hydration still starts from the newest message.
+  - the frontend must treat emitted `timeline_item` objects as the canonical historical read model.
+  - the frontend must not rebuild the whole historical projected timeline from `messages` while hydrating `history`.
+  - local projection logic remains only for the active live run fed by SSE.
 
 - Live/runtime split:
   - historical session open / reopen / tab switch:
@@ -1035,19 +1040,20 @@ This section locks the implementation contract for the immediate Lot-1 increment
 
 - Performance contract:
   - session open must not require a monolithic full-session JSON blob.
-  - the first visible thread items must appear from the first page without waiting for older history.
-  - pagination granularity for BR-05 is fixed at `10` items per page.
+  - the first visible thread items must appear before the full history has finished streaming.
+  - the first visible history item must be the newest item of the session.
+  - the UI must avoid per-item layout thrash; visible insertion happens by staged block flush, not by immediate DOM mount of every single line.
+  - no pagination is required for BR-05.
 
 - Tests impact:
   - replace bootstrap-specific UI assertions with `history` NDJSON hydration assertions.
   - add API tests covering:
     - `GET /api/v1/chat/sessions/:id/history`,
     - first-line `session_meta`,
-    - reverse-order item emission,
-    - `before` pagination.
+    - reverse-order item emission.
   - add UI/E2E tests covering:
     - progressive display of the newest items,
-    - upward pagination,
+    - staged block flush on overflow / end-of-stream,
     - reload/open-new-tab preserves reasoning/tools through `history` + live SSE split.
 
 - Docs cutover:
@@ -1055,6 +1061,39 @@ This section locks the implementation contract for the immediate Lot-1 increment
     - `history` NDJSON as the session-read contract,
     - SSE as the live-update contract,
     - persisted stream events as an internal runtime journal only.
+
+### 4.26 Lot 6 - Adaptive runtime-details rendering by workspace type
+- Goal:
+  - keep large-history hydration perceptibly progressive,
+  - avoid paying the same runtime-details rendering cost in every workspace type,
+  - keep code workspaces optimized for observability while non-code workspaces stay optimized for lightweight reading.
+
+- Decision locked:
+  - runtime-details rendering policy depends on the active workspace type, not on the host (`web`, `chrome`, `vscode`),
+  - the same projected timeline structure is used everywhere,
+  - only the default expansion policy and runtime-body mounting strategy change.
+
+- Code workspace policy:
+  - reasoning/tools blocks are expanded by default,
+  - runtime details render eagerly so coding sessions expose the full chain immediately,
+  - while an assistant-visible content segment is actively streaming, the same active step must not also render as a duplicated runtime-inline stream,
+  - one active step = one visible stream source.
+
+- Non-code workspace policy:
+  - reasoning/tools blocks are collapsed by default,
+  - the detailed body of a runtime block is lazy-rendered only on the first expand,
+  - once rendered, that body is cached locally for subsequent collapse/expand cycles in the same session view,
+  - collapsed runtime blocks must stay cheap to mount even when reasoning/tool payloads are large.
+
+- Shared constraints:
+  - reload/open-new-tab preserve the same projected step order and derive the same default expand/collapse behavior from workspace type,
+  - no duplicate runtime step may remain visible once assistant-visible streaming has taken over the same active step,
+  - performance work must not create a second alternate timeline contract.
+
+- Performance expectation:
+  - large-history session open must visibly progress item by item,
+  - non-code workspaces must avoid eager markdown/runtime-body mounting for collapsed runtime steps,
+  - code workspaces may render runtime bodies eagerly because observability takes precedence there.
 
 
 ## 5) Industry alignment snapshot (for implementation framing)

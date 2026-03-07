@@ -633,17 +633,25 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] remove or rewrite frontend tests tied only to the old `stream-events` contract.
     - [ ] BUG-L6-34 — Session hydration is still too slow on large chats because one bootstrap JSON ships the whole reconstructed assistant runtime history at once.
       - [ ] Add `GET /api/v1/chat/sessions/:id/history` as the session-read contract:
-        - [ ] `application/x-ndjson`,
-        - [ ] first line = `session_meta`,
-        - [ ] following lines = backend-reconstructed `timeline_item`,
-        - [ ] reverse-order pagination (`before`) with page size `10`.
-      - [ ] Cut `ChatPanel` over from `bootstrap` to `history` NDJSON progressive hydration.
-      - [ ] Keep SSE as the active-run contract only; no frontend historical replay via raw event endpoints.
+        - [x] `application/x-ndjson`,
+        - [x] first line = `session_meta`,
+        - [x] following lines = backend-reconstructed `timeline_item`,
+        - [ ] full-session NDJSON stream (no pagination),
+        - [x] reverse conversational emission (`newest -> oldest`).
+      - [x] Cut `ChatPanel` over from `bootstrap` to `history` NDJSON progressive hydration.
+      - [x] Make `timeline_item` the canonical historical UI read model.
+      - [ ] Stage streamed `timeline_item` rows off-DOM and flush them by block on overflow / end-of-stream so reading order stays chronological without rebuilding the whole projected timeline from `messages`.
+      - [x] Keep SSE as the active-run contract only; no frontend historical replay via raw event endpoints.
       - [ ] Remove `bootstrap` from the supported chat UI contract once `history` is live.
       - [ ] Update scoped tests:
-        - [ ] API tests for paginated NDJSON session history,
-        - [ ] UI tests for progressive newest-first render + upward pagination,
+        - [ ] API tests for full-session NDJSON session history,
+        - [ ] UI tests for progressive newest-first render + staged block flush,
         - [ ] E2E reload/open-new-tab checks on the NDJSON history contract.
+    - [ ] BUG-L6-35 — Runtime-details rendering must adapt to workspace type so progressive hydration stays perceptible on large threads.
+      - [ ] In code workspaces, render reasoning/tools expanded by default.
+      - [ ] In code workspaces, prevent duplicate active-step streaming between runtime preview and assistant-visible content.
+      - [ ] In non-code workspaces, keep reasoning/tools collapsed by default and lazy-render the body on first expand only.
+      - [ ] Cache the first-expanded runtime body locally so repeated collapse/expand does not remount the full payload.
     - [x] BUG-L6-33 — API prebuild is no longer blocked by current Hono security advisories before BR05 E2E can run.
       - [x] Refresh `api` lock resolution to latest non-breaking Hono patch line (`hono`, `@hono/node-server`) and rerun `make build-api`.
       - [x] Re-run the blocked BR05 E2E checks only after the API image builds cleanly again.
