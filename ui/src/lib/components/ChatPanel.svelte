@@ -3669,7 +3669,7 @@
       const res = await apiGet<{ sessions: ChatSession[] }>('/chat/sessions');
       sessions = res.sessions ?? [];
       if (!sessionId && sessions.length > 0) {
-        await selectSession(sessions[0].id);
+        void selectSession(sessions[0].id);
       }
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.loadSessions'));

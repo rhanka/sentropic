@@ -664,8 +664,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Verify code/non-code mode divergence stays limited to active-run presentation only, not to historical hydration or live event processing.
       - [ ] Restore live incremental content, live reasoning header updates, and active-step preview in non-code workspaces.
     - [ ] BUG-L6-39 — Workspace switch shows redundant loading states and makes session titles appear to refresh too slowly.
-      - [ ] Confirm session-title generation is not retriggered on workspace switch when titles already exist.
-      - [ ] Collapse the double loader (`loadingSessions` + `loadingMessages`) into an immediate session-list refresh + background message hydration.
+      - [x] Confirm session-title generation is not retriggered on workspace switch when titles already exist.
+      - [x] Collapse the double loader (`loadingSessions` + `loadingMessages`) into an immediate session-list refresh + background message hydration.
     - [x] BUG-L6-33 — API prebuild is no longer blocked by current Hono security advisories before BR05 E2E can run.
       - [x] Refresh `api` lock resolution to latest non-breaking Hono patch line (`hono`, `@hono/node-server`) and rerun `make build-api`.
       - [x] Re-run the blocked BR05 E2E checks only after the API image builds cleanly again.
