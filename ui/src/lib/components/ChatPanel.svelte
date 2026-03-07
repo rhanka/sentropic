@@ -4,6 +4,7 @@
   import type { AppContext } from '$lib/core/context-provider';
   import { _, locale } from 'svelte-i18n';
   import {
+    apiFetch,
     apiGet,
     apiPost,
     apiPatch,
@@ -163,6 +164,14 @@
     sequence: number;
     createdAt?: string;
   };
+  type RuntimeSegmentSummary = {
+    hasReasoning: boolean;
+    hasTools: boolean;
+    toolCount: number;
+    contextBudgetPct: number | null;
+    durationMs: number | null;
+    reasoningEffortLabel: string | null;
+  };
   type ProjectedTimelineItem =
     | {
         kind: 'message';
@@ -183,10 +192,28 @@
         key: string;
         message: LocalMessage;
         streamId: string;
-        segment: ProjectedRunSegment;
+        segment: ProjectedRunSegment & {
+          runtimeSummary?: RuntimeSegmentSummary;
+        };
         acknowledgementText?: string;
         isActiveRuntimeSegment: boolean;
       };
+  type SessionHistoryMetaLine = {
+    type: 'session_meta';
+    sessionId: string;
+    title?: string | null;
+    todoRuntime?: Record<string, unknown> | null;
+    checkpoints?: ChatCheckpoint[];
+    documents?: ContextDocumentItem[];
+  };
+  type SessionHistoryTimelineLine = {
+    type: 'timeline_item';
+    item: ProjectedTimelineItem;
+  };
+  type MessageRuntimeDetailsResponse = {
+    messageId: string;
+    items: ProjectedTimelineItem[];
+  };
   type TodoRuntimeTask = {
     id?: string;
     title: string;
@@ -214,6 +241,11 @@
     streamId: string;
     message: string;
     createdAtMs: number;
+  };
+  type ProjectedAssistantComputation = {
+    signature: string;
+    segments: ProjectedRunSegment[];
+    linkedSteerCount: number;
   };
   type LocalToolStreamState = {
     streamId: string;
@@ -681,6 +713,7 @@
   // eslint-disable-next-line no-unused-vars
   let handleMentionRefresh: ((_: Event) => void) | null = null;
   let listEl: HTMLDivElement | null = null;
+  let historyStageMeasureEl: HTMLDivElement | null = null;
   let composerEl: HTMLDivElement | null = null;
   let panelEl: HTMLDivElement | null = null;
   let followBottom = true;
@@ -698,7 +731,47 @@
   let hasPreviousThread = false;
   let hasNextThread = false;
   let projectedTimelineItems: ProjectedTimelineItem[] = [];
+  let historyTimelineItems: ProjectedTimelineItem[] = [];
+  let stagedHistoryTimelineItems: ProjectedTimelineItem[] = [];
+  let historyHydrationInFlight = false;
+  let historyHydrationSwapPending = false;
+  let historyHydrationStickBottom = false;
   let optimisticSteerMessages: LocalMessage[] = [];
+
+  const getLiveProjectionMessages = (
+    timeline: readonly LocalMessage[],
+  ): LocalMessage[] => {
+    const activeAssistant =
+      [...timeline].reverse().find((message) => isAssistantMessageInProgress(message)) ??
+      null;
+    if (!activeAssistant) return [];
+    const activeAssistantId = String(activeAssistant.id ?? '').trim();
+    if (!activeAssistantId) return [];
+    const activeAssistantIndex = timeline.findIndex(
+      (message) => String(message.id ?? '').trim() === activeAssistantId,
+    );
+    if (activeAssistantIndex < 0) return [];
+    let startIndex = activeAssistantIndex;
+    while (startIndex > 0 && timeline[startIndex - 1]?.role === 'user') {
+      startIndex -= 1;
+    }
+    return timeline.slice(startIndex, activeAssistantIndex + 1);
+  };
+
+  const getCanonicalHistoryExcludedMessageIds = (
+    liveMessages: readonly LocalMessage[],
+  ): Set<string> => {
+    const excluded = new Set(
+      liveMessages
+        .map((message) => String(message.id ?? '').trim())
+        .filter((messageId) => messageId.length > 0),
+    );
+    for (const message of optimisticSteerMessages) {
+      const messageId = String(message.id ?? '').trim();
+      if (messageId) excluded.add(messageId);
+    }
+    return excluded;
+  };
 
   const getMessageStatus = (m: LocalMessage) =>
     m._localStatus ?? (m.content ? 'completed' : 'processing');
@@ -719,7 +792,25 @@
     initialEventsByMessageId;
     composerSteerAck;
     optimisticSteerMessages;
-    projectedTimelineItems = buildProjectedTimeline(messages);
+    historyTimelineItems;
+    const canRenderCanonicalHistory = historyTimelineSessionId === sessionId;
+    if (!canRenderCanonicalHistory) {
+      projectedTimelineItems = buildProjectedTimeline(messages);
+    } else {
+      const liveMessages = getLiveProjectionMessages(messages);
+      const excludedMessageIds = getCanonicalHistoryExcludedMessageIds(
+        liveMessages,
+      );
+      const historicalItems = historyTimelineItems.filter((item) => {
+        const messageId = String(item.message.id ?? '').trim();
+        return !messageId || !excludedMessageIds.has(messageId);
+      });
+      const liveItems =
+        liveMessages.length > 0 || optimisticSteerMessages.length > 0
+          ? buildProjectedTimeline(liveMessages)
+          : [];
+      projectedTimelineItems = [...historicalItems, ...liveItems];
+    }
   }
   $: composerSteerStreamId = activeAssistantMessage
     ? (activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null)
@@ -1307,8 +1398,15 @@
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
   let projectedStreamEventsById = new Map<string, StreamEvent[]>();
+  let projectedAssistantComputationByMessageId = new Map<
+    string,
+    ProjectedAssistantComputation
+  >();
   let projectionEventsVersion = 0;
   let streamDetailsLoading = false;
+  let historyTimelineSessionId: string | null = null;
+  let loadedRuntimeDetailsMessageIds = new Set<string>();
+  let loadingRuntimeDetailsMessageIds = new Set<string>();
   let todoRuntimePanel: TodoRuntimePanelState | null = null;
   let todoRuntimeCollapsed = false;
   let todoRuntimeDeleteInFlight = false;
@@ -1377,6 +1475,45 @@
     return [];
   };
 
+  const buildProjectedAssistantSignature = (
+    message: LocalMessage,
+    events: readonly StreamEvent[],
+  ): string => {
+    const lastSequence =
+      events.length > 0
+        ? Number(events[events.length - 1]?.sequence ?? 0)
+        : 0;
+    return [
+      message._streamId ?? message.id,
+      message._localStatus ?? '',
+      message.content ? message.content.length : 0,
+      events.length,
+      Number.isFinite(lastSequence) ? lastSequence : 0,
+    ].join(':');
+  };
+
+  const getProjectedAssistantComputation = (
+    message: LocalMessage,
+  ): ProjectedAssistantComputation => {
+    const messageId = String(message.id ?? '').trim();
+    const projectionEvents = getProjectionEventsForMessage(message);
+    const signature = buildProjectedAssistantSignature(message, projectionEvents);
+    const cached = projectedAssistantComputationByMessageId.get(messageId);
+    if (cached?.signature === signature) return cached;
+
+    const segments = projectAssistantRunSegments(projectionEvents);
+    const next = {
+      signature,
+      segments,
+      linkedSteerCount: countLinkedSteerMessages(projectionEvents),
+    };
+    projectedAssistantComputationByMessageId = new Map(
+      projectedAssistantComputationByMessageId,
+    );
+    projectedAssistantComputationByMessageId.set(messageId, next);
+    return next;
+  };
+
   const buildFallbackProjectedSegments = (
     message: LocalMessage,
   ): ProjectedRunSegment[] => {
@@ -1434,9 +1571,9 @@
       if ((optimisticSteersByAssistantId.get(message.id)?.length ?? 0) > 0) {
         continue;
       }
-      const projectionEvents = getProjectionEventsForMessage(message);
-      const segments = projectAssistantRunSegments(projectionEvents);
-      const linkedSteerCount = countLinkedSteerMessages(projectionEvents);
+      const assistantProjection = getProjectedAssistantComputation(message);
+      const segments = assistantProjection.segments;
+      const linkedSteerCount = assistantProjection.linkedSteerCount;
       if (linkedSteerCount <= 0) continue;
       const firstRuntimeSegmentWithSteer = segments.findIndex(
         (segment) => segment.kind === 'runtime' && segment.steerCountBefore > 0,
@@ -1467,8 +1604,8 @@
       }
 
       const streamId = message._streamId ?? message.id;
-      const projectionEvents = getProjectionEventsForMessage(message);
-      const projectedSegments = projectAssistantRunSegments(projectionEvents);
+      const assistantProjection = getProjectedAssistantComputation(message);
+      const projectedSegments = assistantProjection.segments;
       const segments =
         projectedSegments.length > 0
           ? projectedSegments
@@ -1819,6 +1956,10 @@
 
   const isVsCodeRuntimeHost = (): boolean => {
     return getExtensionRuntimeHostKind() === 'vscode';
+  };
+
+  const useCodeWorkspaceRuntimeDetails = (): boolean => {
+    return isVsCodeRuntimeHost();
   };
 
   const getRestrictedAllowedToolIds = (): ReadonlySet<string> => {
@@ -3225,20 +3366,257 @@
     checkpointsByAnchorMessageId = map;
   };
 
-  const applyInitialAssistantDetails = (
-    details: Record<string, StreamEvent[]> | undefined,
+  const upsertHistoryMessage = (message: ChatMessage | LocalMessage) => {
+    const normalized: LocalMessage = {
+      ...message,
+      _streamId: (message as LocalMessage)._streamId ?? message.id,
+      _localStatus:
+        (message as LocalMessage)._localStatus ??
+        (message.content ? 'completed' : undefined),
+    };
+    const existingIndex = messages.findIndex((entry) => entry.id === normalized.id);
+    if (existingIndex >= 0) {
+      const next = [...messages];
+      next[existingIndex] = {
+        ...next[existingIndex],
+        ...normalized,
+      };
+      messages = next;
+      return;
+    }
+    const next = [...messages];
+    const sequence = Number(normalized.sequence ?? 0);
+    if (!Number.isFinite(sequence) || next.length === 0) {
+      messages = [...next, normalized];
+      return;
+    }
+    let insertAt = next.length;
+    while (
+      insertAt > 0 &&
+      Number(next[insertAt - 1]?.sequence ?? 0) > sequence
+    ) {
+      insertAt -= 1;
+    }
+    next.splice(insertAt, 0, normalized);
+    messages = next;
+  };
+
+  const mergeInitialEventsForMessage = (
+    messageId: string,
+    events: readonly StreamEvent[],
   ) => {
-    const map = new Map<string, StreamEvent[]>();
-    for (const [messageId, events] of Object.entries(details ?? {})) {
-      const normalizedId = String(messageId ?? '').trim();
-      if (!normalizedId) continue;
-      map.set(
-        normalizedId,
-        Array.isArray(events) ? (events as StreamEvent[]) : [],
+    const normalizedId = String(messageId ?? '').trim();
+    if (!normalizedId || events.length === 0) return;
+    const next = new Map(initialEventsByMessageId);
+    next.set(
+      normalizedId,
+      mergeProjectionHistoryEvents(next.get(normalizedId) ?? [], events),
+    );
+    initialEventsByMessageId = next;
+    streamDetailsLoading = false;
+  };
+
+  const setInitialEventsForMessage = (
+    messageId: string,
+    events: readonly StreamEvent[],
+  ) => {
+    const normalizedId = String(messageId ?? '').trim();
+    if (!normalizedId) return;
+    const next = new Map(initialEventsByMessageId);
+    if (events.length === 0) {
+      next.delete(normalizedId);
+    } else {
+      next.set(normalizedId, [...events].sort((left, right) => left.sequence - right.sequence));
+    }
+    initialEventsByMessageId = next;
+    streamDetailsLoading = false;
+  };
+
+  const loadMessageRuntimeDetails = async (messageId: string) => {
+    const normalizedId = String(messageId ?? '').trim();
+    if (!normalizedId || useCodeWorkspaceRuntimeDetails()) return;
+    if (loadedRuntimeDetailsMessageIds.has(normalizedId)) return;
+    if (loadingRuntimeDetailsMessageIds.has(normalizedId)) return;
+
+    streamDetailsLoading = true;
+    loadingRuntimeDetailsMessageIds = new Set(loadingRuntimeDetailsMessageIds);
+    loadingRuntimeDetailsMessageIds.add(normalizedId);
+
+    try {
+      const payload = await apiGet<MessageRuntimeDetailsResponse>(
+        `/chat/messages/${normalizedId}/runtime-details`,
+      );
+      const nextItems = Array.isArray(payload.items) ? payload.items : [];
+      if (nextItems.length > 0) {
+        const nextEvents = nextItems.flatMap((item) =>
+          item.kind === 'assistant-segment' || item.kind === 'runtime-segment'
+            ? item.segment.events
+            : [],
+        );
+        setInitialEventsForMessage(normalizedId, nextEvents);
+        historyTimelineItems = historyTimelineItems.map((item) => {
+          if (
+            String(item.message.id ?? '').trim() !== normalizedId ||
+            (item.kind !== 'assistant-segment' && item.kind !== 'runtime-segment')
+          ) {
+            return item;
+          }
+          const replacement = nextItems.find(
+            (candidate) => candidate.kind === item.kind && candidate.key === item.key,
+          );
+          if (!replacement || replacement.kind !== item.kind) return item;
+          return {
+            ...item,
+            segment: {
+              ...item.segment,
+              events: replacement.segment.events,
+            },
+          };
+        });
+        loadedRuntimeDetailsMessageIds = new Set(loadedRuntimeDetailsMessageIds);
+        loadedRuntimeDetailsMessageIds.add(normalizedId);
+      }
+    } finally {
+      loadingRuntimeDetailsMessageIds = new Set(loadingRuntimeDetailsMessageIds);
+      loadingRuntimeDetailsMessageIds.delete(normalizedId);
+      streamDetailsLoading = loadingRuntimeDetailsMessageIds.size > 0;
+    }
+  };
+
+  const ingestSessionHistoryMeta = (line: SessionHistoryMetaLine) => {
+    historyTimelineSessionId = line.sessionId;
+    if (typeof line.title === 'string' && line.title.trim().length > 0) {
+      sessions = sessions.map((entry) =>
+        entry.id === line.sessionId ? { ...entry, title: line.title } : entry,
       );
     }
-    initialEventsByMessageId = map;
+    applySessionCheckpoints(
+      Array.isArray(line.checkpoints) ? line.checkpoints : [],
+    );
+    sessionDocs = Array.isArray(line.documents) ? line.documents : [];
+    sessionDocsError = null;
+
+    const runtimeSnapshot = asRuntimeRecord(line.todoRuntime);
+    if (runtimeSnapshot) {
+      handleTodoRuntimeToolResult({
+        toolCallId: `session-runtime:${line.sessionId}`,
+        toolName: 'plan',
+        result: { todoRuntime: runtimeSnapshot },
+      });
+    }
+  };
+
+  const yieldHistoryRenderFrame = async () => {
+    await tick();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  };
+
+  const stageHistoryTimelineItem = async (item: ProjectedTimelineItem) => {
+    stagedHistoryTimelineItems = [...stagedHistoryTimelineItems, item];
+    await yieldHistoryRenderFrame();
+  };
+
+  const shouldFlushHistoryStage = () => {
+    if (stagedHistoryTimelineItems.length === 0) return false;
+    const viewportHeight =
+      listEl?.clientHeight ?? panelEl?.clientHeight ?? window.innerHeight ?? 0;
+    if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) return false;
+    const stagedHeight = historyStageMeasureEl?.offsetHeight ?? 0;
+    return stagedHeight > viewportHeight;
+  };
+
+  const applyHistoryTimelineBlock = async (
+    stagedBlock: readonly ProjectedTimelineItem[],
+    opts?: { revealAtBottom?: boolean },
+  ) => {
+    if (stagedBlock.length === 0) return;
+
+    const chronologicalBlock = [...stagedBlock].reverse();
+    const previousScrollHeight = listEl?.scrollHeight ?? 0;
+    const previousScrollTop = listEl?.scrollTop ?? 0;
+    const shouldRevealAtBottom =
+      opts?.revealAtBottom === true && previousScrollHeight <= 0;
+
+    const nextMessages = [...messages];
+    const nextInitialEvents = new Map(initialEventsByMessageId);
+    const nextHistory = [...historyTimelineItems];
+    let insertAt = 0;
+
+    for (const item of chronologicalBlock) {
+      const normalizedMessage: LocalMessage = {
+        ...item.message,
+        _streamId: item.message._streamId ?? item.message.id,
+        _localStatus:
+          item.message._localStatus ??
+          (item.message.content ? 'completed' : undefined),
+      };
+
+      const existingMessageIndex = nextMessages.findIndex(
+        (entry) => entry.id === normalizedMessage.id,
+      );
+      if (existingMessageIndex >= 0) {
+        nextMessages[existingMessageIndex] = {
+          ...nextMessages[existingMessageIndex],
+          ...normalizedMessage,
+        };
+      } else {
+        const sequence = Number(normalizedMessage.sequence ?? 0);
+        let messageInsertAt = nextMessages.length;
+        while (
+          messageInsertAt > 0 &&
+          Number(nextMessages[messageInsertAt - 1]?.sequence ?? 0) > sequence
+        ) {
+          messageInsertAt -= 1;
+        }
+        nextMessages.splice(messageInsertAt, 0, normalizedMessage);
+      }
+
+      if (item.kind === 'assistant-segment' || item.kind === 'runtime-segment') {
+        nextInitialEvents.set(
+          item.message.id,
+          mergeProjectionHistoryEvents(
+            nextInitialEvents.get(item.message.id) ?? [],
+            item.segment.events,
+          ),
+        );
+      }
+
+      const existingTimelineIndex = nextHistory.findIndex(
+        (entry) => entry.key === item.key,
+      );
+      if (existingTimelineIndex >= 0) {
+        nextHistory[existingTimelineIndex] = item;
+      } else {
+        nextHistory.splice(insertAt, 0, item);
+        insertAt += 1;
+      }
+    }
+
+    historyHydrationSwapPending = shouldRevealAtBottom;
+
+    messages = nextMessages;
+    initialEventsByMessageId = nextInitialEvents;
     streamDetailsLoading = false;
+    historyTimelineItems = nextHistory;
+    stagedHistoryTimelineItems = [];
+
+    await yieldHistoryRenderFrame();
+
+    if (listEl) {
+      if (shouldRevealAtBottom || historyHydrationStickBottom) {
+        listEl.scrollTop = listEl.scrollHeight;
+        await yieldHistoryRenderFrame();
+      } else if (previousScrollHeight > 0) {
+        listEl.scrollTop =
+          listEl.scrollHeight - previousScrollHeight + previousScrollTop;
+      } else {
+        scheduleScrollToBottom({ force: true });
+      }
+    }
+
+    if (shouldRevealAtBottom) {
+      historyHydrationSwapPending = false;
+    }
   };
 
   const loadCheckpoints = async (id: string) => {
@@ -3297,44 +3675,86 @@
     if (shouldShowLoader) loadingMessages = true;
     errorMsg = null;
     try {
-      const res = await apiGet<{
-        sessionId: string;
-        messages: ChatMessage[];
-        todoRuntime?: Record<string, unknown> | null;
-        checkpoints?: ChatCheckpoint[];
-        documents?: ContextDocumentItem[];
-        assistantDetailsByMessageId?: Record<string, StreamEvent[]>;
-      }>(
-        `/chat/sessions/${id}/bootstrap`,
-      );
-      const raw = res.messages ?? [];
-      messages = raw.map((m) => ({
-        ...m,
-        _streamId: m.id,
-        _localStatus: m.content ? 'completed' : undefined,
-      }));
-      optimisticSteerMessages = [];
       if (!opts?.silent || sessionId !== id) {
+        historyHydrationInFlight = true;
+        historyHydrationSwapPending = false;
+        historyHydrationStickBottom = true;
+        messages = [];
+        optimisticSteerMessages = [];
+        historyTimelineItems = [];
+        stagedHistoryTimelineItems = [];
+        historyTimelineSessionId = null;
         projectedStreamEventsById = new Map();
+        projectedAssistantComputationByMessageId = new Map();
         projectionEventsVersion += 1;
-      }
-      applyInitialAssistantDetails(res.assistantDetailsByMessageId);
-      applySessionCheckpoints(
-        Array.isArray(res.checkpoints) ? res.checkpoints : [],
-      );
-      sessionDocs = Array.isArray(res.documents) ? res.documents : [];
-      sessionDocsError = null;
-      const runtimeSnapshot = asRuntimeRecord(res.todoRuntime);
-      if (runtimeSnapshot) {
-        handleTodoRuntimeToolResult({
-          toolCallId: `session-runtime:${id}`,
-          toolName: 'plan',
-          result: { todoRuntime: runtimeSnapshot },
-        });
-      } else if (!opts?.silent) {
+        initialEventsByMessageId = new Map();
+        loadedRuntimeDetailsMessageIds = new Set();
+        loadingRuntimeDetailsMessageIds = new Set();
+        applySessionCheckpoints([]);
+        sessionDocs = [];
+        sessionDocsError = null;
         resetTodoRuntimePanel();
       }
-      const lastAssistantModel = [...raw]
+      const response = await apiFetch(
+        `/chat/sessions/${id}/history?runtimeDetails=${useCodeWorkspaceRuntimeDetails() ? 'full' : 'summary'}`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/x-ndjson',
+          },
+        },
+      );
+      if (!response.body) {
+        throw new Error('Session history stream returned an empty body');
+      }
+
+      const decoder = new TextDecoder();
+      const reader = response.body.getReader();
+      let buffer = '';
+
+      const processLine = async (rawLine: string) => {
+        const line = rawLine.trim();
+        if (!line) return;
+        const payload = JSON.parse(line) as
+          | SessionHistoryMetaLine
+          | SessionHistoryTimelineLine;
+        if (payload.type === 'session_meta') {
+          ingestSessionHistoryMeta(payload);
+          return;
+        }
+        if (payload.type === 'timeline_item') {
+          await stageHistoryTimelineItem(payload.item);
+          if (shouldFlushHistoryStage()) {
+            await applyHistoryTimelineBlock(stagedHistoryTimelineItems, {
+              revealAtBottom: historyTimelineItems.length === 0,
+            });
+          }
+        }
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary = buffer.indexOf('\n');
+        while (boundary >= 0) {
+          const line = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 1);
+          await processLine(line);
+          boundary = buffer.indexOf('\n');
+        }
+      }
+      buffer += decoder.decode();
+      if (buffer.trim().length > 0) {
+        await processLine(buffer);
+      }
+      if (stagedHistoryTimelineItems.length > 0) {
+        await applyHistoryTimelineBlock(stagedHistoryTimelineItems);
+      }
+      historyHydrationStickBottom = false;
+      historyHydrationInFlight = false;
+
+      const lastAssistantModel = [...messages]
         .reverse()
         .find((m) => m.role === 'assistant' && Boolean(m.model))?.model;
       if (lastAssistantModel) {
@@ -3346,13 +3766,18 @@
           selectedModelId = fromCatalog.model_id;
         }
       }
-      if (opts?.scrollToBottom !== false)
+      if (opts?.scrollToBottom !== false) {
         scheduleScrollToBottom({ force: true });
+      }
       // Le scroll est exécuté via afterUpdate (une fois le DOM réellement rendu).
     } catch (e) {
+      historyHydrationInFlight = false;
+      historyHydrationSwapPending = false;
+      historyHydrationStickBottom = false;
       streamDetailsLoading = false;
       errorMsg = formatApiError(e, $_('chat.errors.loadMessages'));
     } finally {
+      if (!historyHydrationInFlight) historyHydrationStickBottom = false;
       if (shouldShowLoader) loadingMessages = false;
     }
   };
@@ -3377,10 +3802,16 @@
   export const newSession = () => {
     sessionId = null;
     messages = [];
+    historyTimelineItems = [];
+    stagedHistoryTimelineItems = [];
+    historyTimelineSessionId = null;
     sessionCheckpoints = [];
     sessionDocs = [];
     sessionDocsError = null;
     initialEventsByMessageId = new Map();
+    loadedRuntimeDetailsMessageIds = new Set();
+    loadingRuntimeDetailsMessageIds = new Set();
+    projectedAssistantComputationByMessageId = new Map();
     optimisticSteerMessages = [];
     resetTodoRuntimePanel();
     resetLocalToolInterceptionState();
@@ -3397,9 +3828,15 @@
       await apiDelete(`/chat/sessions/${sessionId}`);
       sessionId = null;
       messages = [];
+      historyTimelineItems = [];
+      stagedHistoryTimelineItems = [];
+      historyTimelineSessionId = null;
       sessionDocs = [];
       sessionDocsError = null;
       initialEventsByMessageId = new Map();
+      loadedRuntimeDetailsMessageIds = new Set();
+      loadingRuntimeDetailsMessageIds = new Set();
+      projectedAssistantComputationByMessageId = new Map();
       optimisticSteerMessages = [];
       resetTodoRuntimePanel();
       resetLocalToolInterceptionState();
@@ -4134,7 +4571,7 @@
   {/if}
 
   <div
-    class="flex-1 min-h-0"
+    class="flex-1 min-h-0 relative"
     style={mode === 'comments' && commentThreadResolved
       ? 'background-color: #f1f5f9 !important;'
       : ''}
@@ -4329,12 +4766,8 @@
           </div>
         {/if}
       {:else}
-        {#if loadingMessages}
-          <div class="text-xs text-slate-500">{$_('common.loading')}</div>
-        {:else if messages.length === 0}
-          <div class="text-xs text-slate-500">{$_('chat.chat.empty')}</div>
-        {:else}
-          {#each projectedTimelineItems as item (item.key)}
+        {#snippet renderTimelineItems(items: ProjectedTimelineItem[])}
+          {#each items as item (item.key)}
             {#if item.kind === 'message' && item.message.role === 'user'}
               {@const m = item.message}
               <div class="flex flex-col items-end group">
@@ -4430,6 +4863,8 @@
                     smoothContentStreaming={isGeminiModel(m.model)}
                     subscriptionMode="passive"
                     initialEvents={item.segment.events}
+                    initiallyExpanded={useCodeWorkspaceRuntimeDetails()}
+                    deferCollapsedDetails={!useCodeWorkspaceRuntimeDetails()}
                   />
                   {#if item.isTerminal && item.isLastAssistantSegment}
                     <div
@@ -4508,6 +4943,14 @@
                       (item.message.content ? 'completed' : 'processing')}
                     subscriptionMode="passive"
                     initialEvents={item.segment.events}
+                    runtimeSummary={item.segment.runtimeSummary}
+                    initiallyExpanded={useCodeWorkspaceRuntimeDetails()}
+                    deferCollapsedDetails={!useCodeWorkspaceRuntimeDetails()}
+                    requestDeferredDetails={
+                      useCodeWorkspaceRuntimeDetails()
+                        ? undefined
+                        : () => loadMessageRuntimeDetails(item.message.id)
+                    }
                     showRuntimeInlinePreview={item.isActiveRuntimeSegment}
                     acknowledgementText={item.acknowledgementText}
                     onTodoRuntime={handleTodoRuntimeToolResult}
@@ -4516,6 +4959,32 @@
               </div>
             {/if}
           {/each}
+        {/snippet}
+
+        {#if stagedHistoryTimelineItems.length > 0}
+          <div
+            class="pointer-events-none invisible absolute inset-x-0 top-0 z-[-1] p-3 space-y-2"
+            bind:this={historyStageMeasureEl}
+            aria-hidden="true"
+          >
+            {@render renderTimelineItems(stagedHistoryTimelineItems)}
+          </div>
+        {:else}
+          <div
+            class="pointer-events-none invisible absolute inset-x-0 top-0 z-[-1]"
+            bind:this={historyStageMeasureEl}
+            aria-hidden="true"
+          ></div>
+        {/if}
+
+        {#if historyHydrationInFlight && projectedTimelineItems.length === 0}
+          <div class="text-xs text-slate-500">{$_('common.loading')}</div>
+        {:else if messages.length === 0}
+          <div class="text-xs text-slate-500">{$_('chat.chat.empty')}</div>
+        {:else}
+          <div class:invisible={historyHydrationSwapPending}>
+            {@render renderTimelineItems(projectedTimelineItems)}
+          </div>
         {/if}
         {#if pendingLocalToolPermissionPrompts.length > 0}
           {#each pendingLocalToolPermissionPrompts as prompt (prompt.toolCallId)}
