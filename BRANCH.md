@@ -653,14 +653,19 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] Investigate effective tool catalog resolution by real workspace type/template, not by host alone.
       - [x] Scope the conversation list to the active workspace so session mode and workspace type stay aligned.
       - [x] When the active workspace changes while chat is open, reload the scoped session list immediately, reset the active session, and auto-select the latest session of the new workspace.
-      - [ ] In code workspaces, render reasoning/tools expanded by default.
+      - [ ] Converge historical hydration fully: code and non-code must both use `summary + on-demand per-message runtime details`.
+      - [ ] Keep the workspace-type difference only on the active run presentation.
+      - [ ] In code workspaces, render reasoning/tools expanded by default only for the active run.
       - [ ] In code workspaces, prevent duplicate active-step streaming between runtime preview and assistant-visible content.
-      - [ ] In non-code workspaces, keep reasoning/tools collapsed by default and exclude heavy runtime-details bodies from the initial `history` payload.
-      - [ ] On first expand in non-code workspaces, fetch runtime details through one targeted per-message route (message-scoped, not session-wide).
+      - [ ] In non-code workspaces, keep the active run collapsed with compact inline preview.
+      - [ ] On first expand in any workspace, fetch runtime details through one targeted per-message route (message-scoped, not session-wide).
       - [ ] Cache the first-expanded runtime body locally so repeated collapse/expand does not refetch or remount the full payload.
-    - [x] BUG-L6-37 — Code-workspace runtime currently double-renders the active step (expanded reasoning/tools block + compact inline step preview).
-      - [x] Root cause: `showRuntimeInlinePreview` remains enabled while code-workspace runtime-details are already expanded by default.
-      - [x] In code workspaces, keep only the expanded runtime-details block for the active step; suppress the compact inline preview entirely.
+    - [ ] BUG-L6-38 — Non-code workspaces no longer show progressive streaming/runtime updates while a run is in progress.
+      - [ ] Verify code/non-code mode divergence stays limited to active-run presentation only, not to historical hydration or live event processing.
+      - [ ] Restore live incremental content, live reasoning header updates, and active-step preview in non-code workspaces.
+    - [ ] BUG-L6-39 — Workspace switch shows redundant loading states and makes session titles appear to refresh too slowly.
+      - [ ] Confirm session-title generation is not retriggered on workspace switch when titles already exist.
+      - [ ] Collapse the double loader (`loadingSessions` + `loadingMessages`) into an immediate session-list refresh + background message hydration.
     - [x] BUG-L6-33 — API prebuild is no longer blocked by current Hono security advisories before BR05 E2E can run.
       - [x] Refresh `api` lock resolution to latest non-breaking Hono patch line (`hono`, `@hono/node-server`) and rerun `make build-api`.
       - [x] Re-run the blocked BR05 E2E checks only after the API image builds cleanly again.
