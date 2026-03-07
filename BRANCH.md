@@ -648,6 +648,10 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [ ] UI tests for progressive newest-first render + staged block flush,
         - [ ] E2E reload/open-new-tab checks on the NDJSON history contract.
     - [ ] BUG-L6-35 — Runtime-details rendering must adapt to workspace type so progressive hydration stays perceptible on large threads.
+    - [ ] BUG-L6-36 — VSCode host currently forces code-tool scope on non-code workspaces (`usecase ia` / standard workspaces).
+      - [ ] Root cause: host detection (`topai.vscode.runtime`) is used as a proxy for workspace type in ChatPanel, so non-code workspaces inherit code-only tool/runtime behavior.
+      - [ ] Investigate effective tool catalog resolution by real workspace type/template, not by host alone.
+      - [ ] Scope the conversation list to the active workspace so session mode and workspace type stay aligned.
       - [ ] In code workspaces, render reasoning/tools expanded by default.
       - [ ] In code workspaces, prevent duplicate active-step streaming between runtime preview and assistant-visible content.
       - [ ] In non-code workspaces, keep reasoning/tools collapsed by default and exclude heavy runtime-details bodies from the initial `history` payload.

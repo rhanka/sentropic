@@ -302,7 +302,7 @@ chatRouter.delete(
 
 chatRouter.get('/sessions', async (c) => {
   const user = c.get('user');
-  const sessions = await chatService.listSessions(user.userId);
+  const sessions = await chatService.listSessions(user.userId, user.workspaceId);
   return c.json({ sessions });
 });
 
