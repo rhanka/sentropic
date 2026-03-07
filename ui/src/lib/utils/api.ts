@@ -27,10 +27,10 @@ export class ApiError extends Error {
  * Make an authenticated API request
  * Automatically includes credentials (cookies) for authentication
  */
-export async function apiRequest<T = any>(
+export async function apiFetch(
   endpoint: string,
   options: RequestInit = {}
-): Promise<T> {
+): Promise<Response> {
   const baseUrl = getApiBaseUrl() ?? API_BASE_URL;
   const rawUrl = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
   const isBrowser = getApiBrowserFlag() ?? _skBrowser;
@@ -59,7 +59,7 @@ export async function apiRequest<T = any>(
     ...options,
     credentials: authToken ? 'omit' : 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       'X-App-Locale': appLocale,
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...options.headers,
@@ -87,6 +87,15 @@ export async function apiRequest<T = any>(
 
     throw new ApiError(errorMessage, response.status, errorData);
   }
+
+  return response;
+}
+
+export async function apiRequest<T = any>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const response = await apiFetch(endpoint, options);
 
   // Handle 204 No Content responses (common for DELETE)
   if (response.status === 204) {

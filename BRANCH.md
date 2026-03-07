@@ -650,8 +650,9 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] BUG-L6-35 — Runtime-details rendering must adapt to workspace type so progressive hydration stays perceptible on large threads.
       - [ ] In code workspaces, render reasoning/tools expanded by default.
       - [ ] In code workspaces, prevent duplicate active-step streaming between runtime preview and assistant-visible content.
-      - [ ] In non-code workspaces, keep reasoning/tools collapsed by default and lazy-render the body on first expand only.
-      - [ ] Cache the first-expanded runtime body locally so repeated collapse/expand does not remount the full payload.
+      - [ ] In non-code workspaces, keep reasoning/tools collapsed by default and exclude heavy runtime-details bodies from the initial `history` payload.
+      - [ ] On first expand in non-code workspaces, fetch runtime details through one targeted per-message route (message-scoped, not session-wide).
+      - [ ] Cache the first-expanded runtime body locally so repeated collapse/expand does not refetch or remount the full payload.
     - [x] BUG-L6-33 — API prebuild is no longer blocked by current Hono security advisories before BR05 E2E can run.
       - [x] Refresh `api` lock resolution to latest non-breaking Hono patch line (`hono`, `@hono/node-server`) and rerun `make build-api`.
       - [x] Re-run the blocked BR05 E2E checks only after the API image builds cleanly again.

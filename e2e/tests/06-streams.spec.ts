@@ -114,7 +114,7 @@ test.describe('Streams — SSE scoping', () => {
     await userAApi.dispose();
   });
 
-  test('Stream events restent accessibles après retry', async () => {
+  test('Chat bootstrap reste accessible après retry', async () => {
     const userAApi = await request.newContext({
       baseURL: API_BASE_URL,
       storageState: USER_A_STATE,
@@ -132,15 +132,21 @@ test.describe('Streams — SSE scoping', () => {
     expect(createMessageRes.ok()).toBeTruthy();
     const createPayload = await createMessageRes.json().catch(() => null);
     const userMessageId = String(createPayload?.userMessageId ?? '');
-    const streamId = String(createPayload?.streamId ?? '');
-    if (!userMessageId || !streamId) throw new Error('Message/stream manquant');
+    const sessionId = String(createPayload?.sessionId ?? '');
+    const assistantMessageId = String(createPayload?.assistantMessageId ?? '');
+    if (!userMessageId || !sessionId || !assistantMessageId) {
+      throw new Error('Message/session assistant manquant');
+    }
 
     await expect
       .poll(async () => {
-        const eventsRes = await userAApi.get(`/api/v1/streams/events/${encodeURIComponent(streamId)}?limit=50`);
-        if (!eventsRes.ok()) return 0;
-        const payload = await eventsRes.json().catch(() => null);
-        return Array.isArray(payload?.events) ? payload.events.length : 0;
+        const bootstrapRes = await userAApi.get(
+          `/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/bootstrap?workspace_id=${workspaceId}`
+        );
+        if (!bootstrapRes.ok()) return 0;
+        const payload = await bootstrapRes.json().catch(() => null);
+        const details = payload?.assistantDetailsByMessageId?.[assistantMessageId];
+        return Array.isArray(details) ? details.length : 0;
       }, { timeout: 60_000 })
       .toBeGreaterThan(0);
 
@@ -149,15 +155,18 @@ test.describe('Streams — SSE scoping', () => {
     );
     expect(retryRes.ok()).toBeTruthy();
     const retryPayload = await retryRes.json().catch(() => null);
-    const retryStreamId = String(retryPayload?.streamId ?? '');
-    if (!retryStreamId) throw new Error('streamId retry manquant');
+    const retryAssistantMessageId = String(retryPayload?.assistantMessageId ?? '');
+    if (!retryAssistantMessageId) throw new Error('assistantMessageId retry manquant');
 
     await expect
       .poll(async () => {
-        const eventsRes = await userAApi.get(`/api/v1/streams/events/${encodeURIComponent(retryStreamId)}?limit=50`);
-        if (!eventsRes.ok()) return 0;
-        const payload = await eventsRes.json().catch(() => null);
-        return Array.isArray(payload?.events) ? payload.events.length : 0;
+        const bootstrapRes = await userAApi.get(
+          `/api/v1/chat/sessions/${encodeURIComponent(sessionId)}/bootstrap?workspace_id=${workspaceId}`
+        );
+        if (!bootstrapRes.ok()) return 0;
+        const payload = await bootstrapRes.json().catch(() => null);
+        const details = payload?.assistantDetailsByMessageId?.[retryAssistantMessageId];
+        return Array.isArray(details) ? details.length : 0;
       }, { timeout: 60_000 })
       .toBeGreaterThan(0);
 

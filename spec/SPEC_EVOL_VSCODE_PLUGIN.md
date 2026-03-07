@@ -1025,6 +1025,10 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - the frontend must treat emitted `timeline_item` objects as the canonical historical read model.
   - the frontend must not rebuild the whole historical projected timeline from `messages` while hydrating `history`.
   - local projection logic remains only for the active live run fed by SSE.
+  - for non-code workspaces, `history` must not eagerly embed the heavy reasoning/tools body needed only for expanded runtime inspection.
+  - for non-code workspaces, each `timeline_item` carries only the lightweight summary needed to render the collapsed thread.
+  - the first expand of one assistant turn must trigger a targeted fetch for that message runtime detail payload only.
+  - once fetched, that per-message runtime detail payload is cached locally for subsequent collapse/expand cycles in the same session view.
 
 - Live/runtime split:
   - historical session open / reopen / tab switch:
@@ -1043,6 +1047,7 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - the first visible thread items must appear before the full history has finished streaming.
   - the first visible history item must be the newest item of the session.
   - the UI must avoid per-item layout thrash; visible insertion happens by staged block flush, not by immediate DOM mount of every single line.
+  - in non-code workspaces, expensive runtime body markdown must never be part of the initial history hydration cost.
   - no pagination is required for BR-05.
 
 - Tests impact:
@@ -1075,24 +1080,27 @@ This section locks the implementation contract for the immediate Lot-1 increment
 
 - Code workspace policy:
   - reasoning/tools blocks are expanded by default,
-  - runtime details render eagerly so coding sessions expose the full chain immediately,
+  - `history` may embed runtime details eagerly so coding sessions expose the full chain immediately,
   - while an assistant-visible content segment is actively streaming, the same active step must not also render as a duplicated runtime-inline stream,
   - one active step = one visible stream source.
 
 - Non-code workspace policy:
   - reasoning/tools blocks are collapsed by default,
-  - the detailed body of a runtime block is lazy-rendered only on the first expand,
-  - once rendered, that body is cached locally for subsequent collapse/expand cycles in the same session view,
-  - collapsed runtime blocks must stay cheap to mount even when reasoning/tool payloads are large.
+  - `history` must not preload the heavy runtime-details body for those collapsed blocks,
+  - the first expand of one assistant turn must call a dedicated per-message details route (message-scoped, not session-wide) to fetch the reconstructed runtime details for that turn only,
+  - once fetched, that body is cached locally for subsequent collapse/expand cycles in the same session view,
+  - collapsed runtime blocks must stay cheap to mount even when reasoning/tool payloads are large,
+  - a collapsed block may show only summary metadata that is already present in the `history` item payload.
 
 - Shared constraints:
   - reload/open-new-tab preserve the same projected step order and derive the same default expand/collapse behavior from workspace type,
   - no duplicate runtime step may remain visible once assistant-visible streaming has taken over the same active step,
-  - performance work must not create a second alternate timeline contract.
+  - performance work must not create a second alternate timeline contract,
+  - the on-demand runtime-details fetch must reuse the same backend reconstruction semantics as the eager code-workspace path.
 
 - Performance expectation:
   - large-history session open must visibly progress item by item,
-  - non-code workspaces must avoid eager markdown/runtime-body mounting for collapsed runtime steps,
+  - non-code workspaces must avoid both eager runtime-body transport and eager markdown/runtime-body mounting for collapsed runtime steps,
   - code workspaces may render runtime bodies eagerly because observability takes precedence there.
 
 
