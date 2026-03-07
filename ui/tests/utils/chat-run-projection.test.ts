@@ -101,4 +101,48 @@ describe('chat run projection', () => {
       [3, 'C'],
     ]);
   });
+
+  it('rebuilds runtime and assistant segments deterministically from bootstrap-style persisted events', () => {
+    const bootstrapEvents: ProjectionStreamEvent[] = [
+      { eventType: 'status', sequence: 1, data: { state: 'started' } },
+      { eventType: 'reasoning_delta', sequence: 2, data: { delta: 'Method first.' } },
+      {
+        eventType: 'tool_call_start',
+        sequence: 3,
+        data: { tool_call_id: 'call_bootstrap', name: 'history_analyze' },
+      },
+      {
+        eventType: 'tool_call_result',
+        sequence: 4,
+        data: {
+          tool_call_id: 'call_bootstrap',
+          result: { ok: true },
+        },
+      },
+      { eventType: 'content_delta', sequence: 5, data: { delta: 'Final answer.' } },
+      { eventType: 'done', sequence: 6, data: {} },
+    ];
+
+    const projected = projectAssistantRunSegments(bootstrapEvents);
+    expect(projected).toHaveLength(2);
+    expect(projected[0]).toEqual(
+      expect.objectContaining({
+        kind: 'runtime',
+        id: 'runtime:1',
+      }),
+    );
+    expect(projected[0]?.events.map((event) => event.eventType)).toEqual([
+      'status',
+      'reasoning_delta',
+      'tool_call_start',
+      'tool_call_result',
+    ]);
+    expect(projected[1]).toEqual(
+      expect.objectContaining({
+        kind: 'assistant',
+        id: 'assistant:5',
+        content: 'Final answer.',
+      }),
+    );
+  });
 });

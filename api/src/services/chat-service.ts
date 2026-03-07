@@ -45,6 +45,14 @@ import { env } from '../config/env';
 import { writeChatGenerationTrace } from './chat-trace';
 import { generateCommentResolutionProposal } from './context-comments';
 import type { ProviderId } from './provider-runtime';
+import {
+  buildAssistantMessageHistoryDetails,
+  buildChatHistoryTimeline,
+  compactChatHistoryTimelineForSummary,
+  type ChatHistoryMessage,
+  type ChatHistoryTimelineItem,
+  type ChatHistoryStreamEvent,
+} from './chat-session-history';
 
 export type ChatContextType = 'organization' | 'folder' | 'usecase' | 'executive_summary';
 
@@ -1302,6 +1310,34 @@ export class ChatService {
     return row ?? null;
   }
 
+  private async getDetailedMessageForUser(messageId: string, userId: string) {
+    const [row] = await db
+      .select({
+        id: chatMessages.id,
+        sessionId: chatMessages.sessionId,
+        role: chatMessages.role,
+        content: chatMessages.content,
+        contexts: chatMessages.contexts,
+        toolCalls: chatMessages.toolCalls,
+        toolCallId: chatMessages.toolCallId,
+        reasoning: chatMessages.reasoning,
+        model: chatMessages.model,
+        promptId: chatMessages.promptId,
+        promptVersionId: chatMessages.promptVersionId,
+        sequence: chatMessages.sequence,
+        createdAt: chatMessages.createdAt,
+        feedbackVote: chatMessageFeedback.vote,
+      })
+      .from(chatMessages)
+      .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
+      .leftJoin(
+        chatMessageFeedback,
+        and(eq(chatMessageFeedback.messageId, chatMessages.id), eq(chatMessageFeedback.userId, userId))
+      )
+      .where(and(eq(chatMessages.id, messageId), eq(chatSessions.userId, userId)));
+    return row ?? null;
+  }
+
   async getSessionForUser(sessionId: string, userId: string) {
     const [row] = await db
       .select()
@@ -1523,6 +1559,117 @@ export class ChatService {
       checkpoints,
       documents,
       assistantDetailsByMessageId,
+    };
+  }
+
+  async getSessionHistory(options: {
+    sessionId: string;
+    userId: string;
+    detailMode?: 'summary' | 'full';
+  }): Promise<{
+    sessionId: string;
+    title: string | null;
+    todoRuntime: Record<string, unknown> | null;
+    checkpoints: ChatCheckpointSummary[];
+    documents: ChatSessionDocumentItem[];
+    items: ChatHistoryTimelineItem[];
+  }> {
+    const session = await this.getSessionForUser(options.sessionId, options.userId);
+    if (!session) throw new Error('Session not found');
+
+    const [{ messages, todoRuntime }, checkpoints, workspaceId] = await Promise.all([
+      this.listMessages(options.sessionId, options.userId),
+      this.listCheckpoints({
+        sessionId: options.sessionId,
+        userId: options.userId,
+        limit: 20,
+      }),
+      this.resolveSessionWorkspaceId(session, options.userId),
+    ]);
+
+    const documents = await this.listSessionDocuments({
+      sessionId: options.sessionId,
+      workspaceId,
+    });
+    const assistantMessageIds = messages
+      .filter((message) => message.role === 'assistant')
+      .map((message) => String(message.id ?? '').trim())
+      .filter((messageId) => messageId.length > 0);
+    const assistantDetailsByMessageId =
+      await this.listAssistantDetailsByMessageId(assistantMessageIds);
+    const eventMap = new Map<string, ChatHistoryStreamEvent[]>();
+    for (const [messageId, events] of Object.entries(assistantDetailsByMessageId)) {
+      eventMap.set(messageId, events as ChatHistoryStreamEvent[]);
+    }
+    const projectedItems = buildChatHistoryTimeline(
+      messages as ChatHistoryMessage[],
+      eventMap,
+    );
+    const items =
+      options.detailMode === 'full'
+        ? projectedItems
+        : compactChatHistoryTimelineForSummary(projectedItems);
+
+    return {
+      sessionId: options.sessionId,
+      title: session.title ?? null,
+      todoRuntime,
+      checkpoints,
+      documents,
+      items: [...items].reverse(),
+    };
+  }
+
+  async getMessageRuntimeDetails(options: {
+    messageId: string;
+    userId: string;
+  }): Promise<{
+    messageId: string;
+    items: ChatHistoryTimelineItem[];
+  }> {
+    const message = await this.getDetailedMessageForUser(
+      options.messageId,
+      options.userId,
+    );
+    if (!message) throw new Error('Message not found');
+    if (message.role !== 'assistant') {
+      throw new Error('Runtime details only exist for assistant messages');
+    }
+
+    const { messages } = await this.listMessages(
+      message.sessionId,
+      options.userId,
+    );
+    const details = await this.listAssistantDetailsByMessageId([options.messageId]);
+    const events = (details[options.messageId] ?? []) as ChatHistoryStreamEvent[];
+    const eventMap = new Map<string, ChatHistoryStreamEvent[]>();
+    eventMap.set(options.messageId, events);
+    const projected = buildChatHistoryTimeline(
+      messages as ChatHistoryMessage[],
+      eventMap,
+    );
+    const firstIndex = projected.findIndex(
+      (item) => String(item.message.id ?? '').trim() === options.messageId,
+    );
+    const lastIndex = (() => {
+      for (let index = projected.length - 1; index >= 0; index -= 1) {
+        if (String(projected[index]?.message.id ?? '').trim() === options.messageId) {
+          return index;
+        }
+      }
+      return -1;
+    })();
+    const items =
+      firstIndex >= 0 && lastIndex >= firstIndex
+        ? projected.slice(firstIndex, lastIndex + 1)
+        : buildAssistantMessageHistoryDetails(
+            message as ChatHistoryMessage,
+            events,
+          );
+
+    return {
+      messageId: options.messageId,
+      items,
     };
   }
 

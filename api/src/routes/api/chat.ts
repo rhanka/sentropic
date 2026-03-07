@@ -343,6 +343,71 @@ chatRouter.get('/sessions/:id/bootstrap', async (c) => {
   });
 });
 
+chatRouter.get('/sessions/:id/history', async (c) => {
+  const user = c.get('user');
+  const sessionId = c.req.param('id');
+  const detailMode =
+    c.req.query('runtimeDetails') === 'full' ? 'full' : 'summary';
+  const result = await chatService.getSessionHistory({
+    sessionId,
+    userId: user.userId,
+    detailMode,
+  });
+
+  const encoder = new TextEncoder();
+
+  c.header('Content-Type', 'application/x-ndjson; charset=utf-8');
+  c.header('Cache-Control', 'no-store');
+
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      async start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            `${JSON.stringify({
+              type: 'session_meta',
+              sessionId: result.sessionId,
+              title: result.title,
+              todoRuntime: result.todoRuntime,
+              checkpoints: result.checkpoints,
+              documents: result.documents,
+            })}\n`,
+          ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        let emitted = 0;
+        for (const item of result.items) {
+          controller.enqueue(
+            encoder.encode(
+              `${JSON.stringify({
+                type: 'timeline_item',
+                item,
+              })}\n`,
+            ),
+          );
+          emitted += 1;
+          if (emitted % 2 === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
+        }
+        controller.close();
+      },
+    }),
+    { status: 200, headers: c.res.headers },
+  );
+});
+
+chatRouter.get('/messages/:id/runtime-details', async (c) => {
+  const user = c.get('user');
+  const messageId = c.req.param('id');
+  const result = await chatService.getMessageRuntimeDetails({
+    messageId,
+    userId: user.userId,
+  });
+  return c.json(result);
+});
+
 chatRouter.get('/sessions/:id/checkpoints', requireWorkspaceAccessRole(), async (c) => {
   const user = c.get('user');
   const sessionId = c.req.param('id');

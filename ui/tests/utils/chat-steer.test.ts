@@ -48,7 +48,7 @@ describe('chat steer utils', () => {
     ).rejects.toThrow('Missing steer message');
   });
 
-  it('inserts steer message just before active assistant message', () => {
+  it('inserts steer message just after active assistant message during optimistic rendering', () => {
     const timeline = [
       { id: 'user_1', role: 'user' },
       { id: 'assistant_1', role: 'assistant' },
@@ -63,8 +63,8 @@ describe('chat steer utils', () => {
 
     expect(next.map((message) => message.id)).toEqual([
       'user_1',
-      'steer_1',
       'assistant_1',
+      'steer_1',
     ]);
   });
 
