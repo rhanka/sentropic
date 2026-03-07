@@ -1087,6 +1087,7 @@ This section locks the implementation contract for the immediate Lot-1 increment
 - Session scoping policy:
   - chat sessions listed in the UI must be scoped to the active workspace only,
   - switching workspace changes the conversation list as well as the runtime/tool policy for any newly opened session,
+  - if the chat panel is already open when the workspace changes, the client must immediately reload the scoped session list, reset the active session, and auto-select the latest session available in the new workspace (or stay on a fresh empty session if none exists),
   - no mixed cross-workspace conversation list is allowed in VSCode, Chrome, or web hosts,
   - workspace type/template is derived from the active scoped workspace, not from the host runtime.
   - host runtime still controls only local host capabilities (VSCode local tools, Chrome local tools, or none on web),
