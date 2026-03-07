@@ -11,6 +11,7 @@ export type UserWorkspace = {
   id: string;
   name: string;
   role: UserWorkspaceRole;
+  isCodeWorkspace: boolean;
   hiddenAt: string | null;
   createdAt: string;
 };
@@ -154,5 +155,4 @@ if (browser) {
   window.addEventListener('streamhub:workspace_membership_update', handleMembershipUpdate);
   window.addEventListener('streamhub:workspace_update', handleMembershipUpdate);
 }
-
 

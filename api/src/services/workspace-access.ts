@@ -1,6 +1,6 @@
-import { and, desc, eq, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { workspaceMemberships, workspaces } from '../db/schema';
+import { settings, workspaceMemberships, workspaces } from '../db/schema';
 
 export type WorkspaceRole = 'viewer' | 'commenter' | 'editor' | 'admin';
 
@@ -80,10 +80,30 @@ export async function getUserWorkspaces(userId: string): Promise<
     id: string;
     name: string;
     role: WorkspaceRole;
+    isCodeWorkspace: boolean;
     hiddenAt: Date | null;
     createdAt: Date;
   }>
 > {
+  const vscodeWorkspaceStateRow = (await db.get(
+    sql`SELECT value FROM settings WHERE key = 'vscode_project_workspace_state_v1' AND user_id = ${userId}`,
+  )) as { value?: string | null } | undefined;
+  let codeWorkspaceIds = new Set<string>();
+  try {
+    const parsed = JSON.parse(vscodeWorkspaceStateRow?.value ?? '{}') as {
+      codeWorkspaceIds?: unknown;
+    };
+    const ids = Array.isArray(parsed?.codeWorkspaceIds)
+      ? parsed.codeWorkspaceIds
+          .filter((id): id is string => typeof id === 'string')
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0)
+      : [];
+    codeWorkspaceIds = new Set(ids);
+  } catch {
+    codeWorkspaceIds = new Set();
+  }
+
   const rows = await db
     .select({
       id: workspaces.id,
@@ -106,6 +126,7 @@ export async function getUserWorkspaces(userId: string): Promise<
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
+    isCodeWorkspace: codeWorkspaceIds.has(r.id),
     hiddenAt: r.hiddenAt,
     createdAt: r.createdAt,
     role: r.role as WorkspaceRole,

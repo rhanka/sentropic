@@ -1361,11 +1361,22 @@ export class ChatService {
     return { sessionId };
   }
 
-  async listSessions(userId: string) {
+  async listSessions(userId: string, workspaceId?: string | null) {
+    const normalizedWorkspaceId =
+      typeof workspaceId === 'string' && workspaceId.trim().length > 0
+        ? workspaceId.trim()
+        : null;
     return await db
       .select()
       .from(chatSessions)
-      .where(eq(chatSessions.userId, userId))
+      .where(
+        normalizedWorkspaceId
+          ? and(
+              eq(chatSessions.userId, userId),
+              eq(chatSessions.workspaceId, normalizedWorkspaceId),
+            )
+          : eq(chatSessions.userId, userId),
+      )
       .orderBy(desc(chatSessions.updatedAt), desc(chatSessions.createdAt));
   }
 
