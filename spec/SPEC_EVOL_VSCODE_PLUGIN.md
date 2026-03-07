@@ -1084,6 +1084,15 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - while an assistant-visible content segment is actively streaming, the same active step must not also render as a duplicated runtime-inline stream,
   - one active step = one visible stream source.
 
+- Session scoping policy:
+  - chat sessions listed in the UI must be scoped to the active workspace only,
+  - switching workspace changes the conversation list as well as the runtime/tool policy for any newly opened session,
+  - no mixed cross-workspace conversation list is allowed in VSCode, Chrome, or web hosts,
+  - workspace type/template is derived from the active scoped workspace, not from the host runtime.
+  - host runtime still controls only local host capabilities (VSCode local tools, Chrome local tools, or none on web),
+  - a code-workspace conversation opened on web keeps code-workspace behavior but must not gain VSCode local tools,
+  - a non-code workspace opened in VSCode keeps non-code conversation behavior but may still expose VSCode local tool capabilities separately.
+
 - Non-code workspace policy:
   - reasoning/tools blocks are collapsed by default,
   - `history` must not preload the heavy runtime-details body for those collapsed blocks,

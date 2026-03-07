@@ -31,7 +31,7 @@
   import { currentFolderId, foldersStore } from '$lib/stores/folders';
   import { organizationsStore } from '$lib/stores/organizations';
   import { useCasesStore } from '$lib/stores/useCases';
-  import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
   import { deleteDocument, listDocuments, uploadDocument, type ContextDocumentItem } from '$lib/utils/documents';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
@@ -1958,11 +1958,16 @@
     return getExtensionRuntimeHostKind() === 'vscode';
   };
 
-  const useCodeWorkspaceRuntimeDetails = (): boolean => {
-    return isVsCodeRuntimeHost();
-  };
+  const useCodeWorkspaceRuntimeDetails = (): boolean =>
+    Boolean($selectedWorkspace?.isCodeWorkspace);
+
+  const isCodeWorkspaceConversation = (): boolean =>
+    Boolean($selectedWorkspace?.isCodeWorkspace);
 
   const getRestrictedAllowedToolIds = (): ReadonlySet<string> => {
+    if (!isCodeWorkspaceConversation()) {
+      return EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS;
+    }
     return isVsCodeRuntimeHost()
       ? VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS
       : EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS;
@@ -2030,14 +2035,18 @@
   };
 
   const isExtensionNewSessionMode = () =>
-    mode === 'ai' && isLocalToolRuntimeAvailable() && !sessionId;
+    mode === 'ai' &&
+    isLocalToolRuntimeAvailable() &&
+    isCodeWorkspaceConversation() &&
+    !sessionId;
 
   const isExtensionRestrictedToolsetMode = () =>
     computeIsExtensionRestrictedToolsetMode({
       mode,
       hasExtensionRuntime: isLocalToolRuntimeAvailable(),
       sessionId,
-      extensionRestrictedToolset,
+      extensionRestrictedToolset:
+        extensionRestrictedToolset && isCodeWorkspaceConversation(),
     });
 
   const getToolScopeToggles = () => {
@@ -2148,7 +2157,7 @@
   };
 
   const ensureDefaultToolToggles = () => {
-    if (!isLocalToolRuntimeAvailable()) {
+    if (!isLocalToolRuntimeAvailable() || !isCodeWorkspaceConversation()) {
       extensionRestrictedToolset = false;
     } else {
       extensionRestrictedToolset = true;
