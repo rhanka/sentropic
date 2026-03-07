@@ -631,6 +631,19 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [ ] UI tests for bootstrap-driven session hydration,
         - [ ] E2E reload/open-new-tab tests proving reasoning/tools history survives without frontend `stream-events` calls,
         - [x] remove or rewrite frontend tests tied only to the old `stream-events` contract.
+    - [ ] BUG-L6-34 — Session hydration is still too slow on large chats because one bootstrap JSON ships the whole reconstructed assistant runtime history at once.
+      - [ ] Add `GET /api/v1/chat/sessions/:id/history` as the session-read contract:
+        - [ ] `application/x-ndjson`,
+        - [ ] first line = `session_meta`,
+        - [ ] following lines = backend-reconstructed `timeline_item`,
+        - [ ] reverse-order pagination (`before`) with page size `10`.
+      - [ ] Cut `ChatPanel` over from `bootstrap` to `history` NDJSON progressive hydration.
+      - [ ] Keep SSE as the active-run contract only; no frontend historical replay via raw event endpoints.
+      - [ ] Remove `bootstrap` from the supported chat UI contract once `history` is live.
+      - [ ] Update scoped tests:
+        - [ ] API tests for paginated NDJSON session history,
+        - [ ] UI tests for progressive newest-first render + upward pagination,
+        - [ ] E2E reload/open-new-tab checks on the NDJSON history contract.
     - [x] BUG-L6-33 — API prebuild is no longer blocked by current Hono security advisories before BR05 E2E can run.
       - [x] Refresh `api` lock resolution to latest non-breaking Hono patch line (`hono`, `@hono/node-server`) and rerun `make build-api`.
       - [x] Re-run the blocked BR05 E2E checks only after the API image builds cleanly again.
@@ -733,7 +746,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - [ ] Merge durable reuse rules from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md` into durable specs then delete the mini-spec file.
   - [ ] Ensure removed fake features are not described as delivered behavior.
   - [ ] Remove legacy documentation of frontend `stream-events` rehydration paths and replace it with:
-    - [ ] `session bootstrap` as the normal session-read contract,
+    - [ ] `session history` NDJSON as the normal session-read contract,
     - [ ] SSE as the live-update contract,
     - [ ] persisted `chat_stream_events` as internal runtime journal only.
 

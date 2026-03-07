@@ -963,6 +963,99 @@ This section locks the implementation contract for the immediate Lot-1 increment
     - SSE as the live-update contract,
     - persisted stream events as an internal runtime journal.
 
+### 4.25 Lot 6 - Session history NDJSON cutover (paged reverse-order hydration)
+- Goal:
+  - replace the monolithic `bootstrap` JSON payload with one progressive history API,
+  - keep one single session-thread read model for reload/open-new-tab,
+  - preserve SSE as the live-update contract for the active run only.
+
+- Problem statement:
+  - the bootstrap snapshot is coherent, but it becomes too heavy as soon as assistant runtime history grows:
+    - `assistantDetailsByMessageId` dominates payload size,
+    - reload latency becomes visible on long coding/research sessions,
+    - the frontend still waits on a large session-wide JSON before showing the thread.
+  - the product now needs:
+    - one single session-history transport,
+    - progressive rendering,
+    - reverse-order paging so the newest conversation state appears first.
+
+- Decision locked:
+  - the session-read contract becomes:
+    - `GET /api/v1/chat/sessions/:id/history`
+  - response format:
+    - `application/x-ndjson`
+  - order:
+    - newest timeline items first,
+    - reverse chronological pagination using a cursor (`before=...`),
+    - default page size `10`.
+  - `bootstrap` must leave the supported frontend contract once this cutover is done.
+
+- NDJSON contract:
+  - first line of each page:
+    - `type: "session_meta"`
+    - includes the current session-level metadata needed to render the thread shell:
+      - session identity/title,
+      - `todoRuntime`,
+      - `documents`,
+      - `checkpoints`,
+      - pagination metadata (`hasMore`, `nextBefore`, page limit).
+  - following lines:
+    - `type: "timeline_item"`
+    - each item is already reconstructed backend-side, not a raw SQL message row and not raw `stream-events`.
+  - acceptable item kinds for BR-05:
+    - `user-message`
+    - `assistant-segment`
+    - `runtime-segment`
+
+- Reconstruction contract:
+  - the backend must reconstruct the same logical timeline already used in the frontend:
+    - one assistant run can yield multiple `assistant-segment` and `runtime-segment` items,
+    - steering user messages stay linear in the same thread,
+    - no raw `stream-events` endpoint is exposed to the frontend.
+  - every emitted timeline item must be renderable on its own:
+    - no item may depend on a future line to become displayable.
+
+- Frontend contract:
+  - the frontend must render progressively as NDJSON lines arrive.
+  - no client-side buffering gate is required before first paint.
+  - scrolling upward loads the next page (`before=...`) and prepends it without breaking the visible anchor.
+  - the frontend must not maintain a second separate historical reconstruction path once `history` is adopted.
+
+- Live/runtime split:
+  - historical session open / reopen / tab switch:
+    - `history` NDJSON only.
+  - active run continuation:
+    - SSE only.
+  - persisted `chat_stream_events` remain internal backend runtime data.
+
+- API cutover constraints:
+  - direct cutover only; no dual frontend path kept long-term.
+  - `bootstrap` becomes unsupported for the chat UI once the new contract is adopted.
+  - old frontend-facing `stream-events` routes stay deleted.
+
+- Performance contract:
+  - session open must not require a monolithic full-session JSON blob.
+  - the first visible thread items must appear from the first page without waiting for older history.
+  - pagination granularity for BR-05 is fixed at `10` items per page.
+
+- Tests impact:
+  - replace bootstrap-specific UI assertions with `history` NDJSON hydration assertions.
+  - add API tests covering:
+    - `GET /api/v1/chat/sessions/:id/history`,
+    - first-line `session_meta`,
+    - reverse-order item emission,
+    - `before` pagination.
+  - add UI/E2E tests covering:
+    - progressive display of the newest items,
+    - upward pagination,
+    - reload/open-new-tab preserves reasoning/tools through `history` + live SSE split.
+
+- Docs cutover:
+  - durable docs must describe:
+    - `history` NDJSON as the session-read contract,
+    - SSE as the live-update contract,
+    - persisted stream events as an internal runtime journal only.
+
 
 ## 5) Industry alignment snapshot (for implementation framing)
 - Cursor: checkpoint/rewind conversation flow + strong context controls.
