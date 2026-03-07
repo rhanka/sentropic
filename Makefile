@@ -309,7 +309,18 @@ logs-dev-vscode: ## Stream OpenVSCode mounted dev lane logs
 
 .PHONY: up-dev-playwright
 up-dev-playwright: ## Start Playwright dev helper on top of the standard dev stack
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright up -d playwright-dev
+	@playwright_ui_port="$${PLAYWRIGHT_DEV_UI_PORT:-5174}"; \
+	ui_origin="http://host.docker.internal:$$playwright_ui_port"; \
+	api_origin="http://host.docker.internal:$(API_PORT)"; \
+	CORS_ALLOWED_ORIGINS="http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,$$ui_origin,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*" \
+	DISABLE_RATE_LIMIT=true \
+	PLAYWRIGHT_DEV_UI_PORT="$$playwright_ui_port" \
+	UI_BASE_URL="$$ui_origin" \
+	API_BASE_URL="$$api_origin" \
+	VITE_API_BASE_URL="$$api_origin/api/v1" \
+	VITE_EXTENSION_API_BASE_URL="$$api_origin/api/v1" \
+	VITE_EXTENSION_APP_BASE_URL="$$ui_origin" \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright up -d --force-recreate api ui-playwright-dev playwright-dev
 
 .PHONY: down-dev-playwright
 down-dev-playwright: ## Stop Playwright dev helper
@@ -338,7 +349,7 @@ record-dev-playwright-auth: up-dev-playwright ## Record a reusable Playwright st
 
 .PHONY: test-e2e-dev
 test-e2e-dev: up-dev-playwright ## Run scoped Playwright against ENV=dev without seed/reset/global setup
-	@if [ -z "$$E2E_SPEC" ]; then \
+	@if [ -z "$(E2E_SPEC)" ]; then \
 	  echo "❌ E2E_SPEC is required (example: tests/dev/01-chat-bootstrap-reload.spec.ts)"; \
 	  exit 2; \
 	fi
@@ -352,7 +363,8 @@ test-e2e-dev: up-dev-playwright ## Run scoped Playwright against ENV=dev without
 	  max_fail="$${MAX_FAILURES:-}"; \
 	  extra=""; \
 	  if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
-	  spec_path="$${E2E_SPEC#e2e/}"; \
+	  spec_path="$(E2E_SPEC)"; \
+	  spec_path="$${spec_path#e2e/}"; \
 	  echo "▶ Running scoped Playwright (dev): $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
 	  npx playwright test --config playwright.dev.config.ts "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra; \
 	'

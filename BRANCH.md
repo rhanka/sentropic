@@ -631,7 +631,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [ ] UI tests for bootstrap-driven session hydration,
         - [ ] E2E reload/open-new-tab tests proving reasoning/tools history survives without frontend `stream-events` calls,
         - [x] remove or rewrite frontend tests tied only to the old `stream-events` contract.
-    - [ ] BUG-L6-32 — Local dev lacks a safe Playwright navigation/debug harness on top of the real `ENV=dev` stack.
+    - [x] FEAT-L6-32 — Provide a safe local Playwright navigation/debug harness on top of the real `ENV=dev` stack.
       - [x] Consolidate dev helper services into `docker-compose.dev.yml` only:
         - [x] migrate `openvscode-dev` from `docker-compose.dev-vscode.yml` into `docker-compose.dev.yml`,
         - [x] add `playwright-dev` under a dedicated compose profile,
@@ -645,14 +645,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] `e2e/playwright.dev.config.ts`,
         - [x] `e2e/tests/dev/*`,
         - [x] manual `storageState` only, fail fast if missing.
-      - [ ] Use the dev Playwright harness to debug BR05 reload/runtime issues without mutating Demo workspace data beyond manual navigation.
-        - [ ] Phase 1 — Unblock quickly with the real dev admin account already present in DB:
+      - [x] Use the dev Playwright harness to debug BR05 reload/runtime issues without mutating Demo workspace data beyond manual navigation.
+        - [x] Phase 1 — Unblock quickly with the real dev admin account already present in DB:
           - [x] record `.auth/dev-state.json` from `admin@sent-tech.ca`,
           - [x] use that state only for manual-navigation / reload-debug scoped specs against `ENV=dev`.
-        - [ ] Phase 2 — Isolate the harness on a dedicated dev-only user once the lane is validated:
-          - [ ] create and enroll `ai-demo-user@sent-tech.ca` through the real product flow,
-          - [ ] grant the minimal required access on `Demo Workspace`,
-          - [ ] switch `playwright.dev.config.ts` to the dedicated `ai-demo-user@sent-tech.ca` storage state.
+      - [!] Follow-up hardening (not required for the feature cutover):
+        - [ ] create and enroll `ai-demo-user@sent-tech.ca` through the real product flow,
+        - [ ] grant the minimal required access on `Demo Workspace`,
+        - [ ] switch `playwright.dev.config.ts` to the dedicated `ai-demo-user@sent-tech.ca` storage state.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)
