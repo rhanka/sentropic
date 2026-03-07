@@ -651,7 +651,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] BUG-L6-36 — VSCode host currently forces code-tool scope on non-code workspaces (`usecase ia` / standard workspaces).
       - [ ] Root cause: host detection (`topai.vscode.runtime`) is used as a proxy for workspace type in ChatPanel, so non-code workspaces inherit code-only tool/runtime behavior.
       - [ ] Investigate effective tool catalog resolution by real workspace type/template, not by host alone.
-      - [ ] Scope the conversation list to the active workspace so session mode and workspace type stay aligned.
+      - [x] Scope the conversation list to the active workspace so session mode and workspace type stay aligned.
+      - [x] When the active workspace changes while chat is open, reload the scoped session list immediately, reset the active session, and auto-select the latest session of the new workspace.
       - [ ] In code workspaces, render reasoning/tools expanded by default.
       - [ ] In code workspaces, prevent duplicate active-step streaming between runtime preview and assistant-visible content.
       - [ ] In non-code workspaces, keep reasoning/tools collapsed by default and exclude heavy runtime-details bodies from the initial `history` payload.

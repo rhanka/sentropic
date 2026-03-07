@@ -31,7 +31,7 @@
   import { currentFolderId, foldersStore } from '$lib/stores/folders';
   import { organizationsStore } from '$lib/stores/organizations';
   import { useCasesStore } from '$lib/stores/useCases';
-  import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import { deleteDocument, listDocuments, uploadDocument, type ContextDocumentItem } from '$lib/utils/documents';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
@@ -737,6 +737,8 @@
   let historyHydrationSwapPending = false;
   let historyHydrationStickBottom = false;
   let optimisticSteerMessages: LocalMessage[] = [];
+  let previousAiWorkspaceId: string | null | undefined = undefined;
+  let workspaceSessionRescopeInFlight = false;
 
   const getLiveProjectionMessages = (
     timeline: readonly LocalMessage[],
@@ -3830,6 +3832,18 @@
     scheduleScrollToBottom({ force: true });
   };
 
+  const rescopeSessionsForWorkspaceChange = async () => {
+    if (workspaceSessionRescopeInFlight) return;
+    workspaceSessionRescopeInFlight = true;
+    try {
+      newSession();
+      await loadSessions();
+      updateContextFromRoute();
+    } finally {
+      workspaceSessionRescopeInFlight = false;
+    }
+  };
+
   export const deleteCurrentSession = async () => {
     if (!sessionId) return;
     errorMsg = null;
@@ -4366,6 +4380,16 @@
 
   $: if (mode === 'ai' && showComposerMenu) {
     void loadExtensionActiveTabContext();
+  }
+
+  $: if (mode === 'ai' && $workspaceScopeHydrated) {
+    const nextWorkspaceId = $selectedWorkspace?.id ?? null;
+    if (previousAiWorkspaceId === undefined) {
+      previousAiWorkspaceId = nextWorkspaceId;
+    } else if (nextWorkspaceId !== previousAiWorkspaceId) {
+      previousAiWorkspaceId = nextWorkspaceId;
+      void rescopeSessionsForWorkspaceChange();
+    }
   }
 
   let lastPath = '';
