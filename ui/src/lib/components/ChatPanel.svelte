@@ -4984,7 +4984,10 @@
                         ? undefined
                         : () => loadMessageRuntimeDetails(item.message.id)
                     }
-                    showRuntimeInlinePreview={item.isActiveRuntimeSegment}
+                    showRuntimeInlinePreview={
+                      item.isActiveRuntimeSegment &&
+                      !useCodeWorkspaceRuntimeDetails()
+                    }
                     acknowledgementText={item.acknowledgementText}
                     onTodoRuntime={handleTodoRuntimeToolResult}
                   />

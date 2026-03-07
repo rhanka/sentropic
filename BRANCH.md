@@ -658,6 +658,9 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] In non-code workspaces, keep reasoning/tools collapsed by default and exclude heavy runtime-details bodies from the initial `history` payload.
       - [ ] On first expand in non-code workspaces, fetch runtime details through one targeted per-message route (message-scoped, not session-wide).
       - [ ] Cache the first-expanded runtime body locally so repeated collapse/expand does not refetch or remount the full payload.
+    - [x] BUG-L6-37 — Code-workspace runtime currently double-renders the active step (expanded reasoning/tools block + compact inline step preview).
+      - [x] Root cause: `showRuntimeInlinePreview` remains enabled while code-workspace runtime-details are already expanded by default.
+      - [x] In code workspaces, keep only the expanded runtime-details block for the active step; suppress the compact inline preview entirely.
     - [x] BUG-L6-33 — API prebuild is no longer blocked by current Hono security advisories before BR05 E2E can run.
       - [x] Refresh `api` lock resolution to latest non-breaking Hono patch line (`hono`, `@hono/node-server`) and rerun `make build-api`.
       - [x] Re-run the blocked BR05 E2E checks only after the API image builds cleanly again.
