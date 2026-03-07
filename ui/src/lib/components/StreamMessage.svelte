@@ -103,6 +103,13 @@
   let detailLoaded = false;
   let lastInitialEventsRef: unknown = null;
   let lastInitialEventCount = 0;
+  let hasSteps = false;
+  let hasContent = false;
+  let hasAcknowledgement = false;
+  let showStartup = false;
+  let toolsCount = 0;
+  let durationMs = 0;
+  let showDetailLoader = false;
   let smoothedContentText = '';
   let smoothPendingText = '';
   let smoothTimer: ReturnType<typeof setTimeout> | null = null;
@@ -647,50 +654,72 @@
     smoothedContentText = st.contentText || '';
   }
 
-  $: hasSteps = st.sawReasoning || st.sawTools;
-  $: hasContent = !!st.contentText && st.contentText.trim().length > 0;
-  $: hasAcknowledgement =
-    typeof acknowledgementText === 'string' &&
-    acknowledgementText.trim().length > 0;
-  $: showStartup = !!st.sawStarted && !hasSteps && !hasContent && !finalContent;
-  $: toolsCount = st.toolCallIds.size;
-  $: durationMs = (st.endedAtMs ?? Date.now()) - st.startedAtMs;
-  // "Chargement du détail…" est un waiter UX pour le chat (détail tools/reasoning d'un message déjà finalisé),
-  // mais il n'a pas de sens pour les jobs (sinon on voit le waiter pendant les états pending).
-  $: showDetailLoader =
-    variant === 'chat' &&
-    subscriptionMode === 'live' &&
-    (historyPending || detailLoading) &&
-    !detailLoaded &&
-    !hasSteps &&
-    !showStartup &&
-    !!finalContent;
+  $: {
+    st;
+    finalText;
+    acknowledgementText;
+    historyPending;
+    detailLoading;
+    detailLoaded;
+    variant;
+    subscriptionMode;
+    hasSteps = st.sawReasoning || st.sawTools;
+    hasContent = !!st.contentText && st.contentText.trim().length > 0;
+    hasAcknowledgement =
+      typeof acknowledgementText === 'string' &&
+      acknowledgementText.trim().length > 0;
+    showStartup = !!st.sawStarted && !hasSteps && !hasContent && !finalText;
+    toolsCount = st.toolCallIds.size;
+    durationMs = (st.endedAtMs ?? Date.now()) - st.startedAtMs;
+    showDetailLoader =
+      variant === 'chat' &&
+      subscriptionMode === 'live' &&
+      (historyPending || detailLoading) &&
+      !detailLoaded &&
+      !hasSteps &&
+      !showStartup &&
+      !!finalText;
+  }
 
   // Si le parent injecte les events après coup (batch), on les applique sans re-fetch
   $: if (initialEvents && initialEvents !== lastInitialEventsRef) {
     lastInitialEventsRef = initialEvents;
     if (subscriptionMode === 'passive') {
+      const firstSeq = Number(initialEvents[0]?.sequence ?? 0);
+      const lastSeqInBatch = Number(initialEvents.at(-1)?.sequence ?? 0);
+      const sameWindow =
+        initialEvents.length === lastInitialEventCount &&
+        lastSeqInBatch === st.lastSeq &&
+        (initialEvents.length === 0 || firstSeq <= st.lastSeq);
       const shouldReplayFromScratch =
-        initialEvents.length < lastInitialEventCount ||
-        (initialEvents.length > 0 &&
-          st.lastSeq > 0 &&
-          Number(initialEvents[0]?.sequence ?? 0) > st.lastSeq);
+        !sameWindow &&
+        (
+          st.lastSeq === 0 ||
+          initialEvents.length < lastInitialEventCount ||
+          (initialEvents.length > 0 && firstSeq > st.lastSeq)
+        );
       if (shouldReplayFromScratch) {
+        const keepExpanded = st.expanded;
         unsubscribe();
         reset();
+        st = { ...st, expanded: keepExpanded };
       }
-    }
-    if (initialEvents.length > 0) {
-      const nextEvents =
-        subscriptionMode === 'passive' && st.lastSeq > 0
-          ? initialEvents.filter((event) => Number(event.sequence) > st.lastSeq)
-          : initialEvents;
-      if (nextEvents.length > 0) applyEvents(nextEvents as any);
+      if (initialEvents.length > 0) {
+        const nextEvents = shouldReplayFromScratch
+          ? initialEvents
+          : initialEvents.filter((event) => Number(event.sequence) > st.lastSeq);
+        if (nextEvents.length > 0) {
+          applyEvents(nextEvents as any);
+        }
+      }
+    } else if (initialEvents.length > 0) {
+      applyEvents(initialEvents as any);
     }
     lastInitialEventCount = initialEvents.length;
     detailLoaded = true;
     detailLoading = false;
   }
+
 </script>
 
 <div class="w-full max-w-full">

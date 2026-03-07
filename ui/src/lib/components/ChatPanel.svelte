@@ -3348,7 +3348,6 @@
       }
       if (opts?.scrollToBottom !== false)
         scheduleScrollToBottom({ force: true });
-
       // Le scroll est exécuté via afterUpdate (une fois le DOM réellement rendu).
     } catch (e) {
       streamDetailsLoading = false;
