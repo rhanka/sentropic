@@ -956,7 +956,7 @@
     {#if hasSteps || hasPassiveHistoryShell}
       <div class="flex items-center justify-between gap-2 mt-0.5">
         <div class="text-[11px] text-slate-500">
-          {#if subscriptionMode === 'passive'}
+          {#if subscriptionMode === 'passive' && !showRuntimeInlinePreview && passiveHistoryShellHeading}
             {passiveHistoryShellHeading}
           {:else if hasSteps}
             {#if st.sawReasoning}{$_('stream.reasoning')} {Math.max(0, Math.floor(durationMs / 60000))}m{String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, '0')}s{/if}

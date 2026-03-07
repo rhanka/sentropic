@@ -1966,6 +1966,9 @@
   const isCodeWorkspaceConversation = (): boolean =>
     Boolean($selectedWorkspace?.isCodeWorkspace);
 
+  const useUnifiedActiveRunPresentation = (message: LocalMessage): boolean =>
+    getMessageStatus(message) === 'processing';
+
   const getRestrictedAllowedToolIds = (): ReadonlySet<string> => {
     if (!isCodeWorkspaceConversation()) {
       return EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS;
@@ -4897,7 +4900,11 @@
                     subscriptionMode="passive"
                     initialEvents={item.segment.events}
                     initiallyExpanded={useCodeWorkspaceRuntimeDetails()}
-                    deferCollapsedDetails={!useCodeWorkspaceRuntimeDetails()}
+                    deferCollapsedDetails={
+                      useUnifiedActiveRunPresentation(item.message)
+                        ? false
+                        : !useCodeWorkspaceRuntimeDetails()
+                    }
                   />
                   {#if item.isTerminal && item.isLastAssistantSegment}
                     <div
@@ -4978,8 +4985,13 @@
                     initialEvents={item.segment.events}
                     runtimeSummary={item.segment.runtimeSummary}
                     initiallyExpanded={useCodeWorkspaceRuntimeDetails()}
-                    deferCollapsedDetails={!useCodeWorkspaceRuntimeDetails()}
+                    deferCollapsedDetails={
+                      useUnifiedActiveRunPresentation(item.message)
+                        ? false
+                        : !useCodeWorkspaceRuntimeDetails()
+                    }
                     requestDeferredDetails={
+                      useUnifiedActiveRunPresentation(item.message) ||
                       useCodeWorkspaceRuntimeDetails()
                         ? undefined
                         : () => loadMessageRuntimeDetails(item.message.id)
