@@ -1029,6 +1029,12 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - for non-code workspaces, each `timeline_item` carries only the lightweight summary needed to render the collapsed thread.
   - the first expand of one assistant turn must trigger a targeted fetch for that message runtime detail payload only.
   - once fetched, that per-message runtime detail payload is cached locally for subsequent collapse/expand cycles in the same session view.
+  - session switching must keep the currently visible conversation mounted until the next session can be revealed in one stable visual step.
+  - the target conversation may become visible only:
+    - once the full staged hydration completes without overflow, or
+    - once the first staged block is ready to flush because overflow threshold has been reached.
+  - the UI must not expose transient empty-thread states (`no messages`, blank panel) during that switch.
+  - the session-loading placeholder is delayed by `300ms`; if it appears, it must stay visible for at least `500ms` to avoid flash noise.
 
 - Live/runtime split:
   - historical session open / reopen / tab switch:
@@ -1121,6 +1127,7 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - all workspaces must avoid eager runtime-body transport and eager markdown/runtime-body mounting for collapsed historical runtime steps,
   - code-workspace observability must come from the active run presentation, not from a heavier historical hydration contract.
   - terminal completion must therefore be O(1) on the client timeline: no full-session reread, no silent swap, no blink.
+  - session-open progress must feel stable: no placeholder flash shorter than the human perception threshold, no visible half-swapped conversation shell.
 
 
 ## 5) Industry alignment snapshot (for implementation framing)
