@@ -760,41 +760,6 @@
   let previousAiWorkspaceId: string | null | undefined = undefined;
   let workspaceSessionRescopeInFlight = false;
 
-  const getLiveProjectionMessages = (
-    timeline: readonly LocalMessage[],
-  ): LocalMessage[] => {
-    const activeAssistant =
-      [...timeline].reverse().find((message) => isAssistantMessageInProgress(message)) ??
-      null;
-    if (!activeAssistant) return [];
-    const activeAssistantId = String(activeAssistant.id ?? '').trim();
-    if (!activeAssistantId) return [];
-    const activeAssistantIndex = timeline.findIndex(
-      (message) => String(message.id ?? '').trim() === activeAssistantId,
-    );
-    if (activeAssistantIndex < 0) return [];
-    let startIndex = activeAssistantIndex;
-    while (startIndex > 0 && timeline[startIndex - 1]?.role === 'user') {
-      startIndex -= 1;
-    }
-    return timeline.slice(startIndex, activeAssistantIndex + 1);
-  };
-
-  const getCanonicalHistoryExcludedMessageIds = (
-    liveMessages: readonly LocalMessage[],
-  ): Set<string> => {
-    const excluded = new Set(
-      liveMessages
-        .map((message) => String(message.id ?? '').trim())
-        .filter((messageId) => messageId.length > 0),
-    );
-    for (const message of optimisticSteerMessages) {
-      const messageId = String(message.id ?? '').trim();
-      if (messageId) excluded.add(messageId);
-    }
-    return excluded;
-  };
-
   const getMessageStatus = (m: LocalMessage) =>
     m._localStatus ?? (m.content ? 'completed' : 'processing');
   let activeAssistantMessage: LocalMessage | null = null;
@@ -814,25 +779,7 @@
     initialEventsByMessageId;
     composerSteerAck;
     optimisticSteerMessages;
-    historyTimelineItems;
-    const canRenderCanonicalHistory = historyTimelineSessionId === sessionId;
-    if (!canRenderCanonicalHistory) {
-      projectedTimelineItems = buildProjectedTimeline(messages);
-    } else {
-      const liveMessages = getLiveProjectionMessages(messages);
-      const excludedMessageIds = getCanonicalHistoryExcludedMessageIds(
-        liveMessages,
-      );
-      const historicalItems = historyTimelineItems.filter((item) => {
-        const messageId = String(item.message.id ?? '').trim();
-        return !messageId || !excludedMessageIds.has(messageId);
-      });
-      const liveItems =
-        liveMessages.length > 0 || optimisticSteerMessages.length > 0
-          ? buildProjectedTimeline(liveMessages)
-          : [];
-      projectedTimelineItems = [...historicalItems, ...liveItems];
-    }
+    projectedTimelineItems = buildProjectedTimeline(messages);
   }
   $: composerSteerStreamId = activeAssistantMessage
     ? (activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null)
@@ -1434,7 +1381,6 @@
   let todoRuntimeDeleteInFlight = false;
   let composerSteerInFlight = false;
   let composerSteerAck: ComposerSteerAck | null = null;
-  const terminalRefreshInFlight = new Set<string>();
   const jobPollInFlight = new Set<string>();
   let localToolsHubKey = '';
   const localToolStatesById = new Map<string, LocalToolStreamState>();
@@ -3960,24 +3906,16 @@
     }
   };
 
-  const handleAssistantTerminal = async (
+  const handleAssistantTerminal = (
     streamId: string,
     t: 'done' | 'error',
   ) => {
-    if (terminalRefreshInFlight.has(streamId)) return;
-    terminalRefreshInFlight.add(streamId);
     messages = messages.map((m) =>
       (m._streamId ?? m.id) === streamId
         ? { ...m, _localStatus: t === 'done' ? 'completed' : 'failed' }
         : m,
     );
-    // Silent refresh: keep the message list mounted to avoid a visible "blink" at stream completion.
-    if (sessionId)
-      await loadMessages(sessionId, { scrollToBottom: true, silent: true });
     scheduleScrollToBottom({ force: true });
-    // Laisser le temps à la UI de se stabiliser avant d'autoriser un autre refresh (évite boucles sur replay).
-    await tick();
-    terminalRefreshInFlight.delete(streamId);
   };
 
   const pollJobUntilTerminal = async (
@@ -4014,11 +3952,11 @@
         const status = String((job as any)?.status ?? 'unknown');
 
         if (status === 'completed') {
-          await handleAssistantTerminal(streamId, 'done');
+          handleAssistantTerminal(streamId, 'done');
           return;
         }
         if (status === 'failed') {
-          await handleAssistantTerminal(streamId, 'error');
+          handleAssistantTerminal(streamId, 'error');
           return;
         }
         // pending/processing
