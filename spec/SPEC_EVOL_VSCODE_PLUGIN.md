@@ -1111,12 +1111,16 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - reload/open-new-tab preserve the same projected step order in every workspace type,
   - history must not diverge between code and non-code sessions,
   - no duplicate runtime step may remain visible once assistant-visible streaming has taken over the same active step,
-  - performance work must not create a second alternate timeline contract.
+  - performance work must not create a second alternate timeline contract,
+  - terminalization must not trigger a session-wide silent history reload,
+  - once the run reaches `done`/`error`, the UI finalizes the turn from the already received SSE-backed local state only,
+  - no extra terminal API read is allowed just to "confirm" the final assistant message.
 
 - Performance expectation:
   - large-history session open must visibly progress item by item,
   - all workspaces must avoid eager runtime-body transport and eager markdown/runtime-body mounting for collapsed historical runtime steps,
   - code-workspace observability must come from the active run presentation, not from a heavier historical hydration contract.
+  - terminal completion must therefore be O(1) on the client timeline: no full-session reread, no silent swap, no blink.
 
 
 ## 5) Industry alignment snapshot (for implementation framing)

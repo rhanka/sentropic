@@ -663,13 +663,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] BUG-L6-38 — Non-code workspaces no longer show progressive streaming/runtime updates while a run is in progress.
       - [x] Verify code/non-code mode divergence stays limited to active-run presentation only, not to historical hydration or live event processing.
       - [x] Restore live incremental content, live reasoning header updates, and active-step preview in non-code workspaces.
-    - [ ] BUG-L6-41 — Active non-code runs still surface the `Préparation` state too late instead of showing it immediately after the user message is submitted.
+    - [x] BUG-L6-41 — Active non-code runs still surface the `Préparation` state too late instead of showing it immediately after the user message is submitted.
     - [x] BUG-L6-42 — Active-run projection still reorders user bubbles incorrectly when the run completes and when the next user message is appended.
       - [x] Edit/retry no longer leaves a zombie assistant answer above the edited user bubble.
       - [x] Final history hydration preserves `user -> runtime -> assistant` order after edit/retry completion.
-    - [ ] BUG-L6-43 — Terminal silent reload still causes a visible blink because the active chat timeline is rehydrated from full session history instead of reconciling only missing deltas.
-      - [ ] Replace terminal full-history silent refresh with delta reconciliation on the active assistant run.
-      - [ ] Keep the mounted active-run DOM stable through terminalization (no list remount / no swap blink).
+    - [x] BUG-L6-43 — Terminal silent reload still causes a visible blink because the active chat timeline is rehydrated from full session history after the run already streamed locally.
+      - [x] Remove the terminal `loadMessages(..., silent: true)` refresh entirely.
+      - [x] Finalize the active assistant run from the already received SSE state only (no extra API read on terminalization).
+      - [x] Keep the mounted active-run DOM stable through terminalization (no list remount / no swap blink).
     - [ ] BUG-L6-40 — Historical/runtime flow still contains residual code-vs-non-code forks instead of one converged chat pipeline.
       - [ ] Remove any remaining historical transport/render branching between code and non-code workspaces.
       - [ ] Keep the only workspace-type difference on active-run presentation (expanded live runtime in code, compact live preview in non-code).
