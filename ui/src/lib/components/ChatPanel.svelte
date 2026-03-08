@@ -214,6 +214,26 @@
     messageId: string;
     items: ProjectedTimelineItem[];
   };
+
+  const getTimelineItemSortSequence = (item: ProjectedTimelineItem): number => {
+    const messageSequence = Number(item.message.sequence ?? 0);
+    return Number.isFinite(messageSequence) ? messageSequence : 0;
+  };
+
+  const getTimelineItemSortSubsequence = (item: ProjectedTimelineItem): number => {
+    if (item.kind === 'message') return 0;
+    const raw = Number(String(item.segment.id ?? '').split(':').pop() ?? 0);
+    if (Number.isFinite(raw)) return raw;
+    return item.kind === 'runtime-segment' ? 0 : 1;
+  };
+
+  const compareTimelineItems = (
+    left: ProjectedTimelineItem,
+    right: ProjectedTimelineItem,
+  ): number =>
+    getTimelineItemSortSequence(left) - getTimelineItemSortSequence(right) ||
+    getTimelineItemSortSubsequence(left) - getTimelineItemSortSubsequence(right);
+
   type TodoRuntimeTask = {
     id?: string;
     title: string;
@@ -2917,15 +2937,100 @@
     }
   };
 
+  const bootstrapAssistantRun = (input: {
+    sessionId: string;
+    assistantMessageId: string;
+    streamId: string;
+    jobId: string;
+    model: string;
+    userMessage?: LocalMessage;
+    truncateAfterMessageId?: string;
+    checkpointUserMessageId?: string;
+  }) => {
+    const nowIso = new Date().toISOString();
+    const assistantMsg: LocalMessage = {
+      id: input.assistantMessageId,
+      sessionId: input.sessionId,
+      role: 'assistant',
+      content: null,
+      model: input.model,
+      createdAt: nowIso,
+      _localStatus: 'processing',
+      _streamId: input.streamId,
+    };
+    if (input.userMessage) {
+      messages = [...messages, input.userMessage, assistantMsg];
+    } else if (input.truncateAfterMessageId) {
+      const userIndex = messages.findIndex(
+        (m) => m.id === input.truncateAfterMessageId,
+      );
+      messages =
+        userIndex >= 0
+          ? [...messages.slice(0, userIndex + 1), assistantMsg]
+          : [...messages, assistantMsg];
+      const truncatedHistory: ProjectedTimelineItem[] = [];
+      const keptHistoryMessageIds = new Set<string>();
+      for (const item of historyTimelineItems) {
+        truncatedHistory.push(item);
+        keptHistoryMessageIds.add(String(item.message.id ?? '').trim());
+        if (
+          item.kind === 'message' &&
+          String(item.message.id ?? '').trim() === input.truncateAfterMessageId
+        ) {
+          break;
+        }
+      }
+      historyTimelineItems = truncatedHistory;
+      initialEventsByMessageId = new Map(
+        [...initialEventsByMessageId].filter(([messageId]) =>
+          keptHistoryMessageIds.has(messageId),
+        ),
+      );
+      loadedRuntimeDetailsMessageIds = new Set(
+        [...loadedRuntimeDetailsMessageIds].filter((messageId) =>
+          keptHistoryMessageIds.has(messageId),
+        ),
+      );
+      loadingRuntimeDetailsMessageIds = new Set(
+        [...loadingRuntimeDetailsMessageIds].filter((messageId) =>
+          keptHistoryMessageIds.has(messageId),
+        ),
+      );
+    } else {
+      messages = [...messages, assistantMsg];
+    }
+    followBottom = true;
+    scheduleScrollToBottom({ force: true });
+    if (input.checkpointUserMessageId) {
+      void createTurnCheckpoint(input.sessionId, input.checkpointUserMessageId);
+    }
+    void pollJobUntilTerminal(input.jobId, assistantMsg._streamId ?? assistantMsg.id, {
+      timeoutMs: 90_000,
+    });
+  };
+
   const retryMessage = async (messageId: string) => {
     if (!sessionId) return;
     errorMsg = null;
     try {
-      await apiPost(`/chat/messages/${encodeURIComponent(messageId)}/retry`, {
+      const res = await apiPost<{
+        sessionId: string;
+        userMessageId: string;
+        assistantMessageId: string;
+        streamId: string;
+        jobId: string;
+      }>(`/chat/messages/${encodeURIComponent(messageId)}/retry`, {
         providerId: selectedProviderId,
         model: selectedModelId,
       });
-      await loadMessages(sessionId, { scrollToBottom: true });
+      bootstrapAssistantRun({
+        sessionId: res.sessionId,
+        assistantMessageId: res.assistantMessageId,
+        streamId: res.streamId,
+        jobId: res.jobId,
+        model: selectedModelId,
+        truncateAfterMessageId: messageId,
+      });
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.retry'));
     }
@@ -3380,41 +3485,6 @@
     checkpointsByAnchorMessageId = map;
   };
 
-  const upsertHistoryMessage = (message: ChatMessage | LocalMessage) => {
-    const normalized: LocalMessage = {
-      ...message,
-      _streamId: (message as LocalMessage)._streamId ?? message.id,
-      _localStatus:
-        (message as LocalMessage)._localStatus ??
-        (message.content ? 'completed' : undefined),
-    };
-    const existingIndex = messages.findIndex((entry) => entry.id === normalized.id);
-    if (existingIndex >= 0) {
-      const next = [...messages];
-      next[existingIndex] = {
-        ...next[existingIndex],
-        ...normalized,
-      };
-      messages = next;
-      return;
-    }
-    const next = [...messages];
-    const sequence = Number(normalized.sequence ?? 0);
-    if (!Number.isFinite(sequence) || next.length === 0) {
-      messages = [...next, normalized];
-      return;
-    }
-    let insertAt = next.length;
-    while (
-      insertAt > 0 &&
-      Number(next[insertAt - 1]?.sequence ?? 0) > sequence
-    ) {
-      insertAt -= 1;
-    }
-    next.splice(insertAt, 0, normalized);
-    messages = next;
-  };
-
   const mergeInitialEventsForMessage = (
     messageId: string,
     events: readonly StreamEvent[],
@@ -3554,8 +3624,6 @@
     const nextMessages = [...messages];
     const nextInitialEvents = new Map(initialEventsByMessageId);
     const nextHistory = [...historyTimelineItems];
-    let insertAt = 0;
-
     for (const item of chronologicalBlock) {
       const normalizedMessage: LocalMessage = {
         ...item.message,
@@ -3601,10 +3669,10 @@
       if (existingTimelineIndex >= 0) {
         nextHistory[existingTimelineIndex] = item;
       } else {
-        nextHistory.splice(insertAt, 0, item);
-        insertAt += 1;
+        nextHistory.push(item);
       }
     }
+    nextHistory.sort(compareTimelineItems);
 
     historyHydrationSwapPending = shouldRevealAtBottom;
 
@@ -3686,6 +3754,9 @@
     opts?: { scrollToBottom?: boolean; silent?: boolean },
   ) => {
     const shouldShowLoader = !opts?.silent;
+    const serverMessageIds = new Set<string>();
+    const serverTimelineKeys = new Set<string>();
+    const serverEventMessageIds = new Set<string>();
     if (shouldShowLoader) loadingMessages = true;
     errorMsg = null;
     try {
@@ -3737,6 +3808,14 @@
           return;
         }
         if (payload.type === 'timeline_item') {
+          serverTimelineKeys.add(payload.item.key);
+          serverMessageIds.add(String(payload.item.message.id ?? '').trim());
+          if (
+            payload.item.kind === 'assistant-segment' ||
+            payload.item.kind === 'runtime-segment'
+          ) {
+            serverEventMessageIds.add(String(payload.item.message.id ?? '').trim());
+          }
           await stageHistoryTimelineItem(payload.item);
           if (shouldFlushHistoryStage()) {
             await applyHistoryTimelineBlock(stagedHistoryTimelineItems, {
@@ -3765,6 +3844,15 @@
       if (stagedHistoryTimelineItems.length > 0) {
         await applyHistoryTimelineBlock(stagedHistoryTimelineItems);
       }
+      messages = messages.filter((message) => serverMessageIds.has(message.id));
+      historyTimelineItems = historyTimelineItems.filter((item) =>
+        serverTimelineKeys.has(item.key),
+      );
+      initialEventsByMessageId = new Map(
+        [...initialEventsByMessageId].filter(([messageId]) =>
+          serverEventMessageIds.has(messageId),
+        ),
+      );
       historyHydrationStickBottom = false;
       historyHydrationInFlight = false;
 
@@ -4190,29 +4278,15 @@
         createdAt: nowIso,
         _localStatus: 'completed',
       };
-      const assistantMsg: LocalMessage = {
-        id: res.assistantMessageId,
+      bootstrapAssistantRun({
         sessionId: res.sessionId,
-        role: 'assistant',
-        content: null,
+        assistantMessageId: res.assistantMessageId,
+        streamId: res.streamId,
+        jobId: res.jobId,
         model: selectedModelId,
-        createdAt: nowIso,
-        _localStatus: 'processing',
-        _streamId: res.streamId,
-      };
-      messages = [...messages, userMsg, assistantMsg];
-      followBottom = true;
-      scheduleScrollToBottom({ force: true });
-
-      void createTurnCheckpoint(res.sessionId, userMsg.id);
-
-      // Fallback: si SSE rate les events (connection pas prête), on rattrape via polling queue.
-      // On évite ainsi un "Préparation…" bloqué alors que le job est déjà terminé.
-      void pollJobUntilTerminal(
-        res.jobId,
-        assistantMsg._streamId ?? assistantMsg.id,
-        { timeoutMs: 90_000 },
-      );
+        userMessage: userMsg,
+        checkpointUserMessageId: userMsg.id,
+      });
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.send'));
     } finally {
