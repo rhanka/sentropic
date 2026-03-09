@@ -1025,10 +1025,10 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - the frontend must treat emitted `timeline_item` objects as the canonical historical read model.
   - the frontend must not rebuild the whole historical projected timeline from `messages` while hydrating `history`.
   - local projection logic remains only for the active live run fed by SSE.
-  - for non-code workspaces, `history` must not eagerly embed the heavy reasoning/tools body needed only for expanded runtime inspection.
-  - for non-code workspaces, each `timeline_item` carries only the lightweight summary needed to render the collapsed thread.
-  - the first expand of one assistant turn must trigger a targeted fetch for that message runtime detail payload only.
-  - once fetched, that per-message runtime detail payload is cached locally for subsequent collapse/expand cycles in the same session view.
+  - for every workspace type, `history` must not eagerly embed the heavy reasoning/tools body.
+  - each `timeline_item` carries only the lightweight summary needed to render the collapsed historical thread.
+  - historical reasoning/tool detail is not part of BR-05 UX in code workspaces.
+  - code-workspace observability comes from the active run only, not from re-expanding historical reasoning bodies.
   - session switching must keep the currently visible conversation mounted until the next session can be revealed in one stable visual step.
   - the target conversation may become visible only:
     - once the full staged hydration completes without overflow, or
@@ -1086,12 +1086,11 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - host (`web`, `chrome`, `vscode`) must not create a second historical chat contract.
 
 - Shared history policy:
-  - `history` must use the same `summary + on-demand per-message runtime details` contract for every workspace type,
+  - `history` must use the same summary-only contract for every workspace type,
   - reloading a code-workspace session must therefore rehydrate collapsed runtime summaries first, exactly like a non-code session,
-  - the first expand of one assistant turn must call a dedicated per-message details route (message-scoped, not session-wide),
-  - once fetched, that body is cached locally for subsequent collapse/expand cycles in the same session view,
   - collapsed runtime blocks must stay cheap to mount even when reasoning/tool payloads are large,
-  - a collapsed block may show only summary metadata that is already present in the `history` item payload.
+  - a collapsed block may show only summary metadata that is already present in the `history` item payload,
+  - BR-05 does not expose historical reasoning/tool detail in code workspaces.
 
 - Code workspace live policy:
   - only the active run differs from non-code behavior,
@@ -1125,7 +1124,7 @@ This section locks the implementation contract for the immediate Lot-1 increment
 - Performance expectation:
   - large-history session open must visibly progress item by item,
   - all workspaces must avoid eager runtime-body transport and eager markdown/runtime-body mounting for collapsed historical runtime steps,
-  - code-workspace observability must come from the active run presentation, not from a heavier historical hydration contract.
+  - code-workspace observability must come from the active run presentation, not from a heavier historical hydration contract or historical runtime-detail expansion.
   - terminal completion must therefore be O(1) on the client timeline: no full-session reread, no silent swap, no blink.
   - session-open progress must feel stable: no placeholder flash shorter than the human perception threshold, no visible half-swapped conversation shell.
 
