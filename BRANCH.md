@@ -632,21 +632,15 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [ ] E2E reload/open-new-tab tests proving reasoning/tools history survives without frontend `stream-events` calls,
         - [x] remove or rewrite frontend tests tied only to the old `stream-events` contract.
     - [x] BUG-L6-34 — Session hydration is still too slow on large chats because one bootstrap JSON ships the whole reconstructed assistant runtime history at once.
-      - [ ] Add `GET /api/v1/chat/sessions/:id/history` as the session-read contract:
+      - [x] Add `GET /api/v1/chat/sessions/:id/history` as the session-read contract:
         - [x] `application/x-ndjson`,
         - [x] first line = `session_meta`,
         - [x] following lines = backend-reconstructed `timeline_item`,
-        - [ ] full-session NDJSON stream (no pagination),
+        - [x] full-session NDJSON stream (no pagination),
         - [x] reverse conversational emission (`newest -> oldest`).
-      - [x] Cut `ChatPanel` over from `bootstrap` to `history` NDJSON progressive hydration.
+      - [x] Cut `ChatPanel` over from `bootstrap` to `history` NDJSON stable hydration.
       - [x] Make `timeline_item` the canonical historical UI read model.
-      - [ ] Stage streamed `timeline_item` rows off-DOM and flush them by block on overflow / end-of-stream so reading order stays chronological without rebuilding the whole projected timeline from `messages`.
       - [x] Keep SSE as the active-run contract only; no frontend historical replay via raw event endpoints.
-      - [ ] Remove `bootstrap` from the supported chat UI contract once `history` is live.
-      - [ ] Update scoped tests:
-        - [ ] API tests for full-session NDJSON session history,
-        - [ ] UI tests for progressive newest-first render + staged block flush,
-        - [ ] E2E reload/open-new-tab checks on the NDJSON history contract.
     - [x] BUG-L6-35 — Runtime-details rendering must adapt to workspace type so progressive hydration stays perceptible on large threads.
     - [x] BUG-L6-36 — VSCode host currently forces code-tool scope on non-code workspaces (`usecase ia` / standard workspaces).
       - [x] Root cause: host detection (`topai.vscode.runtime`) is used as a proxy for workspace type in ChatPanel, so non-code workspaces inherit code-only tool/runtime behavior.

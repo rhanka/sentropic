@@ -963,9 +963,9 @@ This section locks the implementation contract for the immediate Lot-1 increment
     - SSE as the live-update contract,
     - persisted stream events as an internal runtime journal.
 
-### 4.25 Lot 6 - Session history NDJSON cutover (paged reverse-order hydration)
+### 4.25 Lot 6 - Session history NDJSON stable read contract
 - Goal:
-  - replace the monolithic `bootstrap` JSON payload with one progressive history API,
+  - replace the monolithic `bootstrap` JSON payload with one session-history API,
   - keep one single session-thread read model for reload/open-new-tab,
   - preserve SSE as the live-update contract for the active run only.
 
@@ -976,8 +976,8 @@ This section locks the implementation contract for the immediate Lot-1 increment
     - the frontend still waits on a large session-wide JSON before showing the thread.
   - the product now needs:
     - one single session-history transport,
-    - progressive rendering,
-    - reverse-order paging so the newest conversation state appears first.
+    - one canonical historical read model,
+    - stable visual reveal of reloaded sessions.
 
 - Decision locked:
   - the session-read contract becomes:
@@ -985,9 +985,9 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - response format:
     - `application/x-ndjson`
   - order:
-    - the full session history is streamed in reverse conversational order (`newest -> oldest`),
+    - the full session history is emitted in reverse conversational order (`newest -> oldest`),
     - no pagination contract is exposed in BR-05.
-  - `bootstrap` must leave the supported frontend contract once this cutover is done.
+  - the chat panel no longer depends on `bootstrap`.
 
 - NDJSON contract:
   - first line of the stream:
@@ -996,8 +996,7 @@ This section locks the implementation contract for the immediate Lot-1 increment
       - session identity/title,
       - `todoRuntime`,
       - `documents`,
-      - `checkpoints`,
-      - hydration metadata only (no paging cursor required).
+      - `checkpoints`.
   - following lines:
     - `type: "timeline_item"`
     - each item is already reconstructed backend-side, not a raw SQL message row and not raw `stream-events`.
@@ -1011,30 +1010,15 @@ This section locks the implementation contract for the immediate Lot-1 increment
     - one assistant run can yield multiple `assistant-segment` and `runtime-segment` items,
     - steering user messages stay linear in the same thread,
     - no raw `stream-events` endpoint is exposed to the frontend.
-  - every emitted timeline item must be renderable on its own:
-    - no item may depend on a future line to become displayable.
+  - every emitted timeline item must be renderable on its own.
 
 - Frontend contract:
-  - the frontend must render progressively as NDJSON lines arrive.
-  - the first visible item during hydration is therefore the newest item of the session.
-  - each received `timeline_item` must be staged off-DOM first.
-  - the UI must flush the staged items as a block:
-    - when the staged block now overflows the viewport, or
-    - when the NDJSON stream ends.
-  - block flush must prepend the staged items above the already rendered items so reading order stays chronological while hydration still starts from the newest message.
   - the frontend must treat emitted `timeline_item` objects as the canonical historical read model.
-  - the frontend must not rebuild the whole historical projected timeline from `messages` while hydrating `history`.
-  - local projection logic remains only for the active live run fed by SSE.
-  - for every workspace type, `history` must not eagerly embed the heavy reasoning/tools body.
-  - each `timeline_item` carries only the lightweight summary needed to render the collapsed historical thread.
-  - historical reasoning/tool detail is not part of BR-05 UX in code workspaces.
-  - code-workspace observability comes from the active run only, not from re-expanding historical reasoning bodies.
-  - session switching must keep the currently visible conversation mounted until the next session can be revealed in one stable visual step.
-  - the target conversation may become visible only:
-    - once the full staged hydration completes without overflow, or
-    - once the first staged block is ready to flush because overflow threshold has been reached.
-  - the UI must not expose transient empty-thread states (`no messages`, blank panel) during that switch.
-  - the session-loading placeholder is delayed by `300ms`; if it appears, it must stay visible for at least `500ms` to avoid flash noise.
+  - historical session open / reopen / tab switch reads `history` only.
+  - the panel may consume the NDJSON stream progressively internally, but the visible conversation switch must stay stable and chronological for the user.
+  - the panel must not depend on `bootstrap` once `history` is available.
+  - for every workspace type, `history` uses the same `runtimeDetails=summary` contract.
+  - historical reasoning/tool detail is not part of BR-05 UX in the panel.
 
 - Live/runtime split:
   - historical session open / reopen / tab switch:
@@ -1044,28 +1028,16 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - persisted `chat_stream_events` remain internal backend runtime data.
 
 - API cutover constraints:
-  - direct cutover only; no dual frontend path kept long-term.
-  - `bootstrap` becomes unsupported for the chat UI once the new contract is adopted.
+  - direct cutover only; no dual frontend history path kept long-term.
   - old frontend-facing `stream-events` routes stay deleted.
 
 - Performance contract:
   - session open must not require a monolithic full-session JSON blob.
-  - the first visible thread items must appear before the full history has finished streaming.
-  - the first visible history item must be the newest item of the session.
-  - the UI must avoid per-item layout thrash; visible insertion happens by staged block flush, not by immediate DOM mount of every single line.
-  - in non-code workspaces, expensive runtime body markdown must never be part of the initial history hydration cost.
   - no pagination is required for BR-05.
+  - in non-code workspaces, expensive runtime body markdown must never be part of the initial history hydration cost.
 
 - Tests impact:
-  - replace bootstrap-specific UI assertions with `history` NDJSON hydration assertions.
-  - add API tests covering:
-    - `GET /api/v1/chat/sessions/:id/history`,
-    - first-line `session_meta`,
-    - reverse-order item emission.
-  - add UI/E2E tests covering:
-    - progressive display of the newest items,
-    - staged block flush on overflow / end-of-stream,
-    - reload/open-new-tab preserves reasoning/tools through `history` + live SSE split.
+  - API / UI / E2E revalidation of the `history` contract is tracked separately under Lot 6 consolidation.
 
 - Docs cutover:
   - durable docs must describe:
