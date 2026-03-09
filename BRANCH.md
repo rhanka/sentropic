@@ -653,13 +653,6 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Investigate effective tool catalog resolution by real workspace type/template, not by host alone.
       - [x] Scope the conversation list to the active workspace so session mode and workspace type stay aligned.
       - [x] When the active workspace changes while chat is open, reload the scoped session list immediately, reset the active session, and auto-select the latest session of the new workspace.
-      - [ ] Converge historical hydration fully: code and non-code must both use summary-only historical hydration.
-      - [ ] Keep the workspace-type difference only on the active run presentation.
-      - [ ] In code workspaces, render reasoning/tools expanded by default only for the active run.
-      - [ ] In code workspaces, prevent duplicate active-step streaming between runtime preview and assistant-visible content.
-      - [ ] In non-code workspaces, keep the active run collapsed with compact inline preview.
-      - [ ] On first expand in any workspace, fetch runtime details through one targeted per-message route (message-scoped, not session-wide).
-      - [ ] Cache the first-expanded runtime body locally so repeated collapse/expand does not refetch or remount the full payload.
     - [x] BUG-L6-38 — Non-code workspaces no longer show progressive streaming/runtime updates while a run is in progress.
       - [x] Verify code/non-code mode divergence stays limited to active-run presentation only, not to historical hydration or live event processing.
       - [x] Restore live incremental content, live reasoning header updates, and active-step preview in non-code workspaces.
@@ -705,10 +698,6 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] Phase 1 — Unblock quickly with the real dev admin account already present in DB:
           - [x] record `.auth/dev-state.json` from `admin@sent-tech.ca`,
           - [x] use that state only for manual-navigation / reload-debug scoped specs against `ENV=dev`.
-      - [!] Follow-up hardening (not required for the feature cutover):
-        - [ ] create and enroll `ai-demo-user@sent-tech.ca` through the real product flow,
-        - [ ] grant the minimal required access on `Demo Workspace`,
-        - [ ] switch `playwright.dev.config.ts` to the dedicated `ai-demo-user@sent-tech.ca` storage state.
 
 - [ ] **Lot N-2** UAT
   - [ ] Web app (`ENV=dev`, root workspace)

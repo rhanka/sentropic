@@ -1073,30 +1073,24 @@ This section locks the implementation contract for the immediate Lot-1 increment
     - SSE as the live-update contract,
     - persisted stream events as an internal runtime journal only.
 
-### 4.26 Lot 6 - Converged runtime-details history with workspace-specific live presentation
+### 4.26 Lot 6 - Converged runtime-details history with one shared panel presentation
 - Goal:
   - keep large-history hydration perceptibly progressive,
-  - avoid a permanent code/non-code fork in the historical chat contract,
-  - keep the only workspace-specific difference on the active run presentation.
+  - avoid a permanent code/non-code fork in the chat contract,
+  - keep one shared panel presentation across workspace types.
 
 - Decision locked:
   - history/runtime-details transport is identical for code and non-code workspaces,
   - the same projected timeline structure is used everywhere,
-  - workspace type differences are limited to the live active run presentation,
+  - the same active-run presentation is used everywhere in the panel,
   - host (`web`, `chrome`, `vscode`) must not create a second historical chat contract.
 
 - Shared history policy:
   - `history` must use the same summary-only contract for every workspace type,
-  - reloading a code-workspace session must therefore rehydrate collapsed runtime summaries first, exactly like a non-code session,
+  - reloading any session must therefore rehydrate collapsed runtime summaries first,
   - collapsed runtime blocks must stay cheap to mount even when reasoning/tool payloads are large,
   - a collapsed block may show only summary metadata that is already present in the `history` item payload,
-  - BR-05 does not expose historical reasoning/tool detail in code workspaces.
-
-- Code workspace live policy:
-  - only the active run differs from non-code behavior,
-  - reasoning/tools for the active run are expanded by default,
-  - while an assistant-visible content segment is actively streaming, the same active step must not also render as a duplicated runtime-inline stream,
-  - one active step = one visible stream source.
+  - BR-05 does not expose historical reasoning/tool detail in the panel.
 
 - Session scoping policy:
   - chat sessions listed in the UI must be scoped to the active workspace only,
@@ -1108,9 +1102,10 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - a code-workspace conversation opened on web keeps code-workspace behavior but must not gain VSCode local tools,
   - a non-code workspace opened in VSCode keeps non-code conversation behavior but may still expose VSCode local tool capabilities separately.
 
-- Non-code live policy:
-  - the active run keeps the compact inline runtime preview behavior,
-  - active reasoning/tools blocks remain collapsed by default while the run is in flight.
+- Panel live policy:
+  - the same active-run presentation is used in every workspace type,
+  - one active step = one visible stream source,
+  - the panel must not fork code/non-code rendering behavior.
 
 - Shared constraints:
   - reload/open-new-tab preserve the same projected step order in every workspace type,
@@ -1124,7 +1119,7 @@ This section locks the implementation contract for the immediate Lot-1 increment
 - Performance expectation:
   - large-history session open must visibly progress item by item,
   - all workspaces must avoid eager runtime-body transport and eager markdown/runtime-body mounting for collapsed historical runtime steps,
-  - code-workspace observability must come from the active run presentation, not from a heavier historical hydration contract or historical runtime-detail expansion.
+  - observability must not rely on a workspace-specific heavier panel contract or historical runtime-detail expansion.
   - terminal completion must therefore be O(1) on the client timeline: no full-session reread, no silent swap, no blink.
   - session-open progress must feel stable: no placeholder flash shorter than the human perception threshold, no visible half-swapped conversation shell.
 
