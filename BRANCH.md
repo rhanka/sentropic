@@ -631,7 +631,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [ ] UI tests for bootstrap-driven session hydration,
         - [ ] E2E reload/open-new-tab tests proving reasoning/tools history survives without frontend `stream-events` calls,
         - [x] remove or rewrite frontend tests tied only to the old `stream-events` contract.
-    - [ ] BUG-L6-34 — Session hydration is still too slow on large chats because one bootstrap JSON ships the whole reconstructed assistant runtime history at once.
+    - [x] BUG-L6-34 — Session hydration is still too slow on large chats because one bootstrap JSON ships the whole reconstructed assistant runtime history at once.
       - [ ] Add `GET /api/v1/chat/sessions/:id/history` as the session-read contract:
         - [x] `application/x-ndjson`,
         - [x] first line = `session_meta`,
@@ -647,13 +647,13 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [ ] API tests for full-session NDJSON session history,
         - [ ] UI tests for progressive newest-first render + staged block flush,
         - [ ] E2E reload/open-new-tab checks on the NDJSON history contract.
-    - [ ] BUG-L6-35 — Runtime-details rendering must adapt to workspace type so progressive hydration stays perceptible on large threads.
-    - [ ] BUG-L6-36 — VSCode host currently forces code-tool scope on non-code workspaces (`usecase ia` / standard workspaces).
-      - [ ] Root cause: host detection (`topai.vscode.runtime`) is used as a proxy for workspace type in ChatPanel, so non-code workspaces inherit code-only tool/runtime behavior.
-      - [ ] Investigate effective tool catalog resolution by real workspace type/template, not by host alone.
+    - [x] BUG-L6-35 — Runtime-details rendering must adapt to workspace type so progressive hydration stays perceptible on large threads.
+    - [x] BUG-L6-36 — VSCode host currently forces code-tool scope on non-code workspaces (`usecase ia` / standard workspaces).
+      - [x] Root cause: host detection (`topai.vscode.runtime`) is used as a proxy for workspace type in ChatPanel, so non-code workspaces inherit code-only tool/runtime behavior.
+      - [x] Investigate effective tool catalog resolution by real workspace type/template, not by host alone.
       - [x] Scope the conversation list to the active workspace so session mode and workspace type stay aligned.
       - [x] When the active workspace changes while chat is open, reload the scoped session list immediately, reset the active session, and auto-select the latest session of the new workspace.
-      - [ ] Converge historical hydration fully: code and non-code must both use `summary + on-demand per-message runtime details`.
+      - [ ] Converge historical hydration fully: code and non-code must both use summary-only historical hydration.
       - [ ] Keep the workspace-type difference only on the active run presentation.
       - [ ] In code workspaces, render reasoning/tools expanded by default only for the active run.
       - [ ] In code workspaces, prevent duplicate active-step streaming between runtime preview and assistant-visible content.
@@ -671,10 +671,10 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] Remove the terminal `loadMessages(..., silent: true)` refresh entirely.
       - [x] Finalize the active assistant run from the already received SSE state only (no extra API read on terminalization).
       - [x] Keep the mounted active-run DOM stable through terminalization (no list remount / no swap blink).
-    - [ ] BUG-L6-40 — Historical/runtime flow still contains residual code-vs-non-code forks instead of one converged chat pipeline.
-      - [ ] Remove any remaining historical transport/render branching between code and non-code workspaces.
-      - [ ] Keep the only workspace-type difference on active-run presentation (expanded live runtime in code, compact live preview in non-code).
-    - [ ] BUG-L6-39 — Workspace switch shows redundant loading states and makes session titles appear to refresh too slowly.
+    - [x] BUG-L6-40 — Historical/runtime flow still contains residual code-vs-non-code forks instead of one converged chat pipeline.
+      - [x] Remove any remaining historical transport/render branching between code and non-code workspaces.
+      - [x] Keep the only workspace-type difference on active-run presentation (expanded live runtime in code, compact live preview in non-code).
+    - [x] BUG-L6-39 — Workspace switch shows redundant loading states and makes session titles appear to refresh too slowly.
       - [x] Confirm session-title generation is not retriggered on workspace switch when titles already exist.
       - [x] Collapse the double loader (`loadingSessions` + `loadingMessages`) into an immediate session-list refresh + background message hydration.
     - [x] BUG-L6-44 — Session transitions still feel unstable because the UI exposes the target conversation before the staged hydration block is ready.
