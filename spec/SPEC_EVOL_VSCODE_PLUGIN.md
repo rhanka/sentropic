@@ -1017,6 +1017,7 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - historical session open / reopen / tab switch reads `history` only.
   - the panel may consume the NDJSON stream progressively internally, but the visible conversation switch must stay stable and chronological for the user.
   - the panel must not depend on `bootstrap` once `history` is available.
+  - the legacy `bootstrap` API may remain server-side temporarily, but it is outside the supported chat-panel contract.
   - for every workspace type, `history` uses the same `runtimeDetails=summary` contract.
   - historical reasoning/tool detail is not part of BR-05 UX in the panel.
 
@@ -1037,7 +1038,8 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - in non-code workspaces, expensive runtime body markdown must never be part of the initial history hydration cost.
 
 - Tests impact:
-  - API / UI / E2E revalidation of the `history` contract is tracked separately under Lot 6 consolidation.
+  - API / UI / E2E revalidation of the final `history` + live SSE contract is tracked separately under Lot 6 consolidation.
+  - that revalidation must explicitly cover reload, open-new-tab, steering, edit/retry, active SSE streaming, stable session reveal, and absence of frontend chat `stream-events` replay.
 
 - Docs cutover:
   - durable docs must describe:
