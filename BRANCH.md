@@ -606,31 +606,37 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] `make test-ui SCOPE=tests/utils/chat-run-projection.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
         - [x] `make test-ui SCOPE=tests/utils/chat-steer.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
         - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
-    - [ ] BUG-L6-31 — Chat session reload still depends on fragmented frontend reads (`messages` + `checkpoints` + `documents` + `stream-events`) instead of one coherent bootstrap snapshot.
-      - [x] Add `GET /api/v1/chat/sessions/:id/bootstrap` returning:
-        - [x] `messages`,
-        - [x] `todoRuntime`,
-        - [x] `checkpoints`,
-        - [x] `documents`,
-        - [x] `assistantDetailsByMessageId` for finalized assistant messages.
-      - [x] Cut `ChatPanel` over to the bootstrap endpoint for normal session loading.
+    - [x] BUG-L6-31 — Chat session reload no longer depends on fragmented frontend reads or public chat `stream-events` routes.
       - [x] Remove chat-session frontend reads of:
         - [x] `GET /api/v1/chat/sessions/:id/stream-events`,
-        - [x] `GET /api/v1/chat/messages/:id/stream-events`.
-      - [x] Remove `StreamMessage` chat-mode historical hydration through `stream-events`.
-      - [x] Remove product chat-history replay dependence on `GET /api/v1/streams/events/:streamId` in frontend runtime code.
+        - [x] `GET /api/v1/chat/messages/:id/stream-events`,
+        - [x] `GET /api/v1/streams/events/:streamId`.
       - [x] Keep SSE live transport unchanged for active runs.
       - [x] Keep persisted `chat_stream_events` and backend internal replay logic unchanged.
-      - [ ] Complete the big-bang cutover by removing public frontend-facing `stream-events` routes:
-        - [x] migrate `streamHub` away from `/api/v1/streams/events/:streamId`,
-        - [x] delete `GET /api/v1/chat/sessions/:id/stream-events`, `GET /api/v1/chat/messages/:id/stream-events`, and `GET /api/v1/streams/events/:streamId`,
-        - [x] rewrite affected tests,
-        - [ ] revalidate session reload + SSE live.
-      - [ ] Update scoped tests:
-        - [x] API tests for `GET /api/v1/chat/sessions/:id/bootstrap`,
-        - [ ] UI tests for bootstrap-driven session hydration,
-        - [ ] E2E reload/open-new-tab tests proving reasoning/tools history survives without frontend `stream-events` calls,
-        - [x] remove or rewrite frontend tests tied only to the old `stream-events` contract.
+      - [x] Legacy `bootstrap` API may remain server-side, but it is no longer part of the chat panel contract.
+    - [ ] TEST-L6-45 — Complete chat history + SSE regression coverage on the final `history` contract.
+      - [ ] API
+        - [ ] cover `GET /api/v1/chat/sessions/:id/history` end-to-end,
+        - [ ] assert `application/x-ndjson`,
+        - [ ] assert first line = `session_meta`,
+        - [ ] assert following lines = backend-reconstructed `timeline_item`,
+        - [ ] assert full-session stream without pagination,
+        - [ ] assert reverse emission (`newest -> oldest`),
+        - [ ] assert `runtimeDetails=summary` is the chat-panel contract.
+      - [ ] UI
+        - [ ] session open/reopen hydrates from `history` only (no chat `stream-events` replay),
+        - [ ] session switch keeps reveal stable with no empty-thread flash,
+        - [ ] active non-code run shows `Préparation`, live reasoning header updates, and active-step preview,
+        - [ ] edit/retry keeps `user -> runtime -> assistant` order and leaves no zombie assistant bubble,
+        - [ ] steering keeps the user bubble linear in the active timeline and resumes the same run cleanly,
+        - [ ] final terminalization keeps the mounted DOM stable with no silent reload blink.
+      - [ ] E2E
+        - [ ] reload preserves reasoning/tools history through `history` + live SSE only,
+        - [ ] open-new-tab preserves the same reconstructed timeline without frontend `stream-events` routes,
+        - [ ] active SSE live run still streams correctly after `history` hydration,
+        - [ ] steering during an active run remains linear and stable after reload,
+        - [ ] edit/resend after an existing assistant answer replays cleanly with no reorder or zombie response,
+        - [ ] workspace switch rescopes session list + active chat without re-triggering session title generation.
     - [x] BUG-L6-34 — Session hydration is still too slow on large chats because one bootstrap JSON ships the whole reconstructed assistant runtime history at once.
       - [x] Add `GET /api/v1/chat/sessions/:id/history` as the session-read contract:
         - [x] `application/x-ndjson`,
