@@ -214,6 +214,17 @@
     messageId: string;
     items: ProjectedTimelineItem[];
   };
+  type SessionHistorySnapshot = {
+    sessionId: string;
+    title: string | null;
+    messages: LocalMessage[];
+    timelineItems: ProjectedTimelineItem[];
+    initialEvents: Map<string, StreamEvent[]>;
+    checkpoints: ChatCheckpoint[];
+    documents: ContextDocumentItem[];
+    todoRuntime: Record<string, unknown> | null;
+    lastAssistantModel: string | null;
+  };
 
   const getTimelineItemSortSequence = (item: ProjectedTimelineItem): number => {
     const messageSequence = Number(item.message.sequence ?? 0);
@@ -3533,7 +3544,131 @@
         toolName: 'plan',
         result: { todoRuntime: runtimeSnapshot },
       });
+    } else {
+      resetTodoRuntimePanel();
     }
+  };
+
+  const fetchSessionHistorySnapshot = async (
+    id: string,
+  ): Promise<SessionHistorySnapshot> => {
+    const response = await apiFetch(
+      `/chat/sessions/${id}/history?runtimeDetails=${useCodeWorkspaceRuntimeDetails() ? 'full' : 'summary'}`,
+      {
+        method: 'GET',
+        headers: {
+          Accept: 'application/x-ndjson',
+        },
+      },
+    );
+    if (!response.body) {
+      throw new Error('Session history stream returned an empty body');
+    }
+
+    const snapshot: SessionHistorySnapshot = {
+      sessionId: id,
+      title: null,
+      messages: [],
+      timelineItems: [],
+      initialEvents: new Map(),
+      checkpoints: [],
+      documents: [],
+      todoRuntime: null,
+      lastAssistantModel: null,
+    };
+    const decoder = new TextDecoder();
+    const reader = response.body.getReader();
+    let buffer = '';
+
+    const processLine = (rawLine: string) => {
+      const line = rawLine.trim();
+      if (!line) return;
+      const payload = JSON.parse(line) as
+        | SessionHistoryMetaLine
+        | SessionHistoryTimelineLine;
+      if (payload.type === 'session_meta') {
+        snapshot.sessionId = payload.sessionId;
+        snapshot.title =
+          typeof payload.title === 'string' && payload.title.trim().length > 0
+            ? payload.title
+            : null;
+        snapshot.checkpoints = Array.isArray(payload.checkpoints)
+          ? payload.checkpoints
+          : [];
+        snapshot.documents = Array.isArray(payload.documents)
+          ? payload.documents
+          : [];
+        snapshot.todoRuntime = asRuntimeRecord(payload.todoRuntime);
+        return;
+      }
+
+      const item = payload.item;
+      const normalizedMessage: LocalMessage = {
+        ...item.message,
+        _streamId: item.message._streamId ?? item.message.id,
+        _localStatus:
+          item.message._localStatus ??
+          (item.message.content ? 'completed' : undefined),
+      };
+      const existingMessageIndex = snapshot.messages.findIndex(
+        (entry) => entry.id === normalizedMessage.id,
+      );
+      if (existingMessageIndex >= 0) {
+        snapshot.messages[existingMessageIndex] = {
+          ...snapshot.messages[existingMessageIndex],
+          ...normalizedMessage,
+        };
+      } else {
+        const sequence = Number(normalizedMessage.sequence ?? 0);
+        let insertAt = snapshot.messages.length;
+        while (
+          insertAt > 0 &&
+          Number(snapshot.messages[insertAt - 1]?.sequence ?? 0) > sequence
+        ) {
+          insertAt -= 1;
+        }
+        snapshot.messages.splice(insertAt, 0, normalizedMessage);
+      }
+      if (item.kind === 'assistant-segment' || item.kind === 'runtime-segment') {
+        snapshot.initialEvents.set(
+          item.message.id,
+          mergeProjectionHistoryEvents(
+            snapshot.initialEvents.get(item.message.id) ?? [],
+            item.segment.events,
+          ),
+        );
+      }
+      const existingTimelineIndex = snapshot.timelineItems.findIndex(
+        (entry) => entry.key === item.key,
+      );
+      if (existingTimelineIndex >= 0) {
+        snapshot.timelineItems[existingTimelineIndex] = item;
+      } else {
+        snapshot.timelineItems.push(item);
+      }
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let boundary = buffer.indexOf('\n');
+      while (boundary >= 0) {
+        processLine(buffer.slice(0, boundary));
+        buffer = buffer.slice(boundary + 1);
+        boundary = buffer.indexOf('\n');
+      }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim().length > 0) processLine(buffer);
+
+    snapshot.timelineItems.sort(compareTimelineItems);
+    snapshot.lastAssistantModel =
+      [...snapshot.messages]
+        .reverse()
+        .find((message) => message.role === 'assistant' && Boolean(message.model))
+        ?.model ?? null;
+    return snapshot;
   };
 
   const yieldHistoryRenderFrame = async () => {
@@ -3831,13 +3966,59 @@
   };
 
   export const selectSession = async (id: string) => {
-    sessionId = id;
+    const snapshot = await fetchSessionHistorySnapshot(id);
+    historyHydrationInFlight = true;
+    historyHydrationSwapPending = true;
+    historyHydrationStickBottom = true;
     optimisticSteerMessages = [];
-    sessionDocs = [];
-    sessionDocsError = null;
-    resetTodoRuntimePanel();
+    projectedStreamEventsById = new Map();
+    projectedAssistantComputationByMessageId = new Map();
+    projectionEventsVersion += 1;
+    loadedRuntimeDetailsMessageIds = new Set();
+    loadingRuntimeDetailsMessageIds = new Set();
     resetLocalToolInterceptionState();
-    await loadMessages(id, { scrollToBottom: true });
+    messages = snapshot.messages;
+    historyTimelineItems = snapshot.timelineItems;
+    stagedHistoryTimelineItems = [];
+    historyTimelineSessionId = snapshot.sessionId;
+    initialEventsByMessageId = snapshot.initialEvents;
+    applySessionCheckpoints(snapshot.checkpoints);
+    sessionDocs = snapshot.documents;
+    sessionDocsError = null;
+    if (snapshot.todoRuntime) {
+      handleTodoRuntimeToolResult({
+        toolCallId: `session-runtime:${snapshot.sessionId}`,
+        toolName: 'plan',
+        result: { todoRuntime: snapshot.todoRuntime },
+      });
+    } else {
+      resetTodoRuntimePanel();
+    }
+    if (snapshot.title) {
+      sessions = sessions.map((entry) =>
+        entry.id === snapshot.sessionId
+          ? { ...entry, title: snapshot.title }
+          : entry,
+      );
+    }
+    if (snapshot.lastAssistantModel) {
+      const fromCatalog = modelCatalogModels.find(
+        (entry) => entry.model_id === snapshot.lastAssistantModel,
+      );
+      if (fromCatalog) {
+        selectedProviderId = fromCatalog.provider_id;
+        selectedModelId = fromCatalog.model_id;
+      }
+    }
+    sessionId = id;
+    await yieldHistoryRenderFrame();
+    if (listEl) {
+      listEl.scrollTop = listEl.scrollHeight;
+      await yieldHistoryRenderFrame();
+    }
+    historyHydrationSwapPending = false;
+    historyHydrationInFlight = false;
+    historyHydrationStickBottom = false;
   };
 
   export const refreshCommentThreads = async () => {

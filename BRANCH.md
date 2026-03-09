@@ -677,13 +677,13 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] BUG-L6-39 — Workspace switch shows redundant loading states and makes session titles appear to refresh too slowly.
       - [x] Confirm session-title generation is not retriggered on workspace switch when titles already exist.
       - [x] Collapse the double loader (`loadingSessions` + `loadingMessages`) into an immediate session-list refresh + background message hydration.
-    - [ ] BUG-L6-44 — Session transitions still feel unstable because the UI exposes the target conversation before the staged hydration block is ready.
-      - [ ] Delay the session `loading` placeholder by `300ms`; if shown, keep it visible for at least `500ms`.
-      - [ ] Keep the previous conversation visually mounted until the new session can swap in one stable reveal step.
-      - [ ] Trigger the visible session switch only after the new DOM block is ready:
-        - [ ] either full staged hydration completes without overflow,
-        - [ ] or the first staged block reaches the overflow flush threshold.
-      - [ ] Avoid transient `Aucun message` / empty-thread flashes during session change.
+    - [x] BUG-L6-44 — Session transitions still feel unstable because the UI exposes the target conversation before the staged hydration block is ready.
+      - [x] Delay the session `loading` placeholder by `300ms`; if shown, keep it visible for at least `500ms`.
+      - [x] Keep the previous conversation visually mounted until the new session can swap in one stable reveal step.
+      - [x] Trigger the visible session switch only after the new DOM block is ready:
+        - [x] either full staged hydration completes without overflow,
+        - [x] or the first staged block reaches the overflow flush threshold.
+      - [x] Avoid transient `Aucun message` / empty-thread flashes during session change.
     - [x] BUG-L6-33 — API prebuild is no longer blocked by current Hono security advisories before BR05 E2E can run.
       - [x] Refresh `api` lock resolution to latest non-breaking Hono patch line (`hono`, `@hono/node-server`) and rerun `make build-api`.
       - [x] Re-run the blocked BR05 E2E checks only after the API image builds cleanly again.
