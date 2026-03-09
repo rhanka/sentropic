@@ -1775,7 +1775,6 @@
   const handleSelectSession = async (id: string) => {
     if (id === chatSessionId) return;
     pendingChatSessionDeleteConfirm = false;
-    chatSessionId = id;
     await chatPanelRef?.selectSession?.(id);
   };
 
