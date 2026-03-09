@@ -34,7 +34,7 @@ Forbidden on `ENV=dev`:
 
 ### Preferred lanes
 - Use `make up-dev-playwright ... ENV=dev` for live debug against real dev data
-- Use `make test-e2e-dev E2E_SPEC=... ... ENV=dev` for a single scoped probe
+- Use `make exec-playwright-dev CMD='...' ... ENV=dev` for a single scoped probe
 - Use isolated `test/e2e` envs for permanent regression tests
 
 ## Working method
@@ -105,11 +105,17 @@ Avoid:
 ### 5. Separate harness bugs from product bugs
 Before blaming the product, verify:
 - auth state is valid
+- the lane storage state is the right one: `e2e/.auth/dev-state.json` (mounted as `/app/.auth/dev-state.json`)
 - the correct base URL is used
 - no CORS/CSP issue blocks the browser
 - the probe reaches the page and target element
 
 If the probe fails before product behavior starts, fix the harness first.
+
+For auth, check in this order:
+1. `page.context().cookies()` contains the expected `session`
+2. browser-side `fetch('<api>/auth/session', { credentials: 'include' })` succeeds
+3. only then start the real UI scenario
 
 ### 6. Promote only the useful part
 Once root cause is known:
@@ -166,8 +172,7 @@ Typical flow:
 
 ```bash
 make up-dev-playwright API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080 REGISTRY=local ENV=dev
-make record-dev-playwright-auth DEV_PLAYWRIGHT_AUTH_EMAIL=admin@sent-tech.ca API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080 REGISTRY=local ENV=dev
-make test-e2e-dev E2E_SPEC=tests/dev/_scratch.chat-reload.spec.ts API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080 REGISTRY=local ENV=dev
+make exec-playwright-dev CMD='API_BASE_URL=http://host.docker.internal:8787 UI_BASE_URL=http://host.docker.internal:5174 MAILDEV_API_URL=http://maildev:1080 npx playwright test --config playwright.dev.config.ts tests/dev/_scratch.chat-reload.spec.ts --workers=1 --retries=0 --reporter=list' API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080 REGISTRY=local ENV=dev
 ```
 
 ## Example: chat reload debug
@@ -179,6 +184,7 @@ Bad approach:
 
 Good approach:
 1. Probe auth:
+   - inspect `page.context().cookies()`
    - browser fetch `/api/v1/auth/session`
 2. Open chat:
    - verify the composer is visible
