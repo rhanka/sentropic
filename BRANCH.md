@@ -457,6 +457,30 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
         - [x] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
         - [x] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 REGISTRY=local ENV=test-feat-vscode-plugin-v1`
+    - [ ] BUG-L6-46 — Codex admin enrollment still does not acquire backend-usable user credentials for real runtime calls.
+      - [ ] Restrict BR05 scope to Codex only; defer Gemini Code Assist to BR09 and Mistral Code to BR08.
+      - [ ] Restrict BR05 runtime enrollment to admin-triggered connection only.
+      - [ ] Implement the Codex browser auth flow in OTP/copy-paste mode (no local callback listener, no fake `complete` toggle semantics).
+      - [ ] Bind provider connection to the real Codex/OpenAI account identity returned by provider auth.
+      - [ ] Encrypt and persist backend-owned user credentials (refresh/access tokens, derived OpenAI API key, expiry, account identity).
+      - [ ] Make backend runtime resolve the admin Codex credential as an `openai` credential source and perform actual model calls with it.
+      - [ ] Expose verified readiness/status/disconnect from real stored credential state; web admin settings own connect/status/disconnect, and VSCode consumes readiness/status only.
+    - [ ] TEST-L6-46 — Validate Codex admin backend enrollment and runtime use end-to-end.
+      - [ ] API
+        - [ ] start endpoint creates pending enrollment with PKCE/state and the OTP/copy-paste activation contract,
+        - [ ] complete endpoint exchanges the user-supplied OTP/auth code into stored backend credential material,
+        - [ ] status/readiness reflects verified credential state,
+        - [ ] disconnect clears stored credentials,
+        - [ ] runtime credential resolution prefers the connected Codex-backed credential for `openai` calls made by the same admin user.
+      - [ ] UI
+        - [ ] admin web settings start Codex browser auth, collect the OTP/auth code, and complete the connection without any local callback bridge,
+        - [ ] VSCode settings show Codex readiness/status only (no enrollment ownership in BR05),
+        - [ ] connected state shows provider account identity,
+        - [ ] non-admin users cannot mutate Codex connection.
+      - [ ] E2E
+        - [ ] mocked OTP/copy-paste completion flow completes and marks Codex ready,
+        - [ ] one real admin chat/runtime call uses the Codex-backed `openai` credential path,
+        - [ ] disconnect removes readiness and runtime fallback behaves predictably.
     - [x] BUG-L6-6 — Code-agent base prompt is not aligned with the requested enriched baseline profile.
       - [x] Replace current base prompt with the agreed enriched profile.
       - [x] Add scoped tests for baseline prompt rendering and override behavior.

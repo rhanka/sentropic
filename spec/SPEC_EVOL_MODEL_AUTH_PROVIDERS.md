@@ -75,6 +75,9 @@ Current state summary:
 - Add login and callback flows for:
   - OpenAI/ChatGPT (W1 target)
   - Google (W2 target)
+- Support two verified enrollment completion modes depending on provider capability:
+  - application-controlled callback redirect,
+  - one-time activation/authentication code copied back by the user and exchanged by the backend.
 - Keep existing WebAuthn login path available (no regression).
 - Support linking/unlinking SSO identities from existing users.
 
