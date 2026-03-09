@@ -210,10 +210,6 @@
     type: 'timeline_item';
     item: ProjectedTimelineItem;
   };
-  type MessageRuntimeDetailsResponse = {
-    messageId: string;
-    items: ProjectedTimelineItem[];
-  };
   type SessionHistorySnapshot = {
     sessionId: string;
     title: string | null;
@@ -1383,10 +1379,7 @@
     ProjectedAssistantComputation
   >();
   let projectionEventsVersion = 0;
-  let streamDetailsLoading = false;
   let historyTimelineSessionId: string | null = null;
-  let loadedRuntimeDetailsMessageIds = new Set<string>();
-  let loadingRuntimeDetailsMessageIds = new Set<string>();
   let todoRuntimePanel: TodoRuntimePanelState | null = null;
   let todoRuntimeCollapsed = false;
   let todoRuntimeDeleteInFlight = false;
@@ -1936,9 +1929,6 @@
   const isVsCodeRuntimeHost = (): boolean => {
     return getExtensionRuntimeHostKind() === 'vscode';
   };
-
-  const useCodeWorkspaceRuntimeDetails = (): boolean =>
-    Boolean($selectedWorkspace?.isCodeWorkspace);
 
   const isCodeWorkspaceConversation = (): boolean =>
     Boolean($selectedWorkspace?.isCodeWorkspace);
@@ -2943,16 +2933,6 @@
           keptHistoryMessageIds.has(messageId),
         ),
       );
-      loadedRuntimeDetailsMessageIds = new Set(
-        [...loadedRuntimeDetailsMessageIds].filter((messageId) =>
-          keptHistoryMessageIds.has(messageId),
-        ),
-      );
-      loadingRuntimeDetailsMessageIds = new Set(
-        [...loadingRuntimeDetailsMessageIds].filter((messageId) =>
-          keptHistoryMessageIds.has(messageId),
-        ),
-      );
     } else {
       messages = [...messages, assistantMsg];
     }
@@ -3454,74 +3434,6 @@
       mergeProjectionHistoryEvents(next.get(normalizedId) ?? [], events),
     );
     initialEventsByMessageId = next;
-    streamDetailsLoading = false;
-  };
-
-  const setInitialEventsForMessage = (
-    messageId: string,
-    events: readonly StreamEvent[],
-  ) => {
-    const normalizedId = String(messageId ?? '').trim();
-    if (!normalizedId) return;
-    const next = new Map(initialEventsByMessageId);
-    if (events.length === 0) {
-      next.delete(normalizedId);
-    } else {
-      next.set(normalizedId, [...events].sort((left, right) => left.sequence - right.sequence));
-    }
-    initialEventsByMessageId = next;
-    streamDetailsLoading = false;
-  };
-
-  const loadMessageRuntimeDetails = async (messageId: string) => {
-    const normalizedId = String(messageId ?? '').trim();
-    if (!normalizedId || useCodeWorkspaceRuntimeDetails()) return;
-    if (loadedRuntimeDetailsMessageIds.has(normalizedId)) return;
-    if (loadingRuntimeDetailsMessageIds.has(normalizedId)) return;
-
-    streamDetailsLoading = true;
-    loadingRuntimeDetailsMessageIds = new Set(loadingRuntimeDetailsMessageIds);
-    loadingRuntimeDetailsMessageIds.add(normalizedId);
-
-    try {
-      const payload = await apiGet<MessageRuntimeDetailsResponse>(
-        `/chat/messages/${normalizedId}/runtime-details`,
-      );
-      const nextItems = Array.isArray(payload.items) ? payload.items : [];
-      if (nextItems.length > 0) {
-        const nextEvents = nextItems.flatMap((item) =>
-          item.kind === 'assistant-segment' || item.kind === 'runtime-segment'
-            ? item.segment.events
-            : [],
-        );
-        setInitialEventsForMessage(normalizedId, nextEvents);
-        historyTimelineItems = historyTimelineItems.map((item) => {
-          if (
-            String(item.message.id ?? '').trim() !== normalizedId ||
-            (item.kind !== 'assistant-segment' && item.kind !== 'runtime-segment')
-          ) {
-            return item;
-          }
-          const replacement = nextItems.find(
-            (candidate) => candidate.kind === item.kind && candidate.key === item.key,
-          );
-          if (!replacement || replacement.kind !== item.kind) return item;
-          return {
-            ...item,
-            segment: {
-              ...item.segment,
-              events: replacement.segment.events,
-            },
-          };
-        });
-        loadedRuntimeDetailsMessageIds = new Set(loadedRuntimeDetailsMessageIds);
-        loadedRuntimeDetailsMessageIds.add(normalizedId);
-      }
-    } finally {
-      loadingRuntimeDetailsMessageIds = new Set(loadingRuntimeDetailsMessageIds);
-      loadingRuntimeDetailsMessageIds.delete(normalizedId);
-      streamDetailsLoading = loadingRuntimeDetailsMessageIds.size > 0;
-    }
   };
 
   const ingestSessionHistoryMeta = (line: SessionHistoryMetaLine) => {
@@ -3553,7 +3465,7 @@
     id: string,
   ): Promise<SessionHistorySnapshot> => {
     const response = await apiFetch(
-      `/chat/sessions/${id}/history?runtimeDetails=${useCodeWorkspaceRuntimeDetails() ? 'full' : 'summary'}`,
+      `/chat/sessions/${id}/history?runtimeDetails=summary`,
       {
         method: 'GET',
         headers: {
@@ -3759,7 +3671,6 @@
 
     messages = nextMessages;
     initialEventsByMessageId = nextInitialEvents;
-    streamDetailsLoading = false;
     historyTimelineItems = nextHistory;
     stagedHistoryTimelineItems = [];
 
@@ -3854,15 +3765,13 @@
         projectedAssistantComputationByMessageId = new Map();
         projectionEventsVersion += 1;
         initialEventsByMessageId = new Map();
-        loadedRuntimeDetailsMessageIds = new Set();
-        loadingRuntimeDetailsMessageIds = new Set();
         applySessionCheckpoints([]);
         sessionDocs = [];
         sessionDocsError = null;
         resetTodoRuntimePanel();
       }
       const response = await apiFetch(
-        `/chat/sessions/${id}/history?runtimeDetails=${useCodeWorkspaceRuntimeDetails() ? 'full' : 'summary'}`,
+        `/chat/sessions/${id}/history?runtimeDetails=summary`,
         {
           method: 'GET',
           headers: {
@@ -3957,7 +3866,6 @@
       historyHydrationInFlight = false;
       historyHydrationSwapPending = false;
       historyHydrationStickBottom = false;
-      streamDetailsLoading = false;
       errorMsg = formatApiError(e, $_('chat.errors.loadMessages'));
     } finally {
       if (!historyHydrationInFlight) historyHydrationStickBottom = false;
@@ -3974,8 +3882,6 @@
     projectedStreamEventsById = new Map();
     projectedAssistantComputationByMessageId = new Map();
     projectionEventsVersion += 1;
-    loadedRuntimeDetailsMessageIds = new Set();
-    loadingRuntimeDetailsMessageIds = new Set();
     resetLocalToolInterceptionState();
     messages = snapshot.messages;
     historyTimelineItems = snapshot.timelineItems;
@@ -4038,8 +3944,6 @@
     sessionDocs = [];
     sessionDocsError = null;
     initialEventsByMessageId = new Map();
-    loadedRuntimeDetailsMessageIds = new Set();
-    loadingRuntimeDetailsMessageIds = new Set();
     projectedAssistantComputationByMessageId = new Map();
     optimisticSteerMessages = [];
     resetTodoRuntimePanel();
@@ -4075,8 +3979,6 @@
       sessionDocs = [];
       sessionDocsError = null;
       initialEventsByMessageId = new Map();
-      loadedRuntimeDetailsMessageIds = new Set();
-      loadingRuntimeDetailsMessageIds = new Set();
       projectedAssistantComputationByMessageId = new Map();
       optimisticSteerMessages = [];
       resetTodoRuntimePanel();
@@ -5092,12 +4994,8 @@
                     smoothContentStreaming={isGeminiModel(m.model)}
                     subscriptionMode="passive"
                     initialEvents={item.segment.events}
-                    initiallyExpanded={useCodeWorkspaceRuntimeDetails()}
-                    deferCollapsedDetails={
-                      useUnifiedActiveRunPresentation(item.message)
-                        ? false
-                        : !useCodeWorkspaceRuntimeDetails()
-                    }
+                    initiallyExpanded={false}
+                    deferCollapsedDetails={!useUnifiedActiveRunPresentation(item.message)}
                   />
                   {#if item.isTerminal && item.isLastAssistantSegment}
                     <div
@@ -5177,22 +5075,9 @@
                     subscriptionMode="passive"
                     initialEvents={item.segment.events}
                     runtimeSummary={item.segment.runtimeSummary}
-                    initiallyExpanded={useCodeWorkspaceRuntimeDetails()}
-                    deferCollapsedDetails={
-                      useUnifiedActiveRunPresentation(item.message)
-                        ? false
-                        : !useCodeWorkspaceRuntimeDetails()
-                    }
-                    requestDeferredDetails={
-                      useUnifiedActiveRunPresentation(item.message) ||
-                      useCodeWorkspaceRuntimeDetails()
-                        ? undefined
-                        : () => loadMessageRuntimeDetails(item.message.id)
-                    }
-                    showRuntimeInlinePreview={
-                      item.isActiveRuntimeSegment &&
-                      !useCodeWorkspaceRuntimeDetails()
-                    }
+                    initiallyExpanded={false}
+                    deferCollapsedDetails={!useUnifiedActiveRunPresentation(item.message)}
+                    showRuntimeInlinePreview={item.isActiveRuntimeSegment}
                     acknowledgementText={item.acknowledgementText}
                     onTodoRuntime={handleTodoRuntimeToolResult}
                   />
