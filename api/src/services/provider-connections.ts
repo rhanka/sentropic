@@ -53,6 +53,7 @@ type CodexPendingEnrollmentPayload = {
 };
 
 type CodexConnectedSecret = {
+  accessToken: string;
   refreshToken: string;
   idToken: string;
   accountLabel: string | null;
@@ -351,6 +352,34 @@ export const completeCodexEnrollment = async (input: {
     intervalSeconds: pending.intervalSeconds,
   });
 
+  if (result.status === 'pending') {
+    const requestedAccountLabel =
+      normalizeOptionalText(input.accountLabel) || pending.expectedAccountLabel;
+    if (requestedAccountLabel && requestedAccountLabel !== pending.expectedAccountLabel) {
+      const nextPending: CodexPendingEnrollmentPayload = {
+        ...pending,
+        expectedAccountLabel: requestedAccountLabel,
+      };
+      const nextVisible: CodexConnectionPayload = {
+        ...current,
+        accountLabel: requestedAccountLabel,
+        updatedAt: new Date().toISOString(),
+        updatedByUserId: normalizeOptionalText(input.updatedByUserId),
+      };
+      await Promise.all([
+        writeCodexConnection(input.updatedByUserId, nextVisible),
+        writeEncryptedSetting(
+          input.updatedByUserId,
+          CODEX_CONNECTION_PENDING_SECRET_KEY,
+          nextPending,
+          'Pending Codex device enrollment secret for the current admin user.',
+        ),
+      ]);
+      return toCodexProviderState(nextVisible);
+    }
+    return toCodexProviderState(current);
+  }
+
   const requestedAccountLabel =
     normalizeOptionalText(input.accountLabel) || pending.expectedAccountLabel;
   const connectedAccountLabel = inferCodexAccountLabel(result, requestedAccountLabel);
@@ -368,6 +397,7 @@ export const completeCodexEnrollment = async (input: {
     updatedByUserId: normalizeOptionalText(input.updatedByUserId),
   };
   const secret: CodexConnectedSecret = {
+    accessToken: result.accessToken,
     refreshToken: result.refreshToken,
     idToken: result.idToken,
     accountLabel: connectedAccountLabel,
@@ -383,11 +413,9 @@ export const completeCodexEnrollment = async (input: {
       secret,
       'Codex provider credential for the current admin user.',
     ),
-    writeEncryptedSetting(
+    deleteUserScopedSetting(
       input.updatedByUserId,
       buildUserProviderCredentialSettingKey('openai', input.updatedByUserId),
-      result.apiKey,
-      'OpenAI API key derived from the current user Codex subscription.',
     ),
   ]);
 
