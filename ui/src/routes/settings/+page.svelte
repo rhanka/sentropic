@@ -2,7 +2,7 @@
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet, apiPost, apiPut } from '$lib/utils/api';
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
   import { session } from '$lib/stores/session';
@@ -98,6 +98,7 @@
   let providerConnectionsError = '';
   let providerConnections: ProviderConnectionState[] = [];
   let codexConnectionAccountLabel = '';
+  let codexPollingTimer: ReturnType<typeof setTimeout> | null = null;
   
   // Configuration IA
   let aiSettings = {
@@ -161,6 +162,11 @@
       await loadVsCodeExtensionTokenStatus();
       await loadProviderConnections();
     }
+  });
+
+  onDestroy(() => {
+    if (codexPollingTimer) clearTimeout(codexPollingTimer);
+    codexPollingTimer = null;
   });
 
   const isAdmin = () => {
@@ -361,6 +367,14 @@
       codexConnectionAccountLabel =
         providerConnections.find((provider) => provider.providerId === 'codex')
           ?.accountLabel || '';
+      const codex = providerConnections.find((provider) => provider.providerId === 'codex');
+      if (codexPollingTimer) clearTimeout(codexPollingTimer);
+      codexPollingTimer = null;
+      if (codex?.connectionStatus === 'pending') {
+        codexPollingTimer = setTimeout(() => {
+          void completeCodexProviderConnection(true);
+        }, 4000);
+      }
     } catch (error) {
       console.error('Failed to load provider connections:', error);
       providerConnectionsError =
@@ -380,6 +394,13 @@
       providerConnections = [updatedProvider, ...providerConnections];
     }
     codexConnectionAccountLabel = updatedProvider.accountLabel || '';
+    if (codexPollingTimer) clearTimeout(codexPollingTimer);
+    codexPollingTimer = null;
+    if (updatedProvider.connectionStatus === 'pending') {
+      codexPollingTimer = setTimeout(() => {
+        void completeCodexProviderConnection(true);
+      }, 4000);
+    }
   };
 
   const startCodexProviderConnection = async () => {
@@ -390,10 +411,6 @@
         accountLabel: codexConnectionAccountLabel.trim() || null,
       });
       syncCodexProviderInList(updatedProvider);
-      const enrollmentUrl = updatedProvider.enrollmentUrl;
-      if (enrollmentUrl) {
-        window.open(enrollmentUrl, '_blank', 'noopener,noreferrer');
-      }
       addToast({
         type: 'success',
         message: get(_)('settings.providerConnections.toasts.codexEnrollmentStarted'),
@@ -409,39 +426,38 @@
     }
   };
 
-  const completeCodexProviderConnection = async () => {
+  const completeCodexProviderConnection = async (silent = false) => {
     const codex = codexProviderConnection;
     if (!codex?.enrollmentId) {
-      providerConnectionsError = get(_)('settings.providerConnections.errors.missingEnrollment');
+      if (!silent) {
+        providerConnectionsError = get(_)('settings.providerConnections.errors.missingEnrollment');
+      }
       return;
     }
     isSavingCodexProviderConnection = true;
-    providerConnectionsError = '';
+    if (!silent) providerConnectionsError = '';
     try {
       const updatedProvider = await completeCodexProviderEnrollment({
         enrollmentId: codex.enrollmentId,
         accountLabel: codexConnectionAccountLabel.trim() || null,
       });
       syncCodexProviderInList(updatedProvider);
-      addToast({
-        type: 'success',
-        message: get(_)('settings.providerConnections.toasts.codexConnected'),
-      });
+      if (updatedProvider.connectionStatus === 'connected') {
+        addToast({
+          type: 'success',
+          message: get(_)('settings.providerConnections.toasts.codexConnected'),
+        });
+      }
     } catch (error) {
       console.error('Failed to complete codex provider enrollment:', error);
-      providerConnectionsError =
-        error instanceof Error
-          ? error.message
-          : get(_)('settings.providerConnections.errors.save');
+      if (!silent || error instanceof Error) {
+        providerConnectionsError =
+          error instanceof Error
+            ? error.message
+            : get(_)('settings.providerConnections.errors.save');
+      }
     } finally {
       isSavingCodexProviderConnection = false;
-    }
-  };
-
-  const reopenCodexEnrollment = () => {
-    const enrollmentUrl = codexProviderConnection?.enrollmentUrl;
-    if (enrollmentUrl) {
-      window.open(enrollmentUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -1203,40 +1219,44 @@
             disabled={isSavingCodexProviderConnection}
           />
           <div class="flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="rounded bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
-              on:click={startCodexProviderConnection}
-              disabled={isSavingCodexProviderConnection}
-            >
-              {$_('settings.providerConnections.codex.startEnrollment')}
-            </button>
+            {#if !codexProviderConnection || codexProviderConnection.connectionStatus === 'disconnected'}
+              <button
+                type="button"
+                class="rounded bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                on:click={startCodexProviderConnection}
+                disabled={isSavingCodexProviderConnection}
+              >
+                {$_('settings.providerConnections.codex.startEnrollment')}
+              </button>
+            {/if}
             {#if codexProviderConnection?.connectionStatus === 'pending'}
               <button
                 type="button"
                 class="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                on:click={reopenCodexEnrollment}
-                disabled={isSavingCodexProviderConnection || !codexProviderConnection?.enrollmentUrl}
+                on:click={startCodexProviderConnection}
+                disabled={isSavingCodexProviderConnection}
               >
-                {$_('settings.providerConnections.codex.openVerification')}
+                {$_('settings.providerConnections.codex.regenerateEnrollment')}
               </button>
               <button
                 type="button"
-                class="rounded border border-emerald-300 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-                on:click={completeCodexProviderConnection}
+                class="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                on:click={disconnectCodexProviderConnection}
                 disabled={isSavingCodexProviderConnection}
               >
-                {$_('settings.providerConnections.codex.completeEnrollment')}
+                {$_('settings.providerConnections.codex.cancelEnrollment')}
               </button>
             {/if}
-            <button
-              type="button"
-              class="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-              on:click={disconnectCodexProviderConnection}
-              disabled={isSavingCodexProviderConnection}
-            >
-              {$_('settings.providerConnections.codex.disconnect')}
-            </button>
+            {#if codexProviderConnection?.connectionStatus === 'connected'}
+              <button
+                type="button"
+                class="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                on:click={disconnectCodexProviderConnection}
+                disabled={isSavingCodexProviderConnection}
+              >
+                {$_('settings.providerConnections.codex.disconnect')}
+              </button>
+            {/if}
           </div>
           {#if codexProviderConnection?.connectionStatus === 'pending'}
             <p class="text-xs text-amber-700">
@@ -1248,6 +1268,21 @@
                   {$_('settings.providerConnections.codex.deviceCodeLabel')}
                 </div>
                 <div class="mt-1 font-mono text-base">{codexProviderConnection?.enrollmentCode}</div>
+              </div>
+            {/if}
+            {#if codexProviderConnection?.enrollmentUrl}
+              <div class="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                <div class="font-medium text-slate-900">
+                  {$_('settings.providerConnections.codex.linkHint')}
+                </div>
+                <a
+                  class="mt-1 block break-all text-blue-700 underline"
+                  href={codexProviderConnection.enrollmentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {codexProviderConnection.enrollmentUrl}
+                </a>
               </div>
             {/if}
           {/if}

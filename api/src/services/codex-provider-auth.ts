@@ -12,10 +12,15 @@ export type CodexDeviceEnrollmentPending = {
   intervalSeconds: number;
 };
 
+export type CodexDeviceEnrollmentPendingResult = {
+  status: 'pending';
+};
+
 export type CodexDeviceEnrollmentResult = {
+  status: 'connected';
   idToken: string;
+  accessToken: string;
   refreshToken: string;
-  apiKey: string;
 };
 
 const normalizeIntervalSeconds = (value: unknown): number => {
@@ -29,17 +34,28 @@ const normalizeIntervalSeconds = (value: unknown): number => {
   return Math.max(1, Math.min(parsed, 10));
 };
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
 const readJsonOrThrow = async <T>(response: Response, fallbackMessage: string): Promise<T> => {
-  const payload = (await response.json().catch(() => null)) as T | { error?: string; message?: string } | null;
+  const payload = (await response.json().catch(() => null)) as
+    | T
+    | { error?: string | { message?: string }; message?: string; error_description?: string }
+    | null;
   if (!response.ok) {
-    const message =
+    const errorPayload =
       payload && typeof payload === 'object'
-        ? (payload as { error?: string; message?: string }).error ||
-          (payload as { error?: string; message?: string }).message
+        ? (payload as {
+            error?: string | { message?: string };
+            message?: string;
+            error_description?: string;
+          })
         : null;
+    const message =
+      typeof errorPayload?.error === 'string'
+        ? errorPayload.error
+        : errorPayload?.error &&
+            typeof errorPayload.error === 'object' &&
+            typeof errorPayload.error.message === 'string'
+          ? errorPayload.error.message
+          : errorPayload?.error_description || errorPayload?.message || null;
     throw new Error(message || fallbackMessage);
   }
   return payload as T;
@@ -48,7 +64,7 @@ const readJsonOrThrow = async <T>(response: Response, fallbackMessage: string): 
 const exchangeAuthorizationCode = async (input: {
   authorizationCode: string;
   codeVerifier: string;
-}): Promise<{ idToken: string; refreshToken: string }> => {
+}): Promise<{ idToken: string; accessToken: string; refreshToken: string }> => {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code: input.authorizationCode,
@@ -66,41 +82,17 @@ const exchangeAuthorizationCode = async (input: {
   });
   const payload = await readJsonOrThrow<{
     id_token?: string;
+    access_token?: string;
     refresh_token?: string;
   }>(response, 'Codex token exchange failed.');
-  if (!payload.id_token || !payload.refresh_token) {
+  if (!payload.id_token || !payload.access_token || !payload.refresh_token) {
     throw new Error('Codex token exchange returned an incomplete credential set.');
   }
   return {
     idToken: payload.id_token,
+    accessToken: payload.access_token,
     refreshToken: payload.refresh_token,
   };
-};
-
-const exchangeApiKey = async (idToken: string): Promise<string> => {
-  const body = new URLSearchParams({
-    grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-    client_id: CODEX_CLIENT_ID,
-    requested_token: 'openai-api-key',
-    subject_token: idToken,
-    subject_token_type: 'urn:ietf:params:oauth:token-type:id_token',
-  });
-  const response = await fetch(CODEX_OAUTH_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      accept: 'application/json',
-    },
-    body,
-  });
-  const payload = await readJsonOrThrow<{ access_token?: string }>(
-    response,
-    'Codex API key exchange failed.',
-  );
-  if (!payload.access_token) {
-    throw new Error('Codex API key exchange did not return an API key.');
-  }
-  return payload.access_token;
 };
 
 export const startCodexDeviceEnrollment = async (): Promise<{
@@ -137,50 +129,55 @@ export const startCodexDeviceEnrollment = async (): Promise<{
 
 export const completeCodexDeviceEnrollment = async (
   pending: CodexDeviceEnrollmentPending,
-): Promise<CodexDeviceEnrollmentResult> => {
-  const startedAt = Date.now();
-  const waitMs = pending.intervalSeconds * 1000;
+): Promise<CodexDeviceEnrollmentPendingResult | CodexDeviceEnrollmentResult> => {
+  const response = await fetch(CODEX_DEVICE_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({
+      device_auth_id: pending.deviceAuthId,
+      user_code: pending.userCode,
+    }),
+  });
 
-  for (;;) {
-    const response = await fetch(CODEX_DEVICE_TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json',
-      },
-      body: JSON.stringify({
-        device_auth_id: pending.deviceAuthId,
-        user_code: pending.userCode,
-      }),
-    });
-
-    if (response.status === 403 || response.status === 404) {
-      if (Date.now() - startedAt >= 30_000) {
-        throw new Error('Codex authorization is still pending. Finish the OpenAI device login, then retry.');
-      }
-      await sleep(waitMs);
-      continue;
-    }
-
-    const deviceToken = await readJsonOrThrow<{
-      authorization_code?: string;
-      code_verifier?: string;
-    }>(response, 'Codex device authorization failed.');
-
-    if (!deviceToken.authorization_code || !deviceToken.code_verifier) {
-      throw new Error('Codex device authorization returned an incomplete code exchange payload.');
-    }
-
-    const { idToken, refreshToken } = await exchangeAuthorizationCode({
-      authorizationCode: deviceToken.authorization_code,
-      codeVerifier: deviceToken.code_verifier,
-    });
-    const apiKey = await exchangeApiKey(idToken);
-
-    return {
-      idToken,
-      refreshToken,
-      apiKey,
-    };
+  if (response.status === 403) {
+    return { status: 'pending' };
   }
+  if (response.status === 404) {
+    const payload = await response.json().catch(() => null) as
+      | { error?: string | { message?: string } }
+      | null;
+    const message =
+      payload && typeof payload === 'object'
+        ? typeof payload.error === 'string'
+          ? payload.error
+          : payload.error && typeof payload.error === 'object' && typeof payload.error.message === 'string'
+            ? payload.error.message
+            : null
+        : null;
+    throw new Error(message || 'Codex device authorization expired or was already consumed. Regenerate the code and try again.');
+  }
+
+  const deviceToken = await readJsonOrThrow<{
+    authorization_code?: string;
+    code_verifier?: string;
+  }>(response, 'Codex device authorization failed.');
+
+  if (!deviceToken.authorization_code || !deviceToken.code_verifier) {
+    throw new Error('Codex device authorization returned an incomplete code exchange payload.');
+  }
+
+  const { idToken, accessToken, refreshToken } = await exchangeAuthorizationCode({
+    authorizationCode: deviceToken.authorization_code,
+    codeVerifier: deviceToken.code_verifier,
+  });
+
+  return {
+    status: 'connected',
+    idToken,
+    accessToken,
+    refreshToken,
+  };
 };
