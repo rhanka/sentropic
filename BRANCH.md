@@ -460,27 +460,41 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [x] BUG-L6-46 — Codex admin enrollment still does not acquire backend-usable user credentials for real runtime calls.
       - [x] Restrict BR05 scope to Codex only; defer Gemini Code Assist to BR09 and Mistral Code to BR08.
       - [x] Restrict BR05 runtime enrollment to admin-triggered connection only.
-      - [x] Implement the Codex browser auth flow in OTP/copy-paste mode (no local callback listener, no fake `complete` toggle semantics).
+      - [x] Implement the Codex browser auth flow in OTP/device mode owned by web admin settings (no local callback listener, no fake `complete` toggle semantics).
       - [x] Bind provider connection to the real Codex/OpenAI account identity returned by provider auth.
-      - [x] Encrypt and persist backend-owned user credentials (refresh/access tokens, derived OpenAI API key, expiry, account identity).
-      - [x] Make backend runtime resolve the admin Codex credential as an `openai` credential source and perform actual model calls with it.
+      - [x] Encrypt and persist backend-owned user credentials (`id_token`, `access_token`, `refresh_token`, account identity) even when no platform API key can be derived.
       - [x] Expose verified readiness/status/disconnect from real stored credential state; web admin settings own connect/status/disconnect, and VSCode consumes readiness/status only.
     - [x] TEST-L6-46 — Validate Codex admin backend enrollment and runtime use end-to-end.
       - [x] API
         - [x] start endpoint creates pending enrollment with PKCE/state and the OTP/copy-paste activation contract,
-        - [x] complete endpoint exchanges the user-supplied OTP/auth code into stored backend credential material,
+        - [x] complete endpoint exchanges the official Codex device flow result into stored backend credential material,
         - [x] status/readiness reflects verified credential state,
         - [x] disconnect clears stored credentials,
-        - [x] runtime credential resolution prefers the connected Codex-backed credential for `openai` calls made by the same admin user.
+        - [x] stored credential material remains reusable for a later OpenAI transport choice (`key` vs `codex`) without adding a dedicated runtime/provider.
       - [x] UI
-        - [x] admin web settings start Codex browser auth, collect the OTP/auth code, and complete the connection without any local callback bridge,
+        - [x] admin web settings start Codex device auth, show the verification URL + device code, poll pending status, and support regenerate/cancel,
         - [x] VSCode settings show Codex readiness/status only (no enrollment ownership in BR05),
         - [x] connected state shows provider account identity,
         - [x] non-admin users cannot mutate Codex connection.
       - [x] E2E
-        - [x] mocked OTP/copy-paste completion flow completes and marks Codex ready,
-        - [x] one real admin chat/runtime call uses the Codex-backed `openai` credential path,
-        - [x] disconnect removes readiness and runtime fallback behaves predictably.
+        - [x] mocked device completion flow completes and marks Codex ready,
+        - [x] disconnect removes readiness and pending state behaves predictably.
+    - [ ] FEAT-L6-47 — Keep Codex as an OpenAI transport choice, not a dedicated runtime/provider.
+      - [ ] Add one admin setting to choose the OpenAI runtime source: standard key path or connected Codex token.
+      - [ ] Reuse the stored Codex OAuth credential only when that admin mode is selected.
+      - [ ] Keep the existing OpenAI chat/runtime/UI contract unchanged; no `codex_oauth`, no ChatPanel-specific path, no dedicated model-selection surface.
+      - [ ] Limit BR05 Codex adaptation to the minimal backend transport/header switch needed to use the token-backed path.
+    - [ ] TEST-L6-47 — Validate the minimal OpenAI/Codex transport switch.
+      - [ ] API
+        - [ ] switching the admin mode to `codex` makes OpenAI runtime calls use the stored Codex token path,
+        - [ ] switching back to `token` restores the normal OpenAI key path,
+        - [ ] no provider registry/model catalog/UI chat surface introduces a dedicated Codex runtime.
+      - [ ] UI
+        - [ ] admin settings expose the OpenAI mode toggle and Codex connection state without changing ChatPanel behavior,
+        - [ ] chat model selection stays on the existing OpenAI/Gemini surface.
+      - [ ] E2E
+        - [ ] one real admin session switches OpenAI to `codex` and obtains a successful chat turn,
+        - [ ] one real admin session switches back to `token` and keeps the standard OpenAI path working.
     - [x] BUG-L6-6 — Code-agent base prompt is not aligned with the requested enriched baseline profile.
       - [x] Replace current base prompt with the agreed enriched profile.
       - [x] Add scoped tests for baseline prompt rendering and override behavior.

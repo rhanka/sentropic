@@ -78,6 +78,7 @@ Current state summary:
 - Support two verified enrollment completion modes depending on provider capability:
   - application-controlled callback redirect,
   - one-time activation/authentication code copied back by the user and exchanged by the backend.
+- For coding-subscription providers, allow provider-specific backend-owned token stores when the provider returns OAuth/device credentials rather than a reusable API key.
 - Keep existing WebAuthn login path available (no regression).
 - Support linking/unlinking SSO identities from existing users.
 
@@ -135,3 +136,5 @@ W2:
 - This document stays focused on authentication/federation roadmap concerns.
 - Runtime ownership split (`openai.ts` vs Gemini paths, big-bang cutover) is specified in:
   - `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`
+- Codex-specific backend runtime usage from stored OAuth tokens is specified in:
+  - `spec/SPEC_EVOL_VSCODE_PLUGIN.md` (`BUG-L6-46`, `FEAT-L6-47`)

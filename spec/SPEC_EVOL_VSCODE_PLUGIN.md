@@ -687,35 +687,29 @@ This section locks the implementation contract for the immediate Lot-1 increment
   - BR05 keeps admin-triggered enrollment only; no shared/team credential reuse and no non-admin mutation path.
 - Goal:
   - let a real admin user authenticate with their own Codex/ChatGPT account,
-  - use the Codex browser workflow in OTP/copy-paste mode instead of a local callback listener,
+  - use the official Codex device/browser workflow instead of a local callback listener,
   - store the resulting credential material on the backend,
-  - execute runtime calls from the backend with those credentials.
+  - expose truthful readiness/status from those stored credentials.
 - Required backend auth contract:
   - `start` creates a pending enrollment with:
-    - provider `state`,
-    - PKCE verifier/challenge when required,
-    - the provider/browser URL for OTP/copy-paste activation,
+    - provider/browser verification URL,
+    - user-facing device code,
     - expected local user id.
-  - provider browser login yields a one-time activation/authentication code to the real admin user.
-  - the admin pastes that code into web admin settings.
-  - backend `complete` validates the pending enrollment state, exchanges the user-supplied activation/auth code for provider credential material, derives/refreshes the backend-usable OpenAI API key, and stores encrypted backend credentials.
+  - the real admin user completes the official OpenAI/Codex device flow in the browser with the shown code.
+  - backend `complete` polls the pending enrollment state, exchanges the returned authorization material for provider credential material, and stores encrypted backend credentials.
   - stored credential material must include at least:
+    - id token when provided,
     - access token,
     - refresh token when available,
-    - expiry metadata,
-    - derived OpenAI API key and its expiry when provided by the official Codex/OpenAI flow,
+    - expiry metadata when available,
     - provider account identity metadata (`email`, `subject`, raw provider id when available).
   - `ready` derives only from a valid stored credential.
   - `disconnect` revokes or clears backend credentials and resets readiness.
-- Runtime contract:
-  - Codex becomes a real backend-usable credential source for the existing `openai` runtime.
-  - when an admin runtime/model selection uses provider `openai`, the backend resolves the connected Codex credential first for that same admin user and performs the model call itself.
-  - no frontend-hosted provider token may be required after OTP completion.
 - UX contract:
-  - settings UI must not rely on a fake manual `complete` action; the completion step must submit a real OTP/auth code.
-  - web admin settings own the real Codex connect/start flow, OTP/auth-code entry, verified status/identity, and disconnect.
+  - settings UI must not rely on a fake manual `complete` action.
+  - web admin settings own the real Codex connect/start flow, pending polling, regenerate/cancel actions, verified status/identity, and disconnect.
   - VSCode settings expose verified readiness/status only for BR05.
-  - after provider callback, settings surfaces must show the verified connected identity.
+  - after provider completion, settings surfaces must show the verified connected identity.
   - non-admin users may read readiness but may not start/disconnect the Codex connection.
 - Security contract:
   - credentials are encrypted at rest and never returned to the frontend.
@@ -724,7 +718,19 @@ This section locks the implementation contract for the immediate Lot-1 increment
 - Architecture note:
   - the high-level UX shape may later be reused for Gemini Code Assist and Mistral Code, but credential adapters remain provider-specific.
   - BR05 does not assume the same token shape across providers.
-  - BR05 deliberately does not rely on a local callback listener; the exclusive activation mode for Codex in BR05 is OTP/copy-paste completion.
+  - BR05 deliberately does not rely on a local callback listener.
+  - BR05 does not force derivation of an OpenAI platform API key from the Codex account; connection success is defined by persisted provider OAuth tokens and verified account identity.
+
+#### 4.22.3c FEAT-L6-47 (Codex as an OpenAI transport choice)
+- Source findings:
+  - official Codex keeps device/browser auth credentials as `id/access/refresh` tokens and does not require an OpenAI platform API key for the ChatGPT/Codex backend path,
+  - BR05 does not need a dedicated provider/runtime surface to consume those credentials,
+  - BR05 must keep the existing OpenAI chat/UI contract unless a minimal backend-only transport change is strictly required.
+- Required provider/runtime contract:
+  - keep `openai` as the only OpenAI-family provider/runtime id,
+  - expose one admin setting that chooses the OpenAI runtime source: standard key path or connected Codex token,
+  - when `codex` mode is selected, backend runtime reuses the stored Codex credential on the existing OpenAI path,
+  - BR05 must not add a dedicated `codex_oauth` provider, ChatPanel branch, or separate model-selection surface for this.
 
 #### 4.22.4 BUG-L6-8 (permission prompt readability in VSCode runtime)
 - Current mismatch:
