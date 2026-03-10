@@ -588,14 +588,15 @@
         "accountLabel": "Libellé compte Codex (optionnel)",
         "accountPlaceholder": "admin@example.com",
         "startEnrollment": "Démarrer la connexion",
-        "openVerification": "Ouvrir la page device OpenAI",
-        "completeEnrollment": "Finaliser la connexion",
+        "regenerateEnrollment": "Régénérer le code",
+        "cancelEnrollment": "Annuler",
         "disconnect": "Déconnecter",
-        "pendingHint": "Connexion en attente. Saisissez le code affiché sur la page OpenAI ouverte, puis finalisez ici.",
-        "deviceCodeLabel": "Code device"
+        "pendingHint": "Connexion en attente. Saisissez le code sur la page OpenAI, puis l'état sera détecté automatiquement.",
+        "deviceCodeLabel": "Code device",
+        "linkHint": "Cliquer sur le lien suivant :"
       },
       "toasts": {
-        "codexEnrollmentStarted": "Connexion Codex démarrée. Saisissez le code affiché sur la page OpenAI ouverte, puis finalisez ici.",
+        "codexEnrollmentStarted": "Connexion Codex démarrée. Ouvrez le lien OpenAI affiché puis saisissez le code indiqué.",
         "codexConnected": "Provider Codex connecté.",
         "codexDisconnected": "Provider Codex marqué comme déconnecté."
       },

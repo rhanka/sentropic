@@ -135,12 +135,8 @@ describe('provider connections admin API', () => {
       .mockResolvedValueOnce(
         createJsonResponse({
           id_token: idToken,
+          access_token: 'oauth-access-token',
           refresh_token: 'refresh-token',
-        }),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          access_token: 'openai-api-key-from-codex',
         }),
       );
 
@@ -183,11 +179,6 @@ describe('provider connections admin API', () => {
           ready: true,
           managedBy: 'admin_settings',
           accountLabel: 'admin@example.com',
-        }),
-        expect.objectContaining({
-          providerId: 'openai',
-          ready: true,
-          managedBy: 'admin_settings',
         }),
       ]),
     });
@@ -248,12 +239,8 @@ describe('provider connections admin API', () => {
       .mockResolvedValueOnce(
         createJsonResponse({
           id_token: idToken,
+          access_token: 'oauth-access-token',
           refresh_token: 'refresh-token',
-        }),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          access_token: 'openai-api-key-from-codex',
         }),
       );
 

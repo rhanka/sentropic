@@ -3,11 +3,7 @@ import { expect, test } from '@playwright/test';
 test.describe('Codex provider settings', () => {
   test.use({ storageState: './.auth/state.json' });
 
-  test('admin can complete a mocked Codex device flow from settings', async ({ page }) => {
-    await page.addInitScript(() => {
-      window.open = () => null;
-    });
-
+  test('admin can follow a mocked Codex device flow from settings', async ({ page }) => {
     let providerState = {
       providerId: 'codex',
       label: 'Codex',
@@ -93,14 +89,14 @@ test.describe('Codex provider settings', () => {
             {
               providerId: 'openai',
               label: 'OpenAI',
-              ready: providerState.ready,
-              connectionStatus: providerState.ready ? 'connected' : 'disconnected',
+              ready: false,
+              connectionStatus: 'disconnected',
               enrollmentId: null,
               enrollmentUrl: null,
               enrollmentCode: null,
               enrollmentExpiresAt: null,
-              managedBy: providerState.ready ? 'admin_settings' : 'none',
-              accountLabel: providerState.ready ? 'admin@example.com' : null,
+              managedBy: 'none',
+              accountLabel: null,
               updatedAt: null,
               updatedByUserId: null,
               canConfigure: false,
@@ -135,11 +131,14 @@ test.describe('Codex provider settings', () => {
     await page.getByRole('button', { name: /Start sign-in|Démarrer la connexion/i }).click();
 
     await expect(page.getByText(/ABCD-EFGH/)).toBeVisible();
+    await expect(page.getByRole('link', { name: /https:\/\/auth\.openai\.com\/codex\/device/i })).toBeVisible();
     await expect(
-      page.getByRole('button', { name: /Open OpenAI device page|Ouvrir la page device OpenAI/i }),
+      page.getByRole('button', { name: /Regenerate code|Régénérer le code/i }),
     ).toBeVisible();
-
-    await page.getByRole('button', { name: /Finalize sign-in|Finaliser la connexion/i }).click();
+    await expect(
+      page.getByRole('button', { name: /Cancel|Annuler/i }),
+    ).toBeVisible();
+    await page.waitForTimeout(4500);
 
     await expect(page.getByText('admin@example.com', { exact: true })).toBeVisible();
     await expect(page.getByText('Prêt', { exact: true })).toBeVisible();
