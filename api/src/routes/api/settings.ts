@@ -178,7 +178,8 @@ settingsRouter.delete('/vscode-extension-token', async (c) => {
 });
 
 settingsRouter.get('/provider-connections', async (c) => {
-  const providers = await listProviderConnections();
+  const user = c.get('user') as { userId?: string } | undefined;
+  const providers = await listProviderConnections({ userId: user?.userId ?? null });
   return c.json({ providers });
 });
 
