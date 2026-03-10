@@ -19,7 +19,8 @@ modelsRouter.get('/catalog', async (c) => {
 
 modelsRouter.get('/provider-readiness', async (c) => {
   try {
-    const providers = await listProviderConnections();
+    const user = c.get('user') as { userId?: string } | undefined;
+    const providers = await listProviderConnections({ userId: user?.userId ?? null });
     return c.json({
       providers: providers.map((provider) => ({
         providerId: provider.providerId,

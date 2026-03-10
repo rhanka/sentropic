@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sql } from 'drizzle-orm';
 
 import { app } from '../../src/app';
@@ -10,22 +10,43 @@ import {
 } from '../utils/auth-helper';
 
 const CODEX_CONNECTION_SETTINGS_KEY = 'provider_connection:codex';
+const CODEX_CONNECTION_PENDING_SECRET_KEY = 'provider_connection_secret:codex_pending';
+const CODEX_CONNECTION_SECRET_KEY = 'provider_connection_secret:codex';
+
+const createJsonResponse = (body: unknown, init?: ResponseInit): Response =>
+  new Response(JSON.stringify(body), {
+    status: init?.status ?? 200,
+    headers: {
+      'content-type': 'application/json',
+      ...(init?.headers ?? {}),
+    },
+  });
 
 describe('provider connections admin API', () => {
   let admin: Awaited<ReturnType<typeof createAuthenticatedUser>>;
   let editor: Awaited<ReturnType<typeof createAuthenticatedUser>>;
+  let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     admin = await createAuthenticatedUser('admin_app');
     editor = await createAuthenticatedUser('editor');
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
     await db.run(
-      sql`DELETE FROM settings WHERE key = ${CODEX_CONNECTION_SETTINGS_KEY} AND user_id IS NULL`,
+      sql`DELETE FROM settings WHERE key IN (${CODEX_CONNECTION_SETTINGS_KEY}, ${CODEX_CONNECTION_PENDING_SECRET_KEY}, ${CODEX_CONNECTION_SECRET_KEY})`,
+    );
+    await db.run(
+      sql`DELETE FROM settings WHERE key IN (${`ai_provider_key_user:openai:${admin.userId}`}, ${`ai_provider_key_user:openai:${editor.userId}`})`,
     );
   });
 
   afterEach(async () => {
+    vi.unstubAllGlobals();
     await db.run(
-      sql`DELETE FROM settings WHERE key = ${CODEX_CONNECTION_SETTINGS_KEY} AND user_id IS NULL`,
+      sql`DELETE FROM settings WHERE key IN (${CODEX_CONNECTION_SETTINGS_KEY}, ${CODEX_CONNECTION_PENDING_SECRET_KEY}, ${CODEX_CONNECTION_SECRET_KEY})`,
+    );
+    await db.run(
+      sql`DELETE FROM settings WHERE key IN (${`ai_provider_key_user:openai:${admin.userId}`}, ${`ai_provider_key_user:openai:${editor.userId}`})`,
     );
     await cleanupAuthData();
   });
@@ -54,7 +75,15 @@ describe('provider connections admin API', () => {
     );
   });
 
-  it('starts and completes codex enrollment in admin route, then exposes readiness to authenticated clients', async () => {
+  it('starts and completes codex enrollment in admin route, then exposes readiness only to the authenticated admin', async () => {
+    fetchMock.mockResolvedValueOnce(
+      createJsonResponse({
+        device_auth_id: 'device_auth_1',
+        user_code: 'ABCD-EFGH',
+        interval: 1,
+      }),
+    );
+
     const startResponse = await authenticatedRequest(
       app,
       'POST',
@@ -73,6 +102,7 @@ describe('provider connections admin API', () => {
         connectionStatus: string;
         enrollmentId: string | null;
         enrollmentUrl: string | null;
+        enrollmentCode: string | null;
         accountLabel: string | null;
       };
     };
@@ -82,11 +112,37 @@ describe('provider connections admin API', () => {
         providerId: 'codex',
         ready: false,
         connectionStatus: 'pending',
+        enrollmentUrl: 'https://auth.openai.com/codex/device',
+        enrollmentCode: 'ABCD-EFGH',
         accountLabel: 'admin@example.com',
       },
     });
-    expect(startPayload.provider.enrollmentId).toBeTruthy();
-    expect(startPayload.provider.enrollmentUrl).toContain(startPayload.provider.enrollmentId!);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const idToken = [
+      Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url'),
+      Buffer.from(JSON.stringify({ email: 'admin@example.com' })).toString('base64url'),
+      'signature',
+    ].join('.');
+
+    fetchMock
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          authorization_code: 'authorization-code',
+          code_verifier: 'verifier-code',
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          id_token: idToken,
+          refresh_token: 'refresh-token',
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          access_token: 'openai-api-key-from-codex',
+        }),
+      );
 
     const completeResponse = await authenticatedRequest(
       app,
@@ -109,17 +165,18 @@ describe('provider connections admin API', () => {
         accountLabel: 'admin@example.com',
         enrollmentId: null,
         enrollmentUrl: null,
+        enrollmentCode: null,
       },
     });
 
-    const readinessResponse = await authenticatedRequest(
+    const adminReadiness = await authenticatedRequest(
       app,
       'GET',
       '/api/v1/models/provider-readiness',
-      editor.sessionToken!,
+      admin.sessionToken!,
     );
-    expect(readinessResponse.status).toBe(200);
-    await expect(readinessResponse.json()).resolves.toMatchObject({
+    expect(adminReadiness.status).toBe(200);
+    await expect(adminReadiness.json()).resolves.toMatchObject({
       providers: expect.arrayContaining([
         expect.objectContaining({
           providerId: 'codex',
@@ -127,11 +184,41 @@ describe('provider connections admin API', () => {
           managedBy: 'admin_settings',
           accountLabel: 'admin@example.com',
         }),
+        expect.objectContaining({
+          providerId: 'openai',
+          ready: true,
+          managedBy: 'admin_settings',
+        }),
+      ]),
+    });
+
+    const editorReadiness = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/models/provider-readiness',
+      editor.sessionToken!,
+    );
+    expect(editorReadiness.status).toBe(200);
+    await expect(editorReadiness.json()).resolves.toMatchObject({
+      providers: expect.arrayContaining([
+        expect.objectContaining({
+          providerId: 'codex',
+          ready: false,
+          managedBy: 'none',
+          accountLabel: null,
+        }),
       ]),
     });
   });
 
   it('disconnects codex enrollment in admin route', async () => {
+    fetchMock.mockResolvedValueOnce(
+      createJsonResponse({
+        device_auth_id: 'device_auth_1',
+        user_code: 'ABCD-EFGH',
+        interval: 1,
+      }),
+    );
     const startResponse = await authenticatedRequest(
       app,
       'POST',
@@ -144,6 +231,31 @@ describe('provider connections admin API', () => {
     const startPayload = (await startResponse.json()) as {
       provider: { enrollmentId: string | null };
     };
+
+    const idToken = [
+      Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url'),
+      Buffer.from(JSON.stringify({ email: 'admin@example.com' })).toString('base64url'),
+      'signature',
+    ].join('.');
+
+    fetchMock
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          authorization_code: 'authorization-code',
+          code_verifier: 'verifier-code',
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          id_token: idToken,
+          refresh_token: 'refresh-token',
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          access_token: 'openai-api-key-from-codex',
+        }),
+      );
 
     await authenticatedRequest(
       app,
