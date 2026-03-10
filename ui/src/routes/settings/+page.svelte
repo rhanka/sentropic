@@ -186,7 +186,8 @@
     return parsed.toLocaleString();
   };
 
-  const codexProviderConnection = () =>
+  let codexProviderConnection: ProviderConnectionState | null = null;
+  $: codexProviderConnection =
     providerConnections.find((provider) => provider.providerId === 'codex') ||
     null;
 
@@ -409,7 +410,7 @@
   };
 
   const completeCodexProviderConnection = async () => {
-    const codex = codexProviderConnection();
+    const codex = codexProviderConnection;
     if (!codex?.enrollmentId) {
       providerConnectionsError = get(_)('settings.providerConnections.errors.missingEnrollment');
       return;
@@ -434,6 +435,13 @@
           : get(_)('settings.providerConnections.errors.save');
     } finally {
       isSavingCodexProviderConnection = false;
+    }
+  };
+
+  const reopenCodexEnrollment = () => {
+    const enrollmentUrl = codexProviderConnection?.enrollmentUrl;
+    if (enrollmentUrl) {
+      window.open(enrollmentUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -1181,7 +1189,7 @@
         {/each}
       </div>
 
-      {#if codexProviderConnection()?.canConfigure}
+      {#if codexProviderConnection?.canConfigure}
         <div class="space-y-2 rounded border border-slate-200 p-3">
           <label for="codex-provider-account" class="block text-sm font-medium text-slate-700">
             {$_('settings.providerConnections.codex.accountLabel')}
@@ -1203,7 +1211,15 @@
             >
               {$_('settings.providerConnections.codex.startEnrollment')}
             </button>
-            {#if codexProviderConnection()?.connectionStatus === 'pending'}
+            {#if codexProviderConnection?.connectionStatus === 'pending'}
+              <button
+                type="button"
+                class="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                on:click={reopenCodexEnrollment}
+                disabled={isSavingCodexProviderConnection || !codexProviderConnection?.enrollmentUrl}
+              >
+                {$_('settings.providerConnections.codex.openVerification')}
+              </button>
               <button
                 type="button"
                 class="rounded border border-emerald-300 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
@@ -1222,10 +1238,18 @@
               {$_('settings.providerConnections.codex.disconnect')}
             </button>
           </div>
-          {#if codexProviderConnection()?.connectionStatus === 'pending'}
+          {#if codexProviderConnection?.connectionStatus === 'pending'}
             <p class="text-xs text-amber-700">
               {$_('settings.providerConnections.codex.pendingHint')}
             </p>
+            {#if codexProviderConnection?.enrollmentCode}
+              <div class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <div class="text-xs font-medium uppercase tracking-wide text-amber-700">
+                  {$_('settings.providerConnections.codex.deviceCodeLabel')}
+                </div>
+                <div class="mt-1 font-mono text-base">{codexProviderConnection?.enrollmentCode}</div>
+              </div>
+            {/if}
           {/if}
         </div>
       {/if}

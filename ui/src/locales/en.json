@@ -574,7 +574,7 @@
     "queueFailed": "Failed",
     "providerConnections": {
       "title": "Provider connections",
-      "description": "Configure shared provider readiness in admin settings. VSCode/web clients only consume this backend status.",
+      "description": "Configure your provider connections in admin settings. The backend consumes the stored credential for your runtime calls.",
       "status": {
         "ready": "Ready",
         "notReady": "Not ready"
@@ -588,13 +588,15 @@
         "accountLabel": "Codex account label (optional)",
         "accountPlaceholder": "admin@example.com",
         "startEnrollment": "Start sign-in",
+        "openVerification": "Open OpenAI device page",
         "completeEnrollment": "Finalize sign-in",
         "disconnect": "Disconnect",
-        "pendingHint": "Enrollment is pending. Complete sign-in after authenticating in the opened Codex page."
+        "pendingHint": "Enrollment is pending. Enter the device code on the opened OpenAI page, then finalize here.",
+        "deviceCodeLabel": "Device code"
       },
       "toasts": {
-        "codexEnrollmentStarted": "Codex sign-in started. Finish authentication in the opened page, then finalize.",
-        "codexConnected": "Codex provider marked as connected.",
+        "codexEnrollmentStarted": "Codex sign-in started. Enter the displayed code on the opened OpenAI page, then finalize here.",
+        "codexConnected": "Codex provider connected.",
         "codexDisconnected": "Codex provider marked as disconnected."
       },
       "errors": {

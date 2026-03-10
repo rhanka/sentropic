@@ -7,6 +7,8 @@ export type ProviderConnectionState = {
   connectionStatus: 'connected' | 'pending' | 'disconnected';
   enrollmentId: string | null;
   enrollmentUrl: string | null;
+  enrollmentCode: string | null;
+  enrollmentExpiresAt: string | null;
   managedBy: 'admin_settings' | 'environment' | 'none';
   accountLabel: string | null;
   updatedAt: string | null;

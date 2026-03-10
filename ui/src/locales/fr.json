@@ -574,7 +574,7 @@
     "queueFailed": "Échoués",
     "providerConnections": {
       "title": "Connexions providers",
-      "description": "Configurez l’état partagé des providers dans les paramètres admin. Les clients VSCode/web consomment cet état backend en lecture seule.",
+      "description": "Configurez vos connexions providers dans les paramètres admin. Le backend réutilise ensuite ce credential pour vos appels runtime.",
       "status": {
         "ready": "Prêt",
         "notReady": "Non prêt"
@@ -588,13 +588,15 @@
         "accountLabel": "Libellé compte Codex (optionnel)",
         "accountPlaceholder": "admin@example.com",
         "startEnrollment": "Démarrer la connexion",
+        "openVerification": "Ouvrir la page device OpenAI",
         "completeEnrollment": "Finaliser la connexion",
         "disconnect": "Déconnecter",
-        "pendingHint": "Inscription en attente. Finalisez la connexion après authentification dans la page Codex ouverte."
+        "pendingHint": "Connexion en attente. Saisissez le code affiché sur la page OpenAI ouverte, puis finalisez ici.",
+        "deviceCodeLabel": "Code device"
       },
       "toasts": {
-        "codexEnrollmentStarted": "Connexion Codex démarrée. Terminez l’authentification dans la page ouverte puis finalisez.",
-        "codexConnected": "Provider Codex marqué comme connecté.",
+        "codexEnrollmentStarted": "Connexion Codex démarrée. Saisissez le code affiché sur la page OpenAI ouverte, puis finalisez ici.",
+        "codexConnected": "Provider Codex connecté.",
         "codexDisconnected": "Provider Codex marqué comme déconnecté."
       },
       "errors": {
