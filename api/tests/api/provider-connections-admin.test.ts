@@ -12,6 +12,7 @@ import {
 const CODEX_CONNECTION_SETTINGS_KEY = 'provider_connection:codex';
 const CODEX_CONNECTION_PENDING_SECRET_KEY = 'provider_connection_secret:codex_pending';
 const CODEX_CONNECTION_SECRET_KEY = 'provider_connection_secret:codex';
+const OPENAI_TRANSPORT_MODE_SETTING_KEY = 'provider_connection_mode:openai';
 
 const createJsonResponse = (body: unknown, init?: ResponseInit): Response =>
   new Response(JSON.stringify(body), {
@@ -36,7 +37,10 @@ describe('provider connections admin API', () => {
       sql`DELETE FROM settings WHERE key IN (${CODEX_CONNECTION_SETTINGS_KEY}, ${CODEX_CONNECTION_PENDING_SECRET_KEY}, ${CODEX_CONNECTION_SECRET_KEY})`,
     );
     await db.run(
-      sql`DELETE FROM settings WHERE key IN (${`ai_provider_key_user:openai:${admin.userId}`}, ${`ai_provider_key_user:openai:${editor.userId}`})`,
+      sql`DELETE FROM settings WHERE key = ${OPENAI_TRANSPORT_MODE_SETTING_KEY} AND user_id IS NULL`,
+    );
+    await db.run(
+      sql`DELETE FROM settings WHERE key IN (${`ai_provider_key_user:openai:${admin.id}`}, ${`ai_provider_key_user:openai:${editor.id}`})`,
     );
   });
 
@@ -46,7 +50,10 @@ describe('provider connections admin API', () => {
       sql`DELETE FROM settings WHERE key IN (${CODEX_CONNECTION_SETTINGS_KEY}, ${CODEX_CONNECTION_PENDING_SECRET_KEY}, ${CODEX_CONNECTION_SECRET_KEY})`,
     );
     await db.run(
-      sql`DELETE FROM settings WHERE key IN (${`ai_provider_key_user:openai:${admin.userId}`}, ${`ai_provider_key_user:openai:${editor.userId}`})`,
+      sql`DELETE FROM settings WHERE key = ${OPENAI_TRANSPORT_MODE_SETTING_KEY} AND user_id IS NULL`,
+    );
+    await db.run(
+      sql`DELETE FROM settings WHERE key IN (${`ai_provider_key_user:openai:${admin.id}`}, ${`ai_provider_key_user:openai:${editor.id}`})`,
     );
     await cleanupAuthData();
   });
@@ -73,6 +80,46 @@ describe('provider connections admin API', () => {
     expect(payload.providers.some((provider) => provider.providerId === 'gemini')).toBe(
       true,
     );
+    expect(payload).toMatchObject({ openaiTransportMode: 'token' });
+  });
+
+  it('persists and exposes the OpenAI transport mode toggle', async () => {
+    const setCodex = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/settings/provider-connections/openai/mode',
+      admin.sessionToken!,
+      { mode: 'codex' },
+    );
+
+    expect(setCodex.status).toBe(200);
+    await expect(setCodex.json()).resolves.toMatchObject({ mode: 'codex' });
+
+    const storedCodexMode = (await db.get(
+      sql`SELECT value FROM settings WHERE key = ${OPENAI_TRANSPORT_MODE_SETTING_KEY} AND user_id IS NULL`,
+    )) as { value?: string } | undefined;
+    expect(storedCodexMode?.value).toBe('codex');
+
+    const listWithCodex = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/settings/provider-connections',
+      admin.sessionToken!,
+    );
+    await expect(listWithCodex.json()).resolves.toMatchObject({
+      openaiTransportMode: 'codex',
+    });
+
+    const setToken = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/settings/provider-connections/openai/mode',
+      admin.sessionToken!,
+      { mode: 'token' },
+    );
+
+    expect(setToken.status).toBe(200);
+    await expect(setToken.json()).resolves.toMatchObject({ mode: 'token' });
   });
 
   it('starts and completes codex enrollment in admin route, then exposes readiness only to the authenticated admin', async () => {
@@ -272,6 +319,114 @@ describe('provider connections admin API', () => {
         accountLabel: null,
       },
     });
+  });
+
+  it('keeps Codex enrollment pending and avoids storing a connected secret when device authorization expired', async () => {
+    fetchMock.mockResolvedValueOnce(
+      createJsonResponse({
+        device_auth_id: 'device_auth_1',
+        user_code: 'ABCD-EFGH',
+        interval: 1,
+      }),
+    );
+
+    const startResponse = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/settings/provider-connections/codex/enrollment/start',
+      admin.sessionToken!,
+      { accountLabel: 'admin@example.com' },
+    );
+    const startPayload = (await startResponse.json()) as {
+      provider: { enrollmentId: string | null };
+    };
+
+    fetchMock.mockResolvedValueOnce(
+      createJsonResponse(
+        { error: { message: 'expired' } },
+        { status: 404 },
+      ),
+    );
+
+    const completeResponse = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/settings/provider-connections/codex/enrollment/complete',
+      admin.sessionToken!,
+      {
+        enrollmentId: startPayload.provider.enrollmentId,
+        accountLabel: 'admin@example.com',
+      },
+    );
+
+    expect(completeResponse.status).toBe(400);
+
+    const providerState = (await db.get(
+      sql`SELECT value FROM settings WHERE key = ${CODEX_CONNECTION_SETTINGS_KEY} AND user_id = ${admin.id}`,
+    )) as { value?: string } | undefined;
+    const connectedSecret = (await db.get(
+      sql`SELECT value FROM settings WHERE key = ${CODEX_CONNECTION_SECRET_KEY} AND user_id = ${admin.id}`,
+    )) as { value?: string } | undefined;
+
+    expect(providerState?.value).toContain('"status":"pending"');
+    expect(connectedSecret).toBeUndefined();
+  });
+
+  it('keeps Codex enrollment pending and avoids storing a connected secret when token exchange is incomplete', async () => {
+    fetchMock.mockResolvedValueOnce(
+      createJsonResponse({
+        device_auth_id: 'device_auth_2',
+        user_code: 'WXYZ-9876',
+        interval: 1,
+      }),
+    );
+
+    const startResponse = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/settings/provider-connections/codex/enrollment/start',
+      admin.sessionToken!,
+      { accountLabel: 'admin@example.com' },
+    );
+    const startPayload = (await startResponse.json()) as {
+      provider: { enrollmentId: string | null };
+    };
+
+    fetchMock
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          authorization_code: 'authorization-code',
+          code_verifier: 'verifier-code',
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          access_token: 'oauth-access-token',
+        }),
+      );
+
+    const completeResponse = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/settings/provider-connections/codex/enrollment/complete',
+      admin.sessionToken!,
+      {
+        enrollmentId: startPayload.provider.enrollmentId,
+        accountLabel: 'admin@example.com',
+      },
+    );
+
+    expect(completeResponse.status).toBe(400);
+
+    const providerState = (await db.get(
+      sql`SELECT value FROM settings WHERE key = ${CODEX_CONNECTION_SETTINGS_KEY} AND user_id = ${admin.id}`,
+    )) as { value?: string } | undefined;
+    const connectedSecret = (await db.get(
+      sql`SELECT value FROM settings WHERE key = ${CODEX_CONNECTION_SECRET_KEY} AND user_id = ${admin.id}`,
+    )) as { value?: string } | undefined;
+
+    expect(providerState?.value).toContain('"status":"pending"');
+    expect(connectedSecret).toBeUndefined();
   });
 
   it('rejects codex enrollment start for non-admin users', async () => {
