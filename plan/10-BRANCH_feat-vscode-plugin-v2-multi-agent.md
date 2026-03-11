@@ -86,6 +86,18 @@ Actions with the following status should be included around tasks only if really
     - [ ] Define UX contract for background runs without explicit agent lane creation.
     - [ ] Define failure/retry semantics and audit evidence requirements.
 
+- [ ] **Lot 0.5 — BR05 VSCode carry-over regressions**
+  - [ ] Reproduce and fix VSCode Codex local-tools `HTTP 400` regression:
+    - [ ] local tool calls such as `file_edit` fail in VSCode when the runtime source is Codex,
+    - [ ] the same flows still work in VSCode with the standard OpenAI path.
+  - [ ] Reproduce and fix VSCode rewrite regression:
+    - [ ] rewriting an assistant answer must preserve the active session tool context/tool availability.
+  - [ ] Reproduce and fix VSCode checkpoint regression:
+    - [ ] checkpoints must appear again after a file modification when a real file delta exists.
+  - [ ] Lot 0.5 gate:
+    - [ ] `make typecheck-ui ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make test-ui ENV=test-feat-vscode-plugin-v2-multi-agent`
+
 - [ ] **Lot 1 — Multi-Agent Lanes**
   - [ ] Add multi-agent task lanes and assignment model in plugin UI.
     - <feedback loop if required only>
