@@ -495,6 +495,12 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] E2E
         - [ ] one real admin session switches OpenAI to `codex` and obtains a successful chat turn,
         - [ ] one real admin session switches back to `token` and keeps the standard OpenAI path working.
+    - [ ] BUG-L6-48 — Chrome extension inherited the VSCode token-bootstrap auth copy/flow, so the shared auth card now shows misleading `Validate token` / `Clear session` actions instead of Chrome connect/disconnect wording and behavior.
+      - [ ] Restore host-specific auth UX in the shared widget:
+        - [ ] VSCode keeps token-bootstrap wording and the session-token gate,
+        - [ ] Chrome restores browser-session wording (`Connect`, `Disconnect`) and does not present token-validation copy as the primary auth action.
+      - [ ] Keep the Chrome CTA on the existing browser-session connect path (`extension_auth_connect`) and logout on the existing disconnect/revoke path (`extension_auth_logout`).
+      - [ ] Add/update scoped UI coverage for host-specific auth labels/actions in the shared `ChatWidget`.
     - [x] BUG-L6-6 — Code-agent base prompt is not aligned with the requested enriched baseline profile.
       - [x] Replace current base prompt with the agreed enriched profile.
       - [x] Add scoped tests for baseline prompt rendering and override behavior.
@@ -778,10 +784,10 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] hard-zone tool call compacts first then replans,
     - [x] `history_analyze` can target one oversized tool result and return focused evidence,
       - [x] heavy tool call is compacted/deferred with explicit reason when budget would overflow.
-    - [ ] Validate checkpoint create/list/restore behavior.
-    - [ ] Validate restore banner appears on message restore action only when code/object delta exists.
-    - [ ] Validate assistant retry path triggers the same restore banner when rollback is available.
-    - [ ] Validate no native `confirm()` modal is used for checkpoint restore.
+    - [!] Validate checkpoint create/list/restore behavior.
+    - [!] Validate restore banner appears on message restore action only when code/object delta exists.
+    - [!] Validate assistant retry path triggers the same restore banner when rollback is available.
+    - [!] Validate no native `confirm()` modal is used for checkpoint restore.
     - [x] Validate Code project-workspace mapping behavior (backend/runtime path only).
     - [x] Validate Code project-workspace UI flow (only after S6-4b validation)
       - [x] Token-missing path shows token-required screen first and routes to settings.
@@ -793,18 +799,22 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] `git add` and `git push` can resolve differently by mono/bigram rules,
       - [x] ask decisions show Chrome-style confirmation banner,
       - [x] workspace override cannot be weakened by user-level allow rule.
-    - [ ] Validate `history_analyze` from VSCode host:
-      - [ ] ask a targeted question about earlier turns and verify evidence references are returned,
-      - [ ] verify long conversation path uses chunked analysis (coverage indicates chunking when applicable).
+    - [!] Validate `history_analyze` from VSCode host:
+      - [!] ask a targeted question about earlier turns and verify evidence references are returned,
+      - [!] verify long conversation path uses chunked analysis (coverage indicates chunking when applicable).
   - [x] Side-effect non-regression — documents auth mode split (`ENV=dev`, root workspace)
     - [x] Web app chat: add/list/delete a session document still works with cookie auth (no unexpected `401`).
     - [x] Chrome extension chat: add/list/delete a session document still works (no auth regression from VSCode token path).
     - [x] VSCode plugin chat: add/list/delete a session document works with runtime bearer token and no persistent `HTTP 401` warning.
-  - [ ] Web app chat runtime (`ENV=dev`, root workspace)
-    - [ ] Validate `history_analyze` from web app chat:
-      - [ ] targeted historical question returns answer + evidence references,
-      - [ ] no hidden reasoning leak in tool output,
-      - [ ] `insufficient_coverage` returned when scope is intentionally too narrow.
+  - [!] Web app chat runtime (`ENV=dev`, root workspace)
+    - [!] Validate `history_analyze` from web app chat:
+      - [!] targeted historical question returns answer + evidence references,
+      - [!] no hidden reasoning leak in tool output,
+      - [!] `insufficient_coverage` returned when scope is intentionally too narrow.
+  - [x] 3 VSCode bugs deferred to BRANCH 10
+    - [ ] Codex local tools raise 400 error
+    - [ ] When edit a user message in code mode, tools are not anymore available to AI
+    - [ ] Checkpoint doesn't display anymore, not tested
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate final BR-05 decisions into:
