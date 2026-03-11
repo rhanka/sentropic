@@ -321,14 +321,14 @@ chatRouter.post('/sessions', requireWorkspaceAccessRole(), zValidator('json', cr
 
 chatRouter.get('/sessions/:id/messages', async (c) => {
   const user = c.get('user');
-  const sessionId = c.req.param('id');
+  const sessionId = c.req.param('id')!;
   const result = await chatService.listMessages(sessionId, user.userId);
   return c.json({ sessionId, messages: result.messages, todoRuntime: result.todoRuntime });
 });
 
 chatRouter.get('/sessions/:id/bootstrap', async (c) => {
   const user = c.get('user');
-  const sessionId = c.req.param('id');
+  const sessionId = c.req.param('id')!;
   const result = await chatService.getSessionBootstrap({
     sessionId,
     userId: user.userId,
@@ -345,7 +345,7 @@ chatRouter.get('/sessions/:id/bootstrap', async (c) => {
 
 chatRouter.get('/sessions/:id/history', async (c) => {
   const user = c.get('user');
-  const sessionId = c.req.param('id');
+  const sessionId = c.req.param('id')!;
   const detailMode =
     c.req.query('runtimeDetails') === 'full' ? 'full' : 'summary';
   const result = await chatService.getSessionHistory({
@@ -400,7 +400,7 @@ chatRouter.get('/sessions/:id/history', async (c) => {
 
 chatRouter.get('/messages/:id/runtime-details', async (c) => {
   const user = c.get('user');
-  const messageId = c.req.param('id');
+  const messageId = c.req.param('id')!;
   const result = await chatService.getMessageRuntimeDetails({
     messageId,
     userId: user.userId,
@@ -410,7 +410,7 @@ chatRouter.get('/messages/:id/runtime-details', async (c) => {
 
 chatRouter.get('/sessions/:id/checkpoints', requireWorkspaceAccessRole(), async (c) => {
   const user = c.get('user');
-  const sessionId = c.req.param('id');
+  const sessionId = c.req.param('id')!;
   const url = new URL(c.req.url);
   const limitRaw = Number(url.searchParams.get('limit') ?? '20');
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.floor(limitRaw))) : 20;
@@ -428,7 +428,7 @@ chatRouter.post(
   zValidator('json', createCheckpointInput),
   async (c) => {
     const user = c.get('user');
-    const sessionId = c.req.param('id');
+    const sessionId = c.req.param('id')!;
     const body = c.req.valid('json');
     const checkpoint = await chatService.createCheckpoint({
       sessionId,
@@ -445,8 +445,8 @@ chatRouter.post(
   requireWorkspaceEditorRole(),
   async (c) => {
     const user = c.get('user');
-    const sessionId = c.req.param('id');
-    const checkpointId = c.req.param('checkpointId');
+    const sessionId = c.req.param('id')!;
+    const checkpointId = c.req.param('checkpointId')!;
     const restored = await chatService.restoreCheckpoint({
       sessionId,
       checkpointId,
@@ -462,7 +462,7 @@ chatRouter.post(
  */
 chatRouter.delete('/sessions/:id', async (c) => {
   const user = c.get('user');
-  const sessionId = c.req.param('id');
+  const sessionId = c.req.param('id')!;
   await chatService.deleteSession(sessionId, user.userId);
   return c.json({ ok: true });
 });
@@ -473,7 +473,7 @@ chatRouter.delete('/sessions/:id', async (c) => {
  */
 chatRouter.post('/messages/:id/stop', requireWorkspaceAccessRole(), async (c) => {
   const user = c.get('user');
-  const messageId = c.req.param('id');
+  const messageId = c.req.param('id')!;
 
   const msg = await chatService.getMessageForUser(messageId, user.userId);
   if (!msg) return c.json({ error: 'Message not found' }, 404);
@@ -513,7 +513,7 @@ chatRouter.post('/messages/:id/stop', requireWorkspaceAccessRole(), async (c) =>
  */
 chatRouter.post('/messages/:id/steer', requireWorkspaceAccessRole(), zValidator('json', steerInput), async (c) => {
   const user = c.get('user');
-  const assistantMessageId = c.req.param('id');
+  const assistantMessageId = c.req.param('id')!;
   const body = c.req.valid('json');
 
   const msg = await chatService.getMessageForUser(assistantMessageId, user.userId);
@@ -606,7 +606,7 @@ chatRouter.post('/messages/:id/steer', requireWorkspaceAccessRole(), zValidator(
  */
 chatRouter.post('/messages/:id/feedback', requireWorkspaceAccessRole(), zValidator('json', feedbackInput), async (c) => {
   const user = c.get('user');
-  const messageId = c.req.param('id');
+  const messageId = c.req.param('id')!;
   const body = c.req.valid('json');
 
   try {
@@ -629,7 +629,7 @@ chatRouter.post('/messages/:id/feedback', requireWorkspaceAccessRole(), zValidat
  */
 chatRouter.patch('/messages/:id', requireWorkspaceEditorRole(), zValidator('json', editMessageInput), async (c) => {
   const user = c.get('user');
-  const messageId = c.req.param('id');
+  const messageId = c.req.param('id')!;
   const body = c.req.valid('json');
 
   try {
@@ -652,7 +652,7 @@ chatRouter.patch('/messages/:id', requireWorkspaceEditorRole(), zValidator('json
  */
 chatRouter.post('/messages/:id/retry', requireWorkspaceAccessRole(), async (c) => {
   const user = c.get('user');
-  const messageId = c.req.param('id');
+  const messageId = c.req.param('id')!;
   const payload = retryMessageInput.safeParse(await c.req.json().catch(() => ({})));
   if (!payload.success) {
     return c.json(
@@ -766,7 +766,7 @@ chatRouter.post(
   zValidator('json', toolResultInput),
   async (c) => {
     const user = c.get('user');
-    const messageId = c.req.param('id');
+    const messageId = c.req.param('id')!;
     const body = c.req.valid('json');
     const requestLocale = resolveLocaleFromHeaders({
       appLocaleHeader: c.req.header('x-app-locale'),
