@@ -11,6 +11,7 @@ import {
 import { getNextSequence, readStreamEvents, writeStreamEvent } from './stream-service';
 import { settingsService } from './settings';
 import type OpenAI from 'openai';
+import { getOpenAITransportMode } from './provider-connections';
 import { defaultPrompts } from '../config/default-prompts';
 import {
   readUseCaseTool,
@@ -2093,7 +2094,6 @@ export class ChatService {
     );
     const selectedProviderId = resolvedSelection.provider_id;
     const selectedModel = resolvedSelection.model_id;
-
     const userSeq = await this.getNextMessageSequence(sessionId);
     const assistantSeq = userSeq + 1;
 
@@ -3062,6 +3062,10 @@ Règles :
     );
     const selectedProviderId = resolvedSelection.provider_id;
     const selectedModel = resolvedSelection.model_id;
+    const useCodexTransport =
+      selectedProviderId === 'openai' &&
+      selectedModel === 'gpt-5.4' &&
+      (await getOpenAITransportMode()) === 'codex';
 
     // Reasoning-effort evaluation (best effort):
     // - OpenAI gpt-5* keeps its existing evaluator behavior.
@@ -4773,9 +4777,26 @@ Règles :
         currentMessages = [...currentMessages, { role: 'assistant', content: assistantText }];
       }
 
-      // Appel suivant: on enverra `responseToolOutputs` via rawInput, rattaché à previous_response_id.
-      // NOTE: on n'envoie PAS de "nudge" ici: on teste d'abord le pattern doc-compatible.
-      pendingResponsesRawInput = responseToolOutputs;
+      // Codex backend no longer accepts previous_response_id: replay tool calls locally.
+      if (useCodexTransport) {
+        previousResponseId = null;
+        pendingResponsesRawInput = toolCalls.flatMap((toolCall) => {
+          const output = responseToolOutputs.find((item) => item.call_id === toolCall.id);
+          return output
+            ? [
+                {
+                  type: 'function_call' as const,
+                  call_id: toolCall.id,
+                  name: toolCall.name,
+                  arguments: toolCall.args || '{}',
+                },
+                output,
+              ]
+            : [];
+        });
+      } else {
+        pendingResponsesRawInput = responseToolOutputs;
+      }
     }
 
     // Si on arrive ici sans contenu final, on déclenche un 2e pass (sans tools) pour forcer une réponse.

@@ -316,7 +316,7 @@ foldersRouter.post(
 foldersRouter.get('/:id', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
   const targetWorkspaceId = user.workspaceId;
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const [folder] = await db.select({
     id: folders.id,
     name: folders.name,
@@ -357,7 +357,7 @@ foldersRouter.get('/:id', async (c) => {
 
 foldersRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', folderInput.partial()), async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const payload = c.req.valid('json');
   const organizationId = payload.organizationId;
 
@@ -435,7 +435,7 @@ foldersRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidato
 
 foldersRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   try {
     await requireLockOwnershipForMutation({
       userId,
@@ -455,7 +455,7 @@ foldersRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async 
 foldersRouter.get('/:id/matrix', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
   const targetWorkspaceId = user.workspaceId;
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const [folder] = await db
     .select()
     .from(folders)
@@ -490,7 +490,7 @@ foldersRouter.get('/list/with-matrices', async (c) => {
 
 foldersRouter.put('/:id/matrix', requireEditor, requireWorkspaceEditorRole(), zValidator('json', matrixSchema), async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const matrix = c.req.valid('json');
   try {
     await requireLockOwnershipForMutation({

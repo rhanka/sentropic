@@ -35,7 +35,7 @@ const handleTodoError = (c: Context, error: unknown) => {
 runsRouter.post("/:runId/pause", requireWorkspaceEditorRole(), async (c) => {
   try {
     const actor = actorFromContext(c);
-    const result = await todoOrchestrationService.pauseRun(actor, c.req.param("runId"));
+    const result = await todoOrchestrationService.pauseRun(actor, c.req.param("runId")!);
     return c.json(result);
   } catch (error) {
     return handleTodoError(c, error);
@@ -45,7 +45,7 @@ runsRouter.post("/:runId/pause", requireWorkspaceEditorRole(), async (c) => {
 runsRouter.post("/:runId/resume", requireWorkspaceEditorRole(), async (c) => {
   try {
     const actor = actorFromContext(c);
-    const result = await todoOrchestrationService.resumeRun(actor, c.req.param("runId"));
+    const result = await todoOrchestrationService.resumeRun(actor, c.req.param("runId")!);
     return c.json(result);
   } catch (error) {
     return handleTodoError(c, error);

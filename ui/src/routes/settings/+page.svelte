@@ -20,7 +20,6 @@
   import {
     completeCodexProviderEnrollment,
     disconnectCodexProviderEnrollment,
-    fetchProviderConnections,
     startCodexProviderEnrollment,
     type ProviderConnectionState,
   } from '$lib/utils/provider-connections-api';
@@ -96,7 +95,7 @@
   let isLoadingProviderConnections = false;
   let isSavingCodexProviderConnection = false;
   let providerConnectionsError = '';
-  let providerConnections: ProviderConnectionState[] = [];
+  let providerConnections: ProviderConnectionState[] = [], openaiTransportMode: 'codex' | 'token' = 'token';
   let codexConnectionAccountLabel = '';
   let codexPollingTimer: ReturnType<typeof setTimeout> | null = null;
   
@@ -363,7 +362,12 @@
     isLoadingProviderConnections = true;
     providerConnectionsError = '';
     try {
-      providerConnections = await fetchProviderConnections();
+      const payload = await apiGet<{
+        providers: ProviderConnectionState[];
+        openaiTransportMode?: 'codex' | 'token';
+      }>('/settings/provider-connections');
+      providerConnections = Array.isArray(payload.providers) ? payload.providers : [];
+      openaiTransportMode = payload.openaiTransportMode === 'codex' ? 'codex' : 'token';
       codexConnectionAccountLabel =
         providerConnections.find((provider) => provider.providerId === 'codex')
           ?.accountLabel || '';
@@ -400,6 +404,22 @@
       codexPollingTimer = setTimeout(() => {
         void completeCodexProviderConnection(true);
       }, 4000);
+    }
+  };
+
+  const saveOpenAITransportMode = async (mode: 'codex' | 'token') => {
+    if (openaiTransportMode === mode) return;
+    isSavingCodexProviderConnection = true;
+    providerConnectionsError = '';
+    try {
+      await apiPost('/settings/provider-connections/openai/mode', { mode });
+      openaiTransportMode = mode;
+      await loadProviderConnections();
+    } catch (error) {
+      providerConnectionsError =
+        error instanceof Error ? error.message : get(_)('settings.providerConnections.errors.save');
+    } finally {
+      isSavingCodexProviderConnection = false;
     }
   };
 
@@ -1203,6 +1223,14 @@
             {/if}
           </div>
         {/each}
+      </div>
+
+      <div class="space-y-2 rounded border border-slate-200 p-3">
+        <div class="text-sm font-medium text-slate-700">OpenAI runtime source</div>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class={`rounded border px-3 py-2 text-xs font-medium ${openaiTransportMode === 'token' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`} on:click={() => saveOpenAITransportMode('token')} disabled={isSavingCodexProviderConnection}>OpenAI key</button>
+          <button type="button" class={`rounded border px-3 py-2 text-xs font-medium ${openaiTransportMode === 'codex' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`} on:click={() => saveOpenAITransportMode('codex')} disabled={isSavingCodexProviderConnection || codexProviderConnection?.connectionStatus !== 'connected'}>Codex token</button>
+        </div>
       </div>
 
       {#if codexProviderConnection?.canConfigure}
