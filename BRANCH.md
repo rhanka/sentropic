@@ -501,6 +501,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] Chrome restores browser-session wording (`Connect`, `Disconnect`) and does not present token-validation copy as the primary auth action.
       - [x] Keep the Chrome CTA on the existing browser-session connect path (`extension_auth_connect`) and logout on the existing disconnect/revoke path (`extension_auth_logout`).
       - [x] Add/update scoped UI coverage for host-specific auth labels/actions in the shared `ChatWidget`.
+    - [!] BUG-L6-49 — Deferred to BR10: host/workspace tool separation is still unstable across web app, Chrome, and VSCode, so the visible tools menu can diverge from the effective runtime toolset.
+      - [ ] Record the exact data sources currently used by:
+        - [ ] the visible tools menu,
+        - [ ] the effective `tools` / `localToolDefinitions` payload sent by chat.
+      - [ ] Realign the menu on the same effective host/workspace tool source as the runtime payload, without maintaining a second divergent catalog.
+    - [!] BUG-L6-50 — Deferred to BR10: VSCode still has an inconsistent local-vs-remote tool grouping/translation contract (`Tools` in French for remote tools).
+      - [ ] Audit the current data/translation split between local and remote tool groups in the menu.
+      - [ ] Apply one host-consistent localized label contract for VSCode tool groups.
     - [x] BUG-L6-6 — Code-agent base prompt is not aligned with the requested enriched baseline profile.
       - [x] Replace current base prompt with the agreed enriched profile.
       - [x] Add scoped tests for baseline prompt rendering and override behavior.
