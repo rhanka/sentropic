@@ -251,6 +251,16 @@ body {
   border-top-color: #334155 !important;
 }
 
+#chat-model-selection {
+  background-color: #fff;
+  color: #334155;
+}
+
+:is(#chat-model-selection option, #chat-model-selection optgroup) {
+  background-color: #fff;
+  color: #334155;
+}
+
 .topai-theme-dark #chat-model-selection {
   appearance: none;
   -webkit-appearance: none;

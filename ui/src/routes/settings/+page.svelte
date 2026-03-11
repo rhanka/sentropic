@@ -191,6 +191,13 @@
     return parsed.toLocaleString();
   };
 
+  const settingsButtonBaseClass =
+    'inline-flex items-center justify-center rounded px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50';
+  const settingsPrimaryButtonClass = `${settingsButtonBaseClass} bg-primary text-white hover:bg-primary/90`;
+  const settingsSecondaryButtonClass = `${settingsButtonBaseClass} border border-slate-300 bg-white text-slate-700 hover:bg-slate-100`;
+  const settingsWarningButtonClass = `${settingsButtonBaseClass} bg-amber-700 text-white hover:bg-amber-800`;
+  const settingsDangerButtonClass = `${settingsButtonBaseClass} bg-rose-700 text-white hover:bg-rose-800`;
+
   let codexProviderConnection: ProviderConnectionState | null = null;
   $: codexProviderConnection =
     providerConnections.find((provider) => provider.providerId === 'codex') ||
@@ -871,10 +878,10 @@
       <div class="rounded border border-rose-200 bg-rose-50 p-4">
 	        <h3 class="font-medium text-rose-800">{$_('settings.dangerZone')}</h3>
 	        <div class="mt-3 flex flex-wrap gap-2">
-	          <button class="rounded bg-amber-700 px-3 py-2 text-sm text-white" on:click={handleDeactivate} disabled={deactivating}>
+	          <button class={settingsWarningButtonClass} on:click={handleDeactivate} disabled={deactivating}>
 	            {$_('settings.deactivateAccount')}
 	          </button>
-	          <button class="rounded bg-rose-700 px-3 py-2 text-sm text-white" on:click={handleDelete} disabled={deleting}>
+	          <button class={settingsDangerButtonClass} on:click={handleDelete} disabled={deleting}>
 	            {$_('settings.deleteAccount')}
 	          </button>
 	        </div>
@@ -1122,7 +1129,7 @@
 
           <div class="flex flex-wrap items-center gap-2">
             <button
-              class="inline-flex items-center gap-2 rounded bg-primary px-2.5 py-1 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+              class={settingsPrimaryButtonClass}
               type="button"
               on:click={issueVsCodeExtensionToken}
               disabled={isIssuingVsCodeExtensionToken || isRevokingVsCodeExtensionToken}
@@ -1133,7 +1140,7 @@
                 : $_('settings.vscodeExtension.token.issue')}
             </button>
             <button
-              class="rounded border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              class={settingsSecondaryButtonClass}
               type="button"
               on:click={revokeVsCodeExtensionToken}
               disabled={!vscodeExtensionTokenActive || isIssuingVsCodeExtensionToken || isRevokingVsCodeExtensionToken}
@@ -1228,8 +1235,22 @@
       <div class="space-y-2 rounded border border-slate-200 p-3">
         <div class="text-sm font-medium text-slate-700">OpenAI runtime source</div>
         <div class="flex flex-wrap gap-2">
-          <button type="button" class={`rounded border px-3 py-2 text-xs font-medium ${openaiTransportMode === 'token' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`} on:click={() => saveOpenAITransportMode('token')} disabled={isSavingCodexProviderConnection}>OpenAI key</button>
-          <button type="button" class={`rounded border px-3 py-2 text-xs font-medium ${openaiTransportMode === 'codex' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-300 text-slate-700 hover:bg-slate-100'}`} on:click={() => saveOpenAITransportMode('codex')} disabled={isSavingCodexProviderConnection || codexProviderConnection?.connectionStatus !== 'connected'}>Codex token</button>
+          <button
+            type="button"
+            class={openaiTransportMode === 'token' ? settingsPrimaryButtonClass : settingsSecondaryButtonClass}
+            on:click={() => saveOpenAITransportMode('token')}
+            disabled={isSavingCodexProviderConnection}
+          >
+            OpenAI key
+          </button>
+          <button
+            type="button"
+            class={openaiTransportMode === 'codex' ? settingsPrimaryButtonClass : settingsSecondaryButtonClass}
+            on:click={() => saveOpenAITransportMode('codex')}
+            disabled={isSavingCodexProviderConnection || codexProviderConnection?.connectionStatus !== 'connected'}
+          >
+            Codex token
+          </button>
         </div>
       </div>
 
@@ -1250,7 +1271,7 @@
             {#if !codexProviderConnection || codexProviderConnection.connectionStatus === 'disconnected'}
               <button
                 type="button"
-                class="rounded bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                class={settingsPrimaryButtonClass}
                 on:click={startCodexProviderConnection}
                 disabled={isSavingCodexProviderConnection}
               >
@@ -1260,7 +1281,7 @@
             {#if codexProviderConnection?.connectionStatus === 'pending'}
               <button
                 type="button"
-                class="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                class={settingsPrimaryButtonClass}
                 on:click={startCodexProviderConnection}
                 disabled={isSavingCodexProviderConnection}
               >
@@ -1268,7 +1289,7 @@
               </button>
               <button
                 type="button"
-                class="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                class={settingsSecondaryButtonClass}
                 on:click={disconnectCodexProviderConnection}
                 disabled={isSavingCodexProviderConnection}
               >
@@ -1278,7 +1299,7 @@
             {#if codexProviderConnection?.connectionStatus === 'connected'}
               <button
                 type="button"
-                class="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                class={settingsSecondaryButtonClass}
                 on:click={disconnectCodexProviderConnection}
                 disabled={isSavingCodexProviderConnection}
               >
