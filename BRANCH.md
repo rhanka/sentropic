@@ -738,68 +738,68 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
           - [x] use that state only for manual-navigation / reload-debug scoped specs against `ENV=dev`.
 
 - [ ] **Lot N-2** UAT
-  - [ ] Web app (`ENV=dev`, root workspace)
-    - [ ] Open `/settings` and validate VSCode download card:
-      - [ ] metadata loaded (`version`, `source`),
-      - [ ] download CTA points to valid `.vsix`,
-      - [ ] explicit error message if missing config/package.
-  - [ ] VSCode plugin (`ENV=dev`, root workspace)
-    - [ ] Build package on standard dev ports: `make build-ext-vscode`.
-    - [ ] Install generated `.vsix` in VSCode.
-    - [ ] Open plugin panel and validate real ChatWidget mount in a dockable side panel (not editor tab).
+  - [x] Web app (`ENV=dev`, root workspace)
+    - [x] Open `/settings` and validate VSCode download card:
+      - [x] metadata loaded (`version`, `source`),
+      - [x] download CTA points to valid `.vsix`,
+      - [x] explicit error message if missing config/package.
+  - [x] VSCode plugin (`ENV=dev`, root workspace)
+    - [x] Build package on standard dev ports: `make build-ext-vscode`.
+    - [x] Install generated `.vsix` in VSCode.
+    - [x] Open plugin panel and validate real ChatWidget mount in a dockable side panel (not editor tab).
     - [x] Validate live streaming in VSCode chat (progressive updates visible without manual conversation switching).
-    - [ ] Open settings wheel in widget header and validate:
-      - [ ] endpoint/token bootstrap fields,
-      - [ ] token save/reload in secure storage,
-      - [ ] actionable connectivity errors when endpoint or token is invalid,
-      - [ ] config save/reload.
-      - [ ] global code-agent prompt textarea can be edited/saved/reloaded.
-      - [ ] workspace override prompt textarea can be edited/saved/reloaded and takes precedence over global.
-      - [ ] custom instruction include patterns input persists and affects discovery.
-      - [ ] invalid prompt blocks execution with explicit actionable error.
-  - [ ] Web app admin provider settings (`ENV=dev`, root workspace)
-    - [ ] Open admin settings provider section and validate shared Codex connection lifecycle:
-      - [ ] connect/configure provider as admin,
-      - [ ] provider status visible as shared backend state,
-      - [ ] non-admin users cannot mutate provider connection settings.
-  - [ ] VSCode + web theme parity (`ENV=dev`, root workspace)
-    - [ ] Validate VSCode extension host in dark/light/high-contrast themes.
-    - [ ] Validate web app theme preference (`system|light|dark`) and chat/widget parity.
-  - [ ] Shared runtime regression (`ENV=dev`, root workspace)
-    - [ ] Validate summary behavior on long context.
-    - [ ] Validate summary UI:
-      - [ ] gray strip appears during compaction and resolves to `Contexte compacté.`,
-      - [ ] default strip message has no metrics, hover reveals metrics,
-      - [ ] occupancy indicator remains visible and non-intrusive.
-    - [ ] Validate overflow handling during reasoning/tool calls:
-      - [ ] overflow triggered mid-run does not lose user intent,
-      - [ ] run resumes after compaction (in-flight when available, safe-boundary fallback otherwise),
-      - [ ] soft-zone tool call returns replan signal before execution,
-      - [ ] hard-zone tool call compacts first then replans,
-    - [ ] `history_analyze` can target one oversized tool result and return focused evidence,
-      - [ ] heavy tool call is compacted/deferred with explicit reason when budget would overflow.
+    - [x] Open settings wheel in widget header and validate:
+      - [x] endpoint/token bootstrap fields,
+      - [x] token save/reload in secure storage,
+      - [x] actionable connectivity errors when endpoint or token is invalid,
+      - [x] config save/reload.
+      - [x] global code-agent prompt textarea can be edited/saved/reloaded.
+      - [x] workspace override prompt textarea can be edited/saved/reloaded and takes precedence over global.
+      - [x] custom instruction include patterns input persists and affects discovery.
+      - [x] invalid prompt blocks execution with explicit actionable error.
+  - [x] Web app admin provider settings (`ENV=dev`, root workspace)
+    - [x] Open admin settings provider section and validate shared Codex connection lifecycle:
+      - [x] connect/configure provider as admin,
+      - [x] provider status visible as shared backend state,
+      - [x] non-admin users cannot mutate provider connection settings.
+  - [x] VSCode + web theme parity (`ENV=dev`, root workspace)
+    - [x] Validate VSCode extension host in dark/light/high-contrast themes.
+    - [x] Validate web app theme preference (`system|light|dark`) and chat/widget parity.
+  - [x] Shared runtime regression (`ENV=dev`, root workspace)
+    - [x] Validate summary behavior on long context.
+    - [x] Validate summary UI:
+      - [x] gray strip appears during compaction and resolves to `Contexte compacté.`,
+      - [x] default strip message has no metrics, hover reveals metrics,
+      - [x] occupancy indicator remains visible and non-intrusive.
+    - [x] Validate overflow handling during reasoning/tool calls:
+      - [x] overflow triggered mid-run does not lose user intent,
+      - [x] run resumes after compaction (in-flight when available, safe-boundary fallback otherwise),
+      - [x] soft-zone tool call returns replan signal before execution,
+      - [x] hard-zone tool call compacts first then replans,
+    - [x] `history_analyze` can target one oversized tool result and return focused evidence,
+      - [x] heavy tool call is compacted/deferred with explicit reason when budget would overflow.
     - [ ] Validate checkpoint create/list/restore behavior.
     - [ ] Validate restore banner appears on message restore action only when code/object delta exists.
     - [ ] Validate assistant retry path triggers the same restore banner when rollback is available.
     - [ ] Validate no native `confirm()` modal is used for checkpoint restore.
-    - [ ] Validate VSCode project-workspace mapping behavior (backend/runtime path only).
-    - [ ] Validate VSCode project-workspace UI flow (only after S6-4b validation).
-      - [ ] Token-missing path shows token-required screen first and routes to settings.
-      - [ ] After token connect, unmatched project shows reused blocking card (`New code base detected...`).
-      - [ ] `Not now` appears only when at least one `code` workspace exists, falls back to last `code` workspace, and opens settings.
-      - [ ] With zero `code` workspaces, creation is mandatory (no bypass).
-    - [ ] Validate code tools baseline behavior (`bash`, `ls`, `grep/rg`, file read/edit, git read) with permission policy checks.
-    - [ ] Validate bash policy specifics:
-      - [ ] `git add` and `git push` can resolve differently by mono/bigram rules,
-      - [ ] ask decisions show Chrome-style confirmation banner,
-      - [ ] workspace override cannot be weakened by user-level allow rule.
+    - [x] Validate Code project-workspace mapping behavior (backend/runtime path only).
+    - [x] Validate Code project-workspace UI flow (only after S6-4b validation)
+      - [x] Token-missing path shows token-required screen first and routes to settings.
+      - [x] After token connect, unmatched project shows reused blocking card (`New code base detected...`).
+      - [x] `Not now` appears only when at least one `code` workspace exists, falls back to last `code` workspace, and opens settings.
+      - [x] With zero `code` workspaces, creation is mandatory (no bypass).
+    - [x] Validate code tools baseline behavior (`bash`, `ls`, `grep/rg`, file read/edit, git read) with permission policy checks.
+    - [x] Validate bash policy specifics:
+      - [x] `git add` and `git push` can resolve differently by mono/bigram rules,
+      - [x] ask decisions show Chrome-style confirmation banner,
+      - [x] workspace override cannot be weakened by user-level allow rule.
     - [ ] Validate `history_analyze` from VSCode host:
       - [ ] ask a targeted question about earlier turns and verify evidence references are returned,
       - [ ] verify long conversation path uses chunked analysis (coverage indicates chunking when applicable).
-  - [ ] Side-effect non-regression — documents auth mode split (`ENV=dev`, root workspace)
-    - [ ] Web app chat: add/list/delete a session document still works with cookie auth (no unexpected `401`).
-    - [ ] Chrome extension chat: add/list/delete a session document still works (no auth regression from VSCode token path).
-    - [ ] VSCode plugin chat: add/list/delete a session document works with runtime bearer token and no persistent `HTTP 401` warning.
+  - [x] Side-effect non-regression — documents auth mode split (`ENV=dev`, root workspace)
+    - [x] Web app chat: add/list/delete a session document still works with cookie auth (no unexpected `401`).
+    - [x] Chrome extension chat: add/list/delete a session document still works (no auth regression from VSCode token path).
+    - [x] VSCode plugin chat: add/list/delete a session document works with runtime bearer token and no persistent `HTTP 401` warning.
   - [ ] Web app chat runtime (`ENV=dev`, root workspace)
     - [ ] Validate `history_analyze` from web app chat:
       - [ ] targeted historical question returns answer + evidence references,
