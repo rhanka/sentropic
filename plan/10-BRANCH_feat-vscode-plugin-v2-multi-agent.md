@@ -87,6 +87,10 @@ Actions with the following status should be included around tasks only if really
     - [ ] Define failure/retry semantics and audit evidence requirements.
 
 - [ ] **Lot 0.5 — BR05 VSCode carry-over regressions**
+  - [ ] Reproduce and fix host/workspace tool-separation instability carried from BR05:
+    - [ ] web app in a `code` workspace must not expose the AI/workspace tool menu/runtime when the effective host/workspace toolset should be the code toolset,
+    - [ ] Chrome tools menu must be driven by the same effective tool source as the runtime chat payload,
+    - [ ] VSCode local-vs-remote tool grouping and localization must stay consistent (no generic `Tools` label in French for remote tools).
   - [ ] Reproduce and fix VSCode Codex local-tools `HTTP 400` regression:
     - [ ] local tool calls such as `file_edit` fail in VSCode when the runtime source is Codex,
     - [ ] the same flows still work in VSCode with the standard OpenAI path.
