@@ -120,6 +120,7 @@ describe('Streams API Endpoints', () => {
   afterEach(async () => {
     // Cleanup stream events
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, testStreamId));
+    await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, testMessageId));
     await db.delete(chatMessages).where(eq(chatMessages.id, testMessageId));
     await db.delete(chatSessions).where(eq(chatSessions.id, testSessionId));
     await cleanupAuthData();
@@ -166,6 +167,39 @@ describe('Streams API Endpoints', () => {
 
       // Cleanup inserted org (avoid cross-test bleed)
       await db.delete(organizations).where(eq(organizations.id, org.id));
+    });
+
+    it('replays only unseen stream events when an explicit cursor is provided', async () => {
+      const replayStreamId = testMessageId;
+      await writeStreamEvent(replayStreamId, 'content_delta', { delta: 'Part A' }, 1, testMessageId);
+      await writeStreamEvent(replayStreamId, 'content_delta', { delta: 'Part B' }, 2, testMessageId);
+      await writeStreamEvent(replayStreamId, 'done', {}, 3, testMessageId);
+
+      const cursor = Buffer.from(
+        JSON.stringify({
+          [replayStreamId]: 1,
+        }),
+      ).toString('base64url');
+
+      const reader = await openSse(
+        user.sessionToken!,
+        `/api/v1/streams/sse?streamIds=${encodeURIComponent(replayStreamId)}&cursor=${encodeURIComponent(cursor)}`,
+      );
+
+      const events = await collectFor(reader, 500);
+      await reader.cancel();
+
+      const replayed = events
+        .filter((event) => event.event === 'content_delta' || event.event === 'done')
+        .map((event) => ({
+          event: event.event,
+          sequence: event.data?.sequence,
+        }));
+
+      expect(replayed).toEqual([
+        { event: 'content_delta', sequence: 2 },
+        { event: 'done', sequence: 3 },
+      ]);
     });
   });
 });

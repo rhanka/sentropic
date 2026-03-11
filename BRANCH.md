@@ -496,8 +496,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [ ] one real admin session switches OpenAI to `codex` and obtains a successful chat turn,
         - [ ] one real admin session switches back to `token` and keeps the standard OpenAI path working.
     - [ ] TEST-L6-48 — Restore high-value BR05 coverage on the largest risk surfaces.
-      - [ ] API: add a dedicated contract test for `OpenAI key` vs `Codex token` runtime transport selection.
-      - [ ] API: add negative enrollment tests for Codex (`pending`, `expired`, incomplete payload) with no dirty persisted state.
+      - [x] API: add a dedicated contract test for `OpenAI key` vs `Codex token` runtime transport selection.
+      - [x] API: add negative enrollment tests for Codex (`pending`, `expired`, incomplete payload) with no dirty persisted state.
       - [ ] API: add a focused `chat-session-history` test on `reasoning + tool call + steer + resume` segmentation.
       - [ ] API: add SSE replay/filter coverage for `cursor`, `streamIds`, `jobIds`, and no-duplicate replay.
       - [ ] UI: add a real component/page test for `/settings` provider cards and the `OpenAI key` / `Codex token` toggle.
