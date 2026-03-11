@@ -1016,8 +1016,10 @@
         "title": "Authentification extension",
         "connectedAs": "Connecté en tant que",
         "notConnected": "Non connecté",
-        "connect": "Valider le token",
-        "logout": "Vider la session",
+        "connect": "Se connecter",
+        "connectToken": "Valider le token",
+        "logout": "Déconnecter",
+        "logoutToken": "Vider la session",
         "providerManagedInAdmin": "La connexion fournisseur se gère dans les paramètres admin de l’app web.",
         "openLogin": "Ouvrir la connexion"
       },

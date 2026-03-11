@@ -39,6 +39,7 @@
     resolveCodeAgentPromptProfile,
     type CodeAgentPromptSource,
   } from '$lib/vscode/code-agent-profile';
+  import { resolveExtensionAuthUiState } from '$lib/utils/extension-auth-ui';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -207,6 +208,15 @@
   let extensionAuthLoggingOut = false;
   let extensionAuthConnected = false;
   let extensionAuthUser: User | null = null;
+  let extensionAuthLoginUrl: string | null = null;
+  let usesExtensionTokenBootstrap = false;
+  let extensionAuthUi = resolveExtensionAuthUiState({
+    usesTokenBootstrap: false,
+    isExtensionConfigAvailable: false,
+    sessionToken: '',
+    connected: false,
+    loginUrl: null,
+  });
   let extensionProviderReadiness: ProviderReadinessEntry[] = [];
   let extensionProviderReadinessLoading = false;
   let extensionProviderReadinessError = '';
@@ -333,6 +343,7 @@
   $: isSidePanelHost = hostMode === 'sidepanel';
   $: isExtensionOverlayHost = !isSidePanelHost && isExtensionRuntime();
   $: isPluginMode = isExtensionRuntime();
+  $: usesExtensionTokenBootstrap = isVsCodeExtensionRuntime();
   $: {
     const toolOptions = getExtensionPermissionToolOptions();
     if (!toolOptions.includes(extensionPermissionDraftToolName)) {
@@ -1110,6 +1121,7 @@
         setExtensionAuthStatus(reason, 'error');
         extensionAuthConnected = false;
         extensionAuthUser = null;
+        extensionAuthLoginUrl = null;
         extensionProviderReadiness = [];
         extensionProviderReadinessError = '';
         clearUser();
@@ -1121,6 +1133,7 @@
       if (!status.connected || !status.user) {
         extensionAuthConnected = false;
         extensionAuthUser = null;
+        extensionAuthLoginUrl = null;
         extensionProviderReadiness = [];
         extensionProviderReadinessError = '';
         clearUser();
@@ -1135,6 +1148,7 @@
       const user = toSessionUser(status.user);
       extensionAuthConnected = true;
       extensionAuthUser = user;
+      extensionAuthLoginUrl = null;
       setUser(user);
       setExtensionAuthStatus($_('chat.extension.status.connected'), 'ok');
       extensionAuthStatusLoaded = true;
@@ -1148,6 +1162,7 @@
       );
       extensionAuthConnected = false;
       extensionAuthUser = null;
+      extensionAuthLoginUrl = null;
       extensionProviderReadiness = [];
       extensionProviderReadinessError = '';
       clearUser();
@@ -1161,6 +1176,7 @@
     if (!isExtensionConfigAvailable()) return;
     if (extensionAuthConnecting) return;
     extensionAuthConnecting = true;
+    extensionAuthLoginUrl = null;
     setExtensionAuthStatus($_('chat.extension.status.connecting'), 'info');
     try {
       const runtime = getExtensionRuntime();
@@ -1185,6 +1201,9 @@
           response?.error ?? $_('chat.extension.status.connectFailed');
         extensionAuthConnected = false;
         extensionAuthUser = null;
+        extensionAuthLoginUrl = usesExtensionTokenBootstrap
+          ? null
+          : response?.loginUrl ?? null;
         extensionProviderReadiness = [];
         extensionProviderReadinessError = '';
         clearUser();
@@ -1196,6 +1215,7 @@
       const user = toSessionUser(response.user);
       extensionAuthConnected = true;
       extensionAuthUser = user;
+      extensionAuthLoginUrl = null;
       setUser(user);
       setExtensionAuthStatus($_('chat.extension.status.connectedSuccess'), 'ok');
       extensionAuthStatusLoaded = true;
@@ -1205,6 +1225,7 @@
       const reason = error instanceof Error ? error.message : String(error);
       extensionAuthConnected = false;
       extensionAuthUser = null;
+      extensionAuthLoginUrl = null;
       extensionProviderReadiness = [];
       extensionProviderReadinessError = '';
       clearUser();
@@ -1230,6 +1251,7 @@
       });
       extensionAuthConnected = false;
       extensionAuthUser = null;
+      extensionAuthLoginUrl = null;
       extensionProviderReadiness = [];
       extensionProviderReadinessError = '';
       clearUser();
@@ -1243,6 +1265,23 @@
       );
     } finally {
       extensionAuthLoggingOut = false;
+    }
+  };
+
+  const openExtensionLoginPage = async () => {
+    if (!isExtensionConfigAvailable() || usesExtensionTokenBootstrap) return;
+    try {
+      const runtime = getExtensionRuntime();
+      await runtime?.sendMessage?.({
+        type: 'extension_auth_open_login',
+      });
+      setExtensionAuthStatus($_('chat.extension.status.loginOpened'), 'info');
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      setExtensionAuthStatus(
+        $_('chat.extension.status.openLoginFailed', { values: { reason } }),
+        'error',
+      );
     }
   };
 
@@ -1435,8 +1474,15 @@
     void loadExtensionAuthStatus();
   }
 
-  $: extensionAuthRequired =
-    isExtensionConfigAvailable() && extensionConfigForm.sessionToken.trim().length === 0;
+  $: extensionAuthUi = resolveExtensionAuthUiState({
+    usesTokenBootstrap: usesExtensionTokenBootstrap,
+    isExtensionConfigAvailable: isExtensionConfigAvailable(),
+    sessionToken: extensionConfigForm.sessionToken,
+    connected: extensionAuthConnected,
+    loginUrl: extensionAuthLoginUrl,
+  });
+
+  $: extensionAuthRequired = extensionAuthUi.extensionAuthRequired;
 
   $: extensionWorkspaceOnboardingRequired =
     isExtensionConfigAvailable() &&
@@ -2279,29 +2325,31 @@
                           extensionConfigTesting}
                       />
                     </div>
-                    <div class="space-y-1">
-                      <label
-                        class="block text-[11px] text-slate-600"
-                        for="extension-config-session-token"
-                      >
-                        {$_('chat.extension.sessionToken')}
-                      </label>
-                      <input
-                        id="extension-config-session-token"
-                        class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                        type="password"
-                        bind:value={extensionConfigForm.sessionToken}
-                        placeholder="tok_..."
-                        autocomplete="off"
-                        spellcheck="false"
-                        disabled={extensionConfigLoading ||
-                          extensionConfigSaving ||
-                          extensionConfigTesting}
-                      />
-                      <p class="text-[11px] text-slate-500">
-                        {$_('chat.extension.sessionTokenHint')}
-                      </p>
-                    </div>
+                    {#if extensionAuthUi.showSessionTokenField}
+                      <div class="space-y-1">
+                        <label
+                          class="block text-[11px] text-slate-600"
+                          for="extension-config-session-token"
+                        >
+                          {$_('chat.extension.sessionToken')}
+                        </label>
+                        <input
+                          id="extension-config-session-token"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                          type="password"
+                          bind:value={extensionConfigForm.sessionToken}
+                          placeholder="tok_..."
+                          autocomplete="off"
+                          spellcheck="false"
+                          disabled={extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        />
+                        <p class="text-[11px] text-slate-500">
+                          {$_('chat.extension.sessionTokenHint')}
+                        </p>
+                      </div>
+                    {/if}
                     <div class="flex items-center gap-2 pt-1">
                       <button
                         class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
@@ -2362,7 +2410,7 @@
                               extensionConfigSaving ||
                               extensionConfigTesting}
                           >
-                            {$_('chat.extension.auth.logout')}
+                            {$_(extensionAuthUi.logoutLabelKey)}
                           </button>
                         {:else}
                           <button
@@ -2375,13 +2423,24 @@
                               extensionConfigSaving ||
                               extensionConfigTesting}
                           >
-                            {$_('chat.extension.auth.connect')}
+                            {$_(extensionAuthUi.connectLabelKey)}
                           </button>
                         {/if}
                       </div>
-                      <div class="text-[11px] text-slate-500">
-                        {$_('chat.extension.auth.providerManagedInAdmin')}
-                      </div>
+                      {#if extensionAuthUi.showOpenLogin}
+                        <button
+                          class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
+                          type="button"
+                          on:click={() => void openExtensionLoginPage()}
+                        >
+                          {$_('chat.extension.auth.openLogin')}
+                        </button>
+                      {/if}
+                      {#if extensionAuthUi.showProviderManagedHint}
+                        <div class="text-[11px] text-slate-500">
+                          {$_('chat.extension.auth.providerManagedInAdmin')}
+                        </div>
+                      {/if}
                       <div class="space-y-1 rounded border border-slate-200 bg-slate-50 p-2">
                         <div class="text-[11px] font-semibold text-slate-700">
                           {$_('chat.extension.providerReadiness.title')}

@@ -1016,8 +1016,10 @@
         "title": "Extension auth",
         "connectedAs": "Connected as",
         "notConnected": "Not connected",
-        "connect": "Validate token",
-        "logout": "Clear session",
+        "connect": "Connect",
+        "connectToken": "Validate token",
+        "logout": "Disconnect",
+        "logoutToken": "Clear session",
         "providerManagedInAdmin": "Provider login is managed in admin web app settings.",
         "openLogin": "Open login"
       },

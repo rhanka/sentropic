@@ -495,12 +495,12 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [ ] E2E
         - [ ] one real admin session switches OpenAI to `codex` and obtains a successful chat turn,
         - [ ] one real admin session switches back to `token` and keeps the standard OpenAI path working.
-    - [ ] BUG-L6-48 — Chrome extension inherited the VSCode token-bootstrap auth copy/flow, so the shared auth card now shows misleading `Validate token` / `Clear session` actions instead of Chrome connect/disconnect wording and behavior.
-      - [ ] Restore host-specific auth UX in the shared widget:
-        - [ ] VSCode keeps token-bootstrap wording and the session-token gate,
-        - [ ] Chrome restores browser-session wording (`Connect`, `Disconnect`) and does not present token-validation copy as the primary auth action.
-      - [ ] Keep the Chrome CTA on the existing browser-session connect path (`extension_auth_connect`) and logout on the existing disconnect/revoke path (`extension_auth_logout`).
-      - [ ] Add/update scoped UI coverage for host-specific auth labels/actions in the shared `ChatWidget`.
+    - [x] BUG-L6-48 — Chrome extension inherited the VSCode token-bootstrap auth copy/flow, so the shared auth card now shows misleading `Validate token` / `Clear session` actions instead of Chrome connect/disconnect wording and behavior.
+      - [x] Restore host-specific auth UX in the shared widget:
+        - [x] VSCode keeps token-bootstrap wording and the session-token gate,
+        - [x] Chrome restores browser-session wording (`Connect`, `Disconnect`) and does not present token-validation copy as the primary auth action.
+      - [x] Keep the Chrome CTA on the existing browser-session connect path (`extension_auth_connect`) and logout on the existing disconnect/revoke path (`extension_auth_logout`).
+      - [x] Add/update scoped UI coverage for host-specific auth labels/actions in the shared `ChatWidget`.
     - [x] BUG-L6-6 — Code-agent base prompt is not aligned with the requested enriched baseline profile.
       - [x] Replace current base prompt with the agreed enriched profile.
       - [x] Add scoped tests for baseline prompt rendering and override behavior.
