@@ -47,3 +47,6 @@ pnpm-debug.log*
 .security/sca-*
 .security/iac-*
 .security/container* 
+
+#security tokens
+.auth
