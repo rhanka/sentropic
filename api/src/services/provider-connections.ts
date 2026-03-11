@@ -1,14 +1,12 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
-  buildUserProviderCredentialSettingKey,
   resolveProviderCredential,
   type ProviderCredentialSource,
 } from './provider-credentials';
 import {
   completeCodexDeviceEnrollment,
   startCodexDeviceEnrollment,
-  type CodexDeviceEnrollmentPending,
   type CodexDeviceEnrollmentResult,
 } from './codex-provider-auth';
 import { createId } from '../utils/id';
@@ -63,6 +61,7 @@ type CodexConnectedSecret = {
 const CODEX_CONNECTION_SETTINGS_KEY = 'provider_connection:codex';
 const CODEX_CONNECTION_PENDING_SECRET_KEY = 'provider_connection_secret:codex_pending';
 const CODEX_CONNECTION_SECRET_KEY = 'provider_connection_secret:codex';
+const OPENAI_TRANSPORT_MODE_SETTING_KEY = 'provider_connection_mode:openai';
 
 const normalizeText = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -173,8 +172,62 @@ const deleteCodexSecrets = async (userId: string): Promise<void> => {
   await Promise.all([
     deleteUserScopedSetting(userId, CODEX_CONNECTION_PENDING_SECRET_KEY),
     deleteUserScopedSetting(userId, CODEX_CONNECTION_SECRET_KEY),
-    deleteUserScopedSetting(userId, buildUserProviderCredentialSettingKey('openai', userId)),
   ]);
+};
+
+const readJwtStringClaim = (claims: Record<string, unknown> | null, key: string): string | null => {
+  const value = claims?.[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+};
+
+const inferCodexAccountId = (accessToken: string, idToken: string | null): string | null => {
+  const accessClaims = decodeJwtPayload(accessToken);
+  const idClaims = idToken ? decodeJwtPayload(idToken) : null;
+  const authClaim = (accessClaims?.['https://api.openai.com/auth'] ??
+    idClaims?.['https://api.openai.com/auth']) as Record<string, unknown> | null | undefined;
+  const orgs = (accessClaims?.organizations ?? idClaims?.organizations) as unknown;
+  const firstOrg = Array.isArray(orgs) ? (orgs[0] as Record<string, unknown> | undefined) : undefined;
+  return (
+    readJwtStringClaim(accessClaims, 'chatgpt_account_id') ||
+    readJwtStringClaim(idClaims, 'chatgpt_account_id') ||
+    readJwtStringClaim(accessClaims, 'https://api.openai.com/auth.chatgpt_account_id') ||
+    readJwtStringClaim(idClaims, 'https://api.openai.com/auth.chatgpt_account_id') ||
+    (authClaim && typeof authClaim.chatgpt_account_id === 'string' ? authClaim.chatgpt_account_id.trim() : null) ||
+    (firstOrg && typeof firstOrg.id === 'string' ? firstOrg.id.trim() : null)
+  );
+};
+
+export const resolveConnectedCodexTransport = async (
+  userId: string,
+): Promise<{ accessToken: string; accountId: string | null } | null> => {
+  const secret = parseSecretPayload<CodexConnectedSecret>(
+    await settingsService.get(CODEX_CONNECTION_SECRET_KEY, { userId, fallbackToGlobal: false }),
+  );
+  const accessToken = normalizeOptionalText(secret?.accessToken);
+  if (!accessToken) return null;
+  return {
+    accessToken,
+    accountId: inferCodexAccountId(accessToken, normalizeOptionalText(secret?.idToken)),
+  };
+};
+
+export const getOpenAITransportMode = async (): Promise<'codex' | 'token'> =>
+  normalizeText(
+    await settingsService.get(OPENAI_TRANSPORT_MODE_SETTING_KEY, { fallbackToGlobal: true }),
+  ).toLowerCase() === 'codex'
+    ? 'codex'
+    : 'token';
+
+export const setOpenAITransportMode = async (
+  mode: 'codex' | 'token',
+): Promise<'codex' | 'token'> => {
+  const normalized = mode === 'codex' ? 'codex' : 'token';
+  await settingsService.set(
+    OPENAI_TRANSPORT_MODE_SETTING_KEY,
+    normalized,
+    'OpenAI runtime source mode (`token` or `codex`).',
+  );
+  return normalized;
 };
 
 const toCodexProviderState = (
@@ -412,10 +465,6 @@ export const completeCodexEnrollment = async (input: {
       CODEX_CONNECTION_SECRET_KEY,
       secret,
       'Codex provider credential for the current admin user.',
-    ),
-    deleteUserScopedSetting(
-      input.updatedByUserId,
-      buildUserProviderCredentialSettingKey('openai', input.updatedByUserId),
     ),
   ]);
 

@@ -213,7 +213,7 @@ const updateSchema = z.object({
 
 commentsRouter.patch('/:id', requireWorkspaceCommenterRole(), zValidator('json', updateSchema), async (c) => {
   const user = c.get('user') as { workspaceId: string; userId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const body = c.req.valid('json');
 
   const [row] = await db
@@ -257,7 +257,7 @@ commentsRouter.patch('/:id', requireWorkspaceCommenterRole(), zValidator('json',
 
 commentsRouter.post('/:id/close', requireWorkspaceCommenterRole(), async (c) => {
   const user = c.get('user') as { workspaceId: string; userId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
 
   const [row] = await db
     .select()
@@ -286,7 +286,7 @@ commentsRouter.post('/:id/close', requireWorkspaceCommenterRole(), async (c) => 
 
 commentsRouter.post('/:id/reopen', requireWorkspaceCommenterRole(), async (c) => {
   const user = c.get('user') as { workspaceId: string; userId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
 
   const [row] = await db
     .select()
@@ -315,7 +315,7 @@ commentsRouter.post('/:id/reopen', requireWorkspaceCommenterRole(), async (c) =>
 
 commentsRouter.delete('/:id', requireWorkspaceCommenterRole(), async (c) => {
   const user = c.get('user') as { workspaceId: string; userId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
 
   const [row] = await db
     .select()

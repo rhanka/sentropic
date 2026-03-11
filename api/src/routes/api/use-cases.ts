@@ -418,7 +418,7 @@ useCasesRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator
 useCasesRouter.get('/:id', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
   const targetWorkspaceId = user.workspaceId;
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const [record] = await db
     .select()
     .from(useCases)
@@ -432,7 +432,7 @@ useCasesRouter.get('/:id', async (c) => {
 
 useCasesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', useCaseInput.partial()), async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const payload = c.req.valid('json');
   const [record] = await db
     .select()
@@ -517,7 +517,7 @@ useCasesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidat
 
 useCasesRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   try {
     await requireLockOwnershipForMutation({
       userId,
@@ -699,7 +699,7 @@ useCasesRouter.post('/:id/detail', requireEditor, requireWorkspaceEditorRole(), 
       appLocaleHeader: c.req.header('x-app-locale'),
       acceptLanguageHeader: c.req.header('accept-language')
     });
-    const id = c.req.param('id');
+    const id = c.req.param('id')!;
     const { model } = c.req.valid('json');
     
     // Récupérer le modèle par défaut depuis les settings si non fourni

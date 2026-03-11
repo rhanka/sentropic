@@ -105,7 +105,7 @@ const updateWorkspaceSchema = z.object({
 workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSchema), async (c) => {
   const user = c.get('user') as { userId: string; role: string };
 
-  const workspaceId = c.req.param('id');
+  const workspaceId = c.req.param('id')!;
   try {
     await requireWorkspaceAdmin(user.userId, workspaceId);
   } catch {
@@ -126,7 +126,7 @@ workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSc
 workspacesRouter.post('/:id/hide', requireEditor, async (c) => {
   const user = c.get('user') as { userId: string; role: string };
 
-  const workspaceId = c.req.param('id');
+  const workspaceId = c.req.param('id')!;
   try {
     await requireWorkspaceAdmin(user.userId, workspaceId);
   } catch {
@@ -142,7 +142,7 @@ workspacesRouter.post('/:id/hide', requireEditor, async (c) => {
 workspacesRouter.post('/:id/unhide', requireEditor, async (c) => {
   const user = c.get('user') as { userId: string; role: string };
 
-  const workspaceId = c.req.param('id');
+  const workspaceId = c.req.param('id')!;
   try {
     await requireWorkspaceAdmin(user.userId, workspaceId);
   } catch {
@@ -159,7 +159,7 @@ workspacesRouter.post('/:id/unhide', requireEditor, async (c) => {
 workspacesRouter.delete('/:id', requireEditor, async (c) => {
   const user = c.get('user') as { userId: string; role: string };
 
-  const workspaceId = c.req.param('id');
+  const workspaceId = c.req.param('id')!;
   try {
     await requireWorkspaceAdmin(user.userId, workspaceId);
   } catch {
@@ -214,7 +214,7 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
 // --- Members management (admin-only) ---
 
 workspacesRouter.get('/:id/members', requireWorkspaceAccessRole(), async (c) => {
-  const workspaceId = c.req.param('id');
+  const workspaceId = c.req.param('id')!;
 
   const rows = await db
     .select({
@@ -235,7 +235,7 @@ workspacesRouter.get('/:id/members', requireWorkspaceAccessRole(), async (c) => 
 // Members list for @mentions (workspace access required)
 workspacesRouter.get('/:id/members/mentions', async (c) => {
   const user = c.get('user') as { userId: string };
-  const workspaceId = c.req.param('id');
+  const workspaceId = c.req.param('id')!;
 
   try {
     await requireWorkspaceAccess(user.userId, workspaceId);
@@ -266,7 +266,7 @@ const addMemberSchema = z.object({
 workspacesRouter.post('/:id/members', requireEditor, zValidator('json', addMemberSchema), async (c) => {
   const actor = c.get('user') as { userId: string; role: string };
 
-  const workspaceId = c.req.param('id');
+  const workspaceId = c.req.param('id')!;
   try {
     await requireWorkspaceAdmin(actor.userId, workspaceId);
   } catch {
@@ -304,8 +304,8 @@ const updateMemberSchema = z.object({
 async function updateMemberRoleHandler(c: Context) {
   const actor = c.get('user') as { userId: string; role: string };
 
-  const workspaceId = c.req.param('id');
-  const targetUserId = c.req.param('userId');
+  const workspaceId = c.req.param('id')!;
+  const targetUserId = c.req.param('userId')!;
   if (targetUserId === actor.userId) return c.json({ message: 'Cannot change your own role' }, 400);
 
   try {
@@ -336,8 +336,8 @@ workspacesRouter.put('/:id/members/:userId', requireEditor, zValidator('json', u
 workspacesRouter.delete('/:id/members/:userId', requireEditor, async (c) => {
   const actor = c.get('user') as { userId: string; role: string };
 
-  const workspaceId = c.req.param('id');
-  const targetUserId = c.req.param('userId');
+  const workspaceId = c.req.param('id')!;
+  const targetUserId = c.req.param('userId')!;
   if (targetUserId === actor.userId) return c.json({ message: 'Cannot remove yourself' }, 400);
 
   try {
@@ -353,5 +353,4 @@ workspacesRouter.delete('/:id/members/:userId', requireEditor, async (c) => {
   await notifyWorkspaceMembershipEvent(workspaceId, targetUserId, { action: 'removed' });
   return c.body(null, 204);
 });
-
 

@@ -7,7 +7,9 @@ import { createSession, revokeSession } from '../../services/session-manager';
 import {
   completeCodexEnrollment,
   disconnectCodexEnrollment,
+  getOpenAITransportMode,
   listProviderConnections,
+  setOpenAITransportMode,
   startCodexEnrollment,
 } from '../../services/provider-connections';
 
@@ -25,6 +27,8 @@ const codexEnrollmentCompleteSchema = z.object({
   enrollmentId: z.string().trim().min(1),
   accountLabel: z.string().trim().max(120).optional().nullable(),
 });
+
+const openaiTransportModeSchema = z.object({ mode: z.enum(['codex', 'token']) });
 
 export const settingsRouter = new Hono();
 
@@ -179,9 +183,18 @@ settingsRouter.delete('/vscode-extension-token', async (c) => {
 
 settingsRouter.get('/provider-connections', async (c) => {
   const user = c.get('user') as { userId?: string } | undefined;
-  const providers = await listProviderConnections({ userId: user?.userId ?? null });
-  return c.json({ providers });
+  const [providers, openaiTransportMode] = await Promise.all([
+    listProviderConnections({ userId: user?.userId ?? null }),
+    getOpenAITransportMode(),
+  ]);
+  return c.json({ providers, openaiTransportMode });
 });
+
+settingsRouter.post(
+  '/provider-connections/openai/mode',
+  zValidator('json', openaiTransportModeSchema),
+  async (c) => c.json({ mode: await setOpenAITransportMode(c.req.valid('json').mode) }),
+);
 
 settingsRouter.post(
   '/provider-connections/codex/enrollment/start',

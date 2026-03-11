@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
-import { settings, workspaceMemberships, workspaces } from '../db/schema';
+import { workspaceMemberships, workspaces } from '../db/schema';
 
 export type WorkspaceRole = 'viewer' | 'commenter' | 'editor' | 'admin';
 
