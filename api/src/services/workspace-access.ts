@@ -79,6 +79,7 @@ export async function getUserWorkspaces(userId: string): Promise<
   Array<{
     id: string;
     name: string;
+    type: string;
     role: WorkspaceRole;
     isCodeWorkspace: boolean;
     hiddenAt: Date | null;
@@ -108,6 +109,7 @@ export async function getUserWorkspaces(userId: string): Promise<
     .select({
       id: workspaces.id,
       name: workspaces.name,
+      type: workspaces.type,
       hiddenAt: workspaces.hiddenAt,
       createdAt: workspaces.createdAt,
       role: workspaceMemberships.role,
@@ -126,6 +128,7 @@ export async function getUserWorkspaces(userId: string): Promise<
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
+    type: r.type,
     isCodeWorkspace: codeWorkspaceIds.has(r.id),
     hiddenAt: r.hiddenAt,
     createdAt: r.createdAt,
