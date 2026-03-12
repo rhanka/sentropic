@@ -109,22 +109,10 @@ graph TD
 
 ## 5) Scheduling post-BR-04
 
-Wave scheduling to be validated with user. Dependency constraints:
-
-**Hard dependencies:**
-- BR-07 (UI npm) → BR-14 (chat modularization) — npm export requires modular components
-- BR-10 (VSCode v2) → BR-04 + BR-08
-- BR-11 (Chrome multitab) → BR-06 + BR-08
-- BR-12 (CI publish) → BR-05 + BR-06 + BR-07 + BR-13
-- BR-17 (RAG) → BR-08 (embeddings), optional BR-16
-
-**No BR-04 dependency (startable now):**
-- BR-06, BR-08, BR-09
-
-**Low BR-04 dependency (parallelizable on distinct files):**
-- BR-14, BR-16
-
-Wave ordering TBD — user to validate priorities.
+**Wave A** (parallel to BR-04): BR-06 (Chrome upstream) + BR-08 (Claude/Mistral/Cohere) + BR-09 (SSO Google) + BR-14 (chat modularization) + BR-16 (document connectors)
+**Wave B** (after BR-04 + partial Wave A): BR-07 (UI npm, after BR-14) + BR-11 (Chrome multitab, after BR-06+BR-08) + BR-17 (RAG, after BR-08, optional BR-16)
+**Wave C** (after BR-04 + BR-08): BR-10 (VSCode v2)
+**Wave D** (after Wave B/C): BR-12 (CI publish, after BR-05+BR-06+BR-07+BR-13)
 
 ## 6) Environment convention
 
