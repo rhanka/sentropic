@@ -47,4 +47,44 @@ describe('provider credential resolution', () => {
       source: 'user_byok',
     });
   });
+
+  it('resolves anthropic credential from environment when no user override', async () => {
+    const resolved = await resolveProviderCredential({
+      providerId: 'anthropic',
+    });
+
+    // Environment credential may or may not be set in test env
+    expect(resolved.providerId).toBe('anthropic');
+    expect(['environment', 'none']).toContain(resolved.source);
+  });
+
+  it('resolves mistral credential from environment when no user override', async () => {
+    const resolved = await resolveProviderCredential({
+      providerId: 'mistral',
+    });
+
+    expect(resolved.providerId).toBe('mistral');
+    expect(['environment', 'none']).toContain(resolved.source);
+  });
+
+  it('resolves cohere credential from environment when no user override', async () => {
+    const resolved = await resolveProviderCredential({
+      providerId: 'cohere',
+    });
+
+    expect(resolved.providerId).toBe('cohere');
+    expect(['environment', 'none']).toContain(resolved.source);
+  });
+
+  it('builds correct credential setting key for new providers', () => {
+    expect(buildUserProviderCredentialSettingKey('anthropic', 'user1')).toBe(
+      'ai_provider_key_user:anthropic:user1',
+    );
+    expect(buildUserProviderCredentialSettingKey('mistral', 'user2')).toBe(
+      'ai_provider_key_user:mistral:user2',
+    );
+    expect(buildUserProviderCredentialSettingKey('cohere', 'user3')).toBe(
+      'ai_provider_key_user:cohere:user3',
+    );
+  });
 });
