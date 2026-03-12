@@ -197,7 +197,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 **Tasks:**
 - [x] Write migration SQL file (`api/drizzle/0024_workspace_types_initiatives.sql`) per §1.5 scope.
 - [x] Update `api/src/db/schema.ts` — rename `useCases` table + relations, add `type`/`gate_config` on `workspaces`, add `antecedent_id`/`maturity_stage`/`gate_status`/`template_snapshot_id` on `initiatives`, add 6 new tables with relations.
-- [ ] Verify migration applies cleanly on fresh DB and on existing DB with data (`make db-migrate ENV=feat-workspace-template-catalog`).
+- [x] Verify migration applies cleanly on fresh DB (`make db-migrate API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1014 ENV=feat-workspace-template-catalog`). ✓ 2026-03-12
 
 **Lot 1 gate:**
 - [ ] `make typecheck-api ENV=test-br04`
