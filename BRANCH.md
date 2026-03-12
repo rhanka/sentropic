@@ -113,31 +113,13 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - [x] OQ-8: **Closed — table `bids` dédiée + jonction `bid_products`.** Bid = objet data-driven (clauses, profils, prix en `data jsonb`), cycle de vie propre (draft → review → finalized → contract). FK `bid.initiative_id`. Un bid couvre N products → table de jonction `bid_products(bid_id, product_id, data jsonb)` pour prix/conditions spécifiques par product. Une demande de devis = création d'une initiative type `opportunity` (l'initiative est le point d'entrée universel : idée, demande client, projet code). Schéma FK : `initiative ← solution(initiative_id) ← product(solution_id, initiative_id)`, `initiative ← bid(initiative_id) ← bid_products(bid_id, product_id)`.
   - [x] OQ-9: **Closed — par type workspace uniquement en v1.** Un folder hérite des gates de son type workspace. Pas d'override folder en v1 (simplification : un seul endroit de config, pas de conflits). Override folder possible en évolution future si besoin.
 
-- [ ] **0.3 Spec evolution & target data model**
-  - [ ] Create `spec/SPEC_EVOL_WORKSPACE_TYPES.md` — full spec for workspace type system. Content:
-    - Target data model ERD (Mermaid) + backward compat notes + single migration scope
-    - Workspace type taxonomy and lifecycle
-    - Neutral workspace: auto-creation, landing view, cross-workspace tools, todo automation, task dispatch
-    - Initiative object model: personality per type, maturity gates, lineage, fields per stage
-    - Extended objects: solution (table), product (table), bid/contract (table), bid_products (junction)
-    - Gate system: free / soft-gate / hard-gate, configurable per workspace type
-    - Multi-workflow registry: open task-key mapping, per-workspace-type workflow catalog, generic dispatch (replacing closed compile-time types)
-    - Agent catalog per workspace type
-    - Template catalog per type × maturity stage
-    - Document generation: Mode A (template factory) + Mode B (ad-hoc)
-    - API contracts for all new/modified endpoints
-    - UI surfaces inventory
-    - Each section tagged with fusion target (`→ cible: SPEC.md §X`, `→ DATA_MODEL.md §Y`, etc.)
-  - [ ] Articulate with existing SPEC_EVOL files:
-    - Absorb `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §2.2 (multi-workflow runtime) into new spec
-    - Check overlap with `SPEC_EVOL_BR15_AGENT_WORKFLOW_CONFIG_ROBUSTNESS.md` (agent config robustness)
-    - Update `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` residual (remove absorbed sections, add neutral workspace todo impact)
-  - [ ] Canonical specs NOT updated now (Lot N-1 after implementation). Fusion trajectory documented per section in SPEC_EVOL:
-    - `SPEC.md` — functional map, API contracts
-    - `DATA_MODEL.md` — ERD
-    - `TOOLS.md` — new tools
-    - `SPEC_TEMPLATING.md` — template families per type × stage
-    - `SPEC_CHATBOT.md` — if new chat use cases
+- [x] **0.3 Spec evolution & target data model**
+  - [x] Create `spec/SPEC_EVOL_WORKSPACE_TYPES.md` — 12 sections with fusion trajectory table (§0). ✓ commit `87d841fb`.
+  - [x] Articulate with existing SPEC_EVOL files:
+    - ✓ Absorbed `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §2.2 → §7 multi-workflow registry
+    - ✓ BR-15 overlap noted as dependency (not absorbed, orthogonal)
+    - ✓ Updated `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §2.3 with neutral workspace todo note
+  - [x] Canonical specs NOT updated now (Lot N-1). Fusion trajectory per section in §0 of SPEC_EVOL.
 
 - [ ] **0.4 Impact analysis on future branches**
   - [ ] Document impact of BR-04 on each non-done branch (BR-06 through BR-12).
