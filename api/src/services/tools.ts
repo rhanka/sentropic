@@ -1,7 +1,7 @@
 import { env } from '../config/env';
 import fetch from "node-fetch";
-import { callOpenAIResponseStream } from './openai';
-import type { StreamEventType } from './openai';
+import { callOpenAIResponseStream } from './llm-runtime';
+import type { StreamEventType } from './llm-runtime';
 import type OpenAI from 'openai';
 import { generateStreamId, getNextSequence, writeStreamEvent } from './stream-service';
 import { toolService } from './tool-service';
@@ -499,6 +499,66 @@ export const documentsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
         }
       },
       required: ['action', 'contextType', 'contextId']
+    }
+  }
+};
+
+/**
+ * Conversation history analyzer (read-only).
+ */
+export const historyAnalyzeTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'history_analyze',
+    description:
+      'Answer targeted questions over conversation history with evidence references. Read-only tool.',
+    parameters: {
+      type: 'object',
+      properties: {
+        question: {
+          type: 'string',
+          description: 'Targeted question to answer from chat history.'
+        },
+        from_message_id: {
+          type: 'string',
+          description: 'Optional lower bound message id (inclusive).'
+        },
+        to_message_id: {
+          type: 'string',
+          description: 'Optional upper bound message id (inclusive).'
+        },
+        max_turns: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 500,
+          description: 'Optional bound on scanned turns.'
+        },
+        target_tool_call_id: {
+          type: 'string',
+          description:
+            'Optional tool call id to focus on one specific oversized tool result path.'
+        },
+        target_tool_result_message_id: {
+          type: 'string',
+          description:
+            'Optional tool-result message id to focus the analysis scope.'
+        },
+        include_tool_results: {
+          type: 'boolean',
+          description: 'Include tool-result messages in analysis scope (default true).'
+        },
+        include_system_messages: {
+          type: 'boolean',
+          description: 'Include system messages in analysis scope (default false).'
+        },
+        max_words: {
+          type: 'integer',
+          minimum: 200,
+          maximum: 6000,
+          description: 'Optional answer bound in words.'
+        }
+      },
+      required: ['question']
     }
   }
 };

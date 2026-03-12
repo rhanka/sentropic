@@ -103,7 +103,7 @@ workflowConfigRouter.post(
     try {
       const actor = actorFromContext(c);
       const body = c.req.valid("json");
-      const item = await todoOrchestrationService.forkWorkflowConfig(actor, c.req.param("id"), body);
+      const item = await todoOrchestrationService.forkWorkflowConfig(actor, c.req.param("id")!, body);
       return c.json({ item }, 201);
     } catch (error) {
       return handleTodoError(c, error);
@@ -114,7 +114,7 @@ workflowConfigRouter.post(
 workflowConfigRouter.post("/:id/detach", requireWorkspaceEditorRole(), async (c) => {
   try {
     const actor = actorFromContext(c);
-    const item = await todoOrchestrationService.detachWorkflowConfig(actor, c.req.param("id"));
+    const item = await todoOrchestrationService.detachWorkflowConfig(actor, c.req.param("id")!);
     return c.json({ item });
   } catch (error) {
     return handleTodoError(c, error);

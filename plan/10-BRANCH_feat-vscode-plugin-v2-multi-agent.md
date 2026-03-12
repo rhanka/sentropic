@@ -2,9 +2,11 @@
 
 ## Objective
 Deliver VSCode plugin v2 with multi-agent and multi-model orchestration while reusing shared chat core and API orchestration source of truth.
+Include background/detached tool execution lifecycle (without requiring explicit agent lane UX for the operator).
 
 ## Scope / Guardrails
 - Scope limited to VSCode plugin orchestration UX, agent lanes, model assignment, execution trace.
+- Scope includes background tool lifecycle contracts for long-running tool actions (`start/status/cancel/resume/result`), queue/audit-backed.
 - One migration max in `api/drizzle/*.sql` (if applicable).
 - Make-only workflow, no direct Docker commands.
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
@@ -77,6 +79,28 @@ Actions with the following status should be included around tasks only if really
   - [ ] Confirm scope and dependency boundaries with upstream branches.
   - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [ ] Finalize open questions required before implementation starts.
+  - [ ] **Background mode cadrage phase (mandatory before BR10 implementation lots)**
+    - [ ] Define state machine for detached tool runs (`queued`, `running`, `succeeded`, `failed`, `cancelled`, `paused/resumable`).
+    - [ ] Define contract granularity for `start/status/cancel/resume/result` endpoints/events.
+    - [ ] Define permission and tenancy model (who can start/cancel/resume/read results).
+    - [ ] Define UX contract for background runs without explicit agent lane creation.
+    - [ ] Define failure/retry semantics and audit evidence requirements.
+
+- [ ] **Lot 0.5 — BR05 VSCode carry-over regressions**
+  - [ ] Reproduce and fix host/workspace tool-separation instability carried from BR05:
+    - [ ] web app in a `code` workspace must not expose the AI/workspace tool menu/runtime when the effective host/workspace toolset should be the code toolset,
+    - [ ] Chrome tools menu must be driven by the same effective tool source as the runtime chat payload,
+    - [ ] VSCode local-vs-remote tool grouping and localization must stay consistent (no generic `Tools` label in French for remote tools).
+  - [ ] Reproduce and fix VSCode Codex local-tools `HTTP 400` regression:
+    - [ ] local tool calls such as `file_edit` fail in VSCode when the runtime source is Codex,
+    - [ ] the same flows still work in VSCode with the standard OpenAI path.
+  - [ ] Reproduce and fix VSCode rewrite regression:
+    - [ ] rewriting an assistant answer must preserve the active session tool context/tool availability.
+  - [ ] Reproduce and fix VSCode checkpoint regression:
+    - [ ] checkpoints must appear again after a file modification when a real file delta exists.
+  - [ ] Lot 0.5 gate:
+    - [ ] `make typecheck-ui ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make test-ui ENV=test-feat-vscode-plugin-v2-multi-agent`
 
 - [ ] **Lot 1 — Multi-Agent Lanes**
   - [ ] Add multi-agent task lanes and assignment model in plugin UI.
@@ -100,6 +124,25 @@ Actions with the following status should be included around tasks only if really
   - [ ] Implement execution trace panel for decisions and changes.
   - [ ] Add regression tests for multi-agent + multi-model scenarios.
   - [ ] Lot 2 gate:
+    - [ ] `make typecheck-api ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make lint-api ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make test-api ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make typecheck-ui ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make lint-ui ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make test-ui ENV=test-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make build-api build-ui-image API_PORT=8710 UI_PORT=5110 MAILDEV_UI_PORT=1010 ENV=e2e-feat-vscode-plugin-v2-multi-agent`
+    - [ ] `make clean test-e2e API_PORT=8710 UI_PORT=5110 MAILDEV_UI_PORT=1010 ENV=e2e-feat-vscode-plugin-v2-multi-agent`
+
+- [ ] **Lot 3 — Background Tools Lifecycle**
+  - [ ] Define detached tool runtime contract:
+    - [ ] `start` background tool run,
+    - [ ] `status` polling/subscription,
+    - [ ] `cancel` running task,
+    - [ ] `resume` compatible task,
+    - [ ] `result` retrieval with audit metadata.
+  - [ ] Ensure UX does not require explicit agent-lane creation for background tools.
+  - [ ] Add queue-backed persistence and reason-code error taxonomy.
+  - [ ] Lot 3 gate:
     - [ ] `make typecheck-api ENV=test-feat-vscode-plugin-v2-multi-agent`
     - [ ] `make lint-api ENV=test-feat-vscode-plugin-v2-multi-agent`
     - [ ] `make test-api ENV=test-feat-vscode-plugin-v2-multi-agent`

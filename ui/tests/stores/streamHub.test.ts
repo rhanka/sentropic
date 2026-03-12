@@ -90,6 +90,8 @@ describe('streamHub', () => {
     streamHub.delete('test-key-1');
     streamHub.delete('test-key-2');
     streamHub.delete('test-key-3');
+    streamHub.delete('test-key-vscode');
+    delete (window as any).__TOPAI_VSCODE_RUNTIME__;
     vi.useRealTimers();
     vi.clearAllTimers();
   });
@@ -486,5 +488,86 @@ describe('streamHub', () => {
       })
     );
   });
-});
 
+  it('should use vscode stream proxy port when runtime.connect is available', async () => {
+    (window as any).__TOPAI_VSCODE_RUNTIME__ = {
+      apiBaseUrl: 'http://localhost:8787/api/v1',
+      sessionToken: 'token-vscode',
+    };
+    const originalChrome = (window as any).chrome;
+    const originalFetch = global.fetch;
+    const fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const onMessageListeners = new Set<(message: any) => void>();
+    const onDisconnectListeners = new Set<() => void>();
+    const postMessage = vi.fn();
+    const disconnect = vi.fn(() => {
+      onDisconnectListeners.forEach((listener) => listener());
+    });
+    const connectMock = vi.fn(() => ({
+      postMessage,
+      disconnect,
+      onMessage: {
+        addListener: (listener: (message: any) => void) => {
+          onMessageListeners.add(listener);
+        },
+        removeListener: (listener: (message: any) => void) => {
+          onMessageListeners.delete(listener);
+        },
+      },
+      onDisconnect: {
+        addListener: (listener: () => void) => {
+          onDisconnectListeners.add(listener);
+        },
+        removeListener: (listener: () => void) => {
+          onDisconnectListeners.delete(listener);
+        },
+      },
+    }));
+
+    (window as any).chrome = {
+      runtime: {
+        id: 'topai.vscode.runtime',
+        connect: connectMock,
+      },
+    };
+
+    try {
+      const callback = vi.fn();
+      streamHub.setStream('test-key-vscode', 'stream-vscode-sse-1', callback);
+      await vi.advanceTimersByTimeAsync(250);
+
+      expect(connectMock).toHaveBeenCalledWith({ name: 'topai-stream-proxy' });
+      expect(postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'stream_proxy_start',
+        }),
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      onMessageListeners.forEach((listener) =>
+        listener({
+          type: 'sse_event',
+          eventType: 'content_delta',
+          payload: {
+            streamId: 'stream-vscode-sse-1',
+            sequence: 1,
+            data: { delta: 'hello' },
+          },
+        }),
+      );
+
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'content_delta',
+          streamId: 'stream-vscode-sse-1',
+          sequence: 1,
+        }),
+      );
+    } finally {
+      global.fetch = originalFetch;
+      (window as any).chrome = originalChrome;
+    }
+  });
+});

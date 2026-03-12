@@ -45,8 +45,8 @@ describe('Models API', () => {
       .map((model: { model_id: string }) => model.model_id)
       .sort();
 
-    expect(openaiModelIds).toEqual(['gpt-4.1-nano', 'gpt-5.2']);
-    expect(geminiModelIds).toEqual(['gemini-2.5-flash-lite', 'gemini-3.1-pro-preview-customtools']);
+    expect(openaiModelIds).toEqual(['gpt-4.1-nano', 'gpt-5.4']);
+    expect(geminiModelIds).toEqual(['gemini-3.1-flash-lite', 'gemini-3.1-pro-preview-customtools']);
     expect(data.models).toHaveLength(4);
 
     expect(data.defaults).toBeDefined();
@@ -62,7 +62,7 @@ describe('Models API', () => {
     expect(hasDefaultPair).toBe(true);
   });
 
-  it('returns user-scoped defaults when user overrides default model', async () => {
+  it('migrates legacy Gemini defaults when user overrides with the old light model id', async () => {
     const updateResponse = await authenticatedRequest(
       app,
       'PUT',
@@ -82,6 +82,29 @@ describe('Models API', () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.defaults.provider_id).toBe('gemini');
-    expect(data.defaults.model_id).toBe('gemini-2.5-flash-lite');
+    expect(data.defaults.model_id).toBe('gemini-3.1-flash-lite');
+  });
+
+  it('migrates legacy OpenAI defaults when user overrides with gpt-5.2', async () => {
+    const updateResponse = await authenticatedRequest(
+      app,
+      'PUT',
+      '/api/v1/me/ai-settings',
+      user.sessionToken!,
+      { defaultModel: 'gpt-5.2' }
+    );
+    expect(updateResponse.status).toBe(200);
+
+    const response = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/models/catalog',
+      user.sessionToken!
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.defaults.provider_id).toBe('openai');
+    expect(data.defaults.model_id).toBe('gpt-5.4');
   });
 });

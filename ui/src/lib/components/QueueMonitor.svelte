@@ -1,6 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { queueStore, loadJobs, getJobProgress, getJobDuration, cancelJob, retryJob, deleteJob } from '$lib/stores/queue';
+  import {
+    queueStore,
+    loadJobs,
+    getJobProgress,
+    getJobDuration,
+    cancelJob,
+    retryJob,
+    deleteJob,
+    fetchJobStreamBootstrap,
+    type JobStreamBootstrapEvent,
+  } from '$lib/stores/queue';
   import type { JobStatus, JobType } from '$lib/stores/queue';
   import { addToast } from '$lib/stores/toast';
   import { isAuthenticated } from '$lib/stores/session';
@@ -10,6 +20,8 @@
 
   // Détails par job (éviter N relectures d’historique au montage)
   let expandedJobId: string | null = null;
+  let streamBootstrapByJobId: Record<string, JobStreamBootstrapEvent[]> = {};
+  let streamBootstrapPendingByJobId: Record<string, boolean> = {};
 
   // Charger les jobs au montage et toutes les 5 secondes (seulement si authentifié)
   onMount(async () => {
@@ -67,43 +79,36 @@
     }
   };
 
-  const getStreamIdForJob = (job: any): string => {
-    // Pour organization_enrich: streamId déterministe basé sur l'organisation (organization_<id>)
-    if (job?.type === 'organization_enrich' && job?.data?.organizationId) {
-      return `organization_${job.data.organizationId}`;
+  const ensureJobStreamBootstrap = async (jobId: string) => {
+    if (!jobId || streamBootstrapPendingByJobId[jobId]) return;
+    if ((streamBootstrapByJobId[jobId] ?? []).length > 0) return;
+    streamBootstrapPendingByJobId = {
+      ...streamBootstrapPendingByJobId,
+      [jobId]: true,
+    };
+    try {
+      const payload = await fetchJobStreamBootstrap(jobId, 500);
+      streamBootstrapByJobId = {
+        ...streamBootstrapByJobId,
+        [jobId]: Array.isArray(payload?.events) ? payload.events : [],
+      };
+    } catch (error) {
+      console.error('Failed to load job stream bootstrap:', error);
+      streamBootstrapByJobId = {
+        ...streamBootstrapByJobId,
+        [jobId]: [],
+      };
+    } finally {
+      streamBootstrapPendingByJobId = {
+        ...streamBootstrapPendingByJobId,
+        [jobId]: false,
+      };
     }
-    // Pour usecase_list: streamId déterministe basé sur le dossier (folder_<folderId>)
-    if (job?.type === 'usecase_list' && (job?.data?.folderId || job?.data?.folder_id)) {
-      const folderId = job.data.folderId ?? job.data.folder_id;
-      return `folder_${folderId}`;
-    }
-    // Pour matrix_generate: streamId déterministe basé sur le dossier (matrix_<folderId>)
-    if (job?.type === 'matrix_generate' && (job?.data?.folderId || job?.data?.folder_id)) {
-      const folderId = job.data.folderId ?? job.data.folder_id;
-      return `matrix_${folderId}`;
-    }
-    // Pour usecase_detail: streamId déterministe basé sur le cas (usecase_<useCaseId>)
-    if (job?.type === 'usecase_detail' && (job?.data?.useCaseId || job?.data?.use_case_id)) {
-      const useCaseId = job.data.useCaseId ?? job.data.use_case_id;
-      return `usecase_${useCaseId}`;
-    }
-    // Pour executive_summary: streamId déterministe basé sur le dossier (folder_<folderId>)
-    if (job?.type === 'executive_summary' && (job?.data?.folderId || job?.data?.folder_id)) {
-      const folderId = job.data.folderId ?? job.data.folder_id;
-      return `folder_${folderId}`;
-    }
-    // Pour document_summary: streamId déterministe basé sur le document (document_<documentId>)
-    if (job?.type === 'document_summary' && (job?.data?.documentId || job?.data?.document_id)) {
-      const documentId = job.data.documentId ?? job.data.document_id;
-      return `document_${documentId}`;
-    }
-    // Pour chat_message: le SSE chat est sur streamId == assistantMessageId
-    if (job?.type === 'chat_message' && job?.data?.assistantMessageId) {
-      return String(job.data.assistantMessageId);
-    }
-    // Fallback générique: streamId basé sur jobId
-    return `job_${job?.id}`;
   };
+
+  $: if (expandedJobId) {
+    void ensureJobStreamBootstrap(expandedJobId);
+  }
 
   const handleCancelJob = async (jobId: string) => {
     try {
@@ -177,7 +182,7 @@
                   <div class="flex items-center gap-2 mb-1">
                     <StatusIcon class="w-5 h-5 {job.status === 'processing' ? 'animate-spin' : ''}" />
                     <span class="font-medium text-sm">{getTypeLabel(job.type)}</span>
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {getStatusColor(job.status)}">
+                    <span class="queue-status-badge inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {getStatusColor(job.status)} {job.status === 'completed' ? 'queue-status-badge-completed' : ''}">
                       {getStatusLabel(job.status)}
                     </span>
                   </div>
@@ -194,12 +199,12 @@
 
             {#if job.status === 'pending' || job.status === 'processing' || expandedJobId === job.id}
               <StreamMessage
-                streamId={getStreamIdForJob(job)}
+                streamId={job.streamId}
                 status={job.status}
                 variant="job"
-                historySource={expandedJobId === job.id ? 'stream' : 'none'}
-                historyLimit={expandedJobId === job.id ? 200 : 0}
                 maxHistory={6}
+                initialEvents={expandedJobId === job.id ? (streamBootstrapByJobId[job.id] ?? []) : undefined}
+                historyPending={expandedJobId === job.id ? !!streamBootstrapPendingByJobId[job.id] : false}
               />
             {/if}
 
@@ -230,7 +235,7 @@
                   {/if}
                   {#if job.status === 'pending' || job.status === 'processing'}
                     <button
-                      class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                      class="chat-danger-action-button p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                       on:click={() => handleCancelJob(job.id)}
                       title={$_('queueMonitor.actions.cancel')}
                     >
@@ -247,7 +252,7 @@
                       <RotateCcw class="w-4 h-4" />
                     </button>
                     <button
-                      class="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                      class="chat-danger-action-button p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
                       on:click={() => handleDeleteJob(job.id)}
                       title={$_('queueMonitor.actions.delete')}
                     >

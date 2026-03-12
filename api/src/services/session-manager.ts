@@ -24,6 +24,7 @@ interface DeviceInfo {
 }
 
 interface SessionTokens {
+  sessionId: string;
   sessionToken: string;
   refreshToken: string;
   expiresAt: Date;
@@ -120,6 +121,7 @@ export async function createSession(
   }, 'Session created');
   
   return {
+    sessionId,
     sessionToken,
     refreshToken,
     expiresAt,
@@ -329,6 +331,7 @@ export async function refreshSession(
     }, 'Session refreshed');
     
     return {
+      sessionId: session.id,
       sessionToken: newSessionToken,
       refreshToken: newRefreshToken,
       expiresAt: newExpiresAt,

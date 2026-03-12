@@ -606,7 +606,7 @@ describe('DOCX API', () => {
       const streamResponse = await authenticatedRequest(
         app,
         'GET',
-        `/api/v1/streams/events/${streamId}`,
+        `/api/v1/queue/jobs/${jobId}/stream-bootstrap`,
         user.sessionToken!
       );
       expect(streamResponse.status).toBe(200);

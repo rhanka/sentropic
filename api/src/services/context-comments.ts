@@ -1,4 +1,4 @@
-import { callOpenAIResponseStream } from './openai';
+import { callOpenAIResponseStream } from './llm-runtime';
 import { defaultPrompts } from '../config/default-prompts';
 
 export type CommentContextType = 'organization' | 'folder' | 'usecase' | 'matrix' | 'executive_summary';

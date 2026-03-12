@@ -75,6 +75,10 @@ Current state summary:
 - Add login and callback flows for:
   - OpenAI/ChatGPT (W1 target)
   - Google (W2 target)
+- Support two verified enrollment completion modes depending on provider capability:
+  - application-controlled callback redirect,
+  - one-time activation/authentication code copied back by the user and exchanged by the backend.
+- For coding-subscription providers, allow provider-specific backend-owned token stores when the provider returns OAuth/device credentials rather than a reusable API key.
 - Keep existing WebAuthn login path available (no regression).
 - Support linking/unlinking SSO identities from existing users.
 
@@ -126,3 +130,12 @@ W2:
 - Provider SDK/API instability across releases.
 - SSO edge-cases with account linking and duplicate identities.
 - Regression risk in streaming/tool-call orchestration when introducing adapters.
+
+## 10) Split note (runtime vs auth)
+
+- This document stays focused on authentication/federation roadmap concerns.
+- Runtime ownership split (`openai.ts` vs Gemini paths, big-bang cutover) is specified in:
+  - `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`
+- Delivered BR-05 Codex admin enrollment and OpenAI transport-source selection are specified in:
+  - `spec/SPEC_CHATBOT.md`
+  - `spec/SPEC_VSCODE_PLUGIN.md`

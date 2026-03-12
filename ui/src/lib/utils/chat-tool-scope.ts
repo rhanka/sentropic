@@ -10,6 +10,16 @@ export const EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS = new Set<string>([
   'tab_action',
 ]);
 
+export const VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS = new Set<string>([
+  'plan',
+  'bash',
+  'ls',
+  'rg',
+  'file_read',
+  'file_edit',
+  'git',
+]);
+
 export const isExtensionRestrictedToolsetMode = (input: {
   mode: 'ai' | 'comments';
   hasExtensionRuntime: boolean;

@@ -5,6 +5,7 @@ import {
   decideLocalToolPermission,
   executeLocalTool,
   getLocalToolDefinitions,
+  isLocalToolRuntimeAvailable,
   isLocalToolName,
   localToolsStore,
 } from '../../src/lib/stores/localTools';
@@ -32,6 +33,27 @@ describe('localTools store', () => {
     expect(isLocalToolName('tab_read')).toBe(true);
     expect(isLocalToolName('tab_info')).toBe(true); // legacy compatibility
     expect(isLocalToolName('unknown_tool')).toBe(false);
+  });
+
+  it('exposes VSCode code tool definitions in vscode runtime host', () => {
+    (globalThis as any).chrome = {
+      runtime: {
+        id: 'topai.vscode.runtime',
+        sendMessage: vi.fn(),
+      },
+    };
+
+    const definitions = getLocalToolDefinitions();
+    expect(definitions.map((tool) => tool.name).sort()).toEqual([
+      'bash',
+      'file_edit',
+      'file_read',
+      'git',
+      'ls',
+      'rg',
+    ]);
+    expect(isLocalToolName('bash')).toBe(true);
+    expect(isLocalToolName('git')).toBe(true);
   });
 
   it('executes a local tool successfully and stores completed state', async () => {
@@ -170,5 +192,16 @@ describe('localTools store', () => {
     await expect(
       executeLocalTool('call-4', 'tab_read', { mode: 'screenshot' })
     ).rejects.toThrow(/unavailable outside extension context/i);
+  });
+
+  it('enables local tool runtime in VSCode runtime host', () => {
+    (globalThis as any).chrome = {
+      runtime: {
+        id: 'topai.vscode.runtime',
+        sendMessage: vi.fn(),
+      },
+    };
+
+    expect(isLocalToolRuntimeAvailable()).toBe(true);
   });
 });

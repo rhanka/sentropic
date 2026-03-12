@@ -23,6 +23,43 @@ describe('AI Settings API', () => {
       const data = await response.json();
       expect(data).toBeDefined();
     });
+
+    it('migrates legacy stored global defaults on read', async () => {
+      await settingsService.set('default_provider_id', 'openai', 'legacy provider');
+      await settingsService.set('default_model', 'gpt-5.2', 'legacy model');
+
+      const openaiResponse = await authenticatedRequest(
+        app,
+        'GET',
+        '/api/v1/ai-settings',
+        user.sessionToken!
+      );
+      expect(openaiResponse.status).toBe(200);
+      const openaiData = await openaiResponse.json();
+      expect(openaiData.defaultProviderId).toBe('openai');
+      expect(openaiData.defaultModel).toBe('gpt-5.4');
+
+      await settingsService.set('default_provider_id', 'gemini', 'legacy provider');
+      await settingsService.set(
+        'default_model',
+        'gemini-2.5-flash-lite',
+        'legacy model'
+      );
+
+      const geminiResponse = await authenticatedRequest(
+        app,
+        'GET',
+        '/api/v1/ai-settings',
+        user.sessionToken!
+      );
+      expect(geminiResponse.status).toBe(200);
+      const geminiData = await geminiResponse.json();
+      expect(geminiData.defaultProviderId).toBe('gemini');
+      expect(geminiData.defaultModel).toBe('gemini-3.1-flash-lite');
+
+      await settingsService.set('default_provider_id', 'openai', 'Default AI provider');
+      await settingsService.set('default_model', 'gpt-4.1-nano', 'Modele IA par defaut');
+    });
   });
 
   describe('GET /ai-settings/all', () => {

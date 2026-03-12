@@ -49,6 +49,12 @@ This document is the single checklist for **chat tools**: what is already implem
 
 ## Implemented wiring / behavior ✅
 
+### Shared BR-05 reuse rules
+- [x] Reuse the shared chat/runtime orchestration path instead of creating plugin-only tool pipelines.
+- [x] Reuse the shared permission confirmation banner pattern for `ask` decisions.
+- [x] Reuse one analyzer/chunk-merge family for long-read tools such as `documents.analyze` and `history_analyze`.
+- [x] Keep BR-05 tool execution foreground-only; detached/background execution is deferred.
+
 ### Contexts enabled in API (tool availability)
 - [x] `primaryContextType=usecase`: use case tools + web tools
 - [x] `primaryContextType=organization`: organizations tools (+ folders_list) + web tools
@@ -84,6 +90,32 @@ This document is the single checklist for **chat tools**: what is already implem
 ### UI live refresh (SSE)
 - [x] Dashboard listens to `folder_update` and refreshes executive summary + matrix via `loadMatrix(folderId)`
 
+### Local code tools baseline (BR-05 delivered)
+- [x] `bash`
+  - foreground-only execution
+  - hybrid mono+bigram command policy with shell-segment awareness
+  - `deny > ask > allow` precedence, default `ask`
+  - same confirmation banner UX as other tool prompts
+- [x] `ls`
+  - path-scoped listing with bounded recursion
+- [x] `grep_rg`
+  - `rg` first, bounded result volume, path-scoped
+- [x] `file_read`
+  - bounded reads by default with sensitive-path rules
+- [x] `file_edit`
+  - unified `edit|write|apply_patch` contract
+  - explicit `ask` default with auditable path grants
+- [x] `git`
+  - one unified tool surface
+  - read-only baseline actions allowed, mutating actions gated
+- [x] `history_analyze`
+  - read-only targeted Q&A over session history with evidence references
+  - chunked analysis + merge for oversized histories
+  - coverage metadata and `insufficient_coverage` signaling
+- [x] Shared non-shell policy engine
+  - `deny/ask/allow` precedence
+  - user + workspace merge with workspace as the safety upper bound
+
 ## Remaining / Not implemented ⬜
 
 ### Naming migration (Option B)
@@ -114,3 +146,14 @@ This document is the single checklist for **chat tools**: what is already implem
 - [ ] Organization AI populate / enrich batch from chat tools
 - [ ] Folder AI populate (create folders + generate use cases) from chat tools
 - [ ] Cost/limits safeguards + job queue integration for AI actions
+
+### Code tool expansion beyond BR-05
+- [ ] additional local tool families or host-specific capabilities beyond the BR-05 baseline
+- [ ] richer git action coverage beyond the current guarded baseline
+- [ ] broader policy editors and operator ergonomics beyond the current readable mono/bigram model
+
+### Background tool mode (deferred)
+- [ ] Detached/background tool execution lifecycle is deferred to BR-10:
+  - `start`, `status`, `cancel`, `resume`, `result`,
+  - queue/audit-backed runtime,
+  - no explicit agent-lane requirement for user-facing UX.

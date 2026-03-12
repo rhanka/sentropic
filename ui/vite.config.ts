@@ -7,6 +7,6 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    allowedHosts: ['ui', 'localhost', '127.0.0.1']
+    allowedHosts: ['ui', 'localhost', '127.0.0.1', 'host.docker.internal']
   }
 });

@@ -126,7 +126,7 @@ documentsRouter.get('/:id', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string; userId: string };
   const targetWorkspaceId = user.workspaceId;
 
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const [doc] = await db
     .select()
     .from(contextDocuments)
@@ -160,7 +160,7 @@ documentsRouter.get('/:id/content', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string; userId: string };
   const targetWorkspaceId = user.workspaceId;
 
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const [doc] = await db
     .select()
     .from(contextDocuments)
@@ -185,7 +185,7 @@ documentsRouter.delete('/:id', requireWorkspaceAccessRole(), async (c) => {
   // Delete is write-scoped: only within user's own workspace for now.
   const workspaceId = user.workspaceId;
 
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const [doc] = await db
     .select()
     .from(contextDocuments)
@@ -361,5 +361,4 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
       201
     );
 });
-
 

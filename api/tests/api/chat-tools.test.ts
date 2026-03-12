@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-vi.mock('../../src/services/openai', () => ({
+vi.mock('../../src/services/llm-runtime', () => ({
   callOpenAIResponseStream: vi.fn(),
   callOpenAI: vi.fn()
 }));
@@ -30,7 +30,7 @@ import {
 } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
-import { callOpenAIResponseStream } from '../../src/services/openai';
+import { callOpenAIResponseStream } from '../../src/services/llm-runtime';
 import { generateCommentResolutionProposal } from '../../src/services/context-comments';
 
 const openAIStreamMock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
@@ -157,6 +157,24 @@ describe('Chat tools API - comment_assistant', () => {
     throw new Error(`Job ${jobId} did not complete within ${maxAttempts} attempts`);
   }
 
+  async function fetchAssistantDetails(
+    sessionId: string,
+    assistantMessageId: string,
+    sessionToken: string,
+  ): Promise<any[]> {
+    const response = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/chat/sessions/${sessionId}/bootstrap`,
+      sessionToken,
+    );
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    return Array.isArray(payload?.assistantDetailsByMessageId?.[assistantMessageId])
+      ? payload.assistantDetailsByMessageId[assistantMessageId]
+      : [];
+  }
+
   it('returns a proposal for comment_assistant suggest', async () => {
     const threadId = createId();
     const now = new Date();
@@ -214,15 +232,11 @@ describe('Chat tools API - comment_assistant', () => {
 
     await waitForJobCompletion(chatData.jobId, user.sessionToken!);
 
-    const streamEventsRes = await authenticatedRequest(
-      app,
-      'GET',
-      `/api/v1/streams/events/${chatData.assistantMessageId}`,
-      user.sessionToken!
-    );
-    expect(streamEventsRes.status).toBe(200);
-    const streamData = await streamEventsRes.json();
-    const resultEvent = streamData.events.find(
+    const resultEvent = (await fetchAssistantDetails(
+      chatData.sessionId,
+      chatData.assistantMessageId,
+      user.sessionToken!,
+    )).find(
       (e: any) => e.eventType === 'tool_call_result' && e.data?.tool_call_id === 'tool_suggest_1'
     );
     expect(resultEvent).toBeDefined();
@@ -350,15 +364,11 @@ describe('Chat tools API - comment_assistant', () => {
 
     await waitForJobCompletion(chatData.jobId, viewer.sessionToken!, user.workspaceId);
 
-    const streamEventsRes = await authenticatedRequest(
-      app,
-      'GET',
-      `/api/v1/streams/events/${chatData.assistantMessageId}`,
-      viewer.sessionToken!
-    );
-    expect(streamEventsRes.status).toBe(200);
-    const streamData = await streamEventsRes.json();
-    const resultEvent = streamData.events.find(
+    const resultEvent = (await fetchAssistantDetails(
+      chatData.sessionId,
+      chatData.assistantMessageId,
+      viewer.sessionToken!,
+    )).find(
       (e: any) => e.eventType === 'tool_call_result' && e.data?.tool_call_id === 'tool_resolve_viewer'
     );
     expect(resultEvent?.data?.result?.status).toBe('error');
@@ -491,15 +501,11 @@ describe('Chat tools API - comment_assistant', () => {
 
     await waitForJobCompletion(chatData.jobId, user.sessionToken!);
 
-    const streamEventsRes = await authenticatedRequest(
-      app,
-      'GET',
-      `/api/v1/streams/events/${chatData.assistantMessageId}`,
-      user.sessionToken!
-    );
-    expect(streamEventsRes.status).toBe(200);
-    const streamData = await streamEventsRes.json();
-    const resultEvent = streamData.events.find(
+    const resultEvent = (await fetchAssistantDetails(
+      chatData.sessionId,
+      chatData.assistantMessageId,
+      user.sessionToken!,
+    )).find(
       (e: any) => e.eventType === 'tool_call_result' && e.data?.tool_call_id === 'tool_folder_scope'
     );
     expect(resultEvent?.data?.result?.status).toBe('completed');
@@ -538,15 +544,11 @@ describe('Chat tools API - comment_assistant', () => {
 
     await waitForJobCompletion(chatData.jobId, user.sessionToken!);
 
-    const streamEventsRes = await authenticatedRequest(
-      app,
-      'GET',
-      `/api/v1/streams/events/${chatData.assistantMessageId}`,
-      user.sessionToken!
-    );
-    expect(streamEventsRes.status).toBe(200);
-    const streamData = await streamEventsRes.json();
-    const resultEvent = streamData.events.find(
+    const resultEvent = (await fetchAssistantDetails(
+      chatData.sessionId,
+      chatData.assistantMessageId,
+      user.sessionToken!,
+    )).find(
       (e: any) => e.eventType === 'tool_call_result' && e.data?.tool_call_id === 'tool_wrong_scope'
     );
     expect(resultEvent?.data?.result?.status).toBe('error');

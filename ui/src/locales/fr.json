@@ -533,6 +533,16 @@
     "promptManagement": "Gestion des Prompts IA",
     "aiConfig": "Configuration IA",
     "aiLoading": "Chargement des paramètres…",
+    "theme": {
+      "title": "Thème",
+      "description": "Choisissez le rendu clair/sombre pour la web app et les widgets de chat.",
+      "modeLabel": "Mode d’apparence",
+      "modes": {
+        "system": "Système",
+        "light": "Clair",
+        "dark": "Sombre"
+      }
+    },
     "userAi": {
       "title": "Configuration IA",
       "description": "Choisissez le modèle IA par défaut pour vos nouveaux chats et formulaires de génération.",
@@ -562,6 +572,40 @@
     "queueRunning": "En cours",
     "queueDone": "Terminés",
     "queueFailed": "Échoués",
+    "providerConnections": {
+      "title": "Connexions providers",
+      "description": "Configurez vos connexions providers dans les paramètres admin. Le backend réutilise ensuite ce credential pour vos appels runtime.",
+      "status": {
+        "ready": "Prêt",
+        "notReady": "Non prêt"
+      },
+      "managedBy": {
+        "admin": "Géré dans les paramètres admin",
+        "environment": "Géré par l’environnement",
+        "none": "Non configuré"
+      },
+      "codex": {
+        "accountLabel": "Libellé compte Codex (optionnel)",
+        "accountPlaceholder": "admin@example.com",
+        "startEnrollment": "Démarrer la connexion",
+        "regenerateEnrollment": "Régénérer le code",
+        "cancelEnrollment": "Annuler",
+        "disconnect": "Déconnecter",
+        "pendingHint": "Connexion en attente. Saisissez le code sur la page OpenAI, puis l'état sera détecté automatiquement.",
+        "deviceCodeLabel": "Code device",
+        "linkHint": "Cliquer sur le lien suivant :"
+      },
+      "toasts": {
+        "codexEnrollmentStarted": "Connexion Codex démarrée. Ouvrez le lien OpenAI affiché puis saisissez le code indiqué.",
+        "codexConnected": "Provider Codex connecté.",
+        "codexDisconnected": "Provider Codex marqué comme déconnecté."
+      },
+      "errors": {
+        "load": "Impossible de charger les connexions providers.",
+        "save": "Impossible de mettre à jour la connexion provider.",
+        "missingEnrollment": "Aucune connexion Codex en attente. Démarrez d’abord la connexion."
+      }
+    },
     "chromeExtension": {
       "title": "Extension Chrome",
       "description": "Téléchargez le dernier package de l'extension Chrome configuré pour cette instance.",
@@ -574,6 +618,48 @@
       "sourceLabel": "Source",
       "errors": {
         "load": "Impossible de charger la carte Paramètres Plugin Chrome. Configurez CHROME_EXTENSION_DOWNLOAD_URL dans l'API, ou assurez-vous qu'un package local est disponible à /chrome-extension/top-ai-ideas-chrome-extension.zip, puis redémarrez l'API."
+      }
+    },
+    "vscodeExtension": {
+      "title": "Extension VSCode",
+      "description": "Téléchargez le dernier package de l'extension VSCode configuré pour cette instance.",
+      "experimentalWarning": "(expérimental seulement, pour développeurs)",
+      "loading": "Chargement du package d'extension…",
+      "downloadCta": "Télécharger l'extension (.vsix)",
+      "downloadTooltip": "Téléchargez l’extension VSCode",
+      "retry": "Réessayer",
+      "versionLabel": "Version",
+      "sourceLabel": "Source",
+      "errors": {
+        "load": "Impossible de charger la carte Paramètres Plugin VSCode. Configurez VSCODE_EXTENSION_DOWNLOAD_URL dans l'API, ou assurez-vous qu'un package local est disponible à /vscode-extension/top-ai-ideas-vscode-extension.vsix, puis redémarrez l'API."
+      },
+      "token": {
+        "title": "Token bootstrap extension",
+        "description": "Émettez ou régénérez le token partagé VSCode utilisé pour les appels API en bearer.",
+        "loading": "Chargement de l’état du token…",
+        "issue": "Émettre le token",
+        "rotate": "Régénérer le token",
+        "revoke": "Révoquer le token",
+        "copy": "Copier",
+        "oneTimeNotice": "Copiez ce token maintenant. Il n’est affiché qu’une fois après émission/régénération.",
+        "statusLabel": "Statut",
+        "statusActive": "Actif",
+        "statusInactive": "Inactif",
+        "last4Label": "Suffixe token",
+        "issuedAtLabel": "Émis le",
+        "expiresAtLabel": "Expire le",
+        "notAvailable": "N/A",
+        "toasts": {
+          "issued": "Token extension VSCode émis.",
+          "revoked": "Token extension VSCode révoqué.",
+          "copied": "Token extension VSCode copié."
+        },
+        "errors": {
+          "load": "Impossible de charger l’état du token.",
+          "issue": "Impossible d’émettre le token extension VSCode.",
+          "revoke": "Impossible de révoquer le token extension VSCode.",
+          "copy": "Impossible de copier le token extension VSCode."
+        }
       }
     },
     "systemInfo": "Informations système",
@@ -846,39 +932,105 @@
     "extension": {
       "settingsTitle": "Paramètres de l’extension",
       "settingsTabs": {
-        "endpoint": "Endpoint serveur",
-        "permissions": "Permissions outils"
+        "server": "Serveur",
+        "workspace": "Workspace",
+        "tools": "Outils"
       },
       "endpointConfiguration": "Configuration du endpoint",
+      "workspaceConfiguration": "Configuration workspace",
+      "workspaceScope": "Scope projet détecté",
+      "workspaceScopeKey": "Clé du scope",
+      "workspaceMappedWorkspace": "Workspace mappé",
+      "workspaceScopeNotDetected": "Aucun scope projet détecté pour l’instant.",
+      "workspaceFlow": {
+        "title": "Mapping workspace code",
+        "noCodeWorkspace": "Aucun workspace code n’est encore enregistré.",
+        "selectorLabel": "Workspace code",
+        "applySelection": "Utiliser le workspace sélectionné",
+        "selectWorkspaceRequired": "Sélectionnez d’abord un workspace code.",
+        "mappingRefreshFailed": "Impossible de rafraîchir le mapping workspace.",
+        "mappingSetSuccess": "Mapping workspace mis à jour.",
+        "mappingSetFailed": "Impossible de mettre à jour le mapping workspace.",
+        "onboardingTitle": "Nouvelle base de code détectée",
+        "onboardingDescription": "La création d’un workspace est recommandée.",
+        "createWorkspace": "Créer un workspace code",
+        "createSuccess": "Workspace code créé et mappé.",
+        "createFailed": "Impossible de créer le workspace code.",
+        "useExisting": "Utiliser un workspace code existant",
+        "notNow": "Plus tard",
+        "notNowSuccess": "Workspace de repli appliqué.",
+        "notNowFailed": "Impossible d’appliquer le workspace de repli."
+      },
       "apiBaseUrl": "URL API",
       "appBaseUrl": "URL app",
       "wsBaseUrlOptional": "URL WS (optionnel)",
+      "sessionToken": "Token extension",
+      "sessionTokenHint": "Collez le token VSCode généré par un administrateur dans les paramètres web.",
+      "codeAgent": {
+        "title": "Profil prompt agent code",
+        "effectivePromptSource": "Source du prompt effectif",
+        "sourceWorkspace": "Override workspace",
+        "sourceServer": "Override serveur",
+        "sourceDefault": "Par défaut",
+        "effectivePrompt": "Prompt agent code effectif",
+        "workspacePromptHint": "Appliqué au scope workspace courant : {scope}",
+        "createWorkspaceOverride": "Créer un override workspace",
+        "resetWorkspaceOverride": "Revenir à l’héritage",
+        "workspaceOverrideActive": "L’override workspace sera enregistré sur ce scope.",
+        "resetPending": "La suppression de l’override workspace sera appliquée à l’enregistrement.",
+        "instructionPatterns": "Patterns d’inclusion instructions",
+        "instructionPatternsHint": "Un glob/pattern par ligne (ex : AGENTS.md, .cursor/rules/*.mdc)."
+      },
       "testApi": "Tester l’API",
       "permissions": {
         "title": "Permissions des outils",
         "description": "Gérer les autorisations/refus par outil et origine (URL, domaine ou wildcard).",
+        "bashBuilderTitle": "Constructeur de règles bash",
+        "bashBuilderDescription": "Construisez des règles mono/bigram lisibles puis appliquez-les au brouillon avant enregistrement.",
+        "bashModeLabel": "Mode de sélecteur bash",
+        "bashModeWildcard": "Wildcard (bash:*)",
+        "bashModeMono": "Commande mono (bash:<cmd>)",
+        "bashModeBigram": "Commande bigram (bash:<cmd> <arg>)",
+        "bashModeManual": "Manuel",
+        "bashPreviewLabel": "Aperçu du sélecteur",
+        "bashPrecedenceHint": "Priorité : sélecteur exact > sélecteur wildcard.",
+        "bashUseBuilderCta": "Utiliser ce sélecteur",
         "addTitle": "Ajouter une règle",
         "addCta": "Ajouter",
         "empty": "Aucune règle enregistrée.",
         "allowLabel": "Autoriser",
         "denyLabel": "Refuser",
+        "pathPatternLabel": "Périmètre de chemin",
+        "pathPatternPlaceholder": "Pattern chemin optionnel (ex: api/*)",
         "loadError": "Impossible de charger les permissions outils.",
         "updateError": "Impossible de mettre à jour la permission outil.",
         "deleteError": "Impossible de supprimer la permission outil.",
         "missingDraftFields": "Renseigne un outil et une origine/pattern valide (ex: https://site.com, *.site.com, *)."
       },
       "authRequired": {
-        "title": "Connexion extension requise avant d’utiliser cette zone.",
-        "description": "Ouvre les paramètres, puis clique sur « Connecter ». Si nécessaire, ouvre d’abord la page de connexion de l’application.",
+        "title": "Un token extension est requis avant d’utiliser cette zone.",
+        "description": "Ouvrez les paramètres puis collez le token VSCode émis par un administrateur.",
         "openSettings": "Ouvrir les paramètres"
       },
       "auth": {
         "title": "Authentification extension",
         "connectedAs": "Connecté en tant que",
         "notConnected": "Non connecté",
-        "connect": "Connecter",
+        "connect": "Se connecter",
+        "connectToken": "Valider le token",
         "logout": "Déconnecter",
+        "logoutToken": "Vider la session",
+        "providerManagedInAdmin": "La connexion fournisseur se gère dans les paramètres admin de l’app web.",
         "openLogin": "Ouvrir la connexion"
+      },
+      "providerReadiness": {
+        "title": "État des providers",
+        "empty": "Aucun statut provider disponible pour l’instant.",
+        "loadError": "Impossible de charger l’état des providers.",
+        "status": {
+          "ready": "Prêt",
+          "notReady": "Non prêt"
+        }
       },
       "status": {
         "loadingConfig": "Chargement de la configuration endpoint…",
@@ -930,6 +1082,18 @@
       "defaultTitle": "Conversation {id}",
       "confirmDelete": "Supprimer cette conversation ?"
     },
+    "checkpoints": {
+      "create": "Créer un checkpoint",
+      "restoreLatest": "Restaurer le dernier checkpoint",
+      "confirmRestoreLatest": "Restaurer le dernier checkpoint ? Les messages récents seront supprimés.",
+      "restoreFromMessage": "Restaurer depuis ce point",
+      "confirmRestoreBeforeAction": "Restaurer ce checkpoint avant de continuer ?",
+      "confirmRestoreBeforeRetry": "Restaurer ce checkpoint avant de réessayer ?",
+      "confirmRestoreDetails": "Les messages récents après ce point seront supprimés.",
+      "restoreCta": "Oui, restaurer",
+      "continueWithoutRestore": "Non, continuer",
+      "retryWithoutRestore": "Non, réessayer sans restaurer"
+    },
     "composer": {
       "ariaLabel": "Composer",
       "placeholder": {
@@ -961,7 +1125,13 @@
       "title": "Outils",
       "permissions": {
         "promptTitle": "Autorisation requise",
-        "promptDescription": "Autoriser l’outil {tool} pour {origin} ?",
+        "promptDescription": "Autoriser l’outil {tool} ?",
+        "actionLabel": "Action",
+        "commandLabel": "Commande",
+        "pathLabel": "Chemin",
+        "scopeLabel": "Périmètre",
+        "scopeWorkspace": "workspace",
+        "scopeOutsideWorkspace": "hors workspace",
         "allowOnce": "Oui (une fois)",
         "denyOnce": "Non (une fois)",
         "allowAlways": "Toujours",
@@ -994,6 +1164,30 @@
       "localTabAction": {
         "label": "Onglet (actions)",
         "description": "Agir sur l’onglet actif (scroll, clic, saisie, attente)"
+      },
+      "localCodeBash": {
+        "label": "Code: shell",
+        "description": "Exécuter des commandes shell dans le workspace avec politique d'autorisation"
+      },
+      "localCodeLs": {
+        "label": "Code: lister fichiers",
+        "description": "Lister les fichiers/dossiers avec récursion bornée"
+      },
+      "localCodeRg": {
+        "label": "Code: recherche",
+        "description": "Rechercher dans les fichiers du workspace (ripgrep)"
+      },
+      "localCodeFileRead": {
+        "label": "Code: lire fichier",
+        "description": "Lire le contenu des fichiers (fenêtré/complet borné)"
+      },
+      "localCodeFileEdit": {
+        "label": "Code: éditer fichier",
+        "description": "Modifier/écrire des fichiers avec contrôle d'autorisation"
+      },
+      "localCodeGit": {
+        "label": "Code: git",
+        "description": "Exécuter des actions git (status/diff/ls-files/add/commit/push/...) avec contrôle de politique"
       },
       "organizationRead": { "label": "Organisation (lecture)" },
       "organizationUpdate": { "label": "Organisation (édition)" },
@@ -1086,6 +1280,8 @@
       "loadSessions": "Erreur lors du chargement des sessions",
       "loadMessages": "Erreur lors du chargement des messages",
       "deleteSession": "Erreur lors de la suppression de la session",
+      "checkpointCreate": "Erreur lors de la création du checkpoint",
+      "checkpointRestore": "Erreur lors de la restauration du checkpoint",
       "send": "Erreur lors de l’envoi",
       "stop": "Erreur lors de l’arrêt",
       "feedback": "Erreur lors de la mise à jour du feedback"
@@ -1179,6 +1375,14 @@
     "reasoning": "Raisonnement",
     "reasoningEffort": "Effort de raisonnement",
     "reasoningEffortFailed": "Effort de raisonnement (échec)",
+    "contextBudget": "Budget de contexte",
+    "contextOccupancy": "Contexte {pct}%",
+    "contextCompaction": "Résumé de contexte",
+    "contextCompactionInProgress": "Résumé du contexte en cours…",
+    "contextCompactionDone": "Contexte compacté.",
+    "contextCompactionFailed": "Échec du résumé de contexte.",
+    "contextBudgetEscalation": "Budget de contexte (intervention requise)",
+    "contextBudgetEscalationBody": "Le contexte reste saturé. Réduis la portée ou demande une extraction ciblée.",
     "response": "Réponse",
     "done": "Terminé",
     "error": "Erreur",
