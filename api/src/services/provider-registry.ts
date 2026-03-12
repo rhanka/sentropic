@@ -1,5 +1,8 @@
 import type { ModelCatalogEntry, ProviderDescriptor, ProviderId, ProviderRuntime } from './provider-runtime';
+import { ClaudeProviderRuntime } from './providers/claude-provider';
+import { CohereProviderRuntime } from './providers/cohere-provider';
 import { GeminiProviderRuntime } from './providers/gemini-provider';
+import { MistralProviderRuntime } from './providers/mistral-provider';
 import { OpenAIProviderRuntime } from './providers/openai-provider';
 
 class ProviderRegistry {
@@ -8,10 +11,16 @@ class ProviderRegistry {
   constructor() {
     const openai = new OpenAIProviderRuntime();
     const gemini = new GeminiProviderRuntime();
+    const claude = new ClaudeProviderRuntime();
+    const mistral = new MistralProviderRuntime();
+    const cohere = new CohereProviderRuntime();
 
     this.providers = new Map<ProviderId, ProviderRuntime>([
       ['openai', openai],
       ['gemini', gemini],
+      ['anthropic', claude],
+      ['mistral', mistral],
+      ['cohere', cohere],
     ]);
   }
 
