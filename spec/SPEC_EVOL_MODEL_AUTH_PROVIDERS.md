@@ -113,6 +113,11 @@ W2:
 - Google SSO is functional with account linking.
 - Provider outage on one adapter does not break all runtime flows.
 
+W2+ (added 2026-03-12, from SPEC_VOL_CHAT_DOCS_LLM_RAG demand):
+- Fifth provider: `Cohere` — chat completion + embeddings (useful for RAG pipeline) + reranking.
+- Scope: add `cohere-provider.ts`, catalog entries, credential resolution. Same `ProviderRuntime` contract.
+- Note: Cohere embeddings capability is a prerequisite for `feat/rag-documents` branch (see `SPEC_EVOL_WORKSPACE_TYPES.md` §15.3).
+
 ## 7) Consolidation note (2026-02-24)
 
 - Delivered BR-01 runtime scope has been moved to `spec/SPEC_CHATBOT.md` to keep one canonical implementation spec.
