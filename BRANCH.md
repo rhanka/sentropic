@@ -78,8 +78,8 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default; single final test cycle per segment)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI)
+- [ ] **Mono-branch + cherry-pick** (default; single final test cycle per segment)
+- [x] **Multi-branch** (switched 2026-03-12: BR-04 dev in worktree `tmp/feat-workspace-template-catalog`, root stays on `main`)
 - Rationale: BR-04 is large but sequential — segments A→B→C→D build on each other. UAT checkpoints every ~100 commits provide integration gates without multi-branch overhead.
 
 ## UAT Management (in orchestration context)
@@ -177,14 +177,14 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
     - Lot N-2: final UAT. Lot N-1: docs consolidation. Lot N: final validation + merge.
   - [ ] Validate lot structure with user before proceeding to Lot 1.
 
-- [ ] **Lot 0 gate**:
-  - [ ] All open questions (BR04-D1/D2/D3, AWT-Q3/Q4, OQ-6/7/8/9) frozen with decisions documented.
-  - [ ] `spec/SPEC_EVOL_WORKSPACE_TYPES.md` complete and reviewed.
-  - [ ] Target data model ERD reviewed.
-  - [ ] All branch plan files rewritten.
-  - [ ] `PLAN.md` rewritten.
-  - [ ] Lots 1-N rewritten in this BRANCH.md with actionable detail.
-  - [ ] User sign-off on Lot 0 deliverables before proceeding to Lot 1.
+- [x] **Lot 0 gate**: ✓ validated 2026-03-12
+  - [x] All open questions (BR04-D1/D2/D3, AWT-Q3/Q4, OQ-6/7/8/9) frozen with decisions documented.
+  - [x] `spec/SPEC_EVOL_WORKSPACE_TYPES.md` complete and reviewed (§1-§15).
+  - [x] Target data model ERD reviewed.
+  - [x] All branch plan files rewritten (BR-04/06/07/08/10/11/14/16/17).
+  - [x] `PLAN.md` rewritten (dependency graph, wave scheduling A/B/C/D).
+  - [x] Lots 1-N rewritten in this BRANCH.md with actionable detail (16 lots + N-2/N-1/N).
+  - [x] User sign-off on Lot 0 deliverables. Proceeding to Lot 1.
 
 ### Segment A — Schema, workspace types, initiative rename, neutral workspace (~100 commits)
 
