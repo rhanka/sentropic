@@ -42,6 +42,7 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
 - `BR08-FL3` | `attention` | Claude tool-call streaming uses a different event model (`content_block_start`/`content_block_delta`/`content_block_stop`) vs OpenAI chunks — requires careful normalization in the adapter.
 - `BR08-FL4` | `closed` | Cohere embeddings (`embed-v4.0`) and reranking (`rerank-v3.5`) are **catalogued only** — implementation deferred to BR-17 (RAG).
 - `BR08-FL5` | `risk` | Reasoning system is deeply coupled to OpenAI Responses API (`reasoningEffort`, `reasoningSummary`, `isGpt5` guards). Must be generalized to provider-agnostic `supportsReasoning` checks. See Risk/Impact section.
+- `BR08-FL6` | `blocked` | **Lot 3 gate: all Docker builds fail in worktree.** Root cause: Docker Compose does not parse `export` prefix in `.env` file, so `REGISTRY` variable is empty, causing `invalid tag "/top-ai-ideas-api:91e6f7": invalid reference format`. First attempt also hit BuildKit error `unlazy requires an applier`. All 6 gate checks (typecheck-api, lint-api, test-api, typecheck-ui, lint-ui, test-ui) fail at the Docker build step. Makefile and docker-compose files are Forbidden Paths — cannot fix in this branch. Requires conductor intervention to fix `.env` format or Docker infrastructure.
 
 ## Questions / Notes
 - MPA-Q4: Provider request/response retention compliance baseline — deferred, no impact on adapter implementation.
@@ -264,12 +265,12 @@ Closed: 2026-03-12
 - [x] Verify provider status is `'ready'` when API key is configured, `'planned'` otherwise.
 
 #### 3.3 Lot 3 gate
-- [ ] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral`
-- [ ] `make lint-api ENV=test-feat-model-runtime-claude-mistral`
-- [ ] `make test-api ENV=test-feat-model-runtime-claude-mistral`
-- [ ] `make typecheck-ui ENV=test-feat-model-runtime-claude-mistral`
-- [ ] `make lint-ui ENV=test-feat-model-runtime-claude-mistral`
-- [ ] `make test-ui ENV=test-feat-model-runtime-claude-mistral`
+- [ ] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral` — **blocked** (BR08-FL6: Docker build fails — `REGISTRY` not parsed from `.env` with `export` prefix)
+- [ ] `make lint-api ENV=test-feat-model-runtime-claude-mistral` — **blocked** (BR08-FL6)
+- [ ] `make test-api ENV=test-feat-model-runtime-claude-mistral` — **blocked** (BR08-FL6)
+- [ ] `make typecheck-ui ENV=test-feat-model-runtime-claude-mistral` — **blocked** (BR08-FL6)
+- [ ] `make lint-ui ENV=test-feat-model-runtime-claude-mistral` — **blocked** (BR08-FL6)
+- [ ] `make test-ui ENV=test-feat-model-runtime-claude-mistral` — **blocked** (BR08-FL6)
 
 ### Lot 4 — Tests
 
