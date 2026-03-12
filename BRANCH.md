@@ -121,9 +121,16 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
     - ✓ Updated `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §2.3 with neutral workspace todo note
   - [x] Canonical specs NOT updated now (Lot N-1). Fusion trajectory per section in §0 of SPEC_EVOL.
 
-- [ ] **0.4 Impact analysis on future branches**
-  - [ ] Document impact of BR-04 on each non-done branch (BR-06 through BR-12).
-  - [ ] Identify which branches need scope/dependency updates.
+- [x] **0.4 Impact analysis on future branches**
+  - [x] BR-06 (Chrome upstream v1): low impact — `use_cases`→`initiatives` rename affects `contextType` refs. Update post-merge.
+  - [x] BR-07 (Release UI/npm): no impact — CI/packaging only.
+  - [x] BR-08 (Model runtime Claude/Mistral): low impact — workspace-type-aware model defaults as future consideration.
+  - [x] BR-09 (SSO Google): no impact — auth layer only.
+  - [x] BR-10 (VSCode plugin v2 multi-agent): **high impact** — multi-agent orchestration depends on workspace type for tool gating + workflow selection. Must depend on BR-04. Re-scope after BR-04.
+  - [x] BR-11 (Chrome multitab voice): low impact — same contextType rename as BR-06.
+  - [x] BR-12 (Release Chrome/VSCode CI): no impact — CI/packaging only.
+  - [x] BR-13 (Chrome plugin download): no impact — packaging/distribution only.
+  - [x] Branches needing scope/dependency updates: **BR-06, BR-10, BR-11** (BR-10 is the most impacted).
 
 - [ ] **0.5 Rewrite branch plans**
   - [ ] Rewrite `plan/04-BRANCH_feat-workspace-template-catalog.md` — align with this BRANCH.md (copy final lot structure).
