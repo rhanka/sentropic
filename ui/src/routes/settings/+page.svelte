@@ -1,8 +1,8 @@
 <script lang="ts">
   import { addToast } from '$lib/stores/toast';
-  import { apiGet, apiPost, apiPut } from '$lib/utils/api';
+  import { apiDelete, apiGet, apiPost, apiPut } from '$lib/utils/api';
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
   import { session } from '$lib/stores/session';
@@ -12,11 +12,26 @@
     getChromeExtensionDownloadErrorMessage,
     type ChromeExtensionDownloadMetadata,
   } from '$lib/utils/chrome-extension-download';
+  import {
+    fetchVsCodeExtensionDownloadMetadata,
+    getVsCodeExtensionDownloadErrorMessage,
+    type VsCodeExtensionDownloadMetadata,
+  } from '$lib/utils/vscode-extension-download';
+  import {
+    completeCodexProviderEnrollment,
+    disconnectCodexProviderEnrollment,
+    startCodexProviderEnrollment,
+    type ProviderConnectionState,
+  } from '$lib/utils/provider-connections-api';
   import { emitUserAISettingsUpdated } from '$lib/utils/user-ai-settings-events';
+  import {
+    themePreference,
+    type ThemePreference,
+  } from '$lib/stores/themePreference';
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
   import WorkspaceSettingsPanel from '$lib/components/WorkspaceSettingsPanel.svelte';
   import TodoRuntimeConfigPanel from '$lib/components/TodoRuntimeConfigPanel.svelte';
-  import { Download } from '@lucide/svelte';
+  import { Copy, Download, RefreshCw } from '@lucide/svelte';
 
   interface CatalogProvider {
     provider_id: 'openai' | 'gemini';
@@ -45,17 +60,51 @@
     models: CatalogModel[];
   }
 
+  interface VsCodeExtensionTokenMeta {
+    issuedByUserId: string;
+    issuedAt: string;
+    expiresAt: string;
+    last4: string;
+    revokedAt: string | null;
+  }
+
+  interface VsCodeExtensionTokenStatusPayload {
+    active: boolean;
+    meta: VsCodeExtensionTokenMeta | null;
+  }
+
+  interface VsCodeExtensionTokenIssuePayload extends VsCodeExtensionTokenStatusPayload {
+    token: string;
+  }
+
   let isResetting = false;
   let chromeExtensionDownloadMetadata: ChromeExtensionDownloadMetadata | null = null;
   let chromeExtensionDownloadError = '';
   let isLoadingChromeExtensionDownload = false;
+  let vscodeExtensionDownloadMetadata: VsCodeExtensionDownloadMetadata | null = null;
+  let vscodeExtensionDownloadError = '';
+  let isLoadingVsCodeExtensionDownload = false;
+  let isLoadingVsCodeExtensionToken = false;
+  let isIssuingVsCodeExtensionToken = false;
+  let isRevokingVsCodeExtensionToken = false;
+  let isCopyingVsCodeExtensionToken = false;
+  let vscodeExtensionTokenActive = false;
+  let vscodeExtensionTokenMeta: VsCodeExtensionTokenMeta | null = null;
+  let vscodeExtensionTokenPlaintext = '';
+  let vscodeExtensionTokenError = '';
+  let isLoadingProviderConnections = false;
+  let isSavingCodexProviderConnection = false;
+  let providerConnectionsError = '';
+  let providerConnections: ProviderConnectionState[] = [], openaiTransportMode: 'codex' | 'token' = 'token';
+  let codexConnectionAccountLabel = '';
+  let codexPollingTimer: ReturnType<typeof setTimeout> | null = null;
   
   // Configuration IA
   let aiSettings = {
     concurrency: 10,
     publishingConcurrency: 5,
     defaultProviderId: 'openai' as 'openai' | 'gemini',
-    defaultModel: 'gpt-5.2',
+    defaultModel: 'gpt-5.4',
     processingInterval: 1000
   };
   let modelCatalog: ModelCatalogPayload = {
@@ -103,12 +152,20 @@
   onMount(async () => {
     await loadMe();
     await loadChromeExtensionDownloadMetadata();
+    await loadVsCodeExtensionDownloadMetadata();
     await loadModelCatalog();
     await loadUserAISettings();
     if (isAdmin()) {
       await loadAISettings();
       await loadQueueStats();
+      await loadVsCodeExtensionTokenStatus();
+      await loadProviderConnections();
     }
+  });
+
+  onDestroy(() => {
+    if (codexPollingTimer) clearTimeout(codexPollingTimer);
+    codexPollingTimer = null;
   });
 
   const isAdmin = () => {
@@ -120,6 +177,31 @@
     const s = get(session);
     return s.user?.role === 'admin_app';
   };
+
+  const updateThemePreference = (value: string) => {
+    const next: ThemePreference =
+      value === 'light' || value === 'dark' ? value : 'system';
+    themePreference.set(next);
+  };
+
+  const formatDateTime = (iso: string | null | undefined): string => {
+    if (!iso) return get(_)('settings.vscodeExtension.token.notAvailable');
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return iso;
+    return parsed.toLocaleString();
+  };
+
+  const settingsButtonBaseClass =
+    'inline-flex items-center justify-center rounded px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50';
+  const settingsPrimaryButtonClass = `${settingsButtonBaseClass} bg-primary text-white hover:bg-primary/90`;
+  const settingsSecondaryButtonClass = `${settingsButtonBaseClass} border border-slate-300 bg-white text-slate-700 hover:bg-slate-100`;
+  const settingsWarningButtonClass = `${settingsButtonBaseClass} bg-amber-700 text-white hover:bg-amber-800`;
+  const settingsDangerButtonClass = `${settingsButtonBaseClass} bg-rose-700 text-white hover:bg-rose-800`;
+
+  let codexProviderConnection: ProviderConnectionState | null = null;
+  $: codexProviderConnection =
+    providerConnections.find((provider) => provider.providerId === 'codex') ||
+    null;
 
 
   let deleting = false;
@@ -169,6 +251,261 @@
       );
     } finally {
       isLoadingChromeExtensionDownload = false;
+    }
+  };
+
+  const loadVsCodeExtensionDownloadMetadata = async () => {
+    isLoadingVsCodeExtensionDownload = true;
+    vscodeExtensionDownloadError = '';
+
+    try {
+      vscodeExtensionDownloadMetadata = await fetchVsCodeExtensionDownloadMetadata();
+    } catch (error) {
+      console.error('Failed to load vscode extension metadata:', error);
+      vscodeExtensionDownloadMetadata = null;
+      vscodeExtensionDownloadError = getVsCodeExtensionDownloadErrorMessage(
+        error,
+        get(_)('settings.vscodeExtension.errors.load')
+      );
+    } finally {
+      isLoadingVsCodeExtensionDownload = false;
+    }
+  };
+
+  const loadVsCodeExtensionTokenStatus = async () => {
+    isLoadingVsCodeExtensionToken = true;
+    vscodeExtensionTokenError = '';
+    try {
+      const payload = await apiGet<VsCodeExtensionTokenStatusPayload>(
+        '/settings/vscode-extension-token',
+      );
+      vscodeExtensionTokenActive = payload.active;
+      vscodeExtensionTokenMeta = payload.meta;
+    } catch (error) {
+      console.error('Failed to load vscode extension token status:', error);
+      vscodeExtensionTokenError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.vscodeExtension.token.errors.load');
+    } finally {
+      isLoadingVsCodeExtensionToken = false;
+    }
+  };
+
+  const issueVsCodeExtensionToken = async () => {
+    isIssuingVsCodeExtensionToken = true;
+    vscodeExtensionTokenError = '';
+    try {
+      const payload = await apiPost<VsCodeExtensionTokenIssuePayload>(
+        '/settings/vscode-extension-token',
+      );
+      vscodeExtensionTokenActive = payload.active;
+      vscodeExtensionTokenMeta = payload.meta;
+      vscodeExtensionTokenPlaintext = payload.token;
+      addToast({
+        type: 'success',
+        message: get(_)('settings.vscodeExtension.token.toasts.issued'),
+      });
+    } catch (error) {
+      console.error('Failed to issue vscode extension token:', error);
+      vscodeExtensionTokenError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.vscodeExtension.token.errors.issue');
+    } finally {
+      isIssuingVsCodeExtensionToken = false;
+    }
+  };
+
+  const revokeVsCodeExtensionToken = async () => {
+    isRevokingVsCodeExtensionToken = true;
+    vscodeExtensionTokenError = '';
+    try {
+      const payload = await apiDelete<VsCodeExtensionTokenStatusPayload & { revoked: boolean }>(
+        '/settings/vscode-extension-token',
+      );
+      vscodeExtensionTokenActive = payload.active;
+      vscodeExtensionTokenMeta = payload.meta;
+      vscodeExtensionTokenPlaintext = '';
+      addToast({
+        type: 'success',
+        message: get(_)('settings.vscodeExtension.token.toasts.revoked'),
+      });
+    } catch (error) {
+      console.error('Failed to revoke vscode extension token:', error);
+      vscodeExtensionTokenError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.vscodeExtension.token.errors.revoke');
+    } finally {
+      isRevokingVsCodeExtensionToken = false;
+    }
+  };
+
+  const copyVsCodeExtensionToken = async () => {
+    if (!vscodeExtensionTokenPlaintext) return;
+    isCopyingVsCodeExtensionToken = true;
+    try {
+      await navigator.clipboard.writeText(vscodeExtensionTokenPlaintext);
+      addToast({
+        type: 'success',
+        message: get(_)('settings.vscodeExtension.token.toasts.copied'),
+      });
+    } catch (error) {
+      console.error('Failed to copy vscode extension token:', error);
+      addToast({
+        type: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : get(_)('settings.vscodeExtension.token.errors.copy'),
+      });
+    } finally {
+      isCopyingVsCodeExtensionToken = false;
+    }
+  };
+
+  const loadProviderConnections = async () => {
+    isLoadingProviderConnections = true;
+    providerConnectionsError = '';
+    try {
+      const payload = await apiGet<{
+        providers: ProviderConnectionState[];
+        openaiTransportMode?: 'codex' | 'token';
+      }>('/settings/provider-connections');
+      providerConnections = Array.isArray(payload.providers) ? payload.providers : [];
+      openaiTransportMode = payload.openaiTransportMode === 'codex' ? 'codex' : 'token';
+      codexConnectionAccountLabel =
+        providerConnections.find((provider) => provider.providerId === 'codex')
+          ?.accountLabel || '';
+      const codex = providerConnections.find((provider) => provider.providerId === 'codex');
+      if (codexPollingTimer) clearTimeout(codexPollingTimer);
+      codexPollingTimer = null;
+      if (codex?.connectionStatus === 'pending') {
+        codexPollingTimer = setTimeout(() => {
+          void completeCodexProviderConnection(true);
+        }, 4000);
+      }
+    } catch (error) {
+      console.error('Failed to load provider connections:', error);
+      providerConnectionsError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.providerConnections.errors.load');
+    } finally {
+      isLoadingProviderConnections = false;
+    }
+  };
+
+  const syncCodexProviderInList = (updatedProvider: ProviderConnectionState) => {
+    providerConnections = providerConnections.map((provider) =>
+      provider.providerId === 'codex' ? updatedProvider : provider,
+    );
+    if (!providerConnections.some((provider) => provider.providerId === 'codex')) {
+      providerConnections = [updatedProvider, ...providerConnections];
+    }
+    codexConnectionAccountLabel = updatedProvider.accountLabel || '';
+    if (codexPollingTimer) clearTimeout(codexPollingTimer);
+    codexPollingTimer = null;
+    if (updatedProvider.connectionStatus === 'pending') {
+      codexPollingTimer = setTimeout(() => {
+        void completeCodexProviderConnection(true);
+      }, 4000);
+    }
+  };
+
+  const saveOpenAITransportMode = async (mode: 'codex' | 'token') => {
+    if (openaiTransportMode === mode) return;
+    isSavingCodexProviderConnection = true;
+    providerConnectionsError = '';
+    try {
+      await apiPost('/settings/provider-connections/openai/mode', { mode });
+      openaiTransportMode = mode;
+      await loadProviderConnections();
+    } catch (error) {
+      providerConnectionsError =
+        error instanceof Error ? error.message : get(_)('settings.providerConnections.errors.save');
+    } finally {
+      isSavingCodexProviderConnection = false;
+    }
+  };
+
+  const startCodexProviderConnection = async () => {
+    isSavingCodexProviderConnection = true;
+    providerConnectionsError = '';
+    try {
+      const updatedProvider = await startCodexProviderEnrollment({
+        accountLabel: codexConnectionAccountLabel.trim() || null,
+      });
+      syncCodexProviderInList(updatedProvider);
+      addToast({
+        type: 'success',
+        message: get(_)('settings.providerConnections.toasts.codexEnrollmentStarted'),
+      });
+    } catch (error) {
+      console.error('Failed to update codex provider connection:', error);
+      providerConnectionsError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.providerConnections.errors.save');
+    } finally {
+      isSavingCodexProviderConnection = false;
+    }
+  };
+
+  const completeCodexProviderConnection = async (silent = false) => {
+    const codex = codexProviderConnection;
+    if (!codex?.enrollmentId) {
+      if (!silent) {
+        providerConnectionsError = get(_)('settings.providerConnections.errors.missingEnrollment');
+      }
+      return;
+    }
+    isSavingCodexProviderConnection = true;
+    if (!silent) providerConnectionsError = '';
+    try {
+      const updatedProvider = await completeCodexProviderEnrollment({
+        enrollmentId: codex.enrollmentId,
+        accountLabel: codexConnectionAccountLabel.trim() || null,
+      });
+      syncCodexProviderInList(updatedProvider);
+      if (updatedProvider.connectionStatus === 'connected') {
+        addToast({
+          type: 'success',
+          message: get(_)('settings.providerConnections.toasts.codexConnected'),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to complete codex provider enrollment:', error);
+      if (!silent || error instanceof Error) {
+        providerConnectionsError =
+          error instanceof Error
+            ? error.message
+            : get(_)('settings.providerConnections.errors.save');
+      }
+    } finally {
+      isSavingCodexProviderConnection = false;
+    }
+  };
+
+  const disconnectCodexProviderConnection = async () => {
+    isSavingCodexProviderConnection = true;
+    providerConnectionsError = '';
+    try {
+      const updatedProvider = await disconnectCodexProviderEnrollment();
+      syncCodexProviderInList(updatedProvider);
+      addToast({
+        type: 'success',
+        message: get(_)('settings.providerConnections.toasts.codexDisconnected'),
+      });
+    } catch (error) {
+      console.error('Failed to disconnect codex provider connection:', error);
+      providerConnectionsError =
+        error instanceof Error
+          ? error.message
+          : get(_)('settings.providerConnections.errors.save');
+    } finally {
+      isSavingCodexProviderConnection = false;
     }
   };
 
@@ -541,15 +878,36 @@
       <div class="rounded border border-rose-200 bg-rose-50 p-4">
 	        <h3 class="font-medium text-rose-800">{$_('settings.dangerZone')}</h3>
 	        <div class="mt-3 flex flex-wrap gap-2">
-	          <button class="rounded bg-amber-700 px-3 py-2 text-sm text-white" on:click={handleDeactivate} disabled={deactivating}>
+	          <button class={settingsWarningButtonClass} on:click={handleDeactivate} disabled={deactivating}>
 	            {$_('settings.deactivateAccount')}
 	          </button>
-	          <button class="rounded bg-rose-700 px-3 py-2 text-sm text-white" on:click={handleDelete} disabled={deleting}>
+	          <button class={settingsDangerButtonClass} on:click={handleDelete} disabled={deleting}>
 	            {$_('settings.deleteAccount')}
 	          </button>
 	        </div>
 	      </div>
     {/if}
+  </div>
+
+  <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
+    <h2 class="text-lg font-semibold text-slate-800">{$_('settings.theme.title')}</h2>
+    <p class="text-sm text-slate-600">{$_('settings.theme.description')}</p>
+    <div class="max-w-sm space-y-2">
+      <label for="theme-preference" class="block text-sm font-medium text-slate-700">
+        {$_('settings.theme.modeLabel')}
+      </label>
+      <select
+        id="theme-preference"
+        value={$themePreference}
+        on:change={(event) =>
+          updateThemePreference((event.currentTarget as HTMLSelectElement).value)}
+        class="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="system">{$_('settings.theme.modes.system')}</option>
+        <option value="light">{$_('settings.theme.modes.light')}</option>
+        <option value="dark">{$_('settings.theme.modes.dark')}</option>
+      </select>
+    </div>
   </div>
 
   <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
@@ -673,11 +1031,318 @@
     {/if}
   </div>
 
+  <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="vscode-extension-download-card">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="space-y-1">
+        <h2 class="text-lg font-semibold text-slate-800">{$_('settings.vscodeExtension.title')}</h2>
+        <p class="text-sm text-slate-600">{$_('settings.vscodeExtension.description')}</p>
+        <p class="text-sm font-medium text-rose-700">
+          {$_('settings.vscodeExtension.experimentalWarning')}
+        </p>
+      </div>
+
+      {#if isLoadingVsCodeExtensionDownload}
+        <span class="text-sm text-slate-600" data-testid="vscode-extension-download-loading">
+          {$_('settings.vscodeExtension.loading')}
+        </span>
+      {:else if vscodeExtensionDownloadMetadata}
+        <a
+          class="inline-flex items-center justify-center rounded p-2 transition text-primary hover:bg-slate-100"
+          href={vscodeExtensionDownloadMetadata.downloadUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label={$_('settings.vscodeExtension.downloadTooltip')}
+          title={$_('settings.vscodeExtension.downloadTooltip')}
+          data-testid="vscode-extension-download-cta"
+        >
+          <Download class="h-5 w-5" />
+        </a>
+      {:else}
+        <button
+          class="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          type="button"
+          on:click={loadVsCodeExtensionDownloadMetadata}
+          data-testid="vscode-extension-download-retry"
+        >
+          {$_('settings.vscodeExtension.retry')}
+        </button>
+      {/if}
+    </div>
+
+    {#if vscodeExtensionDownloadMetadata}
+      <dl class="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+        <div class="rounded border border-slate-200 p-3">
+          <dt class="text-slate-500">{$_('settings.vscodeExtension.versionLabel')}</dt>
+          <dd class="font-medium text-slate-900" data-testid="vscode-extension-version">
+            {vscodeExtensionDownloadMetadata.version}
+          </dd>
+        </div>
+        <div class="rounded border border-slate-200 p-3">
+          <dt class="text-slate-500">{$_('settings.vscodeExtension.sourceLabel')}</dt>
+          <dd class="font-medium text-slate-900" data-testid="vscode-extension-source">
+            {vscodeExtensionDownloadMetadata.source}
+          </dd>
+        </div>
+      </dl>
+    {:else if vscodeExtensionDownloadError}
+      <p class="text-sm text-rose-700" data-testid="vscode-extension-download-error">
+        {vscodeExtensionDownloadError}
+      </p>
+    {/if}
+    {#if isAdmin()}
+      <div class="space-y-3 rounded border border-slate-200 bg-slate-50 p-4" data-testid="vscode-extension-token-card">
+        <div class="space-y-1">
+          <h3 class="text-sm font-semibold text-slate-800">{$_('settings.vscodeExtension.token.title')}</h3>
+          <p class="text-xs text-slate-600">{$_('settings.vscodeExtension.token.description')}</p>
+        </div>
+        {#if isLoadingVsCodeExtensionToken}
+          <p class="text-xs text-slate-600">{$_('settings.vscodeExtension.token.loading')}</p>
+        {:else}
+          <dl class="grid gap-2 text-xs text-slate-700 md:grid-cols-2">
+            <div class="rounded border border-slate-200 bg-white p-2">
+              <dt class="text-slate-500">{$_('settings.vscodeExtension.token.statusLabel')}</dt>
+              <dd class="font-medium text-slate-900" data-testid="vscode-extension-token-status">
+                {vscodeExtensionTokenActive
+                  ? $_('settings.vscodeExtension.token.statusActive')
+                  : $_('settings.vscodeExtension.token.statusInactive')}
+              </dd>
+            </div>
+            <div class="rounded border border-slate-200 bg-white p-2">
+              <dt class="text-slate-500">{$_('settings.vscodeExtension.token.last4Label')}</dt>
+              <dd class="font-medium text-slate-900" data-testid="vscode-extension-token-last4">
+                {vscodeExtensionTokenMeta?.last4 ?? $_('settings.vscodeExtension.token.notAvailable')}
+              </dd>
+            </div>
+            <div class="rounded border border-slate-200 bg-white p-2">
+              <dt class="text-slate-500">{$_('settings.vscodeExtension.token.issuedAtLabel')}</dt>
+              <dd class="font-medium text-slate-900">
+                {formatDateTime(vscodeExtensionTokenMeta?.issuedAt)}
+              </dd>
+            </div>
+            <div class="rounded border border-slate-200 bg-white p-2">
+              <dt class="text-slate-500">{$_('settings.vscodeExtension.token.expiresAtLabel')}</dt>
+              <dd class="font-medium text-slate-900">
+                {formatDateTime(vscodeExtensionTokenMeta?.expiresAt)}
+              </dd>
+            </div>
+          </dl>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              class={settingsPrimaryButtonClass}
+              type="button"
+              on:click={issueVsCodeExtensionToken}
+              disabled={isIssuingVsCodeExtensionToken || isRevokingVsCodeExtensionToken}
+            >
+              <RefreshCw class="h-3.5 w-3.5" />
+              {vscodeExtensionTokenActive
+                ? $_('settings.vscodeExtension.token.rotate')
+                : $_('settings.vscodeExtension.token.issue')}
+            </button>
+            <button
+              class={settingsSecondaryButtonClass}
+              type="button"
+              on:click={revokeVsCodeExtensionToken}
+              disabled={!vscodeExtensionTokenActive || isIssuingVsCodeExtensionToken || isRevokingVsCodeExtensionToken}
+            >
+              {$_('settings.vscodeExtension.token.revoke')}
+            </button>
+          </div>
+
+          {#if vscodeExtensionTokenPlaintext}
+            <div class="space-y-2 rounded border border-amber-200 bg-amber-50 p-3">
+              <p class="text-xs text-amber-800">{$_('settings.vscodeExtension.token.oneTimeNotice')}</p>
+              <div class="flex items-center gap-2">
+                <input
+                  class="w-full rounded border border-amber-300 bg-white px-2 py-1 text-xs text-slate-700"
+                  type="text"
+                  readonly
+                  value={vscodeExtensionTokenPlaintext}
+                  data-testid="vscode-extension-token-plaintext"
+                />
+                <button
+                  class="inline-flex items-center gap-1 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-amber-100 disabled:opacity-50"
+                  type="button"
+                  on:click={copyVsCodeExtensionToken}
+                  disabled={isCopyingVsCodeExtensionToken}
+                  data-testid="vscode-extension-token-copy"
+                >
+                  <Copy class="h-3.5 w-3.5" />
+                  {$_('settings.vscodeExtension.token.copy')}
+                </button>
+              </div>
+            </div>
+          {/if}
+
+          {#if vscodeExtensionTokenError}
+            <p class="text-sm text-rose-700" data-testid="vscode-extension-token-error">
+              {vscodeExtensionTokenError}
+            </p>
+          {/if}
+        {/if}
+      </div>
+    {/if}
+  </div>
+
   {#if !isAdmin()}
     <div class="rounded border border-slate-200 bg-white p-6">
       <p class="text-sm text-slate-600">{$_('settings.adminOnlyHint')}</p>
     </div>
   {:else}
+
+  <div class="space-y-4 rounded border border-slate-200 bg-white p-6">
+    <h2 class="text-lg font-semibold text-slate-800 mb-1">
+      {$_('settings.providerConnections.title')}
+    </h2>
+    <p class="text-sm text-slate-600">
+      {$_('settings.providerConnections.description')}
+    </p>
+
+    {#if isLoadingProviderConnections}
+      <p class="text-sm text-slate-600">{$_('common.loading')}</p>
+    {:else}
+      <div class="grid gap-3 md:grid-cols-3">
+        {#each providerConnections as provider (provider.providerId)}
+          <div class="rounded border border-slate-200 bg-slate-50 p-3">
+            <div class="flex items-center justify-between gap-2">
+              <div class="text-sm font-semibold text-slate-800">{provider.label}</div>
+              <span
+                class={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  provider.ready
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-slate-200 text-slate-700'
+                }`}
+              >
+                {provider.ready
+                  ? $_('settings.providerConnections.status.ready')
+                  : $_('settings.providerConnections.status.notReady')}
+              </span>
+            </div>
+            <div class="mt-1 text-xs text-slate-600">
+              {provider.managedBy === 'admin_settings'
+                ? $_('settings.providerConnections.managedBy.admin')
+                : provider.managedBy === 'environment'
+                  ? $_('settings.providerConnections.managedBy.environment')
+                  : $_('settings.providerConnections.managedBy.none')}
+            </div>
+            {#if provider.accountLabel}
+              <div class="mt-1 text-xs text-slate-500">{provider.accountLabel}</div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+
+      <div class="space-y-2 rounded border border-slate-200 p-3">
+        <div class="text-sm font-medium text-slate-700">OpenAI runtime source</div>
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class={openaiTransportMode === 'token' ? settingsPrimaryButtonClass : settingsSecondaryButtonClass}
+            on:click={() => saveOpenAITransportMode('token')}
+            disabled={isSavingCodexProviderConnection}
+          >
+            OpenAI key
+          </button>
+          <button
+            type="button"
+            class={openaiTransportMode === 'codex' ? settingsPrimaryButtonClass : settingsSecondaryButtonClass}
+            on:click={() => saveOpenAITransportMode('codex')}
+            disabled={isSavingCodexProviderConnection || codexProviderConnection?.connectionStatus !== 'connected'}
+          >
+            Codex token
+          </button>
+        </div>
+      </div>
+
+      {#if codexProviderConnection?.canConfigure}
+        <div class="space-y-2 rounded border border-slate-200 p-3">
+          <label for="codex-provider-account" class="block text-sm font-medium text-slate-700">
+            {$_('settings.providerConnections.codex.accountLabel')}
+          </label>
+          <input
+            id="codex-provider-account"
+            type="text"
+            bind:value={codexConnectionAccountLabel}
+            placeholder={$_('settings.providerConnections.codex.accountPlaceholder')}
+            class="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-700"
+            disabled={isSavingCodexProviderConnection}
+          />
+          <div class="flex flex-wrap gap-2">
+            {#if !codexProviderConnection || codexProviderConnection.connectionStatus === 'disconnected'}
+              <button
+                type="button"
+                class={settingsPrimaryButtonClass}
+                on:click={startCodexProviderConnection}
+                disabled={isSavingCodexProviderConnection}
+              >
+                {$_('settings.providerConnections.codex.startEnrollment')}
+              </button>
+            {/if}
+            {#if codexProviderConnection?.connectionStatus === 'pending'}
+              <button
+                type="button"
+                class={settingsPrimaryButtonClass}
+                on:click={startCodexProviderConnection}
+                disabled={isSavingCodexProviderConnection}
+              >
+                {$_('settings.providerConnections.codex.regenerateEnrollment')}
+              </button>
+              <button
+                type="button"
+                class={settingsSecondaryButtonClass}
+                on:click={disconnectCodexProviderConnection}
+                disabled={isSavingCodexProviderConnection}
+              >
+                {$_('settings.providerConnections.codex.cancelEnrollment')}
+              </button>
+            {/if}
+            {#if codexProviderConnection?.connectionStatus === 'connected'}
+              <button
+                type="button"
+                class={settingsSecondaryButtonClass}
+                on:click={disconnectCodexProviderConnection}
+                disabled={isSavingCodexProviderConnection}
+              >
+                {$_('settings.providerConnections.codex.disconnect')}
+              </button>
+            {/if}
+          </div>
+          {#if codexProviderConnection?.connectionStatus === 'pending'}
+            <p class="text-xs text-amber-700">
+              {$_('settings.providerConnections.codex.pendingHint')}
+            </p>
+            {#if codexProviderConnection?.enrollmentCode}
+              <div class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <div class="text-xs font-medium uppercase tracking-wide text-amber-700">
+                  {$_('settings.providerConnections.codex.deviceCodeLabel')}
+                </div>
+                <div class="mt-1 font-mono text-base">{codexProviderConnection?.enrollmentCode}</div>
+              </div>
+            {/if}
+            {#if codexProviderConnection?.enrollmentUrl}
+              <div class="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                <div class="font-medium text-slate-900">
+                  {$_('settings.providerConnections.codex.linkHint')}
+                </div>
+                <a
+                  class="mt-1 block break-all text-blue-700 underline"
+                  href={codexProviderConnection.enrollmentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {codexProviderConnection.enrollmentUrl}
+                </a>
+              </div>
+            {/if}
+          {/if}
+        </div>
+      {/if}
+    {/if}
+
+    {#if providerConnectionsError}
+      <p class="text-sm text-rose-700">{providerConnectionsError}</p>
+    {/if}
+  </div>
 
   <!-- Section Configuration IA -->
 	  <div class="space-y-4 rounded border border-slate-200 bg-white p-6">

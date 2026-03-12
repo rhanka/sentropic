@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { sanitizeGeminiResponseSchema } from '../../src/services/openai';
+import { sanitizeGeminiResponseSchema } from '../../src/services/llm-runtime';
 
 describe('sanitizeGeminiResponseSchema', () => {
   it('removes unsupported Gemini response schema keywords recursively', () => {

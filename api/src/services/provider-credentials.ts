@@ -1,5 +1,6 @@
 import { env } from '../config/env';
 import type { ProviderId } from './provider-runtime';
+import { decryptSecretOrNull } from './secret-crypto';
 import { settingsService } from './settings';
 
 export type ProviderCredentialSource =
@@ -16,8 +17,9 @@ export type ResolvedProviderCredential = {
 };
 
 const normalizeCredential = (value: string | null | undefined): string | null => {
-  if (typeof value !== 'string') return null;
-  const normalized = value.trim();
+  const decrypted = decryptSecretOrNull(value);
+  if (typeof decrypted !== 'string') return null;
+  const normalized = decrypted.trim();
   return normalized.length > 0 ? normalized : null;
 };
 
@@ -56,7 +58,8 @@ export const resolveProviderCredential = async (input: {
   if (userId) {
     const userCredential = normalizeCredential(
       await settingsService.get(
-        buildUserProviderCredentialSettingKey(input.providerId, userId)
+        buildUserProviderCredentialSettingKey(input.providerId, userId),
+        { userId, fallbackToGlobal: false }
       )
     );
     if (userCredential) {

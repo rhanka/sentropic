@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "vite dev",
-    "build": "svelte-kit sync && npm run build:ext && vite build",
+    "build": "svelte-kit sync && npm run build:ext && npm run build:vscode-ext && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -14,6 +14,9 @@
     "test": "vitest run",
     "build:ext": "vite build --config ./chrome-ext/vite.config.ext.ts && node ./chrome-ext/copy-assets.js && node ./chrome-ext/package-extension-zip.js",
     "dev:ext": "vite build --config ./chrome-ext/vite.config.ext.ts --watch",
+    "build:vscode-webview": "vite build --config ./vscode-ext/vite.webview.config.ts",
+    "build:vscode-ext": "node ./vscode-ext/package-vsix.js",
+    "dev:vscode-ext": "node ./vscode-ext/package-vsix.js --watch",
     "client:generate": "echo 'Client generation placeholder'"
   },
   "devDependencies": {

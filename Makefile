@@ -25,6 +25,7 @@ export UI_BASE_URL ?= http://localhost:$(UI_PORT)
 export MAILDEV_API_URL ?= http://localhost:$(MAILDEV_UI_PORT)
 export WEBAUTHN_ORIGIN ?= http://localhost:$(UI_PORT)
 export WEBAUTHN_RP_ID ?= localhost
+export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*
 
 export API_VERSION    ?= $(shell echo "api/src api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs ui/tailwind.config.cjs" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
@@ -259,8 +260,8 @@ build-ui-image: ## Build the UI Docker image for production
 build-ui: ## Build the SvelteKit UI (static)
 	TARGET=development $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run ui npm run build
 
-.PHONY: build-ext
-build-ext: up-ui ## Build Chrome extension to ui/chrome-ext/dist
+.PHONY: build-ext-chrome
+build-ext-chrome: up-ui ## Build Chrome extension to ui/chrome-ext/dist
 	@echo "📦 Syncing UI dependencies in container..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm install --include=dev
 	@echo "🧩 Building Chrome Extension..."
@@ -273,6 +274,100 @@ build-ext: up-ui ## Build Chrome extension to ui/chrome-ext/dist
 dev-ext: up-ui ## Watch build Chrome extension
 	@echo "👀 Watching Chrome Extension..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run dev:ext
+
+.PHONY: build-ext-vscode
+build-ext-vscode: up-ui ## Build VSCode extension package to ui/static/vscode-extension
+	@echo "📦 Syncing UI dependencies in container..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm install --include=dev
+	@echo "🧩 Building VSCode Extension package..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run build:vscode-ext
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /app/static/vscode-extension /app/vscode-ext/dist'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui sh -lc 'test -f /app/static/vscode-extension/top-ai-ideas-vscode-extension.vsix && test -f /app/vscode-ext/dist/extension.js'
+	@echo "✅ VSCode extension package built in ui/static/vscode-extension"
+
+.PHONY: dev-ext-vscode
+dev-ext-vscode: up-ui ## Watch and rebuild VSCode extension package
+	@echo "👀 Watching VSCode Extension..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run dev:vscode-ext
+
+.PHONY: up-dev-vscode
+up-dev-vscode: build-ext-vscode ## Start OpenVSCode mounted dev lane on top of the standard dev stack
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile vscode up -d openvscode-dev
+
+.PHONY: down-dev-vscode
+down-dev-vscode: ## Stop OpenVSCode mounted dev lane
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile vscode stop openvscode-dev >/dev/null 2>&1 || true
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile vscode rm -f openvscode-dev >/dev/null 2>&1 || true
+
+.PHONY: ps-dev-vscode
+ps-dev-vscode: ## Show OpenVSCode mounted dev lane services
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile vscode ps openvscode-dev
+
+.PHONY: logs-dev-vscode
+logs-dev-vscode: ## Stream OpenVSCode mounted dev lane logs
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile vscode logs -f openvscode-dev
+
+.PHONY: up-dev-playwright
+up-dev-playwright: ## Start Playwright dev helper on top of the standard dev stack
+	@playwright_ui_port="$${PLAYWRIGHT_DEV_UI_PORT:-5174}"; \
+	ui_origin="http://host.docker.internal:$$playwright_ui_port"; \
+	api_origin="http://host.docker.internal:$(API_PORT)"; \
+	CORS_ALLOWED_ORIGINS="http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,$$ui_origin,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*" \
+	DISABLE_RATE_LIMIT=true \
+	PLAYWRIGHT_DEV_UI_PORT="$$playwright_ui_port" \
+	UI_BASE_URL="$$ui_origin" \
+	API_BASE_URL="$$api_origin" \
+	VITE_API_BASE_URL="$$api_origin/api/v1" \
+	VITE_EXTENSION_API_BASE_URL="$$api_origin/api/v1" \
+	VITE_EXTENSION_APP_BASE_URL="$$ui_origin" \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright up -d --force-recreate api ui-playwright-dev playwright-dev
+
+.PHONY: down-dev-playwright
+down-dev-playwright: ## Stop Playwright dev helper
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright stop playwright-dev >/dev/null 2>&1 || true
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright rm -f playwright-dev >/dev/null 2>&1 || true
+
+.PHONY: ps-dev-playwright
+ps-dev-playwright: ## Show Playwright dev helper
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright ps playwright-dev
+
+.PHONY: logs-dev-playwright
+logs-dev-playwright: ## Stream Playwright dev helper logs
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright logs -f playwright-dev
+
+.PHONY: shell-dev-playwright
+shell-dev-playwright: up-dev-playwright ## Open a shell inside the Playwright dev helper
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec playwright-dev sh
+
+.PHONY: record-dev-playwright-auth
+record-dev-playwright-auth: up-dev-playwright ## Record a reusable Playwright storageState against ENV=dev
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec -T playwright-dev sh -lc ' \
+	  email="$${DEV_PLAYWRIGHT_AUTH_EMAIL:-admin@sent-tech.ca}"; \
+	  echo "▶ Recording Playwright dev auth for $$email"; \
+	  npx playwright test --config playwright.dev.config.ts tests/dev/00-record-auth.spec.ts --workers=1 --retries=0 --reporter=list --grep "$$email"; \
+	'
+
+.PHONY: test-e2e-dev
+test-e2e-dev: up-dev-playwright ## Run scoped Playwright against ENV=dev without seed/reset/global setup
+	@if [ -z "$(E2E_SPEC)" ]; then \
+	  echo "❌ E2E_SPEC is required (example: tests/dev/01-chat-bootstrap-reload.spec.ts)"; \
+	  exit 2; \
+	fi
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec -T playwright-dev sh -lc ' \
+	  test -f /app/.auth/dev-state.json || { \
+	    echo "❌ Missing /app/.auth/dev-state.json. Record a manual dev storageState before using test-e2e-dev."; \
+	    exit 2; \
+	  }; \
+	  workers="$${WORKERS:-1}"; \
+	  retries="$${RETRIES:-0}"; \
+	  max_fail="$${MAX_FAILURES:-}"; \
+	  extra=""; \
+	  if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
+	  spec_path="$(E2E_SPEC)"; \
+	  spec_path="$${spec_path#e2e/}"; \
+	  echo "▶ Running scoped Playwright (dev): $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
+	  npx playwright test --config playwright.dev.config.ts "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra; \
+	'
 
 update-%:
 	@echo "🔒 Updating $* ..."
@@ -542,6 +637,26 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	@echo "🛑 Stopping services..."
 	# @$(DOCKER_COMPOSE) down
 
+.PHONY: test-e2e-vscode
+test-e2e-vscode: up-e2e-vscode wait-ready db-seed-test e2e-set-queue ## Run VSCode E2E lane (requires E2E_SPEC)
+	@if [ -z "$$E2E_SPEC" ]; then \
+	  echo "❌ E2E_SPEC is required (example: tests/vscode/01-vscode-chat-streaming.spec.ts)"; \
+	  exit 2; \
+	fi
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml run --rm --no-deps \
+	  -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES -e OPENVSCODE_BASE_URL="http://localhost:$${OPENVSCODE_PORT:-3115}" \
+	  e2e-vscode sh -lc ' \
+	    workers="$${WORKERS:-2}"; \
+	    retries="$${RETRIES:-1}"; \
+	    max_fail="$${MAX_FAILURES:-}"; \
+	    extra=""; \
+	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
+	    spec_path="$${E2E_SPEC#e2e/}"; \
+	    echo "▶ Running VSCode scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
+	    npx playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra'
+	@echo "🛑 Stopping VSCode E2E services..."
+	# @$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml down
+
 .PHONY: test-smoke
 test-smoke: up wait-ready ## Run smoke tests (quick E2E subset)
 	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e npx playwright test --grep "devrait charger"
@@ -611,6 +726,22 @@ up: ## Start the full stack in detached mode
 .PHONY: up-e2e
 up-e2e: ## Start stack with test overrides (UI env for API URL)
 	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
+
+.PHONY: up-e2e-vscode
+up-e2e-vscode: ## Start VSCode E2E stack (api/ui/e2e/openvscode)
+	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml up -d
+
+.PHONY: down-e2e-vscode
+down-e2e-vscode: ## Stop VSCode E2E stack
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml down
+
+.PHONY: ps-e2e-vscode
+ps-e2e-vscode: ## Show VSCode E2E services
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml ps
+
+.PHONY: logs-e2e-vscode
+logs-e2e-vscode: ## Stream VSCode E2E logs
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml logs -f
 
 .PHONY: up-api
 up-api: ## Start the api stack in detached mode

@@ -1,2 +1,4 @@
 # Generated extension package artifacts
 static/chrome-extension/
+static/vscode-extension/
+vscode-ext/dist/

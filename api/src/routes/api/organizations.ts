@@ -221,7 +221,7 @@ organizationsRouter.post(
 // POST /api/v1/organizations/:id/enrich - Start enrichment (async via queue)
 organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const { model } = await c.req.json().catch(() => ({}));
   const requestLocale = resolveLocaleFromHeaders({
     appLocaleHeader: c.req.header('x-app-locale'),
@@ -266,7 +266,7 @@ organizationsRouter.post('/:id/enrich', requireEditor, async (c) => {
 organizationsRouter.get('/:id', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
   const targetWorkspaceId = user.workspaceId;
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const [org] = await db
     .select()
     .from(organizations)
@@ -277,7 +277,7 @@ organizationsRouter.get('/:id', async (c) => {
 
 organizationsRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', organizationInput.partial()), async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const payload = c.req.valid('json');
 
   const [existing] = await db
@@ -346,7 +346,7 @@ organizationsRouter.post('/ai-enrich', requireEditor, requireWorkspaceEditorRole
 
 organizationsRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
 
   const [org] = await db
     .select()

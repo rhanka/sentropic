@@ -1,7 +1,7 @@
 import { writable, derived, get } from 'svelte/store';
 import { getNavigation } from '$lib/core/navigation-adapter';
 import { API_BASE_URL } from '$lib/config';
-import { getApiBaseUrl } from '$lib/core/api-client';
+import { getApiAuthToken, getApiBaseUrl } from '$lib/core/api-client';
 
 /**
  * Session Store
@@ -46,11 +46,13 @@ const isExtensionRuntime = (): boolean => {
 async function authRequest<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const baseUrl = getApiBaseUrl() ?? API_BASE_URL;
   const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
+  const authToken = getApiAuthToken();
   const res = await fetch(url, {
     ...options,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(options.headers ?? {})
     }
   });

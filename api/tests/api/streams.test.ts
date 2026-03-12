@@ -120,167 +120,10 @@ describe('Streams API Endpoints', () => {
   afterEach(async () => {
     // Cleanup stream events
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, testStreamId));
+    await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, testMessageId));
     await db.delete(chatMessages).where(eq(chatMessages.id, testMessageId));
     await db.delete(chatSessions).where(eq(chatSessions.id, testSessionId));
     await cleanupAuthData();
-  });
-
-  describe('GET /api/v1/streams/events/:streamId', () => {
-    it('should return stream events for a valid streamId', async () => {
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/streams/events/${testStreamId}`,
-        user.sessionToken!
-      );
-
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      expect(data.streamId).toBe(testStreamId);
-      expect(data.events).toBeDefined();
-      expect(Array.isArray(data.events)).toBe(true);
-      expect(data.events.length).toBe(3);
-      
-      // Vérifier l'ordre séquentiel
-      expect(data.events[0].sequence).toBe(1);
-      expect(data.events[1].sequence).toBe(2);
-      expect(data.events[2].sequence).toBe(3);
-      
-      // Vérifier les types d'événements
-      expect(data.events[0].eventType).toBe('content_delta');
-      expect(data.events[1].eventType).toBe('content_delta');
-      expect(data.events[2].eventType).toBe('done');
-    });
-
-    it('should respect limit parameter', async () => {
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/streams/events/${testStreamId}?limit=2`,
-        user.sessionToken!
-      );
-
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      expect(data.events.length).toBe(2);
-      expect(data.events[0].sequence).toBe(1);
-      expect(data.events[1].sequence).toBe(2);
-    });
-
-    it('should respect sinceSequence parameter', async () => {
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/streams/events/${testStreamId}?sinceSequence=2`,
-        user.sessionToken!
-      );
-
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      // sinceSequence=2 devrait retourner seulement les événements avec sequence > 2
-      expect(data.events.length).toBe(1);
-      expect(data.events[0].sequence).toBe(3);
-    });
-
-    it('should return empty array for non-existent streamId', async () => {
-      const nonExistentStreamId = `non_existent_${createTestId()}`;
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/streams/events/${nonExistentStreamId}`,
-        user.sessionToken!
-      );
-
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      expect(data.streamId).toBe(nonExistentStreamId);
-      expect(data.events).toEqual([]);
-    });
-
-    it('should return 401 without authentication', async () => {
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/streams/events/${testStreamId}`,
-        null // Pas de token
-      );
-
-      expect(response.status).toBe(401);
-    });
-
-    it('should handle events with tool_call types', async () => {
-      // Ajouter un événement tool_call
-      await writeStreamEvent(testStreamId, 'tool_call_start', { 
-        tool_call_id: 'test_tool_1', 
-        name: 'read_usecase' 
-      }, 4, testMessageId);
-      
-      await writeStreamEvent(testStreamId, 'tool_call_result', { 
-        tool_call_id: 'test_tool_1', 
-        result: { status: 'success', data: {} } 
-      }, 5, testMessageId);
-
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/streams/events/${testStreamId}`,
-        user.sessionToken!
-      );
-
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      expect(data.events.length).toBe(5);
-      
-      // Vérifier les événements tool_call
-      const toolCallStart = data.events.find((e: any) => e.eventType === 'tool_call_start');
-      expect(toolCallStart).toBeDefined();
-      expect(toolCallStart.data.tool_call_id).toBe('test_tool_1');
-      expect(['read_usecase', 'usecase_get']).toContain(toolCallStart.data.name);
-      
-      const toolCallResult = data.events.find((e: any) => e.eventType === 'tool_call_result');
-      expect(toolCallResult).toBeDefined();
-      expect(toolCallResult.data.tool_call_id).toBe('test_tool_1');
-    });
-
-    it('should handle reasoning_delta events', async () => {
-      // Ajouter un événement reasoning
-      await writeStreamEvent(testStreamId, 'reasoning_delta', { 
-        delta: 'Thinking about the problem...' 
-      }, 6, testMessageId);
-
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/streams/events/${testStreamId}`,
-        user.sessionToken!
-      );
-
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      const reasoningEvent = data.events.find((e: any) => e.eventType === 'reasoning_delta');
-      expect(reasoningEvent).toBeDefined();
-      expect(reasoningEvent.data.delta).toBe('Thinking about the problem...');
-    });
-
-    it('should handle error events', async () => {
-      // Ajouter un événement error
-      await writeStreamEvent(testStreamId, 'error', { 
-        message: 'Test error message' 
-      }, 7, testMessageId);
-
-      const response = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/streams/events/${testStreamId}`,
-        user.sessionToken!
-      );
-
-      expect(response.status).toBe(200);
-      const data = await response.json();
-      const errorEvent = data.events.find((e: any) => e.eventType === 'error');
-      expect(errorEvent).toBeDefined();
-      expect(errorEvent.data.message).toBe('Test error message');
-    });
   });
 
   describe('GET /api/v1/streams/sse (tenancy)', () => {
@@ -325,6 +168,38 @@ describe('Streams API Endpoints', () => {
       // Cleanup inserted org (avoid cross-test bleed)
       await db.delete(organizations).where(eq(organizations.id, org.id));
     });
+
+    it('replays only unseen stream events when an explicit cursor is provided', async () => {
+      const replayStreamId = testMessageId;
+      await writeStreamEvent(replayStreamId, 'content_delta', { delta: 'Part A' }, 1, testMessageId);
+      await writeStreamEvent(replayStreamId, 'content_delta', { delta: 'Part B' }, 2, testMessageId);
+      await writeStreamEvent(replayStreamId, 'done', {}, 3, testMessageId);
+
+      const cursor = Buffer.from(
+        JSON.stringify({
+          [replayStreamId]: 1,
+        }),
+      ).toString('base64url');
+
+      const reader = await openSse(
+        user.sessionToken!,
+        `/api/v1/streams/sse?streamIds=${encodeURIComponent(replayStreamId)}&cursor=${encodeURIComponent(cursor)}`,
+      );
+
+      const events = await collectFor(reader, 500);
+      await reader.cancel();
+
+      const replayed = events
+        .filter((event) => event.event === 'content_delta' || event.event === 'done')
+        .map((event) => ({
+          event: event.event,
+          sequence: event.data?.sequence,
+        }));
+
+      expect(replayed).toEqual([
+        { event: 'content_delta', sequence: 2 },
+        { event: 'done', sequence: 3 },
+      ]);
+    });
   });
 });
-

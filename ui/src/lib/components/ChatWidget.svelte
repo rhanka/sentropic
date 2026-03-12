@@ -2,8 +2,9 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import type { ContextProvider } from '$lib/core/context-provider';
   import { _ } from 'svelte-i18n';
+  import { initApiClient } from '$lib/core/api-client';
   import { queueStore, loadJobs, updateJob, addJob } from '$lib/stores/queue';
-  import { apiPost } from '$lib/utils/api';
+  import { apiGet, apiPost } from '$lib/utils/api';
   import { addToast } from '$lib/stores/toast';
   import {
     isAuthenticated,
@@ -34,6 +35,11 @@
     upsertLocalToolPermissionPolicy,
     type LocalToolPermissionPolicyEntry,
   } from '$lib/stores/localTools';
+  import {
+    resolveCodeAgentPromptProfile,
+    type CodeAgentPromptSource,
+  } from '$lib/vscode/code-agent-profile';
+  import { resolveExtensionAuthUiState } from '$lib/utils/extension-auth-ui';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -57,6 +63,7 @@
   let chatSessionId: string | null = null;
   let chatLoadingSessions = false;
   let activeChatSession: ChatSession | null = null;
+  let pendingChatSessionDeleteConfirm = false;
   let commentContext: {
     type: 'organization' | 'folder' | 'usecase' | 'executive_summary';
     id?: string;
@@ -103,34 +110,82 @@
 
   type DisplayMode = 'floating' | 'docked';
   type ExtensionProfile = 'uat' | 'prod';
+  type ExtensionCodeWorkspaceSummary = {
+    id: string;
+    name: string;
+    role: 'viewer' | 'commenter' | 'editor' | 'admin';
+  };
   type ExtensionRuntimeConfig = {
     profile: ExtensionProfile;
     apiBaseUrl: string;
     appBaseUrl: string;
     wsBaseUrl: string;
+    sessionToken: string;
+    codeAgentPromptDefault: string;
+    codeAgentPromptGlobal: string;
+    codeAgentPromptWorkspace: string;
+    codeAgentPromptEffective: string;
+    codeAgentPromptSource: CodeAgentPromptSource;
+    instructionIncludePatterns: string;
+    workspaceScopeKey: string;
+    workspaceScopeLabel: string;
+    projectFingerprint: string;
+    workspaceScopeWorkspaceId: string;
+    workspaceScopeLastWorkspaceId: string;
+    codeWorkspaces: ExtensionCodeWorkspaceSummary[];
     updatedAt?: number;
   };
   type ExtensionConfigStatusKind = 'info' | 'ok' | 'error';
   type ExtensionAuthStatusKind = 'info' | 'ok' | 'error';
+  type ProviderReadinessEntry = {
+    providerId: string;
+    label: string;
+    ready: boolean;
+    managedBy: 'admin_settings' | 'environment' | 'none';
+    accountLabel?: string | null;
+  };
   const DISPLAY_MODE_STORAGE_KEY = 'chatWidgetDisplayMode';
   const HANDOFF_EVENT = 'topai:chatwidget-handoff-state';
+  const HANDOFF_STORAGE_KEY = 'topai:chatwidget-handoff-state';
   const OPEN_SIDEPANEL_EVENT = 'topai:open-sidepanel';
   const OPEN_OVERLAY_EVENT = 'topai:open-overlay';
   const OPEN_CHAT_EVENT = 'topai:open-chat';
   const EXTENSION_CONFIG_UPDATED_EVENT = 'topai:extension-config-updated';
   const DEFAULT_EXTENSION_CONFIGS: Record<
     ExtensionProfile,
-    Omit<ExtensionRuntimeConfig, 'profile' | 'updatedAt'>
+    Omit<ExtensionRuntimeConfig, 'profile' | 'updatedAt' | 'workspaceScopeKey' | 'workspaceScopeLabel'>
   > = {
     uat: {
       apiBaseUrl: 'http://localhost:8787/api/v1',
       appBaseUrl: 'http://localhost:5173',
       wsBaseUrl: '',
+      sessionToken: '',
+      codeAgentPromptDefault: '',
+      codeAgentPromptGlobal: '',
+      codeAgentPromptWorkspace: '',
+      codeAgentPromptEffective: '',
+      codeAgentPromptSource: 'default',
+      instructionIncludePatterns: '',
+      projectFingerprint: '',
+      workspaceScopeWorkspaceId: '',
+      workspaceScopeLastWorkspaceId: '',
+      codeWorkspaces: [],
     },
     prod: {
       apiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca/api/v1',
       appBaseUrl: 'https://top-ai-ideas.sent-tech.ca',
       wsBaseUrl: '',
+      sessionToken: '',
+      codeAgentPromptDefault: '',
+      codeAgentPromptGlobal: '',
+      codeAgentPromptWorkspace: '',
+      codeAgentPromptEffective: '',
+      codeAgentPromptSource: 'default',
+      instructionIncludePatterns: '',
+      projectFingerprint: '',
+      workspaceScopeWorkspaceId: '',
+      workspaceScopeLastWorkspaceId: '',
+      codeWorkspaces: [],
     },
   };
   let displayMode: DisplayMode = 'floating';
@@ -154,13 +209,25 @@
   let extensionAuthConnected = false;
   let extensionAuthUser: User | null = null;
   let extensionAuthLoginUrl: string | null = null;
+  let usesExtensionTokenBootstrap = false;
+  let extensionAuthUi = resolveExtensionAuthUiState({
+    usesTokenBootstrap: false,
+    isExtensionConfigAvailable: false,
+    sessionToken: '',
+    connected: false,
+    loginUrl: null,
+  });
+  let extensionProviderReadiness: ProviderReadinessEntry[] = [];
+  let extensionProviderReadinessLoading = false;
+  let extensionProviderReadinessError = '';
   let extensionConfigMenuWasOpen = false;
-  let extensionSettingsTab: 'endpoint' | 'permissions' = 'endpoint';
+  type ExtensionSettingsTab = 'server' | 'workspace' | 'tools';
+  let extensionSettingsTab: ExtensionSettingsTab = 'server';
   let extensionConfigMenuMaxHeightPx = 360;
   let extensionToolPermissionsLoading = false;
   let extensionToolPermissionsError = '';
   let extensionToolPermissions: LocalToolPermissionPolicyEntry[] = [];
-  const EXTENSION_PERMISSION_TOOL_OPTIONS = [
+  const CHROME_EXTENSION_PERMISSION_TOOL_OPTIONS = [
     'tab_read:*',
     'tab_read:info',
     'tab_read:dom',
@@ -172,12 +239,47 @@
     'tab_action:scroll',
     'tab_action:wait',
   ];
+  const VSCODE_EXTENSION_PERMISSION_TOOL_OPTIONS = [
+    'bash:*',
+    'bash:git add',
+    'bash:git push',
+    'bash:rm -rf',
+    'ls',
+    'rg',
+    'file_read',
+    'file_edit',
+    'git',
+    'git:*',
+    'git:commit',
+    'git:push',
+  ];
+  type ExtensionBashRuleMode = 'wildcard' | 'mono' | 'bigram' | 'manual';
   let extensionPermissionDraftToolName = 'tab_action:*';
   let extensionPermissionDraftOrigin = '';
+  let extensionPermissionDraftPathPattern = '';
   let extensionPermissionDraftPolicy: 'allow' | 'deny' = 'allow';
+  let extensionPermissionBashMode: ExtensionBashRuleMode = 'wildcard';
+  let extensionPermissionBashMono = 'git';
+  let extensionPermissionBashBigramFirst = 'git';
+  let extensionPermissionBashBigramSecond = 'add';
+  let extensionPermissionBashManual = 'bash:*';
+  let extensionCodeAgentPromptDraft = DEFAULT_EXTENSION_CONFIGS.uat.codeAgentPromptEffective;
+  let extensionCodeAgentPromptDraftMode: 'inherit' | 'workspace' = 'inherit';
+  let extensionCodeAgentPromptResetPending = false;
+  let extensionWorkspaceSelectionDraft = '';
+  let extensionWorkspaceSelectionSaving = false;
+  let extensionWorkspaceOnboardingBusy = false;
+  let extensionWorkspaceOnboardingError = '';
+  let extensionWorkspaceOnboardingRequired = false;
   let extensionConfigForm: ExtensionRuntimeConfig = {
     profile: 'uat',
     ...DEFAULT_EXTENSION_CONFIGS.uat,
+    workspaceScopeKey: '',
+    workspaceScopeLabel: '',
+    projectFingerprint: '',
+    workspaceScopeWorkspaceId: '',
+    workspaceScopeLastWorkspaceId: '',
+    codeWorkspaces: [],
   };
   let isPluginMode = false;
   const isExtensionRuntime = () => {
@@ -186,9 +288,71 @@
     };
     return Boolean(ext.chrome?.runtime?.id);
   };
+  const isVsCodeExtensionRuntime = () => {
+    const ext = globalThis as typeof globalThis & {
+      chrome?: { runtime?: { id?: string } };
+    };
+    const runtimeId = String(ext.chrome?.runtime?.id ?? '')
+      .trim()
+      .toLowerCase();
+    return runtimeId === 'topai.vscode.runtime';
+  };
+  const getExtensionPermissionToolOptions = () => {
+    return isVsCodeExtensionRuntime()
+      ? VSCODE_EXTENSION_PERMISSION_TOOL_OPTIONS
+      : CHROME_EXTENSION_PERMISSION_TOOL_OPTIONS;
+  };
+  const normalizeBashPolicyToken = (value: string): string =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+  const buildExtensionBashPolicyToolName = (): string => {
+    if (extensionPermissionBashMode === 'wildcard') return 'bash:*';
+    if (extensionPermissionBashMode === 'mono') {
+      const mono = normalizeBashPolicyToken(extensionPermissionBashMono);
+      return mono ? `bash:${mono}` : 'bash:*';
+    }
+    if (extensionPermissionBashMode === 'bigram') {
+      const first = normalizeBashPolicyToken(extensionPermissionBashBigramFirst);
+      const second = normalizeBashPolicyToken(extensionPermissionBashBigramSecond);
+      if (!first) return 'bash:*';
+      if (!second) return `bash:${first}`;
+      return `bash:${first} ${second}`;
+    }
+    const manual = normalizeBashPolicyToken(extensionPermissionBashManual);
+    return manual.startsWith('bash:') ? manual : `bash:${manual}`;
+  };
+  const applyExtensionBashPolicyDraft = () => {
+    extensionPermissionDraftToolName = buildExtensionBashPolicyToolName();
+  };
+  const isBashPermissionToolName = (value: string): boolean =>
+    value.trim().toLowerCase().startsWith('bash:');
+  const isExtensionPermissionsTabAvailable = () => {
+    return !isSidePanelHost || isVsCodeExtensionRuntime();
+  };
+  const resolveDefaultExtensionSettingsTab = (): ExtensionSettingsTab => {
+    if (
+      isVsCodeExtensionRuntime() &&
+      !extensionConfigForm.workspaceScopeKey.trim()
+    ) {
+      return 'workspace';
+    }
+    return 'server';
+  };
   $: isSidePanelHost = hostMode === 'sidepanel';
   $: isExtensionOverlayHost = !isSidePanelHost && isExtensionRuntime();
   $: isPluginMode = isExtensionRuntime();
+  $: usesExtensionTokenBootstrap = isVsCodeExtensionRuntime();
+  $: {
+    const toolOptions = getExtensionPermissionToolOptions();
+    if (!toolOptions.includes(extensionPermissionDraftToolName)) {
+      extensionPermissionDraftToolName = toolOptions[0] ?? '';
+    }
+    if (isVsCodeExtensionRuntime() && !extensionPermissionDraftOrigin.trim()) {
+      extensionPermissionDraftOrigin = 'vscode://workspace';
+    }
+  }
   $: if (isPluginMode && activeTab === 'comments') activeTab = 'chat';
   $: if (isBrowser) {
     const saved = localStorage.getItem(DISPLAY_MODE_STORAGE_KEY);
@@ -342,6 +506,39 @@
     chatDraft = state.draft ?? '';
   };
 
+  const readPersistedHandoffState = (): ChatWidgetHandoffState | null => {
+    if (!isBrowser) return null;
+    try {
+      const raw = localStorage.getItem(HANDOFF_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Partial<ChatWidgetHandoffState> | null;
+      if (!parsed || typeof parsed !== 'object') return null;
+      return {
+        activeTab:
+          parsed.activeTab === 'queue' || parsed.activeTab === 'comments'
+            ? parsed.activeTab
+            : 'chat',
+        chatSessionId:
+          typeof parsed.chatSessionId === 'string' ? parsed.chatSessionId : null,
+        draft: typeof parsed.draft === 'string' ? parsed.draft : '',
+        commentThreadId:
+          typeof parsed.commentThreadId === 'string' ? parsed.commentThreadId : null,
+        commentSectionKey:
+          typeof parsed.commentSectionKey === 'string'
+            ? parsed.commentSectionKey
+            : null,
+        displayMode:
+          parsed.displayMode === 'docked' ? 'docked' : 'floating',
+        isOpen: Boolean(parsed.isOpen),
+        updatedAt:
+          typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
+        source: parsed.source === 'sidepanel' ? 'sidepanel' : 'content',
+      };
+    } catch {
+      return null;
+    }
+  };
+
   let lastHandoffStateFingerprint = '';
   const publishHandoffStateIfChanged = () => {
     if (!isBrowser || !isBrowserReady) return;
@@ -359,6 +556,7 @@
     });
     if (fingerprint === lastHandoffStateFingerprint) return;
     lastHandoffStateFingerprint = fingerprint;
+    localStorage.setItem(HANDOFF_STORAGE_KEY, JSON.stringify(payload));
     window.dispatchEvent(
       new CustomEvent<ChatWidgetHandoffState>(HANDOFF_EVENT, {
         detail: payload,
@@ -433,7 +631,7 @@
 
   const openExtensionSettingsMenu = (event?: Event) => {
     event?.stopPropagation();
-    extensionSettingsTab = 'endpoint';
+    extensionSettingsTab = resolveDefaultExtensionSettingsTab();
     showExtensionConfigMenu = true;
   };
 
@@ -449,6 +647,68 @@
     role: payload.role as User['role'],
   });
 
+  const formatInstructionIncludePatterns = (value: unknown): string => {
+    if (Array.isArray(value)) {
+      return value
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+        .join('\n');
+    }
+    if (typeof value === 'string') {
+      return value.trim();
+    }
+    return '';
+  };
+
+  const parseInstructionIncludePatterns = (value: string): string[] =>
+    value
+      .split(/\r?\n|,/g)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+
+  const syncExtensionCodeAgentPromptDraftFromConfig = (
+    config: ExtensionRuntimeConfig,
+  ) => {
+    extensionCodeAgentPromptDraft = config.codeAgentPromptEffective;
+    extensionCodeAgentPromptDraftMode =
+      config.codeAgentPromptSource === 'workspace' ? 'workspace' : 'inherit';
+    extensionCodeAgentPromptResetPending = false;
+  };
+
+  const syncExtensionWorkspaceSelectionFromConfig = (
+    config: ExtensionRuntimeConfig,
+  ) => {
+    const preferredId = config.workspaceScopeWorkspaceId.trim();
+    if (
+      preferredId &&
+      config.codeWorkspaces.some((workspace) => workspace.id === preferredId)
+    ) {
+      extensionWorkspaceSelectionDraft = preferredId;
+      return;
+    }
+    if (
+      extensionWorkspaceSelectionDraft &&
+      config.codeWorkspaces.some(
+        (workspace) => workspace.id === extensionWorkspaceSelectionDraft,
+      )
+    ) {
+      return;
+    }
+    extensionWorkspaceSelectionDraft = config.codeWorkspaces[0]?.id ?? '';
+  };
+
+  const getExtensionCodeAgentInheritedPrompt = (
+    config: ExtensionRuntimeConfig,
+  ): string => {
+    const profile = resolveCodeAgentPromptProfile({
+      workspaceOverride: '',
+      serverOverride: config.codeAgentPromptGlobal,
+      defaultPrompt: config.codeAgentPromptDefault,
+    });
+    return profile.effectivePrompt;
+  };
+
   const normalizeExtensionConfig = (
     raw?: Partial<ExtensionRuntimeConfig> | null,
   ): ExtensionRuntimeConfig => {
@@ -457,14 +717,99 @@
     const apiBaseUrl = raw?.apiBaseUrl?.trim() || defaults.apiBaseUrl;
     const appBaseUrl = raw?.appBaseUrl?.trim() || defaults.appBaseUrl;
     const wsBaseUrl = raw?.wsBaseUrl?.trim() || '';
+    const sessionToken = raw?.sessionToken?.trim() || '';
+    const codeAgentPromptDefault =
+      raw?.codeAgentPromptDefault?.trim() || defaults.codeAgentPromptDefault;
+    const codeAgentPromptGlobal = raw?.codeAgentPromptGlobal ?? '';
+    const codeAgentPromptWorkspace = raw?.codeAgentPromptWorkspace ?? '';
+    const promptProfile = resolveCodeAgentPromptProfile({
+      workspaceOverride: codeAgentPromptWorkspace,
+      serverOverride: codeAgentPromptGlobal,
+      defaultPrompt: codeAgentPromptDefault,
+    });
+    const codeAgentPromptEffective =
+      typeof raw?.codeAgentPromptEffective === 'string' &&
+      raw.codeAgentPromptEffective.trim().length > 0
+        ? raw.codeAgentPromptEffective
+        : promptProfile.effectivePrompt;
+    const codeAgentPromptSource =
+      raw?.codeAgentPromptSource === 'workspace' ||
+      raw?.codeAgentPromptSource === 'server' ||
+      raw?.codeAgentPromptSource === 'default'
+        ? raw.codeAgentPromptSource
+        : promptProfile.source;
+    const instructionIncludePatterns = formatInstructionIncludePatterns(
+      raw?.instructionIncludePatterns,
+    );
+    const workspaceScopeKey = raw?.workspaceScopeKey?.trim() || '';
+    const workspaceScopeLabel = raw?.workspaceScopeLabel?.trim() || '';
+    const projectFingerprint = raw?.projectFingerprint?.trim() || '';
+    const workspaceScopeWorkspaceId =
+      raw?.workspaceScopeWorkspaceId?.trim() || '';
+    const workspaceScopeLastWorkspaceId =
+      raw?.workspaceScopeLastWorkspaceId?.trim() || '';
+    const codeWorkspaces = Array.isArray(raw?.codeWorkspaces)
+      ? raw.codeWorkspaces
+          .map((entry) => {
+            if (!entry || typeof entry !== 'object') return null;
+            const row = entry as Partial<ExtensionCodeWorkspaceSummary>;
+            if (
+              typeof row.id !== 'string' ||
+              typeof row.name !== 'string' ||
+              (row.role !== 'viewer' &&
+                row.role !== 'commenter' &&
+                row.role !== 'editor' &&
+                row.role !== 'admin')
+            ) {
+              return null;
+            }
+            return {
+              id: row.id.trim(),
+              name: row.name.trim(),
+              role: row.role,
+            } as ExtensionCodeWorkspaceSummary;
+          })
+          .filter((entry): entry is ExtensionCodeWorkspaceSummary => Boolean(entry))
+      : [];
     return {
       profile,
       apiBaseUrl,
       appBaseUrl,
       wsBaseUrl,
+      sessionToken,
+      codeAgentPromptDefault,
+      codeAgentPromptGlobal,
+      codeAgentPromptWorkspace,
+      codeAgentPromptEffective,
+      codeAgentPromptSource,
+      instructionIncludePatterns,
+      workspaceScopeKey,
+      workspaceScopeLabel,
+      projectFingerprint,
+      workspaceScopeWorkspaceId,
+      workspaceScopeLastWorkspaceId,
+      codeWorkspaces,
       updatedAt:
         typeof raw?.updatedAt === 'number' ? raw.updatedAt : Date.now(),
     };
+  };
+
+  const syncExtensionApiClientConfig = (
+    config: ExtensionRuntimeConfig,
+  ): void => {
+    if (!isExtensionConfigAvailable()) return;
+    initApiClient({
+      baseUrl: config.apiBaseUrl,
+      isBrowser: true,
+      authToken: config.sessionToken || undefined,
+    });
+    if (typeof localStorage !== 'undefined') {
+      if (config.workspaceScopeWorkspaceId.trim().length > 0) {
+        localStorage.setItem('workspaceScopeId', config.workspaceScopeWorkspaceId);
+      } else {
+        localStorage.removeItem('workspaceScopeId');
+      }
+    }
   };
 
   const loadExtensionConfig = async () => {
@@ -490,7 +835,11 @@
         return;
       }
       extensionConfigForm = normalizeExtensionConfig(response.config);
+      syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
+      syncExtensionWorkspaceSelectionFromConfig(extensionConfigForm);
+      syncExtensionApiClientConfig(extensionConfigForm);
       extensionConfigLoaded = true;
+      extensionWorkspaceOnboardingError = '';
       setExtensionConfigStatus($_('chat.extension.status.configLoaded'), 'info');
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
@@ -503,7 +852,9 @@
     }
   };
 
-  const saveExtensionConfig = async () => {
+  const saveExtensionConfigPatch = async (
+    payloadPatch: Record<string, unknown>,
+  ) => {
     if (!isExtensionConfigAvailable()) return;
     if (extensionConfigSaving) return;
     extensionConfigSaving = true;
@@ -512,12 +863,7 @@
       const runtime = getExtensionRuntime();
       const response = (await runtime?.sendMessage?.({
         type: 'extension_config_set',
-        payload: {
-          profile: extensionConfigForm.profile,
-          apiBaseUrl: extensionConfigForm.apiBaseUrl,
-          appBaseUrl: extensionConfigForm.appBaseUrl,
-          wsBaseUrl: extensionConfigForm.wsBaseUrl,
-        },
+        payload: payloadPatch,
       })) as
         | {
             ok?: boolean;
@@ -532,11 +878,14 @@
         return;
       }
       extensionConfigForm = normalizeExtensionConfig(response.config);
+      syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
+      syncExtensionWorkspaceSelectionFromConfig(extensionConfigForm);
+      syncExtensionApiClientConfig(extensionConfigForm);
       extensionConfigLoaded = true;
+      extensionWorkspaceOnboardingError = '';
       extensionAuthStatusLoaded = false;
       extensionAuthConnected = false;
       extensionAuthUser = null;
-      extensionAuthLoginUrl = null;
       window.dispatchEvent(
         new CustomEvent<ExtensionRuntimeConfig>(EXTENSION_CONFIG_UPDATED_EVENT, {
           detail: extensionConfigForm,
@@ -552,6 +901,193 @@
     } finally {
       extensionConfigSaving = false;
     }
+  };
+
+  const saveExtensionServerConfig = async () => {
+    await saveExtensionConfigPatch({
+      profile: extensionConfigForm.profile,
+      apiBaseUrl: extensionConfigForm.apiBaseUrl,
+      appBaseUrl: extensionConfigForm.appBaseUrl,
+      wsBaseUrl: extensionConfigForm.wsBaseUrl,
+      sessionToken: extensionConfigForm.sessionToken,
+    });
+  };
+
+  const saveExtensionWorkspaceConfig = async () => {
+    let nextWorkspacePrompt: string | undefined;
+    if (extensionCodeAgentPromptDraftMode === 'workspace') {
+      nextWorkspacePrompt = extensionCodeAgentPromptDraft;
+    } else if (
+      extensionCodeAgentPromptResetPending ||
+      extensionConfigForm.codeAgentPromptSource === 'workspace'
+    ) {
+      nextWorkspacePrompt = '';
+    }
+
+    await saveExtensionConfigPatch({
+      ...(typeof nextWorkspacePrompt === 'string'
+        ? { codeAgentPromptWorkspace: nextWorkspacePrompt }
+        : {}),
+      instructionIncludePatterns: parseInstructionIncludePatterns(
+        extensionConfigForm.instructionIncludePatterns,
+      ),
+    });
+  };
+
+  const refreshExtensionWorkspaceMapping = async (): Promise<boolean> => {
+    if (!isExtensionConfigAvailable()) return false;
+    const runtime = getExtensionRuntime();
+    const response = (await runtime?.sendMessage?.({
+      type: 'extension_workspace_mapping_refresh',
+    })) as
+      | {
+          ok?: boolean;
+          config?: Partial<ExtensionRuntimeConfig>;
+          error?: string;
+        }
+      | undefined;
+    if (!response?.ok || !response?.config) {
+      extensionWorkspaceOnboardingError =
+        response?.error ?? $_('chat.extension.workspaceFlow.mappingRefreshFailed');
+      return false;
+    }
+    extensionConfigForm = normalizeExtensionConfig(response.config);
+    syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
+    syncExtensionWorkspaceSelectionFromConfig(extensionConfigForm);
+    syncExtensionApiClientConfig(extensionConfigForm);
+    extensionWorkspaceOnboardingError = '';
+    return true;
+  };
+
+  const applyExtensionWorkspaceSelection = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionWorkspaceSelectionSaving) return;
+    const workspaceId = extensionWorkspaceSelectionDraft.trim();
+    if (!workspaceId) {
+      extensionWorkspaceOnboardingError = $_(
+        'chat.extension.workspaceFlow.selectWorkspaceRequired',
+      );
+      return;
+    }
+    extensionWorkspaceSelectionSaving = true;
+    extensionWorkspaceOnboardingError = '';
+    try {
+      const runtime = getExtensionRuntime();
+      const response = (await runtime?.sendMessage?.({
+        type: 'extension_workspace_mapping_set',
+        payload: {
+          workspaceId,
+        },
+      })) as
+        | {
+            ok?: boolean;
+            config?: Partial<ExtensionRuntimeConfig>;
+            error?: string;
+          }
+        | undefined;
+      if (!response?.ok || !response?.config) {
+        extensionWorkspaceOnboardingError =
+          response?.error ?? $_('chat.extension.workspaceFlow.mappingSetFailed');
+        return;
+      }
+      extensionConfigForm = normalizeExtensionConfig(response.config);
+      syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
+      syncExtensionWorkspaceSelectionFromConfig(extensionConfigForm);
+      syncExtensionApiClientConfig(extensionConfigForm);
+      setExtensionConfigStatus($_('chat.extension.workspaceFlow.mappingSetSuccess'), 'ok');
+    } catch (error) {
+      extensionWorkspaceOnboardingError =
+        error instanceof Error ? error.message : String(error);
+    } finally {
+      extensionWorkspaceSelectionSaving = false;
+    }
+  };
+
+  const createExtensionCodeWorkspace = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionWorkspaceOnboardingBusy) return;
+    extensionWorkspaceOnboardingBusy = true;
+    extensionWorkspaceOnboardingError = '';
+    try {
+      const runtime = getExtensionRuntime();
+      const response = (await runtime?.sendMessage?.({
+        type: 'extension_workspace_mapping_create',
+      })) as
+        | {
+            ok?: boolean;
+            config?: Partial<ExtensionRuntimeConfig>;
+            error?: string;
+          }
+        | undefined;
+      if (!response?.ok || !response?.config) {
+        extensionWorkspaceOnboardingError =
+          response?.error ?? $_('chat.extension.workspaceFlow.createFailed');
+        return;
+      }
+      extensionConfigForm = normalizeExtensionConfig(response.config);
+      syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
+      syncExtensionWorkspaceSelectionFromConfig(extensionConfigForm);
+      syncExtensionApiClientConfig(extensionConfigForm);
+      extensionSettingsTab = 'workspace';
+      setExtensionConfigStatus($_('chat.extension.workspaceFlow.createSuccess'), 'ok');
+    } catch (error) {
+      extensionWorkspaceOnboardingError =
+        error instanceof Error ? error.message : String(error);
+    } finally {
+      extensionWorkspaceOnboardingBusy = false;
+    }
+  };
+
+  const deferExtensionWorkspaceMapping = async () => {
+    if (!isExtensionConfigAvailable()) return;
+    if (extensionWorkspaceOnboardingBusy) return;
+    extensionWorkspaceOnboardingBusy = true;
+    extensionWorkspaceOnboardingError = '';
+    try {
+      const runtime = getExtensionRuntime();
+      const response = (await runtime?.sendMessage?.({
+        type: 'extension_workspace_mapping_not_now',
+      })) as
+        | {
+            ok?: boolean;
+            config?: Partial<ExtensionRuntimeConfig>;
+            error?: string;
+          }
+        | undefined;
+      if (!response?.ok || !response?.config) {
+        extensionWorkspaceOnboardingError =
+          response?.error ?? $_('chat.extension.workspaceFlow.notNowFailed');
+        return;
+      }
+      extensionConfigForm = normalizeExtensionConfig(response.config);
+      syncExtensionCodeAgentPromptDraftFromConfig(extensionConfigForm);
+      syncExtensionWorkspaceSelectionFromConfig(extensionConfigForm);
+      syncExtensionApiClientConfig(extensionConfigForm);
+      extensionSettingsTab = 'workspace';
+      showExtensionConfigMenu = true;
+      setExtensionConfigStatus($_('chat.extension.workspaceFlow.notNowSuccess'), 'ok');
+    } catch (error) {
+      extensionWorkspaceOnboardingError =
+        error instanceof Error ? error.message : String(error);
+    } finally {
+      extensionWorkspaceOnboardingBusy = false;
+    }
+  };
+
+  const enableExtensionWorkspacePromptOverrideDraft = () => {
+    if (extensionCodeAgentPromptDraftMode === 'workspace') return;
+    extensionCodeAgentPromptDraftMode = 'workspace';
+    extensionCodeAgentPromptResetPending = false;
+    extensionCodeAgentPromptDraft = extensionConfigForm.codeAgentPromptEffective;
+  };
+
+  const resetExtensionWorkspacePromptOverrideDraft = () => {
+    extensionCodeAgentPromptDraftMode = 'inherit';
+    extensionCodeAgentPromptResetPending =
+      extensionConfigForm.codeAgentPromptSource === 'workspace';
+    extensionCodeAgentPromptDraft = getExtensionCodeAgentInheritedPrompt(
+      extensionConfigForm,
+    );
   };
 
   const loadExtensionAuthStatus = async () => {
@@ -586,6 +1122,8 @@
         extensionAuthConnected = false;
         extensionAuthUser = null;
         extensionAuthLoginUrl = null;
+        extensionProviderReadiness = [];
+        extensionProviderReadinessError = '';
         clearUser();
         extensionAuthStatusLoaded = true;
         return;
@@ -596,6 +1134,8 @@
         extensionAuthConnected = false;
         extensionAuthUser = null;
         extensionAuthLoginUrl = null;
+        extensionProviderReadiness = [];
+        extensionProviderReadinessError = '';
         clearUser();
         setExtensionAuthStatus(
           status.reason || $_('chat.extension.auth.notConnected'),
@@ -612,6 +1152,8 @@
       setUser(user);
       setExtensionAuthStatus($_('chat.extension.status.connected'), 'ok');
       extensionAuthStatusLoaded = true;
+      void refreshExtensionWorkspaceMapping();
+      void loadExtensionProviderReadiness();
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       setExtensionAuthStatus(
@@ -621,6 +1163,8 @@
       extensionAuthConnected = false;
       extensionAuthUser = null;
       extensionAuthLoginUrl = null;
+      extensionProviderReadiness = [];
+      extensionProviderReadinessError = '';
       clearUser();
       extensionAuthStatusLoaded = true;
     } finally {
@@ -657,7 +1201,11 @@
           response?.error ?? $_('chat.extension.status.connectFailed');
         extensionAuthConnected = false;
         extensionAuthUser = null;
-        extensionAuthLoginUrl = response?.loginUrl ?? null;
+        extensionAuthLoginUrl = usesExtensionTokenBootstrap
+          ? null
+          : response?.loginUrl ?? null;
+        extensionProviderReadiness = [];
+        extensionProviderReadinessError = '';
         clearUser();
         setExtensionAuthStatus(reason, 'error');
         extensionAuthStatusLoaded = true;
@@ -671,11 +1219,15 @@
       setUser(user);
       setExtensionAuthStatus($_('chat.extension.status.connectedSuccess'), 'ok');
       extensionAuthStatusLoaded = true;
+      void refreshExtensionWorkspaceMapping();
+      void loadExtensionProviderReadiness();
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       extensionAuthConnected = false;
       extensionAuthUser = null;
       extensionAuthLoginUrl = null;
+      extensionProviderReadiness = [];
+      extensionProviderReadinessError = '';
       clearUser();
       setExtensionAuthStatus(
         $_('chat.extension.status.connectionFailed', { values: { reason } }),
@@ -700,6 +1252,8 @@
       extensionAuthConnected = false;
       extensionAuthUser = null;
       extensionAuthLoginUrl = null;
+      extensionProviderReadiness = [];
+      extensionProviderReadinessError = '';
       clearUser();
       setExtensionAuthStatus($_('chat.extension.status.loggedOut'), 'ok');
       extensionAuthStatusLoaded = true;
@@ -715,22 +1269,44 @@
   };
 
   const openExtensionLoginPage = async () => {
-    if (!isExtensionConfigAvailable()) return;
+    if (!isExtensionConfigAvailable() || usesExtensionTokenBootstrap) return;
     try {
       const runtime = getExtensionRuntime();
       await runtime?.sendMessage?.({
         type: 'extension_auth_open_login',
       });
-      setExtensionAuthStatus(
-        $_('chat.extension.status.loginOpened'),
-        'info',
-      );
+      setExtensionAuthStatus($_('chat.extension.status.loginOpened'), 'info');
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       setExtensionAuthStatus(
         $_('chat.extension.status.openLoginFailed', { values: { reason } }),
         'error',
       );
+    }
+  };
+
+  const loadExtensionProviderReadiness = async () => {
+    if (!extensionAuthConnected) {
+      extensionProviderReadiness = [];
+      extensionProviderReadinessError = '';
+      return;
+    }
+    extensionProviderReadinessLoading = true;
+    extensionProviderReadinessError = '';
+    try {
+      const payload = await apiGet<{ providers: ProviderReadinessEntry[] }>(
+        '/models/provider-readiness',
+      );
+      extensionProviderReadiness = Array.isArray(payload.providers)
+        ? payload.providers
+        : [];
+    } catch (error) {
+      extensionProviderReadinessError =
+        error instanceof Error
+          ? error.message
+          : $_('chat.extension.providerReadiness.loadError');
+    } finally {
+      extensionProviderReadinessLoading = false;
     }
   };
 
@@ -799,6 +1375,7 @@
     toolName: string,
     origin: string,
     policy: 'allow' | 'deny',
+    pathPattern?: string | null,
   ) => {
     extensionToolPermissionsError = '';
     try {
@@ -806,6 +1383,7 @@
         toolName,
         origin,
         policy,
+        pathPattern: pathPattern?.trim() || undefined,
       });
       await loadExtensionToolPermissions();
     } catch (error) {
@@ -819,12 +1397,14 @@
   const deleteExtensionToolPermission = async (
     toolName: string,
     origin: string,
+    pathPattern?: string | null,
   ) => {
     extensionToolPermissionsError = '';
     try {
       await deleteLocalToolPermissionPolicy({
         toolName,
         origin,
+        pathPattern: pathPattern?.trim() || undefined,
       });
       await loadExtensionToolPermissions();
     } catch (error) {
@@ -848,8 +1428,10 @@
       toolName,
       origin,
       extensionPermissionDraftPolicy,
+      extensionPermissionDraftPathPattern,
     );
     extensionPermissionDraftOrigin = '';
+    extensionPermissionDraftPathPattern = '';
   };
 
   $: if (
@@ -871,9 +1453,17 @@
   $: if (
     isExtensionConfigAvailable() &&
     showExtensionConfigMenu &&
-    extensionSettingsTab === 'permissions'
+    extensionSettingsTab === 'tools' &&
+    isExtensionPermissionsTabAvailable()
   ) {
     void loadExtensionToolPermissions();
+  }
+
+  $: if (
+    !isExtensionPermissionsTabAvailable() &&
+    extensionSettingsTab === 'tools'
+  ) {
+    extensionSettingsTab = 'server';
   }
 
   $: if (
@@ -884,13 +1474,33 @@
     void loadExtensionAuthStatus();
   }
 
-  $: extensionAuthRequired =
-    isExtensionConfigAvailable() && !extensionAuthConnected;
+  $: extensionAuthUi = resolveExtensionAuthUiState({
+    usesTokenBootstrap: usesExtensionTokenBootstrap,
+    isExtensionConfigAvailable: isExtensionConfigAvailable(),
+    sessionToken: extensionConfigForm.sessionToken,
+    connected: extensionAuthConnected,
+    loginUrl: extensionAuthLoginUrl,
+  });
+
+  $: extensionAuthRequired = extensionAuthUi.extensionAuthRequired;
+
+  $: extensionWorkspaceOnboardingRequired =
+    isExtensionConfigAvailable() &&
+    isVsCodeExtensionRuntime() &&
+    !extensionAuthRequired &&
+    extensionAuthConnected &&
+    extensionConfigForm.projectFingerprint.trim().length > 0 &&
+    extensionConfigForm.workspaceScopeWorkspaceId.trim().length === 0;
+
+  $: if (!extensionWorkspaceOnboardingRequired) {
+    extensionWorkspaceOnboardingBusy = false;
+    extensionWorkspaceOnboardingError = '';
+  }
 
   $: {
     if (extensionConfigMenuWasOpen && !showExtensionConfigMenu) {
       extensionAuthStatusLoaded = false;
-      extensionSettingsTab = 'endpoint';
+      extensionSettingsTab = resolveDefaultExtensionSettingsTab();
     }
     extensionConfigMenuWasOpen = showExtensionConfigMenu;
   }
@@ -1024,6 +1634,7 @@
   $: activeChatSession = chatSessionId
     ? chatSessions.find((s) => s.id === chatSessionId) ?? null
     : null;
+  $: if (!chatSessionId) pendingChatSessionDeleteConfirm = false;
 
   $: activeJobsCount = $queueStore.jobs.filter(
     (job) => job.status === 'pending' || job.status === 'processing',
@@ -1209,11 +1820,12 @@
 
   const handleSelectSession = async (id: string) => {
     if (id === chatSessionId) return;
-    chatSessionId = id;
+    pendingChatSessionDeleteConfirm = false;
     await chatPanelRef?.selectSession?.(id);
   };
 
   const handleNewSession = () => {
+    pendingChatSessionDeleteConfirm = false;
     chatPanelRef?.newSession?.();
     chatSessionId = null;
   };
@@ -1237,7 +1849,7 @@
 
   onMount(async () => {
     isBrowserReady = true;
-    applyInitialState(initialState);
+    applyInitialState(initialState ?? readPersistedHandoffState());
     if (isExtensionOverlayHost) {
       displayMode = 'floating';
     }
@@ -1527,10 +2139,10 @@
       bind:this={dialogEl}
       on:keydown={onDialogKeyDown}
       class={isSidePanelHost
-        ? 'h-full w-full bg-white flex flex-col'
+        ? 'topai-chat-widget-shell h-full w-full bg-white flex flex-col'
         : isDocked
-        ? 'fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 flex flex-col'
-        : 'fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg'}
+        ? 'topai-chat-widget-shell fixed top-0 right-0 bottom-0 z-50 bg-white border-l border-gray-200 flex flex-col'
+        : 'topai-chat-widget-shell fixed inset-x-0 bottom-0 z-50 bg-white shadow-2xl border border-gray-200 flex flex-col h-[85dvh] max-h-[calc(100dvh-1rem)] rounded-t-xl sm:absolute sm:inset-auto sm:bottom-0 sm:right-0 sm:h-[70vh] sm:max-h-[calc(100vh-2rem)] sm:w-[28rem] sm:max-w-[calc(100vw-2rem)] sm:rounded-lg'}
       style={isSidePanelHost ? '' : isDocked ? `width: ${dockWidthCss};` : ''}
       class:hidden={!isVisible}
       class:overflow-hidden={!showExtensionConfigMenu}
@@ -1555,12 +2167,12 @@
             {/if}
 
             <div class="flex items-center gap-2">
-              <div class="flex items-center gap-1 rounded bg-slate-50 p-1">
+              <div class="extension-main-tabs flex items-center gap-1 rounded bg-slate-50 p-1">
                 {#if !isPluginMode}
                   <button
-                    class="rounded px-2 py-1 text-xs transition {activeTab ===
+                    class="extension-main-tab rounded px-2 py-1 text-xs transition {activeTab ===
                     'comments'
-                      ? 'bg-white text-slate-900 shadow-sm'
+                      ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
                       : 'text-slate-500 hover:text-slate-700'}"
                     type="button"
                     on:click={() => (activeTab = 'comments')}
@@ -1569,9 +2181,9 @@
                   </button>
                 {/if}
                 <button
-                  class="rounded px-2 py-1 text-xs transition {activeTab ===
+                  class="extension-main-tab rounded px-2 py-1 text-xs transition {activeTab ===
                   'chat'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'}"
                   type="button"
                   on:click={() => (activeTab = 'chat')}
@@ -1579,9 +2191,9 @@
                   {$_('chat.tabs.chat')}
                 </button>
                 <button
-                  class="rounded px-2 py-1 text-xs transition {activeTab ===
+                  class="extension-main-tab rounded px-2 py-1 text-xs transition {activeTab ===
                   'queue'
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
                     : 'text-slate-500 hover:text-slate-700'}"
                   type="button"
                   on:click={() => (activeTab = 'queue')}
@@ -1618,32 +2230,44 @@
                 <svelte:fragment slot="menu">
                   <div class="flex h-full min-h-0 flex-col">
                     <div class="border-b border-slate-200 p-2">
-                      <div class="flex items-center gap-1 rounded bg-slate-50 p-1">
+                      <div class="extension-main-tabs flex items-center gap-1 rounded bg-slate-50 p-1">
                         <button
-                          class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
-                          'endpoint'
-                            ? 'bg-white text-slate-900 shadow-sm'
+                          class="extension-main-tab rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
+                          'server'
+                            ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'}"
                           type="button"
-                          on:click={() => (extensionSettingsTab = 'endpoint')}
+                          on:click={() => (extensionSettingsTab = 'server')}
                         >
-                          {$_('chat.extension.settingsTabs.endpoint')}
+                          {$_('chat.extension.settingsTabs.server')}
                         </button>
                         <button
-                          class="rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
-                          'permissions'
-                            ? 'bg-white text-slate-900 shadow-sm'
+                          class="extension-main-tab rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
+                          'workspace'
+                            ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'}"
                           type="button"
-                          on:click={() => (extensionSettingsTab = 'permissions')}
+                          on:click={() => (extensionSettingsTab = 'workspace')}
                         >
-                          {$_('chat.extension.settingsTabs.permissions')}
+                          {$_('chat.extension.settingsTabs.workspace')}
                         </button>
+                        {#if isExtensionPermissionsTabAvailable()}
+                          <button
+                            class="extension-main-tab rounded px-2 py-1 text-xs transition {extensionSettingsTab ===
+                            'tools'
+                              ? 'extension-main-tab-active bg-white text-slate-900 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700'}"
+                            type="button"
+                            on:click={() => (extensionSettingsTab = 'tools')}
+                          >
+                            {$_('chat.extension.settingsTabs.tools')}
+                          </button>
+                        {/if}
                       </div>
                     </div>
                     <div class="flex-1 min-h-0 overflow-auto slim-scroll space-y-2 p-2">
 
-                  {#if extensionSettingsTab === 'endpoint'}
+                  {#if extensionSettingsTab === 'server'}
                     <div class="text-xs font-semibold text-slate-700">
                       {$_('chat.extension.endpointConfiguration')}
                     </div>
@@ -1656,7 +2280,7 @@
                       </label>
                       <input
                         id="extension-config-api-base-url"
-                        class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                        class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                         type="text"
                         bind:value={extensionConfigForm.apiBaseUrl}
                         placeholder="https://.../api/v1"
@@ -1674,7 +2298,7 @@
                       </label>
                       <input
                         id="extension-config-app-base-url"
-                        class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                        class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                         type="text"
                         bind:value={extensionConfigForm.appBaseUrl}
                         placeholder="https://..."
@@ -1692,7 +2316,7 @@
                       </label>
                       <input
                         id="extension-config-ws-base-url"
-                        class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                        class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                         type="text"
                         bind:value={extensionConfigForm.wsBaseUrl}
                         placeholder="wss://..."
@@ -1701,11 +2325,36 @@
                           extensionConfigTesting}
                       />
                     </div>
+                    {#if extensionAuthUi.showSessionTokenField}
+                      <div class="space-y-1">
+                        <label
+                          class="block text-[11px] text-slate-600"
+                          for="extension-config-session-token"
+                        >
+                          {$_('chat.extension.sessionToken')}
+                        </label>
+                        <input
+                          id="extension-config-session-token"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                          type="password"
+                          bind:value={extensionConfigForm.sessionToken}
+                          placeholder="tok_..."
+                          autocomplete="off"
+                          spellcheck="false"
+                          disabled={extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        />
+                        <p class="text-[11px] text-slate-500">
+                          {$_('chat.extension.sessionTokenHint')}
+                        </p>
+                      </div>
+                    {/if}
                     <div class="flex items-center gap-2 pt-1">
                       <button
                         class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
                         type="button"
-                        on:click={() => void saveExtensionConfig()}
+                        on:click={() => void saveExtensionServerConfig()}
                         disabled={extensionConfigLoading ||
                           extensionConfigSaving ||
                           extensionConfigTesting}
@@ -1713,7 +2362,7 @@
                         {$_('common.save')}
                       </button>
                       <button
-                        class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        class="extension-test-api-button rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                         type="button"
                         on:click={() => void testExtensionConfig()}
                         disabled={extensionConfigLoading ||
@@ -1729,7 +2378,7 @@
                           extensionConfigStatusKind === 'ok'
                             ? 'border-green-200 bg-green-50 text-green-700'
                             : extensionConfigStatusKind === 'error'
-                              ? 'border-red-200 bg-red-50 text-red-700'
+                              ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200'
                               : 'border-slate-200 bg-slate-50 text-slate-600'
                         }`}
                       >
@@ -1761,7 +2410,7 @@
                               extensionConfigSaving ||
                               extensionConfigTesting}
                           >
-                            {$_('chat.extension.auth.logout')}
+                            {$_(extensionAuthUi.logoutLabelKey)}
                           </button>
                         {:else}
                           <button
@@ -1774,17 +2423,68 @@
                               extensionConfigSaving ||
                               extensionConfigTesting}
                           >
-                            {$_('chat.extension.auth.connect')}
+                            {$_(extensionAuthUi.connectLabelKey)}
                           </button>
                         {/if}
-                        {#if extensionAuthLoginUrl && !extensionAuthConnected}
-                          <button
-                            class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
-                            type="button"
-                            on:click={() => void openExtensionLoginPage()}
-                          >
-                            {$_('chat.extension.auth.openLogin')}
-                          </button>
+                      </div>
+                      {#if extensionAuthUi.showOpenLogin}
+                        <button
+                          class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
+                          type="button"
+                          on:click={() => void openExtensionLoginPage()}
+                        >
+                          {$_('chat.extension.auth.openLogin')}
+                        </button>
+                      {/if}
+                      {#if extensionAuthUi.showProviderManagedHint}
+                        <div class="text-[11px] text-slate-500">
+                          {$_('chat.extension.auth.providerManagedInAdmin')}
+                        </div>
+                      {/if}
+                      <div class="space-y-1 rounded border border-slate-200 bg-slate-50 p-2">
+                        <div class="text-[11px] font-semibold text-slate-700">
+                          {$_('chat.extension.providerReadiness.title')}
+                        </div>
+                        {#if extensionProviderReadinessLoading}
+                          <div class="text-[11px] text-slate-500">
+                            {$_('common.loading')}
+                          </div>
+                        {:else if extensionProviderReadiness.length === 0}
+                          <div class="text-[11px] text-slate-500">
+                            {$_('chat.extension.providerReadiness.empty')}
+                          </div>
+                        {:else}
+                          <div class="space-y-1">
+                            {#each extensionProviderReadiness as provider (
+                              provider.providerId
+                            )}
+                              <div class="flex items-center justify-between gap-2 text-[11px]">
+                                <span class="text-slate-700 truncate">
+                                  {provider.label}
+                                </span>
+                                <span
+                                  class={`rounded px-1.5 py-0.5 ${
+                                    provider.ready
+                                      ? 'extension-provider-readiness-badge extension-provider-readiness-ready bg-green-100 text-green-700'
+                                      : 'extension-provider-readiness-badge extension-provider-readiness-not-ready bg-slate-200 text-slate-700'
+                                  }`}
+                                >
+                                  {provider.ready
+                                    ? $_(
+                                        'chat.extension.providerReadiness.status.ready',
+                                      )
+                                    : $_(
+                                        'chat.extension.providerReadiness.status.notReady',
+                                      )}
+                                </span>
+                              </div>
+                            {/each}
+                          </div>
+                        {/if}
+                        {#if extensionProviderReadinessError}
+                          <div class="text-[11px] text-rose-700">
+                            {extensionProviderReadinessError}
+                          </div>
                         {/if}
                       </div>
                       {#if extensionAuthStatus}
@@ -1793,7 +2493,7 @@
                             extensionAuthStatusKind === 'ok'
                               ? 'border-green-200 bg-green-50 text-green-700'
                               : extensionAuthStatusKind === 'error'
-                                ? 'border-red-200 bg-red-50 text-red-700'
+                              ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200'
                                 : 'border-slate-200 bg-slate-50 text-slate-600'
                           }`}
                         >
@@ -1801,34 +2501,340 @@
                         </div>
                       {/if}
                     </div>
-                  {:else}
+                  {:else if extensionSettingsTab === 'workspace'}
+                    <div class="text-xs font-semibold text-slate-700">
+                      {$_('chat.extension.workspaceConfiguration')}
+                    </div>
+                    <div class="space-y-1 rounded border border-slate-200 bg-slate-50 p-2">
+                      <div class="text-[11px] font-semibold text-slate-700">
+                        {$_('chat.extension.workspaceScope')}
+                      </div>
+                      <div class="text-[11px] text-slate-600 break-all">
+                        {extensionConfigForm.workspaceScopeLabel ||
+                          $_('chat.extension.workspaceScopeNotDetected')}
+                      </div>
+                      {#if extensionConfigForm.workspaceScopeKey}
+                        <div class="text-[11px] text-slate-500 break-all">
+                          {$_('chat.extension.workspaceScopeKey')}: {extensionConfigForm.workspaceScopeKey}
+                        </div>
+                      {/if}
+                      {#if extensionConfigForm.workspaceScopeWorkspaceId}
+                        <div class="text-[11px] text-slate-500 break-all">
+                          {$_('chat.extension.workspaceMappedWorkspace')}: {extensionConfigForm.workspaceScopeWorkspaceId}
+                        </div>
+                      {/if}
+                    </div>
+                    <div class="space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
+                      <div class="text-[11px] font-semibold text-slate-700">
+                        {$_('chat.extension.workspaceFlow.title')}
+                      </div>
+                      {#if extensionConfigForm.codeWorkspaces.length === 0}
+                        <div class="text-[11px] text-slate-500">
+                          {$_('chat.extension.workspaceFlow.noCodeWorkspace')}
+                        </div>
+                      {:else}
+                        <div class="space-y-1">
+                          <label
+                            class="block text-[11px] text-slate-600"
+                            for="extension-workspace-selection"
+                          >
+                            {$_('chat.extension.workspaceFlow.selectorLabel')}
+                          </label>
+                          <select
+                            id="extension-workspace-selection"
+                            class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                            bind:value={extensionWorkspaceSelectionDraft}
+                            disabled={extensionConfigLoading ||
+                              extensionConfigSaving ||
+                              extensionConfigTesting ||
+                              extensionWorkspaceSelectionSaving}
+                          >
+                            {#each extensionConfigForm.codeWorkspaces as workspace (workspace.id)}
+                              <option value={workspace.id}>
+                                {workspace.name} ({workspace.role})
+                              </option>
+                            {/each}
+                          </select>
+                          <div class="flex items-center gap-2">
+                            <button
+                              class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                              type="button"
+                              on:click={() => void applyExtensionWorkspaceSelection()}
+                              disabled={extensionConfigLoading ||
+                                extensionConfigSaving ||
+                                extensionConfigTesting ||
+                                extensionWorkspaceSelectionSaving}
+                            >
+                              {$_('chat.extension.workspaceFlow.applySelection')}
+                            </button>
+                          </div>
+                        </div>
+                      {/if}
+                      {#if extensionWorkspaceOnboardingError}
+                        <div class="text-[11px] text-rose-700">
+                          {extensionWorkspaceOnboardingError}
+                        </div>
+                      {/if}
+                    </div>
+                    <div class="border-t border-slate-200 pt-2 space-y-2">
+                      <div class="text-xs font-semibold text-slate-700">
+                        {$_('chat.extension.codeAgent.title')}
+                      </div>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-[11px] text-slate-500">
+                          {$_('chat.extension.codeAgent.effectivePromptSource')}
+                        </span>
+                        <span
+                          class={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                            extensionConfigForm.codeAgentPromptSource === 'workspace'
+                              ? 'bg-primary/15 text-primary'
+                              : extensionConfigForm.codeAgentPromptSource === 'server'
+                                ? 'bg-slate-200 text-slate-700'
+                                : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {extensionConfigForm.codeAgentPromptSource === 'workspace'
+                            ? $_('chat.extension.codeAgent.sourceWorkspace')
+                            : extensionConfigForm.codeAgentPromptSource === 'server'
+                              ? $_('chat.extension.codeAgent.sourceServer')
+                              : $_('chat.extension.codeAgent.sourceDefault')}
+                        </span>
+                      </div>
+                      <div class="space-y-1">
+                        <label
+                          class="block text-[11px] text-slate-600"
+                          for="extension-config-code-agent-effective"
+                        >
+                          {$_('chat.extension.codeAgent.effectivePrompt')}
+                        </label>
+                        <textarea
+                          id="extension-config-code-agent-effective"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                          bind:value={extensionCodeAgentPromptDraft}
+                          rows={5}
+                          readonly={extensionCodeAgentPromptDraftMode !== 'workspace'}
+                          disabled={extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        ></textarea>
+                      </div>
+                      <p class="text-[11px] text-slate-500">
+                        {$_('chat.extension.codeAgent.workspacePromptHint', {
+                          values: {
+                            scope:
+                              extensionConfigForm.workspaceScopeLabel ||
+                              extensionConfigForm.workspaceScopeKey ||
+                              'workspace',
+                          },
+                        })}
+                      </p>
+                      {#if extensionCodeAgentPromptDraftMode !== 'workspace'}
+                        <button
+                          class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          type="button"
+                          on:click={enableExtensionWorkspacePromptOverrideDraft}
+                          disabled={extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        >
+                          {$_('chat.extension.codeAgent.createWorkspaceOverride')}
+                        </button>
+                      {:else}
+                        <div class="flex items-center gap-2">
+                          <button
+                            class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            type="button"
+                            on:click={resetExtensionWorkspacePromptOverrideDraft}
+                            disabled={extensionConfigLoading ||
+                              extensionConfigSaving ||
+                              extensionConfigTesting}
+                          >
+                            {$_('chat.extension.codeAgent.resetWorkspaceOverride')}
+                          </button>
+                          <span class="text-[11px] text-slate-500">
+                            {extensionCodeAgentPromptResetPending
+                              ? $_('chat.extension.codeAgent.resetPending')
+                              : $_('chat.extension.codeAgent.workspaceOverrideActive')}
+                          </span>
+                        </div>
+                      {/if}
+                      <div class="space-y-1">
+                        <label
+                          class="block text-[11px] text-slate-600"
+                          for="extension-config-code-agent-patterns"
+                        >
+                          {$_('chat.extension.codeAgent.instructionPatterns')}
+                        </label>
+                        <textarea
+                          id="extension-config-code-agent-patterns"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                          bind:value={extensionConfigForm.instructionIncludePatterns}
+                          rows={3}
+                          disabled={extensionConfigLoading ||
+                            extensionConfigSaving ||
+                            extensionConfigTesting}
+                        ></textarea>
+                        <p class="text-[11px] text-slate-500">
+                          {$_('chat.extension.codeAgent.instructionPatternsHint')}
+                        </p>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 pt-1">
+                      <button
+                        class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                        type="button"
+                        on:click={() => void saveExtensionWorkspaceConfig()}
+                        disabled={extensionConfigLoading ||
+                          extensionConfigSaving ||
+                          extensionConfigTesting}
+                      >
+                        {$_('common.save')}
+                      </button>
+                    </div>
+                    {#if extensionConfigStatus}
+                      <div
+                        class={`rounded border px-2 py-1 text-[11px] ${
+                          extensionConfigStatusKind === 'ok'
+                            ? 'border-green-200 bg-green-50 text-green-700'
+                            : extensionConfigStatusKind === 'error'
+                              ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200'
+                              : 'border-slate-200 bg-slate-50 text-slate-600'
+                        }`}
+                      >
+                        {extensionConfigStatus}
+                      </div>
+                    {/if}
+                  {:else if extensionSettingsTab === 'tools'}
                     <div class="text-xs font-semibold text-slate-700">
                       {$_('chat.extension.permissions.title')}
                     </div>
                     <div class="text-[11px] text-slate-500">
                       {$_('chat.extension.permissions.description')}
                     </div>
+                    {#if isVsCodeExtensionRuntime()}
+                      <div class="space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
+                        <div class="text-[11px] font-semibold text-slate-600">
+                          {$_('chat.extension.permissions.bashBuilderTitle')}
+                        </div>
+                        <div class="text-[11px] text-slate-500">
+                          {$_('chat.extension.permissions.bashBuilderDescription')}
+                        </div>
+                        <div class="grid grid-cols-1 gap-2">
+                          <label class="text-[11px] text-slate-600" for="extension-bash-mode">
+                            {$_('chat.extension.permissions.bashModeLabel')}
+                          </label>
+                          <select
+                            id="extension-bash-mode"
+                            class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                            bind:value={extensionPermissionBashMode}
+                          >
+                            <option value="wildcard">
+                              {$_('chat.extension.permissions.bashModeWildcard')}
+                            </option>
+                            <option value="mono">
+                              {$_('chat.extension.permissions.bashModeMono')}
+                            </option>
+                            <option value="bigram">
+                              {$_('chat.extension.permissions.bashModeBigram')}
+                            </option>
+                            <option value="manual">
+                              {$_('chat.extension.permissions.bashModeManual')}
+                            </option>
+                          </select>
+                          {#if extensionPermissionBashMode === 'mono'}
+                            <input
+                              class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                              type="text"
+                              bind:value={extensionPermissionBashMono}
+                              placeholder="git"
+                            />
+                          {:else if extensionPermissionBashMode === 'bigram'}
+                            <div class="grid grid-cols-2 gap-2">
+                              <input
+                                class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                                type="text"
+                                bind:value={extensionPermissionBashBigramFirst}
+                                placeholder="git"
+                              />
+                              <input
+                                class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                                type="text"
+                                bind:value={extensionPermissionBashBigramSecond}
+                                placeholder="add"
+                              />
+                            </div>
+                          {:else if extensionPermissionBashMode === 'manual'}
+                            <input
+                              class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                              type="text"
+                              bind:value={extensionPermissionBashManual}
+                              placeholder="bash:rm -rf"
+                            />
+                          {/if}
+                          <div class="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                            {$_('chat.extension.permissions.bashPreviewLabel')}:
+                            <span class="font-mono">{buildExtensionBashPolicyToolName()}</span>
+                          </div>
+                          <div class="text-[11px] text-slate-500">
+                            {$_('chat.extension.permissions.bashPrecedenceHint')}
+                          </div>
+                          <button
+                            class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+                            type="button"
+                            on:click={applyExtensionBashPolicyDraft}
+                          >
+                            {$_('chat.extension.permissions.bashUseBuilderCta')}
+                          </button>
+                        </div>
+                      </div>
+                    {/if}
                     <div class="space-y-2 rounded border border-slate-200 bg-slate-50 p-2">
                       <div class="text-[11px] font-semibold text-slate-600">
                         {$_('chat.extension.permissions.addTitle')}
                       </div>
                       <div class="grid grid-cols-1 gap-2">
-                        <select
-                          class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
-                          bind:value={extensionPermissionDraftToolName}
-                        >
-                          {#each EXTENSION_PERMISSION_TOOL_OPTIONS as option}
-                            <option value={option}>{option}</option>
-                          {/each}
-                        </select>
+                        {#if isVsCodeExtensionRuntime()}
+                          <input
+                            class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                            type="text"
+                            bind:value={extensionPermissionDraftToolName}
+                            list="vscode-extension-tool-options"
+                            placeholder="bash:git add | file_edit | ls"
+                          />
+                          <datalist id="vscode-extension-tool-options">
+                            {#each getExtensionPermissionToolOptions() as option}
+                              <option value={option}></option>
+                            {/each}
+                          </datalist>
+                        {:else}
+                          <select
+                            class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                            bind:value={extensionPermissionDraftToolName}
+                          >
+                            {#each getExtensionPermissionToolOptions() as option}
+                              <option value={option}>{option}</option>
+                            {/each}
+                          </select>
+                        {/if}
                         <input
-                          class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                           type="text"
                           bind:value={extensionPermissionDraftOrigin}
-                          placeholder="https://example.com | https://* | *.example.com | *"
+                          placeholder={isVsCodeExtensionRuntime()
+                            ? 'vscode://workspace | *'
+                            : 'https://example.com | https://* | *.example.com | *'}
                         />
+                        {#if isVsCodeExtensionRuntime() &&
+                          !isBashPermissionToolName(extensionPermissionDraftToolName)}
+                          <input
+                            class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                            type="text"
+                            bind:value={extensionPermissionDraftPathPattern}
+                            placeholder={$_('chat.extension.permissions.pathPatternPlaceholder')}
+                          />
+                        {/if}
                         <select
-                          class="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                          class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                           bind:value={extensionPermissionDraftPolicy}
                         >
                           <option value="allow">
@@ -1860,7 +2866,7 @@
                     {:else}
                       <div class="space-y-2">
                         {#each extensionToolPermissions as entry (
-                          `${entry.toolName}:${entry.origin}`
+                          `${entry.toolName}:${entry.origin}:${entry.pathPattern ?? ''}`
                         )}
                           <div class="rounded border border-slate-200 p-2 space-y-2">
                             <div class="text-[11px] font-semibold text-slate-700 break-all">
@@ -1869,9 +2875,14 @@
                             <div class="text-[11px] text-slate-500 break-all">
                               {entry.origin}
                             </div>
+                            {#if entry.pathPattern}
+                              <div class="text-[11px] text-slate-500 break-all">
+                                {$_('chat.extension.permissions.pathPatternLabel')}: {entry.pathPattern}
+                              </div>
+                            {/if}
                             <div class="flex items-center gap-2">
                               <select
-                                class="flex-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                                class="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
                                 value={entry.policy}
                                 on:change={(event) =>
                                   void upsertExtensionToolPermission(
@@ -1880,6 +2891,7 @@
                                     (
                                       event.currentTarget as HTMLSelectElement
                                     ).value as 'allow' | 'deny',
+                                    entry.pathPattern,
                                   )}
                               >
                                 <option value="allow">
@@ -1896,6 +2908,7 @@
                                   void deleteExtensionToolPermission(
                                     entry.toolName,
                                     entry.origin,
+                                    entry.pathPattern,
                                   )}
                               >
                                 {$_('common.delete')}
@@ -1908,7 +2921,7 @@
 
                     {#if extensionToolPermissionsError}
                       <div
-                        class="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700"
+                        class="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200"
                       >
                         {extensionToolPermissionsError}
                       </div>
@@ -1919,33 +2932,35 @@
                 </svelte:fragment>
               </MenuPopover>
             {/if}
-            <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
-            <button
-              class={`${isSidePanelHost ? 'inline-flex' : 'hidden lg:inline-flex'} text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded`}
-              on:click={toggleDisplayMode}
-              title={isDocked
-                ? $_('chat.widget.switchToWidget')
-                : $_('chat.widget.switchToPanel')}
-              aria-label={isDocked
-                ? $_('chat.widget.switchToWidget')
-                : $_('chat.widget.switchToPanel')}
-              type="button"
-            >
-              {#if isDocked}
-                <Minimize2 class="w-4 h-4" aria-hidden="true" />
-              {:else}
-                <Maximize2 class="w-4 h-4" aria-hidden="true" />
-              {/if}
-            </button>
-            <button
-              class="text-gray-400 hover:text-gray-600"
-              on:click={close}
-              aria-label={$_('common.close')}
-              type="button"
-              bind:this={closeButtonEl}
-            >
-              <X class="w-5 h-5" />
-            </button>
+            {#if !isSidePanelHost}
+              <!-- Desktop-only: hide below lg to avoid UI duplication in responsive header layouts -->
+              <button
+                class="hidden lg:inline-flex text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-1 rounded"
+                on:click={toggleDisplayMode}
+                title={isDocked
+                  ? $_('chat.widget.switchToWidget')
+                  : $_('chat.widget.switchToPanel')}
+                aria-label={isDocked
+                  ? $_('chat.widget.switchToWidget')
+                  : $_('chat.widget.switchToPanel')}
+                type="button"
+              >
+                {#if isDocked}
+                  <Minimize2 class="w-4 h-4" aria-hidden="true" />
+                {:else}
+                  <Maximize2 class="w-4 h-4" aria-hidden="true" />
+                {/if}
+              </button>
+              <button
+                class="text-gray-400 hover:text-gray-600"
+                on:click={close}
+                aria-label={$_('common.close')}
+                type="button"
+                bind:this={closeButtonEl}
+              >
+                <X class="w-5 h-5" />
+              </button>
+            {/if}
           </div>
         </div>
       </div>
@@ -1971,13 +2986,60 @@
               </button>
             </div>
           </div>
+        {:else if extensionWorkspaceOnboardingRequired}
+          <div class="h-full min-h-0 flex items-center justify-center px-4 py-6">
+            <div
+              class="w-full max-w-md rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 space-y-3"
+            >
+              <div>{$_('chat.extension.workspaceFlow.onboardingTitle')}</div>
+              <div class="text-xs text-slate-500">
+                {$_('chat.extension.workspaceFlow.onboardingDescription')}
+              </div>
+              <div class="space-y-2">
+                <button
+                  class="w-full rounded bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                  type="button"
+                  on:click={() => void createExtensionCodeWorkspace()}
+                  disabled={extensionWorkspaceOnboardingBusy}
+                >
+                  {$_('chat.extension.workspaceFlow.createWorkspace')}
+                </button>
+                {#if extensionConfigForm.codeWorkspaces.length > 0}
+                  <button
+                    class="w-full rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    type="button"
+                    on:click={() => {
+                      extensionSettingsTab = 'workspace';
+                      showExtensionConfigMenu = true;
+                    }}
+                    disabled={extensionWorkspaceOnboardingBusy}
+                  >
+                    {$_('chat.extension.workspaceFlow.useExisting')}
+                  </button>
+                  <button
+                    class="w-full rounded border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    type="button"
+                    on:click={() => void deferExtensionWorkspaceMapping()}
+                    disabled={extensionWorkspaceOnboardingBusy}
+                  >
+                    {$_('chat.extension.workspaceFlow.notNow')}
+                  </button>
+                {/if}
+              </div>
+              {#if extensionWorkspaceOnboardingError}
+                <div class="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200">
+                  {extensionWorkspaceOnboardingError}
+                </div>
+              {/if}
+            </div>
+          </div>
         {:else}
           {#if activeTab === 'queue'}
             <div class="h-full min-h-0 flex flex-col">
               <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
                 <div class="min-w-0 text-xs text-slate-500 truncate">{$_('chat.tabs.jobs')}</div>
                 <button
-                  class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
+                  class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded"
                   on:click={handlePurgeMyJobs}
                   title={$_('chat.queue.purgeMine')}
                   aria-label={$_('chat.queue.purgeMine')}
@@ -2083,8 +3145,8 @@
                   <Plus class="w-4 h-4" />
                 </button>
                 <button
-                  class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
-                  on:click={() => chatPanelRef?.deleteCurrentSession?.()}
+                  class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+                  on:click={() => (pendingChatSessionDeleteConfirm = true)}
                   title={$_('chat.sessions.delete')}
                   aria-label={$_('chat.sessions.delete')}
                   type="button"
@@ -2094,6 +3156,34 @@
                 </button>
               </div>
             </div>
+            {#if pendingChatSessionDeleteConfirm && chatSessionId}
+              <div class="border-b border-slate-100 px-3 py-2">
+                <div class="chat-delete-confirm-surface rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
+                  <div class="text-xs font-semibold text-slate-700">
+                    {$_('chat.sessions.confirmDelete')}
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button
+                      class="chat-delete-confirm-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90"
+                      type="button"
+                      on:click={async () => {
+                        pendingChatSessionDeleteConfirm = false;
+                        await chatPanelRef?.deleteCurrentSession?.();
+                      }}
+                    >
+                      {$_('common.delete')}
+                    </button>
+                    <button
+                      class="chat-delete-confirm-choice rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
+                      type="button"
+                      on:click={() => (pendingChatSessionDeleteConfirm = false)}
+                    >
+                      {$_('common.cancel')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            {/if}
             <div class="flex-1 min-h-0 overflow-hidden">
               <ChatPanel
                 bind:this={chatPanelRef}

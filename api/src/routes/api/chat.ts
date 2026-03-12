@@ -4,7 +4,7 @@ import { and, desc, eq, gte, sql } from 'drizzle-orm';
 import { zValidator } from '@hono/zod-validator';
 import { chatService } from '../../services/chat-service';
 import { queueManager } from '../../services/queue-manager';
-import { readStreamEvents, writeStreamEventWithSequenceRetry } from '../../services/stream-service';
+import { writeStreamEventWithSequenceRetry } from '../../services/stream-service';
 import { db } from '../../db/client';
 import { chatMessages, chatSessions, extensionToolPermissions } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
@@ -28,6 +28,33 @@ const localToolDefinitionInput = z.object({
   parameters: z.record(z.string(), z.unknown())
 });
 
+const vscodeCodeAgentInstructionInput = z.object({
+  path: z.string().min(1).max(512),
+  content: z.string().min(1).max(200_000),
+});
+
+const vscodeCodeAgentSystemContextInput = z.object({
+  workingDirectory: z.string().min(1).max(512).optional(),
+  isGitRepo: z.boolean().optional(),
+  gitBranch: z.string().min(1).max(256).optional(),
+  platform: z.string().min(1).max(64).optional(),
+  osVersion: z.string().min(1).max(256).optional(),
+  shell: z.string().min(1).max(128).optional(),
+  clientDateIso: z.string().min(1).max(128).optional(),
+  clientTimezone: z.string().min(1).max(128).optional(),
+});
+
+const vscodeCodeAgentInput = z.object({
+  source: z.literal('vscode').optional(),
+  workspaceKey: z.string().min(1).max(256).optional(),
+  workspaceLabel: z.string().min(1).max(512).optional(),
+  promptGlobalOverride: z.string().max(200_000).optional(),
+  promptWorkspaceOverride: z.string().max(200_000).optional(),
+  instructionIncludePatterns: z.array(z.string().min(1).max(256)).max(64).optional(),
+  instructionFiles: z.array(vscodeCodeAgentInstructionInput).max(64).optional(),
+  systemContext: vscodeCodeAgentSystemContextInput.optional(),
+});
+
 const createMessageInput = z.object({
   sessionId: z.string().optional(),
   content: z.string().min(1),
@@ -40,7 +67,8 @@ const createMessageInput = z.object({
   sessionTitle: z.string().optional(),
   contexts: z.array(chatContextInput).optional(),
   tools: z.array(z.string()).optional(),
-  localToolDefinitions: z.array(localToolDefinitionInput).max(32).optional()
+  localToolDefinitions: z.array(localToolDefinitionInput).max(32).optional(),
+  vscodeCodeAgent: vscodeCodeAgentInput.optional(),
 });
 
 const feedbackInput = z.object({
@@ -54,6 +82,7 @@ const editMessageInput = z.object({
 const retryMessageInput = z.object({
   providerId: z.enum(['openai', 'gemini']).optional(),
   model: z.string().min(1).optional(),
+  vscodeCodeAgent: vscodeCodeAgentInput.optional(),
 });
 
 const createSessionInput = z.object({
@@ -62,9 +91,15 @@ const createSessionInput = z.object({
   sessionTitle: z.string().optional()
 });
 
+const createCheckpointInput = z.object({
+  title: z.string().min(1).max(120).optional(),
+  anchorMessageId: z.string().min(1).optional(),
+});
+
 const toolResultInput = z.object({
   toolCallId: z.string().min(1),
-  result: z.unknown()
+  result: z.unknown(),
+  vscodeCodeAgent: vscodeCodeAgentInput.optional(),
 });
 
 const steerInput = z.object({
@@ -267,7 +302,7 @@ chatRouter.delete(
 
 chatRouter.get('/sessions', async (c) => {
   const user = c.get('user');
-  const sessions = await chatService.listSessions(user.userId);
+  const sessions = await chatService.listSessions(user.userId, user.workspaceId);
   return c.json({ sessions });
 });
 
@@ -286,34 +321,140 @@ chatRouter.post('/sessions', requireWorkspaceAccessRole(), zValidator('json', cr
 
 chatRouter.get('/sessions/:id/messages', async (c) => {
   const user = c.get('user');
-  const sessionId = c.req.param('id');
+  const sessionId = c.req.param('id')!;
   const result = await chatService.listMessages(sessionId, user.userId);
   return c.json({ sessionId, messages: result.messages, todoRuntime: result.todoRuntime });
 });
 
-/**
- * GET /api/v1/chat/sessions/:id/stream-events
- * Optimisation batch (Option C): relecture des events pour les N derniers messages assistant d'une session.
- */
-chatRouter.get('/sessions/:id/stream-events', async (c) => {
+chatRouter.get('/sessions/:id/bootstrap', async (c) => {
   const user = c.get('user');
-  const sessionId = c.req.param('id');
-
-  const url = new URL(c.req.url);
-  const limitMessagesRaw = url.searchParams.get('limitMessages');
-  const limitEventsRaw = url.searchParams.get('limitEvents');
-  const limitMessages = limitMessagesRaw ? Number(limitMessagesRaw) : undefined;
-  const limitEventsPerMessage = limitEventsRaw ? Number(limitEventsRaw) : undefined;
-
-  const streams = await chatService.listStreamEventsForSession({
+  const sessionId = c.req.param('id')!;
+  const result = await chatService.getSessionBootstrap({
     sessionId,
     userId: user.userId,
-    limitMessages: Number.isFinite(limitMessages as number) ? (limitMessages as number) : undefined,
-    limitEventsPerMessage: Number.isFinite(limitEventsPerMessage as number) ? (limitEventsPerMessage as number) : undefined
+  });
+  return c.json({
+    sessionId,
+    messages: result.messages,
+    todoRuntime: result.todoRuntime,
+    checkpoints: result.checkpoints,
+    documents: result.documents,
+    assistantDetailsByMessageId: result.assistantDetailsByMessageId,
+  });
+});
+
+chatRouter.get('/sessions/:id/history', async (c) => {
+  const user = c.get('user');
+  const sessionId = c.req.param('id')!;
+  const detailMode =
+    c.req.query('runtimeDetails') === 'full' ? 'full' : 'summary';
+  const result = await chatService.getSessionHistory({
+    sessionId,
+    userId: user.userId,
+    detailMode,
   });
 
-  return c.json({ sessionId, streams });
+  const encoder = new TextEncoder();
+
+  c.header('Content-Type', 'application/x-ndjson; charset=utf-8');
+  c.header('Cache-Control', 'no-store');
+
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      async start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            `${JSON.stringify({
+              type: 'session_meta',
+              sessionId: result.sessionId,
+              title: result.title,
+              todoRuntime: result.todoRuntime,
+              checkpoints: result.checkpoints,
+              documents: result.documents,
+            })}\n`,
+          ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        let emitted = 0;
+        for (const item of result.items) {
+          controller.enqueue(
+            encoder.encode(
+              `${JSON.stringify({
+                type: 'timeline_item',
+                item,
+              })}\n`,
+            ),
+          );
+          emitted += 1;
+          if (emitted % 2 === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
+        }
+        controller.close();
+      },
+    }),
+    { status: 200, headers: c.res.headers },
+  );
 });
+
+chatRouter.get('/messages/:id/runtime-details', async (c) => {
+  const user = c.get('user');
+  const messageId = c.req.param('id')!;
+  const result = await chatService.getMessageRuntimeDetails({
+    messageId,
+    userId: user.userId,
+  });
+  return c.json(result);
+});
+
+chatRouter.get('/sessions/:id/checkpoints', requireWorkspaceAccessRole(), async (c) => {
+  const user = c.get('user');
+  const sessionId = c.req.param('id')!;
+  const url = new URL(c.req.url);
+  const limitRaw = Number(url.searchParams.get('limit') ?? '20');
+  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.floor(limitRaw))) : 20;
+  const checkpoints = await chatService.listCheckpoints({
+    sessionId,
+    userId: user.userId,
+    limit,
+  });
+  return c.json({ sessionId, checkpoints });
+});
+
+chatRouter.post(
+  '/sessions/:id/checkpoints',
+  requireWorkspaceAccessRole(),
+  zValidator('json', createCheckpointInput),
+  async (c) => {
+    const user = c.get('user');
+    const sessionId = c.req.param('id')!;
+    const body = c.req.valid('json');
+    const checkpoint = await chatService.createCheckpoint({
+      sessionId,
+      userId: user.userId,
+      title: body.title ?? null,
+      anchorMessageId: body.anchorMessageId ?? null,
+    });
+    return c.json({ sessionId, checkpoint });
+  },
+);
+
+chatRouter.post(
+  '/sessions/:id/checkpoints/:checkpointId/restore',
+  requireWorkspaceEditorRole(),
+  async (c) => {
+    const user = c.get('user');
+    const sessionId = c.req.param('id')!;
+    const checkpointId = c.req.param('checkpointId')!;
+    const restored = await chatService.restoreCheckpoint({
+      sessionId,
+      checkpointId,
+      userId: user.userId,
+    });
+    return c.json({ sessionId, ...restored });
+  },
+);
 
 /**
  * DELETE /api/v1/chat/sessions/:id
@@ -321,30 +462,9 @@ chatRouter.get('/sessions/:id/stream-events', async (c) => {
  */
 chatRouter.delete('/sessions/:id', async (c) => {
   const user = c.get('user');
-  const sessionId = c.req.param('id');
+  const sessionId = c.req.param('id')!;
   await chatService.deleteSession(sessionId, user.userId);
   return c.json({ ok: true });
-});
-
-/**
- * GET /api/v1/chat/messages/:id/stream-events
- * Relecture des events (option C) pour reconstruire reasoning/tools d'une session.
- * streamId == messageId pour le chat.
- */
-chatRouter.get('/messages/:id/stream-events', async (c) => {
-  const user = c.get('user');
-  const messageId = c.req.param('id');
-  const msg = await chatService.getMessageForUser(messageId, user.userId);
-  if (!msg) return c.json({ error: 'Message not found' }, 404);
-
-  const url = new URL(c.req.url);
-  const sinceSequenceRaw = url.searchParams.get('sinceSequence');
-  const limitRaw = url.searchParams.get('limit');
-  const sinceSequence = sinceSequenceRaw ? Number(sinceSequenceRaw) : undefined;
-  const limit = limitRaw ? Number(limitRaw) : 2000;
-
-  const events = await readStreamEvents(messageId, Number.isFinite(sinceSequence as number) ? sinceSequence : undefined, Number.isFinite(limit) ? limit : 2000);
-  return c.json({ messageId, streamId: messageId, events });
 });
 
 /**
@@ -353,7 +473,7 @@ chatRouter.get('/messages/:id/stream-events', async (c) => {
  */
 chatRouter.post('/messages/:id/stop', requireWorkspaceAccessRole(), async (c) => {
   const user = c.get('user');
-  const messageId = c.req.param('id');
+  const messageId = c.req.param('id')!;
 
   const msg = await chatService.getMessageForUser(messageId, user.userId);
   if (!msg) return c.json({ error: 'Message not found' }, 404);
@@ -393,7 +513,7 @@ chatRouter.post('/messages/:id/stop', requireWorkspaceAccessRole(), async (c) =>
  */
 chatRouter.post('/messages/:id/steer', requireWorkspaceAccessRole(), zValidator('json', steerInput), async (c) => {
   const user = c.get('user');
-  const assistantMessageId = c.req.param('id');
+  const assistantMessageId = c.req.param('id')!;
   const body = c.req.valid('json');
 
   const msg = await chatService.getMessageForUser(assistantMessageId, user.userId);
@@ -486,7 +606,7 @@ chatRouter.post('/messages/:id/steer', requireWorkspaceAccessRole(), zValidator(
  */
 chatRouter.post('/messages/:id/feedback', requireWorkspaceAccessRole(), zValidator('json', feedbackInput), async (c) => {
   const user = c.get('user');
-  const messageId = c.req.param('id');
+  const messageId = c.req.param('id')!;
   const body = c.req.valid('json');
 
   try {
@@ -509,7 +629,7 @@ chatRouter.post('/messages/:id/feedback', requireWorkspaceAccessRole(), zValidat
  */
 chatRouter.patch('/messages/:id', requireWorkspaceEditorRole(), zValidator('json', editMessageInput), async (c) => {
   const user = c.get('user');
-  const messageId = c.req.param('id');
+  const messageId = c.req.param('id')!;
   const body = c.req.valid('json');
 
   try {
@@ -532,7 +652,7 @@ chatRouter.patch('/messages/:id', requireWorkspaceEditorRole(), zValidator('json
  */
 chatRouter.post('/messages/:id/retry', requireWorkspaceAccessRole(), async (c) => {
   const user = c.get('user');
-  const messageId = c.req.param('id');
+  const messageId = c.req.param('id')!;
   const payload = retryMessageInput.safeParse(await c.req.json().catch(() => ({})));
   if (!payload.success) {
     return c.json(
@@ -563,6 +683,7 @@ chatRouter.post('/messages/:id/retry', requireWorkspaceAccessRole(), async (c) =
         assistantMessageId: created.assistantMessageId,
         providerId: created.providerId,
         model: created.model,
+        vscodeCodeAgent: payload.data.vscodeCodeAgent ?? undefined,
         locale: requestLocale
       },
       { workspaceId: user.workspaceId }
@@ -622,6 +743,7 @@ chatRouter.post('/messages', requireWorkspaceAccessRole(), zValidator('json', cr
     contexts: body.contexts ?? undefined,
     tools: body.tools ?? undefined,
     localToolDefinitions: body.localToolDefinitions ?? undefined,
+    vscodeCodeAgent: body.vscodeCodeAgent ?? undefined,
     locale: requestLocale
   }, { workspaceId: user.workspaceId });
 
@@ -644,7 +766,7 @@ chatRouter.post(
   zValidator('json', toolResultInput),
   async (c) => {
     const user = c.get('user');
-    const messageId = c.req.param('id');
+    const messageId = c.req.param('id')!;
     const body = c.req.valid('json');
     const requestLocale = resolveLocaleFromHeaders({
       appLocaleHeader: c.req.header('x-app-locale'),
@@ -680,6 +802,8 @@ chatRouter.post(
           sessionId: msg.sessionId,
           assistantMessageId: messageId,
           localToolDefinitions: accepted.localToolDefinitions,
+          vscodeCodeAgent:
+            accepted.vscodeCodeAgent ?? body.vscodeCodeAgent ?? undefined,
           resumeFrom: accepted.resumeFrom,
           locale: requestLocale
         },
