@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { organizationsRouter } from './organizations';
 import { foldersRouter } from './folders';
-import { useCasesRouter } from './use-cases';
+import { initiativesRouter } from './initiatives';
 import { healthRouter } from './health';
 import { settingsRouter } from './settings';
 import { businessConfigRouter } from './business-config';
@@ -43,10 +43,14 @@ apiRouter.route('/organizations', organizationsRouter);
 apiRouter.use('/folders/*', requireAuth);
 apiRouter.route('/folders', foldersRouter);
 
-apiRouter.use('/use-cases/*', requireAuth);
-apiRouter.route('/use-cases', useCasesRouter);
+apiRouter.use('/initiatives/*', requireAuth);
+apiRouter.route('/initiatives', initiativesRouter);
 
-// DOCX export routes (nested under /use-cases, shares auth middleware above)
+// Backward-compatible alias: /use-cases/* → /initiatives/*
+apiRouter.use('/use-cases/*', requireAuth);
+apiRouter.route('/use-cases', initiativesRouter);
+
+// DOCX export routes
 apiRouter.use('/docx/*', requireAuth);
 apiRouter.route('/', docxRouter);
 

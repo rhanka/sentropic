@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeStringListField } from '../../src/services/context-usecase';
+import { normalizeStringListField } from '../../src/services/context-initiative';
 
 describe('normalizeStringListField', () => {
   it('removes marker-only entries (e.g. "-") and empty strings', () => {

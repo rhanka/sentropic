@@ -358,9 +358,9 @@ const buildUseCaseData = (payload: Partial<UseCaseInput>, existingData?: Partial
   return data;
 };
 
-export const useCasesRouter = new Hono();
+export const initiativesRouter = new Hono();
 
-useCasesRouter.get('/', async (c) => {
+initiativesRouter.get('/', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
   const targetWorkspaceId = user.workspaceId;
   const folderId = c.req.query('folder_id');
@@ -371,7 +371,7 @@ useCasesRouter.get('/', async (c) => {
   return c.json({ items: hydrated });
 });
 
-useCasesRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator('json', useCaseInput), async (c) => {
+initiativesRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator('json', useCaseInput), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const payload = c.req.valid('json');
   const [folder] = await db
@@ -415,7 +415,7 @@ useCasesRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator
   return c.json(hydrated, 201);
 });
 
-useCasesRouter.get('/:id', async (c) => {
+initiativesRouter.get('/:id', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
   const targetWorkspaceId = user.workspaceId;
   const id = c.req.param('id')!;
@@ -430,7 +430,7 @@ useCasesRouter.get('/:id', async (c) => {
   return c.json(hydrated);
 });
 
-useCasesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', useCaseInput.partial()), async (c) => {
+initiativesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', useCaseInput.partial()), async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id')!;
   const payload = c.req.valid('json');
@@ -515,7 +515,7 @@ useCasesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidat
   return c.json(hydrated);
 });
 
-useCasesRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async (c) => {
+initiativesRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id')!;
   try {
@@ -542,7 +542,7 @@ const generateInput = z.object({
   model: z.string().optional()
 });
 
-useCasesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zValidator('json', generateInput), async (c) => {
+initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zValidator('json', generateInput), async (c) => {
   try {
     const { workspaceId, userId, role } = c.get('user') as { workspaceId: string; userId: string; role: string };
     const requestLocale = resolveLocaleFromHeaders({
@@ -692,7 +692,7 @@ const detailInput = z.object({
   model: z.string().optional()
 });
 
-useCasesRouter.post('/:id/detail', requireEditor, requireWorkspaceEditorRole(), zValidator('json', detailInput), async (c) => {
+initiativesRouter.post('/:id/detail', requireEditor, requireWorkspaceEditorRole(), zValidator('json', detailInput), async (c) => {
   try {
     const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
     const requestLocale = resolveLocaleFromHeaders({
@@ -767,4 +767,4 @@ useCasesRouter.post('/:id/detail', requireEditor, requireWorkspaceEditorRole(), 
 });
 
 
-export default useCasesRouter;
+export default initiativesRouter;
