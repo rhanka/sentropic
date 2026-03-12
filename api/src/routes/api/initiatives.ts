@@ -19,6 +19,7 @@ import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
 import { resolveLocaleFromHeaders } from '../../utils/locale';
 import { isNeutralWorkspace } from '../../services/workspace-access';
+import { evaluateGate } from '../../services/gate-service';
 
 async function notifyInitiativeEvent(initiativeId: string): Promise<void> {
   const notifyPayload = JSON.stringify({ initiative_id: initiativeId });
@@ -519,6 +520,89 @@ initiativesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zVali
     .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, workspaceId)));
   const hydrated = await hydrateInitiative(updated);
   await notifyInitiativeEvent(id);
+  return c.json(hydrated);
+});
+
+// PATCH /:id — partial update supporting maturity_stage transition with gate evaluation (§6.2)
+const patchInitiativeInput = z.object({
+  maturity_stage: z.string().optional(),
+  gate_status: z.string().optional(),
+}).passthrough();
+
+initiativesRouter.patch('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', patchInitiativeInput), async (c) => {
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
+  const id = c.req.param('id')!;
+  const payload = c.req.valid('json');
+
+  const [record] = await db
+    .select()
+    .from(initiatives)
+    .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, workspaceId)));
+  if (!record) {
+    return c.json({ message: 'Not found' }, 404);
+  }
+
+  try {
+    await requireLockOwnershipForMutation({
+      userId,
+      workspaceId,
+      objectType: 'initiative',
+      objectId: id,
+    });
+  } catch (e: unknown) {
+    if (isObjectLockedError(e)) return c.json({ message: 'Object is locked', code: 'OBJECT_LOCKED', lock: e.lock }, 409);
+    throw e;
+  }
+
+  // Gate evaluation on maturity_stage transition
+  let gateResult = null;
+  if (payload.maturity_stage && payload.maturity_stage !== record.maturityStage) {
+    gateResult = await evaluateGate(workspaceId, id, payload.maturity_stage);
+
+    if (!gateResult.gate_passed) {
+      return c.json({
+        message: 'Gate check failed',
+        code: 'GATE_BLOCKED',
+        gate: gateResult,
+      }, 422);
+    }
+  }
+
+  // Build the update set
+  const updateSet: Record<string, unknown> = {};
+  if (payload.maturity_stage !== undefined) {
+    updateSet.maturityStage = payload.maturity_stage;
+  }
+  if (payload.gate_status !== undefined) {
+    updateSet.gateStatus = payload.gate_status;
+  }
+
+  // If maturity_stage changed and gate passed, update gate_status accordingly
+  if (payload.maturity_stage && payload.maturity_stage !== record.maturityStage && gateResult) {
+    updateSet.gateStatus = gateResult.gate_passed ? 'approved' : 'pending';
+  }
+
+  if (Object.keys(updateSet).length === 0) {
+    const hydrated = await hydrateInitiative(record);
+    return c.json(hydrated);
+  }
+
+  await db
+    .update(initiatives)
+    .set(updateSet)
+    .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, workspaceId)));
+
+  const [updated] = await db
+    .select()
+    .from(initiatives)
+    .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, workspaceId)));
+  const hydrated = await hydrateInitiative(updated);
+  await notifyInitiativeEvent(id);
+
+  // Include gate evaluation in response if transition happened
+  if (gateResult) {
+    return c.json({ ...hydrated, gate: gateResult });
+  }
   return c.json(hydrated);
 });
 
