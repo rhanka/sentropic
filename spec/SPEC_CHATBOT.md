@@ -24,7 +24,7 @@
 - [x] **CU-004: Session replay (display)**
   - [x] Ability to replay a full session to see how the conversation evolved
   - [x] Messages display reasoning, tool calls, and modifications
-  - [x] Endpoints `GET /api/v1/chat/sessions/:id/stream-events` (batch) and `GET /api/v1/chat/messages/:id/stream-events`
+  - [x] Session-read contract `GET /api/v1/chat/sessions/:id/history` (`application/x-ndjson`) + live SSE `GET /api/v1/streams/sse`
 - [x] **CU-005: Context and history in sessions** (partial: use case only)
   - [x] `primaryContextType` and `primaryContextId` in `chat_sessions`
   - [x] Automatic context detection from the route (UI)
@@ -160,6 +160,13 @@
   - UI smooth pseudo-streaming for larger chunk deltas,
   - provider-side schema compatibility compiler before Gemini structured calls (unsupported keywords removed),
   - one-shot structured JSON repair retry using `defaultPrompts.structured_json_repair`.
+- OpenAI-family admin-managed source selection (BR-05 delivered):
+  - backend keeps `openai` as the only OpenAI-family runtime/provider surface,
+  - admin settings own Codex enrollment and the effective runtime source switch,
+  - runtime source can be:
+    - standard OpenAI key path,
+    - connected Codex token path,
+  - Codex mode is a transport/source choice on the existing OpenAI runtime path, not a dedicated provider surface.
 - Settings save propagation:
   - saving user defaults triggers a browser event to refresh new-conversation defaults immediately (no page reload).
 - Display normalization:
@@ -229,6 +236,27 @@ Rules:
 - Tool calls: `tool_call_start`, then zero or more `tool_call_delta`, then `tool_call_result`.
 - Reasoning/content deltas can alternate; UI aggregates.
 
+## Session history and live update contract — delivered
+
+- Historical session loading uses `GET /api/v1/chat/sessions/:id/history`.
+- Response format is `application/x-ndjson`.
+- `history` is the canonical frontend session-read contract for reload/open/reopen.
+- Live continuation of an active run uses `GET /api/v1/streams/sse` only.
+- Frontend chat rendering must not depend on:
+  - `GET /api/v1/chat/sessions/:id/stream-events`
+  - `GET /api/v1/chat/messages/:id/stream-events`
+  - `GET /api/v1/streams/events/:streamId`
+- Persisted `chat_stream_events` remain an internal runtime journal used for:
+  - runtime recovery,
+  - deterministic backend reconstruction,
+  - live SSE publication.
+
+Shared BR-05 history rules:
+- `history` emits one coherent session thread read model, not raw SQL rows and not raw stream-event batches.
+- Host surface (`web`, `chrome`, `vscode`) must not define alternate history contracts.
+- Historical reload uses summary-only runtime details; expensive runtime bodies stay out of the initial session-read path.
+- Multi-step assistant run projection is reconstructed deterministically from the backend history model and live SSE.
+
 ## Chat tracing (debug) — 7 days (20–30 lines)
 
 Goal: debug “agent” issues (tool loops, malformed payloads, context loss) by storing **the exact payload sent to OpenAI** and the tool calls executed.
@@ -266,7 +294,7 @@ ORDER BY created_at ASC;
   - [x] `ChatWidget.svelte`: global floating widget (bubble + panel) with Chat ↔ QueueMonitor switch
   - [x] `ChatPanel.svelte`: sessions + messages + composer
   - [x] `QueueMonitor.svelte`: job list with streaming
-  - [x] Streaming history: reconstructed from `chat_stream_events` for replay (via `historySource="chat"` or `historySource="stream"`)
+  - [x] Session history: loaded from the shared `history` NDJSON contract; active runs continue over SSE
   - [ ] `DiffViewer.svelte`: before/after for objects (coming)
   - [ ] Control bar: model selection, stop/cancel (coming)
 
@@ -397,7 +425,7 @@ Join table between chat sessions and modified business objects.
 - `context_type='executive_summary'` + `context_id` → reference `folders.id` (executive_summary lives in folders)
 
 #### `chat_stream_events`
-Real‑time streaming events for each message or structured call.
+Real‑time runtime journal for each message or structured call.
 
 **Columns:**
 - `id` (PK): unique identifier
@@ -412,6 +440,11 @@ Real‑time streaming events for each message or structured call.
 - `chat_stream_events_message_id_idx`: on `message_id`
 - `chat_stream_events_stream_id_idx`: on `stream_id`
 - `chat_stream_events_sequence_idx`: on `stream_id, sequence`
+
+**Contract note:**
+- `chat_stream_events` are internal runtime data.
+- They support backend reconstruction and live SSE fan-out.
+- They are not the supported frontend session-read contract for normal chat rehydration.
 
 **Usage:**
 - Event storage for replay (informal sessions and structured calls)
@@ -608,9 +641,9 @@ const replay = await replayChatSession('session-789');
 
 - [x] **API (Hono)**:
   - [x] Router `api/src/routes/api/chat.ts` mounted in `api/src/routes/api/index.ts`
-  - [x] Endpoints: `POST /api/v1/chat/messages`, `GET /api/v1/chat/sessions`, `GET /api/v1/chat/sessions/:id/messages`, `GET /api/v1/chat/sessions/:id/stream-events`, `GET /api/v1/chat/messages/:id/stream-events`, `DELETE /api/v1/chat/sessions/:id`
+  - [x] Endpoints: `POST /api/v1/chat/messages`, `GET /api/v1/chat/sessions`, `GET /api/v1/chat/sessions/:id/messages`, `GET /api/v1/chat/sessions/:id/history`, `DELETE /api/v1/chat/sessions/:id`
   - [x] Global SSE endpoint: `GET /api/v1/streams/sse`
-  - [x] History endpoint: `GET /api/v1/streams/events/:streamId`
+  - [x] Session history NDJSON is the supported chat session-read endpoint
   - [x] Services: `chat-service.ts`, `stream-service.ts`, `tool-service.ts`
   - [ ] Document routes (planned Lot B)
 
@@ -641,8 +674,8 @@ const replay = await replayChatSession('session-789');
 **Implemented**:
 - [x] API: POST `/api/v1/chat/messages` (informal chat) + global SSE `/api/v1/streams/sse`
 - [x] Tools: `read_usecase`, `update_usecase_field`, `web_search`, `web_extract`
-- [x] Rehydration: GET `/api/v1/chat/sessions/:id/stream-events` (batch) and GET `/api/v1/chat/messages/:id/stream-events`
-- [x] UI: `ChatWidget` (bubble + panel), `ChatPanel` (sessions + messages), `StreamMessage` (reasoning + content + tools)
+- [x] Session rehydration: GET `/api/v1/chat/sessions/:id/history` (`application/x-ndjson`)
+  - [x] UI: `ChatWidget` (bubble + panel), `ChatPanel` (sessions + messages), `StreamMessage` (reasoning + content + tools)
 - [x] Automatic context detection from the route
 - [x] Data: `chat_stream_events` filled (reasoning/content/tools), `context_modification_history` written for update, snapshots in `chat_contexts`
 - [x] Automatic UI refresh after modification (SSE events)
