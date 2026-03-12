@@ -197,7 +197,7 @@ export function normalizeAutoGenerationSectionKeys(
         .map((s) => {
           const sectionKey = String(s ?? '').trim();
           if (!sectionKey) return '';
-          return contextType === 'usecase' && sectionKey.startsWith('data.')
+          return contextType === 'initiative' && sectionKey.startsWith('data.')
             ? sectionKey.slice('data.'.length)
             : sectionKey;
         })
@@ -335,7 +335,7 @@ export interface ChatMessageJobData {
   providerId?: ProviderId;
   providerApiKey?: string;
   model?: string;
-  contexts?: Array<{ contextType: 'organization' | 'folder' | 'usecase' | 'executive_summary'; contextId: string }>;
+  contexts?: Array<{ contextType: 'organization' | 'folder' | 'initiative' | 'executive_summary'; contextId: string }>;
   tools?: string[];
   localToolDefinitions?: Array<{
     name: string;
@@ -663,7 +663,7 @@ export class QueueManager {
 
   private async hasAnyContextDocuments(
     workspaceId: string,
-    contextType: 'organization' | 'folder' | 'usecase',
+    contextType: 'organization' | 'folder' | 'initiative',
     contextId: string
   ): Promise<boolean> {
     const [row] = await db
@@ -2071,7 +2071,7 @@ export class QueueManager {
       if (typeof data.description === 'string' && data.description.trim()) generatedInitiativeFields.push('data.description');
       await this.createAutoGenerationFieldComments({
         workspaceId,
-        contextType: 'usecase',
+        contextType: 'initiative',
         contextId: uc.id,
         sectionKeys: generatedInitiativeFields,
         createdBy: initiatedByUserId,
@@ -2301,7 +2301,7 @@ export class QueueManager {
     await this.notifyInitiativeEvent(initiativeId);
     await this.createAutoGenerationFieldComments({
       workspaceId: folder.workspaceId,
-      contextType: 'usecase',
+      contextType: 'initiative',
       contextId: initiativeId,
       sectionKeys: generatedInitiativeFields,
       createdBy: initiatedByUserId,

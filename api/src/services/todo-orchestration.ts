@@ -172,9 +172,9 @@ export interface TaskExecutionInput {
 export interface InitiativeGenerationWorkflowTaskAssignments {
   contextPrepareAgentId: string | null;
   matrixPrepareAgentId: string | null;
-  usecaseListAgentId: string | null;
+  initiativeListAgentId: string | null;
   todoSyncAgentId: string | null;
-  usecaseDetailAgentId: string | null;
+  initiativeDetailAgentId: string | null;
   executiveSummaryAgentId: string | null;
 }
 
@@ -1707,9 +1707,9 @@ export class TodoOrchestrationService {
     return {
       contextPrepareAgentId: byTaskKey.get("generation_context_prepare") ?? null,
       matrixPrepareAgentId: byTaskKey.get("generation_matrix_prepare") ?? null,
-      usecaseListAgentId: byTaskKey.get("generation_usecase_list") ?? null,
+      initiativeListAgentId: byTaskKey.get("generation_initiative_list") ?? null,
       todoSyncAgentId: byTaskKey.get("generation_todo_sync") ?? null,
-      usecaseDetailAgentId: byTaskKey.get("generation_usecase_detail") ?? null,
+      initiativeDetailAgentId: byTaskKey.get("generation_initiative_detail") ?? null,
       executiveSummaryAgentId: byTaskKey.get("generation_executive_summary") ?? null,
     };
   }
@@ -1940,7 +1940,7 @@ export class TodoOrchestrationService {
     }
 
     const jobId = await queueManager.addJob(
-      "usecase_list",
+      "initiative_list",
       {
         folderId: input.folderId,
         input: input.input,
@@ -1953,8 +1953,8 @@ export class TodoOrchestrationService {
         workflow: {
           workflowRunId: workflowRuntime.workflowRunId,
           workflowDefinitionId: workflowRuntime.workflowDefinitionId,
-          taskKey: "generation_usecase_list",
-          agentDefinitionId: workflowRuntime.taskAssignments.usecaseListAgentId,
+          taskKey: "generation_initiative_list",
+          agentDefinitionId: workflowRuntime.taskAssignments.initiativeListAgentId,
           taskAssignments: workflowRuntime.taskAssignments,
         },
       },

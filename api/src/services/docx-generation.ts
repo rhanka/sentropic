@@ -335,7 +335,7 @@ async function generateInitiativeOnePage(
 ): Promise<DocxGenerateResult> {
   const source = await loadInitiativeOnePageSource(input);
   const buffer = await generateInitiativeDocx(source.initiative, source.matrix);
-  const nameSlug = slugify(source.initiative.data.name) || 'usecase';
+  const nameSlug = slugify(source.initiative.data.name) || 'initiative';
 
   return {
     buffer,
@@ -428,7 +428,7 @@ async function loadExecutiveSynthesisSource(
 
 const registry: Record<DocxTemplateId, RegistryEntry> = {
   'usecase-onepage': {
-    entityType: 'usecase',
+    entityType: 'initiative',
     generate: generateInitiativeOnePage,
   },
   'executive-synthesis-multipage': {

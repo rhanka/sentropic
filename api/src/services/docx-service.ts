@@ -73,7 +73,7 @@ type DashboardImageInput = {
 };
 
 export type DocxTemplateId = 'usecase-onepage' | 'executive-synthesis-multipage';
-export type DocxEntityType = 'usecase' | 'folder';
+export type DocxEntityType = 'initiative' | 'folder';
 
 type BaseRunStyle = {
   style?: string;

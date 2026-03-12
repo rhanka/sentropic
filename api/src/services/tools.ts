@@ -479,7 +479,7 @@ export const documentsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
         },
         contextType: {
           type: 'string',
-          enum: ['organization', 'folder', 'usecase', 'chat_session'],
+          enum: ['organization', 'folder', 'initiative', 'chat_session'],
           description: 'Type du contexte.'
         },
         contextId: { type: 'string', description: 'ID du contexte.' },
@@ -583,7 +583,7 @@ export const commentAssistantTool: OpenAI.Chat.Completions.ChatCompletionTool = 
         },
         contextType: {
           type: 'string',
-          enum: ['organization', 'folder', 'usecase', 'matrix', 'executive_summary'],
+          enum: ['organization', 'folder', 'initiative', 'matrix', 'executive_summary'],
           description: 'Context type for the comment scope.'
         },
         contextId: { type: 'string', description: 'Context ID for the comment scope.' },
@@ -852,7 +852,7 @@ export interface ExecuteWithToolsStreamOptions {
   useDocuments?: boolean;
   documentsContext?: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
     contextId: string;
   };
   /**
@@ -861,7 +861,7 @@ export interface ExecuteWithToolsStreamOptions {
    */
   documentsContexts?: Array<{
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
     contextId: string;
   }>;
   responseFormat?: 'json_object';

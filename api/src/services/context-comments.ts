@@ -1,7 +1,7 @@
 import { callLLMStream } from './llm-runtime';
 import { defaultPrompts } from '../config/default-prompts';
 
-export type CommentContextType = 'organization' | 'folder' | 'usecase' | 'matrix' | 'executive_summary';
+export type CommentContextType = 'organization' | 'folder' | 'initiative' | 'matrix' | 'executive_summary';
 
 export type CommentThreadSummary = {
   threadId: string;
