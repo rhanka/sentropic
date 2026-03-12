@@ -93,7 +93,7 @@ describe('Comments API', () => {
     const res = await authenticatedRequest(
       app,
       'GET',
-      `/api/v1/comments?context_type=usecase&context_id=${initiativeId}`,
+      `/api/v1/comments?context_type=initiative&context_id=${initiativeId}`,
       user.sessionToken!
     );
     expect(res.status).toBe(200);

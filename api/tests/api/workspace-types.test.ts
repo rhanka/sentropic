@@ -141,7 +141,7 @@ describe('Workspace type system', () => {
     );
     expect(res.status).toBe(400);
     const json = await res.json();
-    expect(json.error).toContain('neutral');
+    expect(json.error).toContain('Neutral');
   });
 
   // --- Task 4: type immutability ---
