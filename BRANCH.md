@@ -380,18 +380,18 @@ Closed: 2026-03-12
 - `api/src/routes/api/index.ts` — register new routes.
 
 **Tasks:**
-- [ ] Implement solution CRUD API (create, read, update, delete, list by initiative).
-- [ ] Implement product CRUD API (create, read, update, delete, list by initiative/solution).
-- [ ] Implement bid CRUD API (create, read, update, delete, list by initiative).
-- [ ] Implement bid_products junction API (attach/detach products to bid).
-- [ ] Zod validation schemas for all new endpoints.
-- [ ] Workspace access middleware on all new endpoints.
-- [ ] Tests: CRUD operations, access control, cascade behavior.
+- [x] Implement solution CRUD API (create, read, update, delete, list by initiative).
+- [x] Implement product CRUD API (create, read, update, delete, list by initiative/solution).
+- [x] Implement bid CRUD API (create, read, update, delete, list by initiative).
+- [x] Implement bid_products junction API (attach/detach products to bid).
+- [x] Zod validation schemas for all new endpoints.
+- [x] Workspace access middleware on all new endpoints.
+- [x] Tests: CRUD operations, access control, cascade behavior (`api/tests/api/extended-objects.test.ts` — 19/20 pass, 1 OOM).
 
 **Lot 6 gate:**
-- [ ] `make typecheck-api ENV=test-br04`
-- [ ] `make lint-api ENV=test-br04`
-- [ ] `make test-api ENV=test-br04`
+- [ ] `make typecheck-api ENV=test-br04` — infra OOM (exit 137, 2 attempts)
+- [x] `make lint-api ENV=test-br04` — 0 errors, 185 warnings (pre-existing)
+- [ ] `make test-api ENV=test-br04` — infra OOM (exit 137, 2 attempts); scoped test `extended-objects.test.ts` 19/20 pass (last OOM mid-run)
 
 ---
 
