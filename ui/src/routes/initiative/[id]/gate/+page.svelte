@@ -28,7 +28,7 @@
       initiative = initiativeData;
 
       // Fetch workspace details (includes gate_config)
-      const workspaceId = $workspaceScope?.workspaceId;
+      const workspaceId = $workspaceScope?.selectedId;
       if (workspaceId) {
         const workspaces = await apiGet('/api/v1/workspaces');
         const ws = workspaces.items?.find((w: any) => w.id === workspaceId);
