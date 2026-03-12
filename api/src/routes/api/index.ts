@@ -29,6 +29,9 @@ import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
 import { chromeExtensionRouter } from './chrome-extension';
 import { vscodeExtensionRouter } from './vscode-extension';
+import { solutionsRouter } from './solutions';
+import { productsRouter } from './products';
+import { bidsRouter } from './bids';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
@@ -50,6 +53,16 @@ apiRouter.route('/initiatives', initiativesRouter);
 // Backward-compatible alias: /use-cases/* → /initiatives/*
 apiRouter.use('/use-cases/*', requireAuth);
 apiRouter.route('/use-cases', initiativesRouter);
+
+// Extended business objects (BR-04 Lot 6)
+apiRouter.use('/solutions/*', requireAuth);
+apiRouter.route('/solutions', solutionsRouter);
+
+apiRouter.use('/products/*', requireAuth);
+apiRouter.route('/products', productsRouter);
+
+apiRouter.use('/bids/*', requireAuth);
+apiRouter.route('/bids', bidsRouter);
 
 // DOCX export routes
 apiRouter.use('/docx/*', requireAuth);
