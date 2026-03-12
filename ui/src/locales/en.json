@@ -4,7 +4,7 @@
     "folders": "Folders",
     "organizations": "Organizations",
     "business": "Business configuration",
-    "useCases": "Use cases",
+    "useCases": "Initiatives",
     "matrix": "Evaluation",
     "dashboard": "Dashboard",
     "data": "Data",
@@ -110,7 +110,7 @@
   },
   "home": {
     "welcomeTitle": "Welcome to Top AI Ideas",
-    "tagline": "Describe your business context and discover AI use cases prioritized by value and complexity.",
+    "tagline": "Describe your business context and discover AI initiatives prioritized by value and complexity.",
     "getStarted": "Get started",
     "redirectingTo": "Redirecting to {path}…"
   },
@@ -236,7 +236,7 @@
     "value": "Value",
     "complexity": "Complexity",
     "fibonacciPoints": "Fibonacci points",
-    "useCaseCount": "Use case count",
+    "useCaseCount": "Initiative count",
     "level": "Level",
     "description": "Description",
     "baseEvaluation": "Base evaluation",
@@ -264,16 +264,16 @@
     "newComplexityAxisName": "New complexity axis",
     "valueAxisAdded": "New value axis added",
     "complexityAxisAdded": "New complexity axis added",
-  "confirmDeleteAxis": "Are you sure you want to delete this axis? This will impact use case score calculations.",
+  "confirmDeleteAxis": "Are you sure you want to delete this axis? This will impact initiative score calculations.",
   "valueAxisDeleted": "Value axis deleted",
   "complexityAxisDeleted": "Complexity axis deleted",
-  "weightsRecalcWarning": "Warning: changing weights will automatically recalculate all scores for your existing use cases.",
+  "weightsRecalcWarning": "Warning: changing weights will automatically recalculate all scores for your existing initiatives.",
   "levelN": "Level {level}",
   "selectedFolder": "Selected folder",
   "createNew": "Create a new matrix",
   "createDialogBody": "Choose the type of matrix to create:",
     "help": {
-      "intro": "Adjust value and complexity axis weights to customize use case evaluation.",
+      "intro": "Adjust value and complexity axis weights to customize initiative evaluation.",
       "details": "The matrix uses 5 levels for each criterion, with specific descriptions for each. Click a criterion to view and edit detailed descriptions for the 5 levels."
     },
     "toasts": {
@@ -297,13 +297,13 @@
       "include": {
         "organizations": "Include organizations",
         "organization": "Include organization",
-        "usecases": "Include use cases",
+        "usecases": "Include initiatives",
         "matrix": "Include matrix"
       }
     },
     "actions": "Folder actions",
     "loading": "Loading folders…",
-    "useCaseCount": "{count} use cases",
+    "useCaseCount": "{count} initiatives",
     "deleteSuccess": "Folder deleted successfully!",
     "deleteError": "Error while deleting folder",
     "toast": {
@@ -315,7 +315,7 @@
     "detail": {
       "defaultTitle": "Folder",
       "title": "Folder",
-      "loadingUseCases": "Loading use cases…",
+      "loadingUseCases": "Loading initiatives…",
       "context": "Context",
       "valueLabel": "Value:",
       "complexityLabel": "Complexity:",
@@ -333,9 +333,9 @@
     "createOrg": "Create an organization",
     "context": "Context",
     "contextPlaceholder": "Describe the business context and objectives…",
-      "useCaseCount": "Number of use cases",
+      "useCaseCount": "Number of initiatives",
       "modelLabel": "Generation model",
-      "modelHint": "Used for use-case and matrix generation for this folder.",
+      "modelHint": "Used for initiative and matrix generation for this folder.",
       "default": "Default: {count}",
       "loadingModelCatalog": "Loading models…",
       "loadingOrganizations": "Loading organizations…",
@@ -462,7 +462,7 @@
     "execSummaryEmpty": "No executive summary available for this folder",
     "execSummaryGenerate": "Generate executive summary",
     "loadingData": "Loading data…",
-  "useCaseCount": "Use case count",
+  "useCaseCount": "Initiative count",
   "quickWins": "Quick wins",
   "roiQuadrants": {
     "quickWins": "Quick wins",
@@ -490,7 +490,7 @@
     "recommendations": "Recommendations",
     "references": "References",
     "annex": "Annex",
-    "annexUseCases": "Use case sheets",
+    "annexUseCases": "Initiative sheets",
     "subtitle": "Prioritize your innovations by value contribution",
     "about": "About"
     ,
@@ -794,7 +794,7 @@
       }
     },
     "admin": {
-      "resetDescription": "This section resets the application completely. All data (organizations, folders, use cases) will be permanently deleted.",
+      "resetDescription": "This section resets the application completely. All data (organizations, folders, initiatives) will be permanently deleted.",
       "confirmResetAll": "Are you sure you want to delete ALL data? This action is irreversible.",
       "reset": "Delete all data",
       "resetting": "Deleting…",
@@ -807,12 +807,12 @@
     }
   },
   "usecase": {
-    "useCase": "Use case",
-    "unnamed": "Untitled use case",
+    "useCase": "Initiative",
+    "unnamed": "Untitled initiative",
     "status": {
       "detailing": "Detail generation in progress…",
       "detailingShort": "Detailing…",
-      "generating": "Use case generation in progress…",
+      "generating": "Initiative generation in progress…",
       "pending": "Generation pending…"
     },
     "info": {
@@ -839,13 +839,13 @@
       "totalComplexity": "Computed complexity"
     },
     "errors": {
-      "load": "Error while loading use case",
+      "load": "Error while loading initiative",
       "readOnlyAction": "Action not allowed (read-only mode).",
       "delete": "Error while deleting"
     },
-    "confirmDelete": "Are you sure you want to delete this use case?",
+    "confirmDelete": "Are you sure you want to delete this initiative?",
     "export": {
-      "title": "Export use case",
+      "title": "Export initiative",
       "include": {
         "folder": "Include folder",
         "folderMatrix": "Include folder matrix",
@@ -853,14 +853,14 @@
       }
     },
     "import": {
-      "title": "Import use case"
+      "title": "Import initiative"
     },
     "toast": {
-      "deleted": "Use case deleted successfully!"
+      "deleted": "Initiative deleted successfully!"
     },
     "scatterPlot": {
       "title": "Prioritization matrix",
-      "empty": "No use cases to display",
+      "empty": "No initiatives to display",
       "loading": "Loading matrix…",
       "placingLabels": "Placing labels…",
       "clickHint": "Click a point to view details.",
@@ -1193,8 +1193,8 @@
       "organizationUpdate": { "label": "Organization (edit)" },
       "folderRead": { "label": "Folder (read)" },
       "folderUpdate": { "label": "Folder (edit)" },
-      "usecaseRead": { "label": "Use case (read)" },
-      "usecaseUpdate": { "label": "Use case (edit)" },
+      "usecaseRead": { "label": "Initiative (read)" },
+      "usecaseUpdate": { "label": "Initiative (edit)" },
       "matrix": { "label": "Matrix (read/edit)" },
       "executiveSummary": { "label": "Executive summary" }
     },
@@ -1231,7 +1231,7 @@
       "none": "No conversation",
       "deleteThread": "Delete conversation",
       "confirmDeleteThread": "Delete this comment conversation?",
-      "noContext": "No context selected. Open a folder, an organization, or a use case.",
+      "noContext": "No context selected. Open a folder, an organization, or an initiative.",
       "placeholder": {
         "disabledViewer": "Comments disabled for viewer role.",
         "resolved": "Comment resolved. Reopen to reply.",
@@ -1342,8 +1342,8 @@
     "type": {
       "organizationEnrich": "Organization enrichment",
       "matrixGenerate": "Matrix generation",
-      "usecaseList": "Use case generation",
-      "usecaseDetail": "Use case detail generation",
+      "usecaseList": "Initiative generation",
+      "usecaseDetail": "Initiative detail generation",
       "executiveSummary": "Executive summary",
       "documentSummary": "Document summary",
       "chatMessage": "Chat",
@@ -1474,7 +1474,7 @@
       "include": {
         "organizations": "Include organizations",
         "folders": "Include folders",
-        "usecases": "Include use cases",
+        "usecases": "Include initiatives",
         "matrix": "Include matrices"
       }
     },
@@ -1529,17 +1529,17 @@
     "type": {
       "organizations": "Organizations",
       "folders": "Folders",
-      "usecases": "Use cases",
+      "usecases": "Initiatives",
       "matrix": "Matrices"
     },
     "targetWorkspace": "Target workspace",
     "createWorkspace": "Create a new workspace",
     "targetLabelFallback": "Target",
-    "importHint": "For object imports (folder, use case, organization), a target workspace is required.",
+    "importHint": "For object imports (folder, initiative, organization), a target workspace is required.",
     "scope": {
       "workspace": "Workspace",
       "folder": "Folder",
-      "usecase": "Use case",
+      "usecase": "Initiative",
       "organization": "Organization",
       "matrix": "Matrix"
     },
