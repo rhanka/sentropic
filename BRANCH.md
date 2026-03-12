@@ -103,43 +103,14 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - return to worktree for fixes.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Cadrage interactif + matrice de récupération Lot 1**
+- [x] **Lot 0 — Cadrage interactif + matrice de récupération Lot 1**
   - [x] Sédimenter la mini-spec de réutilisation BR-05:
     - [x] `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md` (consolidated then deleted in Lot N-1)
     - [x] règles de réutilisation référencées explicitement dans les Lots 1/2/3.
-  - [ ] Lock functional framing for:
+  - [x] Lock functional framing for:
     - [x] Global conversation `summary` (context budget threshold, summary refresh policy, injection strategy).
     - [x] Global conversation `checkpoint` (create/list/restore lifecycle, consistency guarantees, UX/API contract).
     - [x] Restore proposal UI contract (web app + VSCode host parity, no-delta no-CTA behavior, banner reuse, triggers A/B/C, preview/apply flow) — functional framing locked; UAT validation remains in Lot N-2.
-  - [ ] Produce and validate strict Lot 1 recovery matrix from `backup/br05-total-reset-feat-20260302-093246`:
-    - [ ] **Recover verbatim**
-      - [ ] `api/src/routes/api/vscode-extension.ts`
-      - [ ] `api/tests/api/vscode-extension-download.test.ts`
-      - [ ] `ui/src/lib/utils/vscode-extension-download.ts`
-      - [ ] `ui/tests/utils/vscode-extension-download.test.ts`
-      - [ ] `ui/vscode-ext/package-vsix.js`
-      - [ ] `ui/vscode-ext/package.json` (only packaging metadata/scripts kept after review)
-    - [ ] **Recover partially (selective hunks only)**
-      - [ ] `ui/src/routes/settings/+page.svelte` (VSCode download card only)
-      - [ ] `ui/src/locales/en.json` (settings.vscodeExtension keys only)
-      - [ ] `ui/src/locales/fr.json` (settings.vscodeExtension keys only)
-      - [ ] `api/src/config/env.ts` (`VSCODE_EXTENSION_*` env keys only)
-      - [ ] `api/src/routes/api/index.ts` (register `vscodeExtensionRouter` only)
-      - [ ] `ui/package.json` / `ui/package-lock.json` (only required build script/deps for packaging)
-    - [ ] **Rebuild fresh (do not recover fake implementation)**
-      - [x] `ui/vscode-ext/extension.ts`
-      - [x] `ui/vscode-ext/webview-entry.ts`
-      - [ ] `ui/vscode-ext/vscode-bridge.ts`
-      - [ ] `ui/vscode-ext/auth-bridge.ts`
-      - [ ] `ui/vscode-ext/local-tools.ts`
-    - [x] **Explicitly exclude (must not exist after Lot 1)**
-      - [x] `ui/src/routes/vscode-plugin-smoke/+page.svelte`
-      - [x] `e2e/tests/03-chat-vscode-plugin-smoke.spec.ts`
-      - [x] `e2e/tests/03-chat-vscode-plugin.spec.ts`
-      - [x] `ui/tests/vscode-ext/summary-panel.test.ts`
-      - [x] `ui/tests/vscode-ext/checkpoint-panel.test.ts`
-      - [x] `ui/tests/vscode-ext/checkpoint-restore.test.ts`
-      - [x] `ui/vscode-ext/workflow-client.ts`
   - [x] Lock Lot 3 research target for VSCode code tools (baseline capability set + safety policy).
 
 - [x] **Lot 1 — VSCode host hardening + token bootstrap**
