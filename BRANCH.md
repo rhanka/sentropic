@@ -299,9 +299,12 @@ Closed: 2026-03-12
   - `api/tests/unit/llm-runtime-claude-stream.test.ts` — verify Claude stream event normalization.
   - `api/tests/unit/llm-runtime-mistral-stream.test.ts` — verify Mistral stream event normalization.
   - `api/tests/unit/llm-runtime-cohere-stream.test.ts` — verify Cohere stream event normalization.
-- [ ] Scoped runs: `make test-api-endpoints SCOPE=tests/unit/claude-provider.test.ts ENV=test-feat-model-runtime-claude-mistral`
-- [ ] Sub-lot gate: `make test-api ENV=test-feat-model-runtime-claude-mistral`
-- [ ] AI flaky tests run: `make test-api-ai ENV=test-feat-model-runtime-claude-mistral` (non-blocking, document signature)
+- [x] Scoped runs (local npx vitest — Docker blocked by BR08-FL6):
+  - 7 new test files: 73 tests passed (all green)
+  - 2 updated test files: 10 new tests passed (pre-existing DB test fails without postgres, expected)
+  - 1 updated test file (ai-settings): 3 new tests — requires DB, cannot verify without Docker
+- [ ] Sub-lot gate: `make test-api ENV=test-feat-model-runtime-claude-mistral` — Docker blocked (BR08-FL6)
+- [ ] AI flaky tests run: `make test-api-ai ENV=test-feat-model-runtime-claude-mistral` (non-blocking, document signature) — Docker blocked (BR08-FL6)
 
 #### 4.2 UI tests (TypeScript only)
 - [ ] **Existing tests to verify** (no changes expected, non-regression):
