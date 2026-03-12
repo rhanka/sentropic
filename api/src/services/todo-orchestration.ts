@@ -176,6 +176,10 @@ export interface InitiativeGenerationWorkflowTaskAssignments {
   todoSyncAgentId: string | null;
   initiativeDetailAgentId: string | null;
   executiveSummaryAgentId: string | null;
+  /** Alias for initiativeListAgentId — satisfies GenerationWorkflowTaskAssignments */
+  usecaseListAgentId: string | null;
+  /** Alias for initiativeDetailAgentId — satisfies GenerationWorkflowTaskAssignments */
+  usecaseDetailAgentId: string | null;
 }
 
 export interface InitiativeGenerationWorkflowRuntime {
@@ -1704,13 +1708,18 @@ export class TodoOrchestrationService {
       byTaskKey.set(task.taskKey, task.agentDefinitionId ?? null);
     }
 
+    const initiativeListAgentId = byTaskKey.get("generation_initiative_list") ?? null;
+    const initiativeDetailAgentId = byTaskKey.get("generation_initiative_detail") ?? null;
+
     return {
       contextPrepareAgentId: byTaskKey.get("generation_context_prepare") ?? null,
       matrixPrepareAgentId: byTaskKey.get("generation_matrix_prepare") ?? null,
-      initiativeListAgentId: byTaskKey.get("generation_initiative_list") ?? null,
+      initiativeListAgentId,
       todoSyncAgentId: byTaskKey.get("generation_todo_sync") ?? null,
-      initiativeDetailAgentId: byTaskKey.get("generation_initiative_detail") ?? null,
+      initiativeDetailAgentId,
       executiveSummaryAgentId: byTaskKey.get("generation_executive_summary") ?? null,
+      usecaseListAgentId: initiativeListAgentId,
+      usecaseDetailAgentId: initiativeDetailAgentId,
     };
   }
 

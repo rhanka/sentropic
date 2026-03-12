@@ -141,7 +141,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     if (folderTools) {
       expect(folderTools).toContain('folders_list');
       expect(folderTools).toContain('folder_get');
-      expect(folderTools).toContain('usecases_list');
+      expect(folderTools).toContain('initiatives_list');
       expect(folderTools).toContain('executive_summary_get');
       expect(folderTools).toContain('matrix_get');
       // updates enabled in non-readonly context
