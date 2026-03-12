@@ -90,7 +90,7 @@ describe('Organizations Store', () => {
       mockFetchJsonOnce(errorResponse, 409);
 
       await expect(deleteOrganization('1')).rejects.toThrow(
-        "Impossible de supprimer l'organisation (2 dossier(s) et 5 cas d'usage)"
+        "Impossible de supprimer l'organisation (2 dossier(s) et 5 initiatives)"
       );
     });
 
