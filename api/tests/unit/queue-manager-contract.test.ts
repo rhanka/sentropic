@@ -4,7 +4,7 @@ import {
   normalizeAutoGenerationSectionKeys,
   resolveGenerationPromptOverrideFromConfig,
 } from '../../src/services/queue-manager';
-import type { UseCaseDetail } from '../../src/services/context-usecase';
+import type { UseCaseDetail } from '../../src/services/context-initiative';
 
 describe('queue manager contracts', () => {
   it('normalizes auto-comment section keys for each context', () => {

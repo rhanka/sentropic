@@ -5,7 +5,7 @@ import { readStreamEvents } from '../../services/stream-service';
 import { sql } from 'drizzle-orm';
 import { and, eq, gt } from 'drizzle-orm';
 import type { Notification } from 'pg';
-import { hydrateUseCase } from './use-cases';
+import { hydrateUseCase } from './initiatives';
 import { hydrateOrganization } from './organizations';
 import { listPresence } from '../../services/lock-presence';
 import { clearLocksForUser } from '../../services/lock-service';
