@@ -392,7 +392,7 @@ IMPORTANT:
 Réponds UNIQUEMENT avec un JSON valide:
 {
   "dossier": "titre court du dossier",
-  "useCases": [
+  "initiatives": [
     {
       "titre": "titre court 1",
       "description": "Description courte (60-100 mots) du cas d'usage",

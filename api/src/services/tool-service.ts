@@ -9,7 +9,7 @@ import {
   contextModificationHistory,
   folders,
   organizations,
-  useCases,
+  initiatives,
   users,
   workspaceMemberships
 } from '../db/schema';
@@ -22,21 +22,21 @@ import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from 
 import { hasWorkspaceRole } from './workspace-access';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
 
-export type UseCaseFieldUpdate = {
+export type InitiativeFieldUpdate = {
   /**
    * Path du champ à modifier.
    *
    * Convention:
-   * - si `path` commence par "data.", on cible le JSONB `use_cases.data`
+   * - si `path` commence par "data.", on cible le JSONB `initiatives.data`
    * - sinon, on considère que c'est un champ dans `data` (ex: "description" => "data.description")
    */
   path: string;
   value: unknown;
 };
 
-export type UpdateUseCaseFieldsInput = {
-  useCaseId: string;
-  updates: UseCaseFieldUpdate[];
+export type UpdateInitiativeFieldsInput = {
+  initiativeId: string;
+  updates: InitiativeFieldUpdate[];
   /** Contexte chat (optionnel) */
   userId?: string | null;
   sessionId?: string | null;
@@ -492,23 +492,23 @@ export class ToolService {
 
   /**
    * Tool pour lire un use case complet.
-   * Retourne la structure `use_cases.data` complète.
+   * Retourne la structure `initiatives.data` complète.
    */
-  async readUseCase(
-    useCaseId: string,
+  async readInitiative(
+    initiativeId: string,
     opts?: { workspaceId?: string | null; select?: string[] | null }
   ): Promise<{
-    useCaseId: string;
+    initiativeId: string;
     data: unknown;
     selected?: string[] | null;
   }> {
-    if (!useCaseId) throw new Error('useCaseId is required');
+    if (!initiativeId) throw new Error('initiativeId is required');
 
     const workspaceId = (opts?.workspaceId ?? '').trim();
     const where = workspaceId
-      ? and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, workspaceId))
-      : eq(useCases.id, useCaseId);
-    const [row] = await db.select().from(useCases).where(where);
+      ? and(eq(initiatives.id, initiativeId), eq(initiatives.workspaceId, workspaceId))
+      : eq(initiatives.id, initiativeId);
+    const [row] = await db.select().from(initiatives).where(where);
     if (!row) throw new Error('Use case not found');
 
     const data = (row.data ?? {}) as Record<string, unknown>;
@@ -526,12 +526,12 @@ export class ToolService {
           out[k] = data[k];
         }
       }
-      return { useCaseId, data: out, selected: select };
+      return { initiativeId, data: out, selected: select };
     }
 
     // Retourner la structure data complète (par défaut)
     return {
-      useCaseId,
+      initiativeId,
       data,
       selected: null
     };
@@ -539,24 +539,24 @@ export class ToolService {
 
   /**
    * Tool générique: met à jour un ou plusieurs champs d'un use case.
-   * Cible principale: `use_cases.data.*` (JSONB).
+   * Cible principale: `initiatives.data.*` (JSONB).
    */
-  async updateUseCaseFields(input: UpdateUseCaseFieldsInput & { workspaceId?: string | null; locale?: string }): Promise<{
-    useCaseId: string;
+  async updateInitiativeFields(input: UpdateInitiativeFieldsInput & { workspaceId?: string | null; locale?: string }): Promise<{
+    initiativeId: string;
     applied: Array<{ path: string; oldValue: unknown; newValue: unknown }>;
   }> {
-    if (!input.useCaseId) throw new Error('useCaseId is required');
+    if (!input.initiativeId) throw new Error('initiativeId is required');
     if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
     if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
 
     const workspaceId = (input.workspaceId ?? '').trim();
     const where = workspaceId
-      ? and(eq(useCases.id, input.useCaseId), eq(useCases.workspaceId, workspaceId))
-      : eq(useCases.id, input.useCaseId);
-    const [row] = await db.select().from(useCases).where(where);
+      ? and(eq(initiatives.id, input.initiativeId), eq(initiatives.workspaceId, workspaceId))
+      : eq(initiatives.id, input.initiativeId);
+    const [row] = await db.select().from(initiatives).where(where);
     if (!row) throw new Error('Use case not found');
 
-    // `use_cases.data` est directement l'objet métier (pas de wrapper "data")
+    // `initiatives.data` est directement l'objet métier (pas de wrapper "data")
     const originalData = (row.data ?? {}) as unknown;
     const beforeData = deepClone(originalData) as unknown;
 
@@ -601,19 +601,19 @@ export class ToolService {
     const client = await pool.connect();
     try {
       await client.query(
-        `UPDATE use_cases SET "data" = ${updateExpression} WHERE id = $1`,
-        [input.useCaseId]
+        `UPDATE initiatives SET "data" = ${updateExpression} WHERE id = $1`,
+        [input.initiativeId]
       );
     } finally {
       client.release();
     }
     
     // Récupérer les données finales pour l'historique (après update)
-    const [updatedRow] = await db.select().from(useCases).where(where);
+    const [updatedRow] = await db.select().from(initiatives).where(where);
     const finalData = (updatedRow?.data ?? {}) as unknown;
 
     // Émettre un événement usecase_update pour rafraîchir l'UI en temps réel
-    await this.notifyUseCaseEvent(input.useCaseId);
+    await this.notifyInitiativeEvent(input.initiativeId);
 
     // Historique + snapshot (si sessionId fourni)
     const sessionId = input.sessionId ?? null;
@@ -626,7 +626,7 @@ export class ToolService {
         id: createId(),
         sessionId,
         contextType: 'usecase',
-        contextId: input.useCaseId,
+        contextId: input.initiativeId,
         snapshotBefore: beforeData,
         snapshotAfter: finalData,
         modifications: applied,
@@ -635,12 +635,12 @@ export class ToolService {
       });
     }
 
-    let seq = await getNextModificationSequence('usecase', input.useCaseId);
+    let seq = await getNextModificationSequence('usecase', input.initiativeId);
     for (const item of applied) {
       await db.insert(contextModificationHistory).values({
         id: createId(),
         contextType: 'usecase',
-        contextId: input.useCaseId,
+        contextId: input.initiativeId,
         sessionId,
         messageId,
         field: item.path,
@@ -674,7 +674,7 @@ export class ToolService {
       await this.createAutoFieldComments({
         workspaceId: commentWorkspaceId,
         contextType: 'usecase',
-        contextId: input.useCaseId,
+        contextId: input.initiativeId,
         sectionKeys: applied.map((item) => item.path),
         createdBy: commentAuthorId,
         assignedTo: commentAuthorId,
@@ -683,7 +683,7 @@ export class ToolService {
       });
     }
 
-    return { useCaseId: input.useCaseId, applied };
+    return { initiativeId: input.initiativeId, applied };
   }
 
   // ---------------------------
@@ -1141,7 +1141,7 @@ export class ToolService {
   // Use cases list (folder scope)
   // ---------------------------
 
-  async listUseCasesForFolder(
+  async listInitiativesForFolder(
     folderId: string,
     opts?: { workspaceId?: string | null; idsOnly?: boolean | null; select?: string[] | null }
   ): Promise<
@@ -1151,10 +1151,10 @@ export class ToolService {
     if (!folderId) throw new Error('folderId is required');
     const workspaceId = (opts?.workspaceId ?? '').trim();
     const where = workspaceId
-      ? and(eq(useCases.folderId, folderId), eq(useCases.workspaceId, workspaceId))
-      : eq(useCases.folderId, folderId);
+      ? and(eq(initiatives.folderId, folderId), eq(initiatives.workspaceId, workspaceId))
+      : eq(initiatives.folderId, folderId);
 
-    const rows = await db.select().from(useCases).where(where);
+    const rows = await db.select().from(initiatives).where(where);
 
     if (opts?.idsOnly) {
       return { ids: rows.map((r) => r.id), count: rows.length };
@@ -1410,8 +1410,8 @@ export class ToolService {
   /**
    * Émet un événement usecase_update via NOTIFY PostgreSQL pour rafraîchir l'UI en temps réel
    */
-  private async notifyUseCaseEvent(useCaseId: string): Promise<void> {
-    const notifyPayload = JSON.stringify({ use_case_id: useCaseId });
+  private async notifyInitiativeEvent(initiativeId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ use_case_id: initiativeId });
     const client = await pool.connect();
     try {
       await client.query(`NOTIFY usecase_events, '${notifyPayload.replace(/'/g, "''")}'`);

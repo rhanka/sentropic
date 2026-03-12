@@ -21,7 +21,7 @@ import {
 import {
   DEFAULT_USE_CASE_GENERATION_WORKFLOW,
   type GenerationAgentKey,
-  type UseCaseGenerationWorkflowTaskKey,
+  type InitiativeGenerationWorkflowTaskKey,
   USE_CASE_GENERATION_WORKFLOW_KEY,
 } from "../config/default-workflows";
 import {
@@ -169,7 +169,7 @@ export interface TaskExecutionInput {
   approvalGrantedGuardrailIds?: string[];
 }
 
-export interface UseCaseGenerationWorkflowTaskAssignments {
+export interface InitiativeGenerationWorkflowTaskAssignments {
   contextPrepareAgentId: string | null;
   matrixPrepareAgentId: string | null;
   usecaseListAgentId: string | null;
@@ -178,24 +178,24 @@ export interface UseCaseGenerationWorkflowTaskAssignments {
   executiveSummaryAgentId: string | null;
 }
 
-export interface UseCaseGenerationWorkflowRuntime {
+export interface InitiativeGenerationWorkflowRuntime {
   workflowRunId: string;
   workflowDefinitionId: string;
-  taskAssignments: UseCaseGenerationWorkflowTaskAssignments;
+  taskAssignments: InitiativeGenerationWorkflowTaskAssignments;
 }
 
-export interface StartUseCaseGenerationWorkflowDispatchResult extends UseCaseGenerationWorkflowRuntime {
+export interface StartInitiativeGenerationWorkflowDispatchResult extends InitiativeGenerationWorkflowRuntime {
   jobId: string;
   matrixJobId?: string;
 }
 
-export interface StartUseCaseGenerationWorkflowInput {
+export interface StartInitiativeGenerationWorkflowInput {
   folderId: string;
   organizationId?: string;
   matrixMode: "organization" | "generate" | "default";
   input: string;
   model: string;
-  useCaseCount?: number;
+  initiativeCount?: number;
   locale: string;
 }
 
@@ -1681,10 +1681,10 @@ export class TodoOrchestrationService {
     return out as Record<GenerationAgentKey, string>;
   }
 
-  private async getUseCaseGenerationWorkflowTaskAssignments(
+  private async getInitiativeGenerationWorkflowTaskAssignments(
     workspaceId: string,
     workflowDefinitionId: string,
-  ): Promise<UseCaseGenerationWorkflowTaskAssignments> {
+  ): Promise<InitiativeGenerationWorkflowTaskAssignments> {
     const workflowTasks = await db
       .select({
         taskKey: workflowDefinitionTasks.taskKey,
@@ -1714,9 +1714,9 @@ export class TodoOrchestrationService {
     };
   }
 
-  private async ensureUseCaseGenerationWorkflowDefinition(
+  private async ensureInitiativeGenerationWorkflowDefinition(
     actor: TodoActor,
-  ): Promise<{ workflowDefinitionId: string; taskAssignments: UseCaseGenerationWorkflowTaskAssignments }> {
+  ): Promise<{ workflowDefinitionId: string; taskAssignments: InitiativeGenerationWorkflowTaskAssignments }> {
     const generationAgentIds = await this.ensureDefaultGenerationAgents(actor);
 
     const [existingWorkflow] = await db
@@ -1823,7 +1823,7 @@ export class TodoOrchestrationService {
 
     for (const row of workflowTaskRows) {
       if (row.agentDefinitionId) continue;
-      const taskKey = row.taskKey as UseCaseGenerationWorkflowTaskKey;
+      const taskKey = row.taskKey as InitiativeGenerationWorkflowTaskKey;
       const agentKey = DEFAULT_GENERATION_AGENT_KEY_BY_TASK[taskKey];
       const agentId = generationAgentIds[agentKey];
       if (!agentId) continue;
@@ -1841,7 +1841,7 @@ export class TodoOrchestrationService {
         );
     }
 
-    const taskAssignments = await this.getUseCaseGenerationWorkflowTaskAssignments(
+    const taskAssignments = await this.getInitiativeGenerationWorkflowTaskAssignments(
       actor.workspaceId,
       workflowDefinitionId,
     );
@@ -1849,11 +1849,11 @@ export class TodoOrchestrationService {
     return { workflowDefinitionId, taskAssignments };
   }
 
-  async startUseCaseGenerationWorkflow(
+  async startInitiativeGenerationWorkflow(
     actor: TodoActor,
-    input: StartUseCaseGenerationWorkflowInput,
-  ): Promise<UseCaseGenerationWorkflowRuntime> {
-    const { workflowDefinitionId, taskAssignments } = await this.ensureUseCaseGenerationWorkflowDefinition(actor);
+    input: StartInitiativeGenerationWorkflowInput,
+  ): Promise<InitiativeGenerationWorkflowRuntime> {
+    const { workflowDefinitionId, taskAssignments } = await this.ensureInitiativeGenerationWorkflowDefinition(actor);
 
     const workflowRunId = createId();
     const now = new Date();
@@ -1876,7 +1876,7 @@ export class TodoOrchestrationService {
         organizationId: input.organizationId ?? null,
         matrixMode: input.matrixMode,
         model: input.model,
-        useCaseCount: input.useCaseCount,
+        initiativeCount: input.initiativeCount,
         locale: input.locale,
         input: input.input,
       }),
@@ -1898,7 +1898,7 @@ export class TodoOrchestrationService {
         organizationId: input.organizationId ?? null,
         matrixMode: input.matrixMode,
         model: input.model,
-        useCaseCount: input.useCaseCount,
+        initiativeCount: input.initiativeCount,
       },
       sequence: 1,
       createdAt: now,
@@ -1911,11 +1911,11 @@ export class TodoOrchestrationService {
     };
   }
 
-  async startAndDispatchUseCaseGenerationWorkflow(
+  async startAndDispatchInitiativeGenerationWorkflow(
     actor: TodoActor,
-    input: StartUseCaseGenerationWorkflowInput,
-  ): Promise<StartUseCaseGenerationWorkflowDispatchResult> {
-    const workflowRuntime = await this.startUseCaseGenerationWorkflow(actor, input);
+    input: StartInitiativeGenerationWorkflowInput,
+  ): Promise<StartInitiativeGenerationWorkflowDispatchResult> {
+    const workflowRuntime = await this.startInitiativeGenerationWorkflow(actor, input);
 
     let matrixJobId: string | undefined;
     if (input.matrixMode === "generate" && input.organizationId) {
@@ -1947,7 +1947,7 @@ export class TodoOrchestrationService {
         organizationId: input.organizationId,
         matrixMode: input.matrixMode,
         model: input.model,
-        useCaseCount: input.useCaseCount,
+        initiativeCount: input.initiativeCount,
         initiatedByUserId: actor.userId,
         locale: input.locale,
         workflow: {
