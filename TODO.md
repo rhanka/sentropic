@@ -207,8 +207,9 @@ Roadmap specifications:
 
 #### Week 2 target (deadline: 2026-03-08)
 
-- [ ] **BR-08** `feat/model-runtime-claude-mistral`
-  - [ ] Expand to 4 target model families (`OpenAI`, `Gemini`, `Claude`, `Mistral`).
+- [ ] **BR-08** `feat/model-runtime-claude-mistral-cohere`
+  - [ ] Expand to 5 target model families (`OpenAI`, `Gemini`, `Claude`, `Mistral`, `Cohere`).
+  - [ ] Cohere embeddings capability as prerequisite for RAG (BR-17).
 - [ ] **BR-09** `feat/sso-google`
   - [ ] Deliver Google SSO for admin and standard users.
 - [ ] **BR-10** `feat/vscode-plugin-v2-multi-agent`
@@ -217,6 +218,20 @@ Roadmap specifications:
   - [ ] Deliver multi-tab upstream and voice controls.
 - [ ] **BR-12** `feat/release-chrome-vscode-ci-publish`
   - [ ] Publish Chrome plugin and VSCode plugin automatically from CI.
+- [ ] **BR-14** `feat/chat-modularization`
+  - [ ] Decompose ChatPanel.svelte (59K) and ChatWidget.svelte (37K) into modular sub-components.
+  - [ ] Enable parallel development on chat-related branches without merge conflicts.
+  - [ ] Low BR-04 dependency — parallelizable on non-overlapping files.
+- [ ] **BR-16** `feat/document-connectors`
+  - [ ] Add connector abstraction for Google Workspace (Drive, Docs, Sheets) and SharePoint/OneDrive.
+  - [ ] Extend `contextDocuments` model with `connector_type`, `external_ref`, `sync_status`.
+  - [ ] Impact on chat `documents` tool — connected docs accessible same as local.
+  - [ ] Low BR-04 dependency (initiative rename in contextType).
+- [ ] **BR-17** `feat/rag-documents`
+  - [ ] Implement Retrieval-Augmented Generation on document folders.
+  - [ ] Document chunking + vector embeddings (pgvector).
+  - [ ] Semantic search mode for `documents` tool in chat.
+  - [ ] Depends on BR-16 (optional, works with local docs) + BR-08 (Cohere embeddings).
 
 #### Branch closure rules for this roadmap
 
