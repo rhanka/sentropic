@@ -49,6 +49,12 @@ This document is the single checklist for **chat tools**: what is already implem
 
 ## Implemented wiring / behavior ✅
 
+### Shared BR-05 reuse rules
+- [x] Reuse the shared chat/runtime orchestration path instead of creating plugin-only tool pipelines.
+- [x] Reuse the shared permission confirmation banner pattern for `ask` decisions.
+- [x] Reuse one analyzer/chunk-merge family for long-read tools such as `documents.analyze` and `history_analyze`.
+- [x] Keep BR-05 tool execution foreground-only; detached/background execution is deferred.
+
 ### Contexts enabled in API (tool availability)
 - [x] `primaryContextType=usecase`: use case tools + web tools
 - [x] `primaryContextType=organization`: organizations tools (+ folders_list) + web tools
@@ -84,6 +90,30 @@ This document is the single checklist for **chat tools**: what is already implem
 ### UI live refresh (SSE)
 - [x] Dashboard listens to `folder_update` and refreshes executive summary + matrix via `loadMatrix(folderId)`
 
+### Local code tools baseline (BR-05 delivered)
+- [x] `bash`
+  - foreground-only execution
+  - hybrid mono+bigram command policy with shell-segment awareness
+  - `deny > ask > allow` precedence, default `ask`
+  - same confirmation banner UX as other tool prompts
+- [x] `ls`
+  - path-scoped listing with bounded recursion
+- [x] `grep_rg`
+  - `rg` first, bounded result volume, path-scoped
+- [x] `file_read`
+  - bounded reads by default with sensitive-path rules
+- [x] `file_edit`
+  - unified `edit|write|apply_patch` contract
+  - explicit `ask` default with auditable path grants
+- [x] `git`
+  - one unified tool surface
+  - read-only baseline actions allowed, mutating actions gated
+- [x] `history_analyze`
+  - read-only targeted Q&A over session history with evidence references
+- [x] Shared non-shell policy engine
+  - `deny/ask/allow` precedence
+  - user + workspace merge with workspace as the safety upper bound
+
 ## Remaining / Not implemented ⬜
 
 ### Naming migration (Option B)
@@ -115,40 +145,17 @@ This document is the single checklist for **chat tools**: what is already implem
 - [ ] Folder AI populate (create folders + generate use cases) from chat tools
 - [ ] Cost/limits safeguards + job queue integration for AI actions
 
-### Conversation history QA tool (planned)
-- [ ] `history_analyze` (read-only)
-  - Targeted Q&A over chat history with evidence references (message ids/turns)
-  - Can target one specific tool output (`target_tool_call_id` / tool-result message id) when an oversized tool call risks context overflow
-  - Dedicated analyzer flow aligned with `documents.analyze` + chunk/merge strategy for long histories
-  - Must return explicit coverage metadata and `insufficient_coverage` when the selected range is too narrow
+### Conversation history QA hardening
+- [ ] deepen `history_analyze` ergonomics and coverage for oversized histories
+  - targeted Q&A over chat history with evidence references (message ids/turns)
+  - can target one specific tool output (`target_tool_call_id` / tool-result message id) when an oversized tool call risks context overflow
+  - keeps the shared analyzer flow aligned with `documents.analyze` + chunk/merge strategy
+  - must preserve explicit coverage metadata and `insufficient_coverage` behavior
 
-### VSCode code tools v1 (rapid contracts)
-- [ ] `bash` (safe shell wrapper, foreground mode in BR-05)
-  - bounded command execution, explicit policy gates, capped output/time.
-  - policy model: hybrid mono+bigrame + shell segment parsing.
-  - decisions: `deny/ask/allow` with precedence `deny > ask > allow`, default `ask`.
-  - scope merge: user defaults + workspace safety override (workspace cannot be weakened).
-  - `ask` UX reuses Chrome permission banner pattern (`Yes once/No once/Always/Never`).
-  - config editing: mono and bigram rule list editable in settings.
-- [ ] `ls`
-  - path-scoped listing, normalized entries.
-  - bounded depth recursion; hidden files excluded by default (explicit opt-in).
-- [ ] `grep_rg`
-  - use `rg` by default with `grep` fallback.
-  - bounded search results with file/line references + pagination/continuation for long sets.
-- [ ] `file_read`
-  - bounded windowed reads by default; explicit full-read path allowed under caps.
-  - sensitive path policy for secret-bearing files (deny/mask as configured).
-- [ ] `file_edit` (multi-mode: `edit|write|apply_patch`)
-  - default policy `ask` with Chrome-style confirmation banner.
-  - structured deterministic edits with protected-path policies.
-  - path-pattern grants to reduce repeated asks (e.g. `api/*`), auditable and policy-scoped.
-- [ ] `git_status`
-  - read-only workspace state inspection, default allow.
-- [ ] `git_diff`
-  - bounded read-only diff inspection with path/ref scope restrictions.
-- [ ] Shared non-shell policy engine
-  - `deny/ask/allow`, precedence `deny > ask > allow`, user+workspace merge where workspace cannot be weakened.
+### Code tool expansion beyond BR-05
+- [ ] additional local tool families or host-specific capabilities beyond the BR-05 baseline
+- [ ] richer git action coverage beyond the current guarded baseline
+- [ ] broader policy editors and operator ergonomics beyond the current readable mono/bigram model
 
 ### Background tool mode (deferred)
 - [ ] Detached/background tool execution lifecycle is deferred to BR-10:
