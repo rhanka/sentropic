@@ -8,10 +8,15 @@ export const workspaces = pgTable('workspaces', {
   id: text('id').primaryKey(),
   ownerUserId: text('owner_user_id'), // nullable; UNIQUE constraint removed to allow multiple workspaces per user
   name: text('name').notNull(),
+  type: text('type').notNull().default('ai-ideas'), // 'neutral' | 'ai-ideas' | 'opportunity' | 'code'
+  gateConfig: jsonb('gate_config'), // nullable; gate sequence config per workspace. null = free gates (backward-compatible)
   hiddenAt: timestamp('hidden_at', { withTimezone: false }), // nullable; timestamp when workspace was hidden
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
-});
+}, (table) => ({
+  typeIdx: index('workspaces_type_idx').on(table.type),
+  ownerUserIdIdx: index('workspaces_owner_user_id_idx').on(table.ownerUserId),
+}));
 
 export const organizations = pgTable('organizations', {
   id: text('id').primaryKey(),
@@ -46,8 +51,7 @@ export const folders = pgTable('folders', {
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
 });
 
-export const useCases = pgTable('use_cases', {
-  // === GESTION D'ÉTAT ===
+export const initiatives = pgTable('initiatives', {
   id: text('id').primaryKey(),
   workspaceId: text('workspace_id')
     .notNull()
@@ -59,14 +63,26 @@ export const useCases = pgTable('use_cases', {
   organizationId: text('organization_id').references(() => organizations.id),
   status: text('status').default('completed'), // 'draft', 'generating', 'detailing', 'completed'
   model: text('model'), // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano') - nullable, uses default from settings
+  // BR-04: initiative lifecycle columns
+  antecedentId: text('antecedent_id'), // self-FK for lineage (parent initiative)
+  maturityStage: text('maturity_stage'), // e.g. 'G0', 'G2', 'G5', 'G7'. Nullable (null = no gating)
+  gateStatus: text('gate_status'), // 'pending' | 'approved' | 'rejected'. Nullable
+  templateSnapshotId: text('template_snapshot_id'), // template version at creation for traceability
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-  
-  // === DONNÉES MÉTIER (tout dans JSONB, y compris name, description, et toutes les autres colonnes métier) ===
-  // Toutes les colonnes métier (name, description, process, domain, technologies, etc.) ont été migrées vers data JSONB
-  // et supprimées de la table (migration 0008)
   data: jsonb('data').notNull().default(sql`'{}'::jsonb`)
-  // Note: totalValueScore et totalComplexityScore supprimés (champs calculés dynamiquement)
-});
+}, (table) => ({
+  antecedentIdFk: foreignKey({
+    columns: [table.antecedentId],
+    foreignColumns: [table.id],
+    name: 'initiatives_antecedent_id_fk',
+  }),
+  antecedentIdIdx: index('initiatives_antecedent_id_idx').on(table.antecedentId),
+  maturityStageIdx: index('initiatives_maturity_stage_idx').on(table.maturityStage),
+  gateStatusIdx: index('initiatives_gate_status_idx').on(table.gateStatus),
+}));
+
+// Backward-compatible alias for code that still references useCases
+export const useCases = initiatives;
 
 export const settings = pgTable('settings', {
   key: text('key').notNull(),
@@ -212,7 +228,8 @@ export const emailVerificationCodes = pgTable('email_verification_codes', {
 
 export type OrganizationRow = typeof organizations.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
-export type UseCaseRow = typeof useCases.$inferSelect;
+export type InitiativeRow = typeof initiatives.$inferSelect;
+export type UseCaseRow = InitiativeRow; // backward-compatible alias
 export type SettingsRow = typeof settings.$inferSelect;
 export type BusinessConfigRow = typeof businessConfig.$inferSelect;
 export type JobQueueRow = typeof jobQueue.$inferSelect;
@@ -816,6 +833,134 @@ export const executionEvents = pgTable('execution_events', {
   runIdIdx: index('execution_events_run_id_idx').on(table.runId),
   eventTypeIdx: index('execution_events_event_type_idx').on(table.eventType),
 }));
+
+// BR-04: Extended business objects
+
+export const solutions = pgTable('solutions', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id),
+  initiativeId: text('initiative_id')
+    .notNull()
+    .references(() => initiatives.id),
+  status: text('status').notNull().default('draft'), // 'draft' | 'validated' | 'archived'
+  version: integer('version').notNull().default(1),
+  data: jsonb('data').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  workspaceIdIdx: index('solutions_workspace_id_idx').on(table.workspaceId),
+  initiativeIdIdx: index('solutions_initiative_id_idx').on(table.initiativeId),
+  statusIdx: index('solutions_status_idx').on(table.status),
+}));
+
+export const products = pgTable('products', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id),
+  initiativeId: text('initiative_id')
+    .notNull()
+    .references(() => initiatives.id),
+  solutionId: text('solution_id')
+    .references(() => solutions.id), // nullable: product may exist without solution
+  status: text('status').notNull().default('draft'), // 'draft' | 'active' | 'delivered' | 'archived'
+  version: integer('version').notNull().default(1),
+  data: jsonb('data').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  workspaceIdIdx: index('products_workspace_id_idx').on(table.workspaceId),
+  initiativeIdIdx: index('products_initiative_id_idx').on(table.initiativeId),
+  solutionIdIdx: index('products_solution_id_idx').on(table.solutionId),
+  statusIdx: index('products_status_idx').on(table.status),
+}));
+
+export const bids = pgTable('bids', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id),
+  initiativeId: text('initiative_id')
+    .notNull()
+    .references(() => initiatives.id),
+  status: text('status').notNull().default('draft'), // 'draft' | 'review' | 'finalized' | 'contract'
+  version: integer('version').notNull().default(1),
+  data: jsonb('data').notNull().default(sql`'{}'::jsonb`), // clauses, profils, pricing
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  workspaceIdIdx: index('bids_workspace_id_idx').on(table.workspaceId),
+  initiativeIdIdx: index('bids_initiative_id_idx').on(table.initiativeId),
+  statusIdx: index('bids_status_idx').on(table.status),
+}));
+
+export const bidProducts = pgTable('bid_products', {
+  id: text('id').primaryKey(),
+  bidId: text('bid_id')
+    .notNull()
+    .references(() => bids.id),
+  productId: text('product_id')
+    .notNull()
+    .references(() => products.id),
+  data: jsonb('data').notNull().default(sql`'{}'::jsonb`), // unit price, conditions per product in this bid
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+}, (table) => ({
+  bidProductUnique: uniqueIndex('bid_products_bid_product_unique').on(table.bidId, table.productId),
+  bidIdIdx: index('bid_products_bid_id_idx').on(table.bidId),
+  productIdIdx: index('bid_products_product_id_idx').on(table.productId),
+}));
+
+export const workspaceTypeWorkflows = pgTable('workspace_type_workflows', {
+  id: text('id').primaryKey(),
+  workspaceType: text('workspace_type').notNull(), // 'ai-ideas' | 'opportunity' | 'code'
+  workflowDefinitionId: text('workflow_definition_id')
+    .notNull()
+    .references(() => workflowDefinitions.id),
+  isDefault: boolean('is_default').notNull().default(false),
+  triggerStage: text('trigger_stage'), // maturity stage that triggers this workflow (nullable)
+  config: jsonb('config').notNull().default(sql`'{}'::jsonb`), // type-specific workflow config overrides
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  typeWorkflowUnique: uniqueIndex('workspace_type_workflows_type_workflow_unique').on(table.workspaceType, table.workflowDefinitionId),
+  workspaceTypeIdx: index('workspace_type_workflows_workspace_type_idx').on(table.workspaceType),
+  workflowDefinitionIdIdx: index('workspace_type_workflows_workflow_definition_id_idx').on(table.workflowDefinitionId),
+}));
+
+export const viewTemplates = pgTable('view_templates', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .references(() => workspaces.id), // nullable for system seeds
+  workspaceType: text('workspace_type').notNull(),
+  objectType: text('object_type').notNull(), // 'initiative' | 'solution' | 'product' | 'bid' | 'organization' | 'dashboard'
+  maturityStage: text('maturity_stage'), // nullable
+  descriptor: jsonb('descriptor').notNull().default(sql`'{}'::jsonb`), // view template DSL
+  version: integer('version').notNull().default(1),
+  sourceLevel: text('source_level').notNull().default('code'), // 'code' | 'admin' | 'user'
+  parentId: text('parent_id'), // fork/detach lineage
+  isDetached: boolean('is_detached').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  parentIdFk: foreignKey({
+    columns: [table.parentId],
+    foreignColumns: [table.id],
+    name: 'view_templates_parent_id_fk',
+  }),
+  workspaceIdIdx: index('view_templates_workspace_id_idx').on(table.workspaceId),
+  workspaceTypeIdx: index('view_templates_workspace_type_idx').on(table.workspaceType),
+  objectTypeIdx: index('view_templates_object_type_idx').on(table.objectType),
+  parentIdIdx: index('view_templates_parent_id_idx').on(table.parentId),
+}));
+
+export type SolutionRow = typeof solutions.$inferSelect;
+export type ProductRow = typeof products.$inferSelect;
+export type BidRow = typeof bids.$inferSelect;
+export type BidProductRow = typeof bidProducts.$inferSelect;
+export type WorkspaceTypeWorkflowRow = typeof workspaceTypeWorkflows.$inferSelect;
+export type ViewTemplateRow = typeof viewTemplates.$inferSelect;
 
 export type ExtensionToolPermissionRow = typeof extensionToolPermissions.$inferSelect;
 export type PlanRow = typeof plans.$inferSelect;
