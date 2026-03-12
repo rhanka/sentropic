@@ -67,16 +67,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - Rollback: revert plan file changes.
 
 ## Questions / Notes
-- BR04-D1 (to freeze in Lot 0): `steer` = in-flight user guidance to an active run (not governance/approval mode).
-- BR04-D2 (to freeze in Lot 0): split `todo_tool` (assistant-executable) vs `todo_user` (conductor/user-managed tasks).
-- BR04-D3 (to freeze in Lot 0): workflow = stage-based agent orchestration (not settings-panel CRUD).
-- AWT-Q3 (to freeze in Lot 0): migration semantics when workspace template changes with existing artifacts.
-- AWT-Q4 (to freeze in Lot 0): fallback semantics when assigned template is disabled/unavailable.
 - OQ-1 (closed): reuse `use_cases` table for all initiative types. Workspace type determines personality.
-- OQ-6 (to freeze in Lot 0): "initiative" as universal object name? Alternatives: "item", "case", "engagement".
-- OQ-7 (to freeze in Lot 0): solution as JSONB v1 or separate table?
-- OQ-8 (to freeze in Lot 0): bid/devis as artifact or entity?
-- OQ-9 (to freeze in Lot 0): gate sequence configurability — per workspace type only or also per folder?
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -104,23 +95,23 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 
 ### Lot 0 — Baseline, spec framework & lot rewrite (current)
 
-- [ ] **0.1 Baseline setup**
-  - [ ] Confirm branch `feat/workspace-template-catalog` created from `main` (post BR-03 + BR-05).
-  - [ ] Resolve worktree cleanup (`tmp/feat-workspace-template-catalog` needs sudo for Docker-owned files).
-  - [ ] Commit demand document (`plan/04-BRANCH-EVOL-DEMAND.md`) and this `BRANCH.md`.
-  - [ ] Cherry-pick useful code from old BR-04 branch (catalog service pattern, projection logic, test patterns). Evaluate via diff analysis — only cherry-pick if rebase is cleaner than rewrite.
-  - [ ] Confirm environment mapping: `ENV=feat-workspace-template-catalog`, ports 8704/5104/1004.
+- [x] **0.1 Baseline setup**
+  - [x] Confirm branch `feat/workspace-template-catalog` created from `main` (post BR-03 + BR-05). ✓ branch at `04f0b014`, 1 commit ahead of main.
+  - [x] Resolve worktree cleanup. ✓ Pruned refs, old dir remnants don't block. Work in root workspace for now.
+  - [x] Commit demand document (`plan/04-BRANCH-EVOL-DEMAND.md`) and this `BRANCH.md`. ✓ commit `04f0b014`.
+  - [x] Cherry-pick useful code from old BR-04 branch. ✓ Decision: **rewrite from scratch**, old catalog service pattern used as reference only (scope has evolved too much for cherry-pick).
+  - [x] Confirm environment mapping: `ENV=feat-workspace-template-catalog`, ports 8704/5104/1004. ✓ confirmed.
 
-- [ ] **0.2 Freeze open decisions**
-  - [ ] BR04-D1: confirm `steer` = in-flight guidance (not governance). Document in spec.
-  - [ ] BR04-D2: confirm `todo_tool` vs `todo_user` split semantics. Document in spec.
-  - [ ] BR04-D3: confirm workflow = stage-based agent orchestration. Document in spec.
-  - [ ] AWT-Q3: define migration semantics (initiative keeps original template; new template applies to new initiatives only). Document in spec.
-  - [ ] AWT-Q4: define fallback (default to `ai-ideas` template if assigned template is disabled). Document in spec.
-  - [ ] OQ-6: freeze universal object name ("initiative" vs alternatives). Document in spec.
-  - [ ] OQ-7: freeze solution model (JSONB v1 with promotion path). Document in spec.
-  - [ ] OQ-8: freeze bid/devis model (typed artifact on initiative v1). Document in spec.
-  - [ ] OQ-9: freeze gate configurability (per workspace type, with folder-level override possible). Document in spec.
+- [x] **0.2 Freeze open decisions**
+  - [x] BR04-D1: ~~confirm `steer` = in-flight guidance~~. **Eliminated** — already fully specified and implemented in BR-03 (`execution_events` with steer type). No further action in BR-04 or any future branch.
+  - [x] BR04-D2: ~~confirm `todo_tool` vs `todo_user` split~~. **Closed — no split, use BR-03 model as-is.** The unified `plan → todo → task` model is sufficient. A todo is a todo regardless of origin (human, agent, comment). Origin traced via `metadata.source` (JSONB, already available) — e.g. `{ "source": "comment", "comment_id": "xxx" }` or `{ "source": "agent", "run_id": "xxx" }`. Neutral workspace creates normal todos with `ownerUserId` = target user. Zero schema change.
+  - [x] BR04-D3: **Closed — workflow = stage-based agent orchestration, confirmed.** BR-03 delivered: `workflow_definitions` + ordered `workflow_definition_tasks` + `agent_definitions`, with fork/detach/lineage. Seed agents in `default-agents.ts` are initial templates, customizable via settings panel (not hardcoded). Current limitations to address in spec: (1) closed compile-time task-key types (`GenerationAgentKey`, `UseCaseGenerationWorkflowTaskKey`), (2) single canonical workflow (`ai_usecase_generation_v1`), (3) generation-specific dispatch in `todo-orchestration.ts`. BR-04 spec must design the **multi-workflow registry** to open up these constraints (open task-key mapping, per-workspace-type workflow catalog, generic dispatch).
+  - [x] AWT-Q3: **Closed — migration non-cassante.** (1) Legacy: workspaces existants reçoivent leur type (`ai-ideas`) sans impact artefacts — les artefacts n'ont aujourd'hui qu'une dépendance faible au générateur (modèle LLM stocké, pas de lien au type workspace). Pas de type legacy à conserver. (2) Futur: changement de template catalog → initiatives existantes conservées telles quelles, `template_snapshot_id`/`template_version` tracé sur l'initiative pour historique. Nouvelles initiatives utilisent le template courant. (3) Pas de re-template automatique (hors scope BR-04).
+  - [x] AWT-Q4: **Closed — fallback vers le template par défaut du type workspace.** Chaque type workspace a un template default non-supprimable. Si le template configuré est indisponible → fallback sur le default du type + avertissement UI. Exemples : `ai-ideas` → workflow `ai_usecase_generation` (default), `opportunity` → workflow qualification (à spécifier). Le suffixe `_v1` disparaît en cible : le registry gère les versions par clé logique (clé workflow + version courante/historique). `neutral` = pas de génération propre (orchestrateur). `code` = workflow code analysis (à spécifier).
+  - [x] OQ-6: **Closed — "initiative".** Nom universel pour l'objet métier (use case, opportunité, projet code). Porte la sémantique cycle de vie (lancement → maturation → livraison). Table `use_cases` renommée `initiatives` dans la migration unique. Vocabulaire API/UI/spec unifié sur "initiative" partout.
+  - [x] OQ-7: **Closed — table `solutions` dédiée.** Objet métier distinct avec cycle de vie propre (draft → validated), pas un JSONB embarqué. FK `solution.initiative_id` (1 initiative → N solutions). Contenu structuré en `data jsonb`. Même pattern pour tous les objets métier (solution, bid, product).
+  - [x] OQ-8: **Closed — table `bids` dédiée + jonction `bid_products`.** Bid = objet data-driven (clauses, profils, prix en `data jsonb`), cycle de vie propre (draft → review → finalized → contract). FK `bid.initiative_id`. Un bid couvre N products → table de jonction `bid_products(bid_id, product_id, data jsonb)` pour prix/conditions spécifiques par product. Une demande de devis = création d'une initiative type `opportunity` (l'initiative est le point d'entrée universel : idée, demande client, projet code). Schéma FK : `initiative ← solution(initiative_id) ← product(solution_id, initiative_id)`, `initiative ← bid(initiative_id) ← bid_products(bid_id, product_id)`.
+  - [x] OQ-9: **Closed — par type workspace uniquement en v1.** Un folder hérite des gates de son type workspace. Pas d'override folder en v1 (simplification : un seul endroit de config, pas de conflits). Override folder possible en évolution future si besoin.
 
 - [ ] **0.3 Target data model design**
   - [ ] Design stable target data model covering all segments:
@@ -139,6 +130,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
     - Initiative object model: personality per type, maturity gates, lineage, fields per stage
     - Extended objects: solution, product, portfolio, bid/artifact
     - Gate system: free / soft-gate / hard-gate, configurable per type
+    - Multi-workflow registry: open task-key mapping, per-workspace-type workflow catalog, generic dispatch (replacing closed compile-time types)
     - Agent catalog per workspace type
     - Template catalog per type × maturity stage
     - Document generation: Mode A (template factory) + Mode B (ad-hoc)
