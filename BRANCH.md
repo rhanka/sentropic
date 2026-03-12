@@ -274,7 +274,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 - [x] Update API client calls to use `/initiatives` endpoints. ✓
 - [x] Update i18n dictionaries. ✓
 - [x] Update `chat-tool-scope.ts` tool references. ✓ (no usecase refs in file; tool IDs are API-protocol identifiers kept as-is)
-- [ ] Fix all existing UI tests.
+- [x] Fix all existing UI tests. ✓
 
 **Lot 3 gate:**
 - [ ] `make typecheck-ui ENV=test-br04`
