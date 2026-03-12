@@ -54,7 +54,7 @@
     { href: '/', label: 'nav.home' },
     { href: '/folders', label: 'nav.folders' },
     { href: '/organizations', label: 'nav.organizations' },
-    { href: '/usecase', label: 'nav.useCases' },
+    { href: '/initiative', label: 'nav.useCases' },
     { href: '/matrix', label: 'nav.matrix' },
     { href: '/dashboard', label: 'nav.dashboard' },
   ];
@@ -75,7 +75,7 @@
     if (hiddenLock) return true;
 
     // If no folder is selected, disable usecase, matrix and dashboard
-    if (!folderId) return href === '/usecase' || href === '/matrix' || href === '/dashboard';
+    if (!folderId) return href === '/initiative' || href === '/matrix' || href === '/dashboard';
 
     // If a folder is selected, don't disable (even if there are no use cases yet)
     return false;
