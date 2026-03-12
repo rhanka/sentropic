@@ -172,7 +172,7 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 - [x] Update `api/src/services/provider-registry.ts`: instantiate and register `ClaudeProviderRuntime`, `MistralProviderRuntime`, `CohereProviderRuntime` in the constructor Map.
 
 #### 1.6 LLM Runtime orchestrator extension
-- [ ] Update `api/src/services/llm-runtime/index.ts`:
+- [x] Update `api/src/services/llm-runtime/index.ts`:
   - Add `getClaudeProvider()`, `getMistralProvider()`, `getCohereProvider()` helper functions.
   - Extend `callOpenAI()` with Claude/Mistral/Cohere non-streaming branches (message format conversion, response normalization to `ChatCompletion`-compatible shape).
   - Extend `callOpenAIStream()` with Claude/Mistral/Cohere streaming branches (stream event normalization to `StreamEvent`).
