@@ -10,7 +10,7 @@ import {
   contextDocuments,
   folders,
   organizations,
-  useCases,
+  initiatives,
   workspaceMemberships,
   workspaces,
 } from '../../db/schema';
@@ -22,7 +22,7 @@ import { requireWorkspaceAdmin, requireWorkspaceEditor } from '../../services/wo
 export const exportsRouter = new Hono();
 export const importsRouter = new Hono();
 
-const scopeSchema = z.enum(['workspace', 'folder', 'usecase', 'organization', 'matrix']);
+const scopeSchema = z.enum(['workspace', 'folder', 'initiative', 'organization', 'matrix']);
 
 const includeSchema = z.enum([
   'comments',
@@ -165,10 +165,10 @@ async function getLatestCommentDate(params: {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function getUseCaseName(row: typeof useCases.$inferSelect): string {
+function getInitiativeName(row: typeof initiatives.$inferSelect): string {
   const data = row.data as Record<string, unknown> | null | undefined;
   const name = typeof data?.name === 'string' ? data.name : '';
-  return name.trim() || 'usecase';
+  return name.trim() || 'initiative';
 }
 
 async function resolveExportFileInfo(opts: {
@@ -208,12 +208,12 @@ async function resolveExportFileInfo(opts: {
   if (opts.scope === 'folder') {
     const [folder] = await db.select().from(folders).where(eq(folders.id, opts.scopeId)).limit(1);
     const name = folder?.name?.trim() || 'folder';
-    const useCaseRows = await db
-      .select({ id: useCases.id, createdAt: useCases.createdAt })
-      .from(useCases)
-      .where(eq(useCases.folderId, opts.scopeId));
-    const useCaseIds = useCaseRows.map((r) => r.id);
-    const latestUseCase = useCaseRows.reduce<Date | null>((acc, row) => {
+    const initiativeRows = await db
+      .select({ id: initiatives.id, createdAt: initiatives.createdAt })
+      .from(initiatives)
+      .where(eq(initiatives.folderId, opts.scopeId));
+    const initiativeIds = initiativeRows.map((r) => r.id);
+    const latestInitiative = initiativeRows.reduce<Date | null>((acc, row) => {
       const d = row.createdAt ?? null;
       if (!d) return acc;
       if (!acc || d > acc) return d;
@@ -224,15 +224,15 @@ async function resolveExportFileInfo(opts: {
       contextType: 'folder',
       contextId: opts.scopeId,
     });
-    const latestUseCaseComment =
-      useCaseIds.length > 0
+    const latestInitiativeComment =
+      initiativeIds.length > 0
         ? await getLatestCommentDate({
             workspaceId: opts.workspaceId,
-            contextType: 'usecase',
-            contextIds: useCaseIds,
+            contextType: 'initiative',
+            contextIds: initiativeIds,
           })
         : null;
-    const date = [latestUseCaseComment, latestFolderComment, latestUseCase, folder?.createdAt]
+    const date = [latestInitiativeComment, latestFolderComment, latestInitiative, folder?.createdAt]
       .filter(Boolean)
       .reduce<Date | null>((acc, d) => {
         const next = d as Date;
@@ -242,16 +242,16 @@ async function resolveExportFileInfo(opts: {
     return { prefix: 'folder', slug: slugifyName(name) || 'folder', date };
   }
 
-  if (opts.scope === 'usecase') {
-    const [useCase] = await db.select().from(useCases).where(eq(useCases.id, opts.scopeId)).limit(1);
-    const name = useCase ? getUseCaseName(useCase) : 'usecase';
+  if (opts.scope === 'initiative') {
+    const [initiative] = await db.select().from(initiatives).where(eq(initiatives.id, opts.scopeId)).limit(1);
+    const name = initiative ? getInitiativeName(initiative) : 'initiative';
     const latestComment = await getLatestCommentDate({
       workspaceId: opts.workspaceId,
-      contextType: 'usecase',
+      contextType: 'initiative',
       contextId: opts.scopeId,
     });
-    const date = latestComment || useCase?.createdAt || null;
-    return { prefix: 'usecase', slug: slugifyName(name) || 'usecase', date };
+    const date = latestComment || initiative?.createdAt || null;
+    return { prefix: 'initiative', slug: slugifyName(name) || 'initiative', date };
   }
 
   if (opts.scope === 'matrix') {
@@ -298,7 +298,7 @@ function mapFolder(row: typeof folders.$inferSelect): Record<string, unknown> {
   };
 }
 
-function mapUseCase(row: typeof useCases.$inferSelect): Record<string, unknown> {
+function mapInitiative(row: typeof initiatives.$inferSelect): Record<string, unknown> {
   return {
     id: row.id,
     workspace_id: row.workspaceId,
@@ -339,13 +339,13 @@ async function collectExportData(opts: {
   includeFolders: boolean;
   includeWorkspaceOrganizations: boolean;
   includeWorkspaceFolders: boolean;
-  includeWorkspaceUseCases: boolean;
+  includeWorkspaceInitiatives: boolean;
   includeWorkspaceMatrix: boolean;
-  includeFolderUseCases: boolean;
+  includeFolderInitiatives: boolean;
   includeFolderMatrix: boolean;
-  includeUseCaseFolder: boolean;
-  includeUseCaseMatrix: boolean;
-  includeUseCaseOrganization: boolean;
+  includeInitiativeFolder: boolean;
+  includeInitiativeMatrix: boolean;
+  includeInitiativeOrganization: boolean;
 }): Promise<{ payload: ExportPayload; documents: Array<typeof contextDocuments.$inferSelect> }> {
   const payload: ExportPayload = {
     workspaces: [],
@@ -382,20 +382,20 @@ async function collectExportData(opts: {
       created_at: toIso(m.createdAt),
     }));
 
-    const includeFolders = opts.includeWorkspaceFolders || opts.includeWorkspaceUseCases;
-    const includeUseCases = opts.includeWorkspaceUseCases;
+    const includeFolders = opts.includeWorkspaceFolders || opts.includeWorkspaceInitiatives;
+    const includeInitiatives = opts.includeWorkspaceInitiatives;
     const includeMatrix = opts.includeWorkspaceMatrix || includeFolders;
 
     const folderRows = includeFolders
       ? await db.select().from(folders).where(eq(folders.workspaceId, opts.workspaceId))
       : [];
     const folderIds = folderRows.map((f) => f.id);
-    const useCaseRows =
-      includeUseCases && folderIds.length > 0
+    const initiativeRows =
+      includeInitiatives && folderIds.length > 0
         ? await db
             .select()
-            .from(useCases)
-            .where(and(eq(useCases.workspaceId, opts.workspaceId), inArray(useCases.folderId, folderIds)))
+            .from(initiatives)
+            .where(and(eq(initiatives.workspaceId, opts.workspaceId), inArray(initiatives.folderId, folderIds)))
         : [];
 
     const orgRows = opts.includeWorkspaceOrganizations
@@ -412,7 +412,7 @@ async function collectExportData(opts: {
 
     payload.organizations = orgRowsFiltered.map(mapOrganization);
     payload.folders = folderRows.map(mapFolder);
-    payload.use_cases = useCaseRows.map(mapUseCase);
+    payload.use_cases = initiativeRows.map(mapInitiative);
     payload.matrix = includeMatrix
       ? folderRows
           .filter((f) => typeof f.matrixConfig === 'string' && f.matrixConfig.length > 0)
@@ -440,7 +440,7 @@ async function collectExportData(opts: {
       if (payload.use_cases.length > 0) {
         commentFilters.push(
           and(
-            eq(comments.contextType, 'usecase'),
+            eq(comments.contextType, 'initiative'),
             inArray(comments.contextId, payload.use_cases.map((u) => String(u.id)))
           )
         );
@@ -474,7 +474,7 @@ async function collectExportData(opts: {
       if (payload.use_cases.length > 0) {
         docFilters.push(
           and(
-            eq(contextDocuments.contextType, 'usecase'),
+            eq(contextDocuments.contextType, 'initiative'),
             inArray(contextDocuments.contextId, payload.use_cases.map((u) => String(u.id)))
           )
         );
@@ -518,25 +518,25 @@ async function collectExportData(opts: {
       : [];
 
     const folderIds = folderRows.map((f) => f.id);
-    const useCaseRows =
+    const initiativeRows =
       opts.includeFolders && folderIds.length > 0
         ? await db
             .select()
-            .from(useCases)
-            .where(and(eq(useCases.workspaceId, opts.workspaceId), inArray(useCases.folderId, folderIds)))
+            .from(initiatives)
+            .where(and(eq(initiatives.workspaceId, opts.workspaceId), inArray(initiatives.folderId, folderIds)))
         : [];
-    payload.use_cases = useCaseRows.map(mapUseCase);
+    payload.use_cases = initiativeRows.map(mapInitiative);
 
     if (opts.includeComments) {
-      const useCaseIds = useCaseRows.map((u) => u.id);
+      const initiativeIds = initiativeRows.map((u) => u.id);
       const commentFilters = [
         and(eq(comments.contextType, 'organization'), eq(comments.contextId, scopeId)),
       ];
       if (opts.includeFolders && folderIds.length > 0) {
         commentFilters.push(and(eq(comments.contextType, 'folder'), inArray(comments.contextId, folderIds)));
       }
-      if (opts.includeFolders && useCaseIds.length > 0) {
-        commentFilters.push(and(eq(comments.contextType, 'usecase'), inArray(comments.contextId, useCaseIds)));
+      if (opts.includeFolders && initiativeIds.length > 0) {
+        commentFilters.push(and(eq(comments.contextType, 'initiative'), inArray(comments.contextId, initiativeIds)));
       }
       const commentRows = await db
         .select()
@@ -551,15 +551,15 @@ async function collectExportData(opts: {
     }
 
     if (opts.includeDocuments) {
-      const useCaseIds = useCaseRows.map((u) => u.id);
+      const initiativeIds = initiativeRows.map((u) => u.id);
       const docFilters = [
         and(eq(contextDocuments.contextType, 'organization'), eq(contextDocuments.contextId, scopeId)),
       ];
       if (opts.includeFolders && folderIds.length > 0) {
         docFilters.push(and(eq(contextDocuments.contextType, 'folder'), inArray(contextDocuments.contextId, folderIds)));
       }
-      if (opts.includeFolders && useCaseIds.length > 0) {
-        docFilters.push(and(eq(contextDocuments.contextType, 'usecase'), inArray(contextDocuments.contextId, useCaseIds)));
+      if (opts.includeFolders && initiativeIds.length > 0) {
+        docFilters.push(and(eq(contextDocuments.contextType, 'initiative'), inArray(contextDocuments.contextId, initiativeIds)));
       }
       const docRows = await db
         .select()
@@ -629,21 +629,21 @@ async function collectExportData(opts: {
     }
 
     if (opts.scope === 'folder') {
-      const useCaseRows = opts.includeFolderUseCases
+      const initiativeRows = opts.includeFolderInitiatives
         ? await db
             .select()
-            .from(useCases)
-            .where(and(eq(useCases.workspaceId, opts.workspaceId), eq(useCases.folderId, scopeId)))
+            .from(initiatives)
+            .where(and(eq(initiatives.workspaceId, opts.workspaceId), eq(initiatives.folderId, scopeId)))
         : [];
-      payload.use_cases = useCaseRows.map(mapUseCase);
+      payload.use_cases = initiativeRows.map(mapInitiative);
 
       if (opts.includeComments) {
-        const useCaseIds = useCaseRows.map((u) => u.id);
+        const initiativeIds = initiativeRows.map((u) => u.id);
         const commentFilters = [
           and(eq(comments.contextType, 'folder'), eq(comments.contextId, scopeId)),
         ];
-        if (useCaseIds.length > 0) {
-          commentFilters.push(and(eq(comments.contextType, 'usecase'), inArray(comments.contextId, useCaseIds)));
+        if (initiativeIds.length > 0) {
+          commentFilters.push(and(eq(comments.contextType, 'initiative'), inArray(comments.contextId, initiativeIds)));
         }
         if (opts.includeFolderMatrix) {
           commentFilters.push(and(eq(comments.contextType, 'matrix'), eq(comments.contextId, scopeId)));
@@ -664,12 +664,12 @@ async function collectExportData(opts: {
       }
 
       if (opts.includeDocuments) {
-        const useCaseIds = useCaseRows.map((u) => u.id);
+        const initiativeIds = initiativeRows.map((u) => u.id);
         const docFilters = [
           and(eq(contextDocuments.contextType, 'folder'), eq(contextDocuments.contextId, scopeId)),
         ];
-        if (useCaseIds.length > 0) {
-          docFilters.push(and(eq(contextDocuments.contextType, 'usecase'), inArray(contextDocuments.contextId, useCaseIds)));
+        if (initiativeIds.length > 0) {
+          docFilters.push(and(eq(contextDocuments.contextType, 'initiative'), inArray(contextDocuments.contextId, initiativeIds)));
         }
         if (opts.includeFolderMatrix) {
           docFilters.push(and(eq(contextDocuments.contextType, 'matrix'), eq(contextDocuments.contextId, scopeId)));
@@ -693,34 +693,34 @@ async function collectExportData(opts: {
     return { payload, documents };
   }
 
-  if (opts.scope === 'usecase') {
-    const [useCase] = await db
+  if (opts.scope === 'initiative') {
+    const [initiative] = await db
       .select()
-      .from(useCases)
-      .where(and(eq(useCases.id, scopeId), eq(useCases.workspaceId, opts.workspaceId)))
+      .from(initiatives)
+      .where(and(eq(initiatives.id, scopeId), eq(initiatives.workspaceId, opts.workspaceId)))
       .limit(1);
-    if (!useCase) return { payload, documents };
-    payload.use_cases = [mapUseCase(useCase)];
+    if (!initiative) return { payload, documents };
+    payload.use_cases = [mapInitiative(initiative)];
 
-    const shouldIncludeFolder = opts.includeUseCaseFolder || opts.includeUseCaseMatrix;
+    const shouldIncludeFolder = opts.includeInitiativeFolder || opts.includeInitiativeMatrix;
     const [folder] = shouldIncludeFolder
       ? await db
           .select()
           .from(folders)
-          .where(and(eq(folders.id, useCase.folderId), eq(folders.workspaceId, opts.workspaceId)))
+          .where(and(eq(folders.id, initiative.folderId), eq(folders.workspaceId, opts.workspaceId)))
           .limit(1)
       : [null];
     if (folder) {
       payload.folders = [mapFolder(folder)];
-      if (opts.includeUseCaseMatrix && typeof folder.matrixConfig === 'string' && folder.matrixConfig.length > 0) {
+      if (opts.includeInitiativeMatrix && typeof folder.matrixConfig === 'string' && folder.matrixConfig.length > 0) {
         payload.matrix = [{ folder_id: folder.id, matrix_config: parseJsonValue(folder.matrixConfig) }];
       }
     }
-    if (opts.includeUseCaseOrganization && useCase.organizationId) {
+    if (opts.includeInitiativeOrganization && initiative.organizationId) {
       const [org] = await db
         .select()
         .from(organizations)
-        .where(and(eq(organizations.id, useCase.organizationId), eq(organizations.workspaceId, opts.workspaceId)))
+        .where(and(eq(organizations.id, initiative.organizationId), eq(organizations.workspaceId, opts.workspaceId)))
         .limit(1);
       if (org) payload.organizations = [mapOrganization(org)];
     }
@@ -732,12 +732,12 @@ async function collectExportData(opts: {
         .where(
           and(
             eq(comments.workspaceId, opts.workspaceId),
-            eq(comments.contextType, 'usecase'),
+            eq(comments.contextType, 'initiative'),
             eq(comments.contextId, scopeId)
           )
         );
       payload.comments = commentRows.map(mapComment);
-      if (folder && opts.includeUseCaseFolder) {
+      if (folder && opts.includeInitiativeFolder) {
         const folderComments = await db
           .select()
           .from(comments)
@@ -750,7 +750,7 @@ async function collectExportData(opts: {
           );
         payload.comments.push(...folderComments.map(mapComment));
       }
-      if (folder && opts.includeUseCaseMatrix) {
+      if (folder && opts.includeInitiativeMatrix) {
         const matrixComments = await db
           .select()
           .from(comments)
@@ -763,7 +763,7 @@ async function collectExportData(opts: {
           );
         payload.comments.push(...matrixComments.map(mapComment));
       }
-      if (opts.includeUseCaseOrganization && useCase.organizationId) {
+      if (opts.includeInitiativeOrganization && initiative.organizationId) {
         const orgComments = await db
           .select()
           .from(comments)
@@ -771,7 +771,7 @@ async function collectExportData(opts: {
             and(
               eq(comments.workspaceId, opts.workspaceId),
               eq(comments.contextType, 'organization'),
-              eq(comments.contextId, useCase.organizationId)
+              eq(comments.contextId, initiative.organizationId)
             )
           );
         payload.comments.push(...orgComments.map(mapComment));
@@ -785,12 +785,12 @@ async function collectExportData(opts: {
         .where(
           and(
             eq(contextDocuments.workspaceId, opts.workspaceId),
-            eq(contextDocuments.contextType, 'usecase'),
+            eq(contextDocuments.contextType, 'initiative'),
             eq(contextDocuments.contextId, scopeId)
           )
         );
       documents.push(...docRows);
-      if (folder && opts.includeUseCaseFolder) {
+      if (folder && opts.includeInitiativeFolder) {
         const folderDocs = await db
           .select()
           .from(contextDocuments)
@@ -803,7 +803,7 @@ async function collectExportData(opts: {
           );
         documents.push(...folderDocs);
       }
-      if (folder && opts.includeUseCaseMatrix) {
+      if (folder && opts.includeInitiativeMatrix) {
         const matrixDocs = await db
           .select()
           .from(contextDocuments)
@@ -816,7 +816,7 @@ async function collectExportData(opts: {
           );
         documents.push(...matrixDocs);
       }
-      if (opts.includeUseCaseOrganization && useCase.organizationId) {
+      if (opts.includeInitiativeOrganization && initiative.organizationId) {
         const orgDocs = await db
           .select()
           .from(contextDocuments)
@@ -824,7 +824,7 @@ async function collectExportData(opts: {
             and(
               eq(contextDocuments.workspaceId, opts.workspaceId),
               eq(contextDocuments.contextType, 'organization'),
-              eq(contextDocuments.contextId, useCase.organizationId)
+              eq(contextDocuments.contextId, initiative.organizationId)
             )
           );
         documents.push(...orgDocs);
@@ -861,14 +861,14 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
   const includeDocuments = hasIncludeArray ? includeSet.has('documents') : (body.include_documents ?? true);
   const includeOrganization = includeSet.has('organization');
   const includeFolders = includeSet.has('folders');
-  const includeFolderUseCases = hasIncludeArray ? includeSet.has('usecases') : true;
+  const includeFolderInitiatives = hasIncludeArray ? includeSet.has('usecases') : true;
   const includeFolderMatrix = hasIncludeArray ? includeSet.has('matrix') : true;
-  const includeUseCaseFolder = hasIncludeArray ? includeSet.has('folders') : true;
-  const includeUseCaseMatrix = hasIncludeArray ? includeSet.has('matrix') : true;
-  const includeUseCaseOrganization = hasIncludeArray ? includeSet.has('organization') : true;
+  const includeInitiativeFolder = hasIncludeArray ? includeSet.has('folders') : true;
+  const includeInitiativeMatrix = hasIncludeArray ? includeSet.has('matrix') : true;
+  const includeInitiativeOrganization = hasIncludeArray ? includeSet.has('organization') : true;
   const includeWorkspaceOrganizations = hasIncludeArray ? includeSet.has('organizations') : true;
   const includeWorkspaceFolders = hasIncludeArray ? includeSet.has('folders') : true;
-  const includeWorkspaceUseCases = hasIncludeArray ? includeSet.has('usecases') : true;
+  const includeWorkspaceInitiatives = hasIncludeArray ? includeSet.has('usecases') : true;
   const includeWorkspaceMatrix = hasIncludeArray ? includeSet.has('matrix') : true;
 
   const { payload, documents } = await collectExportData({
@@ -881,13 +881,13 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
     includeFolders,
     includeWorkspaceOrganizations,
     includeWorkspaceFolders,
-    includeWorkspaceUseCases,
+    includeWorkspaceInitiatives,
     includeWorkspaceMatrix,
-    includeFolderUseCases,
+    includeFolderInitiatives,
     includeFolderMatrix,
-    includeUseCaseFolder,
-    includeUseCaseMatrix,
-    includeUseCaseOrganization,
+    includeInitiativeFolder,
+    includeInitiativeMatrix,
+    includeInitiativeOrganization,
   });
 
   const zip = new JSZip();
@@ -933,10 +933,10 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
     if (!folderId) continue;
     addZipFile(`folder_${folderId}.json`, encodeJson(withComments(folder, 'folder', folderId)));
   }
-  for (const useCase of payload.use_cases) {
-    const useCaseId = String((useCase as Record<string, unknown>).id ?? '');
-    if (!useCaseId) continue;
-    addZipFile(`usecase_${useCaseId}.json`, encodeJson(withComments(useCase, 'usecase', useCaseId)));
+  for (const initiative of payload.use_cases) {
+    const initiativeId = String((initiative as Record<string, unknown>).id ?? '');
+    if (!initiativeId) continue;
+    addZipFile(`usecase_${initiativeId}.json`, encodeJson(withComments(initiative, 'initiative', initiativeId)));
   }
   for (const matrix of payload.matrix) {
     const folderId = String((matrix as Record<string, unknown>).folder_id ?? '');
@@ -1229,7 +1229,7 @@ importsRouter.post('/', async (c) => {
   const workspacesJson = await readJsonArray('workspaces.json');
   const organizationsJson: Array<Record<string, unknown>> = [];
   const foldersJson: Array<Record<string, unknown>> = [];
-  const useCasesJson: Array<Record<string, unknown>> = [];
+  const initiativesJson: Array<Record<string, unknown>> = [];
   const commentsJson: Array<Record<string, unknown>> = [];
   const matrixJson: Array<Record<string, unknown>> = [];
 
@@ -1277,7 +1277,7 @@ importsRouter.post('/', async (c) => {
       if (!isTypeSelected('usecases')) continue;
       const obj = await readJsonObject(entry.path);
       const id = obj && typeof obj.id === 'string' ? obj.id : '';
-      if (obj && id && isSelected('usecases', id)) useCasesJson.push(stripComments(obj));
+      if (obj && id && isSelected('usecases', id)) initiativesJson.push(stripComments(obj));
       continue;
     }
     if (entry.path.startsWith('matrix_')) {
@@ -1454,18 +1454,18 @@ importsRouter.post('/', async (c) => {
       }
     }
 
-    for (const useCase of useCasesJson) {
+    for (const initiative of initiativesJson) {
       const newId = createId();
-      idMap.usecase.set(String(useCase.id), newId);
+      idMap.usecase.set(String(initiative.id), newId);
       let folderId: string | null = null;
       let orgId: string | null = null;
       if (targetFolder) {
         folderId = targetFolder.id;
         orgId = targetFolder.organizationId ?? null;
       } else {
-        folderId = typeof useCase.folder_id === 'string' ? (idMap.folder.get(useCase.folder_id) ?? null) : null;
+        folderId = typeof initiative.folder_id === 'string' ? (idMap.folder.get(initiative.folder_id) ?? null) : null;
         if (!folderId) {
-          const fallbackKey = typeof useCase.folder_id === 'string' ? useCase.folder_id : `fallback-${newId}`;
+          const fallbackKey = typeof initiative.folder_id === 'string' ? initiative.folder_id : `fallback-${newId}`;
           const existingFallback = idMap.folder.get(fallbackKey);
           if (existingFallback) {
             folderId = existingFallback;
@@ -1486,28 +1486,28 @@ importsRouter.post('/', async (c) => {
             folderId = fallbackId;
           }
         }
-        orgId = typeof useCase.organization_id === 'string' ? (idMap.organization.get(useCase.organization_id) ?? null) : null;
+        orgId = typeof initiative.organization_id === 'string' ? (idMap.organization.get(initiative.organization_id) ?? null) : null;
       }
-      await tx.insert(useCases).values({
+      await tx.insert(initiatives).values({
         id: newId,
         workspaceId: targetWorkspace,
         folderId,
         organizationId: orgId ?? null,
-        status: typeof useCase.status === 'string' ? useCase.status : 'completed',
-        model: typeof useCase.model === 'string' ? useCase.model : null,
-        data: typeof useCase.data === 'object' && useCase.data ? useCase.data : {},
-        createdAt: parseDate(useCase.created_at as string | null),
+        status: typeof initiative.status === 'string' ? initiative.status : 'completed',
+        model: typeof initiative.model === 'string' ? initiative.model : null,
+        data: typeof initiative.data === 'object' && initiative.data ? initiative.data : {},
+        createdAt: parseDate(initiative.created_at as string | null),
       });
     }
 
     if (Array.isArray(commentsJson) && allowComments) {
       for (const comment of commentsJson) {
         const contextType = typeof comment.context_type === 'string' ? comment.context_type : '';
-        if (targetFolder && contextType !== 'usecase') continue;
+        if (targetFolder && contextType !== 'initiative') continue;
         let contextId: string | null = null;
         if (contextType === 'organization') contextId = idMap.organization.get(String(comment.context_id)) ?? null;
         if (contextType === 'folder' || contextType === 'matrix') contextId = idMap.folder.get(String(comment.context_id)) ?? null;
-        if (contextType === 'usecase') contextId = idMap.usecase.get(String(comment.context_id)) ?? null;
+        if (contextType === 'initiative') contextId = idMap.usecase.get(String(comment.context_id)) ?? null;
         if (!contextId) continue;
 
         const threadKey = typeof comment.thread_id === 'string' ? comment.thread_id : '';
@@ -1540,11 +1540,11 @@ importsRouter.post('/', async (c) => {
       const match = entry.path.match(/^documents\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)-(.+)$/);
       if (!match) continue;
       const [, , contextType, contextId, , filename] = match;
-      if (targetFolder && contextType !== 'usecase') continue;
+      if (targetFolder && contextType !== 'initiative') continue;
       let newContextId: string | null = null;
       if (contextType === 'organization') newContextId = idMap.organization.get(contextId) ?? null;
       if (contextType === 'folder' || contextType === 'matrix') newContextId = idMap.folder.get(contextId) ?? null;
-      if (contextType === 'usecase') newContextId = idMap.usecase.get(contextId) ?? null;
+      if (contextType === 'initiative') newContextId = idMap.usecase.get(contextId) ?? null;
       if (!newContextId) continue;
 
       const fileEntry = zip.file(entry.path);

@@ -3,12 +3,12 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db, pool } from '../../db/client';
-import { organizations, folders, useCases } from '../../db/schema';
+import { organizations, folders, initiatives } from '../../db/schema';
 import { and, eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { parseMatrixConfig } from '../../utils/matrix';
-import { calculateUseCaseScores, type ScoreEntry } from '../../utils/scoring';
-import type { UseCaseData, UseCase, UseCaseDataJson } from '../../types/usecase';
+import { calculateInitiativeScores, type ScoreEntry } from '../../utils/scoring';
+import type { InitiativeData, Initiative, InitiativeDataJson } from '../../types/initiative';
 import { defaultMatrixConfig } from '../../config/default-matrix';
 // import { defaultPrompts } from '../../config/default-prompts'; // Commented out - unused
 import { queueManager } from '../../services/queue-manager';
@@ -19,11 +19,11 @@ import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
 import { resolveLocaleFromHeaders } from '../../utils/locale';
 
-async function notifyUseCaseEvent(useCaseId: string): Promise<void> {
-  const notifyPayload = JSON.stringify({ use_case_id: useCaseId });
+async function notifyInitiativeEvent(initiativeId: string): Promise<void> {
+  const notifyPayload = JSON.stringify({ initiative_id: initiativeId });
   const client = await pool.connect();
   try {
-    await client.query(`NOTIFY usecase_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    await client.query(`NOTIFY initiative_events, '${notifyPayload.replace(/'/g, "''")}'`);
   } finally {
     client.release();
   }
@@ -48,7 +48,7 @@ const scoreEntry = z.object({
   description: z.string()
 });
 
-const useCaseInput = z.object({
+const initiativeInput = z.object({
   folderId: z.string(),
   organizationId: z.string().optional(),
   name: z.string().min(1),
@@ -78,15 +78,15 @@ const useCaseInput = z.object({
   complexityScores: z.array(scoreEntry).optional()
 });
 
-type UseCaseInput = z.infer<typeof useCaseInput>;
+type InitiativeInput = z.infer<typeof initiativeInput>;
 
-export type SerializedUseCase = typeof useCases.$inferSelect;
+export type SerializedInitiative = typeof initiatives.$inferSelect;
 
 type MatrixMode = 'organization' | 'generate' | 'default';
 
 // Type pour rétrocompatibilité avec les anciennes colonnes (avant migration 0008)
 // Permet l'accès aux propriétés qui peuvent encore exister dans certains backups
-type LegacyUseCaseRow = SerializedUseCase & {
+type LegacyInitiativeRow = SerializedInitiative & {
   name?: string;
   description?: string;
   process?: string;
@@ -140,7 +140,7 @@ function parseOrganizationMatrixTemplate(value: unknown): Record<string, unknown
  * Extrait les données de data JSONB et des colonnes temporaires (rétrocompatibilité)
  * Calcule les scores dynamiquement à partir de la matrice du dossier
  */
-export const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> => {
+export const hydrateInitiative = async (row: SerializedInitiative): Promise<Initiative> => {
   // Récupérer la matrice du dossier pour calculer les scores
   const [folder] = await db
     .select()
@@ -149,12 +149,12 @@ export const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> =
   const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
   
   // Extraire data JSONB (peut être vide {} pour les anciens enregistrements)
-  let data: Partial<UseCaseData> = {};
+  let data: Partial<InitiativeData> = {};
   try {
     if (row.data && typeof row.data === 'object') {
-      data = row.data as Partial<UseCaseData>;
+      data = row.data as Partial<InitiativeData>;
     } else if (typeof row.data === 'string') {
-      data = JSON.parse(row.data) as Partial<UseCaseData>;
+      data = JSON.parse(row.data) as Partial<InitiativeData>;
     }
   } catch (error) {
     // Si data n'est pas valide, on part d'un objet vide
@@ -164,7 +164,7 @@ export const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> =
   // Rétrocompatibilité : migrer depuis les colonnes natives si elles existent encore dans la DB
   // (pour les backups de prod qui ont encore ces colonnes avant application de la migration 0008)
   // Note: Après la migration 0008, toutes les colonnes sont supprimées et toutes les données sont dans data
-  const legacyRow = row as LegacyUseCaseRow;
+  const legacyRow = row as LegacyInitiativeRow;
   if (!data.name && legacyRow.name) {
     data.name = legacyRow.name;
   }
@@ -223,7 +223,7 @@ export const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> =
   }
   
   // Calculer les scores dynamiquement
-  const computedScores = calculateUseCaseScores(matrix, data as UseCaseData);
+  const computedScores = calculateInitiativeScores(matrix, data as InitiativeData);
   
   return {
     id: row.id,
@@ -232,7 +232,7 @@ export const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> =
     status: row.status ?? 'completed',
     model: row.model,
     createdAt: row.createdAt,
-    data: data as UseCaseData,
+    data: data as InitiativeData,
     totalValueScore: computedScores?.totalValueScore ?? null,
     totalComplexityScore: computedScores?.totalComplexityScore ?? null
   };
@@ -241,7 +241,7 @@ export const hydrateUseCase = async (row: SerializedUseCase): Promise<UseCase> =
 /**
  * Hydrate plusieurs use cases en une fois (optimisé pour les listes)
  */
-export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCase[]> => {
+export const hydrateInitiatives = async (rows: SerializedInitiative[]): Promise<Initiative[]> => {
   const workspaceId = rows[0]?.workspaceId;
   // Récupérer tous les dossiers uniques pour éviter les requêtes multiples
   const folderIds = [...new Set(rows.map(r => r.folderId))];
@@ -261,12 +261,12 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
     const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
     
     // Extraire data JSONB
-    let data: Partial<UseCaseData> = {};
+    let data: Partial<InitiativeData> = {};
     try {
       if (row.data && typeof row.data === 'object') {
-        data = row.data as Partial<UseCaseData>;
+        data = row.data as Partial<InitiativeData>;
       } else if (typeof row.data === 'string') {
-        data = JSON.parse(row.data) as Partial<UseCaseData>;
+        data = JSON.parse(row.data) as Partial<InitiativeData>;
       }
     } catch (error) {
       data = {};
@@ -274,7 +274,7 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
     
     // Rétrocompatibilité : migrer depuis les colonnes natives si elles existent encore dans la DB
     // (pour les backups de prod qui ont encore ces colonnes avant application de la migration 0008)
-    const legacyRow = row as LegacyUseCaseRow;
+    const legacyRow = row as LegacyInitiativeRow;
     if (!data.name && legacyRow.name) {
       data.name = legacyRow.name;
     }
@@ -305,7 +305,7 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
     }
     
     // Calculer les scores dynamiquement
-    const computedScores = calculateUseCaseScores(matrix, data as UseCaseData);
+    const computedScores = calculateInitiativeScores(matrix, data as InitiativeData);
     
     return {
       id: row.id,
@@ -314,7 +314,7 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
       status: row.status ?? 'completed',
       model: row.model,
       createdAt: row.createdAt,
-      data: data as UseCaseData,
+      data: data as InitiativeData,
       totalValueScore: computedScores?.totalValueScore ?? null,
       totalComplexityScore: computedScores?.totalComplexityScore ?? null
     };
@@ -322,12 +322,12 @@ export const hydrateUseCases = async (rows: SerializedUseCase[]): Promise<UseCas
 };
 
 /**
- * Construit l'objet data JSONB à partir d'un UseCaseInput (peut être partiel pour PUT)
+ * Construit l'objet data JSONB à partir d'un InitiativeInput (peut être partiel pour PUT)
  */
-const buildUseCaseData = (payload: Partial<UseCaseInput>, existingData?: Partial<UseCaseData>): UseCaseData => {
+const buildInitiativeData = (payload: Partial<InitiativeInput>, existingData?: Partial<InitiativeData>): InitiativeData => {
   // S'assurer que name est toujours défini (obligatoire)
   const name: string = payload.name ?? existingData?.name ?? 'Cas d\'usage sans nom';
-  const data: UseCaseData = existingData 
+  const data: InitiativeData = existingData 
     ? { ...existingData, name } 
     : { name };
   
@@ -365,13 +365,13 @@ initiativesRouter.get('/', async (c) => {
   const targetWorkspaceId = user.workspaceId;
   const folderId = c.req.query('folder_id');
   const rows = folderId
-    ? await db.select().from(useCases).where(and(eq(useCases.workspaceId, targetWorkspaceId), eq(useCases.folderId, folderId)))
-    : await db.select().from(useCases).where(eq(useCases.workspaceId, targetWorkspaceId));
-  const hydrated = await Promise.all(rows.map(row => hydrateUseCase(row)));
+    ? await db.select().from(initiatives).where(and(eq(initiatives.workspaceId, targetWorkspaceId), eq(initiatives.folderId, folderId)))
+    : await db.select().from(initiatives).where(eq(initiatives.workspaceId, targetWorkspaceId));
+  const hydrated = await Promise.all(rows.map(row => hydrateInitiative(row)));
   return c.json({ items: hydrated });
 });
 
-initiativesRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator('json', useCaseInput), async (c) => {
+initiativesRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator('json', initiativeInput), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
   const payload = c.req.valid('json');
   const [folder] = await db
@@ -392,26 +392,26 @@ initiativesRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValida
   }
 
   const id = createId();
-  const data = buildUseCaseData(payload);
+  const data = buildInitiativeData(payload);
   
   // S'assurer que name est présent dans data (obligatoire)
   if (!data.name) {
     data.name = payload.name;
   }
   
-  await db.insert(useCases).values({
+  await db.insert(initiatives).values({
     id,
     workspaceId,
     folderId: payload.folderId,
     organizationId: payload.organizationId,
-    // data est UseCaseData (garanti par buildUseCaseData), converti en UseCaseDataJson pour compatibilité Drizzle JSONB
-    data: data as UseCaseDataJson // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
+    // data est InitiativeData (garanti par buildInitiativeData), converti en InitiativeDataJson pour compatibilité Drizzle JSONB
+    data: data as InitiativeDataJson // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
   });
   const [record] = await db
     .select()
-    .from(useCases)
-    .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
-  const hydrated = await hydrateUseCase(record);
+    .from(initiatives)
+    .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, workspaceId)));
+  const hydrated = await hydrateInitiative(record);
   return c.json(hydrated, 201);
 });
 
@@ -421,23 +421,23 @@ initiativesRouter.get('/:id', async (c) => {
   const id = c.req.param('id')!;
   const [record] = await db
     .select()
-    .from(useCases)
-    .where(and(eq(useCases.id, id), eq(useCases.workspaceId, targetWorkspaceId)));
+    .from(initiatives)
+    .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, targetWorkspaceId)));
   if (!record) {
     return c.json({ message: 'Not found' }, 404);
   }
-  const hydrated = await hydrateUseCase(record);
+  const hydrated = await hydrateInitiative(record);
   return c.json(hydrated);
 });
 
-initiativesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', useCaseInput.partial()), async (c) => {
+initiativesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('json', initiativeInput.partial()), async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const id = c.req.param('id')!;
   const payload = c.req.valid('json');
   const [record] = await db
     .select()
-    .from(useCases)
-    .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
+    .from(initiatives)
+    .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, workspaceId)));
   if (!record) {
     return c.json({ message: 'Not found' }, 404);
   }
@@ -446,7 +446,7 @@ initiativesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zVali
     await requireLockOwnershipForMutation({
       userId,
       workspaceId,
-      objectType: 'usecase',
+      objectType: 'initiative',
       objectId: id,
     });
   } catch (e: unknown) {
@@ -455,23 +455,23 @@ initiativesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zVali
   }
   
   // Extraire data existant pour le merge
-  let existingData: Partial<UseCaseData> = {};
+  let existingData: Partial<InitiativeData> = {};
   try {
     if (record.data && typeof record.data === 'object') {
-      existingData = record.data as Partial<UseCaseData>;
+      existingData = record.data as Partial<InitiativeData>;
     } else if (typeof record.data === 'string') {
-      existingData = JSON.parse(record.data) as Partial<UseCaseData>;
+      existingData = JSON.parse(record.data) as Partial<InitiativeData>;
     }
   } catch (error) {
     existingData = {};
   }
   
   // Construire le nouveau data en mergeant avec l'existant
-  // buildUseCaseData garantit toujours un name défini
-  let newData = buildUseCaseData(payload, existingData);
+  // buildInitiativeData garantit toujours un name défini
+  let newData = buildInitiativeData(payload, existingData);
   
   // Rétrocompatibilité : si name n'est toujours pas défini (cas edge), utiliser la colonne native
-  const legacyRecord = record as LegacyUseCaseRow;
+  const legacyRecord = record as LegacyInitiativeRow;
   if (!newData.name && legacyRecord.name) {
     newData = { ...newData, name: legacyRecord.name };
   }
@@ -498,20 +498,20 @@ initiativesRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zVali
   }
   
   await db
-    .update(useCases)
+    .update(initiatives)
     .set({
       folderId,
       organizationId: payload.organizationId ?? record.organizationId,
-      // newData est UseCaseData (garanti par buildUseCaseData), converti en UseCaseDataJson pour compatibilité Drizzle JSONB
-      data: newData as UseCaseDataJson // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
+      // newData est InitiativeData (garanti par buildInitiativeData), converti en InitiativeDataJson pour compatibilité Drizzle JSONB
+      data: newData as InitiativeDataJson // Toutes les données métier sont dans data JSONB (inclut name, description, process, technologies, etc.)
     })
-    .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
+    .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, workspaceId)));
   const [updated] = await db
     .select()
-    .from(useCases)
-    .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
-  const hydrated = await hydrateUseCase(updated);
-  await notifyUseCaseEvent(id);
+    .from(initiatives)
+    .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, workspaceId)));
+  const hydrated = await hydrateInitiative(updated);
+  await notifyInitiativeEvent(id);
   return c.json(hydrated);
 });
 
@@ -522,21 +522,21 @@ initiativesRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), as
     await requireLockOwnershipForMutation({
       userId,
       workspaceId,
-      objectType: 'usecase',
+      objectType: 'initiative',
       objectId: id,
     });
   } catch (e: unknown) {
     if (isObjectLockedError(e)) return c.json({ message: 'Object is locked', code: 'OBJECT_LOCKED', lock: e.lock }, 409);
     throw e;
   }
-  await db.delete(useCases).where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
+  await db.delete(initiatives).where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, workspaceId)));
   return c.body(null, 204);
 });
 
 const generateInput = z.object({
   input: z.string().min(1),
   folder_id: z.string().optional(),
-  use_case_count: z.coerce.number().int().min(1).max(25).optional(),
+  initiative_count: z.coerce.number().int().min(1).max(25).optional(),
   organization_id: z.string().optional(),
   matrix_mode: z.enum(['organization', 'generate', 'default']).optional(),
   model: z.string().optional()
@@ -549,7 +549,7 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
       appLocaleHeader: c.req.header('x-app-locale'),
       acceptLanguageHeader: c.req.header('accept-language')
     });
-    const { input, folder_id, use_case_count, organization_id, matrix_mode, model } = c.req.valid('json');
+    const { input, folder_id, initiative_count, organization_id, matrix_mode, model } = c.req.valid('json');
     const organizationId = organization_id;
     const isExplicitDefaultMatrixMode = matrix_mode === 'default';
     
@@ -646,7 +646,7 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
       await notifyFolderEvent(folderId);
     }
 
-    const workflowDispatch = await todoOrchestrationService.startAndDispatchUseCaseGenerationWorkflow(
+    const workflowDispatch = await todoOrchestrationService.startAndDispatchInitiativeGenerationWorkflow(
       { workspaceId, userId, role },
       {
         folderId: folderId!,
@@ -654,7 +654,7 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
         matrixMode: resolvedMatrixMode,
         input,
         model: selectedModel,
-        useCaseCount: use_case_count,
+        initiativeCount: initiative_count,
         locale: requestLocale
       }
     );
@@ -707,11 +707,11 @@ initiativesRouter.post('/:id/detail', requireEditor, requireWorkspaceEditorRole(
     const selectedModel = model || aiSettings.defaultModel;
     
     // Récupérer le cas d'usage
-    const [useCase] = await db
+    const [initiative] = await db
       .select()
-      .from(useCases)
-      .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
-    if (!useCase) {
+      .from(initiatives)
+      .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, workspaceId)));
+    if (!initiative) {
       return c.json({ message: 'Cas d\'usage non trouvé' }, 404);
     }
     
@@ -719,7 +719,7 @@ initiativesRouter.post('/:id/detail', requireEditor, requireWorkspaceEditorRole(
     const [folder] = await db
       .select()
       .from(folders)
-      .where(and(eq(folders.id, useCase.folderId), eq(folders.workspaceId, workspaceId)));
+      .where(and(eq(folders.id, initiative.folderId), eq(folders.workspaceId, workspaceId)));
     if (!folder) {
       return c.json({ message: 'Dossier non trouvé' }, 404);
     }
@@ -728,23 +728,23 @@ initiativesRouter.post('/:id/detail', requireEditor, requireWorkspaceEditorRole(
     // const matrixConfig = parseMatrixConfig(folder.matrixConfig ?? null);
     
     // Mettre à jour le statut à "detailing"
-    await db.update(useCases)
+    await db.update(initiatives)
       .set({ status: 'detailing' })
-      .where(and(eq(useCases.id, id), eq(useCases.workspaceId, workspaceId)));
-    await notifyUseCaseEvent(id);
+      .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, workspaceId)));
+    await notifyInitiativeEvent(id);
     
     // Extraire le nom depuis data JSONB (avec rétrocompatibilité)
-    const useCaseData = useCase.data && typeof useCase.data === 'object' 
-      ? useCase.data as Partial<UseCaseData>
+    const initiativeData = initiative.data && typeof initiative.data === 'object' 
+      ? initiative.data as Partial<InitiativeData>
       : {};
-    const legacyUseCase = useCase as LegacyUseCaseRow;
-    const useCaseName = useCaseData.name || legacyUseCase.name || 'Cas d\'usage sans nom';
+    const legacyInitiative = initiative as LegacyInitiativeRow;
+    const initiativeName = initiativeData.name || legacyInitiative.name || 'Cas d\'usage sans nom';
     
     // Ajouter le job à la queue
-    const jobId = await queueManager.addJob('usecase_detail', {
-      useCaseId: id,
-      useCaseName,
-      folderId: useCase.folderId,
+    const jobId = await queueManager.addJob('initiative_detail', {
+      initiativeId: id,
+      initiativeName,
+      folderId: initiative.folderId,
       model: selectedModel,
       initiatedByUserId: userId,
       locale: requestLocale

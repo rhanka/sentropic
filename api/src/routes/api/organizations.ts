@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { db, pool } from '../../db/client';
-import { folders, organizations, useCases } from '../../db/schema';
+import { folders, organizations, initiatives } from '../../db/schema';
 import { and, eq } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { enrichOrganization } from '../../services/context-organization';
@@ -371,16 +371,16 @@ organizationsRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), 
     .select()
     .from(folders)
     .where(and(eq(folders.organizationId, id), eq(folders.workspaceId, workspaceId)));
-  const relatedUseCases = await db
+  const relatedInitiatives = await db
     .select()
-    .from(useCases)
-    .where(and(eq(useCases.organizationId, id), eq(useCases.workspaceId, workspaceId)));
+    .from(initiatives)
+    .where(and(eq(initiatives.organizationId, id), eq(initiatives.workspaceId, workspaceId)));
 
-  if (relatedFolders.length > 0 || relatedUseCases.length > 0) {
+  if (relatedFolders.length > 0 || relatedInitiatives.length > 0) {
     return c.json(
       {
         message: 'Cannot delete organization because it is in use',
-        details: { folders: relatedFolders.length, useCases: relatedUseCases.length },
+        details: { folders: relatedFolders.length, initiatives: relatedInitiatives.length },
       },
       409
     );
