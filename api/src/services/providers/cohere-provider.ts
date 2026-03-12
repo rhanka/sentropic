@@ -144,7 +144,7 @@ export class CohereProviderRuntime implements ProviderRuntime {
     }
 
     const client = this.getClient(payload.credential);
-    return await client.v2.chat(payload.requestOptions);
+    return await client.v2.chat(payload.requestOptions as Parameters<typeof client.v2.chat>[0]);
   }
 
   async streamGenerate(request: unknown): Promise<AsyncIterable<unknown>> {
@@ -154,7 +154,7 @@ export class CohereProviderRuntime implements ProviderRuntime {
     }
 
     const client = this.getClient(payload.credential);
-    const stream = await client.v2.chatStream(payload.requestOptions);
+    const stream = await client.v2.chatStream(payload.requestOptions as Parameters<typeof client.v2.chatStream>[0]);
 
     return this.toAsyncIterable(stream);
   }
