@@ -153,6 +153,11 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - [x] BR-12 (Release Chrome/VSCode CI): no impact — CI/packaging only.
   - [x] BR-13 (Chrome plugin download): no impact — packaging/distribution only.
   - [x] Branches needing scope/dependency updates: **BR-06, BR-10, BR-11** (BR-10 is the most impacted).
+  - [x] New branches from cross-cutting analysis (0.5):
+    - BR-14 (chat modularization): low BR-04 dependency — ChatPanel/ChatWidget refactoring, parallelizable.
+    - BR-16 (document connectors): low BR-04 dependency — Google Workspace/SharePoint, initiative rename only.
+    - BR-17 (RAG documents): no BR-04 dependency — chunking/embeddings/pgvector, depends on BR-16 + BR-08.
+    - BR-08 scope extended to include Cohere (W2+).
 
 - [x] **0.7 Rewrite branch plans**
   - [x] Rewrite `plan/04-BRANCH_feat-workspace-template-catalog.md` — now pointer to BRANCH.md.
