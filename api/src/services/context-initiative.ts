@@ -3,7 +3,7 @@ import { getReasoningParamsForModel } from './model-catalog';
 import { defaultPrompts } from '../config/default-prompts';
 import type { MatrixConfig } from '../types/matrix';
 
-export interface UseCaseListItem {
+export interface InitiativeListItem {
   titre: string;
   description: string; // 30-60 caractères (description courte)
   problem?: string; // 40-80 caractères (nouveau champ)
@@ -11,12 +11,12 @@ export interface UseCaseListItem {
   ref: string;
 }
 
-export interface UseCaseList {
+export interface InitiativeList {
   dossier: string;
-  useCases: UseCaseListItem[];
+  initiatives: InitiativeListItem[];
 }
 
-export interface UseCaseDetail {
+export interface InitiativeDetail {
   name: string;
   description: string; // 30-60 caractères (description courte)
   problem?: string; // 40-80 caractères (nouveau champ)
@@ -51,7 +51,7 @@ export interface UseCaseDetail {
 }
 
 // UI (/dossier/new) default is 10; keep backend consistent.
-const defaultUseCaseCount = 10;
+const defaultInitiativeCount = 10;
 
 const UNICODE_BULLETS = '[\\u2022\\u2023\\u25e6\\u25aa\\u25ab\\u2023\\u25cf\\u25e6]'; // • ▣ ◦ ▪ ▫ ‣ ● ◦
 const BULLET_PREFIX_RE = new RegExp(`^\\s*(?:[-*+]|(?:\\d+\\.)|${UNICODE_BULLETS})\\s+`);
@@ -188,7 +188,7 @@ const USE_CASE_LIST_STRUCTURED_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
   properties: {
     dossier: { type: 'string' },
-    useCases: {
+    initiatives: {
       type: 'array',
       items: {
         type: 'object',
@@ -202,7 +202,7 @@ const USE_CASE_LIST_STRUCTURED_SCHEMA: Record<string, unknown> = {
       },
     },
   },
-  required: ['dossier', 'useCases'],
+  required: ['dossier', 'initiatives'],
 };
 
 const USE_CASE_DETAIL_STRUCTURED_SCHEMA: Record<string, unknown> = {
@@ -383,11 +383,11 @@ const parseStructuredJsonWithSingleRepair = async <T>(params: {
 /**
  * Générer une liste de cas d'usage
  */
-export const generateUseCaseList = async (
+export const generateInitiativeList = async (
   input: string, 
   organizationInfo?: string, 
   model?: string,
-  useCaseCount?: number,
+  initiativeCount?: number,
   folderName?: string,
   documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>,
   documentsContextJson?: string,
@@ -397,22 +397,22 @@ export const generateUseCaseList = async (
     promptTemplate?: string;
     promptId?: string;
   },
-): Promise<UseCaseList> => {
-  const useCaseListPrompt =
+): Promise<InitiativeList> => {
+  const initiativeListPrompt =
     (typeof runtimePrompt?.promptTemplate === 'string' &&
     runtimePrompt.promptTemplate.trim().length > 0
       ? runtimePrompt.promptTemplate
       : defaultPrompts.find(p => p.id === 'use_case_list')?.content) || '';
   
-  if (!useCaseListPrompt) {
+  if (!initiativeListPrompt) {
     throw new Error('Prompt use_case_list non trouvé');
   }
 
-  const basePrompt = useCaseListPrompt
+  const basePrompt = initiativeListPrompt
     .replace('{{user_input}}', input)
     .replace('{{folder_name}}', folderName || '')
     .replace('{{organization_info}}', organizationInfo || 'Aucune information d\'organisation disponible')
-    .replace('{{use_case_count}}', String(useCaseCount ?? defaultUseCaseCount));
+    .replace('{{use_case_count}}', String(initiativeCount ?? defaultInitiativeCount));
 
   const docsDirective =
     documentsContexts && documentsContexts.length > 0
@@ -454,7 +454,7 @@ export const generateUseCaseList = async (
   if (!content) throw new Error('Aucune réponse reçue pour la liste de cas d\'usage');
   
   try {
-    return await parseStructuredJsonWithSingleRepair<UseCaseList>({
+    return await parseStructuredJsonWithSingleRepair<InitiativeList>({
       rawContent: content,
       model,
       schemaName: 'use_case_list',
@@ -471,8 +471,8 @@ export const generateUseCaseList = async (
 /**
  * Générer le détail d'un cas d'usage
  */
-export const generateUseCaseDetail = async (
-  useCase: string,
+export const generateInitiativeDetail = async (
+  initiative: string,
   context: string,
   matrix: MatrixConfig,
   organizationInfo?: string,
@@ -485,19 +485,19 @@ export const generateUseCaseDetail = async (
     promptTemplate?: string;
     promptId?: string;
   },
-): Promise<UseCaseDetail> => {
-  const useCaseDetailPrompt =
+): Promise<InitiativeDetail> => {
+  const initiativeDetailPrompt =
     (typeof runtimePrompt?.promptTemplate === 'string' &&
     runtimePrompt.promptTemplate.trim().length > 0
       ? runtimePrompt.promptTemplate
       : defaultPrompts.find(p => p.id === 'use_case_detail')?.content) || '';
   
-  if (!useCaseDetailPrompt) {
+  if (!initiativeDetailPrompt) {
     throw new Error('Prompt use_case_detail non trouvé');
   }
 
-  const basePrompt = useCaseDetailPrompt
-    .replace(/\{\{use_case\}\}/g, useCase)
+  const basePrompt = initiativeDetailPrompt
+    .replace(/\{\{use_case\}\}/g, initiative)
     .replace('{{user_input}}', context)
     .replace('{{organization_info}}', organizationInfo || 'Aucune information d\'organisation disponible')
     .replace('{{matrix}}', JSON.stringify(matrix));
@@ -539,10 +539,10 @@ export const generateUseCaseDetail = async (
     signal,
   });
   
-  if (!content) throw new Error(`Aucune réponse reçue pour le cas d'usage: ${useCase}`);
+  if (!content) throw new Error(`Aucune réponse reçue pour le cas d'usage: ${initiative}`);
   
   try {
-    const detail = await parseStructuredJsonWithSingleRepair<UseCaseDetail>({
+    const detail = await parseStructuredJsonWithSingleRepair<InitiativeDetail>({
       rawContent: content,
       model,
       schemaName: 'use_case_detail',
@@ -579,6 +579,6 @@ export const generateUseCaseDetail = async (
     console.error('Contenu reçu (derniers 500 chars):', content.substring(Math.max(0, content.length - 500)));
     console.error('Longueur du contenu:', content.length);
     console.error('Type de contenu:', typeof content);
-    throw new Error(`Erreur lors du parsing de la réponse de l'IA pour le détail: ${useCase}`);
+    throw new Error(`Erreur lors du parsing de la réponse de l'IA pour le détail: ${initiative}`);
   }
 };

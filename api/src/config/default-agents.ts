@@ -1,7 +1,7 @@
 import { defaultPrompts } from "./default-prompts";
 import type {
   GenerationAgentKey,
-  UseCaseGenerationWorkflowTaskKey,
+  InitiativeGenerationWorkflowTaskKey,
 } from "./default-workflows";
 
 const readLegacyPromptTemplate = (promptId: string): string => {
@@ -95,7 +95,7 @@ export const DEFAULT_GENERATION_AGENT_BY_KEY = new Map<
 >(DEFAULT_GENERATION_AGENTS.map((item) => [item.key, item]));
 
 export const DEFAULT_GENERATION_AGENT_KEY_BY_TASK: Record<
-  UseCaseGenerationWorkflowTaskKey,
+  InitiativeGenerationWorkflowTaskKey,
   GenerationAgentKey
 > = {
   generation_context_prepare: "generation_orchestrator",

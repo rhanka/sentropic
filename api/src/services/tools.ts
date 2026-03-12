@@ -64,18 +64,18 @@ export const webExtractTool: OpenAI.Chat.Completions.ChatCompletionTool = {
 
 /**
  * Tool pour lire un use case complet.
- * Retourne la structure `use_cases.data` complète.
+ * Retourne la structure `initiatives.data` complète.
  */
-export const readUseCaseTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const readInitiativeTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: "function",
   function: {
-    name: "read_usecase",
+    name: "read_initiative",
     description:
-      "Lit un use case (structure use_cases.data). Utilise ce tool pour connaître l'état actuel avant de proposer des modifications. IMPORTANT: utilise `select` dès que possible pour ne récupérer que les champs nécessaires (réduit fortement les tokens et évite de renvoyer un blob complet).",
+      "Lit un use case (structure initiatives.data). Utilise ce tool pour connaître l'état actuel avant de proposer des modifications. IMPORTANT: utilise `select` dès que possible pour ne récupérer que les champs nécessaires (réduit fortement les tokens et évite de renvoyer un blob complet).",
     parameters: {
       type: "object",
       properties: {
-        useCaseId: { type: "string", description: "ID du use case à lire" },
+        initiativeId: { type: "string", description: "ID du use case à lire" },
         select: {
           type: "array",
           items: { type: "string" },
@@ -83,42 +83,42 @@ export const readUseCaseTool: OpenAI.Chat.Completions.ChatCompletionTool = {
             "Liste de champs de `data` à inclure. Exemples: ['references'] ou ['problem','solution','description']. Si absent, renvoie `data` complet."
         }
       },
-      required: ["useCaseId"]
+      required: ["initiativeId"]
     }
   }
 };
 
 /**
  * Alias (Option B): `usecase_get` — preferred name for the use case read tool.
- * Keeps backward-compatibility with the legacy `read_usecase` tool id.
+ * Keeps backward-compatibility with the legacy `read_initiative` tool id.
  */
-export const useCaseGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const initiativeGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
     name: 'usecase_get',
     description:
-      "Lit un use case (structure use_cases.data). (Nom standard Option B: usecase_get). IMPORTANT: utilise `select` dès que possible pour ne récupérer que les champs nécessaires.",
-    parameters: readUseCaseTool.function.parameters
+      "Lit un use case (structure initiatives.data). (Nom standard Option B: usecase_get). IMPORTANT: utilise `select` dès que possible pour ne récupérer que les champs nécessaires.",
+    parameters: readInitiativeTool.function.parameters
   }
 };
 
 /**
- * Tool générique: met à jour un ou plusieurs champs de `use_cases.data.*`.
+ * Tool générique: met à jour un ou plusieurs champs de `initiatives.data.*`.
  * Le mapping DB est pris en charge côté `tool-service.ts`.
  */
-export const updateUseCaseFieldTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const updateInitiativeFieldTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: "function",
   function: {
-    name: "update_usecase_field",
+    name: "update_initiative_field",
     description:
-      "OBLIGATOIRE : Utilise ce tool quand l'utilisateur demande de modifier, reformuler ou mettre à jour des champs du use case. Ne réponds pas dans le texte, utilise ce tool pour appliquer les modifications directement en base de données. Met à jour un ou plusieurs champs d'un use case (JSONB use_cases.data). Utilise des paths dot-notation. Exemples de paths : 'description', 'problem', 'solution', 'solution.bullets' (pour un tableau), 'solution.bullets.0' (pour un élément spécifique).",
+      "OBLIGATOIRE : Utilise ce tool quand l'utilisateur demande de modifier, reformuler ou mettre à jour des champs du use case. Ne réponds pas dans le texte, utilise ce tool pour appliquer les modifications directement en base de données. Met à jour un ou plusieurs champs d'un use case (JSONB initiatives.data). Utilise des paths dot-notation. Exemples de paths : 'description', 'problem', 'solution', 'solution.bullets' (pour un tableau), 'solution.bullets.0' (pour un élément spécifique).",
     parameters: {
       type: "object",
       properties: {
-        useCaseId: { type: "string", description: "ID du use case à modifier" },
+        initiativeId: { type: "string", description: "ID du use case à modifier" },
         updates: {
           type: "array",
-          description: "Liste des modifications à appliquer (max 50). path cible use_cases.data.*",
+          description: "Liste des modifications à appliquer (max 50). path cible initiatives.data.*",
           items: {
             type: "object",
             properties: {
@@ -129,22 +129,22 @@ export const updateUseCaseFieldTool: OpenAI.Chat.Completions.ChatCompletionTool 
           }
         }
       },
-      required: ["useCaseId", "updates"]
+      required: ["initiativeId", "updates"]
     }
   }
 };
 
 /**
  * Alias (Option B): `usecase_update` — preferred name for updating a use case.
- * Keeps backward-compatibility with the legacy `update_usecase_field` tool id.
+ * Keeps backward-compatibility with the legacy `update_initiative_field` tool id.
  */
-export const useCaseUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const initiativeUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
     name: 'usecase_update',
     description:
-      "OBLIGATOIRE : Utilise ce tool quand l'utilisateur demande de modifier des champs du use case. (Nom standard Option B: usecase_update). Met à jour un ou plusieurs champs d'un use case (JSONB use_cases.data) via des paths dot-notation.",
-    parameters: updateUseCaseFieldTool.function.parameters
+      "OBLIGATOIRE : Utilise ce tool quand l'utilisateur demande de modifier des champs du use case. (Nom standard Option B: usecase_update). Met à jour un ou plusieurs champs d'un use case (JSONB initiatives.data) via des paths dot-notation.",
+    parameters: updateInitiativeFieldTool.function.parameters
   }
 };
 
@@ -336,12 +336,12 @@ export const folderUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
 /**
  * Use cases list within a folder context
  */
-export const useCasesListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const initiativesListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
-    name: 'usecases_list',
+    name: 'initiatives_list',
     description:
-      'List use cases for a folder. Use idsOnly to get only IDs, or select to limit returned fields from use_cases.data.',
+      'List use cases for a folder. Use idsOnly to get only IDs, or select to limit returned fields from initiatives.data.',
     parameters: {
       type: 'object',
       properties: {
@@ -351,7 +351,7 @@ export const useCasesListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
           type: 'array',
           items: { type: 'string' },
           description:
-            'Optional list of fields from use_cases.data to include (top-level only, like read_usecase).'
+            'Optional list of fields from initiatives.data to include (top-level only, like read_initiative).'
         }
       },
       required: ['folderId']

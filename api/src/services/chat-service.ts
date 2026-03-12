@@ -15,10 +15,10 @@ import type OpenAI from 'openai';
 import { getOpenAITransportMode } from './provider-connections';
 import { defaultPrompts } from '../config/default-prompts';
 import {
-  readUseCaseTool,
-  updateUseCaseFieldTool,
-  useCaseGetTool,
-  useCaseUpdateTool,
+  readInitiativeTool,
+  updateInitiativeFieldTool,
+  initiativeGetTool,
+  initiativeUpdateTool,
   webSearchTool,
   webExtractTool,
   searchWeb,
@@ -29,7 +29,7 @@ import {
   foldersListTool,
   folderGetTool,
   folderUpdateTool,
-  useCasesListTool,
+  initiativesListTool,
   executiveSummaryGetTool,
   executiveSummaryUpdateTool,
   matrixGetTool,
@@ -56,15 +56,15 @@ import {
   type ChatHistoryStreamEvent,
 } from './chat-session-history';
 
-export type ChatContextType = 'organization' | 'folder' | 'usecase' | 'executive_summary';
+export type ChatContextType = 'organization' | 'folder' | 'initiative' | 'executive_summary';
 
-const CHAT_CONTEXT_TYPES = ['organization', 'folder', 'usecase', 'executive_summary'] as const;
+const CHAT_CONTEXT_TYPES = ['organization', 'folder', 'initiative', 'executive_summary'] as const;
 function isChatContextType(value: unknown): value is ChatContextType {
   return typeof value === 'string' && (CHAT_CONTEXT_TYPES as readonly string[]).includes(value);
 }
 
-export type CommentContextType = 'organization' | 'folder' | 'usecase' | 'matrix' | 'executive_summary';
-const COMMENT_CONTEXT_TYPES = ['organization', 'folder', 'usecase', 'matrix', 'executive_summary'] as const;
+export type CommentContextType = 'organization' | 'folder' | 'initiative' | 'matrix' | 'executive_summary';
+const COMMENT_CONTEXT_TYPES = ['organization', 'folder', 'initiative', 'matrix', 'executive_summary'] as const;
 function isCommentContextType(value: unknown): value is CommentContextType {
   return typeof value === 'string' && (COMMENT_CONTEXT_TYPES as readonly string[]).includes(value);
 }
@@ -2174,9 +2174,9 @@ export class ChatService {
     workspaceId: string;
     sessionId: string;
     extraContexts?: Array<{ contextType: ChatContextType; contextId: string }>;
-  }): Promise<Array<{ contextType: 'organization' | 'folder' | 'usecase' | 'chat_session'; contextId: string }>> {
-    const out: Array<{ contextType: 'organization' | 'folder' | 'usecase' | 'chat_session'; contextId: string }> = [];
-    const pushUnique = (contextType: 'organization' | 'folder' | 'usecase' | 'chat_session', contextId: string) => {
+  }): Promise<Array<{ contextType: 'organization' | 'folder' | 'initiative' | 'chat_session'; contextId: string }>> {
+    const out: Array<{ contextType: 'organization' | 'folder' | 'initiative' | 'chat_session'; contextId: string }> = [];
+    const pushUnique = (contextType: 'organization' | 'folder' | 'initiative' | 'chat_session', contextId: string) => {
       if (!contextId) return;
       const key = `${contextType}:${contextId}`;
       if (out.some((c) => `${c.contextType}:${c.contextId}` === key)) return;
@@ -2188,7 +2188,7 @@ export class ChatService {
     const appendContext = async (type: ChatContextType | null, idRaw: string | null | undefined) => {
       const id = (idRaw ?? '').trim();
       if (!type || !id) return;
-      if (type === 'organization' || type === 'usecase') {
+      if (type === 'organization' || type === 'initiative') {
         pushUnique(type, id);
         return;
       }
@@ -2248,14 +2248,14 @@ export class ChatService {
       out.push({ contextType, contextId });
     };
 
-    const appendFolderUseCases = async (folderId: string) => {
+    const appendFolderInitiatives = async (folderId: string) => {
       try {
-        const res = await toolService.listUseCasesForFolder(folderId, {
+        const res = await toolService.listInitiativesForFolder(folderId, {
           workspaceId: opts.workspaceId,
           idsOnly: true
         });
         if ('ids' in res) {
-          for (const id of res.ids) pushUnique('usecase', id);
+          for (const id of res.ids) pushUnique('initiative', id);
         }
       } catch {
         // ignore missing folder
@@ -2265,19 +2265,19 @@ export class ChatService {
     const appendContext = async (type: ChatContextType | null, idRaw: string | null | undefined) => {
       const id = (idRaw ?? '').trim();
       if (!type || !id) return;
-      if (type === 'usecase') {
-        pushUnique('usecase', id);
+      if (type === 'initiative') {
+        pushUnique('initiative', id);
         return;
       }
       if (type === 'folder') {
         pushUnique('folder', id);
-        await appendFolderUseCases(id);
+        await appendFolderInitiatives(id);
         return;
       }
       if (type === 'executive_summary') {
         pushUnique('executive_summary', id);
         pushUnique('folder', id);
-        await appendFolderUseCases(id);
+        await appendFolderInitiatives(id);
         return;
       }
       if (type === 'organization') {
@@ -2291,7 +2291,7 @@ export class ChatService {
           if ('ids' in res) {
             for (const folderId of res.ids) {
               pushUnique('folder', folderId);
-              await appendFolderUseCases(folderId);
+              await appendFolderInitiatives(folderId);
             }
           }
         } catch {
@@ -2424,7 +2424,7 @@ export class ChatService {
     for (const c of allowedContexts) {
       if (c.contextType === 'organization') allowedByType.organization.add(c.contextId);
       if (c.contextType === 'folder') allowedByType.folder.add(c.contextId);
-      if (c.contextType === 'usecase') allowedByType.usecase.add(c.contextId);
+      if (c.contextType === 'initiative') allowedByType.usecase.add(c.contextId);
       if (c.contextType === 'executive_summary') allowedByType.executive_summary.add(c.contextId);
     }
     const allowedFolderIds = new Set<string>([
@@ -2434,7 +2434,7 @@ export class ChatService {
     const hasContextType = (type: ChatContextType) => {
       if (type === 'organization') return allowedByType.organization.size > 0;
       if (type === 'folder') return allowedFolderIds.size > 0;
-      if (type === 'usecase') return allowedByType.usecase.size > 0;
+      if (type === 'initiative') return allowedByType.usecase.size > 0;
       if (type === 'executive_summary') return allowedByType.executive_summary.size > 0;
       return false;
     };
@@ -2524,12 +2524,12 @@ export class ChatService {
     if (primaryContextType) contextTypes.add(primaryContextType);
     contextsOverride.forEach((c) => contextTypes.add(c.contextType));
 
-    if (contextTypes.has('usecase')) {
+    if (contextTypes.has('initiative')) {
       // Prefer Option B tool ids, but keep legacy ids for backward-compatibility.
       addTools([
-        useCaseGetTool,
-        readUseCaseTool,
-        ...(readOnly ? [] : [useCaseUpdateTool, updateUseCaseFieldTool]),
+        initiativeGetTool,
+        readInitiativeTool,
+        ...(readOnly ? [] : [initiativeUpdateTool, updateInitiativeFieldTool]),
         webSearchTool,
         webExtractTool
       ]);
@@ -2551,7 +2551,7 @@ export class ChatService {
         ...(readOnly ? [] : [folderUpdateTool]),
         matrixGetTool,
         ...(readOnly ? [] : [matrixUpdateTool]),
-        useCasesListTool,
+        initiativesListTool,
         executiveSummaryGetTool,
         ...(readOnly ? [] : [executiveSummaryUpdateTool]),
         organizationGetTool,
@@ -2563,7 +2563,7 @@ export class ChatService {
       addTools([
         executiveSummaryGetTool,
         ...(readOnly ? [] : [executiveSummaryUpdateTool]),
-        useCasesListTool,
+        initiativesListTool,
         folderGetTool,
         matrixGetTool,
         organizationGetTool,
@@ -2684,38 +2684,38 @@ export class ChatService {
 
     // Enrichir le system prompt avec le contexte si disponible
     let contextBlock = '';
-    if (primaryContextType === 'usecase' && primaryContextId) {
+    if (primaryContextType === 'initiative' && primaryContextId) {
       contextBlock = ` 
 
-Tu travailles sur le use case ${primaryContextId}. Tu peux répondre aux questions générales de l'utilisateur en t'appuyant sur l'historique de la conversation.
+Tu travailles sur le initiative ${primaryContextId}. Tu peux répondre aux questions générales de l'utilisateur en t'appuyant sur l'historique de la conversation.
 
 Tools disponibles :
-- \`usecase_get\` : Lit l'état actuel du use case
-- \`usecase_update\` : Met à jour des champs du use case (modifications appliquées directement en DB)${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
+- \`initiative_get\` : Lit l'état actuel du initiative
+- \`initiative_update\` : Met à jour des champs du initiative (modifications appliquées directement en DB)${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
 - \`web_search\` : Recherche d'informations récentes sur le web pour trouver de nouvelles URLs ou obtenir des résumés. Utilise ce tool quand tu dois chercher de nouvelles informations ou URLs pertinentes.
-- \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes. CRITIQUE : Utilise ce tool quand l'utilisateur demande des détails sur les références (URLs déjà présentes dans le use case). Si tu dois extraire plusieurs URLs (par exemple 9 URLs), tu DOIS toutes les passer dans UN SEUL appel avec le paramètre \`urls\` en array. NE FAIS JAMAIS plusieurs appels séparés (un par URL). Exemple : si tu as 9 URLs, appelle une seule fois avec \`{"urls": ["url1", "url2", ..., "url9"]}\` au lieu de faire 9 appels séparés.
+- \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes. CRITIQUE : Utilise ce tool quand l'utilisateur demande des détails sur les références (URLs déjà présentes dans le initiative). Si tu dois extraire plusieurs URLs (par exemple 9 URLs), tu DOIS toutes les passer dans UN SEUL appel avec le paramètre \`urls\` en array. NE FAIS JAMAIS plusieurs appels séparés (un par URL). Exemple : si tu as 9 URLs, appelle une seule fois avec \`{"urls": ["url1", "url2", ..., "url9"]}\` au lieu de faire 9 appels séparés.
 
-Quand l'utilisateur demande explicitement de modifier, reformuler ou mettre à jour des champs du use case (par exemple : "reformuler le problème", "mettre en bullet points", "modifier la description"), tu DOIS utiliser les tools disponibles :
-1. D'abord utiliser \`usecase_get\` pour lire l'état actuel du use case
-2. Ensuite utiliser \`usecase_update\` pour appliquer directement les modifications demandées${readOnly ? ' (si disponible; sinon, propose une suggestion sans modifier en DB)' : ''}
+Quand l'utilisateur demande explicitement de modifier, reformuler ou mettre à jour des champs du initiative (par exemple : "reformuler le problème", "mettre en bullet points", "modifier la description"), tu DOIS utiliser les tools disponibles :
+1. D'abord utiliser \`initiative_get\` pour lire l'état actuel du initiative
+2. Ensuite utiliser \`initiative_update\` pour appliquer directement les modifications demandées${readOnly ? ' (si disponible; sinon, propose une suggestion sans modifier en DB)' : ''}
 
-Les modifications sont appliquées immédiatement en base de données via les tools. Ne réponds pas simplement dans le texte quand il s'agit de modifier le use case, utilise les tools pour effectuer les modifications réelles.
+Les modifications sont appliquées immédiatement en base de données via les tools. Ne réponds pas simplement dans le texte quand il s'agit de modifier le initiative, utilise les tools pour effectuer les modifications réelles.
 
 Si l'utilisateur demande une confirmation avant modification, propose alors les modifications dans le chat et attends sa validation avant d'utiliser les tools.
 
-Tu peux utiliser \`web_search\` et \`web_extract\` pour enrichir les références du use case :
+Tu peux utiliser \`web_search\` et \`web_extract\` pour enrichir les références du initiative :
 - \`web_search\` : Pour rechercher de nouvelles informations ou URLs pertinentes sur le web (tu obtiens des résumés et des URLs de résultats)
-- \`web_extract\` : Pour extraire le contenu complet des URLs déjà présentes dans le use case.
+- \`web_extract\` : Pour extraire le contenu complet des URLs déjà présentes dans le initiative.
 
 **Workflow pour analyser les références** : Si l'utilisateur demande des détails sur les références (par exemple "regarde les références en détail", "résume les références"), tu DOIS :
-1. D'abord appeler \`usecase_get\` pour lire le use case et obtenir les références dans \`data.references\` (qui est un array d'objets \`{title: string, url: string}\`)
+1. D'abord appeler \`initiative_get\` pour lire le initiative et obtenir les références dans \`data.references\` (qui est un array d'objets \`{title: string, url: string}\`)
 2. Extraire toutes les URLs depuis \`data.references\` (chaque objet a une propriété \`url\`) et les mettre dans un array
 3. Appeler \`web_extract\` UNE SEULE FOIS avec TOUTES les URLs dans le paramètre \`urls\`. Exemple concret : si \`data.references\` contient 9 objets avec des URLs, tu dois appeler \`web_extract\` une seule fois avec \`{"urls": ["https://url1.com", "https://url2.com", "https://url3.com", ..., "https://url9.com"]}\`. NE FAIS JAMAIS 9 appels séparés avec une URL chacun.
 4. Utiliser le contenu extrait (qui sera dans \`result.results\`, un array d'objets \`{url: string, content: string}\`) pour répondre à la demande de l'utilisateur
 
 Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solution en bullet point", tu dois :
-1. Appeler usecase_get pour lire le use case actuel
-2. Appeler usecase_update avec les modifications (par exemple : path: 'problem', path: 'solution')
+1. Appeler initiative_get pour lire le initiative actuel
+2. Appeler initiative_update avec les modifications (par exemple : path: 'problem', path: 'solution')
 3. Les modifications sont alors appliquées directement en base de données`;
     } else if (primaryContextType === 'organization') {
       const orgLine = primaryContextId
@@ -3841,11 +3841,11 @@ Règles :
           }
           let result: unknown;
 
-          if (toolCall.name === 'read_usecase' || toolCall.name === 'usecase_get') {
-            if (!allowedByType.usecase.has(args.useCaseId)) {
-              throw new Error('Security: useCaseId does not match allowed contexts');
+          if (toolCall.name === 'read_usecase' || toolCall.name === 'initiative_get') {
+            if (!allowedByType.usecase.has(args.initiativeId)) {
+              throw new Error('Security: initiativeId does not match allowed contexts');
             }
-            const readResult = await toolService.readUseCase(args.useCaseId, {
+            const readResult = await toolService.readInitiative(args.initiativeId, {
               workspaceId: sessionWorkspaceId,
               select: Array.isArray(args.select) ? args.select : null
             });
@@ -3859,15 +3859,15 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'update_usecase_field' || toolCall.name === 'usecase_update') {
+          } else if (toolCall.name === 'update_usecase_field' || toolCall.name === 'initiative_update') {
             if (readOnly) {
-              throw new Error('Read-only workspace: use case update is disabled');
+              throw new Error('Read-only workspace: initiative update is disabled');
             }
-            if (!allowedByType.usecase.has(args.useCaseId)) {
-              throw new Error('Security: useCaseId does not match allowed contexts');
+            if (!allowedByType.usecase.has(args.initiativeId)) {
+              throw new Error('Security: initiativeId does not match allowed contexts');
             }
-            const updateResult = await toolService.updateUseCaseFields({
-              useCaseId: args.useCaseId,
+            const updateResult = await toolService.updateInitiativeFields({
+              initiativeId: args.initiativeId,
               updates: args.updates || [],
               userId: options.userId,
               sessionId: options.sessionId,
@@ -4030,7 +4030,7 @@ Règles :
             if (!allowedFolderIds.has(args.folderId)) {
               throw new Error('Security: folderId does not match allowed contexts');
             }
-            const listResult = await toolService.listUseCasesForFolder(args.folderId, {
+            const listResult = await toolService.listInitiativesForFolder(args.folderId, {
               workspaceId: sessionWorkspaceId,
               idsOnly: !!args.idsOnly,
               select: Array.isArray(args.select) ? args.select : null

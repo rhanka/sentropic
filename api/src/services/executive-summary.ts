@@ -1,11 +1,11 @@
 import { db } from '../db/client';
-import { useCases, folders, organizations, contextDocuments } from '../db/schema';
+import { initiatives, folders, organizations, contextDocuments } from '../db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { executeWithToolsStream } from './tools';
 import { getReasoningParamsForModel } from './model-catalog';
 import { defaultPrompts } from '../config/default-prompts';
 import { settingsService } from './settings';
-import { hydrateUseCases } from '../routes/api/initiatives';
+import { hydrateInitiatives } from '../routes/api/initiatives';
 
 type OrganizationData = {
   industry?: string;
@@ -114,16 +114,16 @@ export async function generateExecutiveSummary(
   }
 
   // Récupérer tous les cas d'usage du dossier et les hydrater
-  const rows = await db.select().from(useCases).where(eq(useCases.folderId, folderId));
-  const useCasesList = await hydrateUseCases(rows);
+  const rows = await db.select().from(initiatives).where(eq(initiatives.folderId, folderId));
+  const initiativesList = await hydrateInitiatives(rows);
 
-  if (useCasesList.length === 0) {
+  if (initiativesList.length === 0) {
     throw new Error('No use cases found for this folder');
   }
 
   // Calculer les médianes pour valeur et complexité
-  const valueScores = useCasesList.map(uc => uc.totalValueScore ?? 0).filter(v => v > 0);
-  const complexityScores = useCasesList.map(uc => uc.totalComplexityScore ?? 0).filter(v => v > 0);
+  const valueScores = initiativesList.map(uc => uc.totalValueScore ?? 0).filter(v => v > 0);
+  const complexityScores = initiativesList.map(uc => uc.totalComplexityScore ?? 0).filter(v => v > 0);
   const medianValue = calculateMedian(valueScores);
   const medianComplexity = calculateMedian(complexityScores);
 
@@ -132,7 +132,7 @@ export async function generateExecutiveSummary(
   const effectiveComplexityThreshold = complexityThreshold ?? medianComplexity;
 
   // Calculer les top cas (ROI quadrant: valeur >= seuil ET complexité <= seuil)
-  const topCases = useCasesList
+  const topCases = initiativesList
     .filter(uc => {
       const value = uc.totalValueScore ?? 0;
       const complexity = uc.totalComplexityScore ?? 0;
@@ -141,7 +141,7 @@ export async function generateExecutiveSummary(
     .map(uc => uc.data.name);
 
   // Formater les cas d'usage pour le prompt
-  const useCasesFormatted = useCasesList.map((uc, index) => {
+  const initiativesFormatted = initiativesList.map((uc, index) => {
     const benefits = uc.data.benefits ?? [];
     const risks = uc.data.risks ?? [];
     const nextSteps = uc.data.nextSteps ?? [];
@@ -199,7 +199,7 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     .replace('{{folder_description}}', folder.description || folder.name)
     .replace('{{organization_info}}', organizationInfo)
     .replace('{{top_cas}}', topCasesFormatted)
-    .replace('{{use_cases}}', useCasesFormatted);
+    .replace('{{use_cases}}', initiativesFormatted);
 
   // Documents: autoriser l'outil documents pour le dossier, l'organisation, et les cas d'usage du dossier (si des documents existent).
   const documentsContexts: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }> = [];
@@ -227,20 +227,20 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     if (orgDoc?.id) documentsContexts.push({ workspaceId, contextType: 'organization', contextId: folder.organizationId });
   }
 
-  const useCaseIds = useCasesList.map((uc) => uc.id).filter(Boolean);
-  if (useCaseIds.length > 0) {
-    const useCaseDocRows = await db
+  const initiativeIds = initiativesList.map((uc) => uc.id).filter(Boolean);
+  if (initiativeIds.length > 0) {
+    const initiativeDocRows = await db
       .select({ contextId: contextDocuments.contextId })
       .from(contextDocuments)
       .where(
         and(
           eq(contextDocuments.workspaceId, workspaceId),
           eq(contextDocuments.contextType, 'usecase'),
-          inArray(contextDocuments.contextId, useCaseIds)
+          inArray(contextDocuments.contextId, initiativeIds)
         )
       )
       .groupBy(contextDocuments.contextId);
-    for (const r of useCaseDocRows) {
+    for (const r of initiativeDocRows) {
       if (r.contextId) documentsContexts.push({ workspaceId, contextType: 'usecase', contextId: r.contextId });
     }
   }
