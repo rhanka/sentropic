@@ -9,7 +9,7 @@
   import { apiGet } from '$lib/utils/api';
   import { generateDocxAndDownload } from '$lib/utils/docx';
   import { goto } from '$app/navigation';
-  import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
+  import InitiativeDetail from '$lib/components/InitiativeDetail.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { streamHub } from '$lib/stores/streamHub';
@@ -554,7 +554,7 @@
   {#if useCase.status === 'generating' || useCase.status === 'detailing'}
     <StreamMessage streamId={`usecase_${useCase.id}`} status={useCase.status} maxHistory={10} />
   {/if}
-    <UseCaseDetail
+    <InitiativeDetail
       {useCase}
       {matrix}
       {calculatedScores}
@@ -611,7 +611,7 @@
               </button>
             {/if}
       </svelte:fragment>
-    </UseCaseDetail>
+    </InitiativeDetail>
 
     <div class="print-hidden">
       <DocumentsBlock
