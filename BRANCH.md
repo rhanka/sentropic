@@ -331,7 +331,7 @@ Closed: 2026-03-12
 - [x] Implement `ContainerView.svelte` — card/row list of children, sort/group options, container header, actions.
 - [x] Implement neutral landing page — list workspace cards (type icon, initiative count, last activity).
 - [x] API: neutral dashboard endpoint — aggregate workspace stats.
-- [ ] Wire neutral workspace as default landing on login.
+- [x] Wire neutral workspace as default landing on login.
 
 **Lot 5 gate:**
 - [ ] `make typecheck-ui ENV=test-br04`

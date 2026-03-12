@@ -52,7 +52,7 @@
   };
 
   const navItems = [
-    { href: '/', label: 'nav.home' },
+    { href: '/neutral', label: 'nav.home' },
     { href: '/folders', label: 'nav.folders' },
     { href: '/organizations', label: 'nav.organizations' },
     { href: '/initiative', label: 'nav.useCases' },
