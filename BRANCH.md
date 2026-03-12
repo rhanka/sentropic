@@ -38,14 +38,29 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
 
 ## Feedback Loop
 - `BR08-FL1` | `attention` | Cohere SDK has no official TypeScript SDK with streaming parity — may need raw HTTP adapter (like Gemini). Assess during Lot 1.
-- `BR08-FL2` | `clarification` | MPA-Q5 (fallback behavior): recommend user-driven retry only (no same-request fallback across providers) for initial implementation.
+- `BR08-FL2` | `closed` | MPA-Q5 (fallback behavior): **confirmed user-driven retry only** — no same-request cross-provider fallback in BR-08.
 - `BR08-FL3` | `attention` | Claude tool-call streaming uses a different event model (`content_block_start`/`content_block_delta`/`content_block_stop`) vs OpenAI chunks — requires careful normalization in the adapter.
+- `BR08-FL4` | `closed` | Cohere embeddings (`embed-v4.0`) and reranking (`rerank-v3.5`) are **catalogued only** — implementation deferred to BR-17 (RAG).
+- `BR08-FL5` | `risk` | Reasoning system is deeply coupled to OpenAI Responses API (`reasoningEffort`, `reasoningSummary`, `isGpt5` guards). Must be generalized to provider-agnostic `supportsReasoning` checks. See Risk/Impact section.
 
 ## Questions / Notes
 - MPA-Q4: Provider request/response retention compliance baseline — deferred, no impact on adapter implementation.
-- MPA-Q5: Fallback behavior in same request vs user-driven retry — recommend user-driven retry for BR-08.
-- Cohere embeddings and reranking capabilities are catalogued but implementation of actual embedding/reranking endpoints is deferred to BR-17 (RAG).
+- ~~MPA-Q5: Fallback behavior in same request vs user-driven retry~~ — **closed**: user-driven retry confirmed for BR-08.
+- ~~Cohere embeddings and reranking~~ — **closed**: catalogued only, implementation deferred to BR-17 (RAG).
 - Tool-call support parity: Claude supports tools natively; Mistral supports tools; Cohere supports tools. All three support streaming.
+
+## Confirmed Model Catalog
+
+| Provider | Model ID | Tier | Capabilities |
+|----------|----------|------|-------------|
+| Claude | `claude-sonnet-4-6` | standard | tools, streaming |
+| Claude | `claude-opus-4-6` | advanced | tools, streaming, extended thinking |
+| Mistral | `devstral-small-2505` | standard | tools, streaming |
+| Mistral | `mistral-large-2502` | advanced | tools, streaming |
+| Cohere | `command-a-03-2025` | standard | tools, streaming |
+| Cohere | `command-a-reasoning-03-2025` | advanced | tools, streaming |
+| Cohere | `embed-v4.0` | embedding | catalogued only (BR-17) |
+| Cohere | `rerank-v3.5` | reranking | catalogued only (BR-17) |
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -123,7 +138,8 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 - [ ] Create `api/src/services/providers/claude-provider.ts`:
   - Install `@anthropic-ai/sdk` via `make install-api @anthropic-ai/sdk`.
   - Implement `ClaudeProviderRuntime` class with `ProviderRuntime` interface.
-  - Model catalog entries: `claude-sonnet-4` (advanced, tools+streaming), `claude-haiku-4` (light, tools+streaming).
+  - Model catalog entries: `claude-sonnet-4-6` (standard, tools+streaming), `claude-opus-4-6` (advanced, tools+streaming+extended thinking).
+  - Reasoning parameter mapping: Claude uses `thinking.budget_tokens` (not `reasoning.effort`). Map `reasoningEffort` levels to budget token values for `claude-opus-4-6`. `claude-sonnet-4-6` does not support extended thinking.
   - `validateCredential()`: check `ANTHROPIC_API_KEY` or override.
   - `generate()`: use `client.messages.create()` (non-streaming).
   - `streamGenerate()`: use `client.messages.stream()`, return async iterable.
@@ -133,7 +149,8 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 - [ ] Create `api/src/services/providers/mistral-provider.ts`:
   - Install `@mistralai/mistralai` via `make install-api @mistralai/mistralai`.
   - Implement `MistralProviderRuntime` class with `ProviderRuntime` interface.
-  - Model catalog entries: `mistral-large-latest` (advanced, tools+streaming), `mistral-small-latest` (light, tools+streaming).
+  - Model catalog entries: `devstral-small-2505` (standard, tools+streaming), `mistral-large-2502` (advanced, tools+streaming).
+  - Reasoning parameter mapping: Mistral has no equivalent to `reasoningEffort`/`reasoningSummary`. Pass-through as no-op; `supportsReasoning` returns `false`.
   - `validateCredential()`: check `MISTRAL_API_KEY` or override.
   - `generate()`: use Mistral chat completions (OpenAI-compatible format).
   - `streamGenerate()`: use Mistral streaming, return async iterable.
@@ -143,7 +160,8 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 - [ ] Create `api/src/services/providers/cohere-provider.ts`:
   - Install `cohere-ai` via `make install-api cohere-ai`.
   - Implement `CohereProviderRuntime` class with `ProviderRuntime` interface.
-  - Model catalog entries: `command-r-plus` (advanced, tools+streaming), `command-r` (standard, tools+streaming).
+  - Model catalog entries: `command-a-03-2025` (standard, tools+streaming), `command-a-reasoning-03-2025` (advanced, tools+streaming).
+  - Reasoning parameter mapping: Cohere has no equivalent to `reasoningEffort`/`reasoningSummary`. `command-a-reasoning-03-2025` has built-in reasoning but no configurable effort parameter; `supportsReasoning` returns `false`.
   - Note: Cohere also supports embeddings (`embed-v4.0`) and reranking (`rerank-v3.5`) — catalog these as `defaultContexts: ['embedding']` / `['reranking']` but defer actual embedding/reranking endpoint implementation to BR-17.
   - `validateCredential()`: check `COHERE_API_KEY` or override.
   - `generate()`: use `client.chat()` (v2 API).
@@ -161,8 +179,28 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
   - Extend `callOpenAIResponseStream()` with Claude/Mistral/Cohere streaming branches (including tool-call continuation semantics, structured output support where available).
   - For each new provider, implement message format conversion from OpenAI messages format to provider-native format (similar to `buildGeminiRequestBody`).
   - For each new provider, implement stream chunk normalization to `StreamEvent` types (similar to Gemini stream chunk parsing).
+  - **Tool-call streaming — 3 existing paths + 3 new ones** (all must normalize to `tool_call_start`/`tool_call_delta`):
+    - Existing: Chat Completions API (`delta.tool_calls[].function.name/arguments`, ~line 690)
+    - Existing: Responses API (`response.function_call_arguments.delta/done`, ~line 1175)
+    - Existing: Gemini raw HTTP (`parts[].functionCall`, ~line 599/890)
+    - New — Claude: `content_block` with `type: "tool_use"` + `input_json_delta` blocks
+    - New — Mistral: OpenAI Chat Completions compatible (`delta.tool_calls[]`) — reuse existing path
+    - New — Cohere: `tool-call-start`/`tool-call-delta`/`tool-call-end` events
+  - **Reasoning normalization per provider** (emit `reasoning_delta` events):
+    - Claude: `thinking` content blocks from extended thinking → `reasoning_delta`
+    - Mistral/Cohere: no reasoning stream — no-op
 
-#### 1.7 Lot 1 gate
+#### 1.7 Reasoning parameter mapping in provider adapters
+- [ ] Extend `ProviderRuntime` interface or provider metadata in `api/src/services/provider-runtime.ts`:
+  - Add `supportsReasoning: boolean` capability flag per provider/model.
+  - Add `mapReasoningParams(effort: ReasoningEffort, summary: ReasoningSummary)` method or utility to convert OpenAI-style reasoning params to provider-native format.
+- [ ] Claude mapping: `reasoningEffort` → `thinking.budget_tokens` (e.g., `low`=1024, `medium`=4096, `high`=16384, `xhigh`=32768). `reasoningSummary` → no Claude equivalent (ignore).
+- [ ] Mistral mapping: no-op (no reasoning support).
+- [ ] Cohere mapping: no-op (`command-a-reasoning-03-2025` has built-in reasoning, not configurable).
+- [ ] OpenAI mapping: pass-through (native `reasoningEffort`/`reasoningSummary` params).
+- [ ] Gemini mapping: pass-through or no-op depending on model capability.
+
+#### 1.8 Lot 1 gate
 - [ ] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral`
 - [ ] `make lint-api ENV=test-feat-model-runtime-claude-mistral`
 - [ ] `make test-api ENV=test-feat-model-runtime-claude-mistral`
@@ -170,22 +208,47 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 - [ ] `make lint-ui ENV=test-feat-model-runtime-claude-mistral`
 - [ ] `make test-ui ENV=test-feat-model-runtime-claude-mistral`
 
-### Lot 2 — Routing, UI, and Non-Regression
+### Lot 2 — Reasoning System Provider-Agnostic Refactor
 
-#### 2.1 UI model selector updates
+> **Context**: The reasoning system is deeply coupled to OpenAI's Responses API. `reasoningEffort` (`none|low|medium|high|xhigh`) and `reasoningSummary` (`auto|concise|detailed`) are OpenAI-specific parameters threaded through multiple files. `isGpt5` boolean guards block reasoning for non-OpenAI models and must be generalized.
+
+#### 2.1 Replace `isGpt5` guards with provider-agnostic `supportsReasoning` check
+- [ ] `api/src/services/chat-service.ts` (~line 3559): replace `isGpt5` guard with `supportsReasoning(selection)` check. This controls whether dynamic reasoning effort evaluation runs.
+- [ ] `api/src/services/context-usecase.ts` (~line 448): replace `isGpt5` guard with `supportsReasoning(selection)` check. This controls reasoning effort/summary injection into usecase context.
+- [ ] `api/src/services/context-matrix.ts` (~line 203): replace `isGpt5` guard with `supportsReasoning(selection)` check.
+- [ ] `api/src/services/executive-summary.ts` (~line 273): replace `isGpt5` guard with `supportsReasoning(selection)` check.
+
+#### 2.2 Adapt reasoning effort evaluation pipeline
+- [ ] `api/src/services/chat-service.ts` (~line 3088): the dynamic reasoning effort evaluator uses prompt template `chat_reasoning_effort_eval` and a specific evaluator model. Ensure this pipeline:
+  - Skips entirely when `supportsReasoning` is `false` for the target provider.
+  - When active for Claude, maps evaluated effort level to `thinking.budget_tokens` before passing to the provider adapter.
+  - Preserves existing behavior for OpenAI models.
+
+#### 2.3 Generalize reasoning param forwarding in tool/context files
+- [ ] `api/src/services/tools.ts`: `reasoningSummary`/`reasoningEffort` forwarding must use the provider-specific mapping from Lot 1.7 instead of passing raw OpenAI params.
+- [ ] `api/src/services/context-document.ts`: hardcoded `reasoningEffort`/`reasoningSummary` values must go through provider mapping.
+
+#### 2.4 Lot 2 gate
+- [ ] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral`
+- [ ] `make lint-api ENV=test-feat-model-runtime-claude-mistral`
+- [ ] `make test-api ENV=test-feat-model-runtime-claude-mistral`
+
+### Lot 3 — Routing, UI, and Non-Regression
+
+#### 3.1 UI model selector updates
 - [ ] Update `ui/src/lib/components/ChatPanel.svelte`: ensure grouped model selector renders 5 provider groups.
 - [ ] Update `ui/src/routes/settings/+page.svelte`: ensure provider/model dropdowns include new providers.
 - [ ] Update `ui/src/routes/folder/new/+page.svelte`: ensure model override includes new providers.
 - [ ] Verify provider badge display normalization for long model IDs (like Gemini compaction pattern).
 - [ ] Update `ui/src/locales/en.json` and `ui/src/locales/fr.json` with provider labels if needed.
 
-#### 2.2 Routing hardening
+#### 3.2 Routing hardening
 - [ ] Add provider routing constraints: capability-aware selection (e.g., if a provider does not support structured output, route to fallback).
 - [ ] Validate chat and structured flows across all 5 providers.
 - [ ] Verify credential precedence chain works for all 5 providers.
 - [ ] Verify provider status is `'ready'` when API key is configured, `'planned'` otherwise.
 
-#### 2.3 Lot 2 gate
+#### 3.3 Lot 3 gate
 - [ ] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral`
 - [ ] `make lint-api ENV=test-feat-model-runtime-claude-mistral`
 - [ ] `make test-api ENV=test-feat-model-runtime-claude-mistral`
@@ -193,9 +256,9 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 - [ ] `make lint-ui ENV=test-feat-model-runtime-claude-mistral`
 - [ ] `make test-ui ENV=test-feat-model-runtime-claude-mistral`
 
-### Lot 3 — Tests
+### Lot 4 — Tests
 
-#### 3.1 API tests
+#### 4.1 API tests
 - [ ] **Existing tests to update**:
   - `api/tests/api/models.test.ts` — verify catalog returns 5 providers and expected models.
   - `api/tests/api/ai-settings.test.ts` — verify default selection with new providers.
@@ -216,12 +279,12 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 - [ ] Sub-lot gate: `make test-api ENV=test-feat-model-runtime-claude-mistral`
 - [ ] AI flaky tests run: `make test-api-ai ENV=test-feat-model-runtime-claude-mistral` (non-blocking, document signature)
 
-#### 3.2 UI tests (TypeScript only)
+#### 4.2 UI tests (TypeScript only)
 - [ ] **Existing tests to verify** (no changes expected, non-regression):
   - `ui/tests/` — verify existing model selection tests pass with expanded catalog.
 - [ ] Sub-lot gate: `make test-ui ENV=test`
 
-#### 3.3 E2E tests
+#### 4.3 E2E tests
 - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=8708 UI_PORT=5108 MAILDEV_UI_PORT=1008 ENV=e2e-feat-model-runtime-claude-mistral`
 - [ ] **Existing E2E tests to verify** (non-regression):
   - `e2e/tests/03-chat.spec.ts` — verify chat works with default provider (AI flaky allowlist).
@@ -305,12 +368,28 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
+| **Reasoning system deeply coupled to OpenAI Responses API** — `reasoningEffort`/`reasoningSummary` params and `isGpt5` guards in 6+ files | **High** | Lot 2 dedicated to provider-agnostic refactor: replace `isGpt5` with `supportsReasoning`, add per-provider reasoning param mapping |
 | LLM runtime orchestrator is large (~1000+ lines) with provider-specific if/else branching | Medium | Add new branches following existing Gemini pattern; refactor to dispatch table is deferred to avoid regression risk |
+| **3 distinct tool-call streaming paths** already exist + 3 new ones needed | Medium | Claude uses `content_block`/`tool_use`, Mistral reuses OpenAI path, Cohere needs custom `tool-call-start/delta/end` normalization |
 | Claude stream event model is block-based (different from OpenAI chunk-based) | Medium | Map `content_block_start/delta/stop` to `tool_call_start/delta`, `content_delta` in adapter |
+| Claude reasoning uses `thinking.budget_tokens` (not `reasoning.effort`) — API mismatch | Medium | Provider adapter mapping layer (Lot 1.7) translates effort levels to budget tokens |
 | Provider SDK version instability | Low | Pin SDK versions; use semantic versioning |
 | Cohere SDK may have limited TypeScript streaming support | Low | Fall back to raw HTTP if SDK streaming is unreliable (like Gemini approach) |
 | Regression in existing OpenAI/Gemini flows when extending orchestrator | Medium | Comprehensive unit tests per provider + non-regression API/E2E tests |
 | 3 new npm dependencies increase API image size | Low | Dependencies are necessary; monitor bundle size |
+
+### Reasoning/Tooling Impact Matrix
+
+| File | Impact | Reason |
+|------|--------|--------|
+| `api/src/services/llm-runtime/index.ts` | **HIGH** | 3 new streaming branches + per-provider reasoning normalization + tool-call normalization |
+| `api/src/services/chat-service.ts` | **MEDIUM** | Replace `isGpt5` with provider-agnostic `supportsReasoning` check (~line 3559), adapt dynamic reasoning effort evaluator (~line 3088) |
+| `api/src/services/context-usecase.ts` | **MEDIUM** | `isGpt5` guard (~line 448) to generalize to `supportsReasoning` |
+| `api/src/services/tools.ts` | **MEDIUM** | `reasoningSummary`/`reasoningEffort` forwarding must map to provider-native API |
+| `api/src/services/context-document.ts` | LOW | `reasoningEffort`/`reasoningSummary` hardcoded values need provider mapping |
+| `api/src/services/executive-summary.ts` | LOW | `isGpt5` guard (~line 273) to generalize |
+| `api/src/services/context-matrix.ts` | LOW | `isGpt5` guard (~line 203) to generalize |
+| `api/src/services/provider-runtime.ts` | LOW | Extend `ProviderId`, add `supportsReasoning` capability, add reasoning param mapping |
 
 ---
 
@@ -329,10 +408,16 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 - `api/tests/unit/llm-runtime-cohere-stream.test.ts`
 
 ### Modified files
-- `api/src/services/provider-runtime.ts` (extend ProviderId type)
+- `api/src/services/provider-runtime.ts` (extend `ProviderId` type, add `supportsReasoning` capability, add reasoning param mapping)
 - `api/src/services/provider-registry.ts` (register 3 new providers)
-- `api/src/services/provider-credentials.ts` (extend getEnvironmentCredential)
-- `api/src/services/llm-runtime/index.ts` (add provider dispatch branches)
+- `api/src/services/provider-credentials.ts` (extend `getEnvironmentCredential`)
+- `api/src/services/llm-runtime/index.ts` (**HIGH** — add 3 provider dispatch branches, tool-call streaming normalization, reasoning stream normalization)
+- `api/src/services/chat-service.ts` (**MEDIUM** — replace `isGpt5` guards with `supportsReasoning`, adapt reasoning effort evaluator)
+- `api/src/services/context-usecase.ts` (**MEDIUM** — replace `isGpt5` guard with `supportsReasoning`)
+- `api/src/services/tools.ts` (**MEDIUM** — reasoning param forwarding through provider mapping)
+- `api/src/services/context-document.ts` (LOW — reasoning param provider mapping)
+- `api/src/services/executive-summary.ts` (LOW — replace `isGpt5` guard)
+- `api/src/services/context-matrix.ts` (LOW — replace `isGpt5` guard)
 - `api/src/services/model-catalog.ts` (no changes expected — generic over providers)
 - `api/src/config/env.ts` (add 3 new API key env vars)
 - `api/package.json` (add 3 new dependencies)
