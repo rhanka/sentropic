@@ -152,6 +152,57 @@ describe('AI Settings API', () => {
       expect(data.message).toContain('Invalid provider id');
     });
 
+    it('accepts anthropic as a valid default_provider_id', async () => {
+      const setSpy = vi.spyOn(settingsService, 'set').mockResolvedValue();
+      try {
+        const response = await authenticatedRequest(
+          app,
+          'PUT',
+          '/api/v1/ai-settings/default_provider_id',
+          user.sessionToken!,
+          { value: 'anthropic' }
+        );
+        expect(response.status).toBe(200);
+        expect(setSpy).toHaveBeenCalledWith('default_provider_id', 'anthropic', undefined);
+      } finally {
+        setSpy.mockRestore();
+      }
+    });
+
+    it('accepts mistral as a valid default_provider_id', async () => {
+      const setSpy = vi.spyOn(settingsService, 'set').mockResolvedValue();
+      try {
+        const response = await authenticatedRequest(
+          app,
+          'PUT',
+          '/api/v1/ai-settings/default_provider_id',
+          user.sessionToken!,
+          { value: 'mistral' }
+        );
+        expect(response.status).toBe(200);
+        expect(setSpy).toHaveBeenCalledWith('default_provider_id', 'mistral', undefined);
+      } finally {
+        setSpy.mockRestore();
+      }
+    });
+
+    it('accepts cohere as a valid default_provider_id', async () => {
+      const setSpy = vi.spyOn(settingsService, 'set').mockResolvedValue();
+      try {
+        const response = await authenticatedRequest(
+          app,
+          'PUT',
+          '/api/v1/ai-settings/default_provider_id',
+          user.sessionToken!,
+          { value: 'cohere' }
+        );
+        expect(response.status).toBe(200);
+        expect(setSpy).toHaveBeenCalledWith('default_provider_id', 'cohere', undefined);
+      } finally {
+        setSpy.mockRestore();
+      }
+    });
+
     it('does not reload queue settings for non-queue keys', async () => {
       const setSpy = vi.spyOn(settingsService, 'set').mockResolvedValue();
       const reloadSpy = vi.spyOn(queueManager, 'reloadSettings').mockResolvedValue();
