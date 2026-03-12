@@ -3,7 +3,7 @@ import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import { db } from '../../src/db/client';
-import { folders, useCases } from '../../src/db/schema';
+import { folders, initiatives } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
 
@@ -51,9 +51,9 @@ describe('Executive Summary - Automatic Generation', () => {
     } catch {}
   });
 
-  it('should automatically trigger executive summary generation when all use cases are completed', async () => {
-    // 1. Generate use cases (this will create a folder and usecase_list/usecase_detail jobs)
-    const generateRes = await authenticatedRequest(app, 'POST', '/api/v1/use-cases/generate', user.sessionToken!, {
+  it('should automatically trigger executive summary generation when all initiatives are completed', async () => {
+    // 1. Generate initiatives (this will create a folder and initiative_list/initiative_detail jobs)
+    const generateRes = await authenticatedRequest(app, 'POST', '/api/v1/initiatives/generate', user.sessionToken!, {
       input: 'Test use case generation for automatic executive summary',
       model: getTestModel()
     });
@@ -62,27 +62,27 @@ describe('Executive Summary - Automatic Generation', () => {
     const folderId = generateData.created_folder_id;
 
     // 2. Wait for all use case detail jobs to complete
-    let allUseCasesCompleted = false;
+    let allInitiativesCompleted = false;
     let attempts = 0;
     const maxAttempts = 30; // 5 minutes max
 
-    while (!allUseCasesCompleted && attempts < maxAttempts) {
+    while (!allInitiativesCompleted && attempts < maxAttempts) {
       await sleep(10000); // Wait 10 seconds between checks
 
-      // Check use cases status
-      const useCasesRes = await authenticatedRequest(app, 'GET', `/api/v1/use-cases?folder_id=${folderId}`, user.sessionToken!);
-      expect(useCasesRes.status).toBe(200);
-      const useCasesData = await useCasesRes.json();
-      const useCasesList = useCasesData.items || [];
+      // Check initiatives status
+      const initiativesRes = await authenticatedRequest(app, 'GET', `/api/v1/initiatives?folder_id=${folderId}`, user.sessionToken!);
+      expect(initiativesRes.status).toBe(200);
+      const initiativesData = await initiativesRes.json();
+      const initiativesList = initiativesData.items || [];
 
-      if (useCasesList.length > 0) {
-        allUseCasesCompleted = useCasesList.every((uc: any) => uc.status === 'completed');
+      if (initiativesList.length > 0) {
+        allInitiativesCompleted = initiativesList.every((uc: any) => uc.status === 'completed');
       }
 
       attempts++;
     }
 
-    expect(allUseCasesCompleted).toBe(true);
+    expect(allInitiativesCompleted).toBe(true);
 
     // 4. Wait a bit more for the executive_summary job to be created and potentially processed
     await sleep(5000);
@@ -142,10 +142,10 @@ describe('Executive Summary - Automatic Generation', () => {
       })
     });
 
-    // 2. Create completed use cases (scores calculés dynamiquement, pas stockés)
-    const useCaseId = createTestId();
-    await db.insert(useCases).values({
-      id: useCaseId,
+    // 2. Create completed initiatives (scores calculés dynamiquement, pas stockés)
+    const initiativeId = createTestId();
+    await db.insert(initiatives).values({
+      id: initiativeId,
       workspaceId,
       folderId,
       data: {
@@ -158,7 +158,7 @@ describe('Executive Summary - Automatic Generation', () => {
     });
 
     // 3. Simulate processing a use case detail (which would normally trigger the check)
-    // Since all use cases are already completed, this should NOT create a new executive_summary job
+    // Since all initiatives are already completed, this should NOT create a new executive_summary job
     // We'll check by looking at the queue before and after
     const jobsBeforeRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', user.sessionToken!);
     const jobsBefore = await jobsBeforeRes.json();
@@ -185,7 +185,7 @@ describe('Executive Summary - Automatic Generation', () => {
     expect(folder?.status).toBe('completed');
 
     // Cleanup
-    await db.delete(useCases).where(eq(useCases.folderId, folderId));
+    await db.delete(initiatives).where(eq(initiatives.folderId, folderId));
     await db.delete(folders).where(eq(folders.id, folderId));
   }, 30000);
 });

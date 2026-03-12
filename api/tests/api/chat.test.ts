@@ -122,11 +122,11 @@ describe('Chat API Endpoints', () => {
     });
 
     it('should set primaryContextType and primaryContextId when provided', async () => {
-      const useCaseId = createTestId();
+      const initiativeId = createTestId();
       const response = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
         content: 'Message with context',
-        primaryContextType: 'usecase',
-        primaryContextId: useCaseId
+        primaryContextType: 'initiative',
+        primaryContextId: initiativeId
       });
 
       expect(response.status).toBe(200);
@@ -138,8 +138,8 @@ describe('Chat API Endpoints', () => {
         .where(eq(chatSessions.id, data.sessionId));
 
       expect(sessions.length).toBe(1);
-      expect(sessions[0].primaryContextType).toBe('usecase');
-      expect(sessions[0].primaryContextId).toBe(useCaseId);
+      expect(sessions[0].primaryContextType).toBe('initiative');
+      expect(sessions[0].primaryContextId).toBe(initiativeId);
     });
 
     it('should store message contexts and return them in session messages', async () => {

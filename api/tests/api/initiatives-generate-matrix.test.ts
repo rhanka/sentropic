@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
 import { defaultMatrixConfig } from '../../src/config/default-matrix';
-import { folders, jobQueue, organizations, useCases } from '../../src/db/schema';
+import { folders, jobQueue, organizations, initiatives } from '../../src/db/schema';
 import { queueManager } from '../../src/services/queue-manager';
 import {
   authenticatedRequest,
@@ -24,7 +24,7 @@ describe('Use Cases Generate - Matrix Mode', () => {
   afterEach(async () => {
     processJobsSpy.mockRestore();
     await db.delete(jobQueue).where(eq(jobQueue.workspaceId, user.workspaceId));
-    await db.delete(useCases).where(eq(useCases.workspaceId, user.workspaceId));
+    await db.delete(initiatives).where(eq(initiatives.workspaceId, user.workspaceId));
     await db.delete(folders).where(eq(folders.workspaceId, user.workspaceId));
     await db.delete(organizations).where(eq(organizations.workspaceId, user.workspaceId));
     await cleanupAuthData();
@@ -44,11 +44,11 @@ describe('Use Cases Generate - Matrix Mode', () => {
     const response = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/use-cases/generate',
+      '/api/v1/initiatives/generate',
       user.sessionToken!,
       {
         input: `Generate ${createTestId()}`,
-        use_case_count: 1,
+        initiative_count: 1,
       }
     );
 
@@ -93,12 +93,12 @@ describe('Use Cases Generate - Matrix Mode', () => {
     const response = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/use-cases/generate',
+      '/api/v1/initiatives/generate',
       user.sessionToken!,
       {
         input: `Generate ${createTestId()}`,
         organization_id: organizationId,
-        use_case_count: 1,
+        initiative_count: 1,
       }
     );
 
@@ -122,12 +122,12 @@ describe('Use Cases Generate - Matrix Mode', () => {
     const response = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/use-cases/generate',
+      '/api/v1/initiatives/generate',
       user.sessionToken!,
       {
         input: `Generate ${createTestId()}`,
         organization_id: organizationId,
-        use_case_count: 1,
+        initiative_count: 1,
       }
     );
 
@@ -142,23 +142,23 @@ describe('Use Cases Generate - Matrix Mode', () => {
       .from(jobQueue)
       .where(eq(jobQueue.workspaceId, user.workspaceId));
 
-    const useCaseListJob = jobs.find((job) => job.id === data.jobId);
+    const initiativeListJob = jobs.find((job) => job.id === data.jobId);
     const matrixJob = jobs.find((job) => job.id === data.matrixJobId);
-    expect(useCaseListJob?.type).toBe('usecase_list');
+    expect(initiativeListJob?.type).toBe('initiative_list');
     expect(matrixJob?.type).toBe('matrix_generate');
-    const useCaseListPayload = useCaseListJob ? (JSON.parse(String(useCaseListJob.data)) as Record<string, unknown>) : null;
+    const initiativeListPayload = initiativeListJob ? (JSON.parse(String(initiativeListJob.data)) as Record<string, unknown>) : null;
     const matrixPayload = matrixJob ? (JSON.parse(String(matrixJob.data)) as Record<string, unknown>) : null;
-    const useCaseListWorkflow = useCaseListPayload?.workflow as Record<string, unknown> | undefined;
+    const initiativeListWorkflow = initiativeListPayload?.workflow as Record<string, unknown> | undefined;
     const matrixWorkflow = matrixPayload?.workflow as Record<string, unknown> | undefined;
-    expect(typeof useCaseListWorkflow?.workflowRunId).toBe('string');
-    expect(typeof useCaseListWorkflow?.workflowDefinitionId).toBe('string');
-    expect(useCaseListWorkflow?.taskKey).toBe('generation_usecase_list');
-    expect(typeof useCaseListWorkflow?.agentDefinitionId).toBe('string');
+    expect(typeof initiativeListWorkflow?.workflowRunId).toBe('string');
+    expect(typeof initiativeListWorkflow?.workflowDefinitionId).toBe('string');
+    expect(initiativeListWorkflow?.taskKey).toBe('generation_initiative_list');
+    expect(typeof initiativeListWorkflow?.agentDefinitionId).toBe('string');
     expect(typeof matrixWorkflow?.workflowRunId).toBe('string');
     expect(typeof matrixWorkflow?.workflowDefinitionId).toBe('string');
     expect(matrixWorkflow?.taskKey).toBe('generation_matrix_prepare');
     expect(typeof matrixWorkflow?.agentDefinitionId).toBe('string');
-    const taskAssignments = useCaseListWorkflow?.taskAssignments as Record<string, unknown> | undefined;
+    const taskAssignments = initiativeListWorkflow?.taskAssignments as Record<string, unknown> | undefined;
     expect(taskAssignments).toBeDefined();
     expect(typeof taskAssignments?.contextPrepareAgentId).toBe('string');
     expect(typeof taskAssignments?.matrixPrepareAgentId).toBe('string');
@@ -174,7 +174,7 @@ describe('Use Cases Generate - Matrix Mode', () => {
     const response = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/use-cases/generate',
+      '/api/v1/initiatives/generate',
       user.sessionToken!,
       {
         input: `Generate ${createTestId()}`,
@@ -212,13 +212,13 @@ describe('Use Cases Generate - Matrix Mode', () => {
     const response = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/use-cases/generate',
+      '/api/v1/initiatives/generate',
       user.sessionToken!,
       {
         input: `Generate ${createTestId()}`,
         organization_id: organizationId,
         matrix_mode: 'default',
-        use_case_count: 1,
+        initiative_count: 1,
       }
     );
 
@@ -252,13 +252,13 @@ describe('Use Cases Generate - Matrix Mode', () => {
     const response = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/use-cases/generate',
+      '/api/v1/initiatives/generate',
       user.sessionToken!,
       {
         input: `Generate ${createTestId()}`,
         organization_id: organizationId,
         matrix_mode: 'generate',
-        use_case_count: 1,
+        initiative_count: 1,
       }
     );
 
@@ -271,23 +271,23 @@ describe('Use Cases Generate - Matrix Mode', () => {
       .select()
       .from(jobQueue)
       .where(eq(jobQueue.workspaceId, user.workspaceId));
-    const useCaseListJob = jobs.find((job) => job.id === data.jobId);
+    const initiativeListJob = jobs.find((job) => job.id === data.jobId);
     const matrixJob = jobs.find((job) => job.id === data.matrixJobId);
-    expect(useCaseListJob?.type).toBe('usecase_list');
+    expect(initiativeListJob?.type).toBe('initiative_list');
     expect(matrixJob?.type).toBe('matrix_generate');
-    const useCaseListPayload = useCaseListJob ? (JSON.parse(String(useCaseListJob.data)) as Record<string, unknown>) : null;
+    const initiativeListPayload = initiativeListJob ? (JSON.parse(String(initiativeListJob.data)) as Record<string, unknown>) : null;
     const matrixPayload = matrixJob ? (JSON.parse(String(matrixJob.data)) as Record<string, unknown>) : null;
-    const useCaseListWorkflow = useCaseListPayload?.workflow as Record<string, unknown> | undefined;
+    const initiativeListWorkflow = initiativeListPayload?.workflow as Record<string, unknown> | undefined;
     const matrixWorkflow = matrixPayload?.workflow as Record<string, unknown> | undefined;
-    expect(typeof useCaseListWorkflow?.workflowRunId).toBe('string');
-    expect(typeof useCaseListWorkflow?.workflowDefinitionId).toBe('string');
-    expect(useCaseListWorkflow?.taskKey).toBe('generation_usecase_list');
-    expect(typeof useCaseListWorkflow?.agentDefinitionId).toBe('string');
+    expect(typeof initiativeListWorkflow?.workflowRunId).toBe('string');
+    expect(typeof initiativeListWorkflow?.workflowDefinitionId).toBe('string');
+    expect(initiativeListWorkflow?.taskKey).toBe('generation_initiative_list');
+    expect(typeof initiativeListWorkflow?.agentDefinitionId).toBe('string');
     expect(typeof matrixWorkflow?.workflowRunId).toBe('string');
     expect(typeof matrixWorkflow?.workflowDefinitionId).toBe('string');
     expect(matrixWorkflow?.taskKey).toBe('generation_matrix_prepare');
     expect(typeof matrixWorkflow?.agentDefinitionId).toBe('string');
-    const taskAssignments = useCaseListWorkflow?.taskAssignments as Record<string, unknown> | undefined;
+    const taskAssignments = initiativeListWorkflow?.taskAssignments as Record<string, unknown> | undefined;
     expect(taskAssignments).toBeDefined();
     expect(typeof taskAssignments?.contextPrepareAgentId).toBe('string');
     expect(typeof taskAssignments?.matrixPrepareAgentId).toBe('string');
@@ -301,7 +301,7 @@ describe('Use Cases Generate - Matrix Mode', () => {
     const response = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/use-cases/generate',
+      '/api/v1/initiatives/generate',
       user.sessionToken!,
       {
         input: `Generate ${createTestId()}`,
@@ -318,7 +318,7 @@ describe('Use Cases Generate - Matrix Mode', () => {
   it('blocks usecase detail when matrix_generate failed for the folder (strict policy)', async () => {
     const organizationId = await createOrganization();
     const folderId = createTestId();
-    const useCaseId = createTestId();
+    const initiativeId = createTestId();
 
     await db.insert(folders).values({
       id: folderId,
@@ -331,8 +331,8 @@ describe('Use Cases Generate - Matrix Mode', () => {
       createdAt: new Date(),
     });
 
-    await db.insert(useCases).values({
-      id: useCaseId,
+    await db.insert(initiatives).values({
+      id: initiativeId,
       workspaceId: user.workspaceId!,
       folderId,
       organizationId,
@@ -356,10 +356,10 @@ describe('Use Cases Generate - Matrix Mode', () => {
 
     await expect(
       (queueManager as unknown as {
-        processUseCaseDetail: (data: Record<string, unknown>) => Promise<void>;
-      }).processUseCaseDetail({
-        useCaseId,
-        useCaseName: 'Use case waiting matrix',
+        processInitiativeDetail: (data: Record<string, unknown>) => Promise<void>;
+      }).processInitiativeDetail({
+        initiativeId,
+        initiativeName: 'Use case waiting matrix',
         folderId,
         matrixMode: 'generate',
         model: 'gpt-4.1-nano',

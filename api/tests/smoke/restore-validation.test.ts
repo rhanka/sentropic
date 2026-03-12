@@ -18,7 +18,7 @@ describe('Restore Validation', () => {
       const expectedTables = [
         'organizations',
         'folders',
-        'use_cases',
+        'initiatives',
         'settings',
         'business_config',
         'sessions',

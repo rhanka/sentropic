@@ -35,8 +35,8 @@ describe('API Health', () => {
       expect(Array.isArray(data.items)).toBe(true);
     });
 
-    it('should have use-cases endpoint accessible', async () => {
-      const response = await authenticatedHttpRequest('GET', '/api/v1/use-cases', user.sessionToken!);
+    it('should have initiatives endpoint accessible', async () => {
+      const response = await authenticatedHttpRequest('GET', '/api/v1/initiatives', user.sessionToken!);
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(Array.isArray(data.items)).toBe(true);

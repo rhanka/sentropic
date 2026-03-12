@@ -96,7 +96,7 @@ describe('Streams API Endpoints', () => {
     await db.insert(chatSessions).values({
       id: testSessionId,
       userId: testUserId,
-      primaryContextType: 'usecase',
+      primaryContextType: 'initiative',
       primaryContextId: createTestId(),
       createdAt: new Date(),
       updatedAt: new Date()

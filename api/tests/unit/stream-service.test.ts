@@ -37,7 +37,7 @@ describe('Stream Service', () => {
     await db.insert(chatSessions).values({
       id: testSessionId,
       userId: testUserId,
-      primaryContextType: 'usecase',
+      primaryContextType: 'initiative',
       primaryContextId: createId(),
       createdAt: new Date(),
       updatedAt: new Date()
@@ -158,8 +158,8 @@ describe('Stream Service', () => {
     it('should handle complex data objects', async () => {
       const complexData = {
         tool_call_id: 'call_123',
-        name: 'update_usecase_field',
-        args: { useCaseId: 'uc_1', updates: [{ path: 'data.name', value: 'New Name' }] }
+        name: 'update_initiative_field',
+        args: { initiativeId: 'uc_1', updates: [{ path: 'data.name', value: 'New Name' }] }
       };
 
       await writeStreamEvent(testStreamId, 'tool_call_start', complexData, 1);

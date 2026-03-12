@@ -2,7 +2,7 @@ import { db } from '../../src/db/client.js';
 import { 
   organizations, 
   folders, 
-  useCases, 
+  initiatives, 
   settings, 
   users, 
   workspaces,
@@ -43,7 +43,7 @@ export async function seedTestData() {
     await db.delete(objectLocks);
 
     await db.delete(comments); // Depends on users/workspaces
-    await db.delete(useCases); // Depends on folders and organizations
+    await db.delete(initiatives); // Depends on folders and organizations
     await db.delete(folders); // Depends on organizations
     await db.delete(organizations); // Depends on workspaces
     
@@ -67,7 +67,7 @@ export async function seedTestData() {
     // that might be needed. If you want to clean it too, uncomment:
     // await db.delete(businessConfig);
     
-    console.log('✅ All data cleaned (organizations, folders, use cases, users, auth, jobs, settings)');
+    console.log('✅ All data cleaned (organizations, folders, initiatives, users, auth, jobs, settings)');
     // Deterministic IDs for stable E2E fixtures
     const E2E_ADMIN_ID = 'e2e-user-admin';
     const E2E_USER_A_ID = 'e2e-user-a';
@@ -385,13 +385,13 @@ export async function seedTestData() {
     }
 
     // 3. Cas d'usage (schema v2: toutes les colonnes métier dans JSONB data)
-    const mkUseCaseData = (name: string, description: string, extra: Record<string, unknown> = {}) => ({
+    const mkInitiativeData = (name: string, description: string, extra: Record<string, unknown> = {}) => ({
       name,
       description,
       ...extra,
     });
 
-    const testUseCasesData = [
+    const testInitiativesData = [
       // Workspace A
       {
         id: 'e2e-uc-a-1',
@@ -401,7 +401,7 @@ export async function seedTestData() {
         status: 'completed',
         model: null,
         createdAt: now,
-        data: mkUseCaseData(
+        data: mkInitiativeData(
           'Optimisation planning chantier via IA',
           "Optimiser la planification et l'ordonnancement sur grands projets pour réduire retards et coûts.",
           { domain: 'Construction', process: 'Planification / scheduling' }
@@ -415,7 +415,7 @@ export async function seedTestData() {
         status: 'completed',
         model: null,
         createdAt: now,
-        data: mkUseCaseData(
+        data: mkInitiativeData(
           'Détection défauts et contrôle qualité (vision)',
           "Inspection automatique (images/drones) pour détecter défauts et non-conformités plus tôt.",
           { domain: 'Construction', process: 'Contrôle qualité' }
@@ -431,7 +431,7 @@ export async function seedTestData() {
         status: 'completed',
         model: null,
         createdAt: now,
-        data: mkUseCaseData(
+        data: mkInitiativeData(
           "Orchestration dernier km & promesse fiable",
           "Améliorer l’OTIF, réduire coûts/stop et fiabiliser la promesse e-commerce.",
           { domain: 'Retail', process: 'Logistique / last mile' }
@@ -445,7 +445,7 @@ export async function seedTestData() {
         status: 'completed',
         model: null,
         createdAt: now,
-        data: mkUseCaseData(
+        data: mkInitiativeData(
           "Enrichissement PIM (contenu produit)",
           "Enrichir automatiquement les fiches produit (FR/EN) pour conversion + SEO, avec validation humaine.",
           { domain: 'Retail', process: 'PIM / contenu produit' }
@@ -461,7 +461,7 @@ export async function seedTestData() {
         status: 'completed',
         model: 'gpt-4.1-nano',
         createdAt: now,
-        data: mkUseCaseData(
+        data: mkInitiativeData(
           'Maintenance prédictive flotte',
           "Exploiter télémétrie et historiques MRO pour anticiper pannes et optimiser la disponibilité.",
           { domain: 'Aéronautique', process: 'MRO / maintenance' }
@@ -470,16 +470,16 @@ export async function seedTestData() {
     ] as const;
 
     // Insérer les cas d'usage de test
-    for (const useCase of testUseCasesData) {
-      await db.insert(useCases).values(useCase).onConflictDoNothing();
-      console.log(`✅ Use Case: ${(useCase as any).data?.name ?? useCase.id} (${useCase.status})`);
+    for (const initiative of testInitiativesData) {
+      await db.insert(initiatives).values(initiative).onConflictDoNothing();
+      console.log(`✅ Use Case: ${(initiative as any).data?.name ?? initiative.id} (${initiative.status})`);
     }
 
     // 3.5 Comments (threads + tool_call_id) for E2E coverage
     const commentThreads = [
       {
         workspaceId: E2E_WS_A,
-        contextType: 'usecase',
+        contextType: 'initiative',
         contextId: 'e2e-uc-a-1',
         sectionKey: 'description',
         threadId: 'e2e-thread-uc-a-1',
@@ -553,7 +553,7 @@ export async function seedTestData() {
     console.log('\n📊 Summary:');
     console.log(`- Organizations: ${testOrganizationsData.length}`);
     console.log(`- Folders: ${testFolders.length}`);
-    console.log(`- Use Cases: ${testUseCasesData.length}`);
+    console.log(`- Use Cases: ${testInitiativesData.length}`);
     console.log(`- Matrix: 1`);
     console.log(`- Workspaces: 4`);
     console.log(`- Users: 5`);

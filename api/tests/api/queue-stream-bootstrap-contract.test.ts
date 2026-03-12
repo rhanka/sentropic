@@ -26,7 +26,7 @@ describe('Queue stream bootstrap contract', () => {
       workspaceId: user.workspaceId!,
       data: JSON.stringify({
         templateId: 'usecase-onepage',
-        entityType: 'usecase',
+        entityType: 'initiative',
         entityId: createTestId(),
         locale: 'fr',
       }),

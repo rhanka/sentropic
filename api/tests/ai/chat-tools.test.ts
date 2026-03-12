@@ -7,13 +7,13 @@ import {
   cleanupAuthData
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { chatMessages, chatStreamEvents, chatContexts, contextModificationHistory, useCases, folders } from '../../src/db/schema';
+import { chatMessages, chatStreamEvents, chatContexts, contextModificationHistory, initiatives, folders } from '../../src/db/schema';
 import { eq, and } from 'drizzle-orm';
 import * as tools from '../../src/services/tools';
 
 describe('Chat AI - Tool Calls Integration', () => {
   let user: any;
-  let useCaseId: string;
+  let initiativeId: string;
   let folderId: string;
 
   beforeEach(async () => {
@@ -27,22 +27,22 @@ describe('Chat AI - Tool Calls Integration', () => {
     expect(folderResponse.status).toBe(201);
     folderId = (await folderResponse.json()).id;
 
-    // Créer un use case
-    const useCaseResponse = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, {
+    // Créer un initiative
+    const initiativeResponse = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, {
       name: `Test UC ${createTestId()}`,
-      description: 'Test use case for tool calls',
+      description: 'Test initiative for tool calls',
       folderId
     });
-    expect(useCaseResponse.status).toBe(201);
-    useCaseId = (await useCaseResponse.json()).id;
+    expect(initiativeResponse.status).toBe(201);
+    initiativeId = (await initiativeResponse.json()).id;
   });
 
   afterEach(async () => {
     // Cleanup
-    await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, useCaseId));
+    await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, initiativeId));
     await db.delete(chatContexts);
     await db.delete(contextModificationHistory);
-    await db.delete(useCases).where(eq(useCases.id, useCaseId));
+    await db.delete(initiatives).where(eq(initiatives.id, initiativeId));
     await db.delete(folders).where(eq(folders.id, folderId));
     await cleanupAuthData();
   });
@@ -80,15 +80,15 @@ describe('Chat AI - Tool Calls Integration', () => {
       : [];
   }
 
-  describe('read_usecase tool', () => {
-    it('should call read_usecase and return use case data in stream', async () => {
+  describe('read_initiative tool', () => {
+    it('should call read_initiative and return initiative data in stream', async () => {
       const adminUser = await createAuthenticatedUser('admin_app');
       
-      // Message qui devrait déclencher read_usecase
+      // Message qui devrait déclencher read_initiative
       const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: `Read the use case with id ${useCaseId}`,
-        primaryContextType: 'usecase',
-        primaryContextId: useCaseId,
+        content: `Read the initiative with id ${initiativeId}`,
+        primaryContextType: 'initiative',
+        primaryContextId: initiativeId,
         model: getTestModel()
       });
 
@@ -109,10 +109,10 @@ describe('Chat AI - Tool Calls Integration', () => {
       );
       expect(toolCallEvents.length).toBeGreaterThan(0);
 
-      // Vérifier qu'il y a un tool_call_result avec read_usecase
+      // Vérifier qu'il y a un tool_call_result avec read_initiative
       const toolCallResult = events.find((e: any) => 
         e.eventType === 'tool_call_result' && 
-        e.data?.result?.useCaseId === useCaseId
+        e.data?.result?.initiativeId === initiativeId
       );
       expect(toolCallResult).toBeDefined();
 
@@ -120,15 +120,15 @@ describe('Chat AI - Tool Calls Integration', () => {
     }, 15000);
   });
 
-  describe('update_usecase_field tool', () => {
-    it('should call update_usecase_field and update database', async () => {
+  describe('update_initiative_field tool', () => {
+    it('should call update_initiative_field and update database', async () => {
       const adminUser = await createAuthenticatedUser('admin_app');
       
-      // Message qui devrait déclencher update_usecase_field
+      // Message qui devrait déclencher update_initiative_field
       const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: `Update the description of use case ${useCaseId} to "Updated description for testing"`,
-        primaryContextType: 'usecase',
-        primaryContextId: useCaseId,
+        content: `Update the description of initiative ${initiativeId} to "Updated description for testing"`,
+        primaryContextType: 'initiative',
+        primaryContextId: initiativeId,
         model: getTestModel()
       });
 
@@ -139,11 +139,11 @@ describe('Chat AI - Tool Calls Integration', () => {
       // Attendre la complétion
       await waitForJobCompletion(jobId, adminUser);
 
-      // Vérifier que use_cases.data a été mis à jour via endpoint
-      const useCaseRes = await authenticatedRequest(app, 'GET', `/api/v1/use-cases/${useCaseId}`, user.sessionToken!);
-      expect(useCaseRes.status).toBe(200);
-      const useCaseData = await useCaseRes.json();
-      expect(useCaseData.data).toBeDefined();
+      // Vérifier que initiatives.data a été mis à jour via endpoint
+      const initiativeRes = await authenticatedRequest(app, 'GET', `/api/v1/initiatives/${initiativeId}`, user.sessionToken!);
+      expect(initiativeRes.status).toBe(200);
+      const initiativeData = await initiativeRes.json();
+      expect(initiativeData.data).toBeDefined();
       // Le description devrait avoir été mise à jour (ou au moins mentionnée dans les modifications)
 
       // Vérifier context_modification_history
@@ -152,8 +152,8 @@ describe('Chat AI - Tool Calls Integration', () => {
         .from(contextModificationHistory)
         .where(
           and(
-            eq(contextModificationHistory.contextType, 'usecase'),
-            eq(contextModificationHistory.contextId, useCaseId)
+            eq(contextModificationHistory.contextType, 'initiative'),
+            eq(contextModificationHistory.contextId, initiativeId)
           )
         );
       // L'historique peut être vide si l'IA n'a pas effectué de modifications (acceptable)
@@ -166,7 +166,7 @@ describe('Chat AI - Tool Calls Integration', () => {
         .where(eq(chatContexts.sessionId, sessionId));
       // Si des contexts existent, vérifier qu'ils ont un snapshotAfter
       if (contexts.length > 0) {
-        const context = contexts.find(c => c.contextType === 'usecase' && c.contextId === useCaseId);
+        const context = contexts.find(c => c.contextType === 'initiative' && c.contextId === initiativeId);
         if (context) {
           expect(context.snapshotAfter).toBeDefined();
         }
@@ -191,10 +191,10 @@ describe('Chat AI - Tool Calls Integration', () => {
         { url: 'https://example.com/article2', content: 'Article 2 content' }
       ]);
       
-      // Ajouter des références au use case pour déclencher web_extract
-      const currentRow = (await db.select().from(useCases).where(eq(useCases.id, useCaseId)))[0];
+      // Ajouter des références au initiative pour déclencher web_extract
+      const currentRow = (await db.select().from(initiatives).where(eq(initiatives.id, initiativeId)))[0];
       const currentData = (currentRow?.data ?? {}) as any;
-      await db.update(useCases)
+      await db.update(initiatives)
         .set({
           data: {
             ...currentData,
@@ -204,13 +204,13 @@ describe('Chat AI - Tool Calls Integration', () => {
             ]
           }
         } as any)
-        .where(eq(useCases.id, useCaseId));
+        .where(eq(initiatives.id, initiativeId));
 
       // Message qui pourrait déclencher web_extract (si l'IA le juge nécessaire)
       const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: `Analyze the references for use case ${useCaseId}`,
-        primaryContextType: 'usecase',
-        primaryContextId: useCaseId,
+        content: `Analyze the references for initiative ${initiativeId}`,
+        primaryContextType: 'initiative',
+        primaryContextId: initiativeId,
         model: getTestModel()
       });
 
@@ -283,22 +283,22 @@ describe('Chat AI - Tool Calls Integration', () => {
   });
 
   describe('Security validation', () => {
-    it('should reject update_usecase_field with useCaseId not matching context', async () => {
-      // Créer un autre use case
-      const otherUseCaseResponse = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, {
+    it('should reject update_initiative_field with initiativeId not matching context', async () => {
+      // Créer un autre initiative
+      const otherInitiativeResponse = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, {
         name: `Other UC ${createTestId()}`,
-        description: 'Other use case',
+        description: 'Other initiative',
         folderId
       });
-      const otherUseCaseId = (await otherUseCaseResponse.json()).id;
+      const otherInitiativeId = (await otherInitiativeResponse.json()).id;
 
       const adminUser = await createAuthenticatedUser('admin_app');
       
-      // Tenter de modifier l'autre use case alors que le contexte est sur useCaseId
+      // Tenter de modifier l'autre initiative alors que le contexte est sur initiativeId
       const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: `Update use case ${otherUseCaseId} description`, // Use case différent du contexte
-        primaryContextType: 'usecase',
-        primaryContextId: useCaseId, // Contexte sur useCaseId mais on essaie de modifier otherUseCaseId
+        content: `Update initiative ${otherInitiativeId} description`, // Use case différent du contexte
+        primaryContextType: 'initiative',
+        primaryContextId: initiativeId, // Contexte sur initiativeId mais on essaie de modifier otherInitiativeId
         model: getTestModel()
       });
 
@@ -306,11 +306,11 @@ describe('Chat AI - Tool Calls Integration', () => {
       const chatData = await chatResponse.json();
       const { jobId } = chatData;
 
-      // Attendre la complétion (le job peut réussir si l'IA ne tente pas de modifier le mauvais use case)
+      // Attendre la complétion (le job peut réussir si l'IA ne tente pas de modifier le mauvais initiative)
       // ou échouer avec une erreur de sécurité si l'IA tente effectivement de le faire
       try {
         await waitForJobCompletion(jobId, adminUser);
-        // Si le job réussit, c'est que l'IA n'a pas tenté de modifier le mauvais use case (acceptable)
+        // Si le job réussit, c'est que l'IA n'a pas tenté de modifier le mauvais initiative (acceptable)
       } catch {
         // Si le job échoue, vérifier que c'est à cause de la sécurité
         const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
@@ -320,8 +320,8 @@ describe('Chat AI - Tool Calls Integration', () => {
         }
       }
       
-      // Nettoyer l'autre use case
-      await db.delete(useCases).where(eq(useCases.id, otherUseCaseId));
+      // Nettoyer l'autre initiative
+      await db.delete(initiatives).where(eq(initiatives.id, otherInitiativeId));
       await cleanupAuthData(); // Cleanup admin user
     }, 15000);
   });
@@ -332,9 +332,9 @@ describe('Chat AI - Tool Calls Integration', () => {
       
       // Premier message
       const firstResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: `Read use case ${useCaseId}`,
-        primaryContextType: 'usecase',
-        primaryContextId: useCaseId,
+        content: `Read initiative ${initiativeId}`,
+        primaryContextType: 'initiative',
+        primaryContextId: initiativeId,
         model: getTestModel()
       });
       const { sessionId, jobId: firstJobId } = await firstResponse.json();
@@ -344,8 +344,8 @@ describe('Chat AI - Tool Calls Integration', () => {
       const secondResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
         content: 'Now update the description',
         sessionId,
-        primaryContextType: 'usecase',
-        primaryContextId: useCaseId,
+        primaryContextType: 'initiative',
+        primaryContextId: initiativeId,
         model: getTestModel()
       });
       const { jobId: secondJobId } = await secondResponse.json();

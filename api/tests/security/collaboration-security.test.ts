@@ -70,14 +70,14 @@ describe('Collaboration security', () => {
     );
     expect(folderRes.status).toBe(403);
 
-    const useCaseRes = await authenticatedRequest(
+    const initiativeRes = await authenticatedRequest(
       app,
       'POST',
-      `/api/v1/use-cases?workspace_id=${encodeURIComponent(workspaceId)}`,
+      `/api/v1/initiatives?workspace_id=${encodeURIComponent(workspaceId)}`,
       viewer.sessionToken!,
       { name: `UC ${createTestId()}`, description: 'Test', folderId: 'f_1' }
     );
-    expect(useCaseRes.status).toBe(403);
+    expect(initiativeRes.status).toBe(403);
 
     const lockRes = await authenticatedRequest(
       app,
@@ -177,7 +177,7 @@ describe('Collaboration security', () => {
   });
 
   it('enforces concurrent edit locks per object type (409)', async () => {
-    const objectTypes: Array<'organization' | 'folder' | 'usecase'> = ['organization', 'folder', 'usecase'];
+    const objectTypes: Array<'organization' | 'folder' | 'initiative'> = ['organization', 'folder', 'initiative'];
 
     for (const objectType of objectTypes) {
       const objectId = `${objectType}_${createTestId()}`;

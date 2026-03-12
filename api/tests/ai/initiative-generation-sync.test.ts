@@ -30,7 +30,7 @@ describe('Use Case Generation - Sync (no waiting)', () => {
     const response = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/use-cases/generate',
+      '/api/v1/initiatives/generate',
       user.sessionToken!,
       {
         input,
