@@ -232,7 +232,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 - [ ] Rename route file `use-cases.ts` → `initiatives.ts`, update all endpoints `/use-cases` → `/initiatives`.
 - [ ] Add backward-compatible alias: `/api/v1/use-cases/*` → forward to `/api/v1/initiatives/*`.
 - [ ] Rename service file `context-usecase.ts` → `context-initiative.ts`, update all function names + types.
-- [ ] Update all `useCases`/`useCase`/`use_case` references across API services (grep + systematic rename).
+- [x] Update all `useCases`/`useCase`/`use_case` references across API services (grep + systematic rename). ✓ includes ensure-indexes.ts fix
 - [ ] Update tool names in `tools.ts` and `tool-service.ts`.
 - [ ] Update `contextType` enum values in chat, documents, comments.
 - [ ] Update default agents/workflows prompt text.
