@@ -334,9 +334,9 @@ Closed: 2026-03-12
 - [x] Wire neutral workspace as default landing on login.
 
 **Lot 5 gate:**
-- [ ] `make typecheck-ui ENV=test-br04`
-- [ ] `make lint-ui ENV=test-br04`
-- [ ] `make test-ui ENV=test-br04`
+- [ ] `make typecheck-ui ENV=test-br04` — infra OOM (exit 137: svelte-check killed by OOM after loading workspace)
+- [x] `make lint-ui ENV=test-br04` — PASS (eslint clean, 0 errors)
+- [x] `make test-ui ENV=test-br04` — PASS (7 suites, 85 tests all green; exit 137 infra OOM after vitest completed)
 - [ ] `make build-api build-ui-image API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=e2e-br04`
 - [ ] `make clean test-e2e API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=e2e-br04`
 
