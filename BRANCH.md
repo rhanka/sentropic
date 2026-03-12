@@ -191,14 +191,14 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
     - Mistral/Cohere: no reasoning stream — no-op
 
 #### 1.7 Reasoning parameter mapping in provider adapters
-- [ ] Extend `ProviderRuntime` interface or provider metadata in `api/src/services/provider-runtime.ts`:
+- [x] Extend `ProviderRuntime` interface or provider metadata in `api/src/services/provider-runtime.ts`:
   - Add `supportsReasoning: boolean` capability flag per provider/model.
   - Add `mapReasoningParams(effort: ReasoningEffort, summary: ReasoningSummary)` method or utility to convert OpenAI-style reasoning params to provider-native format.
-- [ ] Claude mapping: `reasoningEffort` → `thinking.budget_tokens` (e.g., `low`=1024, `medium`=4096, `high`=16384, `xhigh`=32768). `reasoningSummary` → no Claude equivalent (ignore).
-- [ ] Mistral mapping: no-op (no reasoning support).
-- [ ] Cohere mapping: no-op (`command-a-reasoning-03-2025` has built-in reasoning, not configurable).
-- [ ] OpenAI mapping: pass-through (native `reasoningEffort`/`reasoningSummary` params).
-- [ ] Gemini mapping: pass-through or no-op depending on model capability.
+- [x] Claude mapping: `reasoningEffort` → `thinking.budget_tokens` (e.g., `low`=1024, `medium`=4096, `high`=16384, `xhigh`=32768). `reasoningSummary` → no Claude equivalent (ignore).
+- [x] Mistral mapping: no-op (no reasoning support).
+- [x] Cohere mapping: no-op (`command-a-reasoning-03-2025` has built-in reasoning, not configurable).
+- [x] OpenAI mapping: pass-through (native `reasoningEffort`/`reasoningSummary` params).
+- [x] Gemini mapping: pass-through or no-op depending on model capability.
 
 #### 1.8 Lot 1 gate
 - [ ] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral`
