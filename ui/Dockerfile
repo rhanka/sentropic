@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.12
+# syntax=docker/dockerfile:1.4
 FROM node:24-alpine AS base
 WORKDIR /app
 RUN apk add --no-cache zip

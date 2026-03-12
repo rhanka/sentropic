@@ -36,10 +36,9 @@ services:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8787/api/v1/health >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 10s
-      retries: 30
-      start_period: 120s
+      interval: 5s
+      timeout: 5s
+      retries: 10
     tty: true
 
   ui:
