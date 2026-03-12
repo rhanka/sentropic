@@ -392,7 +392,7 @@
   const loadUseCase = async () => {
     try {
       // Charger depuis l'API pour avoir les données les plus récentes
-      useCase = await apiGet(`/use-cases/${useCaseId}`);
+      useCase = await apiGet(`/initiatives/${useCaseId}`);
       
       // Mettre à jour le store avec les données fraîches
       initiativesStore.update(items => 
