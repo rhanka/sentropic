@@ -195,8 +195,8 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 - `api/src/db/schema.ts` — update Drizzle schema: rename `useCases`→`initiatives`, add new columns, add 6 new table definitions.
 
 **Tasks:**
-- [ ] Write migration SQL file (`api/drizzle/0024_*.sql`) per §1.5 scope.
-- [ ] Update `api/src/db/schema.ts` — rename `useCases` table + relations, add `type`/`gate_config` on `workspaces`, add `antecedent_id`/`maturity_stage`/`gate_status`/`template_snapshot_id` on `initiatives`, add 6 new tables with relations.
+- [x] Write migration SQL file (`api/drizzle/0024_workspace_types_initiatives.sql`) per §1.5 scope.
+- [x] Update `api/src/db/schema.ts` — rename `useCases` table + relations, add `type`/`gate_config` on `workspaces`, add `antecedent_id`/`maturity_stage`/`gate_status`/`template_snapshot_id` on `initiatives`, add 6 new tables with relations.
 - [ ] Verify migration applies cleanly on fresh DB and on existing DB with data (`make db-migrate ENV=feat-workspace-template-catalog`).
 
 **Lot 1 gate:**
