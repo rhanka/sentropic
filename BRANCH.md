@@ -251,11 +251,11 @@ Closed: 2026-03-12
 ### Lot 3 — Routing, UI, and Non-Regression
 
 #### 3.1 UI model selector updates
-- [ ] Update `ui/src/lib/components/ChatPanel.svelte`: ensure grouped model selector renders 5 provider groups.
-- [ ] Update `ui/src/routes/settings/+page.svelte`: ensure provider/model dropdowns include new providers.
-- [ ] Update `ui/src/routes/folder/new/+page.svelte`: ensure model override includes new providers.
-- [ ] Verify provider badge display normalization for long model IDs (like Gemini compaction pattern).
-- [ ] Update `ui/src/locales/en.json` and `ui/src/locales/fr.json` with provider labels if needed.
+- [x] Update `ui/src/lib/components/ChatPanel.svelte`: ensure grouped model selector renders 5 provider groups.
+- [x] Update `ui/src/routes/settings/+page.svelte`: ensure provider/model dropdowns include new providers.
+- [x] Update `ui/src/routes/folder/new/+page.svelte`: ensure model override includes new providers.
+- [x] Verify provider badge display normalization for long model IDs (like Gemini compaction pattern).
+- [x] Update `ui/src/locales/en.json` and `ui/src/locales/fr.json` with provider labels if needed.
 
 #### 3.2 Routing hardening
 - [ ] Add provider routing constraints: capability-aware selection (e.g., if a provider does not support structured output, route to fallback).
