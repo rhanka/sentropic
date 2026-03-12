@@ -119,7 +119,7 @@ workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSc
   const workspaceId = c.req.param('id')!;
 
   // Workspace type is immutable after creation.
-  const rawBody = await c.req.raw.clone().json().catch(() => null);
+  const rawBody = await c.req.raw.clone().json().catch(() => null) as Record<string, unknown> | null;
   if (rawBody && 'type' in rawBody) {
     return c.json({ error: 'Workspace type cannot be changed after creation' }, 400);
   }
