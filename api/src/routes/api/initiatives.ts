@@ -18,6 +18,7 @@ import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
 import { resolveLocaleFromHeaders } from '../../utils/locale';
+import { isNeutralWorkspace } from '../../services/workspace-access';
 
 async function notifyInitiativeEvent(initiativeId: string): Promise<void> {
   const notifyPayload = JSON.stringify({ initiative_id: initiativeId });
@@ -373,6 +374,12 @@ initiativesRouter.get('/', async (c) => {
 
 initiativesRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator('json', initiativeInput), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
+
+  // Neutral workspaces cannot contain initiatives.
+  if (await isNeutralWorkspace(workspaceId)) {
+    return c.json({ error: 'Neutral workspaces do not support initiatives' }, 400);
+  }
+
   const payload = c.req.valid('json');
   const [folder] = await db
     .select()
@@ -545,6 +552,11 @@ const generateInput = z.object({
 initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zValidator('json', generateInput), async (c) => {
   try {
     const { workspaceId, userId, role } = c.get('user') as { workspaceId: string; userId: string; role: string };
+
+    // Neutral workspaces cannot contain initiatives.
+    if (await isNeutralWorkspace(workspaceId)) {
+      return c.json({ error: 'Neutral workspaces do not support initiatives' }, 400);
+    }
     const requestLocale = resolveLocaleFromHeaders({
       appLocaleHeader: c.req.header('x-app-locale'),
       acceptLanguageHeader: c.req.header('accept-language')

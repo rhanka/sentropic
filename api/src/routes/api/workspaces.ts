@@ -17,7 +17,7 @@ import {
 import { and, desc, eq } from 'drizzle-orm';
 import { requireEditor } from '../../middleware/rbac';
 import { createId } from '../../utils/id';
-import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess } from '../../services/workspace-access';
+import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeutralWorkspace } from '../../services/workspace-access';
 import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
 
 export const workspacesRouter = new Hono();
@@ -278,6 +278,12 @@ workspacesRouter.post('/:id/members', requireEditor, zValidator('json', addMembe
   const actor = c.get('user') as { userId: string; role: string };
 
   const workspaceId = c.req.param('id')!;
+
+  // Neutral workspaces are personal and non-delegable.
+  if (await isNeutralWorkspace(workspaceId)) {
+    return c.json({ error: 'Neutral workspaces do not support memberships' }, 400);
+  }
+
   try {
     await requireWorkspaceAdmin(actor.userId, workspaceId);
   } catch {
