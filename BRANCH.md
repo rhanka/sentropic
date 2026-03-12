@@ -219,7 +219,7 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 - [x] `api/src/services/executive-summary.ts` (~line 273): replace `isGpt5` guard with `supportsReasoning(selection)` check.
 
 #### 2.2 Adapt reasoning effort evaluation pipeline
-- [ ] `api/src/services/chat-service.ts` (~line 3088): the dynamic reasoning effort evaluator uses prompt template `chat_reasoning_effort_eval` and a specific evaluator model. Ensure this pipeline:
+- [x] `api/src/services/chat-service.ts` (~line 3088): the dynamic reasoning effort evaluator uses prompt template `chat_reasoning_effort_eval` and a specific evaluator model. Ensure this pipeline:
   - Skips entirely when `supportsReasoning` is `false` for the target provider.
   - When active for Claude, maps evaluated effort level to `thinking.budget_tokens` before passing to the provider adapter.
   - Preserves existing behavior for OpenAI models.
