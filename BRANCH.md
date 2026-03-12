@@ -277,9 +277,9 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 - [x] Fix all existing UI tests. ✓
 
 **Lot 3 gate:**
-- [ ] `make typecheck-ui ENV=test-br04`
-- [ ] `make lint-ui ENV=test-br04`
-- [ ] `make test-ui ENV=test-br04`
+- [x] `make typecheck-ui ENV=test-br04` ✓
+- [x] `make lint-ui ENV=test-br04` ✓
+- [x] `make test-ui ENV=test-br04` ✓
 
 ---
 
