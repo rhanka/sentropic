@@ -13,30 +13,7 @@
    */
 
   import { ArrowUpDown } from '@lucide/svelte';
-
-  export type CardProps = {
-    title: string;
-    subtitle?: string;
-    icon?: any;
-    iconColorClass?: string;
-    badges?: Array<{ label: string; colorClass?: string }>;
-    href?: string;
-    onClick?: () => void;
-  };
-
-  type ViewAction = {
-    label: string;
-    href?: string;
-    onClick?: () => void;
-    variant?: 'primary' | 'secondary' | 'ghost';
-    icon?: any;
-  };
-
-  type ViewColumn = {
-    key: string;
-    label: string;
-    sortable?: boolean;
-  };
+  import type { CardProps, ViewAction, ViewColumn } from '$lib/types/view-template';
 
   export let title: string | undefined = undefined;
   export let subtitle: string | undefined = undefined;
