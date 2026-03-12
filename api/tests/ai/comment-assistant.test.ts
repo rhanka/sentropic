@@ -8,7 +8,7 @@ import {
   comments,
   folders,
   jobQueue,
-  useCases,
+  initiatives,
   users,
   workspaces,
   workspaceMemberships
@@ -31,7 +31,7 @@ vi.mock('../../src/services/llm-runtime', async () => {
 describe('AI - comment_assistant tool exposure', () => {
   let user: any;
   let folderId = '';
-  let useCaseId = '';
+  let initiativeId = '';
 
   beforeEach(async () => {
     await cleanupAuthData();
@@ -59,17 +59,17 @@ describe('AI - comment_assistant tool exposure', () => {
     expect(folderResponse.status).toBe(201);
     folderId = (await folderResponse.json()).id;
 
-    const useCaseResponse = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, {
+    const initiativeResponse = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, {
       name: `Test UC ${createTestId()}`,
       description: 'Test use case for comment assistant',
       folderId,
     });
-    expect(useCaseResponse.status).toBe(201);
-    useCaseId = (await useCaseResponse.json()).id;
+    expect(initiativeResponse.status).toBe(201);
+    initiativeId = (await initiativeResponse.json()).id;
   });
 
   afterEach(async () => {
-    if (useCaseId) await db.delete(useCases).where(eq(useCases.id, useCaseId));
+    if (initiativeId) await db.delete(initiatives).where(eq(initiatives.id, initiativeId));
     if (folderId) await db.delete(folders).where(eq(folders.id, folderId));
     if (user?.workspaceId) {
       await db.delete(jobQueue).where(eq(jobQueue.workspaceId, user.workspaceId));
@@ -96,8 +96,8 @@ describe('AI - comment_assistant tool exposure', () => {
       content: 'Analyse les commentaires',
       model: getTestModel(),
       workspaceId: user.workspaceId,
-      primaryContextType: 'usecase',
-      primaryContextId: useCaseId,
+      primaryContextType: 'initiative',
+      primaryContextId: initiativeId,
       contexts: undefined,
       sessionTitle: null,
     });
@@ -158,7 +158,7 @@ describe('AI - comment_assistant permissions', () => {
     await db.insert(comments).values({
       id: createId(),
       workspaceId,
-      contextType: 'usecase',
+      contextType: 'initiative',
       contextId,
       sectionKey: 'description',
       createdBy: commenterUser.id,
@@ -184,7 +184,7 @@ describe('AI - comment_assistant permissions', () => {
       toolService.resolveCommentActions({
         workspaceId,
         userId: viewerUser.id,
-        allowedContexts: [{ contextType: 'usecase', contextId }],
+        allowedContexts: [{ contextType: 'initiative', contextId }],
         actions: [{ thread_id: threadId, action: 'note', note: 'Note viewer' }],
         toolCallId: createId(),
       })
@@ -193,7 +193,7 @@ describe('AI - comment_assistant permissions', () => {
     const commenterResult = await toolService.resolveCommentActions({
       workspaceId,
       userId: commenterUser.id,
-      allowedContexts: [{ contextType: 'usecase', contextId }],
+      allowedContexts: [{ contextType: 'initiative', contextId }],
       actions: [{ thread_id: threadId, action: 'note', note: 'Note commenter' }],
       toolCallId: createId(),
     });
@@ -202,7 +202,7 @@ describe('AI - comment_assistant permissions', () => {
     const editorResult = await toolService.resolveCommentActions({
       workspaceId,
       userId: editorUser.id,
-      allowedContexts: [{ contextType: 'usecase', contextId }],
+      allowedContexts: [{ contextType: 'initiative', contextId }],
       actions: [{ thread_id: threadId, action: 'note', note: 'Note editor' }],
       toolCallId: createId(),
     });
@@ -211,7 +211,7 @@ describe('AI - comment_assistant permissions', () => {
     const adminResult = await toolService.resolveCommentActions({
       workspaceId,
       userId: adminUser.id,
-      allowedContexts: [{ contextType: 'usecase', contextId }],
+      allowedContexts: [{ contextType: 'initiative', contextId }],
       actions: [{ thread_id: threadId, action: 'close' }],
       toolCallId: createId(),
     });

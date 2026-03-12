@@ -62,8 +62,8 @@ describe('AI Workflow - Complete Integration Test', () => {
     } catch {}
   });
 
-  // Test complet : Enrichissement d'organisation + Génération de use cases avec cette organisation
-  it('should complete full AI workflow: organization enrichment + use case generation', async () => {
+  // Test complet : Enrichissement d'organisation + Génération de initiatives avec cette organisation
+  it('should complete full AI workflow: organization enrichment + initiative generation', async () => {
     const organizationName = `AI Organization Workflow ${createTestId()}`;
     
     // 1) Create an organization draft
@@ -117,12 +117,12 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(enrichedData.objectives).toBeDefined();
     expect(enrichedData.technologies).toBeDefined();
 
-    // 5) Start use case generation with the enriched organization
-    const input = `Generate 5 AI use cases for ${organizationName} in the ${enrichedData.industry} industry`;
+    // 5) Start initiative generation with the enriched organization
+    const input = `Generate 5 AI initiatives for ${organizationName} in the ${enrichedData.industry} industry`;
     const generateResponse = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/use-cases/generate',
+      '/api/v1/initiatives/generate',
       user.sessionToken!,
       {
         input,
@@ -137,7 +137,7 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(generateData.created_folder_id).toBeDefined();
     createdFolderId = generateData.created_folder_id;
 
-    // 6) Wait for use case generation completion with polling
+    // 6) Wait for initiative generation completion with polling
     let folderResponse;
     let attempts2 = 0;
     const maxAttempts2 = 5; // 5 * 5s = 15s max
@@ -154,50 +154,50 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(folderData.status).toBe('completed');
     expect(folderData.organizationId).toBe(createdOrganizationId);
 
-    // 8) Wait for use cases to complete with polling
-    let useCasesResponse;
+    // 8) Wait for initiatives to complete with polling
+    let initiativesResponse;
     let attempts4 = 0;
     const maxAttempts4 = 6; // 12 * 5s = 30s max
     
     do {
       await sleep(5000); // Wait 5 seconds between checks
-      useCasesResponse = await authenticatedRequest(app, 'GET', `/api/v1/use-cases?folder_id=${createdFolderId}`, user.sessionToken!);
+      initiativesResponse = await authenticatedRequest(app, 'GET', `/api/v1/initiatives?folder_id=${createdFolderId}`, user.sessionToken!);
       attempts4++;
-    } while (useCasesResponse.status === 200 && (await useCasesResponse.clone().json()).items.length === 0 && attempts4 < maxAttempts4);
+    } while (initiativesResponse.status === 200 && (await initiativesResponse.clone().json()).items.length === 0 && attempts4 < maxAttempts4);
 
-    expect(useCasesResponse.status).toBe(200);
-    const useCasesData = await useCasesResponse.json();
-    expect(useCasesData.items.length).toBeGreaterThan(0);
+    expect(initiativesResponse.status).toBe(200);
+    const initiativesData = await initiativesResponse.json();
+    expect(initiativesData.items.length).toBeGreaterThan(0);
     
-    const useCases = useCasesData.items;
-    console.log('Use cases found:', useCases.length);
-    console.log('Use case statuses:', useCases.map((uc: any) => uc.status));
+    const initiatives = initiativesData.items;
+    console.log('Initiatives found:', initiatives.length);
+    console.log('Use case statuses:', initiatives.map((uc: any) => uc.status));
     
-    // Wait until at least 80% of use cases are completed (polling)
-    const totalCount = useCases.length;
+    // Wait until at least 80% of initiatives are completed (polling)
+    const totalCount = initiatives.length;
     const threshold = Math.ceil(0.8 * totalCount);
-    let completedUseCases = useCases.filter((uc: any) => uc.status === 'completed');
+    let completedInitiatives = initiatives.filter((uc: any) => uc.status === 'completed');
     let attempts5 = 0;
     const maxAttempts5 = 24; // 24 * 5s = 120s max
 
-    while (completedUseCases.length < threshold && attempts5 < maxAttempts5) {
+    while (completedInitiatives.length < threshold && attempts5 < maxAttempts5) {
       await sleep(5000);
-      const updatedResponse = await authenticatedRequest(app, 'GET', `/api/v1/use-cases?folder_id=${createdFolderId}`, user.sessionToken!);
+      const updatedResponse = await authenticatedRequest(app, 'GET', `/api/v1/initiatives?folder_id=${createdFolderId}`, user.sessionToken!);
       if (updatedResponse.status === 200) {
         const updatedData = await updatedResponse.json();
-        const updatedUseCases = updatedData.items;
-        completedUseCases = updatedUseCases.filter((uc: any) => uc.status === 'completed');
-        console.log(`Attempt ${attempts5 + 1}: Completed use cases after wait: ${completedUseCases.length}/${updatedUseCases.length}`);
-        console.log('Current statuses:', updatedUseCases.map((uc: any) => uc.status));
+        const updatedInitiatives = updatedData.items;
+        completedInitiatives = updatedInitiatives.filter((uc: any) => uc.status === 'completed');
+        console.log(`Attempt ${attempts5 + 1}: Completed initiatives after wait: ${completedInitiatives.length}/${updatedInitiatives.length}`);
+        console.log('Current statuses:', updatedInitiatives.map((uc: any) => uc.status));
       }
       attempts5++;
     }
 
-    console.log(`Final result: ${completedUseCases.length} completed use cases out of ${totalCount} total`);
-    expect(completedUseCases.length).toBeGreaterThanOrEqual(threshold);
+    console.log(`Final result: ${completedInitiatives.length} completed initiatives out of ${totalCount} total`);
+    expect(completedInitiatives.length).toBeGreaterThanOrEqual(threshold);
     
-    // Verify the first completed use case
-    const firstCompleted = completedUseCases[0];
+    // Verify the first completed initiative
+    const firstCompleted = completedInitiatives[0];
     expect(firstCompleted.organizationId).toBe(createdOrganizationId);
     // name and description are now in data JSONB
     expect(firstCompleted.data?.name).toBeDefined();
@@ -211,7 +211,7 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(firstCompleted.model).toBeDefined();
     expect(firstCompleted.model).toBe(getTestModel());
 
-    // Vérifier que les événements sont écrits dans chat_stream_events pour usecase-list
+    // Vérifier que les événements sont écrits dans chat_stream_events pour initiative-list
     const folderStreamId = `folder_${createdFolderId}`;
     const folderStreamEvents = await db
       .select()
@@ -227,25 +227,25 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(folderEventTypes).toContain('content_delta');
     expect(folderEventTypes).toContain('done');
 
-    // Vérifier que les événements sont écrits dans chat_stream_events pour au moins un usecase-detail
-    const useCaseId = firstCompleted.id;
-    const useCaseStreamId = `usecase_${useCaseId}`;
-    const useCaseStreamEvents = await db
+    // Vérifier que les événements sont écrits dans chat_stream_events pour au moins un initiative-detail
+    const initiativeId = firstCompleted.id;
+    const initiativeStreamId = `initiative_${initiativeId}`;
+    const initiativeStreamEvents = await db
       .select()
       .from(chatStreamEvents)
-      .where(eq(chatStreamEvents.streamId, useCaseStreamId))
+      .where(eq(chatStreamEvents.streamId, initiativeStreamId))
       .orderBy(chatStreamEvents.sequence);
     
-    expect(useCaseStreamEvents.length).toBeGreaterThan(0);
-    useCaseStreamEvents.forEach(event => {
+    expect(initiativeStreamEvents.length).toBeGreaterThan(0);
+    initiativeStreamEvents.forEach(event => {
       expect(event.messageId).toBeNull(); // Générations classiques
     });
-    const useCaseEventTypes = useCaseStreamEvents.map(e => e.eventType);
-    expect(useCaseEventTypes).toContain('content_delta');
-    expect(useCaseEventTypes).toContain('done');
+    const initiativeEventTypes = initiativeStreamEvents.map(e => e.eventType);
+    expect(initiativeEventTypes).toContain('content_delta');
+    expect(initiativeEventTypes).toContain('done');
 
-    // 9) Verify all use cases are associated with the organization
-    const allAssociated = useCases.every((uc: any) => uc.organizationId === createdOrganizationId);
+    // 9) Verify all initiatives are associated with the organization
+    const allAssociated = initiatives.every((uc: any) => uc.organizationId === createdOrganizationId);
     expect(allAssociated).toBe(true);
 
     // 10) Wait for all jobs to complete and verify queue is clean
@@ -266,7 +266,7 @@ describe('AI Workflow - Complete Integration Test', () => {
     const queueData = await queueStats.json();
     expect(queueData.pending).toBe(0);
     // Allow some jobs to still be processing (they might be finishing up)
-    // Note: Can be higher due to multiple use case detail jobs running in parallel
+    // Note: Can be higher due to multiple initiative detail jobs running in parallel
     expect(queueData.processing).toBeLessThanOrEqual(30);
     
     // Log final queue status for debugging
@@ -277,7 +277,7 @@ describe('AI Workflow - Complete Integration Test', () => {
 
     // Cleanup stream events
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, folderStreamId));
-    await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, useCaseStreamId));
+    await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, initiativeStreamId));
       }, 120000);
 });
 

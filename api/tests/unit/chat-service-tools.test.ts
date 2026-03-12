@@ -107,8 +107,8 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
       ]);
     });
 
-    const contexts: Array<{ primaryContextType: 'usecase' | 'organization' | 'folder' | 'executive_summary'; primaryContextId: string | null }> = [
-      { primaryContextType: 'usecase', primaryContextId: createId() },
+    const contexts: Array<{ primaryContextType: 'initiative' | 'organization' | 'folder' | 'executive_summary'; primaryContextId: string | null }> = [
+      { primaryContextType: 'initiative', primaryContextId: createId() },
       { primaryContextType: 'organization', primaryContextId: createId() },
       { primaryContextType: 'folder', primaryContextId: folderId },
       { primaryContextType: 'executive_summary', primaryContextId: folderId },

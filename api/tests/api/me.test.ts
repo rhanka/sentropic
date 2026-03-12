@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { chatGenerationTraces, chatMessages, chatSessions, organizations, folders, settings, useCases, workspaces } from '../../src/db/schema';
+import { chatGenerationTraces, chatMessages, chatSessions, organizations, folders, settings, initiatives, workspaces } from '../../src/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { createTestId } from '../utils/test-helpers';
 import { settingsService } from '../../src/services/settings';
@@ -137,11 +137,11 @@ describe('Me API', () => {
 
     const organizationId = createTestId();
     const folderId = createTestId();
-    const useCaseId = createTestId();
+    const initiativeId = createTestId();
 
     await db.insert(organizations).values({ id: organizationId, workspaceId: wsId, name: `O ${createTestId()}` });
     await db.insert(folders).values({ id: folderId, workspaceId: wsId, name: `F ${createTestId()}`, status: 'completed' });
-    await db.insert(useCases).values({ id: useCaseId, workspaceId: wsId, folderId, data: { name: 'UC' } as any, status: 'completed' });
+    await db.insert(initiatives).values({ id: initiativeId, workspaceId: wsId, folderId, data: { name: 'UC' } as any, status: 'completed' });
 
     const del = await authenticatedRequest(app, 'DELETE', '/api/v1/me', user.sessionToken!);
     expect(del.status).toBe(200);

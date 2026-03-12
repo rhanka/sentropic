@@ -6,9 +6,9 @@ vi.mock('../../src/services/tools', () => ({
 
 import { executeWithToolsStream } from '../../src/services/tools';
 import { defaultMatrixConfig } from '../../src/config/default-matrix';
-import { generateUseCaseDetail } from '../../src/services/context-initiative';
+import { generateInitiativeDetail } from '../../src/services/context-initiative';
 
-describe('generateUseCaseDetail payload contract', () => {
+describe('generateInitiativeDetail payload contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -39,7 +39,7 @@ describe('generateUseCaseDetail payload contract', () => {
       }),
     } as Awaited<ReturnType<typeof executeWithToolsStream>>);
 
-    const detail = await generateUseCaseDetail(
+    const detail = await generateInitiativeDetail(
       'Predictive maintenance assistant',
       'Factory context',
       defaultMatrixConfig,
@@ -100,7 +100,7 @@ describe('generateUseCaseDetail payload contract', () => {
       }),
     } as Awaited<ReturnType<typeof executeWithToolsStream>>);
 
-    const detail = await generateUseCaseDetail(
+    const detail = await generateInitiativeDetail(
       'Document classifier',
       'Operations context',
       defaultMatrixConfig,

@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildGeneratedUseCasePayloadForPersistence,
+  buildGeneratedInitiativePayloadForPersistence,
   normalizeAutoGenerationSectionKeys,
   resolveGenerationPromptOverrideFromConfig,
 } from '../../src/services/queue-manager';
-import type { UseCaseDetail } from '../../src/services/context-initiative';
+import type { InitiativeDetail } from '../../src/services/context-initiative';
 
 describe('queue manager contracts', () => {
   it('normalizes auto-comment section keys for each context', () => {
     expect(
-      normalizeAutoGenerationSectionKeys('usecase', [
+      normalizeAutoGenerationSectionKeys('initiative', [
         'data.name',
         'data.domain',
         'data.constraints',
@@ -33,7 +33,7 @@ describe('queue manager contracts', () => {
   });
 
   it('builds generated usecase payload without persisting unsupported process/prerequisites fields', () => {
-    const detail: UseCaseDetail = {
+    const detail: InitiativeDetail = {
       name: 'Generated use case',
       description: 'Generated description',
       problem: 'Current workflow is slow',
@@ -55,7 +55,7 @@ describe('queue manager contracts', () => {
       complexityScores: [{ axisId: 'implementation_effort', rating: 34, description: 'Moderate effort' }],
     };
 
-    const { useCaseData, generatedUseCaseFields } = buildGeneratedUseCasePayloadForPersistence(
+    const { initiativeData, generatedInitiativeFields } = buildGeneratedInitiativePayloadForPersistence(
       {
         name: 'Existing name',
         description: 'Existing description',
@@ -65,40 +65,40 @@ describe('queue manager contracts', () => {
       detail
     );
 
-    expect(useCaseData.name).toBe('Existing name');
-    expect(useCaseData.description).toBe('Existing description');
-    expect(useCaseData.domain).toBe('Operations');
-    expect(useCaseData.deadline).toBe('8 weeks');
-    expect('process' in useCaseData).toBe(false);
-    expect('prerequisites' in useCaseData).toBe(false);
+    expect(initiativeData.name).toBe('Existing name');
+    expect(initiativeData.description).toBe('Existing description');
+    expect(initiativeData.domain).toBe('Operations');
+    expect(initiativeData.deadline).toBe('8 weeks');
+    expect('process' in initiativeData).toBe(false);
+    expect('prerequisites' in initiativeData).toBe(false);
 
-    expect(generatedUseCaseFields).toEqual(
+    expect(generatedInitiativeFields).toEqual(
       expect.arrayContaining(['data.problem', 'data.solution', 'data.domain', 'data.deadline'])
     );
-    expect(generatedUseCaseFields).not.toContain('data.process');
-    expect(generatedUseCaseFields).not.toContain('data.prerequisites');
-    expect(generatedUseCaseFields).not.toContain('data.name');
-    expect(generatedUseCaseFields).not.toContain('data.description');
+    expect(generatedInitiativeFields).not.toContain('data.process');
+    expect(generatedInitiativeFields).not.toContain('data.prerequisites');
+    expect(generatedInitiativeFields).not.toContain('data.name');
+    expect(generatedInitiativeFields).not.toContain('data.description');
   });
 
   it('extracts generation prompt override from agent config with fallback prompt id', () => {
     const configured = resolveGenerationPromptOverrideFromConfig(
       {
-        promptId: 'agent.use_case_list.v2',
+        promptId: 'agent.initiative_list.v2',
         promptTemplate: 'Template body',
       },
-      'use_case_list',
+      'initiative_list',
     );
-    expect(configured.promptId).toBe('agent.use_case_list.v2');
+    expect(configured.promptId).toBe('agent.initiative_list.v2');
     expect(configured.promptTemplate).toBe('Template body');
 
     const fallback = resolveGenerationPromptOverrideFromConfig(
       {
-        role: 'usecase_list_generation',
+        role: 'initiative_list_generation',
       },
-      'use_case_list',
+      'initiative_list',
     );
-    expect(fallback.promptId).toBe('use_case_list');
+    expect(fallback.promptId).toBe('initiative_list');
     expect(fallback.promptTemplate).toBeUndefined();
   });
 });
