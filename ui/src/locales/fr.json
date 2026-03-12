@@ -4,7 +4,7 @@
     "folders": "Dossiers",
     "organizations": "Organisations",
     "business": "Configuration métier",
-    "useCases": "Cas d'usage",
+    "useCases": "Initiatives",
     "matrix": "Évaluation",
     "dashboard": "Dashboard",
     "data": "Données",
@@ -110,7 +110,7 @@
   },
   "home": {
     "welcomeTitle": "Bienvenue sur Top AI Ideas",
-    "tagline": "Décrivez votre contexte métier et découvrez des cas d'usage d'intelligence artificielle priorisés par valeur et complexité.",
+    "tagline": "Décrivez votre contexte métier et découvrez des initiatives d'intelligence artificielle priorisées par valeur et complexité.",
     "getStarted": "Commencer",
     "redirectingTo": "Redirection vers {path}…"
   },
@@ -236,7 +236,7 @@
     "value": "Valeur",
     "complexity": "Complexité",
     "fibonacciPoints": "Points Fibonacci",
-    "useCaseCount": "Nombre de cas",
+    "useCaseCount": "Nombre d'initiatives",
     "level": "Niveau",
     "description": "Description",
     "baseEvaluation": "Évaluation de base",
@@ -264,16 +264,16 @@
     "newComplexityAxisName": "Nouvel axe de complexité",
     "valueAxisAdded": "Nouvel axe de valeur ajouté",
     "complexityAxisAdded": "Nouvel axe de complexité ajouté",
-  "confirmDeleteAxis": "Êtes-vous sûr de vouloir supprimer cet axe ? Cette action affectera le calcul des scores des cas d'usage.",
+  "confirmDeleteAxis": "Êtes-vous sûr de vouloir supprimer cet axe ? Cette action affectera le calcul des scores des initiatives.",
   "valueAxisDeleted": "Axe de valeur supprimé",
   "complexityAxisDeleted": "Axe de complexité supprimé",
-  "weightsRecalcWarning": "Attention : Modifier les poids recalculera automatiquement tous les scores de vos cas d'usage existants.",
+  "weightsRecalcWarning": "Attention : Modifier les poids recalculera automatiquement tous les scores de vos initiatives existantes.",
   "levelN": "Niveau {level}",
   "selectedFolder": "Dossier sélectionné",
   "createNew": "Créer une nouvelle matrice",
   "createDialogBody": "Choisissez le type de matrice à créer :",
     "help": {
-      "intro": "Ajustez les poids des axes de valeur et de complexité pour personnaliser l'évaluation des cas d'usage.",
+      "intro": "Ajustez les poids des axes de valeur et de complexité pour personnaliser l'évaluation des initiatives.",
       "details": "La matrice utilise 5 niveaux pour chaque critère, avec des descriptions spécifiques pour chacun. Cliquez sur un critère pour voir et modifier les descriptions détaillées des 5 niveaux."
     },
     "toasts": {
@@ -297,13 +297,13 @@
       "include": {
         "organizations": "Inclure les organisations",
         "organization": "Inclure l'organisation",
-        "usecases": "Inclure les cas d'usage",
+        "usecases": "Inclure les initiatives",
         "matrix": "Inclure la matrice"
       }
     },
     "actions": "Actions dossier",
     "loading": "Chargement des dossiers…",
-    "useCaseCount": "{count} cas d'usage",
+    "useCaseCount": "{count} initiatives",
     "deleteSuccess": "Dossier supprimé avec succès !",
     "deleteError": "Erreur lors de la suppression du dossier",
     "toast": {
@@ -315,7 +315,7 @@
     "detail": {
       "defaultTitle": "Dossier",
       "title": "Dossier",
-      "loadingUseCases": "Chargement des cas d'usage…",
+      "loadingUseCases": "Chargement des initiatives…",
       "context": "Contexte",
       "valueLabel": "Valeur:",
       "complexityLabel": "Complexité:",
@@ -333,9 +333,9 @@
     "createOrg": "Créer une organisation",
     "context": "Contexte",
     "contextPlaceholder": "Décrire le contexte métier et les objectifs…",
-      "useCaseCount": "Nombre de cas d'usage",
+      "useCaseCount": "Nombre d'initiatives",
       "modelLabel": "Modèle de génération",
-      "modelHint": "Utilisé pour la génération des cas d'usage et de la matrice de ce dossier.",
+      "modelHint": "Utilisé pour la génération des initiatives et de la matrice de ce dossier.",
       "default": "Défaut: {count}",
       "loadingModelCatalog": "Chargement des modèles…",
       "loadingOrganizations": "Chargement des organisations…",
@@ -462,7 +462,7 @@
     "execSummaryEmpty": "Aucune synthèse exécutive disponible pour ce dossier",
     "execSummaryGenerate": "Générer la synthèse exécutive",
     "loadingData": "Chargement des données…",
-  "useCaseCount": "Nombre de cas d'usage",
+  "useCaseCount": "Nombre d'initiatives",
   "quickWins": "Gains rapides",
   "roiQuadrants": {
     "quickWins": "Gains rapides",
@@ -490,7 +490,7 @@
     "recommendations": "Recommandations",
     "references": "Références",
     "annex": "Annexe",
-    "annexUseCases": "Fiches des cas d'usage",
+    "annexUseCases": "Fiches des initiatives",
     "subtitle": "Priorisez vos innovations par l'apport de valeur",
     "about": "À Propos"
     ,
@@ -794,7 +794,7 @@
       }
     },
     "admin": {
-      "resetDescription": "Cette section permet de réinitialiser complètement l'application. Toutes les données (entreprises, dossiers, cas d'usage) seront définitivement supprimées.",
+      "resetDescription": "Cette section permet de réinitialiser complètement l'application. Toutes les données (entreprises, dossiers, initiatives) seront définitivement supprimées.",
       "confirmResetAll": "Êtes-vous sûr de vouloir supprimer TOUTES les données ? Cette action est irréversible.",
       "reset": "Supprimer toutes les données",
       "resetting": "Suppression en cours…",
@@ -807,12 +807,12 @@
     }
   },
   "usecase": {
-    "useCase": "Cas d'usage",
-    "unnamed": "Cas d'usage sans nom",
+    "useCase": "Initiative",
+    "unnamed": "Initiative sans nom",
     "status": {
       "detailing": "Détail en cours de génération…",
       "detailingShort": "Détail en cours…",
-      "generating": "Cas d'usage en cours de génération…",
+      "generating": "Initiative en cours de génération…",
       "pending": "Génération en attente…"
     },
     "info": {
@@ -839,13 +839,13 @@
       "totalComplexity": "Complexité calculée"
     },
     "errors": {
-      "load": "Erreur lors du chargement du cas d'usage",
+      "load": "Erreur lors du chargement de l'initiative",
       "readOnlyAction": "Action non autorisée (mode lecture seule).",
       "delete": "Erreur lors de la suppression"
     },
-    "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce cas d'usage ?",
+    "confirmDelete": "Êtes-vous sûr de vouloir supprimer cette initiative ?",
     "export": {
-      "title": "Exporter le cas d'usage",
+      "title": "Exporter l'initiative",
       "include": {
         "folder": "Inclure le dossier",
         "folderMatrix": "Inclure la matrice du dossier",
@@ -853,14 +853,14 @@
       }
     },
     "import": {
-      "title": "Importer un cas d'usage"
+      "title": "Importer une initiative"
     },
     "toast": {
-      "deleted": "Cas d'usage supprimé avec succès !"
+      "deleted": "Initiative supprimée avec succès !"
     },
     "scatterPlot": {
       "title": "Matrice de priorisation",
-      "empty": "Aucun cas d'usage à afficher",
+      "empty": "Aucune initiative à afficher",
       "loading": "Chargement de la matrice…",
       "placingLabels": "Placement des labels en cours…",
       "clickHint": "Cliquez sur un point pour voir le détail.",
@@ -1193,8 +1193,8 @@
       "organizationUpdate": { "label": "Organisation (édition)" },
       "folderRead": { "label": "Dossier (lecture)" },
       "folderUpdate": { "label": "Dossier (édition)" },
-      "usecaseRead": { "label": "Cas d'usage (lecture)" },
-      "usecaseUpdate": { "label": "Cas d'usage (édition)" },
+      "usecaseRead": { "label": "Initiative (lecture)" },
+      "usecaseUpdate": { "label": "Initiative (édition)" },
       "matrix": { "label": "Matrice (lecture/édition)" },
       "executiveSummary": { "label": "Synthèse exécutive" }
     },
@@ -1342,8 +1342,8 @@
     "type": {
       "organizationEnrich": "Enrichissement organisation",
       "matrixGenerate": "Génération matrice",
-      "usecaseList": "Génération cas d'usage",
-      "usecaseDetail": "Détail cas d'usage",
+      "usecaseList": "Génération initiatives",
+      "usecaseDetail": "Détail initiative",
       "executiveSummary": "Synthèse exécutive",
       "documentSummary": "Résumé document",
       "chatMessage": "Chat",
@@ -1474,7 +1474,7 @@
       "include": {
         "organizations": "Inclure les organisations",
         "folders": "Inclure les dossiers",
-        "usecases": "Inclure les cas d'usage",
+        "usecases": "Inclure les initiatives",
         "matrix": "Inclure les matrices"
       }
     },
@@ -1529,17 +1529,17 @@
     "type": {
       "organizations": "Organisations",
       "folders": "Dossiers",
-      "usecases": "Cas d'usage",
+      "usecases": "Initiatives",
       "matrix": "Matrices"
     },
     "targetWorkspace": "Workspace cible",
     "createWorkspace": "Créer un nouveau workspace",
     "targetLabelFallback": "Cible",
-    "importHint": "Pour un import d’objet (dossier, cas d’usage, organisation), un workspace cible est requis.",
+    "importHint": "Pour un import d’objet (dossier, initiative, organisation), un workspace cible est requis.",
     "scope": {
       "workspace": "Workspace",
       "folder": "Dossier",
-      "usecase": "Cas d'usage",
+      "usecase": "Initiative",
       "organization": "Organisation",
       "matrix": "Matrice"
     },
