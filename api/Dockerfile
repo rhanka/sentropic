@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile:1.12
 FROM node:24-alpine3.22 AS base
 # Security: Update npm to latest version to fix glob vulnerabilities in npm dependencies
 RUN npm install -g npm@latest

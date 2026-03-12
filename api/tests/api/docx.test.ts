@@ -59,7 +59,7 @@ describe('DOCX API', () => {
     const response = await authenticatedRequest(
       app,
       'GET',
-      `/api/v1/initiatives/${createTestId()}/docx`,
+      `/api/v1/use-cases/${createTestId()}/docx`,
       user.sessionToken!
     );
 
@@ -627,7 +627,7 @@ describe('DOCX API', () => {
       expect(doneEvent.data?.state).toBe('done');
       expect(doneEvent.data?.progress).toBe(100);
       expect(doneEvent.data?.storageBucket).toBe('docs-test');
-      expect(String(doneEvent.data?.storageKey || '')).toContain('/usecase/');
+      expect(String(doneEvent.data?.storageKey || '')).toContain('/initiative/');
 
       expect(workerSpy).toHaveBeenCalledTimes(1);
       expect(putSpy).toHaveBeenCalledTimes(1);

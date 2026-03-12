@@ -1708,8 +1708,8 @@ export class TodoOrchestrationService {
       byTaskKey.set(task.taskKey, task.agentDefinitionId ?? null);
     }
 
-    const initiativeListAgentId = byTaskKey.get("generation_initiative_list") ?? null;
-    const initiativeDetailAgentId = byTaskKey.get("generation_initiative_detail") ?? null;
+    const initiativeListAgentId = byTaskKey.get("generation_usecase_list") ?? byTaskKey.get("generation_initiative_list") ?? null;
+    const initiativeDetailAgentId = byTaskKey.get("generation_usecase_detail") ?? byTaskKey.get("generation_initiative_detail") ?? null;
 
     return {
       contextPrepareAgentId: byTaskKey.get("generation_context_prepare") ?? null,
