@@ -56,16 +56,16 @@ export const calculateScores = (
 };
 
 /**
- * Calcule les scores totaux pour un cas d'usage à partir de sa matrice et de ses scores détaillés
+ * Calcule les scores totaux pour un initiative à partir de sa matrice et de ses scores détaillés
  * Cette fonction remplace l'ancien stockage de totalValueScore et totalComplexityScore
  * 
  * @param matrix - Configuration de la matrice de notation
- * @param useCaseData - Données du cas d'usage (data JSONB)
+ * @param initiativeData - Données du initiative (data JSONB)
  * @returns Scores calculés (totalValueScore, totalComplexityScore, etc.) ou null si pas de matrice
  */
-export const calculateUseCaseScores = (
+export const calculateInitiativeScores = (
   matrix: MatrixConfig | null,
-  useCaseData: InitiativeData
+  initiativeData: InitiativeData
 ): {
   totalValueScore: number | null;
   totalComplexityScore: number | null;
@@ -79,8 +79,8 @@ export const calculateUseCaseScores = (
     return null;
   }
 
-  const valueScores = useCaseData.valueScores ?? [];
-  const complexityScores = useCaseData.complexityScores ?? [];
+  const valueScores = initiativeData.valueScores ?? [];
+  const complexityScores = initiativeData.complexityScores ?? [];
   
   return calculateScores(matrix, valueScores, complexityScores);
 };

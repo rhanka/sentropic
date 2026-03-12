@@ -9,7 +9,7 @@
 
 import { pool } from '../db/client';
 
-async function migrateUseCasesToData() {
+async function migrateInitiativesToData() {
 
   console.log('🔄 Début de la migration des données use_cases vers data JSONB...');
 
@@ -158,7 +158,7 @@ async function migrateUseCasesToData() {
 }
 
 // Exécuter la migration
-migrateUseCasesToData()
+migrateInitiativesToData()
   .then(() => {
     console.log('✅ Migration terminée');
     process.exit(0);
