@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the Mistral SDK before importing the provider
+const mockMistralComplete = vi.fn();
+const mockMistralStream = vi.fn();
+
 vi.mock('@mistralai/mistralai', () => {
-  const mockComplete = vi.fn();
-  const mockStream = vi.fn();
+  class MockMistral {
+    chat = {
+      complete: mockMistralComplete,
+      stream: mockMistralStream,
+    };
+  }
   return {
-    Mistral: vi.fn().mockImplementation(() => ({
-      chat: {
-        complete: mockComplete,
-        stream: mockStream,
-      },
-    })),
-    __mockComplete: mockComplete,
-    __mockStream: mockStream,
+    Mistral: MockMistral,
   };
 });
 
@@ -129,9 +129,7 @@ describe('MistralProviderRuntime', () => {
     });
 
     it('should call Mistral chat.complete', async () => {
-      const sdk = await import('@mistralai/mistralai');
-      const mockComplete = (sdk as unknown as { __mockComplete: ReturnType<typeof vi.fn> }).__mockComplete;
-      mockComplete.mockResolvedValue({
+      mockMistralComplete.mockResolvedValue({
         choices: [{ message: { content: 'Hello' } }],
       });
 
@@ -143,7 +141,7 @@ describe('MistralProviderRuntime', () => {
         },
       });
 
-      expect(mockComplete).toHaveBeenCalled();
+      expect(mockMistralComplete).toHaveBeenCalled();
       expect(result).toEqual({ choices: [{ message: { content: 'Hello' } }] });
     });
   });
@@ -156,15 +154,13 @@ describe('MistralProviderRuntime', () => {
     });
 
     it('should return async iterable from Mistral stream', async () => {
-      const sdk = await import('@mistralai/mistralai');
-      const mockStream = (sdk as unknown as { __mockStream: ReturnType<typeof vi.fn> }).__mockStream;
 
       const events = [
         { data: { choices: [{ delta: { content: 'Hello' } }] } },
         { data: { choices: [{ delta: { content: ' world' }, finish_reason: 'stop' }] } },
       ];
 
-      mockStream.mockResolvedValue({
+      mockMistralStream.mockResolvedValue({
         [Symbol.asyncIterator]: async function* () {
           for (const e of events) yield e;
         },
