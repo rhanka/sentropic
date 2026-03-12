@@ -7,9 +7,12 @@ const STORAGE_KEY = 'workspaceScopeId';
 
 export type UserWorkspaceRole = 'viewer' | 'commenter' | 'editor' | 'admin';
 
+export type WorkspaceType = 'neutral' | 'ai-ideas' | 'opportunity' | 'code';
+
 export type UserWorkspace = {
   id: string;
   name: string;
+  type: WorkspaceType;
   role: UserWorkspaceRole;
   isCodeWorkspace: boolean;
   hiddenAt: string | null;
@@ -52,6 +55,10 @@ export const selectedWorkspace = derived(workspaceScope, ($s) => {
 
 export const selectedWorkspaceRole = derived(selectedWorkspace, ($w) => {
   return $w?.role ?? null;
+});
+
+export const selectedWorkspaceType = derived(selectedWorkspace, ($w) => {
+  return $w?.type ?? null;
 });
 
 export const selectedWorkspaceHidden = derived(selectedWorkspace, ($w) => {
