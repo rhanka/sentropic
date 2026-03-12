@@ -3069,11 +3069,10 @@ Règles :
       (await getOpenAITransportMode()) === 'codex';
 
     // Reasoning-effort evaluation (best effort):
-    // - OpenAI gpt-5* keeps its existing evaluator behavior.
-    // - Gemini provider uses gemini-3.1-flash-lite for the same classification intent.
-    const isGpt5 = typeof selectedModel === 'string' && selectedModel.startsWith('gpt-5');
-    const shouldEvaluateReasoningEffort =
-      isGpt5 || selectedProviderId === 'gemini';
+    // - Runs for any model whose catalog entry has reasoningTier !== 'none'.
+    // - Evaluator uses a cheap model from the same provider family when available,
+    //   otherwise falls back to OpenAI gpt-4.1-nano.
+    const shouldEvaluateReasoningEffort = modelSupportsReasoning(selectedModel);
     const evaluatorProviderId: ProviderId =
       selectedProviderId === 'gemini' ? 'gemini' : 'openai';
     const evaluatorModel =
