@@ -298,7 +298,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 **Tasks:**
 - [x] API: add `type` to workspace creation validation (Zod schema). ✓
 - [x] API: auto-create neutral workspace on user registration/first login + migration backfill. ✓
-- [ ] API: enforce neutral constraints (no memberships, no initiatives, no workflows).
+- [x] API: enforce neutral constraints (no memberships, no initiatives, no workflows). ✓
 - [ ] API: enforce type immutability on workspace update.
 - [ ] UI: add workspace type selector to workspace creation flow.
 - [ ] UI: expose type in workspace stores and display type icon in header.
