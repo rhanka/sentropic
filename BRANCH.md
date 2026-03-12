@@ -133,7 +133,17 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
     - ✓ §13 rewritten: new/refactored/modified screens with container convergence and workflow launch refactoring.
   - [x] Delete `spec/SPEC_VOL_UI_VIEWS.md` once absorbed. ✓ kept for traceability, will be deleted at lot 0 gate.
 
-- [x] **0.5 Impact analysis on future branches**
+- [x] **0.5 Chat × workspace tools, doc connectors, LLM providers, RAG — cross-cutting spec & exclusions**
+  - [x] Created `spec/SPEC_VOL_CHAT_DOCS_LLM_RAG.md` — raw demands: workspace×chat×tools coupling, ChatPanel modularization, Google Workspace/SharePoint connectors, Claude/Mistral/Cohere providers, RAG on documents.
+  - [x] Absorbed into `spec/SPEC_EVOL_WORKSPACE_TYPES.md`:
+    - ✓ §14 added: Workspace-type-aware chat & tool scoping — tool resolution becomes `(workspace_type, context_type, role)`. Per-type tool sets defined (ai-ideas, opportunity, code, neutral). Tool rename impact (`usecase`→`initiative`). Clear boundary: what BR-04 delivers vs defers.
+    - ✓ §15 added: Cross-cutting exclusions & branch articulation — ChatPanel modularization (§15.1), document connectors (§15.2), RAG (§15.3), Cohere (§15.4), parallelization matrix (§15.5).
+    - ✓ Fusion trajectory table updated (§14, §15).
+    - ✓ Articulation section updated with MODEL_AUTH_PROVIDERS and MODEL_PROVIDERS_RUNTIME links.
+  - [x] Updated `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md` — Cohere W2+ addition noted.
+  - [x] New branch candidates identified: `feat/chat-modularization`, `feat/document-connectors`, `feat/rag-documents` (all parallelizable with BR-04).
+
+- [x] **0.6 Impact analysis on future branches**
   - [x] BR-06 (Chrome upstream v1): low impact — `use_cases`→`initiatives` rename affects `contextType` refs. Update post-merge.
   - [x] BR-07 (Release UI/npm): no impact — CI/packaging only.
   - [x] BR-08 (Model runtime Claude/Mistral): low impact — workspace-type-aware model defaults as future consideration.
@@ -144,7 +154,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - [x] BR-13 (Chrome plugin download): no impact — packaging/distribution only.
   - [x] Branches needing scope/dependency updates: **BR-06, BR-10, BR-11** (BR-10 is the most impacted).
 
-- [x] **0.6 Rewrite branch plans**
+- [x] **0.7 Rewrite branch plans**
   - [x] Rewrite `plan/04-BRANCH_feat-workspace-template-catalog.md` — now pointer to BRANCH.md.
   - [x] Rewrite `plan/06-BRANCH_feat-chrome-upstream-v1.md` — BR-04 low impact note added.
   - [x] BR-07, BR-08, BR-09, BR-12 — verified no BR-04 impact (no change needed).
@@ -153,7 +163,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - [x] Rewrite `PLAN.md` — new timeline, dependency graph with BR-04 as structural branch, wave scheduling.
   - [x] Update `TODO.md` — BR-02/03/05 marked done, BR-04 scope updated.
 
-- [ ] **0.7 Rewrite BRANCH.md lots 1-N**
+- [ ] **0.8 Rewrite BRANCH.md lots 1-N**
   - [ ] Based on finalized specs and data model, rewrite all lots (1 through N) in this BRANCH.md with:
     - Actionable task lists per lot
     - API/UI/E2E test plans at file granularity (existing + new + updated files)
