@@ -2,7 +2,7 @@ import { db } from './client';
 import { sql } from 'drizzle-orm';
 
 /**
- * Ensure all recommended indexes exist for use_cases table (idempotent)
+ * Ensure all recommended indexes exist for initiatives table (idempotent)
  * 
  * This function creates indexes for:
  * - JSONB data field for general queries
@@ -20,45 +20,45 @@ export async function ensureIndexes(): Promise<void> {
 
   // Index sur data.name (JSONB) avec pg_trgm
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS idx_use_cases_data_name_trgm 
-    ON use_cases USING GIN ((data->>'name') gin_trgm_ops)
+    CREATE INDEX IF NOT EXISTS idx_initiatives_data_name_trgm 
+    ON initiatives USING GIN ((data->>'name') gin_trgm_ops)
   `);
 
   // Index sur data.description (JSONB) avec pg_trgm
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS idx_use_cases_data_description_trgm 
-    ON use_cases USING GIN ((data->>'description') gin_trgm_ops)
+    CREATE INDEX IF NOT EXISTS idx_initiatives_data_description_trgm 
+    ON initiatives USING GIN ((data->>'description') gin_trgm_ops)
   `);
 
   // Index composite pour requêtes fréquentes (folder_id + data.name)
   // Note: on utilise une expression pour extraire data.name
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS idx_use_cases_folder_data_name 
-    ON use_cases (folder_id, (data->>'name'))
+    CREATE INDEX IF NOT EXISTS idx_initiatives_folder_data_name 
+    ON initiatives (folder_id, (data->>'name'))
   `);
 
   // Index GIN sur data JSONB pour requêtes générales
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS idx_use_cases_data_gin 
-    ON use_cases USING GIN (data)
+    CREATE INDEX IF NOT EXISTS idx_initiatives_data_gin 
+    ON initiatives USING GIN (data)
   `);
 
   // Index sur data.problem avec pg_trgm
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS idx_use_cases_data_problem_trgm 
-    ON use_cases USING GIN ((data->>'problem') gin_trgm_ops)
+    CREATE INDEX IF NOT EXISTS idx_initiatives_data_problem_trgm 
+    ON initiatives USING GIN ((data->>'problem') gin_trgm_ops)
   `);
 
   // Index sur data.solution avec pg_trgm
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS idx_use_cases_data_solution_trgm 
-    ON use_cases USING GIN ((data->>'solution') gin_trgm_ops)
+    CREATE INDEX IF NOT EXISTS idx_initiatives_data_solution_trgm 
+    ON initiatives USING GIN ((data->>'solution') gin_trgm_ops)
   `);
 
   // Index pour tri/filtrage sur statut (folder_id + status)
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS idx_use_cases_folder_status 
-    ON use_cases (folder_id, status)
+    CREATE INDEX IF NOT EXISTS idx_initiatives_folder_status 
+    ON initiatives (folder_id, status)
   `);
 }
 
