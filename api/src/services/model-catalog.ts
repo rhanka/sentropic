@@ -159,6 +159,32 @@ export const resolveDefaultSelection = (
   return FALLBACK_DEFAULT;
 };
 
+/**
+ * Check whether a model supports reasoning (reasoningTier !== 'none') by looking
+ * it up in the provider registry catalog.  Falls back to `false` if the model is
+ * not found.
+ */
+export const modelSupportsReasoning = (modelId: string | undefined | null): boolean => {
+  if (!modelId) return false;
+  const models = providerRegistry.listModels();
+  const entry = models.find((m) => m.modelId === modelId);
+  return entry ? entry.reasoningTier !== 'none' : false;
+};
+
+/**
+ * Return provider-agnostic reasoning params for a model that supports reasoning.
+ * For models that do NOT support reasoning, returns an empty object.
+ * The returned shape is compatible with executeWithToolsStream / executeStructuredGeneration options.
+ */
+export const getReasoningParamsForModel = (
+  modelId: string | undefined | null,
+  effort: 'low' | 'medium' | 'high' | 'xhigh' = 'high',
+  summary: 'auto' | 'concise' | 'detailed' = 'detailed'
+): { reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh'; reasoningSummary?: 'auto' | 'concise' | 'detailed' } => {
+  if (!modelSupportsReasoning(modelId)) return {};
+  return { reasoningEffort: effort, reasoningSummary: summary };
+};
+
 export const getModelCatalogPayload = async (options?: {
   userId?: string | null;
 }): Promise<ModelCatalogPayload> => {

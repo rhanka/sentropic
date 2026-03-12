@@ -1,4 +1,5 @@
 import { executeWithToolsStream } from './tools';
+import { getReasoningParamsForModel } from './model-catalog';
 import { defaultPrompts } from '../config/default-prompts';
 import type { MatrixConfig } from '../types/matrix';
 
@@ -125,7 +126,6 @@ export async function generateOrganizationMatrixTemplate(
     .replace('{{organization_info}}', organizationInfo || 'Aucune information organisationnelle disponible')
     .replace('{{base_matrix}}', JSON.stringify(baseMatrix));
 
-  const isGpt5 = typeof model === 'string' && model.startsWith('gpt-5');
   const finalStreamId = streamId || `organization_matrix_${Date.now()}`;
   const promptId =
     typeof runtimePrompt?.promptId === 'string' &&
@@ -200,7 +200,7 @@ export async function generateOrganizationMatrixTemplate(
         required: ['valueAxes', 'complexityAxes'],
       },
     },
-    ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
+    ...getReasoningParamsForModel(model, 'high', 'detailed'),
     promptId,
     streamId: finalStreamId,
     signal,

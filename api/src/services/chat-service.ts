@@ -6,6 +6,7 @@ import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './ll
 import {
   getModelCatalogPayload,
   inferProviderFromModelIdWithLegacy,
+  modelSupportsReasoning,
   resolveDefaultSelection,
 } from './model-catalog';
 import { getNextSequence, readStreamEvents, writeStreamEvent } from './stream-service';
@@ -3556,7 +3557,7 @@ Règles :
       }
 
       // Debug (requested): if we asked for reasoningSummary=detailed but saw none, log it.
-      if (isGpt5 && reasoningParts.length === 0) {
+      if (modelSupportsReasoning(selectedModel) && reasoningParts.length === 0) {
         try {
           console.warn('[chat] no_reasoning_delta_observed', {
             assistantMessageId: options.assistantMessageId,
