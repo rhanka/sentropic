@@ -5,7 +5,7 @@ import { executeWithToolsStream } from './tools';
 import { getReasoningParamsForModel } from './model-catalog';
 import { defaultPrompts } from '../config/default-prompts';
 import { settingsService } from './settings';
-import { hydrateUseCases } from '../routes/api/use-cases';
+import { hydrateUseCases } from '../routes/api/initiatives';
 
 type OrganizationData = {
   industry?: string;

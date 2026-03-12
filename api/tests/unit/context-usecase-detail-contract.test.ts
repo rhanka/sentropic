@@ -6,7 +6,7 @@ vi.mock('../../src/services/tools', () => ({
 
 import { executeWithToolsStream } from '../../src/services/tools';
 import { defaultMatrixConfig } from '../../src/config/default-matrix';
-import { generateUseCaseDetail } from '../../src/services/context-usecase';
+import { generateUseCaseDetail } from '../../src/services/context-initiative';
 
 describe('generateUseCaseDetail payload contract', () => {
   beforeEach(() => {

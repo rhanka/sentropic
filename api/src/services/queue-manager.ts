@@ -7,7 +7,7 @@ import {
   generateUseCaseDetail,
   type UseCaseDetail,
   type UseCaseListItem,
-} from './context-usecase';
+} from './context-initiative';
 import { generateOrganizationMatrixTemplate, mergeOrganizationMatrixTemplate } from './context-matrix';
 import { parseMatrixConfig } from '../utils/matrix';
 import { defaultMatrixConfig } from '../config/default-matrix';

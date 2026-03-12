@@ -6,7 +6,7 @@ import { useCases, folders } from '../../db/schema';
 import { and, eq } from 'drizzle-orm';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
-import { hydrateUseCases } from './use-cases';
+import { hydrateUseCases } from './initiatives';
 import { requireEditor } from '../../middleware/rbac';
 import { resolveLocaleFromHeaders } from '../../utils/locale';
 
