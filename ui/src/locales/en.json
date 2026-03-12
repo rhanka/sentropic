@@ -1567,5 +1567,15 @@
       "exportStarted": "Export started.",
       "importDone": "Import completed ({scope} → {workspace})."
     }
+  },
+  "neutral": {
+    "dashboardTitle": "Your Workspaces",
+    "dashboardSubtitle": "Overview of all your workspaces — select one to get started.",
+    "colName": "Name",
+    "colType": "Type",
+    "colInitiatives": "Initiatives",
+    "colLastActivity": "Last activity",
+    "emptyWorkspaces": "No workspaces yet. Create your first workspace from Settings.",
+    "newWorkspace": "New workspace"
   }
 }
