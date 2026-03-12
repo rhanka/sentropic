@@ -28,22 +28,13 @@ Open objective:
 - deterministic dedicated-field vs JSON save semantics,
 - authoritative workflow task I/O contracts consumed by runtime.
 
-### 2.2 Generic multi-workflow runtime (future branch)
+### 2.2 Generic multi-workflow runtime → **absorbed into BR-04**
 
-Current BR-03 implementation limits (kept explicit as temporary constraints):
-- generation task identity is still constrained by a closed compile-time task-key set,
-- orchestration routing still contains generation-specific switch/enum logic,
-- task assignment still relies on generation-specific fixed fields,
-- workflow `config` is metadata-oriented and not yet a full executable graph contract,
-- fanout/chaining for generation remains partially encoded in worker orchestration,
-- generation bootstrap still reuses legacy prompt defaults for initialization compatibility,
-- the runtime still assumes one canonical generation workflow key.
+This section has been absorbed into `spec/SPEC_EVOL_WORKSPACE_TYPES.md` §7 (Multi-workflow registry).
 
-Future target (post BR-03):
-- open runtime model for multiple workflows,
-- reusable workflow library/catalog,
-- executable graph semantics (edges/conditions/fanout) driven by persisted workflow objects,
-- generic `taskKey -> capability/agent` mapping without generation-specific hardcoding.
+BR-04 delivers: open task-key mapping, per-workspace-type workflow catalog, generic dispatch, workflow versioning. See that spec for full design.
+
+After BR-04 implementation, this pointer will be removed and the canonical spec updated.
 
 ### 2.3 Collaborative TODO runtime (future branch)
 
@@ -51,6 +42,8 @@ Deferred outside BR-03:
 - collaborative manual TODO editing,
 - multi-user/multi-AI task ownership visualization,
 - concurrent editing conflict UX.
+
+Note: BR-04 neutral workspace todo automation (auto-creation from events, task dispatch) uses the standard todo model per D2 decision. It does not cover collaborative editing.
 
 ## 3) Scope rule for this file
 
