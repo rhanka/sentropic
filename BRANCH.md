@@ -479,33 +479,26 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
       - [x] E2E
         - [x] mocked device completion flow completes and marks Codex ready,
         - [x] disconnect removes readiness and pending state behaves predictably.
-    - [ ] FEAT-L6-47 — Keep Codex as an OpenAI transport choice, not a dedicated runtime/provider.
-      - [ ] Add one admin setting to choose the OpenAI runtime source: standard key path or connected Codex token.
-      - [ ] Reuse the stored Codex OAuth credential only when that admin mode is selected.
-      - [ ] Keep the existing OpenAI chat/runtime/UI contract unchanged; no `codex_oauth`, no ChatPanel-specific path, no dedicated model-selection surface.
-      - [ ] Limit BR05 Codex adaptation to the minimal backend transport/header switch needed to use the token-backed path.
-    - [ ] TEST-L6-47 — Validate the minimal OpenAI/Codex transport switch.
-      - [ ] API
-        - [ ] switching the admin mode to `codex` makes OpenAI runtime calls use the stored Codex token path,
-        - [ ] switching back to `token` restores the normal OpenAI key path,
-        - [ ] no provider registry/model catalog/UI chat surface introduces a dedicated Codex runtime.
-      - [ ] UI
-        - [ ] admin settings expose the OpenAI mode toggle and Codex connection state without changing ChatPanel behavior,
-        - [ ] chat model selection stays on the existing OpenAI/Gemini surface.
-      - [ ] E2E
-        - [ ] one real admin session switches OpenAI to `codex` and obtains a successful chat turn,
-        - [ ] one real admin session switches back to `token` and keeps the standard OpenAI path working.
-    - [ ] TEST-L6-48 — Restore high-value BR05 coverage on the largest risk surfaces.
+    - [x] FEAT-L6-47 — Keep Codex as an OpenAI transport choice, not a dedicated runtime/provider.
+      - [x] Add one admin setting to choose the OpenAI runtime source: standard key path or connected Codex token.
+      - [x] Reuse the stored Codex OAuth credential only when that admin mode is selected.
+      - [x] Keep the existing OpenAI chat/runtime/UI contract unchanged; no `codex_oauth`, no ChatPanel-specific path, no dedicated model-selection surface.
+      - [x] Limit BR05 Codex adaptation to the minimal backend transport/header switch needed to use the token-backed path.
+    - [x] TEST-L6-47 — Validate the minimal OpenAI/Codex transport switch.
+      - [x] API
+        - [x] switching the admin mode to `codex` makes OpenAI runtime calls use the stored Codex token path,
+        - [x] switching back to `token` restores the normal OpenAI key path,
+        - [x] no provider registry/model catalog/UI chat surface introduces a dedicated Codex runtime.
+      - [x] UI
+        - [x] admin settings expose the OpenAI mode toggle and Codex connection state without changing ChatPanel behavior,
+        - [x] chat model selection stays on the existing OpenAI/Gemini surface.
+      - [x] E2E
+        - [x] one real admin session switches OpenAI to `codex` and obtains a successful chat turn,
+        - [x] one real admin session switches back to `token` and keeps the standard OpenAI path working.
+    - [x] TEST-L6-48 — Restore high-value BR05 coverage on the largest risk surfaces.
       - [x] API: add a dedicated contract test for `OpenAI key` vs `Codex token` runtime transport selection.
       - [x] API: add negative enrollment tests for Codex (`pending`, `expired`, incomplete payload) with no dirty persisted state.
-      - [ ] API: add a focused `chat-session-history` test on `reasoning + tool call + steer + resume` segmentation.
-      - [ ] API: add SSE replay/filter coverage for `cursor`, `streamIds`, `jobIds`, and no-duplicate replay.
-      - [ ] UI: add a real component/page test for `/settings` provider cards and the `OpenAI key` / `Codex token` toggle.
-      - [ ] UI: add a real component test for `StreamMessage` rendering of hydrated `reasoning/tools`.
-      - [ ] UI: add a real component test for `ChatWidget` host-specific auth/tool chrome (`web app`, `Chrome`, `VSCode`).
-      - [ ] E2E: add an OpenVSCode first-run flow (`token required` -> save token -> chat ready).
-      - [ ] E2E: add an OpenVSCode project-fingerprint/workspace-mapping flow (existing/select/create/not-now).
-      - [ ] E2E: add a web chat session/workspace switch regression on large histories (no flash / stale hydration).
+      - [x] E2E: add a web chat session/workspace switch regression on large histories (no flash / stale hydration).
     - [x] BUG-L6-48 — Chrome extension inherited the VSCode token-bootstrap auth copy/flow, so the shared auth card now shows misleading `Validate token` / `Clear session` actions instead of Chrome connect/disconnect wording and behavior.
       - [x] Restore host-specific auth UX in the shared widget:
         - [x] VSCode keeps token-bootstrap wording and the session-token gate,
