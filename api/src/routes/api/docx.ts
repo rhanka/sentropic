@@ -22,7 +22,7 @@ import { getDocumentsBucketName, getObjectBytes } from '../../services/storage-s
 
 const generateDocxSchema = z.object({
   templateId: z.enum(['usecase-onepage', 'executive-synthesis-multipage']),
-  entityType: z.enum(['usecase', 'folder']),
+  entityType: z.enum(['initiative', 'folder']),
   entityId: z.string().min(1),
   provided: z.record(z.unknown()).optional(),
   controls: z.record(z.unknown()).optional(),

@@ -309,7 +309,7 @@ const executeStructuredGenerationWithGeminiFallback = async (params: {
   prompt: string;
   model?: string;
   useDocuments: boolean;
-  documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>;
+  documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'initiative'; contextId: string }>;
   structuredOutput: StructuredOutputConfig;
   promptId: string;
   streamId: string;
@@ -389,7 +389,7 @@ export const generateInitiativeList = async (
   model?: string,
   initiativeCount?: number,
   folderName?: string,
-  documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>,
+  documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'initiative'; contextId: string }>,
   documentsContextJson?: string,
   signal?: AbortSignal,
   streamId?: string,
@@ -477,7 +477,7 @@ export const generateInitiativeDetail = async (
   matrix: MatrixConfig,
   organizationInfo?: string,
   model?: string,
-  documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }>,
+  documentsContexts?: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'initiative'; contextId: string }>,
   documentsContextJson?: string,
   signal?: AbortSignal,
   streamId?: string,

@@ -625,7 +625,7 @@ export class ToolService {
       await db.insert(chatContexts).values({
         id: createId(),
         sessionId,
-        contextType: 'usecase',
+        contextType: 'initiative',
         contextId: input.initiativeId,
         snapshotBefore: beforeData,
         snapshotAfter: finalData,
@@ -635,11 +635,11 @@ export class ToolService {
       });
     }
 
-    let seq = await getNextModificationSequence('usecase', input.initiativeId);
+    let seq = await getNextModificationSequence('initiative', input.initiativeId);
     for (const item of applied) {
       await db.insert(contextModificationHistory).values({
         id: createId(),
-        contextType: 'usecase',
+        contextType: 'initiative',
         contextId: input.initiativeId,
         sessionId,
         messageId,
@@ -673,7 +673,7 @@ export class ToolService {
     if (commentAuthorId && commentWorkspaceId) {
       await this.createAutoFieldComments({
         workspaceId: commentWorkspaceId,
-        contextType: 'usecase',
+        contextType: 'initiative',
         contextId: input.initiativeId,
         sectionKeys: applied.map((item) => item.path),
         createdBy: commentAuthorId,
@@ -1565,7 +1565,7 @@ export class ToolService {
           .map((s) => {
             const sectionKey = String(s ?? '').trim();
             if (!sectionKey) return '';
-            return opts.contextType === 'usecase' && sectionKey.startsWith('data.')
+            return opts.contextType === 'initiative' && sectionKey.startsWith('data.')
               ? sectionKey.slice('data.'.length)
               : sectionKey;
           })
@@ -1820,7 +1820,7 @@ export class ToolService {
 
   async listContextDocuments(opts: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
     contextId: string;
   }): Promise<{
     items: Array<{
@@ -1862,7 +1862,7 @@ export class ToolService {
 
   async getDocumentSummary(opts: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
     contextId: string;
     documentId: string;
   }): Promise<{
@@ -1891,7 +1891,7 @@ export class ToolService {
 
   async getDocumentContent(opts: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
     contextId: string;
     documentId: string;
     maxChars?: number | null;
@@ -2060,7 +2060,7 @@ export class ToolService {
 
   async analyzeDocument(opts: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
     contextId: string;
     documentId: string;
     prompt: string;
