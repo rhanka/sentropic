@@ -12,7 +12,7 @@
   import { apiGet } from '$lib/utils/api';
   import { setWorkspaceScope, workspaceScope } from '$lib/stores/workspaceScope';
   import ViewTemplateRenderer from '$lib/components/ViewTemplateRenderer.svelte';
-  import type { ViewTemplateDescriptor } from '$lib/components/ViewTemplateRenderer.svelte';
+  import type { ViewTemplateDescriptor } from '$lib/types/view-template';
   import { Lightbulb, Target, Code2, Home, Plus } from '@lucide/svelte';
   import type { WorkspaceType } from '$lib/stores/workspaceScope';
 
