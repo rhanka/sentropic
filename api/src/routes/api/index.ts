@@ -16,6 +16,7 @@ import queueRouter from './queue';
 import aiSettingsRouter from './ai-settings';
 import { modelsRouter } from './models';
 import { workspacesRouter } from './workspaces';
+import { neutralRouter } from './neutral';
 import { plansRouter } from './plans';
 import { todosRouter } from './todos';
 import { tasksRouter } from './tasks';
@@ -72,6 +73,10 @@ apiRouter.route('/vscode-extension', vscodeExtensionRouter);
 // Workspace routes (authenticated; role checks are enforced per endpoint)
 apiRouter.use('/workspaces/*', requireAuth);
 apiRouter.route('/workspaces', workspacesRouter);
+
+// Neutral orchestrator routes (authenticated; workspace-agnostic dashboard)
+apiRouter.use('/neutral/*', requireAuth);
+apiRouter.route('/neutral', neutralRouter);
 
 // TODO orchestration routes (authenticated; workspace role checks are enforced per endpoint)
 apiRouter.use('/plans/*', requireAuth);
