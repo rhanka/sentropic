@@ -6,8 +6,9 @@
   import { session, isAuthenticated, logout, retrySessionInit } from '../stores/session';
   import { setLocale } from '$lib/i18n';
   import { currentFolderId } from '../stores/folders';
-  import { hiddenWorkspaceLock } from '$lib/stores/workspaceScope';
-  import { ChevronDown, Menu, X } from '@lucide/svelte';
+  import { hiddenWorkspaceLock, selectedWorkspace, selectedWorkspaceType } from '$lib/stores/workspaceScope';
+  import type { WorkspaceType } from '$lib/stores/workspaceScope';
+  import { ChevronDown, Menu, X, Lightbulb, Target, Code2, Home } from '@lucide/svelte';
   import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
   import { fly, fade } from 'svelte/transition';
 
@@ -108,6 +109,14 @@
   };
   $: currentLocale = ($i18nLocale as string) || 'fr';
 
+  const WORKSPACE_TYPE_CONFIG: Record<WorkspaceType, { icon: typeof Lightbulb; colorClass: string; labelKey: string }> = {
+    'neutral': { icon: Home, colorClass: 'text-slate-500 bg-slate-100', labelKey: 'workspaceSettings.types.neutral' },
+    'ai-ideas': { icon: Lightbulb, colorClass: 'text-amber-600 bg-amber-50', labelKey: 'workspaceSettings.types.aiIdeas' },
+    'opportunity': { icon: Target, colorClass: 'text-blue-600 bg-blue-50', labelKey: 'workspaceSettings.types.opportunity' },
+    'code': { icon: Code2, colorClass: 'text-emerald-600 bg-emerald-50', labelKey: 'workspaceSettings.types.code' },
+  };
+  $: wsTypeConfig = $selectedWorkspaceType ? WORKSPACE_TYPE_CONFIG[$selectedWorkspaceType] : null;
+
   // The workspace admin selector is in /settings (Workspace section) — not in the header.
 
   const onGlobalKeyDown = (e: KeyboardEvent) => {
@@ -180,6 +189,16 @@
         {/if}
       </button>
     </div>
+
+    <!-- Workspace type badge (desktop) -->
+    {#if $isAuthenticated && $selectedWorkspace && wsTypeConfig}
+      <div class:hidden={showCompactHeader} class="flex items-center gap-2 mr-2">
+        <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium {wsTypeConfig.colorClass}" title={$selectedWorkspace.name}>
+          <svelte:component this={wsTypeConfig.icon} class="w-3.5 h-3.5" />
+          <span class="max-w-[10rem] truncate">{$selectedWorkspace.name}</span>
+        </span>
+      </div>
+    {/if}
 
     <!-- Desktop right controls (hidden in compact mode) -->
     <div class:hidden={showCompactHeader} class="flex items-center gap-3">
@@ -273,6 +292,14 @@
       </div>
 
     <div class="p-3 space-y-4">
+        {#if $isAuthenticated && $selectedWorkspace && wsTypeConfig}
+          <div class="px-3 py-1">
+            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium {wsTypeConfig.colorClass}">
+              <svelte:component this={wsTypeConfig.icon} class="w-3.5 h-3.5" />
+              <span class="truncate">{$selectedWorkspace.name}</span>
+            </span>
+          </div>
+        {/if}
         <nav class="grid gap-1 text-sm font-medium">
           {#each navItems as item}
             {@const isDisabled = !!navDisabledByHref[item.href]}
