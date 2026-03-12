@@ -114,11 +114,12 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - [x] OQ-9: **Closed — par type workspace uniquement en v1.** Un folder hérite des gates de son type workspace. Pas d'override folder en v1 (simplification : un seul endroit de config, pas de conflits). Override folder possible en évolution future si besoin.
 
 - [x] **0.3 Spec evolution & target data model**
-  - [x] Create `spec/SPEC_EVOL_WORKSPACE_TYPES.md` — 12 sections with fusion trajectory table (§0). ✓ commit `87d841fb`.
+  - [x] Create `spec/SPEC_EVOL_WORKSPACE_TYPES.md` — 13 sections with fusion trajectory table (§0). Initial 12 sections commit `87d841fb`.
   - [x] Articulate with existing SPEC_EVOL files:
     - ✓ Absorbed `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §2.2 → §7 multi-workflow registry
     - ✓ BR-15 overlap noted as dependency (not absorbed, orthogonal)
     - ✓ Updated `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §2.3 with neutral workspace todo note
+  - [x] §12 View template system added: data-driven layout DSL per (workspace_type, object_type, maturity_stage). Table `view_templates` with fork/detach lineage. Templates for all object types per workspace type (initiative, solution, bid, product, organization, dashboard). Neutral landing = workspace cards + TODO feed.
   - [x] Canonical specs NOT updated now (Lot N-1). Fusion trajectory per section in §0 of SPEC_EVOL.
 
 - [x] **0.4 Impact analysis on future branches**
