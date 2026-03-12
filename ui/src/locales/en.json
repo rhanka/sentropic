@@ -533,6 +533,16 @@
     "promptManagement": "AI prompts management",
     "aiConfig": "AI configuration",
     "aiLoading": "Loading settings…",
+    "theme": {
+      "title": "Theme",
+      "description": "Choose how the web app and chat widgets render light/dark mode.",
+      "modeLabel": "Appearance mode",
+      "modes": {
+        "system": "System",
+        "light": "Light",
+        "dark": "Dark"
+      }
+    },
     "userAi": {
       "title": "AI configuration",
       "description": "Choose the default AI model for your new chats and generation forms.",
@@ -562,6 +572,40 @@
     "queueRunning": "Running",
     "queueDone": "Done",
     "queueFailed": "Failed",
+    "providerConnections": {
+      "title": "Provider connections",
+      "description": "Configure your provider connections in admin settings. The backend consumes the stored credential for your runtime calls.",
+      "status": {
+        "ready": "Ready",
+        "notReady": "Not ready"
+      },
+      "managedBy": {
+        "admin": "Managed in admin settings",
+        "environment": "Managed by environment",
+        "none": "Not configured"
+      },
+      "codex": {
+        "accountLabel": "Codex account label (optional)",
+        "accountPlaceholder": "admin@example.com",
+        "startEnrollment": "Start sign-in",
+        "regenerateEnrollment": "Regenerate code",
+        "cancelEnrollment": "Cancel",
+        "disconnect": "Disconnect",
+        "pendingHint": "Enrollment is pending. Enter the code on the OpenAI page and the connection will be detected automatically.",
+        "deviceCodeLabel": "Device code",
+        "linkHint": "Click the following link:"
+      },
+      "toasts": {
+        "codexEnrollmentStarted": "Codex sign-in started. Open the displayed OpenAI link and enter the shown code.",
+        "codexConnected": "Codex provider connected.",
+        "codexDisconnected": "Codex provider marked as disconnected."
+      },
+      "errors": {
+        "load": "Unable to load provider connections.",
+        "save": "Unable to update provider connection.",
+        "missingEnrollment": "No pending Codex enrollment found. Start sign-in first."
+      }
+    },
     "chromeExtension": {
       "title": "Chrome extension",
       "description": "Download the latest Chrome extension package configured for this instance.",
@@ -574,6 +618,48 @@
       "sourceLabel": "Source",
       "errors": {
         "load": "Unable to load the Settings Chrome Plugin card. Set CHROME_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /chrome-extension/top-ai-ideas-chrome-extension.zip, then restart the API."
+      }
+    },
+    "vscodeExtension": {
+      "title": "VSCode extension",
+      "description": "Download the latest VSCode extension package configured for this instance.",
+      "experimentalWarning": "(experimental only, for developers)",
+      "loading": "Loading extension package…",
+      "downloadCta": "Download extension (.vsix)",
+      "downloadTooltip": "Download the VSCode extension",
+      "retry": "Retry",
+      "versionLabel": "Version",
+      "sourceLabel": "Source",
+      "errors": {
+        "load": "Unable to load the Settings VSCode Plugin card. Set VSCODE_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /vscode-extension/top-ai-ideas-vscode-extension.vsix, then restart the API."
+      },
+      "token": {
+        "title": "Extension bootstrap token",
+        "description": "Issue or rotate the shared VSCode extension token used for bearer-auth API calls.",
+        "loading": "Loading token status…",
+        "issue": "Issue token",
+        "rotate": "Rotate token",
+        "revoke": "Revoke token",
+        "copy": "Copy",
+        "oneTimeNotice": "Copy this token now. It is shown once after issue/rotation.",
+        "statusLabel": "Status",
+        "statusActive": "Active",
+        "statusInactive": "Inactive",
+        "last4Label": "Token suffix",
+        "issuedAtLabel": "Issued at",
+        "expiresAtLabel": "Expires at",
+        "notAvailable": "N/A",
+        "toasts": {
+          "issued": "VSCode extension token issued.",
+          "revoked": "VSCode extension token revoked.",
+          "copied": "VSCode extension token copied."
+        },
+        "errors": {
+          "load": "Unable to load token status.",
+          "issue": "Unable to issue VSCode extension token.",
+          "revoke": "Unable to revoke VSCode extension token.",
+          "copy": "Unable to copy VSCode extension token."
+        }
       }
     },
     "systemInfo": "System information",
@@ -846,30 +932,84 @@
     "extension": {
       "settingsTitle": "Extension settings",
       "settingsTabs": {
-        "endpoint": "Server endpoint",
-        "permissions": "Tool permissions"
+        "server": "Server",
+        "workspace": "Workspace",
+        "tools": "Tools"
       },
       "endpointConfiguration": "Endpoint configuration",
+      "workspaceConfiguration": "Workspace configuration",
+      "workspaceScope": "Detected project scope",
+      "workspaceScopeKey": "Scope key",
+      "workspaceMappedWorkspace": "Mapped workspace",
+      "workspaceScopeNotDetected": "No project scope detected yet.",
+      "workspaceFlow": {
+        "title": "Code workspace mapping",
+        "noCodeWorkspace": "No code workspace is registered yet.",
+        "selectorLabel": "Code workspace",
+        "applySelection": "Use selected workspace",
+        "selectWorkspaceRequired": "Select a code workspace first.",
+        "mappingRefreshFailed": "Unable to refresh workspace mapping.",
+        "mappingSetSuccess": "Workspace mapping updated.",
+        "mappingSetFailed": "Unable to update workspace mapping.",
+        "onboardingTitle": "New code base detected",
+        "onboardingDescription": "A workspace creation is recommended.",
+        "createWorkspace": "Create code workspace",
+        "createSuccess": "Code workspace created and mapped.",
+        "createFailed": "Unable to create code workspace.",
+        "useExisting": "Use existing code workspace",
+        "notNow": "Not now",
+        "notNowSuccess": "Fallback workspace applied.",
+        "notNowFailed": "Unable to apply fallback workspace."
+      },
       "apiBaseUrl": "API Base URL",
       "appBaseUrl": "App Base URL",
       "wsBaseUrlOptional": "WS Base URL (optional)",
+      "sessionToken": "Extension token",
+      "sessionTokenHint": "Paste the admin-issued VSCode extension token from web app settings.",
+      "codeAgent": {
+        "title": "Code agent prompt profile",
+        "effectivePromptSource": "Effective prompt source",
+        "sourceWorkspace": "Workspace override",
+        "sourceServer": "Server override",
+        "sourceDefault": "Default",
+        "effectivePrompt": "Effective code-agent prompt",
+        "workspacePromptHint": "Applied to current workspace scope: {scope}",
+        "createWorkspaceOverride": "Create workspace override",
+        "resetWorkspaceOverride": "Reset to inherited prompt",
+        "workspaceOverrideActive": "Workspace override will be saved on this scope.",
+        "resetPending": "Workspace override removal will be applied on save.",
+        "instructionPatterns": "Instruction include patterns",
+        "instructionPatternsHint": "One glob/pattern per line (ex: AGENTS.md, .cursor/rules/*.mdc)."
+      },
       "testApi": "Test API",
       "permissions": {
         "title": "Tool permissions",
         "description": "Manage allow/deny policies by tool and origin (URL, domain, or wildcard).",
+        "bashBuilderTitle": "Bash policy builder",
+        "bashBuilderDescription": "Build readable mono/bigram rules and apply them to the draft before saving.",
+        "bashModeLabel": "Bash selector mode",
+        "bashModeWildcard": "Wildcard (bash:*)",
+        "bashModeMono": "Mono command (bash:<cmd>)",
+        "bashModeBigram": "Bigram command (bash:<cmd> <arg>)",
+        "bashModeManual": "Manual",
+        "bashPreviewLabel": "Selector preview",
+        "bashPrecedenceHint": "Precedence: exact selector > wildcard selector.",
+        "bashUseBuilderCta": "Use this selector",
         "addTitle": "Add rule",
         "addCta": "Add",
         "empty": "No tool permission policy yet.",
         "allowLabel": "Allow",
         "denyLabel": "Deny",
+        "pathPatternLabel": "Path scope",
+        "pathPatternPlaceholder": "Optional path pattern (e.g. api/*)",
         "loadError": "Unable to load tool permissions.",
         "updateError": "Unable to update tool permission.",
         "deleteError": "Unable to delete tool permission.",
         "missingDraftFields": "Provide a tool and a valid origin/pattern (e.g. https://site.com, *.site.com, *)."
       },
       "authRequired": {
-        "title": "Extension auth is required before using this area.",
-        "description": "Open settings, then click Connect. If needed, open app login first.",
+        "title": "An extension token is required before using this area.",
+        "description": "Open settings and paste the VSCode extension token issued by an admin.",
         "openSettings": "Open settings"
       },
       "auth": {
@@ -877,8 +1017,20 @@
         "connectedAs": "Connected as",
         "notConnected": "Not connected",
         "connect": "Connect",
-        "logout": "Logout",
+        "connectToken": "Validate token",
+        "logout": "Disconnect",
+        "logoutToken": "Clear session",
+        "providerManagedInAdmin": "Provider login is managed in admin web app settings.",
         "openLogin": "Open login"
+      },
+      "providerReadiness": {
+        "title": "Provider readiness",
+        "empty": "No provider status available yet.",
+        "loadError": "Unable to load provider readiness.",
+        "status": {
+          "ready": "Ready",
+          "notReady": "Not ready"
+        }
       },
       "status": {
         "loadingConfig": "Loading endpoint configuration…",
@@ -930,6 +1082,18 @@
       "defaultTitle": "Conversation {id}",
       "confirmDelete": "Delete this conversation?"
     },
+    "checkpoints": {
+      "create": "Create checkpoint",
+      "restoreLatest": "Restore latest checkpoint",
+      "confirmRestoreLatest": "Restore latest checkpoint? Recent messages will be removed.",
+      "restoreFromMessage": "Restore from this point",
+      "confirmRestoreBeforeAction": "Restore to this checkpoint before continuing?",
+      "confirmRestoreBeforeRetry": "Restore to this checkpoint before retrying?",
+      "confirmRestoreDetails": "Recent messages after this point will be removed.",
+      "restoreCta": "Yes, restore",
+      "continueWithoutRestore": "No, continue",
+      "retryWithoutRestore": "No, retry without restore"
+    },
     "composer": {
       "ariaLabel": "Composer",
       "placeholder": {
@@ -961,7 +1125,13 @@
       "title": "Tools",
       "permissions": {
         "promptTitle": "Permission required",
-        "promptDescription": "Allow tool {tool} for {origin}?",
+        "promptDescription": "Allow tool {tool}?",
+        "actionLabel": "Action",
+        "commandLabel": "Command",
+        "pathLabel": "Path",
+        "scopeLabel": "Scope",
+        "scopeWorkspace": "workspace",
+        "scopeOutsideWorkspace": "outside workspace",
         "allowOnce": "Yes (once)",
         "denyOnce": "No (once)",
         "allowAlways": "Always",
@@ -994,6 +1164,30 @@
       "localTabAction": {
         "label": "Tab (actions)",
         "description": "Act on active tab (scroll, click, type, wait)"
+      },
+      "localCodeBash": {
+        "label": "Code: shell",
+        "description": "Run shell commands in workspace with policy gating"
+      },
+      "localCodeLs": {
+        "label": "Code: list files",
+        "description": "List files/directories with bounded recursion"
+      },
+      "localCodeRg": {
+        "label": "Code: search",
+        "description": "Search content in workspace files (ripgrep)"
+      },
+      "localCodeFileRead": {
+        "label": "Code: read file",
+        "description": "Read file content with bounded window/full modes"
+      },
+      "localCodeFileEdit": {
+        "label": "Code: edit file",
+        "description": "Edit/write files with explicit permission checks"
+      },
+      "localCodeGit": {
+        "label": "Code: git",
+        "description": "Run git actions (status/diff/ls-files/add/commit/push/...) with policy checks"
       },
       "organizationRead": { "label": "Organization (read)" },
       "organizationUpdate": { "label": "Organization (edit)" },
@@ -1086,6 +1280,8 @@
       "loadSessions": "Error while loading sessions",
       "loadMessages": "Error while loading messages",
       "deleteSession": "Error while deleting session",
+      "checkpointCreate": "Error while creating checkpoint",
+      "checkpointRestore": "Error while restoring checkpoint",
       "send": "Error while sending",
       "stop": "Error while stopping",
       "feedback": "Error while updating feedback"
@@ -1179,6 +1375,14 @@
     "reasoning": "Reasoning",
     "reasoningEffort": "Reasoning effort",
     "reasoningEffortFailed": "Reasoning effort (failed)",
+    "contextBudget": "Context budget",
+    "contextOccupancy": "Context {pct}%",
+    "contextCompaction": "Context summary",
+    "contextCompactionInProgress": "Context summarization in progress…",
+    "contextCompactionDone": "Context compacted.",
+    "contextCompactionFailed": "Context summarization failed.",
+    "contextBudgetEscalation": "Context budget (action required)",
+    "contextBudgetEscalationBody": "Context is still saturated. Narrow scope or request targeted extraction.",
     "response": "Response",
     "done": "Done",
     "error": "Error",

@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { settings } from '../db/schema';
+import { normalizeLegacyModelSelection } from './model-selection-legacy';
 
 export interface Setting {
   key: string;
@@ -232,11 +233,16 @@ export class SettingsService {
       }),
     ]);
 
+    const normalizedSelection = normalizeLegacyModelSelection({
+      providerId: defaultProviderId,
+      modelId: defaultModel,
+    });
+
     return {
       concurrency,
       publishingConcurrency,
-      defaultProviderId,
-      defaultModel,
+      defaultProviderId: normalizedSelection.providerId || 'openai',
+      defaultModel: normalizedSelection.modelId || 'gpt-4.1-nano',
       processingInterval,
     };
   }

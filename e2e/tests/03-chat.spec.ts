@@ -66,18 +66,7 @@ test.describe.serial('Chat', () => {
     } catch (e) {
       console.log('[chat.spec] failed to fetch job status:', e);
     }
-    try {
-      if (streamId) {
-        const evRes = await page.request.get(
-          `/api/v1/streams/events/${encodeURIComponent(streamId)}?limit=50`
-        );
-        console.log('[chat.spec] stream events:', evRes.status(), await evRes.text());
-      } else {
-        console.log('[chat.spec] no streamId captured from POST /chat/messages');
-      }
-    } catch (e) {
-      console.log('[chat.spec] failed to fetch stream events:', e);
-    }
+    console.log('[chat.spec] bootstrap debug requires sessionId + assistantMessageId; streamId=', streamId);
   }
 
   async function debugAssistantState(page: any) {
@@ -186,6 +175,95 @@ test.describe.serial('Chat', () => {
       await debugBackendState(page, jobId, streamId);
       throw e;
     }
+  });
+
+  test('reload + nouvel onglet conservent l’historique reasoning/tools sans appels stream-events legacy', async ({ page }) => {
+    await page.goto('/folders');
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.locator('h1')).toContainText(/Dossiers|Folders/i, { timeout: 1000 });
+
+    const legacyRequests: string[] = [];
+    page.on('request', (request: any) => {
+      const url = String(request.url?.() ?? request.url() ?? '');
+      if (
+        url.includes('/api/v1/chat/sessions/') && url.includes('/stream-events')
+      ) {
+        legacyRequests.push(url);
+      }
+      if (
+        url.includes('/api/v1/chat/messages/') && url.includes('/stream-events')
+      ) {
+        legacyRequests.push(url);
+      }
+      if (url.includes('/api/v1/streams/events/')) {
+        legacyRequests.push(url);
+      }
+    });
+
+    const chatButton = page.locator('button[aria-controls="chat-widget-dialog"]');
+    await expect(chatButton).toBeVisible({ timeout: 1000 });
+    await chatButton.click();
+
+    const composer = page.locator('[role="textbox"][aria-label="Composer"]');
+    await expect(composer).toBeVisible({ timeout: 1000 });
+
+    const prompt = [
+      'Avant de répondre, raisonne par étapes et donne un bref état d’avancement.',
+      'Ensuite réponds de façon structurée à cette question:',
+      'quels sont les éléments visibles de la page actuelle et comment les catégoriser ?',
+    ].join(' ');
+    const { jobId, streamId } = await sendMessageAndWaitApi(page, composer, prompt);
+
+    const runtimeHeader = page
+      .locator('#chat-widget-dialog')
+      .getByText(/Raisonnement|Reasoning/i)
+      .first();
+    const retryButton = page
+      .getByRole('button', { name: /réessayer|retry/i })
+      .last();
+
+    try {
+      await expect(runtimeHeader).toBeVisible({ timeout: 45_000 });
+      await expect(retryButton).toBeVisible({ timeout: 60_000 });
+    } catch (e) {
+      await debugAssistantState(page);
+      await debugBackendState(page, jobId, streamId);
+      throw e;
+    }
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(chatButton).toBeVisible({ timeout: 5_000 });
+    await chatButton.click();
+    await expect(runtimeHeader).toBeVisible({ timeout: 15_000 });
+
+    const page2 = await page.context().newPage();
+    page2.on('request', (request: any) => {
+      const url = String(request.url?.() ?? request.url() ?? '');
+      if (
+        url.includes('/api/v1/chat/sessions/') && url.includes('/stream-events')
+      ) {
+        legacyRequests.push(url);
+      }
+      if (
+        url.includes('/api/v1/chat/messages/') && url.includes('/stream-events')
+      ) {
+        legacyRequests.push(url);
+      }
+      if (url.includes('/api/v1/streams/events/')) {
+        legacyRequests.push(url);
+      }
+    });
+    await page2.goto('/folders');
+    await page2.waitForLoadState('domcontentloaded');
+    await expect(page2.locator('button[aria-controls="chat-widget-dialog"]')).toBeVisible({ timeout: 5_000 });
+    await page2.locator('button[aria-controls="chat-widget-dialog"]').click();
+    await expect(
+      page2.locator('#chat-widget-dialog').getByText(/Raisonnement|Reasoning/i).first()
+    ).toBeVisible({ timeout: 15_000 });
+
+    expect(legacyRequests).toEqual([]);
+
+    await page2.close();
   });
 
   test('devrait envoyer le bon contexte primaire au backend selon la route', async ({ page }) => {

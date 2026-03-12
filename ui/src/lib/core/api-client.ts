@@ -18,6 +18,8 @@ export interface ApiClientConfig {
     baseUrl: string;
     /** Whether we're in a browser environment (always true in extension) */
     isBrowser?: boolean;
+    /** Optional bearer token used by non-cookie runtimes (e.g. VSCode webview). */
+    authToken?: string;
     /** Optional: returns the current scoped workspace ID */
     getWorkspaceId?: () => string | null;
 }
@@ -60,4 +62,15 @@ export function getApiBaseUrl(): string | null {
  */
 export function getApiBrowserFlag(): boolean | null {
     return _config?.isBrowser ?? null;
+}
+
+/**
+ * Get the configured auth token (or null if not initialized).
+ * Used by api.ts/session.ts to attach Authorization header when required.
+ */
+export function getApiAuthToken(): string | null {
+    const raw = _config?.authToken;
+    if (!raw) return null;
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : null;
 }

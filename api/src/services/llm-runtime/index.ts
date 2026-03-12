@@ -1,23 +1,27 @@
 import OpenAI from 'openai';
-import { providerRegistry } from './provider-registry';
-import { inferProviderFromModelId, resolveDefaultSelection } from './model-catalog';
+import { providerRegistry } from '../provider-registry';
+import {
+  inferProviderFromModelIdWithLegacy,
+  resolveDefaultSelection,
+} from '../model-catalog';
 import {
   resolveProviderCredential,
   type ResolvedProviderCredential
-} from './provider-credentials';
+} from '../provider-credentials';
+import { getOpenAITransportMode, resolveConnectedCodexTransport } from '../provider-connections';
 import {
   GeminiProviderRuntime,
   type GeminiGenerateRequest,
   type GeminiStreamGenerateRequest
-} from './providers/gemini-provider';
+} from '../providers/gemini-provider';
 import {
   OpenAIProviderRuntime,
   type OpenAIGenerateRequest,
   type OpenAIStreamGenerateRequest
-} from './providers/openai-provider';
-import { isProviderId, type ProviderId } from './provider-runtime';
-import { settingsService } from './settings';
-import { createId } from '../utils/id';
+} from '../providers/openai-provider';
+import { isProviderId, type ProviderId } from '../provider-runtime';
+import { settingsService } from '../settings';
+import { createId } from '../../utils/id';
 
 const getOpenAIProvider = (): OpenAIProviderRuntime => {
   return providerRegistry.requireProvider('openai') as OpenAIProviderRuntime;
@@ -46,7 +50,7 @@ const resolveRuntimeSelection = async (input: {
   ]);
 
   const requestedModel = (input.model ?? '').trim() || aiSettings.defaultModel;
-  const inferredProvider = inferProviderFromModelId(
+  const inferredProvider = inferProviderFromModelIdWithLegacy(
     models.map((entry) => ({
       provider_id: entry.providerId,
       model_id: entry.modelId,
@@ -276,7 +280,7 @@ export const sanitizeGeminiResponseSchema = (
   return sanitizeGeminiResponseSchemaNode(schema, false) as Record<string, unknown>;
 };
 
-const buildGeminiRequestBody = (
+export const buildGeminiRequestBody = (
   options: GeminiRequestBuildOptions
 ): Record<string, unknown> => {
   const systemParts: string[] = [];
@@ -809,6 +813,15 @@ export async function* callOpenAIResponseStream(
       ? 'none'
       : options.toolChoice;
   const selectedModel = selection.model;
+  const codexTransport =
+    selection.providerId === 'openai' &&
+    typeof userId === 'string' &&
+    userId.trim().length > 0 &&
+    selectedModel === 'gpt-5.4' &&
+    (await getOpenAITransportMode()) === 'codex'
+      ? await resolveConnectedCodexTransport(userId)
+      : null;
+  const useCodexTransport = Boolean(codexTransport);
 
   if (!capabilities.supportsStreaming) {
     throw new Error(`Provider ${selection.providerId} does not support streaming`);
@@ -927,7 +940,7 @@ export async function* callOpenAIResponseStream(
     // OpenAI supports (notably for gpt-5-nano): minimal|low|medium|high.
     // App-level accepts: none|low|medium|high|xhigh.
     // Map to avoid 400s:
-    // - none  -> minimal (ONLY for gpt-5-nano; gpt-5.2 appears to accept "none")
+    // - none  -> minimal (ONLY for gpt-5-nano; current gpt-5 models appear to accept "none")
     // - xhigh -> high
     // - low/medium/high passthrough
     if (effort === 'none') return selectedModel.startsWith('gpt-5-nano') ? 'minimal' : 'none';
@@ -941,14 +954,25 @@ export async function* callOpenAIResponseStream(
   // - Si on envoie `role:"assistant"` avec des content parts `type:"input_text"`, l'API renvoie:
   //   "Invalid value: 'input_text'. Supported values are: 'output_text' and 'refusal'."
   // => On utilise donc `content` en string pour tous les rôles.
-  const input: OpenAI.Responses.ResponseCreateParamsStreaming['input'] = (rawInput && rawInput.length > 0)
-    ? (rawInput as OpenAI.Responses.ResponseCreateParamsStreaming['input'])
-    : messages.map((m) => {
-        const role = (m.role === 'tool' ? 'user' : m.role) as 'user' | 'assistant' | 'system' | 'developer';
-        const contentRaw = (m as unknown as { content?: unknown }).content;
-        const content = typeof contentRaw === 'string' ? contentRaw : JSON.stringify(contentRaw ?? '');
-        return { type: 'message', role, content };
-      });
+  const codexInstructions: string[] = [];
+  const messageInput = messages
+    .map((m) => {
+      const role = (m.role === 'tool' ? 'user' : m.role) as 'user' | 'assistant' | 'system' | 'developer';
+      const contentRaw = (m as unknown as { content?: unknown }).content;
+      const content = typeof contentRaw === 'string' ? contentRaw : JSON.stringify(contentRaw ?? '');
+      if (useCodexTransport && (role === 'system' || role === 'developer')) {
+        if (content.trim()) codexInstructions.push(content);
+        return null;
+      }
+      return { type: 'message' as const, role, content };
+    })
+    .filter((item): item is { type: 'message'; role: 'user' | 'assistant'; content: string } => item !== null);
+  const input: OpenAI.Responses.ResponseCreateParamsStreaming['input'] =
+    rawInput && rawInput.length > 0
+      ? useCodexTransport && !previousResponseId
+        ? ([...messageInput, ...rawInput] as OpenAI.Responses.ResponseCreateParamsStreaming['input'])
+        : (rawInput as OpenAI.Responses.ResponseCreateParamsStreaming['input'])
+      : messageInput;
 
   // Mapper les tools "Chat Completions" -> "Responses" (format plat)
   const responseTools: OpenAI.Responses.ResponseCreateParamsStreaming['tools'] | undefined = filteredTools
@@ -999,11 +1023,18 @@ export async function* callOpenAIResponseStream(
     model: selectedModel,
     stream: true,
     input,
+    ...(useCodexTransport ? { store: false } : {}),
+    ...(useCodexTransport
+      ? { instructions: codexInstructions.join('\n\n').trim() || 'You are a helpful assistant.' }
+      : {}),
     ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(responseTools ? { tools: responseTools } : {}),
     ...(textConfig ? { text: textConfig } : {}),
-    ...(typeof maxOutputTokens === 'number' && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
+    ...(!useCodexTransport &&
+      typeof maxOutputTokens === 'number' &&
+      Number.isFinite(maxOutputTokens) &&
+      maxOutputTokens > 0
       ? { max_output_tokens: Math.floor(maxOutputTokens) }
       : {})
   };
@@ -1016,6 +1047,7 @@ export async function* callOpenAIResponseStream(
       mode: 'responses',
       requestOptions,
       credential: credentialResolution.credential ?? undefined,
+      ...(codexTransport ? { codexTransport } : {}),
       signal
     } satisfies OpenAIStreamGenerateRequest) as AsyncIterable<unknown>;
 

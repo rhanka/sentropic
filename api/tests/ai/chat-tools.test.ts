@@ -66,6 +66,20 @@ describe('Chat AI - Tool Calls Integration', () => {
     throw new Error(`Job ${jobId} did not complete within ${maxAttempts} seconds`);
   }
 
+  async function fetchAssistantDetails(sessionId: string, assistantMessageId: string): Promise<any[]> {
+    const response = await authenticatedRequest(
+      app,
+      'GET',
+      `/api/v1/chat/sessions/${sessionId}/bootstrap`,
+      user.sessionToken!,
+    );
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    return Array.isArray(payload?.assistantDetailsByMessageId?.[assistantMessageId])
+      ? payload.assistantDetailsByMessageId[assistantMessageId]
+      : [];
+  }
+
   describe('read_usecase tool', () => {
     it('should call read_usecase and return use case data in stream', async () => {
       const adminUser = await createAuthenticatedUser('admin_app');
@@ -80,21 +94,12 @@ describe('Chat AI - Tool Calls Integration', () => {
 
       expect(chatResponse.status).toBe(200);
       const chatData = await chatResponse.json();
-      const { jobId, assistantMessageId } = chatData;
+      const { jobId, assistantMessageId, sessionId } = chatData;
 
       // Attendre la complétion
       await waitForJobCompletion(jobId, adminUser);
 
-      // Vérifier les stream events
-      const streamEventsRes = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/streams/events/${assistantMessageId}`,
-        user.sessionToken!
-      );
-      expect(streamEventsRes.status).toBe(200);
-      const streamData = await streamEventsRes.json();
-      const events = streamData.events;
+      const events = await fetchAssistantDetails(sessionId, assistantMessageId);
 
       // Vérifier qu'il y a des événements tool_call
       const toolCallEvents = events.filter((e: any) => 
@@ -167,16 +172,7 @@ describe('Chat AI - Tool Calls Integration', () => {
         }
       }
 
-      // Vérifier chat_stream_events contient tool_call events
-      const streamEventsRes = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/streams/events/${assistantMessageId}`,
-        user.sessionToken!
-      );
-      expect(streamEventsRes.status).toBe(200);
-      const streamData = await streamEventsRes.json();
-      const toolCallEvents = streamData.events.filter((e: any) => 
+      const toolCallEvents = (await fetchAssistantDetails(sessionId, assistantMessageId)).filter((e: any) => 
         e.eventType.startsWith('tool_call_')
       );
       expect(toolCallEvents.length).toBeGreaterThan(0);
@@ -220,20 +216,14 @@ describe('Chat AI - Tool Calls Integration', () => {
 
       expect(chatResponse.status).toBe(200);
       const chatData = await chatResponse.json();
-      const { jobId, assistantMessageId } = chatData;
+      const { jobId, assistantMessageId, sessionId } = chatData;
 
       // Attendre la complétion
       await waitForJobCompletion(jobId, adminUser, 30);
 
-      // Vérifier les stream events
-      const streamEventsRes = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/streams/events/${assistantMessageId}`,
-        user.sessionToken!
-      );
-      expect(streamEventsRes.status).toBe(200);
-      const streamData = await streamEventsRes.json();
+      const streamData = {
+        events: await fetchAssistantDetails(sessionId, assistantMessageId),
+      };
       
       // Si web_extract a été appelé, vérifier qu'il n'y a pas d'erreur avec array vide
       const errorEvents = streamData.events.filter((e: any) => 
@@ -274,19 +264,11 @@ describe('Chat AI - Tool Calls Integration', () => {
 
       expect(chatResponse.status).toBe(200);
       const chatData = await chatResponse.json();
-      const { jobId, assistantMessageId } = chatData;
+      const { jobId, assistantMessageId, sessionId } = chatData;
 
       await waitForJobCompletion(jobId, adminUser, 30);
 
-      const streamEventsRes = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/streams/events/${assistantMessageId}`,
-        user.sessionToken!
-      );
-      expect(streamEventsRes.status).toBe(200);
-      const streamData = await streamEventsRes.json();
-      const events = streamData.events;
+      const events = await fetchAssistantDetails(sessionId, assistantMessageId);
 
       const mxStart = events.find((e: any) => e.eventType === 'tool_call_start' && e.data?.name === 'matrix_get');
       expect(mxStart).toBeDefined();
@@ -384,4 +366,3 @@ describe('Chat AI - Tool Calls Integration', () => {
     }, 30000);
   });
 });
-

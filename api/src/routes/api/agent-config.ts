@@ -81,7 +81,7 @@ agentConfigRouter.post("/:id/fork", requireWorkspaceEditorRole(), zValidator("js
   try {
     const actor = actorFromContext(c);
     const body = c.req.valid("json");
-    const item = await todoOrchestrationService.forkAgentConfig(actor, c.req.param("id"), body);
+    const item = await todoOrchestrationService.forkAgentConfig(actor, c.req.param("id")!, body);
     return c.json({ item }, 201);
   } catch (error) {
     return handleTodoError(c, error);
@@ -91,7 +91,7 @@ agentConfigRouter.post("/:id/fork", requireWorkspaceEditorRole(), zValidator("js
 agentConfigRouter.post("/:id/detach", requireWorkspaceEditorRole(), async (c) => {
   try {
     const actor = actorFromContext(c);
-    const item = await todoOrchestrationService.detachAgentConfig(actor, c.req.param("id"));
+    const item = await todoOrchestrationService.detachAgentConfig(actor, c.req.param("id")!);
     return c.json({ item });
   } catch (error) {
     return handleTodoError(c, error);

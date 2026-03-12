@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '$lib/config';
+import { getApiAuthToken, getApiBaseUrl } from '$lib/core/api-client';
 
 export type DocumentContextType = 'organization' | 'folder' | 'usecase' | 'chat_session';
 
@@ -9,6 +10,22 @@ function getUrlBaseForBrowser(): string {
   if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
   // Fallback for non-browser environments (tests / SSR). Should not be used for real requests.
   return 'http://localhost';
+}
+
+function getDocumentsApiBaseUrl(): string {
+  return getApiBaseUrl() ?? API_BASE_URL;
+}
+
+function withAuth(init: RequestInit = {}): RequestInit {
+  const authToken = getApiAuthToken();
+  return {
+    ...init,
+    credentials: authToken ? 'omit' : 'include',
+    headers: {
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...(init.headers ?? {}),
+    },
+  };
 }
 
 export type ContextDocumentItem = {
@@ -36,10 +53,9 @@ export async function listDocuments(params: {
     context_id: params.contextId,
   });
   if (params.workspaceId) qs.set('workspace_id', params.workspaceId);
-  const res = await fetch(`${API_BASE_URL}/documents?${qs.toString()}`, {
-    credentials: 'include',
+  const res = await fetch(`${getDocumentsApiBaseUrl()}/documents?${qs.toString()}`, withAuth({
     cache: 'no-store',
-  });
+  }));
   if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
   return res.json();
 }
@@ -55,29 +71,27 @@ export async function uploadDocument(params: {
   form.set('context_id', params.contextId);
   form.set('file', params.file);
 
-  const url = new URL(`${API_BASE_URL}/documents`, getUrlBaseForBrowser());
+  const url = new URL(`${getDocumentsApiBaseUrl()}/documents`, getUrlBaseForBrowser());
   if (params.workspaceId) url.searchParams.set('workspace_id', params.workspaceId);
 
-  const res = await fetch(url.toString(), {
+  const res = await fetch(url.toString(), withAuth({
     method: 'POST',
     body: form,
-    credentials: 'include',
-  });
+  }));
   if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
   return res.json();
 }
 
 export function getDownloadUrl(params: { documentId: string; workspaceId?: string | null }): string {
-  const url = new URL(`${API_BASE_URL}/documents/${params.documentId}/content`, getUrlBaseForBrowser());
+  const url = new URL(`${getDocumentsApiBaseUrl()}/documents/${params.documentId}/content`, getUrlBaseForBrowser());
   if (params.workspaceId) url.searchParams.set('workspace_id', params.workspaceId);
   return url.toString();
 }
 
 export async function deleteDocument(params: { documentId: string; workspaceId?: string | null }): Promise<void> {
-  const url = new URL(`${API_BASE_URL}/documents/${params.documentId}`, getUrlBaseForBrowser());
+  const url = new URL(`${getDocumentsApiBaseUrl()}/documents/${params.documentId}`, getUrlBaseForBrowser());
   if (params.workspaceId) url.searchParams.set('workspace_id', params.workspaceId);
-  const res = await fetch(url.toString(), { method: 'DELETE', credentials: 'include' });
+  const res = await fetch(url.toString(), withAuth({ method: 'DELETE' }));
   if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
 }
-
 

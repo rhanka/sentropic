@@ -1,16 +1,17 @@
-import { and, asc, desc, eq, sql, inArray, isNotNull, gt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, sql, inArray, gt, or } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders } from '../db/schema';
+import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue } from '../db/schema';
 import { createId } from '../utils/id';
-import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './openai';
+import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './llm-runtime';
 import {
   getModelCatalogPayload,
-  inferProviderFromModelId,
+  inferProviderFromModelIdWithLegacy,
   resolveDefaultSelection,
 } from './model-catalog';
 import { getNextSequence, readStreamEvents, writeStreamEvent } from './stream-service';
 import { settingsService } from './settings';
 import type OpenAI from 'openai';
+import { getOpenAITransportMode } from './provider-connections';
 import { defaultPrompts } from '../config/default-prompts';
 import {
   readUseCaseTool,
@@ -33,6 +34,7 @@ import {
   matrixGetTool,
   matrixUpdateTool,
   documentsTool,
+  historyAnalyzeTool,
   commentAssistantTool,
   planTool
 } from './tools';
@@ -44,6 +46,14 @@ import { env } from '../config/env';
 import { writeChatGenerationTrace } from './chat-trace';
 import { generateCommentResolutionProposal } from './context-comments';
 import type { ProviderId } from './provider-runtime';
+import {
+  buildAssistantMessageHistoryDetails,
+  buildChatHistoryTimeline,
+  compactChatHistoryTimelineForSummary,
+  type ChatHistoryMessage,
+  type ChatHistoryTimelineItem,
+  type ChatHistoryStreamEvent,
+} from './chat-session-history';
 
 export type ChatContextType = 'organization' | 'folder' | 'usecase' | 'executive_summary';
 
@@ -88,17 +98,80 @@ export type LocalToolDefinitionInput = {
   parameters: Record<string, unknown>;
 };
 
+export type VsCodeCodeAgentInstructionFile = {
+  path: string;
+  content: string;
+};
+
+export type VsCodeCodeAgentSystemContext = {
+  workingDirectory?: string | null;
+  isGitRepo?: boolean | null;
+  gitBranch?: string | null;
+  platform?: string | null;
+  osVersion?: string | null;
+  shell?: string | null;
+  clientDateIso?: string | null;
+  clientTimezone?: string | null;
+};
+
+export type VsCodeCodeAgentRuntimePayload = {
+  source?: 'vscode' | null;
+  workspaceKey?: string | null;
+  workspaceLabel?: string | null;
+  promptGlobalOverride?: string | null;
+  promptWorkspaceOverride?: string | null;
+  instructionIncludePatterns?: string[];
+  instructionFiles?: VsCodeCodeAgentInstructionFile[];
+  systemContext?: VsCodeCodeAgentSystemContext | null;
+};
+
+type NormalizedVsCodeCodeAgentSystemContext = {
+  workingDirectory: string | null;
+  isGitRepo: boolean | null;
+  gitBranch: string | null;
+  platform: string | null;
+  osVersion: string | null;
+  shell: string | null;
+  clientDateIso: string | null;
+  clientTimezone: string | null;
+};
+
+type NormalizedVsCodeCodeAgentRuntimePayload = {
+  workspaceKey: string | null;
+  workspaceLabel: string | null;
+  promptGlobalOverride: string | null;
+  promptWorkspaceOverride: string | null;
+  instructionIncludePatterns: string[];
+  instructionFiles: VsCodeCodeAgentInstructionFile[];
+  systemContext: NormalizedVsCodeCodeAgentSystemContext | null;
+};
+
 export type ChatResumeFromToolOutputs = {
   previousResponseId: string;
-  toolOutputs: Array<{ callId: string; output: string }>;
+  toolOutputs: Array<{
+    callId: string;
+    output: string;
+    name?: string;
+    args?: unknown;
+  }>;
 };
 
 type AwaitingLocalToolState = {
   sequence: number;
   previousResponseId: string;
-  pendingToolCallIds: string[];
-  baseToolOutputs: Array<{ callId: string; output: string }>;
+  pendingLocalToolCalls: Array<{
+    id: string;
+    name: string;
+    args: unknown;
+  }>;
+  baseToolOutputs: Array<{
+    callId: string;
+    output: string;
+    name?: string;
+    args?: unknown;
+  }>;
   localToolDefinitions: LocalToolDefinitionInput[];
+  vscodeCodeAgent: NormalizedVsCodeCodeAgentRuntimePayload | null;
 };
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
@@ -106,7 +179,24 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
   return value as Record<string, unknown>;
 };
 
+const getDataString = (data: unknown, key: string): string | null => {
+  const record = asRecord(data);
+  const value = record?.[key];
+  return typeof value === 'string' ? value : null;
+};
+
 const isValidToolName = (value: string): boolean => /^[a-zA-Z0-9_-]{1,64}$/.test(value);
+
+const parseToolCallArgs = (value: unknown): unknown => {
+  if (typeof value !== 'string') return value ?? {};
+  const trimmed = value.trim();
+  if (!trimmed) return {};
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return {};
+  }
+};
 
 type TodoRuntimeToolName = 'plan';
 type TodoRuntimeToolOperation = 'create' | 'update_plan' | 'update_task';
@@ -116,6 +206,23 @@ const TODO_BLOCKING_STATUSES = new Set(['blocked']);
 const BASE_MAX_ITERATIONS = 10;
 const TODO_AUTONOMOUS_MAX_ITERATIONS = 60;
 const TODO_AUTONOMOUS_EXTENSION_STEP = 10;
+const CONTEXT_BUDGET_SOFT_THRESHOLD = 85;
+const CONTEXT_BUDGET_HARD_THRESHOLD = 92;
+const CONTEXT_BUDGET_DEFAULT_TOKENS = 32_000;
+const CONTEXT_BUDGET_OPENAI_GPT5_TOKENS = 128_000;
+const CONTEXT_BUDGET_GEMINI_TOKENS = 128_000;
+const CONTEXT_SUMMARY_RECENT_MESSAGES = 8;
+const CONTEXT_SUMMARY_MAX_CHARS = 32_000;
+const CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS = 700;
+const CONTEXT_SUMMARY_SYSTEM_MARKER_START = '[CONTEXT_COMPACT_SUMMARY_BEGIN]';
+const CONTEXT_SUMMARY_SYSTEM_MARKER_END = '[CONTEXT_COMPACT_SUMMARY_END]';
+const CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS = 1;
+const CONTEXT_BUDGET_SOFT_ZONE_CODE = 'context_budget_risk';
+const CONTEXT_BUDGET_HARD_ZONE_CODE = 'context_budget_blocked';
+const VSCODE_CODE_AGENT_INSTRUCTION_FILES_MAX = 16;
+const VSCODE_CODE_AGENT_INSTRUCTION_CONTENT_MAX_CHARS = 12_000;
+const VSCODE_CODE_AGENT_INSTRUCTION_BLOCK_MAX_CHARS = 48_000;
+const VSCODE_CODE_AGENT_SYSTEM_CONTEXT_FIELD_MAX_CHARS = 512;
 
 type SessionTodoRuntimeTask = {
   id: string;
@@ -128,6 +235,51 @@ type SessionTodoRuntimeSnapshot = {
   todoTitle: string;
   status: string;
   tasks: SessionTodoRuntimeTask[];
+};
+
+type ChatRuntimeMessage =
+  | { role: 'system' | 'user' | 'assistant'; content: string }
+  | { role: 'tool'; content: string; tool_call_id: string };
+
+type ContextBudgetZone = 'normal' | 'soft' | 'hard';
+
+type ContextBudgetSnapshot = {
+  estimatedTokens: number;
+  maxTokens: number;
+  occupancyPct: number;
+  zone: ContextBudgetZone;
+};
+const CHAT_CHECKPOINT_CONTEXT_TYPE = 'chat_session_checkpoint';
+
+type ChatCheckpointSummary = {
+  id: string;
+  title: string;
+  anchorMessageId: string;
+  anchorSequence: number;
+  messageCount: number;
+  createdAt: string;
+};
+
+type ChatBootstrapStreamEvent = {
+  eventType: string;
+  data: unknown;
+  sequence: number;
+  createdAt: Date;
+};
+
+type ChatSessionDocumentItem = {
+  id: string;
+  context_type: 'chat_session';
+  context_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  status: 'uploaded' | 'processing' | 'ready' | 'failed';
+  summary?: string | null;
+  summary_lang?: string | null;
+  created_at?: Date;
+  updated_at?: Date | null;
+  job_id?: string | null;
 };
 
 const normalizeTodoRuntimeStatus = (value: unknown): string =>
@@ -333,6 +485,216 @@ const normalizeTodoRuntimeToolResult = (
   return normalized;
 };
 
+const toBudgetString = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value ?? null);
+  } catch {
+    return String(value ?? '');
+  }
+};
+
+const inferContextBudgetMaxTokens = (
+  providerId: ProviderId,
+  modelId: string | null | undefined,
+): number => {
+  const model = String(modelId ?? '').trim().toLowerCase();
+  if (providerId === 'gemini') return CONTEXT_BUDGET_GEMINI_TOKENS;
+  if (model.startsWith('gpt-5')) return CONTEXT_BUDGET_OPENAI_GPT5_TOKENS;
+  return CONTEXT_BUDGET_DEFAULT_TOKENS;
+};
+
+const estimateTokenCountFromChars = (charCount: number): number =>
+  Math.max(1, Math.ceil(charCount / 4));
+
+const resolveBudgetZone = (occupancyPct: number): ContextBudgetZone => {
+  if (occupancyPct >= CONTEXT_BUDGET_HARD_THRESHOLD) return 'hard';
+  if (occupancyPct >= CONTEXT_BUDGET_SOFT_THRESHOLD) return 'soft';
+  return 'normal';
+};
+
+const estimateContextBudget = (input: {
+  messages: ChatRuntimeMessage[];
+  tools?: unknown;
+  rawInput?: unknown[] | null;
+  providerId: ProviderId;
+  modelId: string | null | undefined;
+}): ContextBudgetSnapshot => {
+  const maxTokens = inferContextBudgetMaxTokens(input.providerId, input.modelId);
+  const messageChars = input.messages.reduce<number>((acc, message) => {
+    const base = `${message.role}:${toBudgetString(message.content)}`;
+    return acc + base.length;
+  }, 0);
+  const toolsChars = input.tools ? toBudgetString(input.tools).length : 0;
+  const rawInputChars = Array.isArray(input.rawInput)
+    ? input.rawInput.reduce<number>(
+        (acc, entry) => acc + toBudgetString(entry).length,
+        0,
+      )
+    : 0;
+  const estimatedTokens = estimateTokenCountFromChars(
+    messageChars + toolsChars + rawInputChars,
+  );
+  const occupancyPct = Math.min(
+    100,
+    Math.max(0, Math.round((estimatedTokens / maxTokens) * 100)),
+  );
+  const zone: ContextBudgetZone = resolveBudgetZone(occupancyPct);
+  return {
+    estimatedTokens,
+    maxTokens,
+    occupancyPct,
+    zone,
+  };
+};
+
+const estimateToolResultProjectionChars = (
+  toolName: string,
+  args: Record<string, unknown>,
+): number => {
+  if (toolName === 'documents') {
+    const action = typeof args.action === 'string' ? args.action : '';
+    if (action === 'get_content') {
+      const maxChars =
+        typeof args.maxChars === 'number' && Number.isFinite(args.maxChars)
+          ? Math.max(2000, Math.floor(args.maxChars))
+          : 70_000;
+      return maxChars;
+    }
+    if (action === 'analyze') return 20_000;
+    if (action === 'list' || action === 'get_summary') return 8_000;
+  }
+  if (toolName === 'web_extract') {
+    const urls = Array.isArray(args.urls)
+      ? args.urls.length
+      : args.url
+        ? 1
+        : 0;
+    const count = Math.max(1, urls);
+    return Math.min(180_000, count * 40_000);
+  }
+  if (toolName === 'history_analyze') return 16_000;
+  if (toolName === 'web_search') return 8_000;
+  if (toolName === 'plan') return 5_000;
+  return 6_000;
+};
+
+const stripCompactSummaryFromSystemPrompt = (prompt: string): string => {
+  const startIndex = prompt.indexOf(CONTEXT_SUMMARY_SYSTEM_MARKER_START);
+  const endIndex = prompt.indexOf(CONTEXT_SUMMARY_SYSTEM_MARKER_END);
+  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+    return prompt.trim();
+  }
+  const before = prompt.slice(0, startIndex).trim();
+  const after = prompt
+    .slice(endIndex + CONTEXT_SUMMARY_SYSTEM_MARKER_END.length)
+    .trim();
+  return `${before}\n\n${after}`.trim();
+};
+
+const injectCompactSummaryInSystemPrompt = (prompt: string, summary: string): string => {
+  const cleanPrompt = stripCompactSummaryFromSystemPrompt(prompt);
+  const cleanSummary = summary.trim();
+  if (!cleanSummary) return cleanPrompt;
+  return [
+    cleanPrompt,
+    '',
+    CONTEXT_SUMMARY_SYSTEM_MARKER_START,
+    'Conversation context summary (auto-generated for context budget compaction):',
+    cleanSummary,
+    CONTEXT_SUMMARY_SYSTEM_MARKER_END,
+  ].join('\n').trim();
+};
+
+const formatConversationForSummary = (messages: ChatRuntimeMessage[]): string =>
+  messages
+    .map((message, index) => {
+      const role = String(message.role || 'unknown').toUpperCase();
+      const content = toBudgetString(message.content).slice(
+        0,
+        CONTEXT_SUMMARY_MAX_CHARS,
+      );
+      return `#${index + 1} ${role}\n${content}`;
+    })
+    .join('\n\n');
+
+const compactConversationContext = async (input: {
+  messages: ChatRuntimeMessage[];
+  providerId: ProviderId;
+  modelId: string | null | undefined;
+  userId: string;
+  workspaceId: string;
+  signal?: AbortSignal;
+}): Promise<{
+  compactedMessages: ChatRuntimeMessage[];
+  summary: string;
+  summarizedCount: number;
+}> => {
+  const [systemMessage, ...conversation] = input.messages;
+  const safeSystemMessage =
+    systemMessage?.role === 'system'
+      ? systemMessage
+      : ({ role: 'system', content: '' } as const);
+  const keepTailCount =
+    conversation.length > CONTEXT_SUMMARY_RECENT_MESSAGES
+      ? CONTEXT_SUMMARY_RECENT_MESSAGES
+      : Math.min(2, conversation.length);
+  if (conversation.length <= keepTailCount) {
+    return {
+      compactedMessages: input.messages,
+      summary: '',
+      summarizedCount: 0,
+    };
+  }
+
+  const summaryTarget = conversation.slice(
+    0,
+    Math.max(0, conversation.length - keepTailCount),
+  );
+  const keepTail = conversation.slice(-keepTailCount);
+  const summaryInput = formatConversationForSummary(summaryTarget);
+  const summaryPrompt = [
+    'Summarize the conversation history for continuity.',
+    '- Keep key user goals, constraints, and unresolved questions.',
+    '- Keep factual tool outputs/evidence already established.',
+    '- Keep language concise, neutral, and faithful.',
+    '- Return plain markdown bullet points (max 12 bullets).',
+    '',
+    summaryInput,
+  ].join('\n');
+
+  const summaryResponse = await callOpenAI({
+    providerId: input.providerId,
+    model:
+      input.providerId === 'gemini'
+        ? 'gemini-3.1-flash-lite'
+        : 'gpt-4.1-nano',
+    userId: input.userId,
+    workspaceId: input.workspaceId,
+    messages: [{ role: 'user', content: summaryPrompt }],
+    maxOutputTokens: CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS,
+    signal: input.signal,
+  });
+  const summary = String(
+    summaryResponse.choices?.[0]?.message?.content ?? '',
+  ).trim();
+  const nextSystemContent = injectCompactSummaryInSystemPrompt(
+    safeSystemMessage.content,
+    summary,
+  );
+  return {
+    compactedMessages: [
+      {
+        role: 'system',
+        content: nextSystemContent,
+      },
+      ...keepTail,
+    ],
+    summary,
+    summarizedCount: summaryTarget.length,
+  };
+};
+
 export class ChatService {
   private normalizeMessageContexts(
     input: Pick<CreateChatMessageInput, 'contexts' | 'primaryContextType' | 'primaryContextId'>
@@ -424,6 +786,240 @@ export class ChatService {
     return tools;
   }
 
+  private normalizeVsCodeCodeAgentPayload(
+    input?: VsCodeCodeAgentRuntimePayload | null,
+  ): NormalizedVsCodeCodeAgentRuntimePayload | null {
+    if (!input || typeof input !== 'object') return null;
+    const raw = input as Record<string, unknown>;
+    const source =
+      typeof input.source === 'string'
+        ? input.source
+        : (typeof raw.source === 'string' ? raw.source : null);
+    if (source && source !== 'vscode') return null;
+
+    const normalizeNullable = (value: unknown): string | null => {
+      if (typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    };
+    const normalizeBoundedNullable = (
+      value: unknown,
+      maxChars = VSCODE_CODE_AGENT_SYSTEM_CONTEXT_FIELD_MAX_CHARS,
+    ): string | null => {
+      const normalized = normalizeNullable(value);
+      if (!normalized) return null;
+      return normalized.slice(0, maxChars);
+    };
+
+    const instructionIncludePatternsRaw = Array.isArray(input.instructionIncludePatterns)
+      ? input.instructionIncludePatterns
+      : (Array.isArray(raw.instruction_include_patterns)
+          ? (raw.instruction_include_patterns as string[])
+          : []);
+    const instructionIncludePatterns = Array.isArray(instructionIncludePatternsRaw)
+      ? instructionIncludePatternsRaw
+          .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+          .filter((entry) => entry.length > 0)
+          .slice(0, 64)
+      : [];
+
+    const instructionFilesRaw = Array.isArray(input.instructionFiles)
+      ? input.instructionFiles
+      : (Array.isArray(raw.instruction_files)
+          ? (raw.instruction_files as VsCodeCodeAgentInstructionFile[])
+          : []);
+    const instructionFiles = Array.isArray(instructionFilesRaw)
+      ? instructionFilesRaw
+          .map((entry) => {
+            const path = typeof entry?.path === 'string' ? entry.path.trim() : '';
+            const content = typeof entry?.content === 'string' ? entry.content : '';
+            if (!path || !content.trim()) return null;
+            return {
+              path: path.slice(0, 512),
+              content: this.safeTruncate(
+                content.trim(),
+                VSCODE_CODE_AGENT_INSTRUCTION_CONTENT_MAX_CHARS,
+              ),
+            };
+          })
+          .filter((entry): entry is VsCodeCodeAgentInstructionFile => entry !== null)
+          .slice(0, VSCODE_CODE_AGENT_INSTRUCTION_FILES_MAX)
+      : [];
+
+    const systemContextRaw =
+      asRecord(input.systemContext) ??
+      asRecord(raw.system_context) ??
+      null;
+    const systemContext: NormalizedVsCodeCodeAgentSystemContext | null =
+      systemContextRaw
+        ? {
+            workingDirectory: normalizeBoundedNullable(
+              systemContextRaw.workingDirectory ?? systemContextRaw.working_directory,
+            ),
+            isGitRepo:
+              typeof (systemContextRaw.isGitRepo ?? systemContextRaw.is_git_repo) ===
+              'boolean'
+                ? Boolean(
+                    systemContextRaw.isGitRepo ?? systemContextRaw.is_git_repo,
+                  )
+                : null,
+            gitBranch: normalizeBoundedNullable(
+              systemContextRaw.gitBranch ?? systemContextRaw.git_branch,
+            ),
+            platform: normalizeBoundedNullable(systemContextRaw.platform),
+            osVersion: normalizeBoundedNullable(
+              systemContextRaw.osVersion ?? systemContextRaw.os_version,
+            ),
+            shell: normalizeBoundedNullable(systemContextRaw.shell),
+            clientDateIso: normalizeBoundedNullable(
+              systemContextRaw.clientDateIso ?? systemContextRaw.client_date_iso,
+            ),
+            clientTimezone: normalizeBoundedNullable(
+              systemContextRaw.clientTimezone ?? systemContextRaw.client_timezone,
+            ),
+          }
+        : null;
+    const hasSystemContextSignal = Boolean(
+      systemContext &&
+        (systemContext.workingDirectory ||
+          systemContext.isGitRepo !== null ||
+          systemContext.gitBranch ||
+          systemContext.platform ||
+          systemContext.osVersion ||
+          systemContext.shell ||
+          systemContext.clientDateIso ||
+          systemContext.clientTimezone),
+    );
+
+    const payload: NormalizedVsCodeCodeAgentRuntimePayload = {
+      workspaceKey: normalizeNullable(input.workspaceKey ?? raw.workspace_key),
+      workspaceLabel: normalizeNullable(
+        input.workspaceLabel ?? raw.workspace_label,
+      ),
+      promptGlobalOverride: normalizeNullable(
+        input.promptGlobalOverride ?? raw.prompt_global_override,
+      ),
+      promptWorkspaceOverride: normalizeNullable(
+        input.promptWorkspaceOverride ?? raw.prompt_workspace_override,
+      ),
+      instructionIncludePatterns,
+      instructionFiles,
+      systemContext: hasSystemContextSignal ? systemContext : null,
+    };
+
+    const hasSignal = Boolean(
+      payload.workspaceKey ||
+        payload.workspaceLabel ||
+        payload.promptGlobalOverride ||
+        payload.promptWorkspaceOverride ||
+        payload.instructionIncludePatterns.length > 0 ||
+        payload.instructionFiles.length > 0 ||
+        payload.systemContext ||
+        source === 'vscode',
+    );
+    return hasSignal ? payload : null;
+  }
+
+  private renderVsCodeInstructionFilesBlock(
+    payload: NormalizedVsCodeCodeAgentRuntimePayload,
+  ): string {
+    const lines: string[] = [];
+    if (payload.workspaceLabel || payload.workspaceKey) {
+      lines.push(
+        `Workspace: ${payload.workspaceLabel || payload.workspaceKey || 'unknown'}`,
+      );
+    }
+    if (payload.instructionIncludePatterns.length > 0) {
+      lines.push(
+        `Instruction patterns: ${payload.instructionIncludePatterns.join(', ')}`,
+      );
+    }
+
+    if (payload.instructionFiles.length === 0) {
+      lines.push('Aucun fichier d’instructions projet détecté.');
+      return lines.join('\n');
+    }
+
+    lines.push('Fichiers d’instructions projet chargés:');
+    for (const file of payload.instructionFiles) {
+      lines.push(`--- ${file.path} ---`);
+      lines.push(file.content);
+    }
+
+    return this.safeTruncate(
+      lines.join('\n'),
+      VSCODE_CODE_AGENT_INSTRUCTION_BLOCK_MAX_CHARS,
+    );
+  }
+
+  private renderVsCodeBranchInfoBlock(
+    payload: NormalizedVsCodeCodeAgentRuntimePayload,
+  ): string {
+    const workspace = payload.workspaceLabel || payload.workspaceKey || 'unknown';
+    return `Workspace scope: ${workspace}`;
+  }
+
+  private renderVsCodeSystemContextBlock(
+    payload: NormalizedVsCodeCodeAgentRuntimePayload,
+  ): string {
+    const context = payload.systemContext;
+    const serverDateIso = new Date().toISOString();
+    const serverTimezone = (() => {
+      try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown';
+      } catch {
+        return 'unknown';
+      }
+    })();
+    const clientDateIso = context?.clientDateIso;
+    const today = clientDateIso
+      ? clientDateIso.slice(0, 10)
+      : serverDateIso.slice(0, 10);
+    const lines = [
+      '<env>',
+      `Working directory: ${
+        context?.workingDirectory ||
+        payload.workspaceKey ||
+        payload.workspaceLabel ||
+        'unknown'
+      }`,
+      `Is directory a git repo: ${
+        context?.isGitRepo === true
+          ? 'Yes'
+          : context?.isGitRepo === false
+            ? 'No'
+            : 'Unknown'
+      }`,
+      ...(context?.gitBranch ? [`Git branch: ${context.gitBranch}`] : []),
+      `Platform: ${context?.platform || 'unknown'}`,
+      `OS Version: ${context?.osVersion || 'unknown'}`,
+      ...(context?.shell ? [`Shell: ${context.shell}`] : []),
+      `Today's date: ${today}`,
+      ...(context?.clientTimezone ? [`Timezone: ${context.clientTimezone}`] : []),
+      `Server date: ${serverDateIso}`,
+      `Server timezone: ${serverTimezone}`,
+      '</env>',
+    ];
+    return lines.join('\n');
+  }
+
+  private resolveVsCodeMonolithicPromptTemplate(
+    payload: NormalizedVsCodeCodeAgentRuntimePayload,
+  ): string {
+    const defaultTemplate = this.getPromptTemplate('chat_code_agent');
+    const resolvedTemplate =
+      payload.promptWorkspaceOverride ??
+      payload.promptGlobalOverride ??
+      defaultTemplate;
+    const normalized = resolvedTemplate.trim();
+    if (!normalized) {
+      throw new Error(
+        'VSCode code-agent prompt is invalid: resolved prompt is empty. Open extension settings and provide a non-empty global/workspace prompt.',
+      );
+    }
+    return normalized;
+  }
+
   private extractAwaitingLocalToolState(
     events: Array<{
       eventType: string;
@@ -441,7 +1037,11 @@ export class ChatService {
         typeof data.previous_response_id === 'string' ? data.previous_response_id : '';
       if (!previousResponseId) return null;
 
-      const pendingToolCallIds: string[] = [];
+      const pendingLocalToolCalls: Array<{
+        id: string;
+        name: string;
+        args: unknown;
+      }> = [];
       const pendingRaw = Array.isArray(data.pending_local_tool_calls)
         ? data.pending_local_tool_calls
         : [];
@@ -449,11 +1049,24 @@ export class ChatService {
         const rec = asRecord(item);
         const toolCallId =
           rec && typeof rec.tool_call_id === 'string' ? rec.tool_call_id.trim() : '';
-        if (!toolCallId || pendingToolCallIds.includes(toolCallId)) continue;
-        pendingToolCallIds.push(toolCallId);
+        const name =
+          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
+        const args = rec ? rec.args : {};
+        if (
+          !toolCallId ||
+          pendingLocalToolCalls.some((entry) => entry.id === toolCallId)
+        ) {
+          continue;
+        }
+        pendingLocalToolCalls.push({ id: toolCallId, name, args });
       }
 
-      const baseToolOutputs: Array<{ callId: string; output: string }> = [];
+      const baseToolOutputs: Array<{
+        callId: string;
+        output: string;
+        name?: string;
+        args?: unknown;
+      }> = [];
       const outputsRaw = Array.isArray(data.base_tool_outputs)
         ? data.base_tool_outputs
         : [];
@@ -464,7 +1077,14 @@ export class ChatService {
         const output =
           rec && typeof rec.output === 'string' ? rec.output : '';
         if (!callId) continue;
-        baseToolOutputs.push({ callId, output });
+        const name =
+          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
+        baseToolOutputs.push({
+          callId,
+          output,
+          ...(name ? { name } : {}),
+          ...(rec && 'args' in rec ? { args: rec.args } : {}),
+        });
       }
 
       const localToolDefinitions: LocalToolDefinitionInput[] = [];
@@ -488,14 +1108,17 @@ export class ChatService {
         localToolDefinitions.push({ name, description, parameters });
       }
 
-      if (pendingToolCallIds.length === 0) return null;
+      if (pendingLocalToolCalls.length === 0) return null;
 
       return {
         sequence: event.sequence,
         previousResponseId,
-        pendingToolCallIds,
+        pendingLocalToolCalls,
         baseToolOutputs,
-        localToolDefinitions
+        localToolDefinitions,
+        vscodeCodeAgent: this.normalizeVsCodeCodeAgentPayload(
+          data.vscode_code_agent as VsCodeCodeAgentRuntimePayload,
+        ),
       };
     }
 
@@ -510,6 +1133,7 @@ export class ChatService {
     readyToResume: boolean;
     waitingForToolCallIds: string[];
     localToolDefinitions: LocalToolDefinitionInput[];
+    vscodeCodeAgent?: NormalizedVsCodeCodeAgentRuntimePayload | null;
     resumeFrom?: ChatResumeFromToolOutputs;
   }> {
     const toolCallId = String(options.toolCallId ?? '').trim();
@@ -522,7 +1146,7 @@ export class ChatService {
     if (!awaitingState) {
       throw new Error('No pending local tool call found for this assistant message');
     }
-    if (!awaitingState.pendingToolCallIds.includes(toolCallId)) {
+    if (!awaitingState.pendingLocalToolCalls.some((entry) => entry.id === toolCallId)) {
       throw new Error(`Tool call ${toolCallId} is not pending for this assistant message`);
     }
 
@@ -554,7 +1178,7 @@ export class ChatService {
     );
 
     const followupEvents = await readStreamEvents(options.assistantMessageId, awaitingState.sequence);
-    const pendingSet = new Set(awaitingState.pendingToolCallIds);
+    const pendingSet = new Set(awaitingState.pendingLocalToolCalls.map((entry) => entry.id));
     const collectedByToolCallId = new Map<string, string>();
     for (const event of followupEvents) {
       if (event.eventType !== 'tool_call_result') continue;
@@ -567,14 +1191,15 @@ export class ChatService {
       collectedByToolCallId.set(id, output);
     }
 
-    const waitingForToolCallIds = awaitingState.pendingToolCallIds.filter(
-      (id) => !collectedByToolCallId.has(id)
-    );
+    const waitingForToolCallIds = awaitingState.pendingLocalToolCalls
+      .map((entry) => entry.id)
+      .filter((id) => !collectedByToolCallId.has(id));
     if (waitingForToolCallIds.length > 0) {
       return {
         readyToResume: false,
         waitingForToolCallIds,
-        localToolDefinitions: awaitingState.localToolDefinitions
+        localToolDefinitions: awaitingState.localToolDefinitions,
+        vscodeCodeAgent: awaitingState.vscodeCodeAgent,
       };
     }
 
@@ -583,20 +1208,33 @@ export class ChatService {
       if (!item.callId) continue;
       dedupedOutputs.set(item.callId, item.output);
     }
-    for (const id of awaitingState.pendingToolCallIds) {
+    for (const id of awaitingState.pendingLocalToolCalls.map((entry) => entry.id)) {
       const output = collectedByToolCallId.get(id);
       if (!output) continue;
       dedupedOutputs.set(id, output);
     }
-    const toolOutputs = Array.from(dedupedOutputs.entries()).map(([callId, output]) => ({
-      callId,
-      output
-    }));
+    const pendingById = new Map(
+      awaitingState.pendingLocalToolCalls.map((entry) => [entry.id, entry] as const)
+    );
+    const baseById = new Map(
+      awaitingState.baseToolOutputs.map((entry) => [entry.callId, entry] as const)
+    );
+    const toolOutputs = Array.from(dedupedOutputs.entries()).map(([callId, output]) => {
+      const pending = pendingById.get(callId);
+      const base = baseById.get(callId);
+      return {
+        callId,
+        output,
+        ...(pending?.name ? { name: pending.name } : base?.name ? { name: base.name } : {}),
+        ...(pending ? { args: pending.args } : base && 'args' in base ? { args: base.args } : {}),
+      };
+    });
 
     return {
       readyToResume: true,
       waitingForToolCallIds: [],
       localToolDefinitions: awaitingState.localToolDefinitions,
+      vscodeCodeAgent: awaitingState.vscodeCodeAgent,
       resumeFrom: {
         previousResponseId: awaitingState.previousResponseId,
         toolOutputs
@@ -673,6 +1311,34 @@ export class ChatService {
     return row ?? null;
   }
 
+  private async getDetailedMessageForUser(messageId: string, userId: string) {
+    const [row] = await db
+      .select({
+        id: chatMessages.id,
+        sessionId: chatMessages.sessionId,
+        role: chatMessages.role,
+        content: chatMessages.content,
+        contexts: chatMessages.contexts,
+        toolCalls: chatMessages.toolCalls,
+        toolCallId: chatMessages.toolCallId,
+        reasoning: chatMessages.reasoning,
+        model: chatMessages.model,
+        promptId: chatMessages.promptId,
+        promptVersionId: chatMessages.promptVersionId,
+        sequence: chatMessages.sequence,
+        createdAt: chatMessages.createdAt,
+        feedbackVote: chatMessageFeedback.vote,
+      })
+      .from(chatMessages)
+      .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
+      .leftJoin(
+        chatMessageFeedback,
+        and(eq(chatMessageFeedback.messageId, chatMessages.id), eq(chatMessageFeedback.userId, userId))
+      )
+      .where(and(eq(chatMessages.id, messageId), eq(chatSessions.userId, userId)));
+    return row ?? null;
+  }
+
   async getSessionForUser(sessionId: string, userId: string) {
     const [row] = await db
       .select()
@@ -696,11 +1362,22 @@ export class ChatService {
     return { sessionId };
   }
 
-  async listSessions(userId: string) {
+  async listSessions(userId: string, workspaceId?: string | null) {
+    const normalizedWorkspaceId =
+      typeof workspaceId === 'string' && workspaceId.trim().length > 0
+        ? workspaceId.trim()
+        : null;
     return await db
       .select()
       .from(chatSessions)
-      .where(eq(chatSessions.userId, userId))
+      .where(
+        normalizedWorkspaceId
+          ? and(
+              eq(chatSessions.userId, userId),
+              eq(chatSessions.workspaceId, normalizedWorkspaceId),
+            )
+          : eq(chatSessions.userId, userId),
+      )
       .orderBy(desc(chatSessions.updatedAt), desc(chatSessions.createdAt));
   }
 
@@ -740,10 +1417,10 @@ export class ChatService {
       .orderBy(asc(chatMessages.sequence));
 
     let todoRuntime: Record<string, unknown> | null = null;
-    const sessionWorkspaceId =
-      typeof session.workspaceId === 'string' && session.workspaceId.trim().length > 0
-        ? session.workspaceId
-        : (await ensureWorkspaceForUser(userId, { createIfMissing: false })).workspaceId;
+    const sessionWorkspaceId = await this.resolveSessionWorkspaceId(
+      session,
+      userId,
+    );
     if (sessionWorkspaceId) {
       const role = (await getWorkspaceRole(userId, sessionWorkspaceId)) ?? 'viewer';
       todoRuntime = await todoOrchestrationService.getSessionTodoRuntime(
@@ -755,6 +1432,465 @@ export class ChatService {
     return {
       messages,
       todoRuntime,
+    };
+  }
+
+  private async resolveSessionWorkspaceId(
+    session: { workspaceId?: string | null },
+    userId: string,
+  ): Promise<string | null> {
+    if (
+      typeof session.workspaceId === 'string' &&
+      session.workspaceId.trim().length > 0
+    ) {
+      return session.workspaceId;
+    }
+    return (await ensureWorkspaceForUser(userId, { createIfMissing: false }))
+      .workspaceId;
+  }
+
+  private async listSessionDocuments(options: {
+    sessionId: string;
+    workspaceId: string | null;
+  }): Promise<ChatSessionDocumentItem[]> {
+    if (!options.workspaceId) return [];
+
+    const rows = await db
+      .select()
+      .from(contextDocuments)
+      .where(
+        and(
+          eq(contextDocuments.workspaceId, options.workspaceId),
+          eq(contextDocuments.contextType, 'chat_session'),
+          eq(contextDocuments.contextId, options.sessionId),
+        ),
+      )
+      .orderBy(desc(contextDocuments.createdAt));
+
+    const jobIds = rows
+      .map((row) => row.jobId)
+      .filter((value): value is string => typeof value === 'string' && value.length > 0);
+    const jobById = new Map<string, { status: string | null }>();
+    if (jobIds.length > 0) {
+      const jobRows = await db
+        .select({ id: jobQueue.id, status: jobQueue.status })
+        .from(jobQueue)
+        .where(
+          and(
+            eq(jobQueue.workspaceId, options.workspaceId),
+            inArray(jobQueue.id, jobIds),
+          ),
+        );
+      for (const job of jobRows) {
+        jobById.set(job.id, { status: job.status ?? null });
+      }
+    }
+
+    return rows.map((row) => ({
+      status: (
+        (row.status === 'uploaded' || row.status === 'processing') &&
+        row.jobId &&
+        jobById.get(row.jobId)?.status === 'failed'
+          ? 'failed'
+          : row.status
+      ) as ChatSessionDocumentItem['status'],
+      id: row.id,
+      context_type: 'chat_session',
+      context_id: row.contextId,
+      filename: row.filename,
+      mime_type: row.mimeType,
+      size_bytes: row.sizeBytes,
+      summary: getDataString(row.data, 'summary'),
+      summary_lang: getDataString(row.data, 'summaryLang'),
+      job_id: row.jobId,
+      created_at: row.createdAt,
+      updated_at: row.updatedAt,
+    }));
+  }
+
+  private async listAssistantDetailsByMessageId(
+    messageIds: readonly string[],
+  ): Promise<Record<string, ChatBootstrapStreamEvent[]>> {
+    if (messageIds.length === 0) return {};
+
+    const rows = await db
+      .select({
+        streamId: chatStreamEvents.streamId,
+        eventType: chatStreamEvents.eventType,
+        data: chatStreamEvents.data,
+        sequence: chatStreamEvents.sequence,
+        createdAt: chatStreamEvents.createdAt,
+      })
+      .from(chatStreamEvents)
+      .where(inArray(chatStreamEvents.streamId, [...messageIds]))
+      .orderBy(chatStreamEvents.streamId, chatStreamEvents.sequence);
+
+    const out: Record<string, ChatBootstrapStreamEvent[]> = {};
+    for (const row of rows) {
+      const messageId = String(row.streamId ?? '').trim();
+      if (!messageId) continue;
+      if (!out[messageId]) out[messageId] = [];
+      out[messageId].push({
+        eventType: row.eventType,
+        data: row.data,
+        sequence: row.sequence,
+        createdAt: row.createdAt,
+      });
+    }
+    return out;
+  }
+
+  async getSessionBootstrap(options: { sessionId: string; userId: string }) {
+    const session = await this.getSessionForUser(options.sessionId, options.userId);
+    if (!session) throw new Error('Session not found');
+
+    const [{ messages, todoRuntime }, checkpoints, workspaceId] = await Promise.all([
+      this.listMessages(options.sessionId, options.userId),
+      this.listCheckpoints({
+        sessionId: options.sessionId,
+        userId: options.userId,
+        limit: 20,
+      }),
+      this.resolveSessionWorkspaceId(session, options.userId),
+    ]);
+
+    const documents = await this.listSessionDocuments({
+      sessionId: options.sessionId,
+      workspaceId,
+    });
+    const assistantMessageIds = messages
+      .filter((message) => message.role === 'assistant')
+      .map((message) => String(message.id ?? '').trim())
+      .filter((messageId) => messageId.length > 0);
+    const assistantDetailsByMessageId =
+      await this.listAssistantDetailsByMessageId(assistantMessageIds);
+
+    return {
+      messages,
+      todoRuntime,
+      checkpoints,
+      documents,
+      assistantDetailsByMessageId,
+    };
+  }
+
+  async getSessionHistory(options: {
+    sessionId: string;
+    userId: string;
+    detailMode?: 'summary' | 'full';
+  }): Promise<{
+    sessionId: string;
+    title: string | null;
+    todoRuntime: Record<string, unknown> | null;
+    checkpoints: ChatCheckpointSummary[];
+    documents: ChatSessionDocumentItem[];
+    items: ChatHistoryTimelineItem[];
+  }> {
+    const session = await this.getSessionForUser(options.sessionId, options.userId);
+    if (!session) throw new Error('Session not found');
+
+    const [{ messages, todoRuntime }, checkpoints, workspaceId] = await Promise.all([
+      this.listMessages(options.sessionId, options.userId),
+      this.listCheckpoints({
+        sessionId: options.sessionId,
+        userId: options.userId,
+        limit: 20,
+      }),
+      this.resolveSessionWorkspaceId(session, options.userId),
+    ]);
+
+    const documents = await this.listSessionDocuments({
+      sessionId: options.sessionId,
+      workspaceId,
+    });
+    const assistantMessageIds = messages
+      .filter((message) => message.role === 'assistant')
+      .map((message) => String(message.id ?? '').trim())
+      .filter((messageId) => messageId.length > 0);
+    const assistantDetailsByMessageId =
+      await this.listAssistantDetailsByMessageId(assistantMessageIds);
+    const eventMap = new Map<string, ChatHistoryStreamEvent[]>();
+    for (const [messageId, events] of Object.entries(assistantDetailsByMessageId)) {
+      eventMap.set(messageId, events as ChatHistoryStreamEvent[]);
+    }
+    const projectedItems = buildChatHistoryTimeline(
+      messages as ChatHistoryMessage[],
+      eventMap,
+    );
+    const items =
+      options.detailMode === 'full'
+        ? projectedItems
+        : compactChatHistoryTimelineForSummary(projectedItems);
+
+    return {
+      sessionId: options.sessionId,
+      title: session.title ?? null,
+      todoRuntime,
+      checkpoints,
+      documents,
+      items: [...items].reverse(),
+    };
+  }
+
+  async getMessageRuntimeDetails(options: {
+    messageId: string;
+    userId: string;
+  }): Promise<{
+    messageId: string;
+    items: ChatHistoryTimelineItem[];
+  }> {
+    const message = await this.getDetailedMessageForUser(
+      options.messageId,
+      options.userId,
+    );
+    if (!message) throw new Error('Message not found');
+    if (message.role !== 'assistant') {
+      throw new Error('Runtime details only exist for assistant messages');
+    }
+
+    const { messages } = await this.listMessages(
+      message.sessionId,
+      options.userId,
+    );
+    const details = await this.listAssistantDetailsByMessageId([options.messageId]);
+    const events = (details[options.messageId] ?? []) as ChatHistoryStreamEvent[];
+    const eventMap = new Map<string, ChatHistoryStreamEvent[]>();
+    eventMap.set(options.messageId, events);
+    const projected = buildChatHistoryTimeline(
+      messages as ChatHistoryMessage[],
+      eventMap,
+    );
+    const firstIndex = projected.findIndex(
+      (item) => String(item.message.id ?? '').trim() === options.messageId,
+    );
+    const lastIndex = (() => {
+      for (let index = projected.length - 1; index >= 0; index -= 1) {
+        if (String(projected[index]?.message.id ?? '').trim() === options.messageId) {
+          return index;
+        }
+      }
+      return -1;
+    })();
+    const items =
+      firstIndex >= 0 && lastIndex >= firstIndex
+        ? projected.slice(firstIndex, lastIndex + 1)
+        : buildAssistantMessageHistoryDetails(
+            message as ChatHistoryMessage,
+            events,
+          );
+
+    return {
+      messageId: options.messageId,
+      items,
+    };
+  }
+
+  async createCheckpoint(options: {
+    sessionId: string;
+    userId: string;
+    title?: string | null;
+    anchorMessageId?: string | null;
+  }): Promise<ChatCheckpointSummary> {
+    const session = await this.getSessionForUser(options.sessionId, options.userId);
+    if (!session) throw new Error('Session not found');
+
+    const messages = await db
+      .select({
+        id: chatMessages.id,
+        role: chatMessages.role,
+        content: chatMessages.content,
+        contexts: chatMessages.contexts,
+        toolCalls: chatMessages.toolCalls,
+        toolCallId: chatMessages.toolCallId,
+        reasoning: chatMessages.reasoning,
+        model: chatMessages.model,
+        promptId: chatMessages.promptId,
+        promptVersionId: chatMessages.promptVersionId,
+        sequence: chatMessages.sequence,
+        createdAt: chatMessages.createdAt,
+      })
+      .from(chatMessages)
+      .where(eq(chatMessages.sessionId, options.sessionId))
+      .orderBy(asc(chatMessages.sequence));
+
+    if (messages.length === 0) {
+      throw new Error('Cannot create checkpoint on an empty session');
+    }
+
+    const anchorMessage =
+      (options.anchorMessageId
+        ? messages.find((message) => message.id === options.anchorMessageId)
+        : null) ?? messages[messages.length - 1];
+    if (!anchorMessage) throw new Error('Anchor message not found');
+
+    const anchorSequence = Number(anchorMessage.sequence ?? 0);
+    if (!Number.isFinite(anchorSequence) || anchorSequence <= 0) {
+      throw new Error('Invalid checkpoint anchor sequence');
+    }
+
+    const snapshotMessages = messages
+      .filter((message) => Number(message.sequence ?? 0) <= anchorSequence)
+      .map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        contexts: message.contexts,
+        toolCalls: message.toolCalls,
+        toolCallId: message.toolCallId,
+        reasoning: message.reasoning,
+        model: message.model,
+        promptId: message.promptId,
+        promptVersionId: message.promptVersionId,
+        sequence: message.sequence,
+        createdAt:
+          message.createdAt instanceof Date
+            ? message.createdAt.toISOString()
+            : String(message.createdAt ?? ''),
+      }));
+
+    const checkpointId = createId();
+    const now = new Date();
+    const title =
+      typeof options.title === 'string' && options.title.trim().length > 0
+        ? options.title.trim()
+        : `Checkpoint #${anchorSequence}`;
+
+    const snapshot = {
+      id: checkpointId,
+      title,
+      anchorMessageId: anchorMessage.id,
+      anchorSequence,
+      messageCount: snapshotMessages.length,
+      messages: snapshotMessages,
+    };
+
+    await db.insert(chatContexts).values({
+      id: checkpointId,
+      sessionId: options.sessionId,
+      contextType: CHAT_CHECKPOINT_CONTEXT_TYPE,
+      contextId: checkpointId,
+      snapshotBefore: null,
+      snapshotAfter: snapshot,
+      modifications: {
+        action: 'checkpoint_create',
+        anchorMessageId: anchorMessage.id,
+        anchorSequence,
+      },
+      modifiedAt: now,
+      createdAt: now,
+    });
+
+    return {
+      id: checkpointId,
+      title,
+      anchorMessageId: anchorMessage.id,
+      anchorSequence,
+      messageCount: snapshotMessages.length,
+      createdAt: now.toISOString(),
+    };
+  }
+
+  async listCheckpoints(options: {
+    sessionId: string;
+    userId: string;
+    limit?: number;
+  }): Promise<ChatCheckpointSummary[]> {
+    const session = await this.getSessionForUser(options.sessionId, options.userId);
+    if (!session) throw new Error('Session not found');
+
+    const limit = Number.isFinite(options.limit)
+      ? Math.min(Math.max(Math.floor(options.limit as number), 1), 100)
+      : 20;
+
+    const rows = await db
+      .select({
+        id: chatContexts.id,
+        snapshotAfter: chatContexts.snapshotAfter,
+        createdAt: chatContexts.createdAt,
+      })
+      .from(chatContexts)
+      .where(
+        and(
+          eq(chatContexts.sessionId, options.sessionId),
+          eq(chatContexts.contextType, CHAT_CHECKPOINT_CONTEXT_TYPE),
+        ),
+      )
+      .orderBy(desc(chatContexts.createdAt))
+      .limit(limit);
+
+    return rows.map((row) => {
+      const snapshot = asRecord(row.snapshotAfter) ?? {};
+      const titleRaw = String(snapshot.title ?? '').trim();
+      const anchorMessageId = String(snapshot.anchorMessageId ?? '').trim();
+      const anchorSequence = Number(snapshot.anchorSequence ?? 0);
+      const messageCount = Number(snapshot.messageCount ?? 0);
+      const createdAt =
+        row.createdAt instanceof Date
+          ? row.createdAt.toISOString()
+          : new Date(String(row.createdAt ?? '')).toISOString();
+      return {
+        id: row.id,
+        title: titleRaw || `Checkpoint #${anchorSequence || 0}`,
+        anchorMessageId,
+        anchorSequence: Number.isFinite(anchorSequence) ? anchorSequence : 0,
+        messageCount: Number.isFinite(messageCount) ? messageCount : 0,
+        createdAt,
+      };
+    });
+  }
+
+  async restoreCheckpoint(options: {
+    sessionId: string;
+    checkpointId: string;
+    userId: string;
+  }): Promise<{
+    checkpointId: string;
+    restoredToSequence: number;
+    removedMessages: number;
+  }> {
+    const session = await this.getSessionForUser(options.sessionId, options.userId);
+    if (!session) throw new Error('Session not found');
+
+    const [checkpoint] = await db
+      .select({
+        id: chatContexts.id,
+        snapshotAfter: chatContexts.snapshotAfter,
+      })
+      .from(chatContexts)
+      .where(
+        and(
+          eq(chatContexts.id, options.checkpointId),
+          eq(chatContexts.sessionId, options.sessionId),
+          eq(chatContexts.contextType, CHAT_CHECKPOINT_CONTEXT_TYPE),
+        ),
+      );
+    if (!checkpoint) throw new Error('Checkpoint not found');
+
+    const snapshot = asRecord(checkpoint.snapshotAfter);
+    const restoredToSequence = Number(snapshot?.anchorSequence ?? 0);
+    if (!Number.isFinite(restoredToSequence) || restoredToSequence <= 0) {
+      throw new Error('Invalid checkpoint payload');
+    }
+
+    const removedRows = await db
+      .delete(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.sessionId, options.sessionId),
+          gt(chatMessages.sequence, restoredToSequence),
+        ),
+      )
+      .returning({ id: chatMessages.id });
+
+    await db
+      .update(chatSessions)
+      .set({ updatedAt: new Date() })
+      .where(eq(chatSessions.id, options.sessionId));
+
+    return {
+      checkpointId: checkpoint.id,
+      restoredToSequence,
+      removedMessages: removedRows.length,
     };
   }
 
@@ -829,7 +1965,7 @@ export class ChatService {
       settingsService.getAISettings({ userId: options.userId }),
       getModelCatalogPayload({ userId: options.userId }),
     ]);
-    const inferredProviderId = inferProviderFromModelId(
+    const inferredProviderId = inferProviderFromModelIdWithLegacy(
       catalog.models,
       options.model
     );
@@ -879,62 +2015,6 @@ export class ChatService {
       providerId: selectedProviderId,
       model: selectedModel
     };
-  }
-
-  async listStreamEventsForSession(options: {
-    sessionId: string;
-    userId: string;
-    limitMessages?: number;
-    limitEventsPerMessage?: number;
-  }): Promise<Array<{ messageId: string; events: Array<{ eventType: string; data: unknown; sequence: number; createdAt: Date }> }>> {
-    const session = await this.getSessionForUser(options.sessionId, options.userId);
-    if (!session) throw new Error('Session not found');
-
-    const limitMessages = Math.max(1, Math.min(50, options.limitMessages ?? 20));
-    const limitEventsPerMessage = Math.max(10, Math.min(5000, options.limitEventsPerMessage ?? 2000));
-
-    // Derniers messages assistant finalisés
-    const assistantRows = await db
-      .select({ id: chatMessages.id })
-      .from(chatMessages)
-      .where(
-        and(
-          eq(chatMessages.sessionId, options.sessionId),
-          eq(chatMessages.role, 'assistant'),
-          isNotNull(chatMessages.content)
-        )
-      )
-      .orderBy(desc(chatMessages.sequence))
-      .limit(limitMessages);
-
-    const messageIds = assistantRows.map((r) => r.id).filter(Boolean);
-    if (messageIds.length === 0) return [];
-
-    const rows = await db
-      .select({
-        streamId: chatStreamEvents.streamId,
-        eventType: chatStreamEvents.eventType,
-        data: chatStreamEvents.data,
-        sequence: chatStreamEvents.sequence,
-        createdAt: chatStreamEvents.createdAt
-      })
-      .from(chatStreamEvents)
-      .where(inArray(chatStreamEvents.streamId, messageIds))
-      .orderBy(chatStreamEvents.streamId, chatStreamEvents.sequence);
-
-    const byId = new Map<string, Array<{ eventType: string; data: unknown; sequence: number; createdAt: Date }>>();
-    for (const r of rows) {
-      const sid = r.streamId;
-      if (!sid) continue;
-      const arr = byId.get(sid) ?? [];
-      if (arr.length < limitEventsPerMessage) {
-        arr.push({ eventType: r.eventType, data: r.data, sequence: r.sequence, createdAt: r.createdAt });
-      }
-      byId.set(sid, arr);
-    }
-
-    // Garder l'ordre "le plus récent d'abord" côté messages, mais les events restent triés
-    return messageIds.map((id) => ({ messageId: id, events: byId.get(id) ?? [] }));
   }
 
   private async getNextMessageSequence(sessionId: string): Promise<number> {
@@ -998,7 +2078,10 @@ export class ChatService {
       settingsService.getAISettings({ userId: input.userId }),
       getModelCatalogPayload({ userId: input.userId }),
     ]);
-    const inferredProviderId = inferProviderFromModelId(catalog.models, input.model);
+    const inferredProviderId = inferProviderFromModelIdWithLegacy(
+      catalog.models,
+      input.model
+    );
     const resolvedSelection = resolveDefaultSelection(
       {
         providerId:
@@ -1011,7 +2094,6 @@ export class ChatService {
     );
     const selectedProviderId = resolvedSelection.provider_id;
     const selectedModel = resolvedSelection.model_id;
-
     const userSeq = await this.getNextMessageSequence(sessionId);
     const assistantSeq = userSeq + 1;
 
@@ -1224,6 +2306,7 @@ export class ChatService {
     contexts?: Array<{ contextType: string; contextId: string }>;
     tools?: string[];
     localToolDefinitions?: LocalToolDefinitionInput[];
+    vscodeCodeAgent?: VsCodeCodeAgentRuntimePayload | null;
     resumeFrom?: ChatResumeFromToolOutputs;
     locale?: string;
     signal?: AbortSignal;
@@ -1497,6 +2580,7 @@ export class ChatService {
     if (hasCommentContexts) {
       addTools([commentAssistantTool]);
     }
+    addTools([historyAnalyzeTool]);
     const localTools = this.normalizeLocalToolDefinitions(
       options.localToolDefinitions
     );
@@ -1514,6 +2598,7 @@ export class ChatService {
     if (Array.isArray(options.tools) && options.tools.length > 0 && tools?.length) {
       const allowed = new Set<string>([
         ...effectiveRequestedTools,
+        'history_analyze',
         ...Array.from(localToolNames)
       ]);
       tools = tools.filter((t) => (t.type === 'function' ? allowed.has(t.function?.name || '') : false));
@@ -1777,14 +2862,66 @@ Règles :
         : `OUTILS ACTIFS POUR CETTE REPONSE :\n- Aucun outil actif.`;
     contextBlock += `\n\n${activeToolsBlock}`;
 
-    const basePrompt = this.getPromptTemplate('chat_system_base')
-      || "Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.\n\n{{CONTEXT_BLOCK}}\n\n{{DOCUMENTS_BLOCK}}\n\n{{AUTOMATION_BLOCK}}";
-    const automationBlock = this.getPromptTemplate('chat_conversation_auto');
-    const systemPrompt = this.renderTemplate(basePrompt, {
-      CONTEXT_BLOCK: contextBlock,
-      DOCUMENTS_BLOCK: documentsBlock,
-      AUTOMATION_BLOCK: automationBlock
-    }).trim();
+    const vscodeCodeAgentPayload = this.normalizeVsCodeCodeAgentPayload(
+      options.vscodeCodeAgent,
+    );
+    const systemPrompt = (() => {
+      if (vscodeCodeAgentPayload) {
+        const template = this.resolveVsCodeMonolithicPromptTemplate(
+          vscodeCodeAgentPayload,
+        );
+        const instructionFilesBlock =
+          this.renderVsCodeInstructionFilesBlock(vscodeCodeAgentPayload);
+        const branchInfoBlock =
+          this.renderVsCodeBranchInfoBlock(vscodeCodeAgentPayload);
+        const systemContextBlock =
+          this.renderVsCodeSystemContextBlock(vscodeCodeAgentPayload);
+        const hasInstructionPlaceholder = template.includes(
+          '{{INSTRUCTION_FILES_BLOCK}}',
+        );
+        const hasBranchInfoPlaceholder = template.includes(
+          '{{BRANCH_INFO_BLOCK}}',
+        );
+        const hasSystemContextPlaceholder = template.includes(
+          '{{SYSTEM_CONTEXT_BLOCK}}',
+        );
+        const hasContextPlaceholder = template.includes('{{CONTEXT_BLOCK}}');
+        let rendered = this.renderTemplate(template, {
+          INSTRUCTION_FILES_BLOCK: instructionFilesBlock,
+          BRANCH_INFO_BLOCK: branchInfoBlock,
+          SYSTEM_CONTEXT_BLOCK: systemContextBlock,
+          CONTEXT_BLOCK: contextBlock,
+        }).trim();
+        if (!hasInstructionPlaceholder && instructionFilesBlock.trim()) {
+          rendered = `${rendered}\n\nContexte projet (fichiers d’instructions):\n${instructionFilesBlock}`.trim();
+        }
+        if (!hasBranchInfoPlaceholder && branchInfoBlock.trim()) {
+          rendered = `${rendered}\n\nContexte de branche:\n${branchInfoBlock}`.trim();
+        }
+        if (!hasSystemContextPlaceholder && systemContextBlock.trim()) {
+          rendered = `${rendered}\n\nSystem context:\n${systemContextBlock}`.trim();
+        }
+        if (!hasContextPlaceholder && contextBlock.trim()) {
+          rendered = `${rendered}\n\nContexte runtime:\n${contextBlock}`.trim();
+        }
+        if (!rendered) {
+          throw new Error(
+            'VSCode code-agent prompt is invalid: rendered prompt is empty. Update extension settings (global/workspace prompt).',
+          );
+        }
+        return rendered;
+      }
+
+      const basePrompt =
+        this.getPromptTemplate('chat_system_base') ||
+        "Tu es un assistant IA pour une application B2B d'idées d'IA. Réponds en français, de façon concise et actionnable.\n\n{{CONTEXT_BLOCK}}\n\n{{DOCUMENTS_BLOCK}}\n\n{{AUTOMATION_BLOCK}}";
+      const automationBlock = this.getPromptTemplate('chat_conversation_auto');
+      return this.renderTemplate(basePrompt, {
+        CONTEXT_BLOCK: contextBlock,
+        DOCUMENTS_BLOCK: documentsBlock,
+        AUTOMATION_BLOCK: automationBlock,
+      }).trim();
+    })();
     const STEER_PROMPT_MAX_MESSAGES = 8;
     const STEER_REASONING_REPLAY_MAX_CHARS = 6000;
     const STEER_REASONING_EXCERPT_MAX_CHARS = 1800;
@@ -1876,10 +3013,10 @@ Règles :
     const toolCalls: Array<{ id: string; name: string; args: string }> = [];
     
     // Boucle itérative pour gérer plusieurs rounds de tool calls
-    let currentMessages: Array<
-      | { role: 'system' | 'user' | 'assistant'; content: string }
-      | { role: 'tool'; content: string; tool_call_id: string }
-    > = [{ role: 'system' as const, content: systemPrompt }, ...conversation];
+    let currentMessages: ChatRuntimeMessage[] = [
+      { role: 'system' as const, content: systemPrompt },
+      ...conversation,
+    ];
     let maxIterations = BASE_MAX_ITERATIONS;
     const todoAutonomousExtensionEnabled = Boolean(
       enforceTodoUpdateMode && todoProgressionFocusMode,
@@ -1897,17 +3034,19 @@ Règles :
       ? options.resumeFrom!.toolOutputs.map((item) => ({
           type: 'function_call_output',
           call_id: item.callId,
-          output: item.output
+          output: item.output,
         }))
       : null;
     const steerHistoryMessages: string[] = [];
     let steerReasoningReplay = '';
+    let lastBudgetAnnouncedPct = -1;
+    let contextBudgetReplanAttempts = 0;
 
     const [aiSettings, catalog] = await Promise.all([
       settingsService.getAISettings({ userId: options.userId }),
       getModelCatalogPayload({ userId: options.userId }),
     ]);
-    const inferredProviderId = inferProviderFromModelId(
+    const inferredProviderId = inferProviderFromModelIdWithLegacy(
       catalog.models,
       options.model || assistantRow.model || null
     );
@@ -1923,10 +3062,14 @@ Règles :
     );
     const selectedProviderId = resolvedSelection.provider_id;
     const selectedModel = resolvedSelection.model_id;
+    const useCodexTransport =
+      selectedProviderId === 'openai' &&
+      selectedModel === 'gpt-5.4' &&
+      (await getOpenAITransportMode()) === 'codex';
 
     // Reasoning-effort evaluation (best effort):
     // - OpenAI gpt-5* keeps its existing evaluator behavior.
-    // - Gemini provider uses gemini-2.5-flash-lite for the same classification intent.
+    // - Gemini provider uses gemini-3.1-flash-lite for the same classification intent.
     const isGpt5 = typeof selectedModel === 'string' && selectedModel.startsWith('gpt-5');
     const shouldEvaluateReasoningEffort =
       isGpt5 || selectedProviderId === 'gemini';
@@ -1934,7 +3077,7 @@ Règles :
       selectedProviderId === 'gemini' ? 'gemini' : 'openai';
     const evaluatorModel =
       selectedProviderId === 'gemini'
-        ? 'gemini-2.5-flash-lite'
+        ? 'gemini-3.1-flash-lite'
         : 'gpt-4.1-nano';
     let reasoningEffortForThisMessage: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | undefined;
     // Default fallback if evaluator fails: medium.
@@ -2054,6 +3197,109 @@ Règles :
       return messages;
     };
 
+    const writeContextBudgetStatus = async (
+      phase: 'pre_model' | 'pre_tool',
+      snapshot: ContextBudgetSnapshot,
+      extras?: Record<string, unknown>,
+    ) => {
+      if (
+        snapshot.occupancyPct === lastBudgetAnnouncedPct &&
+        snapshot.zone === 'normal'
+      ) {
+        return;
+      }
+      await writeStreamEvent(
+        options.assistantMessageId,
+        'status',
+        {
+          state: 'context_budget_update',
+          phase,
+          occupancy_pct: snapshot.occupancyPct,
+          estimated_tokens: snapshot.estimatedTokens,
+          max_tokens: snapshot.maxTokens,
+          zone: snapshot.zone,
+          ...(extras ?? {}),
+        },
+        streamSeq,
+        options.assistantMessageId,
+      );
+      streamSeq += 1;
+      lastBudgetAnnouncedPct = snapshot.occupancyPct;
+    };
+
+    const compactContextIfNeeded = async (
+      reason:
+        | 'pre_model_hard_threshold'
+        | 'pre_tool_hard_threshold',
+      snapshot: ContextBudgetSnapshot,
+    ): Promise<ContextBudgetSnapshot> => {
+      await writeStreamEvent(
+        options.assistantMessageId,
+        'status',
+        {
+          state: 'context_compaction_started',
+          reason,
+          occupancy_pct_before: snapshot.occupancyPct,
+        },
+        streamSeq,
+        options.assistantMessageId,
+      );
+      streamSeq += 1;
+      try {
+        const compacted = await compactConversationContext({
+          messages: currentMessages,
+          providerId: selectedProviderId,
+          modelId: selectedModel,
+          userId: options.userId,
+          workspaceId: sessionWorkspaceId,
+          signal: options.signal,
+        });
+        if (compacted.summary.trim().length > 0) {
+          currentMessages = compacted.compactedMessages;
+        }
+        const afterSnapshot = estimateContextBudget({
+          messages: currentMessages,
+          tools,
+          rawInput: pendingResponsesRawInput,
+          providerId: selectedProviderId,
+          modelId: selectedModel,
+        });
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'status',
+          {
+            state: 'context_compaction_done',
+            reason,
+            occupancy_pct_before: snapshot.occupancyPct,
+            occupancy_pct_after: afterSnapshot.occupancyPct,
+            summarized_messages: compacted.summarizedCount,
+          },
+          streamSeq,
+          options.assistantMessageId,
+        );
+        streamSeq += 1;
+        await writeContextBudgetStatus('pre_model', afterSnapshot, {
+          source: 'compaction',
+        });
+        return afterSnapshot;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error ?? '');
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'status',
+          {
+            state: 'context_compaction_failed',
+            reason,
+            message: message.slice(0, 300),
+          },
+          streamSeq,
+          options.assistantMessageId,
+        );
+        streamSeq += 1;
+        return snapshot;
+      }
+    };
+
     while (continueGenerationLoop) {
       if (iteration >= maxIterations) {
         const canExtendTodoAutonomousLoop =
@@ -2085,6 +3331,20 @@ Règles :
         steerHistoryMessages,
         steerReasoningReplay,
       );
+      let preModelBudget = estimateContextBudget({
+        messages: currentMessages,
+        tools,
+        rawInput: pendingResponsesRawInput,
+        providerId: selectedProviderId,
+        modelId: selectedModel,
+      });
+      await writeContextBudgetStatus('pre_model', preModelBudget);
+      if (preModelBudget.zone === 'hard') {
+        preModelBudget = await compactContextIfNeeded(
+          'pre_model_hard_threshold',
+          preModelBudget,
+        );
+      }
       let steerInterruptionRequested = false;
       let steerInterruptionBatch: string[] = [];
 
@@ -2323,8 +3583,16 @@ Règles :
 
       // Exécuter les tool calls et ajouter les résultats à la conversation
       const toolResults: Array<{ role: 'tool'; content: string; tool_call_id: string }> = [];
-      const responseToolOutputs: Array<{ type: 'function_call_output'; call_id: string; output: string }> = [];
-      const pendingLocalToolCalls: Array<{ id: string; name: string }> = [];
+      const responseToolOutputs: Array<{
+        type: 'function_call_output';
+        call_id: string;
+        output: string;
+      }> = [];
+      const pendingLocalToolCalls: Array<{
+        id: string;
+        name: string;
+        args: unknown;
+      }> = [];
       const orgByFolderId = new Map<string, string | null>();
       const getOrganizationIdForFolder = async (folderId: string): Promise<string | null> => {
         if (orgByFolderId.has(folderId)) return orgByFolderId.get(folderId) ?? null;
@@ -2409,7 +3677,11 @@ Règles :
         if (options.signal?.aborted) throw new Error('AbortError');
         const toolName = String(toolCall.name || '').trim();
         if (toolName && localToolNames.has(toolName)) {
-          pendingLocalToolCalls.push({ id: toolCall.id, name: toolName });
+          pendingLocalToolCalls.push({
+            id: toolCall.id,
+            name: toolName,
+            args: parseToolCallArgs(toolCall.args),
+          });
           await writeStreamEvent(
             options.assistantMessageId,
             'tool_call_result',
@@ -2423,6 +3695,107 @@ Règles :
         
         try {
           const args = JSON.parse(toolCall.args || '{}');
+          const projectedResultChars = estimateToolResultProjectionChars(
+            toolCall.name,
+            asRecord(args) ?? {},
+          );
+          let preToolBudget = estimateContextBudget({
+            messages: currentMessages,
+            tools,
+            rawInput: responseToolOutputs,
+            providerId: selectedProviderId,
+            modelId: selectedModel,
+          });
+          await writeContextBudgetStatus('pre_tool', preToolBudget, {
+            tool_name: toolCall.name,
+          });
+          const computeProjected = (snapshot: ContextBudgetSnapshot) => {
+            const projectedTokens =
+              snapshot.estimatedTokens +
+              estimateTokenCountFromChars(projectedResultChars);
+            const projectedPct = Math.min(
+              100,
+              Math.max(0, Math.round((projectedTokens / snapshot.maxTokens) * 100)),
+            );
+            return {
+              projectedTokens,
+              projectedPct,
+              projectedZone: resolveBudgetZone(projectedPct),
+            };
+          };
+          let projectedBudget = computeProjected(preToolBudget);
+          if (projectedBudget.projectedZone === 'hard') {
+            preToolBudget = await compactContextIfNeeded(
+              'pre_tool_hard_threshold',
+              preToolBudget,
+            );
+            projectedBudget = computeProjected(preToolBudget);
+          }
+          if (projectedBudget.projectedZone !== 'normal') {
+            contextBudgetReplanAttempts += 1;
+            const escalationRequired =
+              contextBudgetReplanAttempts > CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS;
+            const deferredResult = {
+              status: 'deferred',
+              code:
+                projectedBudget.projectedZone === 'hard'
+                  ? CONTEXT_BUDGET_HARD_ZONE_CODE
+                  : CONTEXT_BUDGET_SOFT_ZONE_CODE,
+              message:
+                projectedBudget.projectedZone === 'hard'
+                  ? 'Tool call blocked: context budget still above hard threshold after compaction.'
+                  : 'Tool call deferred: projected output would exceed context budget soft threshold.',
+              occupancy_pct: projectedBudget.projectedPct,
+              estimated_tokens: projectedBudget.projectedTokens,
+              max_tokens: preToolBudget.maxTokens,
+              replan_required: true,
+              escalation_required: escalationRequired,
+              suggested_actions: [
+                'Narrow scope and retry tool with smaller payload.',
+                'Use history_analyze for targeted extraction if needed.',
+              ],
+            };
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result: deferredResult },
+              streamSeq,
+              options.assistantMessageId,
+            );
+            streamSeq += 1;
+            if (escalationRequired) {
+              await writeStreamEvent(
+                options.assistantMessageId,
+                'status',
+                {
+                  state: 'context_budget_user_escalation_required',
+                  occupancy_pct: projectedBudget.projectedPct,
+                  code: deferredResult.code,
+                },
+                streamSeq,
+                options.assistantMessageId,
+              );
+              streamSeq += 1;
+            }
+            toolResults.push({
+              role: 'tool',
+              content: JSON.stringify(deferredResult),
+              tool_call_id: toolCall.id,
+            });
+            responseToolOutputs.push({
+              type: 'function_call_output',
+              call_id: toolCall.id,
+              output: JSON.stringify(deferredResult),
+            });
+            executedTools.push({
+              toolCallId: toolCall.id,
+              name: toolCall.name || 'unknown_tool',
+              args,
+              result: deferredResult,
+            });
+            continue;
+          }
+          contextBudgetReplanAttempts = 0;
           const todoOperation: TodoRuntimeToolOperation | null = (() => {
             if (toolCall.name !== 'plan') return null;
             const actionRaw =
@@ -3153,6 +4526,64 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
+          } else if (toolCall.name === 'history_analyze') {
+            const question =
+              typeof args.question === 'string' ? args.question.trim() : '';
+            if (!question) {
+              throw new Error('history_analyze: question is required');
+            }
+            const fromMessageId =
+              typeof args.from_message_id === 'string'
+                ? args.from_message_id
+                : undefined;
+            const toMessageId =
+              typeof args.to_message_id === 'string'
+                ? args.to_message_id
+                : undefined;
+            const maxTurns =
+              typeof args.max_turns === 'number' ? args.max_turns : undefined;
+            const targetToolCallId =
+              typeof args.target_tool_call_id === 'string'
+                ? args.target_tool_call_id
+                : undefined;
+            const targetToolResultMessageId =
+              typeof args.target_tool_result_message_id === 'string'
+                ? args.target_tool_result_message_id
+                : undefined;
+            const includeToolResults =
+              typeof args.include_tool_results === 'boolean'
+                ? args.include_tool_results
+                : undefined;
+            const includeSystemMessages =
+              typeof args.include_system_messages === 'boolean'
+                ? args.include_system_messages
+                : undefined;
+            const maxWords =
+              typeof args.max_words === 'number' ? args.max_words : undefined;
+
+            const analysis = await toolService.analyzeHistory({
+              workspaceId: sessionWorkspaceId,
+              sessionId: options.sessionId,
+              question,
+              fromMessageId,
+              toMessageId,
+              maxTurns,
+              targetToolCallId,
+              targetToolResultMessageId,
+              includeToolResults,
+              includeSystemMessages,
+              maxWords,
+              signal: options.signal,
+            });
+            result = { status: 'completed', ...analysis };
+            await writeStreamEvent(
+              options.assistantMessageId,
+              'tool_call_result',
+              { tool_call_id: toolCall.id, result },
+              streamSeq,
+              options.assistantMessageId
+            );
+            streamSeq += 1;
           } else {
             throw new Error(`Unknown tool: ${toolCall.name}`);
           }
@@ -3171,7 +4602,7 @@ Règles :
           responseToolOutputs.push({
             type: 'function_call_output',
             call_id: toolCall.id,
-            output: JSON.stringify(result)
+            output: JSON.stringify(result),
           });
         } catch (error) {
           const errorResult = {
@@ -3198,7 +4629,7 @@ Règles :
           responseToolOutputs.push({
             type: 'function_call_output',
             call_id: toolCall.id,
-            output: JSON.stringify(errorResult)
+            output: JSON.stringify(errorResult),
           });
           executedTools.push({
             toolCallId: toolCall.id,
@@ -3277,7 +4708,8 @@ Règles :
             previous_response_id: previousResponseId,
             pending_local_tool_calls: pendingLocalToolCalls.map((item) => ({
               tool_call_id: item.id,
-              name: item.name
+              name: item.name,
+              args: item.args,
             })),
             local_tool_definitions: localTools.map((tool) => ({
               name: tool.type === 'function' ? tool.function.name : '',
@@ -3290,8 +4722,44 @@ Règles :
             })),
             base_tool_outputs: responseToolOutputs.map((item) => ({
               call_id: item.call_id,
-              output: item.output
-            }))
+              output: item.output,
+            })),
+            vscode_code_agent: vscodeCodeAgentPayload
+              ? {
+                  source: 'vscode',
+                  workspace_key: vscodeCodeAgentPayload.workspaceKey,
+                  workspace_label: vscodeCodeAgentPayload.workspaceLabel,
+                  prompt_global_override:
+                    vscodeCodeAgentPayload.promptGlobalOverride,
+                  prompt_workspace_override:
+                    vscodeCodeAgentPayload.promptWorkspaceOverride,
+                  instruction_include_patterns:
+                    vscodeCodeAgentPayload.instructionIncludePatterns,
+                  instruction_files: vscodeCodeAgentPayload.instructionFiles.map(
+                    (file) => ({
+                      path: file.path,
+                      content: file.content,
+                    }),
+                  ),
+                  system_context: vscodeCodeAgentPayload.systemContext
+                    ? {
+                        working_directory:
+                          vscodeCodeAgentPayload.systemContext.workingDirectory,
+                        is_git_repo:
+                          vscodeCodeAgentPayload.systemContext.isGitRepo,
+                        git_branch:
+                          vscodeCodeAgentPayload.systemContext.gitBranch,
+                        platform: vscodeCodeAgentPayload.systemContext.platform,
+                        os_version: vscodeCodeAgentPayload.systemContext.osVersion,
+                        shell: vscodeCodeAgentPayload.systemContext.shell,
+                        client_date_iso:
+                          vscodeCodeAgentPayload.systemContext.clientDateIso,
+                        client_timezone:
+                          vscodeCodeAgentPayload.systemContext.clientTimezone,
+                      }
+                    : undefined,
+                }
+              : undefined
           },
           streamSeq,
           options.assistantMessageId
@@ -3309,9 +4777,26 @@ Règles :
         currentMessages = [...currentMessages, { role: 'assistant', content: assistantText }];
       }
 
-      // Appel suivant: on enverra `responseToolOutputs` via rawInput, rattaché à previous_response_id.
-      // NOTE: on n'envoie PAS de "nudge" ici: on teste d'abord le pattern doc-compatible.
-      pendingResponsesRawInput = responseToolOutputs;
+      // Codex backend no longer accepts previous_response_id: replay tool calls locally.
+      if (useCodexTransport) {
+        previousResponseId = null;
+        pendingResponsesRawInput = toolCalls.flatMap((toolCall) => {
+          const output = responseToolOutputs.find((item) => item.call_id === toolCall.id);
+          return output
+            ? [
+                {
+                  type: 'function_call' as const,
+                  call_id: toolCall.id,
+                  name: toolCall.name,
+                  arguments: toolCall.args || '{}',
+                },
+                output,
+              ]
+            : [];
+        });
+      } else {
+        pendingResponsesRawInput = responseToolOutputs;
+      }
     }
 
     // Si on arrive ici sans contenu final, on déclenche un 2e pass (sans tools) pour forcer une réponse.

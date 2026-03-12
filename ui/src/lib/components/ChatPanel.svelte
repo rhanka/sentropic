@@ -4,6 +4,7 @@
   import type { AppContext } from '$lib/core/context-provider';
   import { _, locale } from 'svelte-i18n';
   import {
+    apiFetch,
     apiGet,
     apiPost,
     apiPatch,
@@ -30,7 +31,7 @@
   import { currentFolderId, foldersStore } from '$lib/stores/folders';
   import { organizationsStore } from '$lib/stores/organizations';
   import { useCasesStore } from '$lib/stores/useCases';
-  import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import { deleteDocument, listDocuments, uploadDocument, type ContextDocumentItem } from '$lib/utils/documents';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
@@ -51,6 +52,7 @@
     Copy,
     Pencil,
     RotateCcw,
+    UndoDot,
     Check,
     Paperclip,
     X,
@@ -76,15 +78,21 @@
     Trash2,
     ChevronLeft,
     ChevronRight,
-    ChevronDown
+    ChevronDown,
+    Terminal,
+    Search,
+    GitBranch
   } from '@lucide/svelte';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
+  import { postChatSteer } from '$lib/utils/chat-steer';
   import {
-    insertSteerMessageInTimeline,
-    postChatSteer,
-  } from '$lib/utils/chat-steer';
+    filterPermissionPromptsForPendingStream,
+    parsePendingLocalToolCallsFromStatusPayload,
+    shouldResetLocalToolStateForFreshRound,
+  } from '$lib/utils/localToolStreamSync';
   import {
     EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+    VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
     computeEnabledToolIds,
     computeToolToggleDefaults,
     computeVisibleToolToggleIds,
@@ -94,6 +102,18 @@
     USER_AI_SETTINGS_UPDATED_EVENT,
     type UserAISettingsUpdatedPayload,
   } from '$lib/utils/user-ai-settings-events';
+  import {
+    getCheckpointMutationPreviewItems,
+    hasCheckpointMutationDelta,
+  } from '$lib/utils/checkpointDelta';
+  import {
+    appendLiveProjectionEvent,
+    countLinkedSteerMessages,
+    getLinkedSteerMessageIds,
+    mergeProjectionHistoryEvents,
+    projectAssistantRunSegments,
+    type ProjectedRunSegment,
+  } from '$lib/utils/chat-run-projection';
 
   type ChatSession = {
     id: string;
@@ -102,6 +122,21 @@
     primaryContextId?: string | null;
     createdAt?: string;
     updatedAt?: string | null;
+  };
+
+  type ChatCheckpoint = {
+    id: string;
+    title: string;
+    anchorMessageId: string;
+    anchorSequence: number;
+    messageCount: number;
+    createdAt: string;
+  };
+  type PendingCheckpointPrompt = {
+    kind: 'restore' | 'retry';
+    checkpoint: ChatCheckpoint;
+    userMessageId: string;
+    assistantMessageId?: string;
   };
 
   type ChatMessage = {
@@ -119,6 +154,8 @@
   type LocalMessage = ChatMessage & {
     _localStatus?: 'processing' | 'completed' | 'failed';
     _streamId?: string;
+    _optimisticSteerTargetAssistantId?: string;
+    _optimisticSteerSubmittedAtMs?: number;
   };
 
   type StreamEvent = {
@@ -127,6 +164,83 @@
     sequence: number;
     createdAt?: string;
   };
+  type RuntimeSegmentSummary = {
+    hasReasoning: boolean;
+    hasTools: boolean;
+    toolCount: number;
+    contextBudgetPct: number | null;
+    durationMs: number | null;
+    reasoningEffortLabel: string | null;
+  };
+  type ProjectedTimelineItem =
+    | {
+        kind: 'message';
+        key: string;
+        message: LocalMessage;
+      }
+    | {
+        kind: 'assistant-segment';
+        key: string;
+        message: LocalMessage;
+        streamId: string;
+        segment: ProjectedRunSegment;
+        isLastAssistantSegment: boolean;
+        isTerminal: boolean;
+      }
+    | {
+        kind: 'runtime-segment';
+        key: string;
+        message: LocalMessage;
+        streamId: string;
+        segment: ProjectedRunSegment & {
+          runtimeSummary?: RuntimeSegmentSummary;
+        };
+        acknowledgementText?: string;
+        isActiveRuntimeSegment: boolean;
+      };
+  type SessionHistoryMetaLine = {
+    type: 'session_meta';
+    sessionId: string;
+    title?: string | null;
+    todoRuntime?: Record<string, unknown> | null;
+    checkpoints?: ChatCheckpoint[];
+    documents?: ContextDocumentItem[];
+  };
+  type SessionHistoryTimelineLine = {
+    type: 'timeline_item';
+    item: ProjectedTimelineItem;
+  };
+  type SessionHistorySnapshot = {
+    sessionId: string;
+    title: string | null;
+    messages: LocalMessage[];
+    timelineItems: ProjectedTimelineItem[];
+    initialEvents: Map<string, StreamEvent[]>;
+    checkpoints: ChatCheckpoint[];
+    documents: ContextDocumentItem[];
+    todoRuntime: Record<string, unknown> | null;
+    lastAssistantModel: string | null;
+  };
+
+  const getTimelineItemSortSequence = (item: ProjectedTimelineItem): number => {
+    const messageSequence = Number(item.message.sequence ?? 0);
+    return Number.isFinite(messageSequence) ? messageSequence : 0;
+  };
+
+  const getTimelineItemSortSubsequence = (item: ProjectedTimelineItem): number => {
+    if (item.kind === 'message') return 0;
+    const raw = Number(String(item.segment.id ?? '').split(':').pop() ?? 0);
+    if (Number.isFinite(raw)) return raw;
+    return item.kind === 'runtime-segment' ? 0 : 1;
+  };
+
+  const compareTimelineItems = (
+    left: ProjectedTimelineItem,
+    right: ProjectedTimelineItem,
+  ): number =>
+    getTimelineItemSortSequence(left) - getTimelineItemSortSequence(right) ||
+    getTimelineItemSortSubsequence(left) - getTimelineItemSortSubsequence(right);
+
   type TodoRuntimeTask = {
     id?: string;
     title: string;
@@ -154,6 +268,11 @@
     streamId: string;
     message: string;
     createdAtMs: number;
+  };
+  type ProjectedAssistantComputation = {
+    signature: string;
+    segments: ProjectedRunSegment[];
+    linkedSteerCount: number;
   };
   type LocalToolStreamState = {
     streamId: string;
@@ -585,6 +704,7 @@
   let defaultProviderIdForNewSession: ModelProviderId = 'openai';
   let defaultModelIdForNewSession = 'gpt-4.1-nano';
   let selectedModelSelectionKey = 'openai::gpt-4.1-nano';
+  let pendingTodoRuntimeDeleteConfirm = false;
   let input = draft;
   let commentInput = '';
   let commentMessages: CommentItem[] = [];
@@ -620,6 +740,7 @@
   // eslint-disable-next-line no-unused-vars
   let handleMentionRefresh: ((_: Event) => void) | null = null;
   let listEl: HTMLDivElement | null = null;
+  let historyStageMeasureEl: HTMLDivElement | null = null;
   let composerEl: HTMLDivElement | null = null;
   let panelEl: HTMLDivElement | null = null;
   let followBottom = true;
@@ -636,6 +757,15 @@
   let commentThreadIndex = -1;
   let hasPreviousThread = false;
   let hasNextThread = false;
+  let projectedTimelineItems: ProjectedTimelineItem[] = [];
+  let historyTimelineItems: ProjectedTimelineItem[] = [];
+  let stagedHistoryTimelineItems: ProjectedTimelineItem[] = [];
+  let historyHydrationInFlight = false;
+  let historyHydrationSwapPending = false;
+  let historyHydrationStickBottom = false;
+  let optimisticSteerMessages: LocalMessage[] = [];
+  let previousAiWorkspaceId: string | null | undefined = undefined;
+  let workspaceSessionRescopeInFlight = false;
 
   const getMessageStatus = (m: LocalMessage) =>
     m._localStatus ?? (m.content ? 'completed' : 'processing');
@@ -651,6 +781,13 @@
   };
   $: activeAssistantMessage =
     [...messages].reverse().find((m) => isAssistantMessageInProgress(m)) ?? null;
+  $: {
+    projectionEventsVersion;
+    initialEventsByMessageId;
+    composerSteerAck;
+    optimisticSteerMessages;
+    projectedTimelineItems = buildProjectedTimeline(messages);
+  }
   $: composerSteerStreamId = activeAssistantMessage
     ? (activeAssistantMessage._streamId ?? activeAssistantMessage.id ?? null)
     : null;
@@ -674,6 +811,29 @@
         })
         .map((message) => message._streamId ?? message.id),
     );
+
+  const isKnownAssistantStream = (streamId: string): boolean =>
+    messages.some(
+      (message) =>
+        message.role === 'assistant' &&
+        (message._streamId ?? message.id) === streamId &&
+        getMessageStatus(message) !== 'failed',
+    );
+
+  const clearLocalToolStateForStream = (streamId: string) => {
+    for (const [toolCallId, state] of localToolStatesById.entries()) {
+      if (state.streamId !== streamId) continue;
+      const timerId = localToolExecutionTimersById.get(toolCallId);
+      if (timerId) clearTimeout(timerId);
+      localToolExecutionTimersById.delete(toolCallId);
+      localToolStatesById.delete(toolCallId);
+      localToolInFlight.delete(toolCallId);
+      localToolPermissionRetriesInFlight.delete(toolCallId);
+    }
+    pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
+      (prompt) => prompt.streamId !== streamId,
+    );
+  };
 
   const resetLocalToolInterceptionState = () => {
     localToolExecutionTimersById.forEach((timerId) => clearTimeout(timerId));
@@ -735,15 +895,68 @@
       : new Error('Unknown local tool result forwarding error');
   };
 
+  const hasPendingPermissionPromptForStream = (
+    streamId: string,
+    exceptToolCallId?: string,
+  ): boolean =>
+    pendingLocalToolPermissionPrompts.some(
+      (item) =>
+        item.streamId === streamId &&
+        (!exceptToolCallId || item.toolCallId !== exceptToolCallId),
+    );
+
+  const hasInFlightToolForStream = (
+    streamId: string,
+    exceptToolCallId?: string,
+  ): boolean => {
+    for (const inFlightToolCallId of localToolInFlight) {
+      if (exceptToolCallId && inFlightToolCallId === exceptToolCallId) continue;
+      const state = localToolStatesById.get(inFlightToolCallId);
+      if (!state) continue;
+      if (state.streamId === streamId) return true;
+    }
+    return false;
+  };
+
+  const getNextPendingToolCallIdForStream = (
+    streamId: string,
+  ): string | null => {
+    const pending = Array.from(localToolStatesById.entries())
+      .filter(([_, state]) => state.streamId === streamId && !state.executed)
+      .sort(([, a], [, b]) => {
+        if (a.firstSeenAt !== b.firstSeenAt) {
+          return a.firstSeenAt - b.firstSeenAt;
+        }
+        return a.lastSequence - b.lastSequence;
+      });
+    return pending[0]?.[0] ?? null;
+  };
+
+  const scheduleNextToolForStream = (streamId: string, delayMs = 80) => {
+    const nextToolCallId = getNextPendingToolCallIdForStream(streamId);
+    if (!nextToolCallId) return;
+    scheduleBufferedLocalToolExecution(nextToolCallId, delayMs);
+  };
+
   const tryExecuteBufferedLocalTool = async (toolCallId: string) => {
     const localToolState = localToolStatesById.get(toolCallId);
     if (!localToolState || localToolState.executed) return;
     if (localToolInFlight.has(toolCallId)) return;
     if (!isLocalToolRuntimeAvailable()) return;
+    const firstPendingToolCallId = getNextPendingToolCallIdForStream(
+      localToolState.streamId,
+    );
+    if (firstPendingToolCallId && firstPendingToolCallId !== toolCallId) return;
+    if (hasPendingPermissionPromptForStream(localToolState.streamId, toolCallId))
+      return;
+    if (hasInFlightToolForStream(localToolState.streamId, toolCallId)) return;
 
     if (!localToolState.argsText.trim() && localToolState.name === 'tab_type') {
       const elapsed = Date.now() - localToolState.firstSeenAt;
-      if (elapsed < 1500) return;
+      if (elapsed < 1500) {
+        scheduleBufferedLocalToolExecution(toolCallId, 200);
+        return;
+      }
       localToolState.executed = true;
       localToolStatesById.set(toolCallId, localToolState);
       try {
@@ -761,11 +974,15 @@
           `Failed to forward missing-args error for ${localToolState.name} (${toolCallId}): ${reason}`,
         );
       }
+      scheduleNextToolForStream(localToolState.streamId);
       return;
     }
 
     const parsed = parseBufferedToolArgs(localToolState.argsText);
-    if (!parsed.ready) return;
+    if (!parsed.ready) {
+      scheduleBufferedLocalToolExecution(toolCallId, 120);
+      return;
+    }
 
     localToolState.executed = true;
     localToolStatesById.set(toolCallId, localToolState);
@@ -821,6 +1038,7 @@
       }
     } finally {
       localToolInFlight.delete(toolCallId);
+      scheduleNextToolForStream(localToolState.streamId);
     }
   };
 
@@ -887,7 +1105,44 @@
       }
     } finally {
       localToolPermissionRetriesInFlight.delete(prompt.toolCallId);
+      scheduleNextToolForStream(prompt.streamId);
     }
+  };
+
+  const resolvePermissionPromptDetails = (
+    prompt: LocalToolPermissionPrompt,
+  ): Array<{ label: string; value: string }> => {
+    const details =
+      prompt.request.details && typeof prompt.request.details === 'object'
+        ? (prompt.request.details as Record<string, unknown>)
+        : null;
+    if (!details) return [];
+
+    const rows: Array<{ label: string; value: string }> = [];
+    const operation = String(details.operation ?? '').trim();
+    const command = String(details.command ?? '').trim();
+    const pathValue = String(details.path ?? '').trim();
+    const scope = String(details.scope ?? '').trim().toLowerCase();
+
+    if (operation) {
+      rows.push({ label: $_('chat.tools.permissions.actionLabel'), value: operation });
+    }
+    if (command) {
+      rows.push({ label: $_('chat.tools.permissions.commandLabel'), value: command });
+    }
+    if (pathValue) {
+      rows.push({ label: $_('chat.tools.permissions.pathLabel'), value: pathValue });
+    }
+    if (scope) {
+      rows.push({
+        label: $_('chat.tools.permissions.scopeLabel'),
+        value:
+          scope === 'outside_workspace'
+            ? $_('chat.tools.permissions.scopeOutsideWorkspace')
+            : $_('chat.tools.permissions.scopeWorkspace'),
+      });
+    }
+    return rows;
   };
 
   const scheduleBufferedLocalToolExecution = (
@@ -918,14 +1173,21 @@
 
     const previous = localToolStatesById.get(toolCallId);
     if (previous && sequence <= previous.lastSequence) return;
+    const isFreshRound = shouldResetLocalToolStateForFreshRound(
+      previous,
+      sequence,
+    );
 
     localToolStatesById.set(toolCallId, {
       streamId,
       name: toolNameRaw,
-      argsText: previous ? `${previous.argsText}${argsChunk}` : argsChunk,
+      argsText:
+        previous && !isFreshRound
+          ? `${previous.argsText}${argsChunk}`
+          : argsChunk,
       lastSequence: sequence,
       firstSeenAt: previous?.firstSeenAt ?? Date.now(),
-      executed: previous?.executed ?? false,
+      executed: isFreshRound ? false : (previous?.executed ?? false),
     });
     scheduleBufferedLocalToolExecution(toolCallId);
   };
@@ -952,13 +1214,96 @@
     scheduleBufferedLocalToolExecution(toolCallId);
   };
 
+  const handleLocalToolStatusEvent = (event: StreamHubEvent) => {
+    const streamId = String((event as any)?.streamId ?? '').trim();
+    if (!streamId || !isKnownAssistantStream(streamId)) return;
+
+    const data = (event as any)?.data;
+    const state = String(data?.state ?? '').trim();
+    const sequenceRaw = Number((event as any)?.sequence);
+    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : 0;
+
+    if (state === 'awaiting_local_tool_results') {
+      const pendingCalls = parsePendingLocalToolCallsFromStatusPayload(
+        streamId,
+        sequence,
+        data,
+        isLocalToolName,
+      );
+      const pendingToolCallIds = new Set(
+        pendingCalls.map((call) => call.toolCallId),
+      );
+      pendingLocalToolPermissionPrompts = filterPermissionPromptsForPendingStream(
+        pendingLocalToolPermissionPrompts,
+        streamId,
+        pendingToolCallIds,
+      );
+
+      for (const call of pendingCalls) {
+        const previous = localToolStatesById.get(call.toolCallId);
+        const isFreshRound = shouldResetLocalToolStateForFreshRound(
+          previous,
+          sequence,
+        );
+        localToolStatesById.set(call.toolCallId, {
+          streamId,
+          name: call.name as LocalToolName,
+          argsText:
+            previous &&
+            !isFreshRound &&
+            previous.argsText.trim().length > 0
+              ? previous.argsText
+              : call.argsText,
+          lastSequence: Math.max(previous?.lastSequence ?? 0, call.sequence),
+          firstSeenAt: previous?.firstSeenAt ?? Date.now(),
+          executed: isFreshRound ? false : (previous?.executed ?? false),
+        });
+      }
+
+      scheduleNextToolForStream(streamId, 0);
+      return;
+    }
+
+    if (state === 'local_tool_result_received') {
+      const toolCallId = String(data?.tool_call_id ?? '').trim();
+      if (!toolCallId) return;
+      const timerId = localToolExecutionTimersById.get(toolCallId);
+      if (timerId) clearTimeout(timerId);
+      localToolExecutionTimersById.delete(toolCallId);
+      pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
+        (prompt) => prompt.toolCallId !== toolCallId,
+      );
+      localToolStatesById.delete(toolCallId);
+      localToolInFlight.delete(toolCallId);
+      localToolPermissionRetriesInFlight.delete(toolCallId);
+      return;
+    }
+
+    if (state === 'response_created') {
+      pendingLocalToolPermissionPrompts = pendingLocalToolPermissionPrompts.filter(
+        (prompt) => prompt.streamId !== streamId,
+      );
+    }
+  };
+
   const handleLocalToolStreamEvent = (event: StreamHubEvent) => {
+    const streamId = String((event as any)?.streamId ?? '').trim();
+    if (!streamId) return;
+
+    if (event.type === 'status') {
+      handleLocalToolStatusEvent(event);
+      return;
+    }
+
+    if (event.type === 'done' || event.type === 'error') {
+      clearLocalToolStateForStream(streamId);
+      return;
+    }
+
     if (event.type !== 'tool_call_start' && event.type !== 'tool_call_delta')
       return;
     if (!isLocalToolRuntimeAvailable()) return;
 
-    const streamId = String((event as any)?.streamId ?? '').trim();
-    if (!streamId) return;
     const localToolEligibleStreamIds = getLocalToolEligibleStreamIds();
     if (!localToolEligibleStreamIds.has(streamId)) return;
 
@@ -967,6 +1312,23 @@
       return;
     }
     handleLocalToolCallDelta(event);
+  };
+
+  const handleProjectionStreamEvent = (event: StreamHubEvent) => {
+    const streamId = String((event as any)?.streamId ?? '').trim();
+    if (!streamId || !isTrackedAssistantStreamId(streamId)) return;
+    const sequence = Number((event as any)?.sequence);
+    if (!Number.isFinite(sequence)) return;
+    appendProjectedLiveEvent(streamId, {
+      eventType: String((event as any)?.type ?? '').trim(),
+      data: (event as any)?.data ?? {},
+      sequence,
+      createdAt: undefined,
+    });
+    if (event.type === 'done' || event.type === 'error') {
+      void handleAssistantTerminal(streamId, event.type);
+    }
+    scheduleScrollToBottom();
   };
 
   $: commentPlaceholder = !$workspaceCanComment
@@ -988,6 +1350,10 @@
   let sessionDocs: ContextDocumentItem[] = [];
   let sessionDocsUploading = false;
   let sessionDocsError: string | null = null;
+  let sessionCheckpoints: ChatCheckpoint[] = [];
+  let checkpointsByAnchorMessageId = new Map<string, ChatCheckpoint>();
+  let checkpointActionInFlight = false;
+  let pendingCheckpointPrompt: PendingCheckpointPrompt | null = null;
   let sessionDocsKey = '';
   let sessionDocsSseKey = '';
   let sessionTitlesSseKey = '';
@@ -1007,13 +1373,18 @@
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
-  let streamDetailsLoading = false;
+  let projectedStreamEventsById = new Map<string, StreamEvent[]>();
+  let projectedAssistantComputationByMessageId = new Map<
+    string,
+    ProjectedAssistantComputation
+  >();
+  let projectionEventsVersion = 0;
+  let historyTimelineSessionId: string | null = null;
   let todoRuntimePanel: TodoRuntimePanelState | null = null;
   let todoRuntimeCollapsed = false;
   let todoRuntimeDeleteInFlight = false;
   let composerSteerInFlight = false;
   let composerSteerAck: ComposerSteerAck | null = null;
-  const terminalRefreshInFlight = new Set<string>();
   const jobPollInFlight = new Set<string>();
   let localToolsHubKey = '';
   const localToolStatesById = new Map<string, LocalToolStreamState>();
@@ -1030,6 +1401,283 @@
     origin: string;
     title: string | null;
   } | null = null;
+  let projectionHubKey = '';
+
+  const isTrackedAssistantStreamId = (streamId: string): boolean =>
+    messages.some(
+      (message) =>
+        message.role === 'assistant' && (message._streamId ?? message.id) === streamId,
+    );
+
+  const mergeProjectedHistoryForStream = (
+    streamId: string,
+    events: readonly StreamEvent[],
+  ) => {
+    if (!streamId) return;
+    projectedStreamEventsById = new Map(projectedStreamEventsById);
+    projectedStreamEventsById.set(
+      streamId,
+      mergeProjectionHistoryEvents(
+        projectedStreamEventsById.get(streamId) ?? [],
+        events,
+      ),
+    );
+    projectionEventsVersion += 1;
+  };
+
+  const appendProjectedLiveEvent = (streamId: string, event: StreamEvent) => {
+    if (!streamId) return;
+    projectedStreamEventsById = new Map(projectedStreamEventsById);
+    projectedStreamEventsById.set(
+      streamId,
+      appendLiveProjectionEvent(
+        projectedStreamEventsById.get(streamId) ?? [],
+        event,
+      ),
+    );
+    projectionEventsVersion += 1;
+  };
+
+  const getProjectionEventsForMessage = (message: LocalMessage): StreamEvent[] => {
+    const streamId = message._streamId ?? message.id;
+    const projected = projectedStreamEventsById.get(streamId);
+    if (projected && projected.length > 0) return projected;
+    const hydrated = initialEventsByMessageId.get(streamId);
+    if (hydrated && hydrated.length > 0) return hydrated;
+    return [];
+  };
+
+  const buildProjectedAssistantSignature = (
+    message: LocalMessage,
+    events: readonly StreamEvent[],
+  ): string => {
+    const lastSequence =
+      events.length > 0
+        ? Number(events[events.length - 1]?.sequence ?? 0)
+        : 0;
+    return [
+      message._streamId ?? message.id,
+      message._localStatus ?? '',
+      message.content ? message.content.length : 0,
+      events.length,
+      Number.isFinite(lastSequence) ? lastSequence : 0,
+    ].join(':');
+  };
+
+  const getProjectedAssistantComputation = (
+    message: LocalMessage,
+  ): ProjectedAssistantComputation => {
+    const messageId = String(message.id ?? '').trim();
+    const projectionEvents = getProjectionEventsForMessage(message);
+    const signature = buildProjectedAssistantSignature(message, projectionEvents);
+    const cached = projectedAssistantComputationByMessageId.get(messageId);
+    if (cached?.signature === signature) return cached;
+
+    const segments = projectAssistantRunSegments(projectionEvents);
+    const next = {
+      signature,
+      segments,
+      linkedSteerCount: countLinkedSteerMessages(projectionEvents),
+    };
+    projectedAssistantComputationByMessageId = new Map(
+      projectedAssistantComputationByMessageId,
+    );
+    projectedAssistantComputationByMessageId.set(messageId, next);
+    return next;
+  };
+
+  const buildFallbackProjectedSegments = (
+    message: LocalMessage,
+  ): ProjectedRunSegment[] => {
+    if (typeof message.content === 'string' && message.content.trim().length > 0) {
+      return [
+        {
+          id: `assistant:fallback:${message.id}`,
+          kind: 'assistant',
+          events: [],
+          content: message.content,
+          steerCountBefore: 0,
+        },
+      ];
+    }
+    if (message._localStatus === 'processing') {
+      return [
+        {
+          id: `runtime:fallback:${message.id}`,
+          kind: 'runtime',
+          events: [
+            {
+              eventType: 'status',
+              sequence: 1,
+              data: { state: 'started' },
+            },
+          ],
+          content: '',
+          steerCountBefore: 0,
+        },
+      ];
+    }
+    return [];
+  };
+
+  const buildProjectedTimeline = (
+    timeline: readonly LocalMessage[],
+  ): ProjectedTimelineItem[] => {
+    const steerIdsByAssistantId = new Map<string, string[]>();
+    const optimisticSteersByAssistantId = new Map<string, LocalMessage[]>();
+    const skippedSteerIds = new Set<string>();
+
+    for (const steerMessage of optimisticSteerMessages) {
+      const assistantId = String(
+        steerMessage._optimisticSteerTargetAssistantId ?? '',
+      ).trim();
+      if (!assistantId) continue;
+      const existing = optimisticSteersByAssistantId.get(assistantId) ?? [];
+      existing.push(steerMessage);
+      optimisticSteersByAssistantId.set(assistantId, existing);
+    }
+
+    for (let index = 0; index < timeline.length; index += 1) {
+      const message = timeline[index];
+      if (message.role !== 'assistant') continue;
+      if ((optimisticSteersByAssistantId.get(message.id)?.length ?? 0) > 0) {
+        continue;
+      }
+      const assistantProjection = getProjectedAssistantComputation(message);
+      const segments = assistantProjection.segments;
+      const linkedSteerCount = assistantProjection.linkedSteerCount;
+      if (linkedSteerCount <= 0) continue;
+      const firstRuntimeSegmentWithSteer = segments.findIndex(
+        (segment) => segment.kind === 'runtime' && segment.steerCountBefore > 0,
+      );
+      const hasAssistantVisibleBeforeSteer =
+        firstRuntimeSegmentWithSteer > 0 &&
+        segments
+          .slice(0, firstRuntimeSegmentWithSteer)
+          .some((segment) => segment.kind === 'assistant');
+      if (!hasAssistantVisibleBeforeSteer) continue;
+      const linkedIds = getLinkedSteerMessageIds(timeline, index, linkedSteerCount);
+      if (linkedIds.length === 0) continue;
+      steerIdsByAssistantId.set(message.id, linkedIds);
+      for (const linkedId of linkedIds) skippedSteerIds.add(linkedId);
+    }
+
+    const projected: ProjectedTimelineItem[] = [];
+
+    for (const message of timeline) {
+      if (skippedSteerIds.has(message.id)) continue;
+      if (message.role !== 'assistant') {
+        projected.push({
+          kind: 'message',
+          key: `message:${message.id}`,
+          message,
+        });
+        continue;
+      }
+
+      const streamId = message._streamId ?? message.id;
+      const assistantProjection = getProjectedAssistantComputation(message);
+      const projectedSegments = assistantProjection.segments;
+      const segments =
+        projectedSegments.length > 0
+          ? projectedSegments
+          : buildFallbackProjectedSegments(message);
+      const linkedSteers = (steerIdsByAssistantId.get(message.id) ?? [])
+        .map((steerId) => timeline.find((entry) => entry.id === steerId) ?? null)
+        .filter((entry): entry is LocalMessage => entry !== null);
+      const optimisticSteers = optimisticSteersByAssistantId.get(message.id) ?? [];
+      const combinedSteers = [...linkedSteers, ...optimisticSteers].sort(
+        (left, right) =>
+          Number(left._optimisticSteerSubmittedAtMs ?? 0) -
+          Number(right._optimisticSteerSubmittedAtMs ?? 0),
+      );
+
+      const assistantIndexes = segments
+        .map((segment, index) => (segment.kind === 'assistant' ? index : -1))
+        .filter((index) => index >= 0);
+      const lastAssistantIndex =
+        assistantIndexes.length > 0
+          ? assistantIndexes[assistantIndexes.length - 1]
+          : -1;
+      const lastRuntimeIndex = (() => {
+        for (let index = segments.length - 1; index >= 0; index -= 1) {
+          if (segments[index]?.kind === 'runtime') return index;
+        }
+        return -1;
+      })();
+      const isTerminal =
+        (message._localStatus ?? (message.content ? 'completed' : 'processing')) ===
+        'completed';
+      let steerCursor = 0;
+
+      for (let index = 0; index < segments.length; index += 1) {
+        const segment = segments[index];
+        if (!segment) continue;
+
+        if (segment.kind === 'runtime') {
+          let steerCountToInsert = segment.steerCountBefore;
+          if (
+            steerCountToInsert === 0 &&
+            index === lastRuntimeIndex &&
+            !isTerminal &&
+            steerCursor < combinedSteers.length
+          ) {
+            steerCountToInsert = combinedSteers.length - steerCursor;
+          }
+          if (steerCountToInsert > 0) {
+            const nextSteers = combinedSteers.slice(
+              steerCursor,
+              steerCursor + steerCountToInsert,
+            );
+            steerCursor += nextSteers.length;
+            for (const steerMessage of nextSteers) {
+              projected.push({
+                kind: 'message',
+                key: `message:${steerMessage.id}`,
+                message: steerMessage,
+              });
+            }
+          }
+
+          projected.push({
+            kind: 'runtime-segment',
+            key: `${message.id}:${segment.id}`,
+            message,
+            streamId,
+            segment,
+            isActiveRuntimeSegment: !isTerminal && index === segments.length - 1,
+            acknowledgementText:
+              composerSteerAck?.streamId === streamId && index === lastRuntimeIndex
+                ? composerSteerAck.message
+                : undefined,
+          });
+          continue;
+        }
+
+        projected.push({
+          kind: 'assistant-segment',
+          key: `${message.id}:${segment.id}`,
+          message,
+          streamId,
+          segment,
+          isLastAssistantSegment: index === lastAssistantIndex,
+          isTerminal,
+        });
+      }
+
+      if (steerCursor < combinedSteers.length) {
+        for (const steerMessage of combinedSteers.slice(steerCursor)) {
+          projected.push({
+            kind: 'message',
+            key: `message:${steerMessage.id}`,
+            message: steerMessage,
+          });
+        }
+      }
+    }
+
+    return projected;
+  };
 
   let lastDraftApplied = draft;
   $: if (draft !== lastDraftApplied && draft !== input) {
@@ -1210,9 +1858,92 @@
       toolIds: ['tab_action'],
       icon: Clapperboard,
     },
+    {
+      id: 'bash',
+      label: $_('chat.tools.localCodeBash.label'),
+      description: $_('chat.tools.localCodeBash.description'),
+      toolIds: ['bash'],
+      icon: Terminal,
+    },
+    {
+      id: 'ls',
+      label: $_('chat.tools.localCodeLs.label'),
+      description: $_('chat.tools.localCodeLs.description'),
+      toolIds: ['ls'],
+      icon: FolderOpen,
+    },
+    {
+      id: 'rg',
+      label: $_('chat.tools.localCodeRg.label'),
+      description: $_('chat.tools.localCodeRg.description'),
+      toolIds: ['rg'],
+      icon: Search,
+    },
+    {
+      id: 'file_read',
+      label: $_('chat.tools.localCodeFileRead.label'),
+      description: $_('chat.tools.localCodeFileRead.description'),
+      toolIds: ['file_read'],
+      icon: FileText,
+    },
+    {
+      id: 'file_edit',
+      label: $_('chat.tools.localCodeFileEdit.label'),
+      description: $_('chat.tools.localCodeFileEdit.description'),
+      toolIds: ['file_edit'],
+      icon: Pencil,
+    },
+    {
+      id: 'git',
+      label: $_('chat.tools.localCodeGit.label'),
+      description: $_('chat.tools.localCodeGit.description'),
+      toolIds: ['git'],
+      icon: GitBranch,
+    },
   ];
 
-  const LOCAL_TOOL_TOGGLE_IDS = new Set(['tab_read', 'tab_action']);
+  const CHROME_LOCAL_TOOL_TOGGLE_IDS = new Set(['tab_read', 'tab_action']);
+  const VSCODE_LOCAL_TOOL_TOGGLE_IDS = new Set([
+    'bash',
+    'ls',
+    'rg',
+    'file_read',
+    'file_edit',
+    'git',
+  ]);
+  const LOCAL_TOOL_TOGGLE_IDS = new Set([
+    ...CHROME_LOCAL_TOOL_TOGGLE_IDS,
+    ...VSCODE_LOCAL_TOOL_TOGGLE_IDS,
+  ]);
+
+  const getExtensionRuntimeHostKind = (): 'none' | 'chrome' | 'vscode' => {
+    const runtime = (globalThis as typeof globalThis & {
+      chrome?: { runtime?: { id?: string } };
+    }).chrome?.runtime;
+    const runtimeId = String(runtime?.id ?? '').trim().toLowerCase();
+    if (!runtimeId) return 'none';
+    if (runtimeId === 'topai.vscode.runtime') return 'vscode';
+    return 'chrome';
+  };
+
+  const isVsCodeRuntimeHost = (): boolean => {
+    return getExtensionRuntimeHostKind() === 'vscode';
+  };
+
+  const isCodeWorkspaceConversation = (): boolean =>
+    Boolean($selectedWorkspace?.isCodeWorkspace);
+
+  const useUnifiedActiveRunPresentation = (message: LocalMessage): boolean =>
+    getMessageStatus(message) === 'processing';
+
+  const getRestrictedAllowedToolIds = (): ReadonlySet<string> => {
+    if (!isCodeWorkspaceConversation()) {
+      return EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS;
+    }
+    return isVsCodeRuntimeHost()
+      ? VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS
+      : EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS;
+  };
 
   const getPrefsKey = (id: string | null) =>
     `chat_session_prefs:${id || 'new'}`;
@@ -1276,30 +2007,43 @@
   };
 
   const isExtensionNewSessionMode = () =>
-    mode === 'ai' && isLocalToolRuntimeAvailable() && !sessionId;
+    mode === 'ai' &&
+    isLocalToolRuntimeAvailable() &&
+    isCodeWorkspaceConversation() &&
+    !sessionId;
 
   const isExtensionRestrictedToolsetMode = () =>
     computeIsExtensionRestrictedToolsetMode({
       mode,
       hasExtensionRuntime: isLocalToolRuntimeAvailable(),
       sessionId,
-      extensionRestrictedToolset,
+      extensionRestrictedToolset:
+        extensionRestrictedToolset && isCodeWorkspaceConversation(),
     });
 
-  const getToolScopeToggles = () =>
-    TOOL_TOGGLES.filter(
-      (toggle) =>
-        !LOCAL_TOOL_TOGGLE_IDS.has(toggle.id) || isLocalToolRuntimeAvailable(),
+  const getToolScopeToggles = () => {
+    const runtimeKind = getExtensionRuntimeHostKind();
+    const hasExtensionRuntime = runtimeKind !== 'none';
+    return TOOL_TOGGLES.filter(
+      (toggle) => {
+        if (!LOCAL_TOOL_TOGGLE_IDS.has(toggle.id)) return true;
+        if (!hasExtensionRuntime) return false;
+        if (runtimeKind === 'vscode') {
+          return VSCODE_LOCAL_TOOL_TOGGLE_IDS.has(toggle.id);
+        }
+        return CHROME_LOCAL_TOOL_TOGGLE_IDS.has(toggle.id);
+      },
     ).map((toggle) => ({
       id: toggle.id,
       toolIds: toggle.toolIds,
     }));
+  };
 
   const getToolToggleDefaults = () => {
     return computeToolToggleDefaults({
       toolToggles: getToolScopeToggles(),
       restrictedMode: isExtensionRestrictedToolsetMode(),
-      allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+      allowedToolIds: getRestrictedAllowedToolIds(),
     });
   };
 
@@ -1308,7 +2052,7 @@
       computeVisibleToolToggleIds({
         toolToggles: getToolScopeToggles(),
         restrictedMode: isExtensionRestrictedToolsetMode(),
-        allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+        allowedToolIds: getRestrictedAllowedToolIds(),
       }),
     );
     return TOOL_TOGGLES.filter(
@@ -1323,7 +2067,7 @@
       computeVisibleToolToggleIds({
         toolToggles: getToolScopeToggles(),
         restrictedMode: isExtensionRestrictedToolsetMode(),
-        allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+        allowedToolIds: getRestrictedAllowedToolIds(),
       }),
     );
     return TOOL_TOGGLES.filter(
@@ -1333,7 +2077,10 @@
   };
 
   const loadExtensionActiveTabContext = async () => {
-    if (!isLocalToolRuntimeAvailable()) {
+    if (
+      !isLocalToolRuntimeAvailable() ||
+      getExtensionRuntimeHostKind() !== 'chrome'
+    ) {
       extensionActiveTabContext = null;
       return;
     }
@@ -1382,7 +2129,7 @@
   };
 
   const ensureDefaultToolToggles = () => {
-    if (!isLocalToolRuntimeAvailable()) {
+    if (!isLocalToolRuntimeAvailable() || !isCodeWorkspaceConversation()) {
       extensionRestrictedToolset = false;
     } else {
       extensionRestrictedToolset = true;
@@ -1523,7 +2270,7 @@
       toolToggles: getToolScopeToggles(),
       toolEnabledById,
       restrictedMode: isExtensionRestrictedToolsetMode(),
-      allowedToolIds: EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
+      allowedToolIds: getRestrictedAllowedToolIds(),
     });
   };
 
@@ -2137,17 +2884,174 @@
     }
   };
 
+  const bootstrapAssistantRun = (input: {
+    sessionId: string;
+    assistantMessageId: string;
+    streamId: string;
+    jobId: string;
+    model: string;
+    userMessage?: LocalMessage;
+    truncateAfterMessageId?: string;
+    checkpointUserMessageId?: string;
+  }) => {
+    const nowIso = new Date().toISOString();
+    const assistantMsg: LocalMessage = {
+      id: input.assistantMessageId,
+      sessionId: input.sessionId,
+      role: 'assistant',
+      content: null,
+      model: input.model,
+      createdAt: nowIso,
+      _localStatus: 'processing',
+      _streamId: input.streamId,
+    };
+    if (input.userMessage) {
+      messages = [...messages, input.userMessage, assistantMsg];
+    } else if (input.truncateAfterMessageId) {
+      const userIndex = messages.findIndex(
+        (m) => m.id === input.truncateAfterMessageId,
+      );
+      messages =
+        userIndex >= 0
+          ? [...messages.slice(0, userIndex + 1), assistantMsg]
+          : [...messages, assistantMsg];
+      const truncatedHistory: ProjectedTimelineItem[] = [];
+      const keptHistoryMessageIds = new Set<string>();
+      for (const item of historyTimelineItems) {
+        truncatedHistory.push(item);
+        keptHistoryMessageIds.add(String(item.message.id ?? '').trim());
+        if (
+          item.kind === 'message' &&
+          String(item.message.id ?? '').trim() === input.truncateAfterMessageId
+        ) {
+          break;
+        }
+      }
+      historyTimelineItems = truncatedHistory;
+      initialEventsByMessageId = new Map(
+        [...initialEventsByMessageId].filter(([messageId]) =>
+          keptHistoryMessageIds.has(messageId),
+        ),
+      );
+    } else {
+      messages = [...messages, assistantMsg];
+    }
+    followBottom = true;
+    scheduleScrollToBottom({ force: true });
+    if (input.checkpointUserMessageId) {
+      void createTurnCheckpoint(input.sessionId, input.checkpointUserMessageId);
+    }
+    void pollJobUntilTerminal(input.jobId, assistantMsg._streamId ?? assistantMsg.id, {
+      timeoutMs: 90_000,
+    });
+  };
+
   const retryMessage = async (messageId: string) => {
     if (!sessionId) return;
     errorMsg = null;
     try {
-      await apiPost(`/chat/messages/${encodeURIComponent(messageId)}/retry`, {
+      const res = await apiPost<{
+        sessionId: string;
+        userMessageId: string;
+        assistantMessageId: string;
+        streamId: string;
+        jobId: string;
+      }>(`/chat/messages/${encodeURIComponent(messageId)}/retry`, {
         providerId: selectedProviderId,
         model: selectedModelId,
       });
-      await loadMessages(sessionId, { scrollToBottom: true });
+      bootstrapAssistantRun({
+        sessionId: res.sessionId,
+        assistantMessageId: res.assistantMessageId,
+        streamId: res.streamId,
+        jobId: res.jobId,
+        model: selectedModelId,
+        truncateAfterMessageId: messageId,
+      });
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.retry'));
+    }
+  };
+
+  const getCheckpointForUserMessage = (
+    userMessageId: string,
+  ): ChatCheckpoint | null => {
+    const id = String(userMessageId ?? '').trim();
+    if (!id) return null;
+    return checkpointsByAnchorMessageId.get(id) ?? null;
+  };
+
+  const hasCheckpointRollbackDelta = (
+    checkpoint: ChatCheckpoint | null | undefined,
+  ): boolean => {
+    return hasCheckpointMutationDelta(
+      checkpoint,
+      messages,
+      initialEventsByMessageId,
+    );
+  };
+
+  const getCheckpointPreviewTitle = (userMessageId: string): string => {
+    const checkpoint = getCheckpointForUserMessage(userMessageId);
+    const baseTitle = $_('chat.checkpoints.restoreFromMessage');
+    if (!checkpoint) return baseTitle;
+    const previewItems = getCheckpointMutationPreviewItems(
+      checkpoint,
+      messages,
+      initialEventsByMessageId,
+    );
+    if (previewItems.length === 0) return baseTitle;
+    return `${baseTitle}\n${previewItems.join('\n')}`;
+  };
+
+  const applyCheckpointRestore = async (
+    checkpoint: ChatCheckpoint,
+  ): Promise<boolean> => {
+    if (!sessionId || checkpointActionInFlight) return false;
+    checkpointActionInFlight = true;
+    errorMsg = null;
+    try {
+      await apiPost(
+        `/chat/sessions/${sessionId}/checkpoints/${checkpoint.id}/restore`,
+        {},
+      );
+      await loadMessages(sessionId, { scrollToBottom: true, silent: true });
+      return true;
+    } catch (e) {
+      errorMsg = formatApiError(e, $_('chat.errors.checkpointRestore'));
+      return false;
+    } finally {
+      checkpointActionInFlight = false;
+    }
+  };
+
+  const openCheckpointPromptForMessage = (userMessageId: string) => {
+    const checkpoint = getCheckpointForUserMessage(userMessageId);
+    if (!checkpoint || !hasCheckpointRollbackDelta(checkpoint)) return;
+    pendingCheckpointPrompt = {
+      kind: 'restore',
+      checkpoint,
+      userMessageId,
+    };
+  };
+
+  const confirmCheckpointPrompt = async () => {
+    const prompt = pendingCheckpointPrompt;
+    if (!prompt) return;
+    const restored = await applyCheckpointRestore(prompt.checkpoint);
+    pendingCheckpointPrompt = null;
+    if (!restored) return;
+    if (prompt.kind === 'retry') {
+      await retryMessage(prompt.userMessageId);
+    }
+  };
+
+  const cancelCheckpointPrompt = async () => {
+    const prompt = pendingCheckpointPrompt;
+    pendingCheckpointPrompt = null;
+    if (!prompt) return;
+    if (prompt.kind === 'retry') {
+      await retryMessage(prompt.userMessageId);
     }
   };
 
@@ -2158,6 +3062,16 @@
       .reverse()
       .find((m) => m.role === 'user');
     if (!previousUser) return;
+    const checkpoint = getCheckpointForUserMessage(previousUser.id);
+    if (checkpoint && hasCheckpointRollbackDelta(checkpoint)) {
+      pendingCheckpointPrompt = {
+        kind: 'retry',
+        checkpoint,
+        userMessageId: previousUser.id,
+        assistantMessageId,
+      };
+      return;
+    }
     await retryMessage(previousUser.id);
   };
 
@@ -2316,6 +3230,7 @@
     todoRuntimePanel = null;
     todoRuntimeCollapsed = false;
     composerSteerAck = null;
+    pendingTodoRuntimeDeleteConfirm = false;
   };
 
   const getActiveAssistantStreamId = (): string | null => {
@@ -2336,7 +3251,6 @@
 
   const handleDeleteTodoRuntime = async () => {
     if (!todoRuntimePanel?.todoId || todoRuntimeDeleteInFlight) return;
-    if (!confirm($_('chat.todoRuntimePanel.confirmDelete'))) return;
     todoRuntimeDeleteInFlight = true;
     try {
       await apiPatch(`/todos/${encodeURIComponent(todoRuntimePanel.todoId)}`, {
@@ -2377,13 +3291,11 @@
       content: steerText,
       createdAt: nowIso,
       _localStatus: 'completed',
+      _optimisticSteerTargetAssistantId:
+        activeAssistantMessage?.id ?? targetStreamId,
+      _optimisticSteerSubmittedAtMs: Date.now(),
     };
-    const activeAssistantId = activeAssistantMessage?.id ?? targetStreamId;
-    messages = insertSteerMessageInTimeline(
-      messages,
-      localSteerMessage,
-      activeAssistantId,
-    );
+    optimisticSteerMessages = [...optimisticSteerMessages, localSteerMessage];
     followBottom = true;
     scheduleScrollToBottom({ force: true });
     input = '';
@@ -2393,6 +3305,9 @@
     try {
       await postChatSteer(apiPost, targetStreamId, steerText);
     } catch (e) {
+      optimisticSteerMessages = optimisticSteerMessages.filter(
+        (message) => message.id !== localSteerMessage.id,
+      );
       errorMsg = formatApiError(e, $_('chat.steer.error'));
     } finally {
       composerSteerInFlight = false;
@@ -2496,6 +3411,320 @@
     todoRuntimePanel = next;
   };
 
+  const applySessionCheckpoints = (items: ChatCheckpoint[]) => {
+    sessionCheckpoints = items;
+    const map = new Map<string, ChatCheckpoint>();
+    for (const checkpoint of sessionCheckpoints) {
+      const anchorId = String(checkpoint.anchorMessageId ?? '').trim();
+      if (!anchorId || map.has(anchorId)) continue;
+      map.set(anchorId, checkpoint);
+    }
+    checkpointsByAnchorMessageId = map;
+  };
+
+  const mergeInitialEventsForMessage = (
+    messageId: string,
+    events: readonly StreamEvent[],
+  ) => {
+    const normalizedId = String(messageId ?? '').trim();
+    if (!normalizedId || events.length === 0) return;
+    const next = new Map(initialEventsByMessageId);
+    next.set(
+      normalizedId,
+      mergeProjectionHistoryEvents(next.get(normalizedId) ?? [], events),
+    );
+    initialEventsByMessageId = next;
+  };
+
+  const ingestSessionHistoryMeta = (line: SessionHistoryMetaLine) => {
+    historyTimelineSessionId = line.sessionId;
+    if (typeof line.title === 'string' && line.title.trim().length > 0) {
+      sessions = sessions.map((entry) =>
+        entry.id === line.sessionId ? { ...entry, title: line.title } : entry,
+      );
+    }
+    applySessionCheckpoints(
+      Array.isArray(line.checkpoints) ? line.checkpoints : [],
+    );
+    sessionDocs = Array.isArray(line.documents) ? line.documents : [];
+    sessionDocsError = null;
+
+    const runtimeSnapshot = asRuntimeRecord(line.todoRuntime);
+    if (runtimeSnapshot) {
+      handleTodoRuntimeToolResult({
+        toolCallId: `session-runtime:${line.sessionId}`,
+        toolName: 'plan',
+        result: { todoRuntime: runtimeSnapshot },
+      });
+    } else {
+      resetTodoRuntimePanel();
+    }
+  };
+
+  const fetchSessionHistorySnapshot = async (
+    id: string,
+  ): Promise<SessionHistorySnapshot> => {
+    const response = await apiFetch(
+      `/chat/sessions/${id}/history?runtimeDetails=summary`,
+      {
+        method: 'GET',
+        headers: {
+          Accept: 'application/x-ndjson',
+        },
+      },
+    );
+    if (!response.body) {
+      throw new Error('Session history stream returned an empty body');
+    }
+
+    const snapshot: SessionHistorySnapshot = {
+      sessionId: id,
+      title: null,
+      messages: [],
+      timelineItems: [],
+      initialEvents: new Map(),
+      checkpoints: [],
+      documents: [],
+      todoRuntime: null,
+      lastAssistantModel: null,
+    };
+    const decoder = new TextDecoder();
+    const reader = response.body.getReader();
+    let buffer = '';
+
+    const processLine = (rawLine: string) => {
+      const line = rawLine.trim();
+      if (!line) return;
+      const payload = JSON.parse(line) as
+        | SessionHistoryMetaLine
+        | SessionHistoryTimelineLine;
+      if (payload.type === 'session_meta') {
+        snapshot.sessionId = payload.sessionId;
+        snapshot.title =
+          typeof payload.title === 'string' && payload.title.trim().length > 0
+            ? payload.title
+            : null;
+        snapshot.checkpoints = Array.isArray(payload.checkpoints)
+          ? payload.checkpoints
+          : [];
+        snapshot.documents = Array.isArray(payload.documents)
+          ? payload.documents
+          : [];
+        snapshot.todoRuntime = asRuntimeRecord(payload.todoRuntime);
+        return;
+      }
+
+      const item = payload.item;
+      const normalizedMessage: LocalMessage = {
+        ...item.message,
+        _streamId: item.message._streamId ?? item.message.id,
+        _localStatus:
+          item.message._localStatus ??
+          (item.message.content ? 'completed' : undefined),
+      };
+      const existingMessageIndex = snapshot.messages.findIndex(
+        (entry) => entry.id === normalizedMessage.id,
+      );
+      if (existingMessageIndex >= 0) {
+        snapshot.messages[existingMessageIndex] = {
+          ...snapshot.messages[existingMessageIndex],
+          ...normalizedMessage,
+        };
+      } else {
+        const sequence = Number(normalizedMessage.sequence ?? 0);
+        let insertAt = snapshot.messages.length;
+        while (
+          insertAt > 0 &&
+          Number(snapshot.messages[insertAt - 1]?.sequence ?? 0) > sequence
+        ) {
+          insertAt -= 1;
+        }
+        snapshot.messages.splice(insertAt, 0, normalizedMessage);
+      }
+      if (item.kind === 'assistant-segment' || item.kind === 'runtime-segment') {
+        snapshot.initialEvents.set(
+          item.message.id,
+          mergeProjectionHistoryEvents(
+            snapshot.initialEvents.get(item.message.id) ?? [],
+            item.segment.events,
+          ),
+        );
+      }
+      const existingTimelineIndex = snapshot.timelineItems.findIndex(
+        (entry) => entry.key === item.key,
+      );
+      if (existingTimelineIndex >= 0) {
+        snapshot.timelineItems[existingTimelineIndex] = item;
+      } else {
+        snapshot.timelineItems.push(item);
+      }
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let boundary = buffer.indexOf('\n');
+      while (boundary >= 0) {
+        processLine(buffer.slice(0, boundary));
+        buffer = buffer.slice(boundary + 1);
+        boundary = buffer.indexOf('\n');
+      }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim().length > 0) processLine(buffer);
+
+    snapshot.timelineItems.sort(compareTimelineItems);
+    snapshot.lastAssistantModel =
+      [...snapshot.messages]
+        .reverse()
+        .find((message) => message.role === 'assistant' && Boolean(message.model))
+        ?.model ?? null;
+    return snapshot;
+  };
+
+  const yieldHistoryRenderFrame = async () => {
+    await tick();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  };
+
+  const stageHistoryTimelineItem = async (item: ProjectedTimelineItem) => {
+    stagedHistoryTimelineItems = [...stagedHistoryTimelineItems, item];
+    await yieldHistoryRenderFrame();
+  };
+
+  const shouldFlushHistoryStage = () => {
+    if (stagedHistoryTimelineItems.length === 0) return false;
+    const viewportHeight =
+      listEl?.clientHeight ?? panelEl?.clientHeight ?? window.innerHeight ?? 0;
+    if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) return false;
+    const stagedHeight = historyStageMeasureEl?.offsetHeight ?? 0;
+    return stagedHeight > viewportHeight;
+  };
+
+  const applyHistoryTimelineBlock = async (
+    stagedBlock: readonly ProjectedTimelineItem[],
+    opts?: { revealAtBottom?: boolean },
+  ) => {
+    if (stagedBlock.length === 0) return;
+
+    const chronologicalBlock = [...stagedBlock].reverse();
+    const previousScrollHeight = listEl?.scrollHeight ?? 0;
+    const previousScrollTop = listEl?.scrollTop ?? 0;
+    const shouldRevealAtBottom =
+      opts?.revealAtBottom === true && previousScrollHeight <= 0;
+
+    const nextMessages = [...messages];
+    const nextInitialEvents = new Map(initialEventsByMessageId);
+    const nextHistory = [...historyTimelineItems];
+    for (const item of chronologicalBlock) {
+      const normalizedMessage: LocalMessage = {
+        ...item.message,
+        _streamId: item.message._streamId ?? item.message.id,
+        _localStatus:
+          item.message._localStatus ??
+          (item.message.content ? 'completed' : undefined),
+      };
+
+      const existingMessageIndex = nextMessages.findIndex(
+        (entry) => entry.id === normalizedMessage.id,
+      );
+      if (existingMessageIndex >= 0) {
+        nextMessages[existingMessageIndex] = {
+          ...nextMessages[existingMessageIndex],
+          ...normalizedMessage,
+        };
+      } else {
+        const sequence = Number(normalizedMessage.sequence ?? 0);
+        let messageInsertAt = nextMessages.length;
+        while (
+          messageInsertAt > 0 &&
+          Number(nextMessages[messageInsertAt - 1]?.sequence ?? 0) > sequence
+        ) {
+          messageInsertAt -= 1;
+        }
+        nextMessages.splice(messageInsertAt, 0, normalizedMessage);
+      }
+
+      if (item.kind === 'assistant-segment' || item.kind === 'runtime-segment') {
+        nextInitialEvents.set(
+          item.message.id,
+          mergeProjectionHistoryEvents(
+            nextInitialEvents.get(item.message.id) ?? [],
+            item.segment.events,
+          ),
+        );
+      }
+
+      const existingTimelineIndex = nextHistory.findIndex(
+        (entry) => entry.key === item.key,
+      );
+      if (existingTimelineIndex >= 0) {
+        nextHistory[existingTimelineIndex] = item;
+      } else {
+        nextHistory.push(item);
+      }
+    }
+    nextHistory.sort(compareTimelineItems);
+
+    historyHydrationSwapPending = shouldRevealAtBottom;
+
+    messages = nextMessages;
+    initialEventsByMessageId = nextInitialEvents;
+    historyTimelineItems = nextHistory;
+    stagedHistoryTimelineItems = [];
+
+    await yieldHistoryRenderFrame();
+
+    if (listEl) {
+      if (shouldRevealAtBottom || historyHydrationStickBottom) {
+        listEl.scrollTop = listEl.scrollHeight;
+        await yieldHistoryRenderFrame();
+      } else if (previousScrollHeight > 0) {
+        listEl.scrollTop =
+          listEl.scrollHeight - previousScrollHeight + previousScrollTop;
+      } else {
+        scheduleScrollToBottom({ force: true });
+      }
+    }
+
+    if (shouldRevealAtBottom) {
+      historyHydrationSwapPending = false;
+    }
+  };
+
+  const loadCheckpoints = async (id: string) => {
+    if (!id) {
+      applySessionCheckpoints([]);
+      return;
+    }
+    try {
+      const res = await apiGet<{ checkpoints?: ChatCheckpoint[] }>(
+        `/chat/sessions/${id}/checkpoints?limit=20`,
+      );
+      applySessionCheckpoints(
+        Array.isArray(res.checkpoints) ? res.checkpoints : [],
+      );
+    } catch {
+      applySessionCheckpoints([]);
+    }
+  };
+
+  const createTurnCheckpoint = async (
+    targetSessionId: string,
+    anchorMessageId: string,
+  ) => {
+    if (!targetSessionId || !anchorMessageId) return;
+    try {
+      await apiPost(`/chat/sessions/${targetSessionId}/checkpoints`, {
+        anchorMessageId,
+      });
+      await loadCheckpoints(targetSessionId);
+    } catch {
+      // checkpoint creation is best-effort and must not block chat flow
+    }
+  };
+
   const loadSessions = async () => {
     loadingSessions = true;
     errorMsg = null;
@@ -2503,7 +3732,7 @@
       const res = await apiGet<{ sessions: ChatSession[] }>('/chat/sessions');
       sessions = res.sessions ?? [];
       if (!sessionId && sessions.length > 0) {
-        await selectSession(sessions[0].id);
+        void selectSession(sessions[0].id);
       }
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.loadSessions'));
@@ -2517,33 +3746,107 @@
     opts?: { scrollToBottom?: boolean; silent?: boolean },
   ) => {
     const shouldShowLoader = !opts?.silent;
+    const serverMessageIds = new Set<string>();
+    const serverTimelineKeys = new Set<string>();
+    const serverEventMessageIds = new Set<string>();
     if (shouldShowLoader) loadingMessages = true;
     errorMsg = null;
     try {
-      const res = await apiGet<{
-        sessionId: string;
-        messages: ChatMessage[];
-        todoRuntime?: Record<string, unknown> | null;
-      }>(
-        `/chat/sessions/${id}/messages`,
-      );
-      const raw = res.messages ?? [];
-      messages = raw.map((m) => ({
-        ...m,
-        _streamId: m.id,
-        _localStatus: m.content ? 'completed' : undefined,
-      }));
-      const runtimeSnapshot = asRuntimeRecord(res.todoRuntime);
-      if (runtimeSnapshot) {
-        handleTodoRuntimeToolResult({
-          toolCallId: `session-runtime:${id}`,
-          toolName: 'plan',
-          result: { todoRuntime: runtimeSnapshot },
-        });
-      } else if (!opts?.silent) {
+      if (!opts?.silent || sessionId !== id) {
+        historyHydrationInFlight = true;
+        historyHydrationSwapPending = false;
+        historyHydrationStickBottom = true;
+        messages = [];
+        optimisticSteerMessages = [];
+        historyTimelineItems = [];
+        stagedHistoryTimelineItems = [];
+        historyTimelineSessionId = null;
+        projectedStreamEventsById = new Map();
+        projectedAssistantComputationByMessageId = new Map();
+        projectionEventsVersion += 1;
+        initialEventsByMessageId = new Map();
+        applySessionCheckpoints([]);
+        sessionDocs = [];
+        sessionDocsError = null;
         resetTodoRuntimePanel();
       }
-      const lastAssistantModel = [...raw]
+      const response = await apiFetch(
+        `/chat/sessions/${id}/history?runtimeDetails=summary`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/x-ndjson',
+          },
+        },
+      );
+      if (!response.body) {
+        throw new Error('Session history stream returned an empty body');
+      }
+
+      const decoder = new TextDecoder();
+      const reader = response.body.getReader();
+      let buffer = '';
+
+      const processLine = async (rawLine: string) => {
+        const line = rawLine.trim();
+        if (!line) return;
+        const payload = JSON.parse(line) as
+          | SessionHistoryMetaLine
+          | SessionHistoryTimelineLine;
+        if (payload.type === 'session_meta') {
+          ingestSessionHistoryMeta(payload);
+          return;
+        }
+        if (payload.type === 'timeline_item') {
+          serverTimelineKeys.add(payload.item.key);
+          serverMessageIds.add(String(payload.item.message.id ?? '').trim());
+          if (
+            payload.item.kind === 'assistant-segment' ||
+            payload.item.kind === 'runtime-segment'
+          ) {
+            serverEventMessageIds.add(String(payload.item.message.id ?? '').trim());
+          }
+          await stageHistoryTimelineItem(payload.item);
+          if (shouldFlushHistoryStage()) {
+            await applyHistoryTimelineBlock(stagedHistoryTimelineItems, {
+              revealAtBottom: historyTimelineItems.length === 0,
+            });
+          }
+        }
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary = buffer.indexOf('\n');
+        while (boundary >= 0) {
+          const line = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 1);
+          await processLine(line);
+          boundary = buffer.indexOf('\n');
+        }
+      }
+      buffer += decoder.decode();
+      if (buffer.trim().length > 0) {
+        await processLine(buffer);
+      }
+      if (stagedHistoryTimelineItems.length > 0) {
+        await applyHistoryTimelineBlock(stagedHistoryTimelineItems);
+      }
+      messages = messages.filter((message) => serverMessageIds.has(message.id));
+      historyTimelineItems = historyTimelineItems.filter((item) =>
+        serverTimelineKeys.has(item.key),
+      );
+      initialEventsByMessageId = new Map(
+        [...initialEventsByMessageId].filter(([messageId]) =>
+          serverEventMessageIds.has(messageId),
+        ),
+      );
+      historyHydrationStickBottom = false;
+      historyHydrationInFlight = false;
+
+      const lastAssistantModel = [...messages]
         .reverse()
         .find((m) => m.role === 'assistant' && Boolean(m.model))?.model;
       if (lastAssistantModel) {
@@ -2555,48 +3858,73 @@
           selectedModelId = fromCatalog.model_id;
         }
       }
-      if (opts?.scrollToBottom !== false)
+      if (opts?.scrollToBottom !== false) {
         scheduleScrollToBottom({ force: true });
-
-      // Hydratation batch (Option C) en arrière-plan: ne doit pas bloquer l'affichage des messages
-      initialEventsByMessageId = new Map();
-      streamDetailsLoading = true;
-      void (async () => {
-        try {
-          const hist = await apiGet<{
-            sessionId: string;
-            streams: Array<{ messageId: string; events: StreamEvent[] }>;
-          }>(
-            `/chat/sessions/${id}/stream-events?limitMessages=20&limitEvents=2000`,
-          );
-          if (sessionId !== id) return;
-          const map = new Map<string, StreamEvent[]>();
-          for (const item of (hist as any)?.streams ?? []) {
-            const mid = String(item?.messageId ?? '').trim();
-            if (!mid) continue;
-            map.set(mid, (item as any)?.events ?? []);
-          }
-          initialEventsByMessageId = map;
-        } catch {
-          initialEventsByMessageId = new Map();
-        } finally {
-          if (sessionId === id) streamDetailsLoading = false;
-        }
-      })();
-
+      }
       // Le scroll est exécuté via afterUpdate (une fois le DOM réellement rendu).
     } catch (e) {
+      historyHydrationInFlight = false;
+      historyHydrationSwapPending = false;
+      historyHydrationStickBottom = false;
       errorMsg = formatApiError(e, $_('chat.errors.loadMessages'));
     } finally {
+      if (!historyHydrationInFlight) historyHydrationStickBottom = false;
       if (shouldShowLoader) loadingMessages = false;
     }
   };
 
   export const selectSession = async (id: string) => {
-    sessionId = id;
-    resetTodoRuntimePanel();
+    const snapshot = await fetchSessionHistorySnapshot(id);
+    historyHydrationInFlight = true;
+    historyHydrationSwapPending = true;
+    historyHydrationStickBottom = true;
+    optimisticSteerMessages = [];
+    projectedStreamEventsById = new Map();
+    projectedAssistantComputationByMessageId = new Map();
+    projectionEventsVersion += 1;
     resetLocalToolInterceptionState();
-    await loadMessages(id, { scrollToBottom: true });
+    messages = snapshot.messages;
+    historyTimelineItems = snapshot.timelineItems;
+    stagedHistoryTimelineItems = [];
+    historyTimelineSessionId = snapshot.sessionId;
+    initialEventsByMessageId = snapshot.initialEvents;
+    applySessionCheckpoints(snapshot.checkpoints);
+    sessionDocs = snapshot.documents;
+    sessionDocsError = null;
+    if (snapshot.todoRuntime) {
+      handleTodoRuntimeToolResult({
+        toolCallId: `session-runtime:${snapshot.sessionId}`,
+        toolName: 'plan',
+        result: { todoRuntime: snapshot.todoRuntime },
+      });
+    } else {
+      resetTodoRuntimePanel();
+    }
+    if (snapshot.title) {
+      sessions = sessions.map((entry) =>
+        entry.id === snapshot.sessionId
+          ? { ...entry, title: snapshot.title }
+          : entry,
+      );
+    }
+    if (snapshot.lastAssistantModel) {
+      const fromCatalog = modelCatalogModels.find(
+        (entry) => entry.model_id === snapshot.lastAssistantModel,
+      );
+      if (fromCatalog) {
+        selectedProviderId = fromCatalog.provider_id;
+        selectedModelId = fromCatalog.model_id;
+      }
+    }
+    sessionId = id;
+    await yieldHistoryRenderFrame();
+    if (listEl) {
+      listEl.scrollTop = listEl.scrollHeight;
+      await yieldHistoryRenderFrame();
+    }
+    historyHydrationSwapPending = false;
+    historyHydrationInFlight = false;
+    historyHydrationStickBottom = false;
   };
 
   export const refreshCommentThreads = async () => {
@@ -2609,7 +3937,15 @@
   export const newSession = () => {
     sessionId = null;
     messages = [];
+    historyTimelineItems = [];
+    stagedHistoryTimelineItems = [];
+    historyTimelineSessionId = null;
+    sessionCheckpoints = [];
+    sessionDocs = [];
+    sessionDocsError = null;
     initialEventsByMessageId = new Map();
+    projectedAssistantComputationByMessageId = new Map();
+    optimisticSteerMessages = [];
     resetTodoRuntimePanel();
     resetLocalToolInterceptionState();
     selectedProviderId = defaultProviderIdForNewSession;
@@ -2618,15 +3954,33 @@
     scheduleScrollToBottom({ force: true });
   };
 
+  const rescopeSessionsForWorkspaceChange = async () => {
+    if (workspaceSessionRescopeInFlight) return;
+    workspaceSessionRescopeInFlight = true;
+    try {
+      newSession();
+      await loadSessions();
+      updateContextFromRoute();
+    } finally {
+      workspaceSessionRescopeInFlight = false;
+    }
+  };
+
   export const deleteCurrentSession = async () => {
     if (!sessionId) return;
-    if (!confirm($_('chat.sessions.confirmDelete'))) return;
     errorMsg = null;
     try {
       await apiDelete(`/chat/sessions/${sessionId}`);
       sessionId = null;
       messages = [];
+      historyTimelineItems = [];
+      stagedHistoryTimelineItems = [];
+      historyTimelineSessionId = null;
+      sessionDocs = [];
+      sessionDocsError = null;
       initialEventsByMessageId = new Map();
+      projectedAssistantComputationByMessageId = new Map();
+      optimisticSteerMessages = [];
       resetTodoRuntimePanel();
       resetLocalToolInterceptionState();
       await loadSessions();
@@ -2635,24 +3989,16 @@
     }
   };
 
-  const handleAssistantTerminal = async (
+  const handleAssistantTerminal = (
     streamId: string,
     t: 'done' | 'error',
   ) => {
-    if (terminalRefreshInFlight.has(streamId)) return;
-    terminalRefreshInFlight.add(streamId);
     messages = messages.map((m) =>
       (m._streamId ?? m.id) === streamId
         ? { ...m, _localStatus: t === 'done' ? 'completed' : 'failed' }
         : m,
     );
-    // Silent refresh: keep the message list mounted to avoid a visible "blink" at stream completion.
-    if (sessionId)
-      await loadMessages(sessionId, { scrollToBottom: true, silent: true });
     scheduleScrollToBottom({ force: true });
-    // Laisser le temps à la UI de se stabiliser avant d'autoriser un autre refresh (évite boucles sur replay).
-    await tick();
-    terminalRefreshInFlight.delete(streamId);
   };
 
   const pollJobUntilTerminal = async (
@@ -2689,11 +4035,11 @@
         const status = String((job as any)?.status ?? 'unknown');
 
         if (status === 'completed') {
-          await handleAssistantTerminal(streamId, 'done');
+          handleAssistantTerminal(streamId, 'done');
           return;
         }
         if (status === 'failed') {
-          await handleAssistantTerminal(streamId, 'error');
+          handleAssistantTerminal(streamId, 'error');
           return;
         }
         // pending/processing
@@ -2811,6 +4157,21 @@
     modelCatalogModels.find((entry) => entry.model_id === selectedModelId) ??
     null;
 
+  const getSelectedModelLabel = (): string =>
+    fallbackSelectedModelOption()?.label ?? selectedModelId;
+
+  const getLongestVisibleModelLabelLength = (): number => {
+    const labels = modelCatalogGroups.flatMap((group) =>
+      group.models.map((modelOption) => modelOption.label),
+    );
+
+    if (labels.length === 0) {
+      labels.push(getSelectedModelLabel());
+    }
+
+    return labels.reduce((max, label) => Math.max(max, label.length), 0);
+  };
+
   $: modelCatalogGroups = modelCatalogProviders
     .map((provider) => ({
       provider,
@@ -2839,6 +4200,10 @@
   }
 
   $: selectedModelSelectionKey = `${selectedProviderId}::${selectedModelId}`;
+  $: selectedModelWidthCh = Math.max(
+    getLongestVisibleModelLabelLength() + 4,
+    18,
+  );
 
   const sendMessage = async () => {
     const text = input.trim();
@@ -2934,27 +4299,15 @@
         createdAt: nowIso,
         _localStatus: 'completed',
       };
-      const assistantMsg: LocalMessage = {
-        id: res.assistantMessageId,
+      bootstrapAssistantRun({
         sessionId: res.sessionId,
-        role: 'assistant',
-        content: null,
+        assistantMessageId: res.assistantMessageId,
+        streamId: res.streamId,
+        jobId: res.jobId,
         model: selectedModelId,
-        createdAt: nowIso,
-        _localStatus: 'processing',
-        _streamId: res.streamId,
-      };
-      messages = [...messages, userMsg, assistantMsg];
-      followBottom = true;
-      scheduleScrollToBottom({ force: true });
-
-      // Fallback: si SSE rate les events (connection pas prête), on rattrape via polling queue.
-      // On évite ainsi un "Préparation…" bloqué alors que le job est déjà terminé.
-      void pollJobUntilTerminal(
-        res.jobId,
-        assistantMsg._streamId ?? assistantMsg.id,
-        { timeoutMs: 90_000 },
-      );
+        userMessage: userMsg,
+        checkpointUserMessageId: userMsg.id,
+      });
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.send'));
     } finally {
@@ -3007,8 +4360,6 @@
       const key = sessionId ? `chat_session:${sessionId}` : '';
       if (key && key !== sessionDocsKey) {
         sessionDocsKey = key;
-        sessionDocs = [];
-        void loadSessionDocs();
       }
       if (!key && sessionDocsKey) {
         sessionDocsKey = '';
@@ -3078,6 +4429,10 @@
     streamHub.set(localToolsHubKey, (event: StreamHubEvent) => {
       handleLocalToolStreamEvent(event);
     });
+    projectionHubKey = `chat-projection:${Math.random().toString(36).slice(2)}`;
+    streamHub.set(projectionHubKey, (event: StreamHubEvent) => {
+      handleProjectionStreamEvent(event);
+    });
     if (mode !== 'ai') return;
     sessionDocsSseKey = `chat-documents:${Math.random().toString(36).slice(2)}`;
     streamHub.setJobUpdates(sessionDocsSseKey, (ev: StreamHubEvent) => {
@@ -3125,6 +4480,16 @@
     void loadExtensionActiveTabContext();
   }
 
+  $: if (mode === 'ai' && $workspaceScopeHydrated) {
+    const nextWorkspaceId = $selectedWorkspace?.id ?? null;
+    if (previousAiWorkspaceId === undefined) {
+      previousAiWorkspaceId = nextWorkspaceId;
+    } else if (nextWorkspaceId !== previousAiWorkspaceId) {
+      previousAiWorkspaceId = nextWorkspaceId;
+      void rescopeSessionsForWorkspaceChange();
+    }
+  }
+
   let lastPath = '';
   $: if (
     mode === 'ai' &&
@@ -3156,6 +4521,8 @@
     commentHubKey = '';
     if (localToolsHubKey) streamHub.delete(localToolsHubKey);
     localToolsHubKey = '';
+    if (projectionHubKey) streamHub.delete(projectionHubKey);
+    projectionHubKey = '';
     resetLocalToolInterceptionState();
     if (handleDocumentClick) {
       document.removeEventListener('click', handleDocumentClick);
@@ -3175,7 +4542,7 @@
   });
 </script>
 
-<div class="flex flex-col h-full" bind:this={panelEl}>
+<div class="topai-chat-panel-shell flex flex-col h-full" bind:this={panelEl}>
   {#if mode === 'comments'}
     {@const assignedUser = currentCommentRoot?.assigned_to_user ?? null}
     {@const isAssignedToMe = assignedUser?.id && assignedUser.id === $session.user?.id}
@@ -3320,7 +4687,7 @@
             <ChevronRight class="w-4 h-4" />
           </button>
           <button
-            class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+            class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
             on:click={() => void handleDeleteCommentThread()}
             title={$_('chat.comments.deleteThread')}
             aria-label={$_('chat.comments.deleteThread')}
@@ -3335,7 +4702,7 @@
   {/if}
 
   <div
-    class="flex-1 min-h-0"
+    class="flex-1 min-h-0 relative"
     style={mode === 'comments' && commentThreadResolved
       ? 'background-color: #f1f5f9 !important;'
       : ''}
@@ -3394,7 +4761,7 @@
                   </div>
                 {/if}
                 <div
-                  class="max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
+                  class="chat-user-bubble max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
                 >
                   {#if editingCommentId === c.id}
                     <div class="space-y-2">
@@ -3408,14 +4775,14 @@
                         class="flex items-center justify-end gap-2 text-[11px]"
                       >
                         <button
-                          class="rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
+                          class="chat-edit-action-secondary rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
                           type="button"
                           on:click={cancelEditComment}
                         >
                           {$_('common.cancel')}
                         </button>
                         <button
-                          class="rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
+                          class="chat-edit-action-primary rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
                           type="button"
                           on:click={() => void commitEditComment()}
                         >
@@ -3431,7 +4798,7 @@
                   class="mt-1 flex items-center justify-end gap-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <button
-                    class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                    class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                     on:click={async () => {
                       const text = c.content ?? '';
                       const ok = await copyToClipboard(
@@ -3452,7 +4819,7 @@
                   </button>
                   {#if canEdit && editingCommentId !== c.id}
                     <button
-                      class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                      class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                       on:click={() => startEditComment(c)}
                       type="button"
                       aria-label="Modifier"
@@ -3499,7 +4866,7 @@
                     class="mt-1 flex items-center gap-2 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <button
-                      class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                      class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                       on:click={async () => {
                         const text = c.content ?? '';
                         const ok = await copyToClipboard(
@@ -3530,16 +4897,13 @@
           </div>
         {/if}
       {:else}
-        {#if loadingMessages}
-          <div class="text-xs text-slate-500">{$_('common.loading')}</div>
-        {:else if messages.length === 0}
-          <div class="text-xs text-slate-500">{$_('chat.chat.empty')}</div>
-        {:else}
-          {#each messages as m (m.id)}
-            {#if m.role === 'user'}
+        {#snippet renderTimelineItems(items: ProjectedTimelineItem[])}
+          {#each items as item (item.key)}
+            {#if item.kind === 'message' && item.message.role === 'user'}
+              {@const m = item.message}
               <div class="flex flex-col items-end group">
                 <div
-                  class="max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
+                  class="chat-user-bubble max-w-[85%] rounded bg-primary text-white text-xs px-3 py-2 break-words w-full userMarkdown"
                 >
                   {#if editingMessageId === m.id}
                     <div class="space-y-2">
@@ -3552,14 +4916,14 @@
                         class="flex items-center justify-end gap-2 text-[11px]"
                       >
                         <button
-                          class="rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
+                          class="chat-edit-action-secondary rounded border border-slate-600 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
                           type="button"
                           on:click={cancelEditMessage}
                         >
                           {$_('common.cancel')}
                         </button>
                         <button
-                          class="rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
+                          class="chat-edit-action-primary rounded bg-white text-slate-900 px-2 py-0.5 hover:bg-slate-200"
                           type="button"
                           on:click={() => void saveEditMessage(m.id)}
                         >
@@ -3574,8 +4938,19 @@
                 <div
                   class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
+                  {#if hasCheckpointRollbackDelta(getCheckpointForUserMessage(m.id))}
+                    <button
+                      class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                      on:click={() => openCheckpointPromptForMessage(m.id)}
+                      type="button"
+                      aria-label={$_('chat.checkpoints.restoreFromMessage')}
+                      title={getCheckpointPreviewTitle(m.id)}
+                    >
+                      <UndoDot class="w-3.5 h-3.5" />
+                    </button>
+                  {/if}
                   <button
-                    class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                    class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                     on:click={async () => {
                       const text = m.content ?? '';
                       const ok = await copyToClipboard(
@@ -3595,7 +4970,7 @@
                     {/if}
                   </button>
                   <button
-                    class="inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
+                    class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 hover:bg-slate-100"
                     on:click={() => startEditMessage(m)}
                     type="button"
                     aria-label="Modifier"
@@ -3605,61 +4980,49 @@
                   </button>
                 </div>
               </div>
-            {:else if m.role === 'assistant'}
-              {@const sid = m._streamId ?? m.id}
-              {@const initEvents = initialEventsByMessageId.get(sid)}
-              {@const showDetailWaiter =
-                !!m.content && streamDetailsLoading && initEvents === undefined}
+            {:else if item.kind === 'assistant-segment'}
+              {@const m = item.message}
               {@const isUp = m.feedbackVote === 1}
               {@const isDown = m.feedbackVote === -1}
-              {@const isTerminal =
-                (m._localStatus ?? (m.content ? 'completed' : 'processing')) ===
-                'completed'}
               <div class="flex justify-start group">
                 <div class="max-w-[85%] w-full">
                   <StreamMessage
                     variant="chat"
-                    streamId={sid}
-                    status={m._localStatus ??
-                      (m.content ? 'completed' : 'processing')}
-                    finalContent={m.content ?? null}
+                    streamId={item.key}
+                    status={item.isTerminal ? 'completed' : 'processing'}
+                    finalContent={item.segment.content}
                     smoothContentStreaming={isGeminiModel(m.model)}
-                    historySource="stream"
-                    initialEvents={initEvents}
-                    historyPending={showDetailWaiter}
-                    acknowledgementText={composerSteerAck?.streamId === sid
-                      ? composerSteerAck.message
-                      : undefined}
-                    onStreamEvent={() => scheduleScrollToBottom()}
-                    onTodoRuntime={handleTodoRuntimeToolResult}
-                    onTerminal={(t) => void handleAssistantTerminal(sid, t)}
+                    subscriptionMode="passive"
+                    initialEvents={item.segment.events}
+                    initiallyExpanded={false}
+                    deferCollapsedDetails={!useUnifiedActiveRunPresentation(item.message)}
                   />
-                  {#if isTerminal}
+                  {#if item.isTerminal && item.isLastAssistantSegment}
                     <div
                       class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500"
                     >
                       <button
-                        class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                         on:click={async () => {
                           const text = m.content ?? '';
                           const ok = await copyToClipboard(
                             text,
                             renderMarkdownWithRefs(text),
                           );
-                          if (ok) markCopied(m.id);
+                          if (ok) markCopied(item.key);
                         }}
                         type="button"
                         aria-label={$_('common.copy')}
                         title={$_('common.copy')}
                       >
-                        {#if isCopied(m.id)}
+                        {#if isCopied(item.key)}
                           <Check class="w-3.5 h-3.5 text-slate-900" />
                         {:else}
                           <Copy class="w-3.5 h-3.5" />
                         {/if}
                       </button>
                       <button
-                        class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                         on:click={() => void retryFromAssistant(m.id)}
                         type="button"
                         aria-label={$_('common.retry')}
@@ -3668,9 +5031,9 @@
                         <RotateCcw class="w-3.5 h-3.5" />
                       </button>
                       <button
-                        class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                         class:text-slate-900={isUp}
-                        class:bg-slate-100={isUp}
+                        class:chat-message-action-button-active={isUp}
                         on:click={() =>
                           void setFeedback(m.id, isUp ? 'clear' : 'up')}
                         type="button"
@@ -3683,9 +5046,9 @@
                         />
                       </button>
                       <button
-                        class="inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        class="chat-message-action-button inline-flex items-center rounded px-1.5 py-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                         class:text-slate-900={isDown}
-                        class:bg-slate-100={isDown}
+                        class:chat-message-action-button-active={isDown}
                         on:click={() =>
                           void setFeedback(m.id, isDown ? 'clear' : 'down')}
                         type="button"
@@ -3701,8 +5064,53 @@
                   {/if}
                 </div>
               </div>
+            {:else if item.kind === 'runtime-segment'}
+              <div class="flex justify-start">
+                <div class="max-w-[85%] w-full">
+                  <StreamMessage
+                    variant="chat"
+                    streamId={item.key}
+                    status={item.message._localStatus ??
+                      (item.message.content ? 'completed' : 'processing')}
+                    subscriptionMode="passive"
+                    initialEvents={item.segment.events}
+                    runtimeSummary={item.segment.runtimeSummary}
+                    initiallyExpanded={false}
+                    deferCollapsedDetails={!useUnifiedActiveRunPresentation(item.message)}
+                    showRuntimeInlinePreview={item.isActiveRuntimeSegment}
+                    acknowledgementText={item.acknowledgementText}
+                    onTodoRuntime={handleTodoRuntimeToolResult}
+                  />
+                </div>
+              </div>
             {/if}
           {/each}
+        {/snippet}
+
+        {#if stagedHistoryTimelineItems.length > 0}
+          <div
+            class="pointer-events-none invisible absolute inset-x-0 top-0 z-[-1] p-3 space-y-2"
+            bind:this={historyStageMeasureEl}
+            aria-hidden="true"
+          >
+            {@render renderTimelineItems(stagedHistoryTimelineItems)}
+          </div>
+        {:else}
+          <div
+            class="pointer-events-none invisible absolute inset-x-0 top-0 z-[-1]"
+            bind:this={historyStageMeasureEl}
+            aria-hidden="true"
+          ></div>
+        {/if}
+
+        {#if historyHydrationInFlight && projectedTimelineItems.length === 0}
+          <div class="text-xs text-slate-500">{$_('common.loading')}</div>
+        {:else if messages.length === 0}
+          <div class="text-xs text-slate-500">{$_('chat.chat.empty')}</div>
+        {:else}
+          <div class:invisible={historyHydrationSwapPending}>
+            {@render renderTimelineItems(projectedTimelineItems)}
+          </div>
         {/if}
         {#if pendingLocalToolPermissionPrompts.length > 0}
           {#each pendingLocalToolPermissionPrompts as prompt (prompt.toolCallId)}
@@ -3714,14 +5122,24 @@
                 {$_('chat.tools.permissions.promptDescription', {
                   values: {
                     tool: prompt.request.toolName,
-                    origin: prompt.request.origin,
                   },
                 })}
               </div>
+              {#if resolvePermissionPromptDetails(prompt).length > 0}
+                <div class="space-y-1">
+                  {#each resolvePermissionPromptDetails(prompt) as detail}
+                    <div class="text-[11px] text-slate-600 break-all">
+                      <span class="font-semibold text-slate-700">{detail.label}:</span>
+                      {' '}
+                      {detail.value}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
               <div class="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  class="rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90"
+                  class="chat-tool-permission-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90"
                   on:click={() =>
                     void handleLocalToolPermissionDecision(
                       prompt,
@@ -3732,7 +5150,7 @@
                 </button>
                 <button
                   type="button"
-                  class="rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
+                  class="chat-tool-permission-choice rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
                   on:click={() =>
                     void handleLocalToolPermissionDecision(
                       prompt,
@@ -3743,7 +5161,7 @@
                 </button>
                 <button
                   type="button"
-                  class="rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 hover:bg-emerald-100"
+                  class="chat-tool-permission-choice rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] text-emerald-700 hover:bg-emerald-100"
                   on:click={() =>
                     void handleLocalToolPermissionDecision(
                       prompt,
@@ -3754,7 +5172,7 @@
                 </button>
                 <button
                   type="button"
-                  class="rounded border border-red-300 bg-red-50 px-2 py-1 text-[11px] text-red-700 hover:bg-red-100"
+                  class="chat-tool-permission-choice rounded border border-red-300 bg-red-50 px-2 py-1 text-[11px] text-red-700 hover:bg-red-100"
                   on:click={() =>
                     void handleLocalToolPermissionDecision(
                       prompt,
@@ -3766,6 +5184,38 @@
               </div>
             </div>
           {/each}
+        {/if}
+        {#if pendingCheckpointPrompt}
+          <div class="rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
+            <div class="text-xs font-semibold text-slate-700">
+              {pendingCheckpointPrompt.kind === 'retry'
+                ? $_('chat.checkpoints.confirmRestoreBeforeRetry')
+                : $_('chat.checkpoints.confirmRestoreBeforeAction')}
+            </div>
+            <div class="text-[11px] text-slate-600">
+              {$_('chat.checkpoints.confirmRestoreDetails')}
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                class="chat-checkpoint-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                on:click={() => void confirmCheckpointPrompt()}
+                disabled={checkpointActionInFlight}
+              >
+                {$_('chat.checkpoints.restoreCta')}
+              </button>
+              <button
+                type="button"
+                class="chat-checkpoint-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                on:click={() => void cancelCheckpointPrompt()}
+                disabled={checkpointActionInFlight}
+              >
+                {pendingCheckpointPrompt.kind === 'retry'
+                  ? $_('chat.checkpoints.retryWithoutRestore')
+                  : $_('chat.checkpoints.continueWithoutRestore')}
+              </button>
+            </div>
+          </div>
         {/if}
         {#if errorMsg}
           <div
@@ -3792,10 +5242,10 @@
           </div>
           <div class="flex items-center gap-1">
             <button
-              class="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
+              class="chat-danger-action-button text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded disabled:opacity-50"
               type="button"
               disabled={todoRuntimeDeleteInFlight}
-              on:click={() => void handleDeleteTodoRuntime()}
+              on:click={() => (pendingTodoRuntimeDeleteConfirm = true)}
               aria-label={$_('chat.todoRuntimePanel.delete')}
               title={$_('chat.todoRuntimePanel.delete')}
               data-testid="todo-runtime-delete-button"
@@ -3824,6 +5274,31 @@
         </div>
         {#if !todoRuntimeCollapsed}
           <div class="mt-2 max-h-28 overflow-y-auto slim-scroll space-y-2 text-[11px] text-slate-700">
+            {#if pendingTodoRuntimeDeleteConfirm}
+              <div class="chat-delete-confirm-surface rounded border border-slate-200 bg-slate-50 p-2 space-y-2">
+                <div class="text-xs font-semibold text-slate-700">
+                  {$_('chat.todoRuntimePanel.confirmDelete')}
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    class="chat-delete-confirm-choice rounded bg-primary px-2 py-1 text-[11px] font-semibold text-white hover:bg-primary/90 disabled:opacity-50"
+                    on:click={() => void handleDeleteTodoRuntime()}
+                    disabled={todoRuntimeDeleteInFlight}
+                  >
+                    {$_('common.delete')}
+                  </button>
+                  <button
+                    type="button"
+                    class="chat-delete-confirm-choice rounded border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                    on:click={() => (pendingTodoRuntimeDeleteConfirm = false)}
+                    disabled={todoRuntimeDeleteInFlight}
+                  >
+                    {$_('common.cancel')}
+                  </button>
+                </div>
+              </div>
+            {/if}
             {#if todoRuntimePanel.conflictMessage}
               <div class="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
                 {todoRuntimePanel.conflictMessage}
@@ -3873,11 +5348,11 @@
     </div>
   {/if}
 
-  <div class="p-2 border-t border-slate-200">
+  <div class="chat-composer-footer p-2 border-t border-slate-200">
     <div>
       <div class="relative">
         <div
-          class="relative w-full min-w-0 rounded px-2 text-xs composer-rich slim-scroll overflow-y-auto overflow-x-hidden"
+          class="chat-composer-surface relative w-full min-w-0 rounded px-2 text-xs composer-rich slim-scroll overflow-y-auto overflow-x-hidden"
           class:composer-single-line={!composerIsMultiline}
           class:bg-white={($workspaceCanComment && !commentThreadResolved) ||
             mode !== 'comments'}
@@ -4143,7 +5618,8 @@
             id="chat-model-selection"
             value={selectedModelSelectionKey}
             on:change={handleModelSelectionChange}
-            class="min-w-[220px] bg-transparent px-0 py-0 text-[11px] text-slate-700 focus:outline-none"
+            class="w-auto px-2 py-0.5 text-[11px] text-slate-700 focus:outline-none"
+            style={`width:${selectedModelWidthCh}ch;min-width:${selectedModelWidthCh}ch;`}
           >
             {#if modelCatalogGroups.length === 0 && fallbackSelectedModelOption()}
               <option value={`${fallbackSelectedModelOption()?.provider_id ?? selectedProviderId}::${fallbackSelectedModelOption()?.model_id ?? selectedModelId}`}>
@@ -4165,7 +5641,7 @@
         <div class="ml-auto flex items-center gap-2">
         {#if composerSteerReady && activeAssistantMessage}
           <button
-            class="rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-60"
+            class="chat-composer-stop-button rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-60"
             on:click={stopAssistantMessage}
             disabled={stoppingMessageId === activeAssistantMessage.id}
             type="button"

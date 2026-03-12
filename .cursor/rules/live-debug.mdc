@@ -1,0 +1,225 @@
+---
+description: Playwright live-debug method for fast, non-destructive exploratory debugging
+alwaysApply: false
+tags: [debug, playwright, live]
+---
+
+# LIVE DEBUG
+
+## Goal
+Use Playwright as a fast **observe -> act -> re-observe** debug tool without turning every investigation into a permanent E2E test.
+
+This rule is for:
+- UI bugs that need real browser behavior (`hover`, `scroll`, `streaming`, `reload`, `focus`, `popover`, `timing`)
+- issues that are hard to diagnose from logs alone
+- short live-debug loops on a real app state
+
+This rule is **not** for:
+- destructive test campaigns on `ENV=dev`
+- broad product validation
+- replacing final permanent regression tests
+
+## Environment policy
+
+### `ENV=dev`
+Allowed only for:
+- manual navigation
+- read-mostly debug
+- scoped Playwright probes that do **not** seed/reset data
+
+Forbidden on `ENV=dev`:
+- `make test-e2e`
+- seed/reset/global setup flows
+- anything that rewrites Demo data without explicit need
+
+### Preferred lanes
+- Use `make up-dev-playwright ... ENV=dev` for live debug against real dev data
+- Use `make exec-playwright-dev CMD='...' ... ENV=dev` for a single scoped probe
+- Use isolated `test/e2e` envs for permanent regression tests
+
+## Working method
+
+### 1. Start from the smallest reproducible surface
+Do **not** begin with a full end-to-end product scenario.
+
+Start with:
+- one page
+- one interaction
+- one expected signal
+
+Examples:
+- chat reload should preserve reasoning blocks
+- hover should show a menu
+- stream should append text progressively
+
+### 2. Use an ad hoc debug probe, not a permanent test
+Default mode:
+- create an **untracked** scratch probe under `e2e/tests/dev/_scratch.<bug>.spec.ts`
+- rewrite it freely at each pass
+- delete it once the bug is understood
+
+Only keep a tracked file under `e2e/tests/dev/` if it becomes a genuinely reusable harness example.
+
+The first version of the probe should:
+- navigate to the right page
+- reproduce the issue
+- inspect only the target symptom
+
+It does **not** need to be a final durable spec.
+
+Temporary debug code is acceptable in a dev probe:
+- network listeners
+- console dumps
+- screenshots
+- direct `page.evaluate(...)` probes
+- short DOM dumps
+
+Do not commit throwaway debug instrumentation.
+Do not keep a tracked `dev` probe just because it helped once.
+Promote only the minimal reusable pattern once the bug is solved.
+
+### 3. Observe before acting again
+For each step, collect the minimum useful signals:
+- current URL
+- visible target element state
+- relevant request/response
+- browser console error
+- one screenshot if visual state matters
+
+Only then decide the next action.
+
+### 4. Prefer exact signals over sleep
+Avoid generic delays.
+
+Prefer:
+- `waitForResponse(...)`
+- `waitForRequest(...)`
+- `locator.waitFor(...)`
+- `expect.poll(...)`
+- `page.waitForLoadState(...)`
+
+Avoid:
+- long `waitForTimeout(...)`
+- broad retries without understanding the missing signal
+
+### 5. Separate harness bugs from product bugs
+Before blaming the product, verify:
+- auth state is valid
+- the lane storage state is the right one: `e2e/.auth/dev-state.json` (mounted as `/app/.auth/dev-state.json`)
+- the correct base URL is used
+- no CORS/CSP issue blocks the browser
+- the probe reaches the page and target element
+
+If the probe fails before product behavior starts, fix the harness first.
+
+For auth, check in this order:
+1. `page.context().cookies()` contains the expected `session`
+2. browser-side `fetch('<api>/auth/session', { credentials: 'include' })` succeeds
+3. only then start the real UI scenario
+
+### 6. Promote only the useful part
+Once root cause is known:
+- keep the smallest stable regression check
+- remove temporary logs/probes
+- move durable coverage into the right permanent test file if needed
+
+The scratch probe itself should usually disappear.
+
+## Recommended Playwright actions for live debug
+
+Use Playwright like an operator:
+- `page.goto(...)`
+- `locator.click()`
+- `locator.hover()`
+- `page.mouse.move(x, y)`
+- `page.keyboard.type(...)`
+- `page.reload()`
+- `locator.screenshot(...)`
+- `page.on('request', ...)`
+- `page.on('response', ...)`
+- `page.on('console', ...)`
+- `page.evaluate(...)`
+
+For rich text / TipTap / contenteditable:
+- do **not** assume `.fill(...)` works
+- prefer:
+  - focus editable node
+  - `Control+A`
+  - `Backspace`
+  - `keyboard.type(...)`
+
+## Debug loop contract
+
+For each bug:
+1. Reproduce with a single dev probe
+2. Capture one clear failure signal
+3. Apply one focused code change
+4. Re-run the same probe
+5. If fixed, reduce the probe to the stable assertion you actually need
+
+Never mix:
+- harness refactor
+- product fix
+- regression test promotion
+
+Do them in that order and in separate commits when committed.
+
+## Minimal command set
+
+Use Make only.
+
+Typical flow:
+
+```bash
+make up-dev-playwright API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080 REGISTRY=local ENV=dev
+make exec-playwright-dev CMD='API_BASE_URL=http://host.docker.internal:8787 UI_BASE_URL=http://host.docker.internal:5174 MAILDEV_API_URL=http://maildev:1080 npx playwright test --config playwright.dev.config.ts tests/dev/_scratch.chat-reload.spec.ts --workers=1 --retries=0 --reporter=list' API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080 REGISTRY=local ENV=dev
+```
+
+## Example: chat reload debug
+
+Bad approach:
+- write a huge final E2E spec
+- assert 20 things at once
+- mix auth/bootstrap/reload/rendering diagnosis
+
+Good approach:
+1. Probe auth:
+   - inspect `page.context().cookies()`
+   - browser fetch `/api/v1/auth/session`
+2. Open chat:
+   - verify the composer is visible
+3. Send one message:
+   - capture `sessionId` and `assistantMessageId`
+4. Probe bootstrap:
+   - verify `assistantDetailsByMessageId[assistantMessageId]` becomes non-empty
+5. Reload:
+   - verify bootstrap is still non-empty
+6. Only then assert the UI rendering of reasoning blocks
+
+This sequence tells you whether the bug is:
+- auth/harness
+- backend bootstrap payload
+- or frontend rendering after reload
+
+Recommended execution:
+- create `e2e/tests/dev/_scratch.chat-reload.spec.ts`
+- run it
+- inspect the exact failing signal
+- patch the app
+- rerun the same scratch file
+- delete or rewrite it for the next bug
+
+## Commit policy
+- Commit the **harness feature** separately from the **bug fix**
+- Do not commit temporary probe noise
+- If a dev probe becomes genuinely useful, extract the durable part into a proper test later
+- If it proves a stable product regression, port the assertion to the permanent E2E suite later
+
+## Output expectation
+After a live-debug pass, report only:
+1. current blocker
+2. exact failing signal
+3. whether it is harness or product
+4. next focused change
+
+No over-formalized narrative.

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
-  import { apiGet } from '$lib/utils/api';
   import { ChevronDown, Loader2 } from '@lucide/svelte';
   import { Streamdown } from 'svelte-streamdown';
   import { _ } from 'svelte-i18n';
@@ -19,12 +18,24 @@
   export let initialEvents:
     | Array<{ eventType: string; data: unknown; sequence: number; createdAt?: string }>
     | undefined = undefined;
-  export let historySource: 'none' | 'stream' | 'chat' = 'none';
-  export let historyLimit = 2000;
   export let historyPending: boolean = false;
+  export let subscriptionMode: 'live' | 'passive' = 'live';
   export let smoothContentStreaming = false;
   export let smoothChunkThreshold = 80;
   export let acknowledgementText: string | undefined = undefined;
+  export let showRuntimeInlinePreview = true;
+  export let deferCollapsedDetails = false;
+  export let requestDeferredDetails: (() => Promise<void>) | undefined = undefined;
+  export let runtimeSummary:
+    | {
+        hasReasoning: boolean;
+        hasTools: boolean;
+        toolCount: number;
+        contextBudgetPct: number | null;
+        durationMs: number | null;
+        reasoningEffortLabel: string | null;
+      }
+    | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
   export let onTerminal: ((t: 'done' | 'error') => void) | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
@@ -69,6 +80,9 @@
     sawStarted: boolean;
     steps: Step[];
     todoCards: TodoToolCard[];
+    contextBudgetPct: number | null;
+    contextBudgetZone: 'normal' | 'soft' | 'hard';
+    contextCompactionStrip: string;
     expanded: boolean;
     lastSeq: number;
   };
@@ -88,6 +102,9 @@
     sawStarted: false,
     steps: [],
     todoCards: [],
+    contextBudgetPct: null,
+    contextBudgetZone: 'normal',
+    contextCompactionStrip: '',
     expanded: initiallyExpanded,
     lastSeq: 0
   };
@@ -96,7 +113,19 @@
 
   let detailLoading = false;
   let detailLoaded = false;
+  let detailHydrated = false;
+  let detailDomMounted = false;
   let lastInitialEventsRef: unknown = null;
+  let lastInitialEventCount = 0;
+  let hasSteps = false;
+  let hasContent = false;
+  let hasAcknowledgement = false;
+  let showStartup = false;
+  let hasPassiveHistoryShell = false;
+  let passiveHistoryShellHeading = '';
+  let toolsCount = 0;
+  let durationMs = 0;
+  let showDetailLoader = false;
   let smoothedContentText = '';
   let smoothPendingText = '';
   let smoothTimer: ReturnType<typeof setTimeout> | null = null;
@@ -321,7 +350,27 @@
     return lines.join('\n');
   };
 
-  const applyEvent = (eventType: string, data: any, sequence: number, createdAt?: string) => {
+  const summarizePreviewText = (value: string): string => {
+    const normalized = value.trim();
+    if (!normalized) return '';
+    if (normalized.length <= 320) return normalized;
+    return `${normalized.slice(-320)}`;
+  };
+
+  const applyEvent = (
+    eventType: string,
+    data: any,
+    sequence: number,
+    createdAt?: string,
+    options?: {
+      collectDetails?: boolean;
+      collectContent?: boolean;
+      preserveAuxPreview?: boolean;
+    },
+  ) => {
+    const collectDetails = options?.collectDetails ?? true;
+    const collectContent = options?.collectContent ?? true;
+    const preserveAuxPreview = options?.preserveAuxPreview ?? true;
     if (!Number.isFinite(sequence)) return;
     if (sequence <= st.lastSeq) return;
     st.lastSeq = sequence;
@@ -344,7 +393,7 @@
         st.stepKind = 'reasoning';
         st.stepTitle = $_('stream.reasoningEffort');
         st.auxText = label;
-        upsertStep(st.stepTitle, label);
+        if (collectDetails) upsertStep(st.stepTitle, label);
       } else if (state === 'reasoning_effort') {
         const effort = String(data?.effort ?? '').trim() || 'unknown';
         const phase = String(data?.phase ?? '').trim();
@@ -353,13 +402,52 @@
         st.stepKind = 'reasoning';
         st.stepTitle = $_('stream.reasoningEffort');
         st.auxText = label;
-        upsertStep(st.stepTitle, label);
+        if (collectDetails) upsertStep(st.stepTitle, label);
       } else if (state === 'reasoning_effort_eval_failed') {
         const msg = String(data?.message ?? '').trim() || $_('stream.unknownError');
         st.stepKind = 'reasoning';
         st.stepTitle = $_('stream.reasoningEffortFailed');
         st.auxText = msg;
-        upsertStep(st.stepTitle, msg);
+        if (collectDetails) upsertStep(st.stepTitle, msg);
+      } else if (state === 'context_budget_update') {
+        const pctRaw = Number(data?.occupancy_pct);
+        const pct = Number.isFinite(pctRaw)
+          ? Math.max(0, Math.min(100, Math.round(pctRaw)))
+          : null;
+        const zoneRaw = String(data?.zone ?? 'normal');
+        const zone = zoneRaw === 'hard' || zoneRaw === 'soft' ? zoneRaw : 'normal';
+        st.contextBudgetPct = pct;
+        st.contextBudgetZone = zone;
+        const line = pct === null
+          ? $_('stream.contextBudget')
+          : $_('stream.contextOccupancy', { values: { pct } });
+        st.stepKind = 'status';
+        st.stepTitle = $_('stream.contextBudget');
+        st.auxText = line;
+        if (collectDetails) upsertStep(st.stepTitle, line);
+      } else if (state === 'context_compaction_started') {
+        st.contextCompactionStrip = $_('stream.contextCompactionInProgress');
+        st.stepKind = 'status';
+        st.stepTitle = $_('stream.contextCompaction');
+        st.auxText = $_('stream.contextCompactionInProgress');
+        if (collectDetails) upsertStep(st.stepTitle, st.auxText);
+      } else if (state === 'context_compaction_done') {
+        st.contextCompactionStrip = $_('stream.contextCompactionDone');
+        st.stepKind = 'status';
+        st.stepTitle = $_('stream.contextCompaction');
+        st.auxText = $_('stream.contextCompactionDone');
+        if (collectDetails) upsertStep(st.stepTitle, st.auxText);
+      } else if (state === 'context_compaction_failed') {
+        st.contextCompactionStrip = $_('stream.contextCompactionFailed');
+        st.stepKind = 'status';
+        st.stepTitle = $_('stream.contextCompaction');
+        st.auxText = String(data?.message ?? $_('stream.unknownError'));
+        if (collectDetails) upsertStep(st.stepTitle, st.auxText);
+      } else if (state === 'context_budget_user_escalation_required') {
+        st.stepKind = 'status';
+        st.stepTitle = $_('stream.contextBudgetEscalation');
+        st.auxText = $_('stream.contextBudgetEscalationBody');
+        if (collectDetails) upsertStep(st.stepTitle, st.auxText);
       } else {
         st.stepKind = 'status';
         st.stepTitle = $_('stream.status', { values: { state } });
@@ -370,10 +458,14 @@
       st.stepKind = 'reasoning';
       st.stepTitle = $_('stream.reasoning');
       const delta = String(data?.delta ?? '');
-      const prev = st.auxText || '';
-      const sep = needsReasoningSectionBreak(prev, delta) ? '\n\n' : '';
-      st.auxText = prev + sep + delta;
-      upsertStep(st.stepTitle, st.auxText);
+      if (collectDetails) {
+        const prev = st.auxText || '';
+        const sep = needsReasoningSectionBreak(prev, delta) ? '\n\n' : '';
+        st.auxText = prev + sep + delta;
+        upsertStep(st.stepTitle, st.auxText);
+      } else if (preserveAuxPreview) {
+        st.auxText = summarizePreviewText(delta);
+      }
     } else if (eventType === 'tool_call_start') {
       st.sawTools = true;
       st.sawStarted = false;
@@ -385,21 +477,31 @@
       if (toolId && name && name !== 'unknown') st.toolNameById[toolId] = name;
       const args = String(data?.args ?? '').trim();
       if (args) st.auxText = args;
-      upsertStep(st.stepTitle, args || undefined);
+      if (collectDetails) upsertStep(st.stepTitle, args || undefined);
     } else if (eventType === 'tool_call_delta') {
       st.sawTools = true;
       st.sawStarted = false;
       const toolId = String(data?.tool_call_id ?? '').trim() || 'unknown';
       const delta = String(data?.delta ?? '');
       if (toolId && toolId !== 'unknown') st.toolCallIds.add(toolId);
-      st.toolArgsById[toolId] = (st.toolArgsById[toolId] ?? '') + delta;
+      if (collectDetails) {
+        st.toolArgsById[toolId] = (st.toolArgsById[toolId] ?? '') + delta;
+      } else if (preserveAuxPreview) {
+        st.toolArgsById[toolId] = summarizePreviewText(
+          `${st.toolArgsById[toolId] ?? ''}${delta}`,
+        );
+      }
       const toolName = st.toolNameById[toolId];
       st.stepKind = 'tool';
       st.stepTitle = toolName
         ? $_('stream.toolArgs', { values: { name: toolName } })
         : $_('stream.toolArgsFallback');
-      st.auxText = st.toolArgsById[toolId];
-      upsertStep(st.stepTitle, st.auxText);
+      if (collectDetails) {
+        st.auxText = st.toolArgsById[toolId];
+        upsertStep(st.stepTitle, st.auxText);
+      } else if (preserveAuxPreview) {
+        st.auxText = summarizePreviewText(st.toolArgsById[toolId]);
+      }
     } else if (eventType === 'tool_call_result') {
       st.sawTools = true;
       st.sawStarted = false;
@@ -430,7 +532,7 @@
           toolResultBody = checklist;
         }
       }
-      upsertStep(st.stepTitle, toolResultBody);
+      if (collectDetails) upsertStep(st.stepTitle, toolResultBody);
       if (toolId && (isTodoRuntimeToolName(toolName) || runtimeToolName)) {
         const resultRecord =
           data?.result && typeof data.result === 'object' && !Array.isArray(data.result)
@@ -454,13 +556,15 @@
       st.stepKind = 'content';
       st.stepTitle = $_('stream.response');
       const delta = String(data?.delta ?? '');
-      st.contentText = (st.contentText || '') + delta;
-      if (smoothContentStreaming && variant === 'chat') {
-        pushSmoothedDelta(delta);
-      } else {
-        smoothPendingText = '';
-        cancelSmoothTimer();
-        smoothedContentText = st.contentText || '';
+      if (collectContent) {
+        st.contentText = (st.contentText || '') + delta;
+        if (smoothContentStreaming && variant === 'chat') {
+          pushSmoothedDelta(delta);
+        } else {
+          smoothPendingText = '';
+          cancelSmoothTimer();
+          smoothedContentText = st.contentText || '';
+        }
       }
     } else if (eventType === 'done' || eventType === 'error') {
       st.endedAtMs = ts;
@@ -490,33 +594,125 @@
     };
   };
 
+  const applyEventsSummary = (
+    events: Array<{ eventType: string; data: any; sequence: number; createdAt?: string }>,
+  ) => {
+    for (const ev of events) {
+      applyEvent(ev.eventType, ev.data, ev.sequence, ev.createdAt, {
+        collectDetails: false,
+        collectContent: false,
+        preserveAuxPreview: showRuntimeInlinePreview,
+      });
+    }
+    st = {
+      ...st,
+      toolCallIds: new Set(st.toolCallIds),
+      toolArgsById: { ...st.toolArgsById },
+      toolNameById: { ...st.toolNameById },
+      steps: [],
+      todoCards: [...st.todoCards],
+    };
+  };
+
+  const shouldDeferCollapsedDetails = () =>
+    deferCollapsedDetails &&
+    subscriptionMode === 'passive' &&
+    !st.expanded;
+
+  const formatDuration = (inputMs: number | null): string => {
+    if (!Number.isFinite(inputMs) || inputMs === null || inputMs < 0) {
+      return '0mn00s';
+    }
+    const totalSeconds = Math.max(0, Math.floor(inputMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}mn${String(seconds).padStart(2, '0')}s`;
+  };
+
+  const compactReasoningEffortLabel = (value: string | null): string => {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    const direct = trimmed.split(' (via ')[0]?.trim() ?? '';
+    if (direct) return direct;
+    return trimmed;
+  };
+
+  const summarizePassiveHistoryShell = (
+    summary:
+      | {
+          hasReasoning: boolean;
+          hasTools: boolean;
+          toolCount: number;
+          contextBudgetPct: number | null;
+          durationMs: number | null;
+          reasoningEffortLabel: string | null;
+        }
+      | undefined,
+  ): { visible: boolean; heading: string } => {
+    if (!summary) return { visible: false, heading: '' };
+    const effortLabel = compactReasoningEffortLabel(summary.reasoningEffortLabel);
+    if (summary.hasReasoning && summary.hasTools) {
+      return {
+        visible: true,
+        heading: [
+          `${$_('stream.reasoning')}${effortLabel ? ` ${effortLabel}` : ''} ${formatDuration(summary.durationMs)}`.trim(),
+          $_('stream.toolCalls', {
+            values: { count: Math.max(1, summary.toolCount) },
+          }),
+        ].join(' - '),
+      };
+    }
+    if (summary.hasReasoning) {
+      return {
+        visible: true,
+        heading: `${$_('stream.reasoning')}${effortLabel ? ` ${effortLabel}` : ''} ${formatDuration(summary.durationMs)}`.trim(),
+      };
+    }
+    if (summary.hasTools) {
+      return {
+        visible: true,
+        heading: $_('stream.toolCalls', {
+          values: { count: Math.max(1, summary.toolCount) },
+        }),
+      };
+    }
+    if (summary.contextBudgetPct !== null) {
+      return {
+        visible: true,
+        heading: $_('stream.contextOccupancy', {
+          values: { pct: summary.contextBudgetPct },
+        }),
+      };
+    }
+    return { visible: false, heading: '' };
+  };
+
+  const hydrateDeferredDetails = () => {
+    if (!initialEvents || initialEvents.length === 0) return;
+    if (detailHydrated) return;
+    const keepExpanded = st.expanded;
+    reset();
+    st = { ...st, expanded: keepExpanded };
+    applyEvents(initialEvents as any);
+    detailHydrated = true;
+    detailLoaded = true;
+    detailDomMounted = true;
+    detailLoading = false;
+    lastInitialEventCount = initialEvents.length;
+    lastInitialEventsRef = initialEvents;
+  };
+
   const hydrateHistory = async () => {
+    if (subscriptionMode === 'passive') return;
     if (!streamId) return;
     if (initialEvents && initialEvents.length > 0) {
       applyEvents(initialEvents as any);
       detailLoaded = true;
       return;
     }
-    if (historySource === 'none') return;
-    try {
-      detailLoading = true;
-      if (historySource === 'stream') {
-        const res = await apiGet<{ streamId: string; events: Array<{ eventType: string; data: any; sequence: number; createdAt?: string }> }>(
-          `/streams/events/${encodeURIComponent(streamId)}?limit=${historyLimit}`
-        );
-        applyEvents((res as any)?.events ?? []);
-      } else if (historySource === 'chat') {
-        const res = await apiGet<{ messageId: string; streamId: string; events: Array<{ eventType: string; data: any; sequence: number; createdAt?: string }> }>(
-          `/chat/messages/${encodeURIComponent(streamId)}/stream-events?limit=${historyLimit}`
-        );
-        applyEvents((res as any)?.events ?? []);
-      }
-      detailLoaded = true;
-    } catch {
-      // ignore
-    } finally {
-      detailLoading = false;
-    }
+    detailLoaded = false;
+    detailLoading = false;
   };
 
   const makeKey = () => `streamMessage2:${streamId}:${Math.random().toString(36).slice(2)}`;
@@ -585,6 +781,9 @@
       sawStarted: false,
       steps: [],
       todoCards: [],
+      contextBudgetPct: null,
+      contextBudgetZone: 'normal',
+      contextCompactionStrip: '',
       expanded: initiallyExpanded,
       lastSeq: 0
     };
@@ -592,14 +791,19 @@
     smoothPendingText = '';
     detailLoading = false;
     detailLoaded = false;
+    detailHydrated = false;
+    detailDomMounted = false;
     lastInitialEventsRef = null;
+    lastInitialEventCount = 0;
     terminalNotified = false;
   };
 
   $: if (streamId && streamId !== subscribedTo) {
-    unsubscribe();
-    reset();
-    void subscribe(streamId);
+    if (subscriptionMode === 'live') {
+      unsubscribe();
+      reset();
+      void subscribe(streamId);
+    }
   }
 
   onDestroy(() => {
@@ -613,37 +817,126 @@
     smoothedContentText = st.contentText || '';
   }
 
-  $: hasSteps = st.sawReasoning || st.sawTools;
-  $: hasContent = !!st.contentText && st.contentText.trim().length > 0;
-  $: hasAcknowledgement =
-    typeof acknowledgementText === 'string' &&
-    acknowledgementText.trim().length > 0;
-  $: showStartup = !!st.sawStarted && !hasSteps && !hasContent && !finalContent;
-  $: toolsCount = st.toolCallIds.size;
-  $: durationMs = (st.endedAtMs ?? Date.now()) - st.startedAtMs;
-  // "Chargement du détail…" est un waiter UX pour le chat (détail tools/reasoning d'un message déjà finalisé),
-  // mais il n'a pas de sens pour les jobs (sinon on voit le waiter pendant les états pending).
-  $: showDetailLoader =
-    variant === 'chat' &&
-    (historyPending || detailLoading) &&
-    !detailLoaded &&
-    !hasSteps &&
-    !showStartup &&
-    !!finalContent;
+  $: {
+    st;
+    finalText;
+    acknowledgementText;
+    historyPending;
+    detailLoading;
+    detailLoaded;
+    variant;
+    subscriptionMode;
+    hasSteps = st.sawReasoning || st.sawTools || st.steps.length > 0;
+    hasContent = !!st.contentText && st.contentText.trim().length > 0;
+    hasAcknowledgement =
+      typeof acknowledgementText === 'string' &&
+      acknowledgementText.trim().length > 0;
+    showStartup = !!st.sawStarted && !hasSteps && !hasContent && !finalText;
+    toolsCount = st.toolCallIds.size;
+    const passiveHistoryShell = summarizePassiveHistoryShell(runtimeSummary);
+    hasPassiveHistoryShell =
+      variant === 'chat' &&
+      subscriptionMode === 'passive' &&
+      !hasContent &&
+      passiveHistoryShell.visible;
+    passiveHistoryShellHeading = passiveHistoryShell.heading;
+    durationMs =
+      variant === 'chat' &&
+      subscriptionMode === 'passive' &&
+      runtimeSummary?.durationMs !== null &&
+      runtimeSummary?.durationMs !== undefined
+        ? runtimeSummary.durationMs
+        : (st.endedAtMs ?? Date.now()) - st.startedAtMs;
+    showDetailLoader =
+      (
+        variant === 'chat' &&
+        subscriptionMode === 'live' &&
+        (historyPending || detailLoading) &&
+        !detailLoaded &&
+        !hasSteps &&
+        !showStartup &&
+        !!finalText
+      ) ||
+      (
+        variant === 'chat' &&
+        subscriptionMode === 'passive' &&
+        detailLoading &&
+        !detailLoaded &&
+        st.expanded
+      );
+  }
 
   // Si le parent injecte les events après coup (batch), on les applique sans re-fetch
   $: if (initialEvents && initialEvents !== lastInitialEventsRef) {
+    const previousInitialEventsRef = lastInitialEventsRef;
     lastInitialEventsRef = initialEvents;
-    if (initialEvents.length > 0) applyEvents(initialEvents as any);
-    detailLoaded = true;
+    if (subscriptionMode === 'passive') {
+      const firstSeq = Number(initialEvents[0]?.sequence ?? 0);
+      const lastSeqInBatch = Number(initialEvents.at(-1)?.sequence ?? 0);
+      const sameWindow =
+        initialEvents.length === lastInitialEventCount &&
+        lastSeqInBatch === st.lastSeq &&
+        (initialEvents.length === 0 || firstSeq <= st.lastSeq);
+      const deferDetails = shouldDeferCollapsedDetails();
+      const isDeferredDetailUpgrade =
+        deferCollapsedDetails &&
+        subscriptionMode === 'passive' &&
+        st.expanded &&
+        initialEvents.length > 0 &&
+        initialEvents !== previousInitialEventsRef;
+      const shouldReplayFromScratch =
+        isDeferredDetailUpgrade ||
+        !sameWindow &&
+        (
+          st.lastSeq === 0 ||
+          initialEvents.length < lastInitialEventCount ||
+          (initialEvents.length > 0 && firstSeq > st.lastSeq)
+        );
+      if (shouldReplayFromScratch) {
+        const keepExpanded = st.expanded;
+        unsubscribe();
+        reset();
+        st = { ...st, expanded: keepExpanded };
+      }
+      if (initialEvents.length > 0) {
+        if (deferDetails) {
+          const keepExpanded = st.expanded;
+          reset();
+          st = { ...st, expanded: keepExpanded };
+          applyEventsSummary(initialEvents as any);
+          detailHydrated = false;
+        } else {
+          const nextEvents = shouldReplayFromScratch
+            ? initialEvents
+            : initialEvents.filter((event) => Number(event.sequence) > st.lastSeq);
+          if (nextEvents.length > 0) {
+            applyEvents(nextEvents as any);
+          }
+          detailHydrated = true;
+          detailDomMounted = true;
+        }
+      }
+    } else if (initialEvents.length > 0) {
+      applyEvents(initialEvents as any);
+      detailHydrated = true;
+      detailDomMounted = true;
+    }
+    lastInitialEventCount = initialEvents.length;
+    detailLoaded = !shouldDeferCollapsedDetails();
     detailLoading = false;
   }
+
 </script>
 
 <div class="w-full max-w-full">
     {#if variant === 'chat' && hasAcknowledgement}
       <div class="text-[11px] text-slate-500 mt-0.5">
         {acknowledgementText}
+      </div>
+    {/if}
+    {#if variant === 'chat' && st.contextCompactionStrip}
+      <div class="mt-1 rounded border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] text-slate-700">
+        {st.contextCompactionStrip}
       </div>
     {/if}
     {#if showDetailLoader}
@@ -660,33 +953,65 @@
         </button>
       </div>
     {/if}
-    {#if hasSteps && (hasContent || !!finalContent || (variant === 'job' && isTerminalStatus(status)))}
+    {#if hasSteps || hasPassiveHistoryShell}
       <div class="flex items-center justify-between gap-2 mt-0.5">
         <div class="text-[11px] text-slate-500">
-          {#if st.sawReasoning}{$_('stream.reasoning')} {Math.max(0, Math.floor(durationMs / 60000))}m{String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, '0')}s{/if}
-          {#if st.sawReasoning && toolsCount > 0}, {/if}
-          {#if toolsCount > 0}{$_('stream.toolCalls', { values: { count: toolsCount } })}{/if}
+          {#if subscriptionMode === 'passive' && !showRuntimeInlinePreview && passiveHistoryShellHeading}
+            {passiveHistoryShellHeading}
+          {:else if hasSteps}
+            {#if st.sawReasoning}{$_('stream.reasoning')} {Math.max(0, Math.floor(durationMs / 60000))}m{String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, '0')}s{/if}
+            {#if st.sawReasoning && toolsCount > 0}, {/if}
+            {#if toolsCount > 0}{$_('stream.toolCalls', { values: { count: toolsCount } })}{/if}
+            {#if st.contextBudgetPct !== null}
+              {#if st.sawReasoning || toolsCount > 0}, {/if}
+              {$_('stream.contextOccupancy', { values: { pct: st.contextBudgetPct } })}
+            {/if}
+          {/if}
         </div>
         <button
           class="text-slate-500 hover:text-slate-700 p-1 rounded hover:bg-slate-100 shrink-0"
           type="button"
           aria-label={st.expanded ? $_('stream.actions.collapseDetails') : $_('stream.actions.expandDetails')}
-          on:click={() => st = { ...st, expanded: !st.expanded }}
+          on:click={async () => {
+            const shouldHydrateDetails =
+              deferCollapsedDetails &&
+              subscriptionMode === 'passive' &&
+              !detailHydrated &&
+              !st.expanded;
+            if (!st.expanded && shouldHydrateDetails) {
+              if (requestDeferredDetails) {
+                detailLoading = true;
+                try {
+                  await requestDeferredDetails();
+                } finally {
+                  detailLoading = false;
+                }
+              } else {
+                hydrateDeferredDetails();
+              }
+              detailDomMounted = true;
+              st = { ...st, expanded: true };
+              return;
+            }
+            const nextExpanded = !st.expanded;
+            if (nextExpanded) detailDomMounted = true;
+            st = { ...st, expanded: nextExpanded };
+          }}
         >
           <ChevronDown
             class="w-4 h-4 transition-transform duration-150 {st.expanded ? 'rotate-180' : ''}"
           />
         </button>
       </div>
-      {#if st.expanded}
-        <div class="mt-1 bg-transparent border border-slate-100 rounded p-2">
+      {#if detailDomMounted}
+        <div class="mt-1 bg-transparent border border-slate-100 rounded p-2" class:hidden={!st.expanded}>
           <ul class="space-y-2">
             {#each st.steps as step, i (i)}
               <li class="text-[11px] text-slate-600">
                 <div class="font-medium text-slate-600">{step.title}</div>
                 {#if step.body}
                   <div
-                    class="mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto slim-scroll [&_*]:text-slate-400"
+                    class="stream-aux-markdown mt-0.5 text-slate-400 whitespace-pre-wrap break-words max-h-24 overflow-y-auto slim-scroll [&_*]:text-slate-400"
                     use:scrollToEnd
                   >
                     {#if step.kind === 'reasoning' || step.kind === 'tool'}
@@ -709,17 +1034,17 @@
           <Streamdown content={displayContent} />
         </div>
       {:else}
-        {#if showStartup}
+        {#if showStartup && showRuntimeInlinePreview}
           <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
             <Loader2 class="w-3.5 h-3.5 animate-spin" />
             <span>{$_('stream.preparing')}</span>
           </div>
         {/if}
-        {#if hasSteps && !hasContent}
+        {#if hasSteps && !hasContent && showRuntimeInlinePreview}
           <div class="text-[11px] text-slate-500">{$_('stream.stepRunning', { values: { title: st.stepTitle || $_('stream.inProgress') } })}</div>
           {#if st.auxText}
             <div
-              class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll [&_*]:text-slate-400"
+              class="stream-aux-markdown mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll [&_*]:text-slate-400"
               use:scrollToEnd
             >
               {#if st.stepKind === 'reasoning' || st.stepKind === 'tool'}
@@ -806,5 +1131,57 @@
   .chatMarkdown :global(td) {
     padding: 0.2rem 0.35rem;
     vertical-align: top;
+  }
+
+  /* Keep code blocks and inline code aligned with message text size. */
+  .chatMarkdown :global(code),
+  .stream-aux-markdown :global(code),
+  .chatMarkdown :global(pre code),
+  .stream-aux-markdown :global(pre code),
+  .chatMarkdown :global(pre code *),
+  .stream-aux-markdown :global(pre code *) {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+
+  /* Streamdown can inject wrappers with text-sm around fenced code.
+     Keep code typography aligned with chat body size in all hosts (web + VSCode). */
+  .chatMarkdown :global(.text-sm),
+  .stream-aux-markdown :global(.text-sm) {
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+
+  .chatMarkdown :global(pre),
+  .stream-aux-markdown :global(pre),
+  .chatMarkdown :global(.shiki),
+  .stream-aux-markdown :global(.shiki),
+  .chatMarkdown :global([data-rehype-pretty-code-fragment]),
+  .stream-aux-markdown :global([data-rehype-pretty-code-fragment]),
+  .chatMarkdown :global([data-rehype-pretty-code-figure]),
+  .stream-aux-markdown :global([data-rehype-pretty-code-figure]) {
+    margin: 0.35rem 0;
+    padding: 0 !important;
+    border-radius: 0.375rem;
+    overflow: auto;
+    font-size: inherit !important;
+    line-height: inherit !important;
+  }
+
+  .chatMarkdown :global(pre > code),
+  .stream-aux-markdown :global(pre > code),
+  .chatMarkdown :global(.shiki > code),
+  .stream-aux-markdown :global(.shiki > code) {
+    display: block;
+    padding: 0.55rem 0.7rem !important;
+    white-space: pre;
+  }
+
+  .chatMarkdown :global([data-rehype-pretty-code-fragment] pre),
+  .stream-aux-markdown :global([data-rehype-pretty-code-fragment] pre),
+  .chatMarkdown :global([data-rehype-pretty-code-figure] pre),
+  .stream-aux-markdown :global([data-rehype-pretty-code-figure] pre) {
+    margin: 0 !important;
+    border: 0 !important;
   }
 </style>

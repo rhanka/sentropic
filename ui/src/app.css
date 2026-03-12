@@ -183,3 +183,686 @@ body {
 .slim-scroll:hover::-webkit-scrollbar-thumb {
   background-color: rgba(15, 23, 42, 0.32);
 }
+
+/* Web app theme preference (system|light|dark) */
+.topai-theme-dark body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+.topai-theme-dark .bg-white {
+  background-color: #0f172a !important;
+}
+
+.topai-theme-dark .bg-slate-50,
+.topai-theme-dark .bg-slate-50\/70 {
+  background-color: #111827 !important;
+}
+
+.topai-theme-dark .bg-slate-100 {
+  background-color: #1f2937 !important;
+}
+
+.topai-theme-dark .border-slate-100,
+.topai-theme-dark .border-slate-200,
+.topai-theme-dark .border-slate-300,
+.topai-theme-dark .border-gray-200 {
+  border-color: #334155 !important;
+}
+
+.topai-theme-dark .text-slate-900,
+.topai-theme-dark .text-slate-800,
+.topai-theme-dark .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+
+.topai-theme-dark .text-slate-600,
+.topai-theme-dark .text-slate-500 {
+  color: #cbd5e1 !important;
+}
+
+.topai-theme-dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+.topai-theme-dark {
+  --topai-dark-anthracite: #1f2937;
+  --topai-dark-anthracite-hover: #2b313d;
+  --topai-dark-input-bg: #111318;
+  --topai-dark-input-fg: #e2e8f0;
+}
+
+.topai-theme-dark .bg-primary {
+  background-color: var(--topai-dark-anthracite) !important;
+  color: #e2e8f0 !important;
+}
+
+.topai-theme-dark .hover\:bg-primary\/90:hover {
+  background-color: var(--topai-dark-anthracite-hover) !important;
+}
+
+.topai-theme-dark .chat-user-bubble {
+  background-color: var(--topai-dark-anthracite) !important;
+  border: 1px solid #334155 !important;
+}
+
+.topai-theme-dark .chat-composer-footer {
+  background-color: var(--topai-dark-anthracite) !important;
+  border-top-color: #334155 !important;
+}
+
+#chat-model-selection {
+  background-color: #fff;
+  color: #334155;
+}
+
+:is(#chat-model-selection option, #chat-model-selection optgroup) {
+  background-color: #fff;
+  color: #334155;
+}
+
+.topai-theme-dark #chat-model-selection {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid #334155 !important;
+  border-radius: 0.375rem;
+  background-color: var(--topai-dark-input-bg) !important;
+  color: var(--topai-dark-input-fg) !important;
+  color-scheme: dark;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.45rem center;
+  background-size: 0.85rem;
+  padding-right: 1.65rem;
+}
+
+.topai-theme-dark :is(#chat-model-selection:hover, #chat-model-selection:focus, #chat-model-selection:active) {
+  background-color: var(--topai-dark-input-bg) !important;
+  color: var(--topai-dark-input-fg) !important;
+}
+
+.topai-theme-dark :is(#chat-model-selection option, #chat-model-selection optgroup) {
+  background-color: var(--topai-dark-input-bg) !important;
+  color: var(--topai-dark-input-fg) !important;
+}
+
+.topai-theme-dark .chat-composer-surface {
+  background-color: var(--topai-dark-input-bg) !important;
+  color: var(--topai-dark-input-fg) !important;
+}
+
+.topai-theme-dark [data-testid='todo-runtime-panel'] {
+  background-color: var(--topai-dark-anthracite) !important;
+  border-color: #334155 !important;
+}
+
+.topai-theme-dark [data-testid='todo-runtime-panel'] :is(.text-slate-700, .text-slate-600) {
+  color: #e2e8f0 !important;
+}
+
+.topai-theme-dark [data-testid='todo-runtime-panel'] :is(.text-slate-500, .text-slate-400) {
+  color: #94a3b8 !important;
+}
+
+.topai-theme-dark [data-testid='todo-runtime-panel'] .border-slate-400 {
+  border-color: #334155 !important;
+}
+
+.topai-theme-dark .chat-delete-confirm-surface {
+  background-color: #111827 !important;
+  border-color: #334155 !important;
+}
+
+.topai-theme-dark .chat-delete-confirm-surface .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+
+.topai-theme-dark .extension-main-tabs {
+  background-color: var(--topai-dark-anthracite) !important;
+  border: 1px solid #334155 !important;
+}
+
+.topai-theme-dark .extension-main-tab {
+  color: rgb(226 232 240 / 0.72) !important;
+}
+
+.topai-theme-dark .extension-main-tab:hover {
+  background-color: var(--topai-dark-anthracite-hover) !important;
+  color: #e2e8f0 !important;
+}
+
+.topai-theme-dark .extension-main-tab-active {
+  background-color: var(--topai-dark-anthracite-hover) !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #334155 !important;
+  box-shadow: none !important;
+}
+
+.topai-theme-dark .extension-provider-readiness-badge {
+  background-color: var(--topai-dark-anthracite) !important;
+  border: 1px solid #334155 !important;
+}
+
+.topai-theme-dark .extension-provider-readiness-ready {
+  color: #86efac !important;
+}
+
+.topai-theme-dark .extension-provider-readiness-not-ready {
+  color: rgb(226 232 240 / 0.82) !important;
+}
+
+/* VSCode host theme parity */
+body.vscode-dark #topai-vscode-root,
+body.vscode-high-contrast #topai-vscode-root,
+body.vscode-high-contrast-light #topai-vscode-root {
+  background-color: var(--vscode-sideBar-background);
+  color: var(--vscode-foreground);
+}
+
+body.vscode-dark #topai-vscode-root .topai-chat-widget-shell,
+body.vscode-high-contrast #topai-vscode-root .topai-chat-widget-shell,
+body.vscode-high-contrast-light #topai-vscode-root .topai-chat-widget-shell {
+  background-color: var(--vscode-sideBar-background) !important;
+  color: var(--vscode-foreground) !important;
+  border-color: var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root .bg-white,
+body.vscode-dark #topai-vscode-root .bg-slate-50,
+body.vscode-dark #topai-vscode-root .bg-slate-100,
+body.vscode-high-contrast #topai-vscode-root .bg-white,
+body.vscode-high-contrast #topai-vscode-root .bg-slate-50,
+body.vscode-high-contrast #topai-vscode-root .bg-slate-100,
+body.vscode-high-contrast-light #topai-vscode-root .bg-white,
+body.vscode-high-contrast-light #topai-vscode-root .bg-slate-50,
+body.vscode-high-contrast-light #topai-vscode-root .bg-slate-100 {
+  background-color: var(--vscode-sideBar-background) !important;
+}
+
+body.vscode-dark #topai-vscode-root .border-slate-100,
+body.vscode-dark #topai-vscode-root .border-slate-200,
+body.vscode-dark #topai-vscode-root .border-slate-300,
+body.vscode-dark #topai-vscode-root .border-gray-200,
+body.vscode-high-contrast #topai-vscode-root .border-slate-100,
+body.vscode-high-contrast #topai-vscode-root .border-slate-200,
+body.vscode-high-contrast #topai-vscode-root .border-slate-300,
+body.vscode-high-contrast #topai-vscode-root .border-gray-200,
+body.vscode-high-contrast-light #topai-vscode-root .border-slate-100,
+body.vscode-high-contrast-light #topai-vscode-root .border-slate-200,
+body.vscode-high-contrast-light #topai-vscode-root .border-slate-300,
+body.vscode-high-contrast-light #topai-vscode-root .border-gray-200 {
+  border-color: var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root .text-slate-900,
+body.vscode-dark #topai-vscode-root .text-slate-800,
+body.vscode-dark #topai-vscode-root .text-slate-700,
+body.vscode-dark #topai-vscode-root .text-slate-600,
+body.vscode-dark #topai-vscode-root .text-slate-500,
+body.vscode-high-contrast #topai-vscode-root .text-slate-900,
+body.vscode-high-contrast #topai-vscode-root .text-slate-800,
+body.vscode-high-contrast #topai-vscode-root .text-slate-700,
+body.vscode-high-contrast #topai-vscode-root .text-slate-600,
+body.vscode-high-contrast #topai-vscode-root .text-slate-500,
+body.vscode-high-contrast-light #topai-vscode-root .text-slate-900,
+body.vscode-high-contrast-light #topai-vscode-root .text-slate-800,
+body.vscode-high-contrast-light #topai-vscode-root .text-slate-700,
+body.vscode-high-contrast-light #topai-vscode-root .text-slate-600,
+body.vscode-high-contrast-light #topai-vscode-root .text-slate-500 {
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root .bg-red-50,
+body.vscode-high-contrast #topai-vscode-root .bg-red-50,
+body.vscode-high-contrast-light #topai-vscode-root .bg-red-50 {
+  background-color: color-mix(in srgb, var(--vscode-errorForeground) 18%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root .border-red-200,
+body.vscode-high-contrast #topai-vscode-root .border-red-200,
+body.vscode-high-contrast-light #topai-vscode-root .border-red-200 {
+  border-color: color-mix(in srgb, var(--vscode-errorForeground) 38%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root .text-red-700,
+body.vscode-high-contrast #topai-vscode-root .text-red-700,
+body.vscode-high-contrast-light #topai-vscode-root .text-red-700 {
+  color: var(--vscode-errorForeground) !important;
+}
+
+body.vscode-dark #topai-vscode-root .bg-green-50,
+body.vscode-high-contrast #topai-vscode-root .bg-green-50,
+body.vscode-high-contrast-light #topai-vscode-root .bg-green-50 {
+  background-color: color-mix(in srgb, var(--vscode-testing-iconPassed) 18%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root .border-green-200,
+body.vscode-high-contrast #topai-vscode-root .border-green-200,
+body.vscode-high-contrast-light #topai-vscode-root .border-green-200 {
+  border-color: color-mix(in srgb, var(--vscode-testing-iconPassed) 38%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root .text-green-700,
+body.vscode-high-contrast #topai-vscode-root .text-green-700,
+body.vscode-high-contrast-light #topai-vscode-root .text-green-700 {
+  color: var(--vscode-testing-iconPassed) !important;
+}
+
+body.vscode-dark #topai-vscode-root .extension-test-api-button,
+body.vscode-high-contrast #topai-vscode-root .extension-test-api-button,
+body.vscode-high-contrast-light #topai-vscode-root .extension-test-api-button {
+  background-color: transparent !important;
+  color: var(--vscode-foreground) !important;
+  border-color: var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root .extension-test-api-button:hover,
+body.vscode-high-contrast #topai-vscode-root .extension-test-api-button:hover,
+body.vscode-high-contrast-light #topai-vscode-root .extension-test-api-button:hover {
+  background-color: var(--vscode-toolbar-hoverBackground) !important;
+}
+
+#topai-vscode-root .extension-test-api-button {
+  background-color: transparent !important;
+  color: var(--vscode-foreground) !important;
+  border-color: var(--vscode-panel-border) !important;
+}
+
+#topai-vscode-root .extension-test-api-button:hover {
+  background-color: var(--vscode-toolbar-hoverBackground) !important;
+}
+
+body.vscode-dark #topai-vscode-root,
+body.vscode-high-contrast #topai-vscode-root,
+body.vscode-high-contrast-light #topai-vscode-root {
+  --topai-vscode-anthracite: var(--vscode-input-background, #1f2937);
+  --topai-vscode-anthracite-hover: color-mix(
+    in srgb,
+    var(--topai-vscode-anthracite) 82%,
+    #ffffff 18%
+  );
+  --topai-vscode-code-bg: var(--topai-vscode-anthracite);
+}
+
+body.vscode-dark #topai-vscode-root .bg-primary,
+body.vscode-high-contrast #topai-vscode-root .bg-primary,
+body.vscode-high-contrast-light #topai-vscode-root .bg-primary {
+  background-color: var(--topai-vscode-anthracite) !important;
+  color: var(--vscode-button-foreground, var(--vscode-foreground)) !important;
+}
+
+body.vscode-dark #topai-vscode-root .hover\:bg-primary\/90:hover,
+body.vscode-high-contrast #topai-vscode-root .hover\:bg-primary\/90:hover,
+body.vscode-high-contrast-light #topai-vscode-root .hover\:bg-primary\/90:hover {
+  background-color: var(--topai-vscode-anthracite-hover) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-user-bubble,
+body.vscode-high-contrast #topai-vscode-root .chat-user-bubble,
+body.vscode-high-contrast-light #topai-vscode-root .chat-user-bubble {
+  background-color: var(--topai-vscode-anthracite) !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-composer-footer,
+body.vscode-high-contrast #topai-vscode-root .chat-composer-footer,
+body.vscode-high-contrast-light #topai-vscode-root .chat-composer-footer {
+  background-color: var(--topai-vscode-anthracite) !important;
+  border-top-color: var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root #chat-model-selection,
+body.vscode-high-contrast #topai-vscode-root #chat-model-selection,
+body.vscode-high-contrast-light #topai-vscode-root #chat-model-selection {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--vscode-panel-border) !important;
+  border-radius: 0.375rem;
+  background-color: var(--vscode-input-background, var(--topai-vscode-anthracite)) !important;
+  color: var(--vscode-input-foreground, var(--vscode-foreground)) !important;
+  color-scheme: dark;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.45rem center;
+  background-size: 0.85rem;
+  padding-right: 1.65rem;
+}
+
+body.vscode-dark #topai-vscode-root #chat-model-selection:hover,
+body.vscode-dark #topai-vscode-root #chat-model-selection:focus,
+body.vscode-dark #topai-vscode-root #chat-model-selection:active,
+body.vscode-high-contrast #topai-vscode-root #chat-model-selection:hover,
+body.vscode-high-contrast #topai-vscode-root #chat-model-selection:focus,
+body.vscode-high-contrast #topai-vscode-root #chat-model-selection:active,
+body.vscode-high-contrast-light #topai-vscode-root #chat-model-selection:hover,
+body.vscode-high-contrast-light #topai-vscode-root #chat-model-selection:focus,
+body.vscode-high-contrast-light #topai-vscode-root #chat-model-selection:active {
+  background-color: var(--vscode-input-background, var(--topai-vscode-anthracite)) !important;
+  color: var(--vscode-input-foreground, var(--vscode-foreground)) !important;
+}
+
+body.vscode-dark #topai-vscode-root #chat-model-selection option,
+body.vscode-dark #topai-vscode-root #chat-model-selection optgroup,
+body.vscode-high-contrast #topai-vscode-root #chat-model-selection option,
+body.vscode-high-contrast #topai-vscode-root #chat-model-selection optgroup,
+body.vscode-high-contrast-light #topai-vscode-root #chat-model-selection option,
+body.vscode-high-contrast-light #topai-vscode-root #chat-model-selection optgroup {
+  background-color: var(--vscode-input-background, var(--topai-vscode-anthracite)) !important;
+  color: var(--vscode-input-foreground, var(--vscode-foreground)) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-composer-surface,
+body.vscode-high-contrast #topai-vscode-root .chat-composer-surface,
+body.vscode-high-contrast-light #topai-vscode-root .chat-composer-surface {
+  background-color: var(--vscode-input-background) !important;
+  color: var(--vscode-input-foreground, var(--vscode-foreground)) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-composer-stop-button:hover,
+body.vscode-high-contrast #topai-vscode-root .chat-composer-stop-button:hover,
+body.vscode-high-contrast-light #topai-vscode-root .chat-composer-stop-button:hover {
+  background-color: var(--topai-vscode-anthracite-hover) !important;
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-tool-permission-choice,
+body.vscode-high-contrast #topai-vscode-root .chat-tool-permission-choice,
+body.vscode-high-contrast-light #topai-vscode-root .chat-tool-permission-choice {
+  background-color: var(--topai-vscode-anthracite) !important;
+  border-color: var(--vscode-panel-border) !important;
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-tool-permission-choice:hover,
+body.vscode-high-contrast #topai-vscode-root .chat-tool-permission-choice:hover,
+body.vscode-high-contrast-light #topai-vscode-root .chat-tool-permission-choice:hover {
+  background-color: var(--topai-vscode-anthracite-hover) !important;
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-checkpoint-choice,
+body.vscode-high-contrast #topai-vscode-root .chat-checkpoint-choice,
+body.vscode-high-contrast-light #topai-vscode-root .chat-checkpoint-choice {
+  background-color: var(--topai-vscode-anthracite) !important;
+  border-color: var(--vscode-panel-border) !important;
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-checkpoint-choice:hover,
+body.vscode-high-contrast #topai-vscode-root .chat-checkpoint-choice:hover,
+body.vscode-high-contrast-light #topai-vscode-root .chat-checkpoint-choice:hover {
+  background-color: var(--topai-vscode-anthracite-hover) !important;
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root [data-testid='todo-runtime-panel'],
+body.vscode-high-contrast #topai-vscode-root [data-testid='todo-runtime-panel'],
+body.vscode-high-contrast-light #topai-vscode-root [data-testid='todo-runtime-panel'] {
+  background-color: var(--topai-vscode-anthracite) !important;
+  border-color: var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root [data-testid='todo-runtime-panel'] :is(.text-slate-700, .text-slate-600),
+body.vscode-high-contrast #topai-vscode-root [data-testid='todo-runtime-panel'] :is(.text-slate-700, .text-slate-600),
+body.vscode-high-contrast-light #topai-vscode-root [data-testid='todo-runtime-panel'] :is(.text-slate-700, .text-slate-600) {
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root [data-testid='todo-runtime-panel'] :is(.text-slate-500, .text-slate-400),
+body.vscode-high-contrast #topai-vscode-root [data-testid='todo-runtime-panel'] :is(.text-slate-500, .text-slate-400),
+body.vscode-high-contrast-light #topai-vscode-root [data-testid='todo-runtime-panel'] :is(.text-slate-500, .text-slate-400) {
+  color: color-mix(in srgb, var(--vscode-foreground) 70%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root [data-testid='todo-runtime-panel'] .border-slate-400,
+body.vscode-high-contrast #topai-vscode-root [data-testid='todo-runtime-panel'] .border-slate-400,
+body.vscode-high-contrast-light #topai-vscode-root [data-testid='todo-runtime-panel'] .border-slate-400 {
+  border-color: color-mix(in srgb, var(--vscode-foreground) 78%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-delete-confirm-surface,
+body.vscode-high-contrast #topai-vscode-root .chat-delete-confirm-surface,
+body.vscode-high-contrast-light #topai-vscode-root .chat-delete-confirm-surface {
+  background-color: var(--vscode-editorWidget-background, var(--vscode-sideBar-background)) !important;
+  border-color: var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-delete-confirm-surface .text-slate-700,
+body.vscode-high-contrast #topai-vscode-root .chat-delete-confirm-surface .text-slate-700,
+body.vscode-high-contrast-light #topai-vscode-root .chat-delete-confirm-surface .text-slate-700 {
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root :is(.chat-edit-action-primary, .chat-edit-action-secondary),
+body.vscode-high-contrast #topai-vscode-root :is(.chat-edit-action-primary, .chat-edit-action-secondary),
+body.vscode-high-contrast-light #topai-vscode-root :is(.chat-edit-action-primary, .chat-edit-action-secondary) {
+  background-color: var(--topai-vscode-anthracite) !important;
+  border-color: var(--vscode-panel-border) !important;
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root :is(.chat-edit-action-primary, .chat-edit-action-secondary):hover,
+body.vscode-high-contrast #topai-vscode-root :is(.chat-edit-action-primary, .chat-edit-action-secondary):hover,
+body.vscode-high-contrast-light #topai-vscode-root :is(.chat-edit-action-primary, .chat-edit-action-secondary):hover {
+  background-color: var(--topai-vscode-anthracite-hover) !important;
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-message-action-button,
+body.vscode-high-contrast #topai-vscode-root .chat-message-action-button,
+body.vscode-high-contrast-light #topai-vscode-root .chat-message-action-button {
+  color: color-mix(in srgb, var(--vscode-foreground) 70%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-danger-action-button,
+body.vscode-high-contrast #topai-vscode-root .chat-danger-action-button,
+body.vscode-high-contrast-light #topai-vscode-root .chat-danger-action-button {
+  background-color: transparent !important;
+  color: color-mix(in srgb, var(--vscode-foreground) 70%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-danger-action-button svg,
+body.vscode-high-contrast #topai-vscode-root .chat-danger-action-button svg,
+body.vscode-high-contrast-light #topai-vscode-root .chat-danger-action-button svg {
+  color: inherit !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-danger-action-button:hover,
+body.vscode-high-contrast #topai-vscode-root .chat-danger-action-button:hover,
+body.vscode-high-contrast-light #topai-vscode-root .chat-danger-action-button:hover {
+  background-color: var(--topai-vscode-anthracite-hover) !important;
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root .chat-danger-action-button:hover svg,
+body.vscode-high-contrast #topai-vscode-root .chat-danger-action-button:hover svg,
+body.vscode-high-contrast-light #topai-vscode-root .chat-danger-action-button:hover svg {
+  color: inherit !important;
+}
+
+.topai-theme-dark .chat-danger-action-button {
+  background-color: transparent !important;
+  color: #94a3b8 !important;
+}
+
+.topai-theme-dark .chat-danger-action-button svg {
+  color: inherit !important;
+}
+
+.topai-theme-dark .chat-danger-action-button:hover {
+  background-color: #1f2937 !important;
+  color: #e2e8f0 !important;
+}
+
+.topai-theme-dark .chat-danger-action-button:hover svg {
+  color: inherit !important;
+}
+
+body.vscode-dark #topai-vscode-root :is(.hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover, .hover\:bg-slate-200:hover),
+body.vscode-high-contrast #topai-vscode-root :is(.hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover, .hover\:bg-slate-200:hover),
+body.vscode-high-contrast-light #topai-vscode-root :is(.hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover, .hover\:bg-slate-200:hover) {
+  background-color: var(--topai-vscode-anthracite-hover) !important;
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root :is(.chat-message-action-button:hover, .chat-message-action-button-active),
+body.vscode-high-contrast #topai-vscode-root :is(.chat-message-action-button:hover, .chat-message-action-button-active),
+body.vscode-high-contrast-light #topai-vscode-root :is(.chat-message-action-button:hover, .chat-message-action-button-active) {
+  background-color: var(--topai-vscode-anthracite-hover) !important;
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root .queue-status-badge-completed,
+body.vscode-high-contrast #topai-vscode-root .queue-status-badge-completed,
+body.vscode-high-contrast-light #topai-vscode-root .queue-status-badge-completed {
+  background-color: var(--topai-vscode-anthracite) !important;
+  color: var(--vscode-foreground) !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root .queue-monitor :is(.border-gray-100, .border-slate-100, .border-slate-200),
+body.vscode-high-contrast #topai-vscode-root .queue-monitor :is(.border-gray-100, .border-slate-100, .border-slate-200),
+body.vscode-high-contrast-light #topai-vscode-root .queue-monitor :is(.border-gray-100, .border-slate-100, .border-slate-200) {
+  border-color: color-mix(in srgb, var(--topai-vscode-anthracite) 85%, #ffffff 15%) !important;
+}
+
+body.vscode-dark #topai-vscode-root .extension-main-tabs,
+body.vscode-high-contrast #topai-vscode-root .extension-main-tabs,
+body.vscode-high-contrast-light #topai-vscode-root .extension-main-tabs {
+  background-color: var(--topai-vscode-anthracite) !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root .extension-main-tab,
+body.vscode-high-contrast #topai-vscode-root .extension-main-tab,
+body.vscode-high-contrast-light #topai-vscode-root .extension-main-tab {
+  color: color-mix(in srgb, var(--vscode-foreground) 72%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root .extension-main-tab:hover,
+body.vscode-high-contrast #topai-vscode-root .extension-main-tab:hover,
+body.vscode-high-contrast-light #topai-vscode-root .extension-main-tab:hover {
+  background-color: var(--topai-vscode-anthracite-hover) !important;
+  color: var(--vscode-foreground) !important;
+}
+
+body.vscode-dark #topai-vscode-root .extension-main-tab-active,
+body.vscode-high-contrast #topai-vscode-root .extension-main-tab-active,
+body.vscode-high-contrast-light #topai-vscode-root .extension-main-tab-active {
+  background-color: var(--topai-vscode-anthracite-hover) !important;
+  color: var(--vscode-foreground) !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+  box-shadow: none !important;
+}
+
+body.vscode-dark #topai-vscode-root .extension-provider-readiness-badge,
+body.vscode-high-contrast #topai-vscode-root .extension-provider-readiness-badge,
+body.vscode-high-contrast-light #topai-vscode-root .extension-provider-readiness-badge {
+  background-color: var(--topai-vscode-anthracite) !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+}
+
+body.vscode-dark #topai-vscode-root .extension-provider-readiness-ready,
+body.vscode-high-contrast #topai-vscode-root .extension-provider-readiness-ready,
+body.vscode-high-contrast-light #topai-vscode-root .extension-provider-readiness-ready {
+  color: var(--vscode-testing-iconPassed, var(--vscode-foreground)) !important;
+}
+
+body.vscode-dark #topai-vscode-root .extension-provider-readiness-not-ready,
+body.vscode-high-contrast #topai-vscode-root .extension-provider-readiness-not-ready,
+body.vscode-high-contrast-light #topai-vscode-root .extension-provider-readiness-not-ready {
+  color: color-mix(in srgb, var(--vscode-foreground) 82%, transparent) !important;
+}
+
+body.vscode-dark #topai-vscode-root
+  :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown)
+  :where(:not(pre)) > code,
+body.vscode-high-contrast #topai-vscode-root
+  :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown)
+  :where(:not(pre)) > code,
+body.vscode-high-contrast-light #topai-vscode-root
+  :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown)
+  :where(:not(pre)) > code {
+  background-color: var(--topai-vscode-code-bg) !important;
+  color: var(--vscode-editor-foreground, var(--vscode-foreground)) !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+  border-radius: 0.25rem !important;
+  padding: 0.05rem 0.3rem !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+body.vscode-dark #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre, .shiki, .astro-code, [data-rehype-pretty-code-fragment], [data-rehype-pretty-code-figure], figure),
+body.vscode-high-contrast #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre, .shiki, .astro-code, [data-rehype-pretty-code-fragment], [data-rehype-pretty-code-figure], figure),
+body.vscode-high-contrast-light #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre, .shiki, .astro-code, [data-rehype-pretty-code-fragment], [data-rehype-pretty-code-figure], figure) {
+  background-color: var(--topai-vscode-code-bg) !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+  border-radius: 0.375rem !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  margin: 0.35rem 0 !important;
+  scrollbar-color: color-mix(in srgb, var(--vscode-foreground) 42%, transparent)
+    transparent !important;
+}
+
+body.vscode-dark #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is([data-rehype-pretty-code-fragment], [data-rehype-pretty-code-figure], figure) pre,
+body.vscode-high-contrast #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is([data-rehype-pretty-code-fragment], [data-rehype-pretty-code-figure], figure) pre,
+body.vscode-high-contrast-light #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is([data-rehype-pretty-code-fragment], [data-rehype-pretty-code-figure], figure) pre {
+  margin: 0 !important;
+  border: 0 !important;
+}
+
+body.vscode-dark #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre code, .shiki code, .astro-code code),
+body.vscode-high-contrast #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre code, .shiki code, .astro-code code),
+body.vscode-high-contrast-light #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre code, .shiki code, .astro-code code) {
+  background-color: transparent !important;
+  border: 0 !important;
+  padding: 0.55rem 0.7rem !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+body.vscode-dark #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre code *, .shiki code *, .astro-code code *),
+body.vscode-high-contrast #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre code *, .shiki code *, .astro-code code *),
+body.vscode-high-contrast-light #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre code *, .shiki code *, .astro-code code *) {
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+/* Streamdown fallback wrapper (bg-gray-100 p-2 text-sm) must be neutralized in VSCode dark themes. */
+body.vscode-dark #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(div.relative.overflow-visible.bg-gray-100.p-2.font-mono.text-sm, .bg-gray-100, .bg-gray-100\/40),
+body.vscode-high-contrast #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(div.relative.overflow-visible.bg-gray-100.p-2.font-mono.text-sm, .bg-gray-100, .bg-gray-100\/40),
+body.vscode-high-contrast-light #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(div.relative.overflow-visible.bg-gray-100.p-2.font-mono.text-sm, .bg-gray-100, .bg-gray-100\/40) {
+  background-color: var(--topai-vscode-code-bg) !important;
+}
+
+body.vscode-dark #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) div.relative.overflow-visible.bg-gray-100.p-2.font-mono.text-sm,
+body.vscode-high-contrast #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) div.relative.overflow-visible.bg-gray-100.p-2.font-mono.text-sm,
+body.vscode-high-contrast-light #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) div.relative.overflow-visible.bg-gray-100.p-2.font-mono.text-sm {
+  padding: 0 !important;
+  border: 1px solid var(--vscode-panel-border) !important;
+  border-radius: 0.375rem !important;
+  margin: 0.35rem 0 !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+body.vscode-dark #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre, code, .text-sm),
+body.vscode-high-contrast #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre, code, .text-sm),
+body.vscode-high-contrast-light #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre, code, .text-sm) {
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+body.vscode-dark #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre, .shiki, .astro-code)::-webkit-scrollbar-thumb,
+body.vscode-high-contrast #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre, .shiki, .astro-code)::-webkit-scrollbar-thumb,
+body.vscode-high-contrast-light #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre, .shiki, .astro-code)::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--vscode-foreground) 42%, transparent) !important;
+  border-radius: 999px !important;
+}
+
+body.vscode-dark #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre, .shiki, .astro-code):hover::-webkit-scrollbar-thumb,
+body.vscode-high-contrast #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre, .shiki, .astro-code):hover::-webkit-scrollbar-thumb,
+body.vscode-high-contrast-light #topai-vscode-root :is(.chatMarkdown, .stream-aux-markdown, .userMarkdown, .markdown-wrapper, .prose, .streamdown) :is(pre, .shiki, .astro-code):hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--vscode-foreground) 58%, transparent) !important;
+}

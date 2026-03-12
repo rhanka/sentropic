@@ -22,7 +22,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { settingsService } from '../../services/settings';
 import {
   getModelCatalogPayload,
-  inferProviderFromModelId,
+  inferProviderFromModelIdWithLegacy,
   resolveDefaultSelection,
 } from '../../services/model-catalog';
 
@@ -143,7 +143,7 @@ meRouter.put(
       settingsService.getAISettings({ userId }),
       getModelCatalogPayload({ userId }),
     ]);
-    const inferredProviderId = inferProviderFromModelId(
+    const inferredProviderId = inferProviderFromModelIdWithLegacy(
       catalog.models,
       body.defaultModel ?? null
     );

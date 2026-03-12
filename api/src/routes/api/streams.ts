@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { db, pool } from '../../db/client';
-import { listActiveStreamIds, readStreamEvents } from '../../services/stream-service';
+import { listActiveStreamIds } from '../../services/stream-service';
+import { readStreamEvents } from '../../services/stream-service';
 import { sql } from 'drizzle-orm';
 import { and, eq, gt } from 'drizzle-orm';
 import type { Notification } from 'pg';
@@ -207,25 +208,6 @@ async function resolveTargetWorkspaceId(c: Context, url: URL): Promise<string> {
   if (!role) throw new Error('Workspace not accessible');
   return requested;
 }
-
-// GET /streams/events/:streamId?limit=2000&sinceSequence=123
-streamsRouter.get('/events/:streamId', async (c) => {
-  const streamId = c.req.param('streamId');
-  const url = new URL(c.req.url);
-  const limitRaw = url.searchParams.get('limit');
-  const sinceRaw = url.searchParams.get('sinceSequence');
-
-  const limit = limitRaw ? Number(limitRaw) : 2000;
-  const sinceSequence = sinceRaw ? Number(sinceRaw) : undefined;
-
-  const events = await readStreamEvents(
-    streamId,
-    Number.isFinite(sinceSequence as number) ? (sinceSequence as number) : undefined,
-    Number.isFinite(limit) ? limit : 2000
-  );
-
-  return c.json({ streamId, events });
-});
 
 // GET /streams/active?since_minutes=360&limit=200
 streamsRouter.get('/active', async (c) => {
