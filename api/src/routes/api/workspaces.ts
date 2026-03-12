@@ -19,6 +19,7 @@ import { requireEditor } from '../../middleware/rbac';
 import { createId } from '../../utils/id';
 import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeutralWorkspace } from '../../services/workspace-access';
 import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
+import { getDefaultGateConfig, type GateConfig } from '../../services/gate-service';
 
 export const workspacesRouter = new Hono();
 
@@ -84,12 +85,16 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
   const id = createId();
   const now = new Date();
 
+  // Seed default gate config for this workspace type (§6.3)
+  const defaultGateConfig = getDefaultGateConfig(type as import('../../services/workspace-access').WorkspaceType);
+
   await db.transaction(async (tx) => {
     await tx.insert(workspaces).values({
       id,
       ownerUserId: user.userId,
       name,
       type,
+      gateConfig: defaultGateConfig ?? undefined,
       createdAt: now,
       updatedAt: now,
     });
@@ -111,6 +116,7 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
 // Update workspace metadata (admin-only)
 const updateWorkspaceSchema = z.object({
   name: z.string().min(1).max(128),
+  type: z.string().optional(),
 });
 
 workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSchema), async (c) => {
@@ -119,8 +125,8 @@ workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSc
   const workspaceId = c.req.param('id')!;
 
   // Workspace type is immutable after creation.
-  const rawBody = await c.req.raw.clone().json().catch(() => null) as Record<string, unknown> | null;
-  if (rawBody && 'type' in rawBody) {
+  const { name, type } = c.req.valid('json');
+  if (type !== undefined) {
     return c.json({ error: 'Workspace type cannot be changed after creation' }, 400);
   }
 
@@ -129,14 +135,51 @@ workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSc
   } catch {
     return c.json({ error: 'Insufficient permissions' }, 403);
   }
-
-  const { name } = c.req.valid('json');
   const now = new Date();
   const [ws] = await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
   if (!ws) return c.json({ message: 'Not found' }, 404);
   await db.update(workspaces).set({ name, updatedAt: now }).where(eq(workspaces.id, workspaceId));
   await notifyWorkspaceEvent(workspaceId, { action: 'renamed' });
   return c.json({ success: true });
+});
+
+// Update gate_config for a workspace (admin-only)
+const gateConfigSchema = z.object({
+  mode: z.enum(['free', 'soft', 'hard']),
+  stages: z.array(z.string()),
+  criteria: z.record(z.object({
+    required_fields: z.array(z.string()),
+    guardrail_categories: z.array(z.string()),
+  })).optional(),
+});
+
+workspacesRouter.patch('/:id/gate-config', requireEditor, zValidator('json', gateConfigSchema), async (c) => {
+  const user = c.get('user') as { userId: string; role: string };
+  const workspaceId = c.req.param('id')!;
+
+  try {
+    await requireWorkspaceAdmin(user.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const [ws] = await db
+    .select({ id: workspaces.id, type: workspaces.type })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1);
+  if (!ws) return c.json({ message: 'Not found' }, 404);
+
+  // Neutral workspaces do not support gate config
+  if (ws.type === 'neutral') {
+    return c.json({ error: 'Neutral workspaces do not support gate configuration' }, 400);
+  }
+
+  const gateConfig = c.req.valid('json');
+  const now = new Date();
+  await db.update(workspaces).set({ gateConfig, updatedAt: now }).where(eq(workspaces.id, workspaceId));
+  await notifyWorkspaceEvent(workspaceId, { action: 'gate_config_updated' });
+  return c.json({ success: true, gate_config: gateConfig });
 });
 
 // --- Hide / Unhide / Delete (admin-only) ---
@@ -288,7 +331,7 @@ workspacesRouter.post('/:id/members', requireEditor, zValidator('json', addMembe
 
   // Neutral workspaces are personal and non-delegable.
   if (await isNeutralWorkspace(workspaceId)) {
-    return c.json({ error: 'Neutral workspaces do not support memberships' }, 400);
+    return c.json({ error: 'neutral workspaces do not support memberships' }, 400);
   }
 
   try {
