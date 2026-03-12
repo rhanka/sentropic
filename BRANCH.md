@@ -225,8 +225,8 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
   - Preserves existing behavior for OpenAI models.
 
 #### 2.3 Generalize reasoning param forwarding in tool/context files
-- [ ] `api/src/services/tools.ts`: `reasoningSummary`/`reasoningEffort` forwarding must use the provider-specific mapping from Lot 1.7 instead of passing raw OpenAI params.
-- [ ] `api/src/services/context-document.ts`: hardcoded `reasoningEffort`/`reasoningSummary` values must go through provider mapping.
+- [x] `api/src/services/tools.ts`: `reasoningSummary`/`reasoningEffort` forwarding must use the provider-specific mapping from Lot 1.7 instead of passing raw OpenAI params.
+- [x] `api/src/services/context-document.ts`: hardcoded `reasoningEffort`/`reasoningSummary` values must go through provider mapping.
 
 #### 2.4 Lot 2 gate
 - [ ] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral`
