@@ -703,6 +703,10 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
     capabilities.supportsTools && toolChoice !== 'none' ? tools : undefined;
   const normalizedToolChoice =
     !capabilities.supportsTools && toolChoice !== 'none' ? 'none' : toolChoice;
+  // Structured output routing constraint: warn if provider does not support structured output
+  if (!capabilities.supportsStructuredOutput && responseFormat) {
+    console.warn(`[llm-runtime] Provider ${selection.providerId} does not support structured output — responseFormat ignored`);
+  }
 
   if (!capabilities.supportsStreaming) {
     throw new Error(`Provider ${selection.providerId} does not support streaming`);
@@ -942,6 +946,10 @@ export async function* callOpenAIStream(
     capabilities.supportsTools && toolChoice !== 'none' ? tools : undefined;
   const normalizedToolChoice =
     !capabilities.supportsTools && toolChoice !== 'none' ? 'none' : toolChoice;
+  // Structured output routing constraint: warn if provider does not support structured output
+  if (!capabilities.supportsStructuredOutput && responseFormat) {
+    console.warn(`[llm-runtime] Provider ${selection.providerId} does not support structured output — responseFormat ignored in stream`);
+  }
 
   if (selection.providerId === 'gemini') {
     try {
@@ -1452,6 +1460,12 @@ export async function* callOpenAIResponseStream(
     !capabilities.supportsTools && options.toolChoice !== 'none'
       ? 'none'
       : options.toolChoice;
+  // Structured output routing constraint: warn and degrade if provider does not support structured output
+  if (!capabilities.supportsStructuredOutput && (structuredOutput || responseFormat)) {
+    console.warn(`[llm-runtime] Provider ${selection.providerId} does not support structured output — structuredOutput/responseFormat ignored`);
+  }
+  const effectiveStructuredOutput = capabilities.supportsStructuredOutput ? structuredOutput : undefined;
+  const effectiveResponseFormat = capabilities.supportsStructuredOutput ? responseFormat : undefined;
   const selectedModel = selection.model;
   const codexTransport =
     selection.providerId === 'openai' &&
@@ -1474,8 +1488,8 @@ export async function* callOpenAIResponseStream(
       messages,
       tools: filteredTools,
       toolChoice: normalizedToolChoice,
-      responseFormat,
-      structuredOutput,
+      responseFormat: effectiveResponseFormat,
+      structuredOutput: effectiveStructuredOutput,
       maxOutputTokens,
       rawInput,
     });
@@ -1617,9 +1631,9 @@ export async function* callOpenAIResponseStream(
           messages: claudeMessages as unknown[],
           ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
           ...(thinkingParams ?? {}),
-          ...(structuredOutput
+          ...(effectiveStructuredOutput
             ? { response_format: { type: 'json_object' as const } }
-            : responseFormat === 'json_object'
+            : effectiveResponseFormat === 'json_object'
               ? { response_format: { type: 'json_object' as const } }
               : {}),
         } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
@@ -1720,9 +1734,9 @@ export async function* callOpenAIResponseStream(
           model: selectedModel,
           messages: mistralMessages,
           ...(mistralTools ? { tools: mistralTools } : {}),
-          ...(structuredOutput
+          ...(effectiveStructuredOutput
             ? { response_format: { type: 'json_object' } }
-            : responseFormat === 'json_object'
+            : effectiveResponseFormat === 'json_object'
               ? { response_format: { type: 'json_object' } }
               : {}),
           ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
@@ -1850,9 +1864,9 @@ export async function* callOpenAIResponseStream(
           model: selectedModel,
           messages: cohereMessages,
           ...(cohereTools ? { tools: cohereTools } : {}),
-          ...(structuredOutput
+          ...(effectiveStructuredOutput
             ? { response_format: { type: 'json_object' } }
-            : responseFormat === 'json_object'
+            : effectiveResponseFormat === 'json_object'
               ? { response_format: { type: 'json_object' } }
               : {}),
           ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
@@ -1990,18 +2004,18 @@ export async function* callOpenAIResponseStream(
 
   // Structured output via Responses API: text.format
   const textConfig: OpenAI.Responses.ResponseCreateParamsStreaming['text'] | undefined =
-    structuredOutput
+    effectiveStructuredOutput
       ? {
           format: {
             type: 'json_schema',
-            name: structuredOutput.name,
-            schema: structuredOutput.schema,
-            description: structuredOutput.description,
-            strict: structuredOutput.strict ?? true
+            name: effectiveStructuredOutput.name,
+            schema: effectiveStructuredOutput.schema,
+            description: effectiveStructuredOutput.description,
+            strict: effectiveStructuredOutput.strict ?? true
           }
         }
-      : responseFormat
-        ? { format: { type: responseFormat } }
+      : effectiveResponseFormat
+        ? { format: { type: effectiveResponseFormat } }
         : undefined;
 
   // Reasoning (Responses API):

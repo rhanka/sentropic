@@ -258,10 +258,10 @@ Closed: 2026-03-12
 - [x] Update `ui/src/locales/en.json` and `ui/src/locales/fr.json` with provider labels if needed.
 
 #### 3.2 Routing hardening
-- [ ] Add provider routing constraints: capability-aware selection (e.g., if a provider does not support structured output, route to fallback).
-- [ ] Validate chat and structured flows across all 5 providers.
-- [ ] Verify credential precedence chain works for all 5 providers.
-- [ ] Verify provider status is `'ready'` when API key is configured, `'planned'` otherwise.
+- [x] Add provider routing constraints: capability-aware selection (e.g., if a provider does not support structured output, route to fallback).
+- [x] Validate chat and structured flows across all 5 providers.
+- [x] Verify credential precedence chain works for all 5 providers.
+- [x] Verify provider status is `'ready'` when API key is configured, `'planned'` otherwise.
 
 #### 3.3 Lot 3 gate
 - [ ] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral`
