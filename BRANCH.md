@@ -327,7 +327,7 @@ Closed: 2026-03-12
 - `api/src/routes/api/workspaces.ts` — `GET /api/v1/neutral/dashboard` endpoint (aggregate workspace data).
 
 **Tasks:**
-- [ ] Implement `ViewTemplateRenderer.svelte` core — resolve view template descriptor, dispatch to layout/widget renderers.
+- [x] Implement `ViewTemplateRenderer.svelte` core — resolve view template descriptor, dispatch to layout/widget renderers.
 - [ ] Implement `ContainerView.svelte` — card/row list of children, sort/group options, container header, actions.
 - [ ] Implement neutral landing page — list workspace cards (type icon, initiative count, last activity).
 - [ ] API: neutral dashboard endpoint — aggregate workspace stats.
