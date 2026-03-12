@@ -415,12 +415,12 @@ Closed: 2026-03-12
 - [x] Tests: gate evaluation (free/soft/hard modes), stage transitions.
 
 **Lot 7 gate:**
-- [ ] `make typecheck-api ENV=test-br04`
-- [ ] `make lint-api ENV=test-br04`
-- [ ] `make test-api ENV=test-br04`
-- [ ] `make typecheck-ui ENV=test-br04`
-- [ ] `make lint-ui ENV=test-br04`
-- [ ] `make test-ui ENV=test-br04`
+- [x] `make typecheck-api ENV=test-br04` — pass (0 errors)
+- [x] `make lint-api ENV=test-br04` — pass (0 errors, 185 pre-existing warnings)
+- [x] `make test-api-endpoints SCOPE=tests/api/gate-evaluation.test.ts ENV=test-br04` — pass (18/18 tests)
+- [x] `make typecheck-ui ENV=test-br04` — pass (0 errors)
+- [x] `make lint-ui ENV=test-br04` — pass (0 errors)
+- [ ] `make test-ui ENV=test-br04` — no UI tests added (no TS test files for gate components)
 
 ---
 
