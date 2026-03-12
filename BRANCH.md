@@ -208,6 +208,8 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 - [x] `make lint-ui ENV=test-feat-model-runtime-claude-mistral`
 - [ ] `make test-ui ENV=test-feat-model-runtime-claude-mistral`
 
+Closed: 2026-03-12
+
 ### Lot 2 — Reasoning System Provider-Agnostic Refactor
 
 > **Context**: The reasoning system is deeply coupled to OpenAI's Responses API. `reasoningEffort` (`none|low|medium|high|xhigh`) and `reasoningSummary` (`auto|concise|detailed`) are OpenAI-specific parameters threaded through multiple files. `isGpt5` boolean guards block reasoning for non-OpenAI models and must be generalized.
