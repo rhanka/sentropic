@@ -201,11 +201,11 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 - [x] Gemini mapping: pass-through or no-op depending on model capability.
 
 #### 1.8 Lot 1 gate
-- [ ] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral`
-- [ ] `make lint-api ENV=test-feat-model-runtime-claude-mistral`
-- [ ] `make test-api ENV=test-feat-model-runtime-claude-mistral`
-- [ ] `make typecheck-ui ENV=test-feat-model-runtime-claude-mistral`
-- [ ] `make lint-ui ENV=test-feat-model-runtime-claude-mistral`
+- [x] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral`
+- [x] `make lint-api ENV=test-feat-model-runtime-claude-mistral`
+- [x] `make test-api ENV=test-feat-model-runtime-claude-mistral` (smoke/unit/endpoints/queue pass; security target has pre-existing `vitest: not found` in container — unrelated to branch)
+- [x] `make typecheck-ui ENV=test-feat-model-runtime-claude-mistral`
+- [x] `make lint-ui ENV=test-feat-model-runtime-claude-mistral`
 - [ ] `make test-ui ENV=test-feat-model-runtime-claude-mistral`
 
 ### Lot 2 — Reasoning System Provider-Agnostic Refactor
