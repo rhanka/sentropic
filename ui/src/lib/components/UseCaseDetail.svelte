@@ -12,7 +12,7 @@
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { apiGet } from '$lib/utils/api';
-  import { useCasesStore } from '$lib/stores/useCases';
+  import { initiativesStore } from '$lib/stores/initiatives';
   import { goto } from '$app/navigation';
   import { arrayToMarkdown, markdownToArray, normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, renderMarkdownWithRefs, parseReferencesInText } from '$lib/utils/markdown';
   import { formatCompactModelLabel } from '$lib/utils/model-display';
@@ -62,7 +62,7 @@
     reloadTimeout = setTimeout(async () => {
       try {
         const updated = await apiGet(`/use-cases/${useCaseId}`);
-        useCasesStore.update(items => items.map(uc => uc.id === useCaseId ? updated : uc));
+        initiativesStore.update(items => items.map(uc => uc.id === useCaseId ? updated : uc));
         if (useCase?.id === useCaseId) {
           useCase = updated;
         }

@@ -3,8 +3,8 @@
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
-  import { useCasesStore, openUseCaseExport, closeUseCaseExport, useCaseExportState } from '$lib/stores/useCases';
-  import { deleteUseCase } from '$lib/stores/useCases';
+  import { initiativesStore, openInitiativeExport, closeInitiativeExport, initiativeExportState } from '$lib/stores/initiatives';
+  import { deleteInitiative } from '$lib/stores/initiatives';
   import { addToast } from '$lib/stores/toast';
   import { apiGet } from '$lib/utils/api';
   import { generateDocxAndDownload } from '$lib/utils/docx';
@@ -160,7 +160,7 @@
       if (data?.deleted) return;
       if (data?.useCase) {
         useCase = { ...(useCase || {}), ...data.useCase };
-        useCasesStore.update(items => items.map(uc => uc.id === currentId ? useCase : uc));
+        initiativesStore.update(items => items.map(uc => uc.id === currentId ? useCase : uc));
         recalculateScoresFromCurrentUseCase();
         if (!matrix) {
           void loadMatrixAndCalculateScores();
@@ -395,7 +395,7 @@
       useCase = await apiGet(`/use-cases/${useCaseId}`);
       
       // Mettre à jour le store avec les données fraîches
-      useCasesStore.update(items => 
+      initiativesStore.update(items => 
         items.map(uc => uc.id === useCaseId ? useCase : uc)
       );
       
@@ -406,7 +406,7 @@
     } catch (err) {
       console.error('Failed to fetch use case:', err);
       // Fallback sur le store local en cas d'erreur
-      const useCases = $useCasesStore;
+      const useCases = $initiativesStore;
       useCase = useCases.find(uc => uc.id === useCaseId);
       
       if (!useCase) {
@@ -431,8 +431,8 @@
     if (!confirm(get(_)('usecase.confirmDelete'))) return;
 
     try {
-      await deleteUseCase(useCase.id);
-      useCasesStore.update(items => items.filter(uc => uc.id !== useCase?.id));
+      await deleteInitiative(useCase.id);
+      initiativesStore.update(items => items.filter(uc => uc.id !== useCase?.id));
       addToast({ type: 'success', message: get(_)('usecase.toast.deleted') });
       if (useCase.folderId) {
         goto(`/folders/${useCase.folderId}`);
@@ -592,7 +592,7 @@
               showDelete={!isReadOnly}
               disabledImport={isReadOnly}
               disabledExport={isReadOnly}
-              onExport={() => openUseCaseExport(useCaseId)}
+              onExport={() => openInitiativeExport(useCaseId)}
               onDownloadDocx={handleDownloadDocx}
               onPrint={() => window.print()}
               onDelete={handleDelete}
@@ -631,11 +631,11 @@
 
 {#if useCase}
   <ImportExportDialog
-    bind:open={$useCaseExportState.open}
+    bind:open={$initiativeExportState.open}
     mode="export"
     title={$_('usecase.export.title')}
     scope="usecase"
-    scopeId={$useCaseExportState.useCaseId ?? useCase.id}
+    scopeId={$initiativeExportState.useCaseId ?? useCase.id}
     allowScopeSelect={false}
     allowScopeIdEdit={false}
     workspaceName={workspaceName}
@@ -652,6 +652,6 @@
     includeDependencies={{ matrix: ['folders'] }}
     includeAffectsComments={['folders', 'matrix', 'organization']}
     includeAffectsDocuments={['folders', 'matrix', 'organization']}
-    on:close={closeUseCaseExport}
+    on:close={closeInitiativeExport}
   />
 {/if}
