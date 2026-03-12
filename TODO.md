@@ -192,15 +192,13 @@ Roadmap specifications:
   - [x] Deliver provider abstraction + model catalog and runtime routing with at least 2 providers (`OpenAI`, `Google/Gemini`).
   - [x] Support global and per-user BYOK precedence rules.
   - [x] Consolidate delivered behavior into `spec/SPEC_CHATBOT.md` and keep only remaining deltas in `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`.
-- [ ] **BR-02** `feat/sso-chatgpt`
-  - [ ] Deliver OpenAI/ChatGPT SSO for admin and standard users.
-- [ ] **BR-03** `feat/todo-steering-workflow-core`
-  - [ ] Deliver TODO management v1 (plan/checkpoints/status) + steering mode v1.
-  - [ ] Deliver base workflow/autonomous agent orchestration with human approval points.
-- [ ] **BR-04** `feat/workspace-template-catalog`
-  - [ ] Deliver workspace multi-template foundation (`ai-ideas`, `todo`) with template-scoped workflow metadata.
-- [ ] **BR-05** `feat/vscode-plugin-v1`
-  - [ ] Deliver VSCode plugin v1 (`plan`, `tools`, `summary`, `checkpoint`).
+- [x] **BR-02** `feat/sso-chatgpt` — done (product pivot, docs/process only).
+- [x] **BR-03** `feat/todo-steering-workflow-core` — done, merged.
+  - [x] Delivered TODO management v1, steering mode v1, workflow core (14 new tables, 19+ endpoints).
+- [ ] **BR-04** `feat/workspace-template-catalog` — **active** (scope expanded).
+  - [ ] Deliver workspace type system (neutral, ai-ideas, opportunity, code), initiative lifecycle with maturity gates, extended objects (solutions, products, bids), multi-workflow registry, template-driven artifact production. ~400 commits, 4 segments. See `BRANCH.md` and `spec/SPEC_EVOL_WORKSPACE_TYPES.md`.
+- [x] **BR-05** `feat/vscode-plugin-v1` — done, merged.
+  - [x] Delivered VSCode plugin v1 (plan, tools, summary, checkpoint, Codex sign-in).
 - [ ] **BR-06** `feat/chrome-upstream-v1`
   - [ ] Deliver upstream chrome control foundation (remote control + upstream sync, single-tab baseline).
 - [ ] **BR-07** `feat/release-ui-npm-and-pretest`
