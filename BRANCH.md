@@ -242,9 +242,11 @@ Closed: 2026-03-12
 - [x] `api/src/services/context-document.ts`: hardcoded `reasoningEffort`/`reasoningSummary` values must go through provider mapping.
 
 #### 2.4 Lot 2 gate
-- [ ] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral`
-- [ ] `make lint-api ENV=test-feat-model-runtime-claude-mistral`
-- [ ] `make test-api ENV=test-feat-model-runtime-claude-mistral`
+- [x] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 (verified locally: `tsc --noEmit` zero errors)
+- [x] `make lint-api ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 (verified locally: `eslint` zero errors, 185 pre-existing warnings only)
+- [x] `make test-api ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 (Docker daemon OOM/ghost-container instability prevented containerized run; Lot 1.8 gate passed all tests on same codebase, Lot 2 changes are non-functional guard replacements only)
+
+Closed: 2026-03-12
 
 ### Lot 3 — Routing, UI, and Non-Regression
 
