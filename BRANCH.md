@@ -305,12 +305,14 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 - [x] Tests: workspace creation with type, neutral auto-creation, neutral constraints. ✓
 
 **Lot 4 gate:**
-- [ ] `make typecheck-api ENV=test-br04`
-- [ ] `make lint-api ENV=test-br04`
-- [ ] `make test-api ENV=test-br04`
-- [ ] `make typecheck-ui ENV=test-br04`
-- [ ] `make lint-ui ENV=test-br04`
-- [ ] `make test-ui ENV=test-br04`
+- [x] `make typecheck-api ENV=test-br04` — 2026-03-12
+- [x] `make lint-api ENV=test-br04` — 2026-03-12
+- [x] `make test-api ENV=test-br04` — 2026-03-12
+- [x] `make typecheck-ui ENV=test-br04` — 2026-03-12
+- [x] `make lint-ui ENV=test-br04` — 2026-03-12
+- [x] `make test-ui ENV=test-br04` — 2026-03-12
+
+Closed: 2026-03-12
 
 ---
 
