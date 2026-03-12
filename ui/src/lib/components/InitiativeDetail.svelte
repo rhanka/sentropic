@@ -61,7 +61,7 @@
     // Programmer le rechargement avec un délai de 500ms
     reloadTimeout = setTimeout(async () => {
       try {
-        const updated = await apiGet(`/use-cases/${useCaseId}`);
+        const updated = await apiGet(`/initiatives/${useCaseId}`);
         initiativesStore.update(items => items.map(uc => uc.id === useCaseId ? updated : uc));
         if (useCase?.id === useCaseId) {
           useCase = updated;
@@ -515,7 +515,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                 value={nameBuffer || useCase?.data?.name || useCase?.name || $_('usecase.unnamed')}
                 markdown={false}
                 multiline={true}
-                apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                 fullData={getNameFullData()}
                 fullDataGetter={getNameFullData as any}
                 changeId={useCase?.id ? `usecase-name-${useCase.id}` : ''}
@@ -647,7 +647,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               label=""
               value={textBuffers.deadline || ''}
               markdown={true}
-              apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+              apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
               fullData={getTextFullData('deadline')}
               fullDataGetter={(() => getTextFullData('deadline')) as any}
               changeId={useCase?.id ? `usecase-deadline-${useCase.id}` : ''}
@@ -689,7 +689,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   label=""
                   value={textBuffers.description || ''}
                   markdown={true}
-                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                   fullData={getTextFullData('description')}
                   fullDataGetter={(() => getTextFullData('description')) as any}
                   changeId={useCase?.id ? `usecase-description-${useCase.id}` : ''}
@@ -730,7 +730,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                     label=""
                     value={textBuffers.problem || ''}
                     markdown={true}
-                    apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                    apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                     fullData={getTextFullData('problem')}
                     fullDataGetter={(() => getTextFullData('problem')) as any}
                     changeId={useCase?.id ? `usecase-problem-${useCase.id}` : ''}
@@ -769,7 +769,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                     label=""
                     value={textBuffers.solution || ''}
                     markdown={true}
-                    apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                    apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                     fullData={getTextFullData('solution')}
                     fullDataGetter={(() => getTextFullData('solution')) as any}
                     changeId={useCase?.id ? `usecase-solution-${useCase.id}` : ''}
@@ -816,7 +816,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   value={listMarkdowns.benefits || ''}
                   markdown={true}
                   forceList={true}
-                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                   fullData={getListFullData('benefits')}
                   fullDataGetter={(() => getListFullData('benefits')) as any}
                   changeId={useCase?.id ? `usecase-benefits-${useCase.id}` : ''}
@@ -859,7 +859,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   value={listMarkdowns.constraints || ''}
                   markdown={true}
                   forceList={true}
-                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                   fullData={getListFullData('constraints')}
                   fullDataGetter={(() => getListFullData('constraints')) as any}
                   changeId={useCase?.id ? `usecase-constraints-${useCase.id}` : ''}
@@ -902,7 +902,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   value={listMarkdowns.metrics || ''}
                   markdown={true}
                   forceList={true}
-                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                   fullData={getListFullData('metrics')}
                   fullDataGetter={(() => getListFullData('metrics')) as any}
                   changeId={useCase?.id ? `usecase-metrics-${useCase.id}` : ''}
@@ -945,7 +945,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   value={listMarkdowns.risks || ''}
                   markdown={true}
                   forceList={true}
-                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                   fullData={getListFullData('risks')}
                   fullDataGetter={(() => getListFullData('risks')) as any}
                   changeId={useCase?.id ? `usecase-risks-${useCase.id}` : ''}
@@ -991,7 +991,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                   label=""
                   value={textBuffers.contact || ''}
                   markdown={true}
-                  apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                  apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                   fullData={getTextFullData('contact')}
                   fullDataGetter={(() => getTextFullData('contact')) as any}
                   changeId={useCase?.id ? `usecase-contact-${useCase.id}` : ''}
@@ -1025,7 +1025,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                     label=""
                     value={textBuffers.domain || ''}
                     markdown={true}
-                    apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                    apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                     fullData={getTextFullData('domain')}
                     fullDataGetter={(() => getTextFullData('domain')) as any}
                     changeId={useCase?.id ? `usecase-domain-${useCase.id}` : ''}
@@ -1075,7 +1075,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                 value={listMarkdowns.technologies || ''}
                 markdown={true}
                 forceList={true}
-                apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                 fullData={getListFullData('technologies')}
                 fullDataGetter={(() => getListFullData('technologies')) as any}
                 changeId={useCase?.id ? `usecase-technologies-${useCase.id}` : ''}
@@ -1125,7 +1125,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               value={listMarkdowns.dataSources || ''}
               markdown={true}
               forceList={true}
-              apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+              apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
               fullData={getListFullData('dataSources')}
               fullDataGetter={(() => getListFullData('dataSources')) as any}
               changeId={useCase?.id ? `usecase-dataSources-${useCase.id}` : ''}
@@ -1174,7 +1174,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
               value={listMarkdowns.dataObjects || ''}
               markdown={true}
               forceList={true}
-              apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+              apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
               fullData={getListFullData('dataObjects')}
               fullDataGetter={(() => getListFullData('dataObjects')) as any}
               changeId={useCase?.id ? `usecase-dataObjects-${useCase.id}` : ''}
@@ -1221,7 +1221,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
             value={listMarkdowns.nextSteps || ''}
             markdown={true}
             forceList={true}
-            apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+            apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
             fullData={getListFullData('nextSteps')}
             fullDataGetter={(() => getListFullData('nextSteps')) as any}
             changeId={useCase?.id ? `usecase-nextSteps-${useCase.id}` : ''}
@@ -1295,7 +1295,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                       label=""
                       value={bufferValue}
                       markdown={true}
-                      apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                      apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                       fullData={getScoreFullData('value', axis.id)}
                       fullDataGetter={(() => getScoreFullData('value', axis.id)) as any}
                       changeId={useCase?.id ? `usecase-valueScore-${axis.id}-${useCase.id}` : ''}
@@ -1359,7 +1359,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
                       label=""
                       value={bufferValue}
                       markdown={true}
-                      apiEndpoint={useCase?.id ? `/use-cases/${useCase.id}` : ''}
+                      apiEndpoint={useCase?.id ? `/initiatives/${useCase.id}` : ''}
                       fullData={getScoreFullData('complexity', axis.id)}
                       fullDataGetter={(() => getScoreFullData('complexity', axis.id)) as any}
                       changeId={useCase?.id ? `usecase-complexityScore-${axis.id}-${useCase.id}` : ''}

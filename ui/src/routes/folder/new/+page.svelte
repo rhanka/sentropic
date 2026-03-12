@@ -322,7 +322,7 @@
         return generateOrganizationMatrix ? ('generate' as MatrixModeRequest) : ('default' as MatrixModeRequest);
       })();
 
-      await apiPost('/use-cases/generate', {
+      await apiPost('/initiatives/generate', {
         input,
         folder_id: id,
         use_case_count: nbUseCases,

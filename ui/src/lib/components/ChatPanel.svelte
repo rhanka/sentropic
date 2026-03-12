@@ -402,7 +402,7 @@
         const useCase = await apiGet<{
           data?: { name?: string };
           name?: string;
-        }>(`/use-cases/${contextId}`);
+        }>(`/initiatives/${contextId}`);
         const name = useCase?.data?.name || useCase?.name;
         if (name) contextNameByKey.set(key, name);
       }
