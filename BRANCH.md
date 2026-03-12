@@ -41,7 +41,10 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
   - `scripts/**`
   - `BRANCH.md`
   - `plan/05-BRANCH_feat-vscode-plugin-v1.md`
+  - `spec/SPEC_CHATBOT.md`
+  - `spec/SPEC_VSCODE_PLUGIN.md`
   - `spec/SPEC_EVOL_VSCODE_PLUGIN.md`
+  - `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`
   - `spec/TOOLS.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
@@ -102,7 +105,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Cadrage interactif + matrice de récupération Lot 1**
   - [x] Sédimenter la mini-spec de réutilisation BR-05:
-    - [x] `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`
+    - [x] `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md` (consolidated then deleted in Lot N-1)
     - [x] règles de réutilisation référencées explicitement dans les Lots 1/2/3.
   - [ ] Lock functional framing for:
     - [x] Global conversation `summary` (context budget threshold, summary refresh policy, injection strategy).
@@ -141,7 +144,8 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
 
 - [x] **Lot 1 — VSCode host hardening + token bootstrap**
   - [x] Spec mapping:
-    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `2`, `4.13`, `4.14`, `7.1` (BR05 foreground-only boundary), and reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md`.
+    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` sections `2`, `4.13`, `4.14`, `7.1` (historical scoping anchors; canonical delivered content now lives in `spec/SPEC_VSCODE_PLUGIN.md`).
+    - [x] reuse constraints later consolidated into durable specs in Lot N-1.
   - [x] Restore minimal VSCode extension packaging pipeline:
     - [x] add `ui/vscode-ext` packaging scripts/assets required to produce `.vsix`,
     - [x] add `make build-ext-vscode` target (and optional `make dev-ext-vscode`) under `BR05-EX1`.
@@ -228,9 +232,9 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
 
 - [x] **Lot 3 — VSCode plugin code tools (research + implementation)**
   - [x] Spec mapping:
-    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `8` (rapid v1 tool contracts, including policy engine),
-    - [x] `spec/TOOLS.md` section `VSCode code tools v1 (rapid contracts)`,
-    - [x] reuse constraints from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md` (shared analyzer + shared permission primitives).
+    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` section `8` (historical anchor; canonical delivered content now lives in `spec/TOOLS.md`),
+    - [x] `spec/TOOLS.md` delivered local code tool baseline,
+    - [x] reuse constraints consolidated into `spec/TOOLS.md` in Lot N-1 (shared analyzer + shared permission primitives).
   - [x] Research/code-scan and lock baseline toolset for v1 plugin code interactions:
     - [x] `bash` (safe shell wrapper),
     - [x] `ls`,
@@ -828,16 +832,18 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
     - [ ] When edit a user message in code mode, tools are not anymore available to AI
     - [ ] Checkpoint doesn't display anymore, not tested
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Consolidate final BR-05 decisions into:
-    - [ ] `spec/SPEC_EVOL_VSCODE_PLUGIN.md`
-    - [ ] `spec/TOOLS.md`
-  - [ ] Merge durable reuse rules from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md` into durable specs then delete the mini-spec file.
-  - [ ] Ensure removed fake features are not described as delivered behavior.
-  - [ ] Remove legacy documentation of frontend `stream-events` rehydration paths and replace it with:
-    - [ ] `session history` NDJSON as the normal session-read contract,
-    - [ ] SSE as the live-update contract,
-    - [ ] persisted `chat_stream_events` as internal runtime journal only.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Consolidate final BR-05 decisions into:
+    - [x] `spec/SPEC_VSCODE_PLUGIN.md` (delivered VSCode canon)
+    - [x] `spec/SPEC_EVOL_VSCODE_PLUGIN.md` (remaining backlog + historical anchors only)
+    - [x] `spec/SPEC_CHATBOT.md`
+    - [x] `spec/TOOLS.md`
+  - [x] Merge durable reuse rules from `spec/SPEC_EVOL_BR05_REUSE_STRATEGY.md` into durable specs then delete the mini-spec file.
+  - [x] Ensure removed fake features are not described as delivered behavior.
+  - [x] Remove legacy documentation of frontend `stream-events` rehydration paths and replace it with:
+    - [x] `session history` NDJSON as the normal session-read contract,
+    - [x] SSE as the live-update contract,
+    - [x] persisted `chat_stream_events` as internal runtime journal only.
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
