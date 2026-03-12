@@ -19,7 +19,8 @@ Each section below is tagged with its canonical spec target for post-implementat
 | §9 Template catalog | `SPEC_TEMPLATING.md` | §2 families per type × stage |
 | §10 Document generation | `SPEC_TEMPLATING.md` | §5 support model extension |
 | §11 API contracts | `SPEC.md` | §3 |
-| §12 UI surfaces | `SPEC.md` | §1 |
+| §12 View template system | `SPEC.md` | §1, §5 (new pattern) |
+| §13 UI surfaces | `SPEC.md` | §1 |
 
 ### Articulation with existing SPEC_EVOL files
 
@@ -109,6 +110,8 @@ erDiagram
     bids ||--o{ bid_products : "bid_id"
     products ||--o{ bid_products : "product_id"
     workspace_type_workflows }o--|| workflow_definitions : "workflow_definition_id"
+    workspaces ||--o{ view_templates : "workspace_id"
+    view_templates }o--o| view_templates : "parent_id (fork/detach)"
 
     workspaces {
         text id PK
@@ -188,6 +191,21 @@ erDiagram
         timestamp created_at
         timestamp updated_at
     }
+
+    view_templates {
+        text id PK
+        text workspace_id FK "nullable for system seeds"
+        text workspace_type
+        text object_type "initiative|solution|product|bid|organization|dashboard"
+        text maturity_stage "nullable"
+        jsonb descriptor "view template DSL"
+        integer version
+        text source_level "code|admin|user"
+        text parent_id FK "fork/detach lineage"
+        boolean is_detached
+        timestamp created_at
+        timestamp updated_at
+    }
 ```
 
 ### 1.4 Backward compatibility
@@ -215,9 +233,11 @@ One file in `api/drizzle/` (BR04-EX1):
 10. `CREATE TABLE bids (...)`
 11. `CREATE TABLE bid_products (...)`
 12. `CREATE TABLE workspace_type_workflows (...)`
-13. Indexes + FK constraints
-14. `UPDATE workspaces SET type = 'ai-ideas' WHERE type = 'ai-ideas'` (no-op, ensures default applied)
-15. Backfill: create one neutral workspace per existing user who doesn't have one
+13. `CREATE TABLE view_templates (...)`
+14. Indexes + FK constraints
+15. `UPDATE workspaces SET type = 'ai-ideas' WHERE type = 'ai-ideas'` (no-op, ensures default applied)
+16. Backfill: create one neutral workspace per existing user who doesn't have one
+17. Backfill: seed default view_templates per workspace type
 
 ---
 
@@ -638,23 +658,189 @@ Implementation priority: DOCX first, PPTX as stretch goal within BR-04 budget.
 
 ---
 
-## 12) UI surfaces inventory
+## 12) View template system
+
+> → cible: `SPEC.md` §1, §5 (new pattern)
+
+### 12.1 Problem
+
+Current UI has hardcoded views per object type (UseCase detail, Organization detail, Folder detail, Dashboard). With workspace types introducing different object personalities (an ai-ideas initiative ≠ an opportunity initiative) and new objects (solution, bid, product), hardcoded views don't scale. Each workspace type needs contextual rendering: different fields, different layouts, different actions, different dashboard visualizations.
+
+### 12.2 View template model
+
+A **view template** is a data-driven layout descriptor that controls how an object type is rendered in the UI. It defines layout structure, field placement, conditional zones, and available actions.
+
+Resolution key: `(workspace_type, object_type, maturity_stage?)` → view template.
+
+Stored in `data` JSONB on a new registry or as workspace-type seed config (decision: registry table vs JSONB on workspace_type_workflows — TBD in implementation, spec defines the contract).
+
+### 12.3 View template DSL
+
+```json
+{
+  "object_type": "initiative",
+  "workspace_type": "opportunity",
+  "layout": "tabs",
+  "tabs": [
+    {
+      "key": "overview",
+      "label": "Overview",
+      "layout": "two-columns",
+      "left": [
+        { "key": "data.description", "type": "richtext", "label": "Description" },
+        { "key": "data.domain", "type": "tag", "label": "Domain" },
+        { "key": "data.contact", "type": "text", "label": "Contact" },
+        { "key": "maturity_stage", "type": "stage_badge", "label": "Maturity" }
+      ],
+      "right": [
+        { "key": "data.valueScores", "type": "ratings_table", "label": "Value assessment" },
+        { "key": "data.complexityScores", "type": "ratings_table", "label": "Complexity assessment" }
+      ]
+    },
+    {
+      "key": "pipeline",
+      "label": "Pipeline",
+      "layout": "vertical",
+      "sections": [
+        { "key": "solutions", "type": "child_list", "object": "solution", "label": "Solutions" },
+        { "key": "bids", "type": "child_list", "object": "bid", "label": "Bids / Contracts" },
+        { "key": "products", "type": "child_list", "object": "product", "label": "Products" }
+      ]
+    },
+    {
+      "key": "lineage",
+      "label": "Lineage",
+      "layout": "vertical",
+      "sections": [
+        { "key": "antecedent", "type": "lineage_graph", "label": "Origin" }
+      ]
+    }
+  ],
+  "actions": [
+    { "key": "advance_gate", "label": "Advance gate", "condition": "maturity_stage != 'G7'" },
+    { "key": "create_solution", "label": "New solution" },
+    { "key": "create_bid", "label": "New bid" },
+    { "key": "generate_doc", "label": "Generate document" }
+  ]
+}
+```
+
+### 12.4 Field widget types
+
+The view template renderer supports these widget types:
+
+| Widget type | Renders as | Used for |
+|---|---|---|
+| `text` | Single-line input | name, contact, domain |
+| `richtext` | Multi-line editor (markdown-capable) | description, analysis |
+| `tag` | Tag/badge | status, domain, category |
+| `list` | Editable list of strings | benefits, risks, nextSteps |
+| `ratings_table` | Matrix of axes × ratings (existing pattern) | valueScores, complexityScores |
+| `stage_badge` | Maturity stage indicator with gate status | maturity_stage |
+| `child_list` | Embedded list of child objects with inline actions | solutions, bids, products |
+| `lineage_graph` | Visual lineage tree/chain | antecedent_id chain |
+| `pricing_grid` | Structured pricing table | bid pricing, product costs |
+| `clause_editor` | Structured clause list with versioning | bid clauses |
+| `key_value` | Key-value pairs | metadata, custom fields |
+| `image` | Image display/upload | dashboardImage, logos |
+| `chart` | Embedded chart (scatter, funnel, bar) | dashboard visualizations |
+
+New widget types can be added as components without changing the template engine.
+
+### 12.5 View templates per workspace type
+
+**`ai-ideas` initiative** (close to current UseCase detail):
+- Layout: vertical sections (no tabs needed for simple ideation)
+- Sections: description, problem, solution, benefits, metrics, risks, scores, references
+- Actions: generate detail, export DOCX
+- Dashboard: scatter Value vs Ease (existing)
+
+**`opportunity` initiative**:
+- Layout: tabs (Overview / Pipeline / Lineage)
+- Overview: description, domain, contact, scores
+- Pipeline: solutions list, bids list, products list
+- Actions: advance gate, create solution, create bid, generate doc
+- Dashboard: funnel by maturity stage, pipeline value
+
+**`code` initiative**:
+- Layout: tabs (Overview / Implementation / Lineage)
+- Overview: description, stack, repo link, issue count
+- Implementation: tasks, milestones, dependencies
+- Actions: advance gate, create implementation plan
+- Dashboard: burndown / progress by stage
+
+**`organization`** (all workspace types):
+- Layout: vertical (existing, but field set driven by view template)
+- Sections: industry, size, products, processes, kpis, challenges, objectives, references
+
+**`bid`**:
+- Layout: tabs (Clauses / Products / Pricing / History)
+- Clauses: clause editor widget
+- Products: child_list of bid_products with per-product pricing
+- Pricing: pricing_grid aggregate
+- Actions: finalize, clone as new version
+
+**`solution`**:
+- Layout: vertical (description, components, stack, estimation)
+- Child list: products
+- Actions: validate, archive
+
+**`product`**:
+- Layout: vertical (definition, deliverables, acceptance criteria)
+- Actions: mark delivered, archive
+
+**`dashboard`** (per workspace type):
+- `ai-ideas`: scatter Value vs Ease (existing) + maturity distribution
+- `opportunity`: pipeline funnel (G0→G2→G5→G7) + value pipeline chart + bid conversion rate
+- `code`: progress by stage + velocity metrics
+- `neutral`: workspace cards + cross-workspace activity feed + pending gates
+
+### 12.6 View template lifecycle
+
+1. **Seed**: each workspace type ships with default view templates for its object types (created on workspace creation, like workflow seeds).
+2. **Customizable**: operator can modify field order, hide/show sections, add custom `key_value` fields — same fork/detach pattern as agents/workflows.
+3. **Versioned**: view templates carry a version for snapshot traceability (like `template_snapshot_id` on initiatives).
+4. **Renderable**: the Svelte UI has a generic `ViewTemplateRenderer.svelte` component that takes a view template descriptor and renders the appropriate layout/widgets.
+
+### 12.7 Data model addition
+
+**`view_templates`** (new table):
+- `id text PK`
+- `workspace_id text FK` — nullable (null = system-level seed template)
+- `workspace_type text NOT NULL`
+- `object_type text NOT NULL` — `initiative | solution | product | bid | organization | dashboard`
+- `maturity_stage text` — nullable (null = applies to all stages)
+- `descriptor jsonb NOT NULL` — the view template DSL content
+- `version integer NOT NULL DEFAULT 1`
+- `source_level text NOT NULL DEFAULT 'code'` — `code | admin | user` (same lineage model as agents)
+- `parent_id text` — self-FK for fork/detach
+- `is_detached boolean NOT NULL DEFAULT false`
+- `created_at, updated_at timestamps`
+- Unique constraint: `(workspace_id, workspace_type, object_type, maturity_stage)`
+
+This follows the same pattern as `agent_definitions` and `workflow_definitions` (seed + fork/detach + lineage).
+
+> Note: add to §1 data model ERD and §1.5 migration scope after validation.
+
+---
+
+## 13) UI surfaces inventory
 
 > → cible: `SPEC.md` §1
 
-### 12.1 New screens
+### 13.1 New screens
 
 | Screen | Route | Purpose |
 |---|---|---|
-| Neutral dashboard | `/neutral` (or `/`) | Card-based workspace overview, activity feed |
+| Neutral dashboard | `/neutral` (or `/`) | Card-based workspace overview, activity feed, TODO list |
 | Workspace creation | `/workspaces/new` | Type selector + workspace creation form |
-| Initiative detail (extended) | `/initiatives/:id` | Existing usecase detail + maturity stage + lineage |
-| Solution editor | `/initiatives/:id/solutions/:id` | Solution CRUD |
-| Product editor | `/products/:id` | Product CRUD |
-| Bid editor | `/initiatives/:id/bids/:id` | Bid CRUD with product attachment |
+| Initiative detail (extended) | `/initiatives/:id` | View-template-driven rendering per workspace type + maturity stage |
+| Solution editor | `/initiatives/:id/solutions/:id` | View-template-driven solution CRUD |
+| Product editor | `/products/:id` | View-template-driven product CRUD |
+| Bid editor | `/initiatives/:id/bids/:id` | View-template-driven bid CRUD with product attachment |
 | Gate review | `/initiatives/:id/gate` | Gate criteria evaluation view |
 
-### 12.2 Modified screens
+### 13.2 Modified screens
 
 | Screen | Changes |
 |---|---|
@@ -663,7 +849,7 @@ Implementation priority: DOCX first, PPTX as stretch goal within BR-04 budget.
 | Settings (`/settings`) | Multi-workflow config per workspace type |
 | Dashboard (`/dashboard`) | Maturity stage distribution chart |
 
-### 12.3 Navigation
+### 13.3 Navigation
 
 - Default landing: neutral workspace dashboard.
 - Workspace switcher in header (existing) enhanced with type icon.
