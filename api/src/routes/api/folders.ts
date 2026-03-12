@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db, pool } from '../../db/client';
-import { folders, organizations, useCases } from '../../db/schema';
+import { folders, organizations, initiatives } from '../../db/schema';
 import { createId } from '../../utils/id';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { defaultMatrixConfig } from '../../config/default-matrix';
@@ -116,9 +116,9 @@ foldersRouter.get('/', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
   const targetWorkspaceId = user.workspaceId;
   const organizationId = c.req.query('organization_id');
-  const includeUseCaseCounts = c.req.query('include_usecase_counts') === 'true';
+  const includeInitiativeCounts = c.req.query('include_usecase_counts') === 'true';
   
-  if (includeUseCaseCounts) {
+  if (includeInitiativeCounts) {
     const rows = organizationId
       ? await db.select({
           id: folders.id,
@@ -129,11 +129,11 @@ foldersRouter.get('/', async (c) => {
           matrixConfig: folders.matrixConfig,
           status: folders.status,
           createdAt: folders.createdAt,
-          useCaseCount: sql<number>`count(${useCases.id})`.mapWith(Number)
+          initiativeCount: sql<number>`count(${initiatives.id})`.mapWith(Number)
         })
         .from(folders)
         .leftJoin(organizations, and(eq(folders.organizationId, organizations.id), eq(organizations.workspaceId, targetWorkspaceId)))
-        .leftJoin(useCases, and(eq(useCases.folderId, folders.id), eq(useCases.workspaceId, targetWorkspaceId)))
+        .leftJoin(initiatives, and(eq(initiatives.folderId, folders.id), eq(initiatives.workspaceId, targetWorkspaceId)))
         .where(and(eq(folders.workspaceId, targetWorkspaceId), eq(folders.organizationId, organizationId)))
         .groupBy(
           folders.id,
@@ -155,11 +155,11 @@ foldersRouter.get('/', async (c) => {
           matrixConfig: folders.matrixConfig,
           status: folders.status,
           createdAt: folders.createdAt,
-          useCaseCount: sql<number>`count(${useCases.id})`.mapWith(Number)
+          initiativeCount: sql<number>`count(${initiatives.id})`.mapWith(Number)
         })
         .from(folders)
         .leftJoin(organizations, and(eq(folders.organizationId, organizations.id), eq(organizations.workspaceId, targetWorkspaceId)))
-        .leftJoin(useCases, and(eq(useCases.folderId, folders.id), eq(useCases.workspaceId, targetWorkspaceId)))
+        .leftJoin(initiatives, and(eq(initiatives.folderId, folders.id), eq(initiatives.workspaceId, targetWorkspaceId)))
         .where(eq(folders.workspaceId, targetWorkspaceId))
         .groupBy(
           folders.id,

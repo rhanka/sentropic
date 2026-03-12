@@ -14,7 +14,7 @@ function isHttpError(e: unknown): e is { status: number } {
   return typeof status === 'number';
 }
 
-const objectTypeSchema = z.enum(['organization', 'folder', 'usecase']);
+const objectTypeSchema = z.enum(['organization', 'folder', 'initiative']);
 
 const lockQuerySchema = z.object({
   objectType: objectTypeSchema,

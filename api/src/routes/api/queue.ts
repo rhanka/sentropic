@@ -197,8 +197,8 @@ queueRouter.get('/stats', async (c) => {
       byType: {
         organization_enrich: jobs.filter(j => j.type === 'organization_enrich').length,
         matrix_generate: jobs.filter(j => j.type === 'matrix_generate').length,
-        usecase_list: jobs.filter(j => j.type === 'usecase_list').length,
-        usecase_detail: jobs.filter(j => j.type === 'usecase_detail').length,
+        initiative_list: jobs.filter(j => j.type === 'initiative_list').length,
+        initiative_detail: jobs.filter(j => j.type === 'initiative_detail').length,
         document_summary: jobs.filter(j => j.type === 'document_summary').length,
         docx_generate: jobs.filter(j => j.type === 'docx_generate').length,
       }
