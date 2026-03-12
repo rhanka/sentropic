@@ -239,13 +239,13 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 - [x] Fix all existing API tests to use `initiatives` naming. ✓
 
 **Test plan:**
-- [ ] Existing API tests pass (all renamed refs).
+- [x] Existing API tests pass (all renamed refs). ✓ 294+7+49+26+4 passed, 0 failed
 - [ ] Backward-compatible alias returns correct responses.
 
-**Lot 2 gate:**
-- [ ] `make typecheck-api ENV=test-br04`
-- [ ] `make lint-api ENV=test-br04`
-- [ ] `make test-api ENV=test-br04`
+**Lot 2 gate:** ✓ closed 2026-03-12
+- [x] `make typecheck-api ENV=test-br04` ✓ 0 errors
+- [x] `make lint-api ENV=test-br04` ✓ 0 errors (185 pre-existing warnings)
+- [x] `make test-api ENV=test-br04` ✓ all pass
 
 ---
 
