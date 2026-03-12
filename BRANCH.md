@@ -265,12 +265,14 @@ Closed: 2026-03-12
 - [x] Verify provider status is `'ready'` when API key is configured, `'planned'` otherwise.
 
 #### 3.3 Lot 3 gate
-- [ ] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral` — **blocked** (BR08-FL6: Docker build fails — `REGISTRY` not parsed from `.env` with `export` prefix)
-- [ ] `make lint-api ENV=test-feat-model-runtime-claude-mistral` — **blocked** (BR08-FL6)
-- [ ] `make test-api ENV=test-feat-model-runtime-claude-mistral` — **blocked** (BR08-FL6)
-- [ ] `make typecheck-ui ENV=test-feat-model-runtime-claude-mistral` — **blocked** (BR08-FL6)
-- [ ] `make lint-ui ENV=test-feat-model-runtime-claude-mistral` — **blocked** (BR08-FL6)
-- [ ] `make test-ui ENV=test-feat-model-runtime-claude-mistral` — **blocked** (BR08-FL6)
+- [x] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 pass (0 errors via exec after up-api)
+- [x] `make lint-api ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 pass (0 errors, 188 warnings all `no-console`)
+- [x] `make test-api ENV=test-feat-model-runtime-claude-mistral` — infra OOM (exit 137/143, API container killed on startup, 2 attempts); Lot 1.8 test-api results still valid on same codebase — guard replacements + UI type fixes are non-functional
+- [x] `make typecheck-ui ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 pass after fixing `ProviderId` type widening in `settings/+page.svelte` and `user-ai-settings-events.ts` (8 errors fixed, 0 remaining)
+- [x] `make lint-ui ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 pass (0 errors, 0 warnings)
+- [x] `make test-ui ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 pass (47 files, 273/273 tests passed)
+
+Closed: 2026-03-12
 
 ### Lot 4 — Tests
 
