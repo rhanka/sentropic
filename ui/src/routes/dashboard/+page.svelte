@@ -9,8 +9,8 @@
   import { addToast, removeToast } from '$lib/stores/toast';
   import { apiGet, apiPost } from '$lib/utils/api';
   import { streamHub } from '$lib/stores/streamHub';
-  import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
-  import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
+  import InitiativeScatterPlot from '$lib/components/InitiativeScatterPlot.svelte';
+  import InitiativeDetail from '$lib/components/InitiativeDetail.svelte';
   import CommentBadge from '$lib/components/CommentBadge.svelte';
   import type { MatrixConfig } from '$lib/types/matrix';
   import References from '$lib/components/References.svelte';
@@ -1553,7 +1553,7 @@
           </div>
           
           <div class="flex justify-center">
-            <UseCaseScatterPlot 
+            <InitiativeScatterPlot 
               bind:this={scatterPlotRef}
               useCases={completedUseCases} 
               {matrix} 
@@ -1774,7 +1774,7 @@
           class="space-y-6 usecase-annex-section {index === 23 ? 'force-page-break-before' : ''}" 
           data-usecase-id={useCase.id} 
           data-usecase-title={useCase?.data?.name || useCase?.name || $_('usecase.useCase')}>
-            <UseCaseDetail
+            <InitiativeDetail
               useCase={useCase}
               matrix={matrix}
               calculatedScores={useCaseScoresMap.get(useCase.id) || null}
