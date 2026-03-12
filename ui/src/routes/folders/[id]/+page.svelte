@@ -206,7 +206,7 @@
 
   const handleUseCaseClick = (useCaseId: string, status: string) => {
     if (status === 'generating' || status === 'detailing') return;
-    goto(`/usecase/${useCaseId}`);
+    goto(`/initiative/${useCaseId}`);
   };
 
   const handleDeleteUseCase = async (id: string) => {

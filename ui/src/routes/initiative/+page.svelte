@@ -6,7 +6,7 @@
   import { _ } from 'svelte-i18n';
 
   onMount(() => {
-    // Use case list moved to /folders/[id]
+    // Initiative list moved to /folders/[id]
     const urlParams = new URLSearchParams($page.url.search);
     const folderId = urlParams.get('folder');
     if (folderId) {

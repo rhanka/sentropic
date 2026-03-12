@@ -268,7 +268,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 - i18n dictionaries (FR/EN) — replace all "cas d'usage"/"use case" with "initiative".
 
 **Tasks:**
-- [ ] Rename route directory and files.
+- [x] Rename route directory and files. ✓
 - [ ] Rename store file and all store references across UI.
 - [ ] Rename components and update all imports.
 - [ ] Update API client calls to use `/initiatives` endpoints.

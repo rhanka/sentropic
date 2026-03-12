@@ -55,7 +55,7 @@
     '/organizations',
     '/folders',
     '/folder',
-    '/usecase',
+    '/initiative',
     '/matrix',
     '/dashboard',
     '/dashboard-tmp',
@@ -76,7 +76,7 @@
       path.startsWith('/organizations/') ||
       path.startsWith('/folders/') ||
       path.startsWith('/folder/') ||
-      path.startsWith('/usecase/')
+      path.startsWith('/initiative/')
     ) {
       return true;
     }
