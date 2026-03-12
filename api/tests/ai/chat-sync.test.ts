@@ -72,7 +72,7 @@ describe('Chat AI - Complete Integration', () => {
     }, 15000); // 15 seconds timeout for AI generation
 
     it('should generate response with tool calls', async () => {
-      // Créer un folder et use case pour le contexte
+      // Créer un folder et initiative pour le contexte
       const folderResponse = await authenticatedRequest(app, 'POST', '/api/v1/folders', user.sessionToken!, {
         name: `Test Folder ${createTestId()}`,
         description: 'Test folder'
@@ -80,20 +80,20 @@ describe('Chat AI - Complete Integration', () => {
       expect(folderResponse.status).toBe(201);
       const { id: folderId } = await folderResponse.json();
 
-      // Créer un use case
-      const useCaseResponse = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, {
+      // Créer un initiative
+      const initiativeResponse = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, {
         name: `Test UC ${createTestId()}`,
         description: 'Test',
         folderId
       });
-      expect(useCaseResponse.status).toBe(201);
-      const { id: useCaseId } = await useCaseResponse.json();
+      expect(initiativeResponse.status).toBe(201);
+      const { id: initiativeId } = await initiativeResponse.json();
 
-      // Message simple qui devrait déclencher read_usecase
+      // Message simple qui devrait déclencher read_initiative
       const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: `Read use case ${useCaseId}`,
-        primaryContextType: 'usecase',
-        primaryContextId: useCaseId,
+        content: `Read initiative ${initiativeId}`,
+        primaryContextType: 'initiative',
+        primaryContextId: initiativeId,
         model: getTestModel()
       });
 

@@ -28,7 +28,7 @@ vi.mock('../../src/services/llm-runtime', async () => {
 
 describe('ToolService (documents) - unit', () => {
   const workspaceId = ADMIN_WORKSPACE_ID;
-  const contextType = 'usecase' as const;
+  const contextType = 'initiative' as const;
   const contextId = `uc_${createId()}`;
   let docId = '';
 

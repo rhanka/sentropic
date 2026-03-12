@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { app } from '../../src/app';
 import { createTestId } from '../utils/test-helpers';
-import { testUseCases } from '../utils/test-data';
+import { testInitiatives } from '../utils/test-data';
 import { 
   createAuthenticatedUser, 
   authenticatedRequest, 
@@ -57,27 +57,27 @@ describe('Use Cases API', () => {
   }
 
   // Helper function to create a test use case
-  async function createTestUseCase(folderId?: string) {
-    const useCaseData = {
+  async function createTestInitiative(folderId?: string) {
+    const initiativeData = {
       name: `Test Use Case ${createTestId()}`,
       description: 'Test use case description',
       ...(folderId && { folderId })
     };
 
-    const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, useCaseData);
+    const response = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, initiativeData);
     expect(response.status).toBe(201);
     const data = await response.json();
     return data;
   }
 
-  describe('GET /use-cases', () => {
-    it('should get all use cases', async () => {
-      const response = await authenticatedRequest(app, 'GET', '/api/v1/use-cases', user.sessionToken!);
+  describe('GET /initiatives', () => {
+    it('should get all initiatives', async () => {
+      const response = await authenticatedRequest(app, 'GET', '/api/v1/initiatives', user.sessionToken!);
       
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(Array.isArray(data.items)).toBe(true);
-      // Model field should be present in all use cases
+      // Model field should be present in all initiatives
       if (data.items.length > 0) {
         expect(data.items[0]).toHaveProperty('model');
       }
@@ -87,41 +87,41 @@ describe('Use Cases API', () => {
   it('enforces export permissions for usecase scope', async () => {
     const orgId = await createTestOrganization();
     const folderId = await createTestFolder(orgId);
-    const useCase = await createTestUseCase(folderId);
+    const initiative = await createTestInitiative(folderId);
 
     const resEditor = await authenticatedRequest(app, 'POST', '/api/v1/exports', user.sessionToken!, {
-      scope: 'usecase',
-      scope_id: useCase.id,
+      scope: 'initiative',
+      scope_id: initiative.id,
       include_comments: false,
       include_documents: false,
     });
     expect(resEditor.status).toBe(200);
 
     const resViewer = await authenticatedRequest(app, 'POST', '/api/v1/exports', viewer.sessionToken!, {
-      scope: 'usecase',
-      scope_id: useCase.id,
+      scope: 'initiative',
+      scope_id: initiative.id,
       include_comments: false,
       include_documents: false,
     });
     expect(resViewer.status).toBe(403);
   });
 
-  describe('POST /use-cases', () => {
+  describe('POST /initiatives', () => {
     it('should create a use case', async () => {
       const folderId = await createTestFolder();
-      const useCaseData = {
+      const initiativeData = {
         name: `Test Use Case ${createTestId()}`,
         description: 'Test use case description',
         folderId: folderId
       };
 
-      const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, useCaseData);
+      const response = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, initiativeData);
 
       expect(response.status).toBe(201);
       const data = await response.json();
       // name and description are now in data JSONB
-      expect(data.data?.name).toBe(useCaseData.name);
-      expect(data.data?.description).toBe(useCaseData.description);
+      expect(data.data?.name).toBe(initiativeData.name);
+      expect(data.data?.description).toBe(initiativeData.description);
       expect(data.folderId).toBe(folderId);
       // Scores are calculated dynamically
       expect(data.totalValueScore).toBeDefined();
@@ -130,7 +130,7 @@ describe('Use Cases API', () => {
 
     it('should create a use case with problem and solution', async () => {
       const folderId = await createTestFolder();
-      const useCaseData = {
+      const initiativeData = {
         name: `Test Use Case ${createTestId()}`,
         description: 'Test use case description',
         problem: 'Test problem description',
@@ -138,46 +138,46 @@ describe('Use Cases API', () => {
         folderId: folderId
       };
 
-      const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, useCaseData);
+      const response = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, initiativeData);
 
       expect(response.status).toBe(201);
       const data = await response.json();
-      expect(data.data?.name).toBe(useCaseData.name);
-      expect(data.data?.description).toBe(useCaseData.description);
-      expect(data.data?.problem).toBe(useCaseData.problem);
-      expect(data.data?.solution).toBe(useCaseData.solution);
+      expect(data.data?.name).toBe(initiativeData.name);
+      expect(data.data?.description).toBe(initiativeData.description);
+      expect(data.data?.problem).toBe(initiativeData.problem);
+      expect(data.data?.solution).toBe(initiativeData.solution);
     });
 
     it('should create a use case without folder', async () => {
       const folderId = await createTestFolder();
-      const useCaseData = {
+      const initiativeData = {
         name: `Test Use Case ${createTestId()}`,
         description: 'Test use case without folder',
         folderId: folderId
       };
 
-      const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, useCaseData);
+      const response = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, initiativeData);
 
       expect(response.status).toBe(201);
       const data = await response.json();
-      expect(data.data?.name).toBe(useCaseData.name);
+      expect(data.data?.name).toBe(initiativeData.name);
       expect(data.folderId).toBe(folderId);
     });
 
     it('should reject invalid use case data', async () => {
-      const invalidUseCaseData = {
+      const invalidInitiativeData = {
         // Missing required name field
         description: 'Invalid use case'
       };
 
-      const response = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, invalidUseCaseData);
+      const response = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, invalidInitiativeData);
 
       expect(response.status).toBe(400);
     });
 
-    it('should forbid viewers from creating use cases', async () => {
+    it('should forbid viewers from creating initiatives', async () => {
       const folderId = await createTestFolder();
-      const useCaseData = {
+      const initiativeData = {
         name: `Test Use Case ${createTestId()}`,
         description: 'Test use case description',
         folderId
@@ -186,41 +186,41 @@ describe('Use Cases API', () => {
       const response = await authenticatedRequest(
         app,
         'POST',
-        `/api/v1/use-cases?workspace_id=${encodeURIComponent(user.workspaceId)}`,
+        `/api/v1/initiatives?workspace_id=${encodeURIComponent(user.workspaceId)}`,
         viewer.sessionToken!,
-        useCaseData
+        initiativeData
       );
       expect(response.status).toBe(403);
     });
   });
 
-  describe('DELETE /use-cases/:id', () => {
-    it('should forbid viewers from deleting use cases', async () => {
+  describe('DELETE /initiatives/:id', () => {
+    it('should forbid viewers from deleting initiatives', async () => {
       const folderId = await createTestFolder();
-      const useCase = await createTestUseCase(folderId);
+      const initiative = await createTestInitiative(folderId);
 
       const response = await authenticatedRequest(
         app,
         'DELETE',
-        `/api/v1/use-cases/${useCase.id}?workspace_id=${encodeURIComponent(user.workspaceId)}`,
+        `/api/v1/initiatives/${initiative.id}?workspace_id=${encodeURIComponent(user.workspaceId)}`,
         viewer.sessionToken!
       );
       expect(response.status).toBe(403);
     });
   });
 
-  describe('GET /use-cases/:id', () => {
+  describe('GET /initiatives/:id', () => {
     it('should get a specific use case', async () => {
       const folderId = await createTestFolder();
-      const useCase = await createTestUseCase(folderId);
+      const initiative = await createTestInitiative(folderId);
       
-      const response = await authenticatedRequest(app, 'GET', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!);
+      const response = await authenticatedRequest(app, 'GET', `/api/v1/initiatives/${initiative.id}`, user.sessionToken!);
       
       expect(response.status).toBe(200);
       const data = await response.json();
-      expect(data.id).toBe(useCase.id);
+      expect(data.id).toBe(initiative.id);
       // name and description are now in data JSONB
-      expect(data.data?.name).toBe(useCase.data?.name);
+      expect(data.data?.name).toBe(initiative.data?.name);
       // Model field should be present (may be null or have default value from settings)
       expect(data).toHaveProperty('model');
       // Scores are calculated dynamically
@@ -231,22 +231,22 @@ describe('Use Cases API', () => {
     it('should return 404 for non-existent use case', async () => {
       const nonExistentId = 'non-existent-id';
       
-      const response = await authenticatedRequest(app, 'GET', `/api/v1/use-cases/${nonExistentId}`, user.sessionToken!);
+      const response = await authenticatedRequest(app, 'GET', `/api/v1/initiatives/${nonExistentId}`, user.sessionToken!);
       
       expect(response.status).toBe(404);
     });
   });
 
-  describe('PUT /use-cases/:id', () => {
+  describe('PUT /initiatives/:id', () => {
     it('should update a use case', async () => {
       const folderId = await createTestFolder();
-      const useCase = await createTestUseCase(folderId);
+      const initiative = await createTestInitiative(folderId);
       const updateData = {
         name: `Updated Use Case ${createTestId()}`,
         description: 'Updated description'
       };
 
-      const response = await authenticatedRequest(app, 'PUT', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!, updateData);
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/initiatives/${initiative.id}`, user.sessionToken!, updateData);
       
       expect(response.status).toBe(200);
       const data = await response.json();
@@ -256,13 +256,13 @@ describe('Use Cases API', () => {
 
     it('should update problem and solution', async () => {
       const folderId = await createTestFolder();
-      const useCase = await createTestUseCase(folderId);
+      const initiative = await createTestInitiative(folderId);
       const updateData = {
         problem: 'Updated problem description',
         solution: 'Updated solution description'
       };
 
-      const response = await authenticatedRequest(app, 'PUT', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!, updateData);
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/initiatives/${initiative.id}`, user.sessionToken!, updateData);
       
       expect(response.status).toBe(200);
       const data = await response.json();
@@ -272,18 +272,18 @@ describe('Use Cases API', () => {
 
     it('should partially update a use case', async () => {
       const folderId = await createTestFolder();
-      const useCase = await createTestUseCase(folderId);
+      const initiative = await createTestInitiative(folderId);
       const partialUpdate = {
         name: `Partially Updated ${createTestId()}`
       };
 
-      const response = await authenticatedRequest(app, 'PUT', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!, partialUpdate);
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/initiatives/${initiative.id}`, user.sessionToken!, partialUpdate);
       
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data.data?.name).toBe(partialUpdate.name);
       // Description should remain unchanged
-      expect(data.data?.description).toBe(useCase.data?.description);
+      expect(data.data?.description).toBe(initiative.data?.description);
     });
 
     it('should round totalValueScore with Math.round() when valueScores are updated', async () => {
@@ -319,7 +319,7 @@ describe('Use Cases API', () => {
       const folderId = folder.id;
 
       // Create use case
-      const useCase = await createTestUseCase(folderId);
+      const initiative = await createTestInitiative(folderId);
 
       // Update with valueScores that will result in a decimal score (e.g., 15.7 -> 16)
       // Le schéma attend { axisId, rating, description }
@@ -329,7 +329,7 @@ describe('Use Cases API', () => {
         ]
       };
 
-      const response = await authenticatedRequest(app, 'PUT', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!, updateData);
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/initiatives/${initiative.id}`, user.sessionToken!, updateData);
       
       expect(response.status).toBe(200);
       const data = await response.json();
@@ -369,7 +369,7 @@ describe('Use Cases API', () => {
       const folderId = folder.id;
 
       // Create use case
-      const useCase = await createTestUseCase(folderId);
+      const initiative = await createTestInitiative(folderId);
 
       // Update with complexityScores
       // Le schéma attend { axisId, rating, description }
@@ -379,7 +379,7 @@ describe('Use Cases API', () => {
         ]
       };
 
-      const response = await authenticatedRequest(app, 'PUT', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!, updateData);
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/initiatives/${initiative.id}`, user.sessionToken!, updateData);
       
       expect(response.status).toBe(200);
       const data = await response.json();
@@ -390,10 +390,10 @@ describe('Use Cases API', () => {
 
     it('should only recompute scores when valueScores or complexityScores are modified', async () => {
       const folderId = await createTestFolder();
-      const useCase = await createTestUseCase(folderId);
+      const initiative = await createTestInitiative(folderId);
       
       // Get initial scores
-      const initialResponse = await authenticatedRequest(app, 'GET', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!);
+      const initialResponse = await authenticatedRequest(app, 'GET', `/api/v1/initiatives/${initiative.id}`, user.sessionToken!);
       const initialData = await initialResponse.json();
       const initialValueScore = initialData.totalValueScore;
       const initialComplexityScore = initialData.totalComplexityScore;
@@ -403,7 +403,7 @@ describe('Use Cases API', () => {
         name: `Updated Name ${createTestId()}`
       };
 
-      const response = await authenticatedRequest(app, 'PUT', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!, updateData);
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/initiatives/${initiative.id}`, user.sessionToken!, updateData);
       
       expect(response.status).toBe(200);
       const data = await response.json();
@@ -422,10 +422,10 @@ describe('Use Cases API', () => {
 
     it('should preserve existing scores when not modifying valueScores or complexityScores', async () => {
       const folderId = await createTestFolder();
-      const useCase = await createTestUseCase(folderId);
+      const initiative = await createTestInitiative(folderId);
       
       // Get initial scores
-      const initialResponse = await authenticatedRequest(app, 'GET', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!);
+      const initialResponse = await authenticatedRequest(app, 'GET', `/api/v1/initiatives/${initiative.id}`, user.sessionToken!);
       const initialData = await initialResponse.json();
       const initialValueScore = initialData.totalValueScore;
       const initialComplexityScore = initialData.totalComplexityScore;
@@ -435,7 +435,7 @@ describe('Use Cases API', () => {
         description: 'Updated description without changing scores'
       };
 
-      const response = await authenticatedRequest(app, 'PUT', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!, updateData);
+      const response = await authenticatedRequest(app, 'PUT', `/api/v1/initiatives/${initiative.id}`, user.sessionToken!, updateData);
       
       expect(response.status).toBe(200);
       const data = await response.json();
@@ -453,17 +453,17 @@ describe('Use Cases API', () => {
     });
   });
 
-  describe('DELETE /use-cases/:id', () => {
+  describe('DELETE /initiatives/:id', () => {
     it('should delete a use case', async () => {
       const folderId = await createTestFolder();
-      const useCase = await createTestUseCase(folderId);
+      const initiative = await createTestInitiative(folderId);
       
-      const response = await authenticatedRequest(app, 'DELETE', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!);
+      const response = await authenticatedRequest(app, 'DELETE', `/api/v1/initiatives/${initiative.id}`, user.sessionToken!);
       
       expect(response.status).toBe(204);
 
       // Verify it's deleted
-      const getResponse = await authenticatedRequest(app, 'GET', `/api/v1/use-cases/${useCase.id}`, user.sessionToken!);
+      const getResponse = await authenticatedRequest(app, 'GET', `/api/v1/initiatives/${initiative.id}`, user.sessionToken!);
       expect(getResponse.status).toBe(404);
     });
   });

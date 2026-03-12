@@ -936,7 +936,7 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
   for (const initiative of payload.use_cases) {
     const initiativeId = String((initiative as Record<string, unknown>).id ?? '');
     if (!initiativeId) continue;
-    addZipFile(`usecase_${initiativeId}.json`, encodeJson(withComments(initiative, 'initiative', initiativeId)));
+    addZipFile(`initiative_${initiativeId}.json`, encodeJson(withComments(initiative, 'initiative', initiativeId)));
   }
   for (const matrix of payload.matrix) {
     const folderId = String((matrix as Record<string, unknown>).folder_id ?? '');

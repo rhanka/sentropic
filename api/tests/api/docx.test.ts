@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
-import { chatStreamEvents, folders, jobQueue, useCases } from '../../src/db/schema';
+import { chatStreamEvents, folders, jobQueue, initiatives } from '../../src/db/schema';
 import { queueManager } from '../../src/services/queue-manager';
 import * as storageS3 from '../../src/services/storage-s3';
 import * as docxRenderWorker from '../../src/services/docx-render-worker';
@@ -25,12 +25,12 @@ describe('DOCX API', () => {
   afterEach(async () => {
     processJobsSpy.mockRestore();
     await db.delete(jobQueue).where(eq(jobQueue.workspaceId, user.workspaceId));
-    await db.delete(useCases).where(eq(useCases.workspaceId, user.workspaceId));
+    await db.delete(initiatives).where(eq(initiatives.workspaceId, user.workspaceId));
     await db.delete(folders).where(eq(folders.workspaceId, user.workspaceId));
     await cleanupAuthData();
   });
 
-  async function createFolderAndUseCase() {
+  async function createFolderAndInitiative() {
     const folderRes = await authenticatedRequest(app, 'POST', '/api/v1/folders', user.sessionToken!, {
       name: `Folder ${createTestId()}`,
       description: 'DOCX test folder',
@@ -38,10 +38,10 @@ describe('DOCX API', () => {
     expect(folderRes.status).toBe(201);
     const folder = await folderRes.json();
 
-    const useCaseRes = await authenticatedRequest(
+    const initiativeRes = await authenticatedRequest(
       app,
       'POST',
-      '/api/v1/use-cases',
+      '/api/v1/initiatives',
       user.sessionToken!,
       {
         folderId: folder.id,
@@ -49,17 +49,17 @@ describe('DOCX API', () => {
         description: 'DOCX test use case',
       }
     );
-    expect(useCaseRes.status).toBe(201);
-    const useCase = await useCaseRes.json();
+    expect(initiativeRes.status).toBe(201);
+    const initiative = await initiativeRes.json();
 
-    return { folder, useCase };
+    return { folder, initiative };
   }
 
   it('returns 410 on legacy synchronous endpoint', async () => {
     const response = await authenticatedRequest(
       app,
       'GET',
-      `/api/v1/use-cases/${createTestId()}/docx`,
+      `/api/v1/initiatives/${createTestId()}/docx`,
       user.sessionToken!
     );
 
@@ -81,12 +81,12 @@ describe('DOCX API', () => {
   });
 
   it('accepts options alias and enqueues a docx job', async () => {
-    const { useCase } = await createFolderAndUseCase();
+    const { initiative } = await createFolderAndInitiative();
 
     const response = await authenticatedRequest(app, 'POST', '/api/v1/docx/generate', user.sessionToken!, {
       templateId: 'usecase-onepage',
-      entityType: 'usecase',
-      entityId: useCase.id,
+      entityType: 'initiative',
+      entityId: initiative.id,
       options: {
         dashboardImage: { dataBase64: 'ZGFzaGJvYXJk' },
       },
@@ -110,14 +110,14 @@ describe('DOCX API', () => {
 
     const payload = JSON.parse(job!.data) as Record<string, unknown>;
     expect(payload.templateId).toBe('usecase-onepage');
-    expect(payload.entityType).toBe('usecase');
-    expect(payload.entityId).toBe(useCase.id);
+    expect(payload.entityType).toBe('initiative');
+    expect(payload.entityId).toBe(initiative.id);
     expect((payload.provided as Record<string, unknown>)?.dashboardImage).toBeDefined();
     expect(typeof payload.sourceHash).toBe('string');
   });
 
   it('enqueues executive synthesis template for folder entity', async () => {
-    const { folder } = await createFolderAndUseCase();
+    const { folder } = await createFolderAndInitiative();
 
     const response = await authenticatedRequest(app, 'POST', '/api/v1/docx/generate', user.sessionToken!, {
       templateId: 'executive-synthesis-multipage',
@@ -145,11 +145,11 @@ describe('DOCX API', () => {
   });
 
   it('reuses job for same locale and creates a new one for a different locale', async () => {
-    const { useCase } = await createFolderAndUseCase();
+    const { initiative } = await createFolderAndInitiative();
     const payload = {
       templateId: 'usecase-onepage',
-      entityType: 'usecase',
-      entityId: useCase.id,
+      entityType: 'initiative',
+      entityId: initiative.id,
     } as const;
 
     const firstRes = await authenticatedRequest(
@@ -207,11 +207,11 @@ describe('DOCX API', () => {
   });
 
   it('reuses the same pending job for identical payload', async () => {
-    const { useCase } = await createFolderAndUseCase();
+    const { initiative } = await createFolderAndInitiative();
     const payload = {
       templateId: 'usecase-onepage',
-      entityType: 'usecase',
-      entityId: useCase.id,
+      entityType: 'initiative',
+      entityId: initiative.id,
     } as const;
 
     const firstRes = await authenticatedRequest(app, 'POST', '/api/v1/docx/generate', user.sessionToken!, payload);
@@ -241,7 +241,7 @@ describe('DOCX API', () => {
       workspaceId: user.workspaceId!,
       data: JSON.stringify({
         templateId: 'usecase-onepage',
-        entityType: 'usecase',
+        entityType: 'initiative',
         entityId: createTestId(),
       }),
       createdAt: new Date(),
@@ -320,7 +320,7 @@ describe('DOCX API', () => {
       workspaceId: user.workspaceId!,
       data: JSON.stringify({
         templateId: 'usecase-onepage',
-        entityType: 'usecase',
+        entityType: 'initiative',
         entityId: createTestId(),
       }),
       result: JSON.stringify({
@@ -360,7 +360,7 @@ describe('DOCX API', () => {
         workspaceId: user.workspaceId!,
         data: JSON.stringify({
           templateId: 'usecase-onepage',
-          entityType: 'usecase',
+          entityType: 'initiative',
           entityId: createTestId(),
         }),
         result: JSON.stringify({
@@ -390,7 +390,7 @@ describe('DOCX API', () => {
   });
 
   it('invalidates previous docx cache entries when source changes', async () => {
-    const { useCase } = await createFolderAndUseCase();
+    const { initiative } = await createFolderAndInitiative();
     const deleteSpy = vi.spyOn(storageS3, 'deleteObject').mockResolvedValue();
     const oldCompletedJobId = createTestId();
     const oldPendingJobId = createTestId();
@@ -404,8 +404,8 @@ describe('DOCX API', () => {
           workspaceId: user.workspaceId!,
           data: JSON.stringify({
             templateId: 'usecase-onepage',
-            entityType: 'usecase',
-            entityId: useCase.id,
+            entityType: 'initiative',
+            entityId: initiative.id,
             sourceHash: 'old-source-hash-completed',
           }),
           result: JSON.stringify({
@@ -424,8 +424,8 @@ describe('DOCX API', () => {
           workspaceId: user.workspaceId!,
           data: JSON.stringify({
             templateId: 'usecase-onepage',
-            entityType: 'usecase',
-            entityId: useCase.id,
+            entityType: 'initiative',
+            entityId: initiative.id,
             sourceHash: 'old-source-hash-pending',
           }),
           createdAt: new Date(Date.now() - 2000),
@@ -439,8 +439,8 @@ describe('DOCX API', () => {
         user.sessionToken!,
         {
           templateId: 'usecase-onepage',
-          entityType: 'usecase',
-          entityId: useCase.id,
+          entityType: 'initiative',
+          entityId: initiative.id,
         },
         { 'Accept-Language': 'fr-FR' }
       );
@@ -511,7 +511,7 @@ describe('DOCX API', () => {
           workspaceId: user.workspaceId!,
           data: JSON.stringify({
             templateId: 'usecase-onepage',
-            entityType: 'usecase',
+            entityType: 'initiative',
             entityId: createTestId(),
           }),
           createdAt: new Date(),
@@ -584,7 +584,7 @@ describe('DOCX API', () => {
         workspaceId: user.workspaceId!,
         data: JSON.stringify({
           templateId: 'usecase-onepage',
-          entityType: 'usecase',
+          entityType: 'initiative',
           entityId: createTestId(),
           locale: 'fr',
         }),
@@ -596,7 +596,7 @@ describe('DOCX API', () => {
       }).processDocxGenerate(
         {
           templateId: 'usecase-onepage',
-          entityType: 'usecase',
+          entityType: 'initiative',
           entityId: createTestId(),
           locale: 'fr',
         },
@@ -649,7 +649,7 @@ describe('DOCX API', () => {
       workspaceId: user.workspaceId!,
       data: JSON.stringify({
         templateId: 'usecase-onepage',
-        entityType: 'usecase',
+        entityType: 'initiative',
         entityId: createTestId(),
       }),
       result: JSON.stringify({
