@@ -635,7 +635,7 @@
     mode="export"
     title={$_('usecase.export.title')}
     scope="usecase"
-    scopeId={$initiativeExportState.useCaseId ?? useCase.id}
+    scopeId={$initiativeExportState.initiativeId ?? useCase.id}
     allowScopeSelect={false}
     allowScopeIdEdit={false}
     workspaceName={workspaceName}
