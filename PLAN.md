@@ -44,7 +44,7 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-04 | `feat/workspace-template-catalog` | **active** | BR-03, BR-05 | — |
 | BR-05 | `feat/vscode-plugin-v1` | done | BR-01, BR-03 | — |
 | BR-06 | `feat/chrome-upstream-v1` | plan | BR-00 | low (contextType rename) |
-| BR-07 | `feat/release-ui-npm-and-pretest` | plan | BR-00 | none |
+| BR-07 | `feat/release-ui-npm-and-pretest` | plan | BR-00, **BR-14** | none (blocked: npm export requires modular ChatWidget) |
 | BR-08 | `feat/model-runtime-claude-mistral-cohere` | done | BR-01 | none (scope extended: +Cohere) |
 | BR-09 | `feat/sso-google` | plan | BR-00 | none |
 | BR-10 | `feat/vscode-plugin-v2-multi-agent` | plan | BR-05, BR-08, **BR-04** | **high** (workspace-type-aware agents) |
@@ -87,6 +87,7 @@ graph TD
   BR03 --> BR05
   BR00 --> BR06
   BR00 --> BR07
+  BR14 --> BR07
   BR06 --> BR13
 
   BR01 --> BR08
@@ -108,15 +109,22 @@ graph TD
 
 ## 5) Scheduling post-BR-04
 
-After BR-04 merge, independent branches can proceed in parallel:
-- **Wave A**: BR-06 (Chrome upstream) + BR-07 (UI npm) + BR-08 (Claude/Mistral/Cohere) — no BR-04 dependency
-- **Wave A'** (parallelizable with BR-04): BR-14 (chat modularization) + BR-16 (document connectors) — low BR-04 dependency, can start on non-overlapping files
-- **Wave B**: BR-09 (SSO Google) — independent
-- **Wave C**: BR-10 (VSCode v2) + BR-11 (Chrome multitab) — after Wave A + BR-04
-- **Wave C'**: BR-17 (RAG documents) — after BR-16 (optional) + BR-08 (Cohere embeddings)
-- **Wave D**: BR-12 (CI publish) — after Wave A/C
+Wave scheduling to be validated with user. Dependency constraints:
 
-Exact timeline TBD after BR-04 Lot 0 gate.
+**Hard dependencies:**
+- BR-07 (UI npm) → BR-14 (chat modularization) — npm export requires modular components
+- BR-10 (VSCode v2) → BR-04 + BR-08
+- BR-11 (Chrome multitab) → BR-06 + BR-08
+- BR-12 (CI publish) → BR-05 + BR-06 + BR-07 + BR-13
+- BR-17 (RAG) → BR-08 (embeddings), optional BR-16
+
+**No BR-04 dependency (startable now):**
+- BR-06, BR-08, BR-09
+
+**Low BR-04 dependency (parallelizable on distinct files):**
+- BR-14, BR-16
+
+Wave ordering TBD — user to validate priorities.
 
 ## 6) Environment convention
 
