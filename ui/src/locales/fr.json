@@ -1484,7 +1484,14 @@
     "createDialog": {
       "title": "Nouveau workspace",
       "nameLabel": "Nom du workspace",
-      "namePlaceholder": "Nom du workspace"
+      "namePlaceholder": "Nom du workspace",
+      "typeLabel": "Type de workspace"
+    },
+    "types": {
+      "neutral": "Personnel (neutre)",
+      "aiIdeas": "AI Ideas",
+      "opportunity": "Opportunit\u00e9",
+      "code": "Code"
     },
     "confirm": {
       "deletePermanently": "Supprimer définitivement ce workspace (uniquement possible si caché) ?",
