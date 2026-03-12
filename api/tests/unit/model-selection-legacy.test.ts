@@ -55,4 +55,43 @@ describe('model selection legacy cutovers', () => {
       migrated: false,
     });
   });
+
+  it('leaves Claude model ids unchanged (no legacy rules)', () => {
+    expect(
+      normalizeLegacyModelSelection({
+        providerId: 'anthropic',
+        modelId: 'claude-sonnet-4-6',
+      })
+    ).toEqual({
+      providerId: 'anthropic',
+      modelId: 'claude-sonnet-4-6',
+      migrated: false,
+    });
+  });
+
+  it('leaves Mistral model ids unchanged (no legacy rules)', () => {
+    expect(
+      normalizeLegacyModelSelection({
+        providerId: 'mistral',
+        modelId: 'mistral-large-2502',
+      })
+    ).toEqual({
+      providerId: 'mistral',
+      modelId: 'mistral-large-2502',
+      migrated: false,
+    });
+  });
+
+  it('leaves Cohere model ids unchanged (no legacy rules)', () => {
+    expect(
+      normalizeLegacyModelSelection({
+        providerId: 'cohere',
+        modelId: 'command-a-03-2025',
+      })
+    ).toEqual({
+      providerId: 'cohere',
+      modelId: 'command-a-03-2025',
+      migrated: false,
+    });
+  });
 });
