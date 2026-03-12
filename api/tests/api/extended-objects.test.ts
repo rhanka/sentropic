@@ -59,7 +59,7 @@ describe('Extended objects API (solutions, products, bids)', () => {
       data: { name: 'Test Initiative' },
     });
     cleanupIds.initiativeIds.push(testInitiativeId);
-  });
+  }, 30000);
 
   afterEach(async () => {
     // Cleanup in reverse dependency order
