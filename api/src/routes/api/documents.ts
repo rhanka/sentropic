@@ -11,7 +11,7 @@ import { requireWorkspaceEditor } from '../../services/workspace-access';
 
 export const documentsRouter = new Hono();
 
-const contextTypeSchema = z.enum(['organization', 'folder', 'usecase', 'chat_session']);
+const contextTypeSchema = z.enum(['organization', 'folder', 'initiative', 'chat_session']);
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};

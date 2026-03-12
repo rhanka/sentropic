@@ -7,7 +7,7 @@ import {
   chatSessions,
   contextDocuments,
   jobQueue,
-  useCases,
+  initiatives,
   folders,
   organizations,
   users,
@@ -195,7 +195,7 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
     await tx.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
 
     // Core business tables
-    await tx.delete(useCases).where(eq(useCases.workspaceId, workspaceId));
+    await tx.delete(initiatives).where(eq(initiatives.workspaceId, workspaceId));
     await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
 

@@ -14,7 +14,7 @@ import { resolveLocaleFromHeaders } from '../../utils/locale';
 export const chatRouter = new Hono();
 
 const chatContextInput = z.object({
-  contextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']),
+  contextType: z.enum(['organization', 'folder', 'initiative', 'executive_summary']),
   contextId: z.string().min(1)
 });
 
@@ -62,7 +62,7 @@ const createMessageInput = z.object({
   providerApiKey: z.string().min(1).optional(),
   model: z.string().optional(),
   workspace_id: z.string().optional(),
-  primaryContextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']).optional(),
+  primaryContextType: z.enum(['organization', 'folder', 'initiative', 'executive_summary']).optional(),
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional(),
   contexts: z.array(chatContextInput).optional(),
@@ -86,7 +86,7 @@ const retryMessageInput = z.object({
 });
 
 const createSessionInput = z.object({
-  primaryContextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']).optional(),
+  primaryContextType: z.enum(['organization', 'folder', 'initiative', 'executive_summary']).optional(),
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional()
 });

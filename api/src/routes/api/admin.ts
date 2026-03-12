@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { folders, organizations, useCases, userSessions, users, workspaces } from '../../db/schema';
+import { folders, organizations, initiatives, userSessions, users, workspaces } from '../../db/schema';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   chatGenerationTraces,
@@ -30,7 +30,7 @@ const userStatusSchema = z.enum([
 adminRouter.post('/reset', async (c) => {
   try {
     // Supprimer toutes les données dans l'ordre inverse des dépendances
-    await db.delete(useCases);
+    await db.delete(initiatives);
     await db.delete(folders);
     await db.delete(organizations);
     
@@ -54,12 +54,12 @@ adminRouter.get('/stats', async (c) => {
   try {
     const [organizationsCount] = await db.select({ count: sql`count(*)` }).from(organizations);
     const [foldersCount] = await db.select({ count: sql`count(*)` }).from(folders);
-    const [useCasesCount] = await db.select({ count: sql`count(*)` }).from(useCases);
+    const [initiativesCount] = await db.select({ count: sql`count(*)` }).from(initiatives);
     
     return c.json({
       organizations: organizationsCount.count,
       folders: foldersCount.count,
-      useCases: useCasesCount.count,
+      initiatives: initiativesCount.count,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -281,17 +281,17 @@ adminRouter.delete('/users/:id', async (c) => {
         .from(organizations)
         .where(eq(organizations.workspaceId, workspaceId));
       const folderRows = await tx.select({ id: folders.id }).from(folders).where(eq(folders.workspaceId, workspaceId));
-      const useCaseRows = await tx.select({ id: useCases.id }).from(useCases).where(eq(useCases.workspaceId, workspaceId));
+      const initiativeRows = await tx.select({ id: initiatives.id }).from(initiatives).where(eq(initiatives.workspaceId, workspaceId));
 
       const organizationIds = organizationRows.map((r) => r.id);
       const folderIds = folderRows.map((r) => r.id);
-      const useCaseIds = useCaseRows.map((r) => r.id);
+      const initiativeIds = initiativeRows.map((r) => r.id);
 
       // Stream events for structured generations (organization_/folder_/usecase_)
       const streamIds: string[] = [];
       for (const id of organizationIds) streamIds.push(`organization_${id}`);
       for (const id of folderIds) streamIds.push(`folder_${id}`);
-      for (const id of useCaseIds) streamIds.push(`usecase_${id}`);
+      for (const id of initiativeIds) streamIds.push(`usecase_${id}`);
       if (streamIds.length) {
         await tx.delete(chatStreamEvents).where(inArray(chatStreamEvents.streamId, streamIds));
       }
@@ -312,14 +312,14 @@ adminRouter.delete('/users/:id', async (c) => {
           .delete(contextModificationHistory)
           .where(and(eq(contextModificationHistory.contextType, 'folder'), inArray(contextModificationHistory.contextId, folderIds)));
       }
-      if (useCaseIds.length) {
+      if (initiativeIds.length) {
         await tx
           .delete(contextModificationHistory)
-          .where(and(eq(contextModificationHistory.contextType, 'usecase'), inArray(contextModificationHistory.contextId, useCaseIds)));
+          .where(and(eq(contextModificationHistory.contextType, 'usecase'), inArray(contextModificationHistory.contextId, initiativeIds)));
       }
 
       // Delete business objects (workspace scoped)
-      await tx.delete(useCases).where(eq(useCases.workspaceId, workspaceId));
+      await tx.delete(initiatives).where(eq(initiatives.workspaceId, workspaceId));
       await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
       await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
       await tx.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
