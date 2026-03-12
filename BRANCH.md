@@ -113,43 +113,37 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - [x] OQ-8: **Closed — table `bids` dédiée + jonction `bid_products`.** Bid = objet data-driven (clauses, profils, prix en `data jsonb`), cycle de vie propre (draft → review → finalized → contract). FK `bid.initiative_id`. Un bid couvre N products → table de jonction `bid_products(bid_id, product_id, data jsonb)` pour prix/conditions spécifiques par product. Une demande de devis = création d'une initiative type `opportunity` (l'initiative est le point d'entrée universel : idée, demande client, projet code). Schéma FK : `initiative ← solution(initiative_id) ← product(solution_id, initiative_id)`, `initiative ← bid(initiative_id) ← bid_products(bid_id, product_id)`.
   - [x] OQ-9: **Closed — par type workspace uniquement en v1.** Un folder hérite des gates de son type workspace. Pas d'override folder en v1 (simplification : un seul endroit de config, pas de conflits). Override folder possible en évolution future si besoin.
 
-- [ ] **0.3 Target data model design**
-  - [ ] Design stable target data model covering all segments:
-    - Workspace layer: `workspaces.type`, template catalog, capability map
-    - Business objects: initiative (use_cases) with `antecedent_id`, `maturity_stage`, `gate_status`; solution (JSONB v1); product (table); portfolio (view)
-    - Orchestration: agent/workflow defaults per workspace type; gate enforcement via guardrails
-    - Template/rendering: template catalog per type × maturity stage; rendering engine abstraction
-  - [ ] Produce ERD (Mermaid) for the target model.
-  - [ ] Review against existing schema (`api/src/db/schema.ts`) for backward compatibility.
-  - [ ] Identify single migration file content (all DDL in one file).
-
-- [ ] **0.4 Spec evolution documents (100% framed)**
-  - [ ] Create `spec/SPEC_EVOL_WORKSPACE_TYPES.md` — full spec for workspace type system:
+- [ ] **0.3 Spec evolution & target data model**
+  - [ ] Create `spec/SPEC_EVOL_WORKSPACE_TYPES.md` — full spec for workspace type system. Content:
+    - Target data model ERD (Mermaid) + backward compat notes + single migration scope
     - Workspace type taxonomy and lifecycle
     - Neutral workspace: auto-creation, landing view, cross-workspace tools, todo automation, task dispatch
     - Initiative object model: personality per type, maturity gates, lineage, fields per stage
-    - Extended objects: solution, product, portfolio, bid/artifact
-    - Gate system: free / soft-gate / hard-gate, configurable per type
+    - Extended objects: solution (table), product (table), bid/contract (table), bid_products (junction)
+    - Gate system: free / soft-gate / hard-gate, configurable per workspace type
     - Multi-workflow registry: open task-key mapping, per-workspace-type workflow catalog, generic dispatch (replacing closed compile-time types)
     - Agent catalog per workspace type
     - Template catalog per type × maturity stage
     - Document generation: Mode A (template factory) + Mode B (ad-hoc)
     - API contracts for all new/modified endpoints
     - UI surfaces inventory
-  - [ ] Update `spec/SPEC.md` — sections impacted:
-    - §1 Functional map: add neutral workspace landing, opportunity screens
-    - §2 Data model: add workspace type, initiative maturity, products, solution, portfolio
-    - §3 API contracts: add workspace type endpoints, initiative maturity endpoints, product CRUD, template catalog per type
-  - [ ] Update `spec/DATA_MODEL.md` — new ERD with all additions.
-  - [ ] Update `spec/SPEC_TEMPLATING.md` — template families per workspace type × maturity stage.
-  - [ ] Update `spec/TOOLS.md` — new tools (cross-workspace, template_create, document_generate).
-  - [ ] Update `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` — residual items impacted by neutral workspace todo automation.
+    - Each section tagged with fusion target (`→ cible: SPEC.md §X`, `→ DATA_MODEL.md §Y`, etc.)
+  - [ ] Articulate with existing SPEC_EVOL files:
+    - Absorb `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §2.2 (multi-workflow runtime) into new spec
+    - Check overlap with `SPEC_EVOL_BR15_AGENT_WORKFLOW_CONFIG_ROBUSTNESS.md` (agent config robustness)
+    - Update `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` residual (remove absorbed sections, add neutral workspace todo impact)
+  - [ ] Canonical specs NOT updated now (Lot N-1 after implementation). Fusion trajectory documented per section in SPEC_EVOL:
+    - `SPEC.md` — functional map, API contracts
+    - `DATA_MODEL.md` — ERD
+    - `TOOLS.md` — new tools
+    - `SPEC_TEMPLATING.md` — template families per type × stage
+    - `SPEC_CHATBOT.md` — if new chat use cases
 
-- [ ] **0.5 Impact analysis on future branches**
+- [ ] **0.4 Impact analysis on future branches**
   - [ ] Document impact of BR-04 on each non-done branch (BR-06 through BR-12).
   - [ ] Identify which branches need scope/dependency updates.
 
-- [ ] **0.6 Rewrite branch plans**
+- [ ] **0.5 Rewrite branch plans**
   - [ ] Rewrite `plan/04-BRANCH_feat-workspace-template-catalog.md` — align with this BRANCH.md (copy final lot structure).
   - [ ] Rewrite `plan/06-BRANCH_feat-chrome-upstream-v1.md` — add BR-04 dependency awareness.
   - [ ] Rewrite `plan/07-BRANCH_feat-release-ui-npm-and-pretest.md` — verify no BR-04 impact.
@@ -161,7 +155,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - [ ] Rewrite `PLAN.md` — new timeline, updated dependency graph, BR-04 as structural branch.
   - [ ] Update `TODO.md` — roadmap sync.
 
-- [ ] **0.7 Rewrite BRANCH.md lots 1-N**
+- [ ] **0.6 Rewrite BRANCH.md lots 1-N**
   - [ ] Based on finalized specs and data model, rewrite all lots (1 through N) in this BRANCH.md with:
     - Actionable task lists per lot
     - API/UI/E2E test plans at file granularity (existing + new + updated files)
