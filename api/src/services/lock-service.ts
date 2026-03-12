@@ -4,7 +4,7 @@ import { objectLocks, users } from '../db/schema';
 import { createId } from '../utils/id';
 import { hasWorkspaceRole } from './workspace-access';
 
-export type LockObjectType = 'organization' | 'folder' | 'usecase';
+export type LockObjectType = 'organization' | 'folder' | 'initiative';
 
 export type LockSnapshot = {
   id: string;
@@ -67,7 +67,7 @@ function normalizeObjectType(value: string): LockObjectType | null {
   const v = (value || '').trim().toLowerCase();
   if (v === 'organization') return 'organization';
   if (v === 'folder') return 'folder';
-  if (v === 'usecase') return 'usecase';
+  if (v === 'initiative') return 'initiative';
   return null;
 }
 

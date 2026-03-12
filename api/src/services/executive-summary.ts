@@ -202,7 +202,7 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     .replace('{{use_cases}}', initiativesFormatted);
 
   // Documents: autoriser l'outil documents pour le dossier, l'organisation, et les cas d'usage du dossier (si des documents existent).
-  const documentsContexts: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'usecase'; contextId: string }> = [];
+  const documentsContexts: Array<{ workspaceId: string; contextType: 'organization' | 'folder' | 'initiative'; contextId: string }> = [];
   const workspaceId = folder.workspaceId;
 
   const [folderDoc] = await db
@@ -235,13 +235,13 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
       .where(
         and(
           eq(contextDocuments.workspaceId, workspaceId),
-          eq(contextDocuments.contextType, 'usecase'),
+          eq(contextDocuments.contextType, 'initiative'),
           inArray(contextDocuments.contextId, initiativeIds)
         )
       )
       .groupBy(contextDocuments.contextId);
     for (const r of initiativeDocRows) {
-      if (r.contextId) documentsContexts.push({ workspaceId, contextType: 'usecase', contextId: r.contextId });
+      if (r.contextId) documentsContexts.push({ workspaceId, contextType: 'initiative', contextId: r.contextId });
     }
   }
 

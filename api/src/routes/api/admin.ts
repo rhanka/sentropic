@@ -315,7 +315,7 @@ adminRouter.delete('/users/:id', async (c) => {
       if (initiativeIds.length) {
         await tx
           .delete(contextModificationHistory)
-          .where(and(eq(contextModificationHistory.contextType, 'usecase'), inArray(contextModificationHistory.contextId, initiativeIds)));
+          .where(and(eq(contextModificationHistory.contextType, 'initiative'), inArray(contextModificationHistory.contextId, initiativeIds)));
       }
 
       // Delete business objects (workspace scoped)
