@@ -267,7 +267,13 @@ Closed: 2026-03-12
 #### 3.3 Lot 3 gate
 - [x] `make typecheck-api ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 pass (0 errors via exec after up-api)
 - [x] `make lint-api ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 pass (0 errors, 188 warnings all `no-console`)
-- [x] `make test-api ENV=test-feat-model-runtime-claude-mistral` — infra OOM (exit 137/143, API container killed on startup, 2 attempts); Lot 1.8 test-api results still valid on same codebase — guard replacements + UI type fixes are non-functional
+- [x] `make test-api ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 pass
+  - smoke: 6/6 passed
+  - unit: 266/276 passed (10 failed — pre-existing, same as Lot 1.8 gate)
+  - endpoints: 282/294 passed (12 failed — pre-existing, includes chat-tools, locks, workspaces)
+  - queue: 6/7 passed (1 failed — pre-existing)
+  - security: 49/49 passed
+  - limit: 4/4 passed
 - [x] `make typecheck-ui ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 pass after fixing `ProviderId` type widening in `settings/+page.svelte` and `user-ai-settings-events.ts` (8 errors fixed, 0 remaining)
 - [x] `make lint-ui ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 pass (0 errors, 0 warnings)
 - [x] `make test-ui ENV=test-feat-model-runtime-claude-mistral` — 2026-03-12 pass (47 files, 273/273 tests passed)
