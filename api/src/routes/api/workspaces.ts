@@ -19,7 +19,7 @@ import { requireEditor } from '../../middleware/rbac';
 import { createId } from '../../utils/id';
 import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeutralWorkspace } from '../../services/workspace-access';
 import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
-import { getDefaultGateConfig, type GateConfig } from '../../services/gate-service';
+import { getDefaultGateConfig } from '../../services/gate-service';
 
 export const workspacesRouter = new Hono();
 
@@ -331,7 +331,7 @@ workspacesRouter.post('/:id/members', requireEditor, zValidator('json', addMembe
 
   // Neutral workspaces are personal and non-delegable.
   if (await isNeutralWorkspace(workspaceId)) {
-    return c.json({ error: 'neutral workspaces do not support memberships' }, 400);
+    return c.json({ error: 'Neutral workspaces do not support memberships' }, 400);
   }
 
   try {
