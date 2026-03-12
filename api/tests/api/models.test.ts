@@ -34,20 +34,22 @@ describe('Models API', () => {
     const providerIds = data.providers.map((provider: { provider_id: string }) => provider.provider_id);
     expect(providerIds).toContain('openai');
     expect(providerIds).toContain('gemini');
+    expect(providerIds).toContain('anthropic');
+    expect(providerIds).toContain('mistral');
+    expect(providerIds).toContain('cohere');
 
-    const openaiModelIds = data.models
-      .filter((model: { provider_id: string; model_id: string }) => model.provider_id === 'openai')
-      .map((model: { model_id: string }) => model.model_id)
-      .sort();
+    const modelsByProvider = (pid: string) =>
+      data.models
+        .filter((m: { provider_id: string }) => m.provider_id === pid)
+        .map((m: { model_id: string }) => m.model_id)
+        .sort();
 
-    const geminiModelIds = data.models
-      .filter((model: { provider_id: string; model_id: string }) => model.provider_id === 'gemini')
-      .map((model: { model_id: string }) => model.model_id)
-      .sort();
-
-    expect(openaiModelIds).toEqual(['gpt-4.1-nano', 'gpt-5.4']);
-    expect(geminiModelIds).toEqual(['gemini-3.1-flash-lite', 'gemini-3.1-pro-preview-customtools']);
-    expect(data.models).toHaveLength(4);
+    expect(modelsByProvider('openai')).toEqual(['gpt-4.1-nano', 'gpt-5.4']);
+    expect(modelsByProvider('gemini')).toEqual(['gemini-3.1-flash-lite', 'gemini-3.1-pro-preview-customtools']);
+    expect(modelsByProvider('anthropic')).toEqual(['claude-opus-4-6', 'claude-sonnet-4-6']);
+    expect(modelsByProvider('mistral')).toEqual(['devstral-small-2505', 'mistral-large-2502']);
+    expect(modelsByProvider('cohere')).toEqual(['command-a-03-2025', 'command-a-reasoning-03-2025', 'embed-v4.0', 'rerank-v3.5']);
+    expect(data.models).toHaveLength(12);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
