@@ -273,7 +273,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 - [x] Rename components and update all imports. ✓
 - [x] Update API client calls to use `/initiatives` endpoints. ✓
 - [x] Update i18n dictionaries. ✓
-- [ ] Update `chat-tool-scope.ts` tool references.
+- [x] Update `chat-tool-scope.ts` tool references. ✓ (no usecase refs in file; tool IDs are API-protocol identifiers kept as-is)
 - [ ] Fix all existing UI tests.
 
 **Lot 3 gate:**
