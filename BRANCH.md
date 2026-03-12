@@ -328,7 +328,7 @@ Closed: 2026-03-12
 
 **Tasks:**
 - [x] Implement `ViewTemplateRenderer.svelte` core — resolve view template descriptor, dispatch to layout/widget renderers.
-- [ ] Implement `ContainerView.svelte` — card/row list of children, sort/group options, container header, actions.
+- [x] Implement `ContainerView.svelte` — card/row list of children, sort/group options, container header, actions.
 - [ ] Implement neutral landing page — list workspace cards (type icon, initiative count, last activity).
 - [ ] API: neutral dashboard endpoint — aggregate workspace stats.
 - [ ] Wire neutral workspace as default landing on login.
