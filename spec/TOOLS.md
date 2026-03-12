@@ -110,6 +110,8 @@ This document is the single checklist for **chat tools**: what is already implem
   - read-only baseline actions allowed, mutating actions gated
 - [x] `history_analyze`
   - read-only targeted Q&A over session history with evidence references
+  - chunked analysis + merge for oversized histories
+  - coverage metadata and `insufficient_coverage` signaling
 - [x] Shared non-shell policy engine
   - `deny/ask/allow` precedence
   - user + workspace merge with workspace as the safety upper bound
@@ -144,13 +146,6 @@ This document is the single checklist for **chat tools**: what is already implem
 - [ ] Organization AI populate / enrich batch from chat tools
 - [ ] Folder AI populate (create folders + generate use cases) from chat tools
 - [ ] Cost/limits safeguards + job queue integration for AI actions
-
-### Conversation history QA hardening
-- [ ] deepen `history_analyze` ergonomics and coverage for oversized histories
-  - targeted Q&A over chat history with evidence references (message ids/turns)
-  - can target one specific tool output (`target_tool_call_id` / tool-result message id) when an oversized tool call risks context overflow
-  - keeps the shared analyzer flow aligned with `documents.analyze` + chunk/merge strategy
-  - must preserve explicit coverage metadata and `insufficient_coverage` behavior
 
 ### Code tool expansion beyond BR-05
 - [ ] additional local tool families or host-specific capabilities beyond the BR-05 baseline
