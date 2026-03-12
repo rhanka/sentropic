@@ -13,7 +13,7 @@
     closeFolderExport,
     folderExportState,
   } from '$lib/stores/folders';
-  import { useCasesStore, fetchUseCases, deleteUseCase } from '$lib/stores/useCases';
+  import { initiativesStore, fetchInitiatives, deleteInitiative } from '$lib/stores/initiatives';
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet } from '$lib/utils/api';
   import { _ } from 'svelte-i18n';
@@ -90,8 +90,8 @@
   const loadUseCases = async () => {
     isLoading = true;
     try {
-      const useCases = await fetchUseCases(folderId);
-      useCasesStore.set(useCases);
+      const useCases = await fetchInitiatives(folderId);
+      initiativesStore.set(useCases);
 
       const folder: Folder = await apiGet(`/folders/${folderId}`);
       currentFolder = folder;
@@ -212,8 +212,8 @@
   const handleDeleteUseCase = async (id: string) => {
     if (!confirm(get(_)('usecase.confirmDelete'))) return;
     try {
-      await deleteUseCase(id);
-      useCasesStore.update((items) => items.filter((uc) => uc.id !== id));
+      await deleteInitiative(id);
+      initiativesStore.update((items) => items.filter((uc) => uc.id !== id));
       addToast({ type: 'success', message: get(_)('usecase.toast.deleted') });
     } catch (error) {
       console.error('Failed to delete use case:', error);
@@ -259,12 +259,12 @@
         const data: any = evt.data ?? {};
         if (!useCaseId) return;
         if (data?.deleted) {
-          useCasesStore.update((items) => items.filter((uc) => uc.id !== useCaseId));
+          initiativesStore.update((items) => items.filter((uc) => uc.id !== useCaseId));
           return;
         }
         if (data?.useCase) {
           const updated = data.useCase;
-          useCasesStore.update((items) => {
+          initiativesStore.update((items) => {
             const idx = items.findIndex((uc) => uc.id === updated.id);
             if (idx === -1) return [updated, ...items];
             const next = [...items];
@@ -633,7 +633,7 @@
   {/if}
 
   <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-    {#each $useCasesStore.filter((uc) => uc.folderId === folderId) as useCase}
+    {#each $initiativesStore.filter((uc) => uc.folderId === folderId) as useCase}
       {@const isDetailing = useCase.status === 'detailing'}
       {@const isDraft = useCase.status === 'draft'}
       {@const isGenerating = useCase.status === 'generating'}

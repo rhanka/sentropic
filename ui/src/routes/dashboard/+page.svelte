@@ -4,7 +4,7 @@
   // which sanitizes HTML via DOMPurify to protect against XSS.
   
   import { onMount, onDestroy, tick } from 'svelte';
-  import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
+  import { initiativesStore, fetchInitiatives } from '$lib/stores/initiatives';
   import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';
   import { addToast, removeToast } from '$lib/stores/toast';
   import { apiGet, apiPost } from '$lib/utils/api';
@@ -552,12 +552,12 @@
         const data: any = evt.data ?? {};
         if (!useCaseId) return;
         if (data?.deleted) {
-          useCasesStore.update((items) => items.filter((uc) => uc.id !== useCaseId));
+          initiativesStore.update((items) => items.filter((uc) => uc.id !== useCaseId));
           return;
         }
         if (data?.useCase) {
           const updated = data.useCase;
-          useCasesStore.update((items) => {
+          initiativesStore.update((items) => {
             const idx = items.findIndex((uc) => uc.id === updated.id);
             if (idx === -1) return [updated, ...items];
             const next = [...items];
@@ -629,8 +629,8 @@
       foldersStore.set(folders);
       
       // Charger les cas d'usage
-      const useCases = await fetchUseCases();
-      useCasesStore.set(useCases);
+      const useCases = await fetchInitiatives();
+      initiativesStore.set(useCases);
       
       // Sélectionner le dossier persistant uniquement s'il existe dans le scope courant
       const persistedFolderId = $currentFolderId;
@@ -1032,8 +1032,8 @@
 
   // Filtrer les cas d'usage par dossier sélectionné
   $: filteredUseCases = selectedFolderId 
-    ? $useCasesStore.filter(uc => uc.folderId === selectedFolderId)
-    : $useCasesStore;
+    ? $initiativesStore.filter(uc => uc.folderId === selectedFolderId)
+    : $initiativesStore;
   $: workspaceId = $workspaceScope.selectedId ?? null;
   $: commentUserId = $session.user?.id ?? null;
 

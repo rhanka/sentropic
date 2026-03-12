@@ -16,7 +16,7 @@
   import { streamHub } from '$lib/stores/streamHub';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
   import { API_BASE_URL } from '$lib/config';
-  import { fetchUseCases } from '$lib/stores/useCases';
+  import { fetchInitiatives } from '$lib/stores/initiatives';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, selectedWorkspaceRole, selectedWorkspace } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
@@ -500,7 +500,7 @@
 
     try {
       // Charger les cas d'usage du dossier
-      const useCases = await fetchUseCases($currentFolderId);
+      const useCases = await fetchInitiatives($currentFolderId);
 
       // Initialiser les compteurs à 0
       const valueCounts: Record<number, number> = {};
