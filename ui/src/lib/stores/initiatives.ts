@@ -81,7 +81,7 @@ import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
 export const fetchInitiatives = async (folderId?: string): Promise<Initiative[]> => {
   const qsFolder = folderId ? `folder_id=${encodeURIComponent(folderId)}` : '';
   const qs = [qsFolder].filter(Boolean).join('&');
-  const url = qs ? `/use-cases?${qs}` : '/use-cases';
+  const url = qs ? `/initiatives?${qs}` : '/initiatives';
 
   const data = await apiGet<{ items: Initiative[] }>(url);
   return data.items;
@@ -93,7 +93,7 @@ export const generateInitiatives = async (
   folderId?: string,
   initiativeCount?: number
 ): Promise<{ created_folder_id?: string; created_use_case_ids: string[]; summary: string }> => {
-  return apiPost('/use-cases/generate', {
+  return apiPost('/initiatives/generate', {
     input,
     organization_id: organizationId,
     folder_id: folderId,
@@ -102,19 +102,19 @@ export const generateInitiatives = async (
 };
 
 export const createInitiative = async (initiative: Omit<Initiative, 'id' | 'createdAt'>): Promise<Initiative> => {
-  return apiPost<Initiative>('/use-cases', initiative);
+  return apiPost<Initiative>('/initiatives', initiative);
 };
 
 export const updateInitiative = async (id: string, initiative: Partial<Initiative>): Promise<Initiative> => {
-  return apiPut<Initiative>(`/use-cases/${id}`, initiative);
+  return apiPut<Initiative>(`/initiatives/${id}`, initiative);
 };
 
 export const deleteInitiative = async (id: string): Promise<void> => {
-  await apiDelete(`/use-cases/${id}`);
+  await apiDelete(`/initiatives/${id}`);
 };
 
 export const detailInitiative = async (id: string, model?: string): Promise<void> => {
-  await apiPost(`/use-cases/${id}/detail`, { model });
+  await apiPost(`/initiatives/${id}/detail`, { model });
 };
 
 /** @deprecated Use fetchInitiatives */
