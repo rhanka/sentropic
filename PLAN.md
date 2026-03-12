@@ -18,6 +18,7 @@ Previous window (2026-02-23 → 2026-03-08) closed. New timeline driven by BR-04
 
 **Pending branches (blocked or dependent on BR-04):**
 - BR-06 through BR-12 — not started, pending BR-04 completion or independent scheduling.
+- BR-14, BR-16, BR-17 — new branches identified during BR-04 Lot 0 cross-cutting analysis (2026-03-12).
 
 ## 2) BR-04 as structural branch
 
@@ -27,6 +28,8 @@ BR-04 is now the structural foundation for most future branches:
 - Delivers multi-workflow registry (replaces single hardcoded workflow)
 - Adds extended business objects (solutions, products, bids)
 - Adds gate system for initiative maturity
+- Defines workspace-type-aware chat tool scoping (§14)
+- Defines cross-cutting exclusions and branch articulation for parallel work (§15)
 
 Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 
@@ -42,12 +45,16 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-05 | `feat/vscode-plugin-v1` | done | BR-01, BR-03 | — |
 | BR-06 | `feat/chrome-upstream-v1` | plan | BR-00 | low (contextType rename) |
 | BR-07 | `feat/release-ui-npm-and-pretest` | plan | BR-00 | none |
-| BR-08 | `feat/model-runtime-claude-mistral` | done | BR-01 | none |
+| BR-08 | `feat/model-runtime-claude-mistral-cohere` | done | BR-01 | none (scope extended: +Cohere) |
 | BR-09 | `feat/sso-google` | plan | BR-00 | none |
 | BR-10 | `feat/vscode-plugin-v2-multi-agent` | plan | BR-05, BR-08, **BR-04** | **high** (workspace-type-aware agents) |
 | BR-11 | `feat/chrome-upstream-multitab-voice` | plan | BR-06, BR-08 | low (contextType rename) |
 | BR-12 | `feat/release-chrome-vscode-ci-publish` | plan | BR-05, BR-06, BR-07, BR-13 | none |
 | BR-13 | `feat/chrome-plugin-download-distribution` | done | BR-06 | — |
+| BR-14 | `feat/chat-modularization` | plan | BR-04 (low) | low (ChatPanel/ChatWidget refactoring) |
+| BR-15 | _(reserved: agent workflow config robustness)_ | plan | BR-04 | — |
+| BR-16 | `feat/document-connectors` | plan | BR-04 (low) | low (initiative rename in contextType) |
+| BR-17 | `feat/rag-documents` | plan | BR-16 (optional), BR-08 (Cohere embeddings) | none |
 
 ## 4) Dependency graph
 
@@ -67,6 +74,9 @@ graph TD
   BR11[BR-11 chrome multitab+voice]
   BR12[BR-12 release chrome+vscode ci]
   BR13[BR-13 chrome download ✓]
+  BR14[BR-14 chat modularization]
+  BR16[BR-16 document connectors]
+  BR17[BR-17 RAG documents]
 
   BR00 --> BR01
   BR00 --> BR02
@@ -90,14 +100,20 @@ graph TD
   BR06 --> BR12
   BR07 --> BR12
   BR13 --> BR12
+  BR04 -.->|low| BR14
+  BR04 -.->|low| BR16
+  BR16 -.-> BR17
+  BR08 -.->|Cohere embeddings| BR17
 ```
 
 ## 5) Scheduling post-BR-04
 
 After BR-04 merge, independent branches can proceed in parallel:
-- **Wave A**: BR-06 (Chrome upstream) + BR-07 (UI npm) + BR-08 (Claude/Mistral) — no BR-04 dependency
+- **Wave A**: BR-06 (Chrome upstream) + BR-07 (UI npm) + BR-08 (Claude/Mistral/Cohere) — no BR-04 dependency
+- **Wave A'** (parallelizable with BR-04): BR-14 (chat modularization) + BR-16 (document connectors) — low BR-04 dependency, can start on non-overlapping files
 - **Wave B**: BR-09 (SSO Google) — independent
 - **Wave C**: BR-10 (VSCode v2) + BR-11 (Chrome multitab) — after Wave A + BR-04
+- **Wave C'**: BR-17 (RAG documents) — after BR-16 (optional) + BR-08 (Cohere embeddings)
 - **Wave D**: BR-12 (CI publish) — after Wave A/C
 
 Exact timeline TBD after BR-04 Lot 0 gate.
