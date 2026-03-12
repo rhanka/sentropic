@@ -8,7 +8,7 @@ export type GenerationAgentKey =
   | "usecase_detail_agent"
   | "executive_synthesis_agent";
 
-export type UseCaseGenerationWorkflowTaskKey =
+export type InitiativeGenerationWorkflowTaskKey =
   | "generation_context_prepare"
   | "generation_matrix_prepare"
   | "generation_usecase_list"
@@ -17,7 +17,7 @@ export type UseCaseGenerationWorkflowTaskKey =
   | "generation_executive_summary";
 
 export type DefaultWorkflowTaskDefinition = {
-  taskKey: UseCaseGenerationWorkflowTaskKey;
+  taskKey: InitiativeGenerationWorkflowTaskKey;
   title: string;
   description: string;
   orderIndex: number;
