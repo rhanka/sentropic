@@ -117,6 +117,13 @@ workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSc
   const user = c.get('user') as { userId: string; role: string };
 
   const workspaceId = c.req.param('id')!;
+
+  // Workspace type is immutable after creation.
+  const rawBody = await c.req.raw.clone().json().catch(() => null);
+  if (rawBody && 'type' in rawBody) {
+    return c.json({ error: 'Workspace type cannot be changed after creation' }, 400);
+  }
+
   try {
     await requireWorkspaceAdmin(user.userId, workspaceId);
   } catch {
