@@ -729,6 +729,7 @@ Rebuild BR-05 from `origin/main` with strict selective recovery of essential VSC
         - [x] Phase 1 — Unblock quickly with the real dev admin account already present in DB:
           - [x] record `.auth/dev-state.json` from `admin@sent-tech.ca`,
           - [x] use that state only for manual-navigation / reload-debug scoped specs against `ENV=dev`.
+    - [x] BUG-L6-51 — CI `security-sast-sca` fails on `api/src/services/secret-crypto.ts` because AES-GCM is instantiated without an explicit `authTagLength`; fixed in code with no vulnerability-register acceptance.
 
 - [ ] **Lot N-2** UAT
   - [x] Web app (`ENV=dev`, root workspace)
