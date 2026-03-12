@@ -213,10 +213,10 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 > **Context**: The reasoning system is deeply coupled to OpenAI's Responses API. `reasoningEffort` (`none|low|medium|high|xhigh`) and `reasoningSummary` (`auto|concise|detailed`) are OpenAI-specific parameters threaded through multiple files. `isGpt5` boolean guards block reasoning for non-OpenAI models and must be generalized.
 
 #### 2.1 Replace `isGpt5` guards with provider-agnostic `supportsReasoning` check
-- [ ] `api/src/services/chat-service.ts` (~line 3559): replace `isGpt5` guard with `supportsReasoning(selection)` check. This controls whether dynamic reasoning effort evaluation runs.
-- [ ] `api/src/services/context-usecase.ts` (~line 448): replace `isGpt5` guard with `supportsReasoning(selection)` check. This controls reasoning effort/summary injection into usecase context.
-- [ ] `api/src/services/context-matrix.ts` (~line 203): replace `isGpt5` guard with `supportsReasoning(selection)` check.
-- [ ] `api/src/services/executive-summary.ts` (~line 273): replace `isGpt5` guard with `supportsReasoning(selection)` check.
+- [x] `api/src/services/chat-service.ts` (~line 3559): replace `isGpt5` guard with `supportsReasoning(selection)` check. This controls whether dynamic reasoning effort evaluation runs.
+- [x] `api/src/services/context-usecase.ts` (~line 448): replace `isGpt5` guard with `supportsReasoning(selection)` check. This controls reasoning effort/summary injection into usecase context.
+- [x] `api/src/services/context-matrix.ts` (~line 203): replace `isGpt5` guard with `supportsReasoning(selection)` check.
+- [x] `api/src/services/executive-summary.ts` (~line 273): replace `isGpt5` guard with `supportsReasoning(selection)` check.
 
 #### 2.2 Adapt reasoning effort evaluation pipeline
 - [ ] `api/src/services/chat-service.ts` (~line 3088): the dynamic reasoning effort evaluator uses prompt template `chat_reasoning_effort_eval` and a specific evaluator model. Ensure this pipeline:
