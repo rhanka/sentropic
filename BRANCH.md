@@ -122,7 +122,14 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - [x] §12 View template system added: data-driven layout DSL per (workspace_type, object_type, maturity_stage). Table `view_templates` with fork/detach lineage. Templates for all object types per workspace type (initiative, solution, bid, product, organization, dashboard). Neutral landing = workspace cards + TODO feed.
   - [x] Canonical specs NOT updated now (Lot N-1). Fusion trajectory per section in §0 of SPEC_EVOL.
 
-- [x] **0.4 Impact analysis on future branches**
+- [ ] **0.4 UI spec — container views, workflow launch & view template refactoring**
+  - [ ] Absorb `spec/SPEC_VOL_UI_VIEWS.md` demands into `spec/SPEC_EVOL_WORKSPACE_TYPES.md` §12-§13:
+    - Container view unification: one "container" `object_type` in view templates for all levels (workspace→folders, folder→initiatives, neutral→workspaces). Refactoring of existing Folder/UseCase list views.
+    - Workflow launch templatizing: `object_type: "workflow_launch"` — each workspace type defines its own launch form via view template. Workspace template maps all views including home.
+    - Specify refactoring impact on existing views (Folder, UseCase list, /home).
+  - [ ] Delete `spec/SPEC_VOL_UI_VIEWS.md` once absorbed.
+
+- [x] **0.5 Impact analysis on future branches**
   - [x] BR-06 (Chrome upstream v1): low impact — `use_cases`→`initiatives` rename affects `contextType` refs. Update post-merge.
   - [x] BR-07 (Release UI/npm): no impact — CI/packaging only.
   - [x] BR-08 (Model runtime Claude/Mistral): low impact — workspace-type-aware model defaults as future consideration.
@@ -133,7 +140,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - [x] BR-13 (Chrome plugin download): no impact — packaging/distribution only.
   - [x] Branches needing scope/dependency updates: **BR-06, BR-10, BR-11** (BR-10 is the most impacted).
 
-- [x] **0.5 Rewrite branch plans**
+- [x] **0.6 Rewrite branch plans**
   - [x] Rewrite `plan/04-BRANCH_feat-workspace-template-catalog.md` — now pointer to BRANCH.md.
   - [x] Rewrite `plan/06-BRANCH_feat-chrome-upstream-v1.md` — BR-04 low impact note added.
   - [x] BR-07, BR-08, BR-09, BR-12 — verified no BR-04 impact (no change needed).
@@ -142,7 +149,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - [x] Rewrite `PLAN.md` — new timeline, dependency graph with BR-04 as structural branch, wave scheduling.
   - [x] Update `TODO.md` — BR-02/03/05 marked done, BR-04 scope updated.
 
-- [ ] **0.6 Rewrite BRANCH.md lots 1-N**
+- [ ] **0.7 Rewrite BRANCH.md lots 1-N**
   - [ ] Based on finalized specs and data model, rewrite all lots (1 through N) in this BRANCH.md with:
     - Actionable task lists per lot
     - API/UI/E2E test plans at file granularity (existing + new + updated files)
