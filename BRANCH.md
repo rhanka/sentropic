@@ -296,7 +296,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 - `ui/src/lib/components/Header.svelte` — workspace switcher enhanced with type icon.
 
 **Tasks:**
-- [ ] API: add `type` to workspace creation validation (Zod schema).
+- [x] API: add `type` to workspace creation validation (Zod schema). ✓
 - [ ] API: auto-create neutral workspace on user registration/first login + migration backfill.
 - [ ] API: enforce neutral constraints (no memberships, no initiatives, no workflows).
 - [ ] API: enforce type immutability on workspace update.
