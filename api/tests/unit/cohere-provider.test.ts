@@ -1,19 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the Cohere SDK before importing the provider
+const mockCohereChat = vi.fn();
+const mockCohereChatStream = vi.fn();
+
 vi.mock('cohere-ai', () => {
-  const mockChat = vi.fn();
-  const mockChatStream = vi.fn();
-  return {
-    CohereClient: vi.fn().mockImplementation(() => ({
-      v2: {
-        chat: mockChat,
-        chatStream: mockChatStream,
-      },
-    })),
-    __mockChat: mockChat,
-    __mockChatStream: mockChatStream,
-  };
+  class MockCohereClient {
+    v2 = {
+      chat: mockCohereChat,
+      chatStream: mockCohereChatStream,
+    };
+  }
+  return { CohereClient: MockCohereClient };
 });
 
 // Mock env to control API key presence
@@ -144,9 +142,7 @@ describe('CohereProviderRuntime', () => {
     });
 
     it('should call Cohere v2.chat', async () => {
-      const sdk = await import('cohere-ai');
-      const mockChat = (sdk as unknown as { __mockChat: ReturnType<typeof vi.fn> }).__mockChat;
-      mockChat.mockResolvedValue({
+      mockCohereChat.mockResolvedValue({
         message: { content: [{ type: 'text', text: 'Hello' }] },
       });
 
@@ -158,7 +154,7 @@ describe('CohereProviderRuntime', () => {
         },
       });
 
-      expect(mockChat).toHaveBeenCalled();
+      expect(mockCohereChat).toHaveBeenCalled();
       expect(result).toEqual({
         message: { content: [{ type: 'text', text: 'Hello' }] },
       });
@@ -173,15 +169,13 @@ describe('CohereProviderRuntime', () => {
     });
 
     it('should return async iterable from Cohere stream', async () => {
-      const sdk = await import('cohere-ai');
-      const mockChatStream = (sdk as unknown as { __mockChatStream: ReturnType<typeof vi.fn> }).__mockChatStream;
 
       const events = [
         { type: 'content-delta', delta: { message: { content: { text: 'Hi' } } } },
         { type: 'message-end' },
       ];
 
-      mockChatStream.mockResolvedValue({
+      mockCohereChatStream.mockResolvedValue({
         [Symbol.asyncIterator]: async function* () {
           for (const e of events) yield e;
         },

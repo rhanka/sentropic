@@ -1,19 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the Anthropic SDK before importing the provider
+const mockAnthropicCreate = vi.fn();
+const mockAnthropicStream = vi.fn();
+
 vi.mock('@anthropic-ai/sdk', () => {
-  const mockCreate = vi.fn();
-  const mockStream = vi.fn();
-  return {
-    default: vi.fn().mockImplementation(() => ({
-      messages: {
-        create: mockCreate,
-        stream: mockStream,
-      },
-    })),
-    __mockCreate: mockCreate,
-    __mockStream: mockStream,
-  };
+  class MockAnthropic {
+    messages = {
+      create: mockAnthropicCreate,
+      stream: mockAnthropicStream,
+    };
+  }
+  return { default: MockAnthropic };
 });
 
 // Mock env to control API key presence
@@ -131,9 +129,7 @@ describe('ClaudeProviderRuntime', () => {
     });
 
     it('should call Anthropic messages.create with stream false', async () => {
-      const sdk = await import('@anthropic-ai/sdk');
-      const mockCreate = (sdk as unknown as { __mockCreate: ReturnType<typeof vi.fn> }).__mockCreate;
-      mockCreate.mockResolvedValue({ content: [{ type: 'text', text: 'Hello' }] });
+      mockAnthropicCreate.mockResolvedValue({ content: [{ type: 'text', text: 'Hello' }] });
 
       const result = await runtime.generate({
         mode: 'messages',
@@ -144,7 +140,7 @@ describe('ClaudeProviderRuntime', () => {
         },
       });
 
-      expect(mockCreate).toHaveBeenCalledWith(
+      expect(mockAnthropicCreate).toHaveBeenCalledWith(
         expect.objectContaining({ stream: false }),
         expect.anything(),
       );
@@ -160,15 +156,13 @@ describe('ClaudeProviderRuntime', () => {
     });
 
     it('should return async iterable from Anthropic stream', async () => {
-      const sdk = await import('@anthropic-ai/sdk');
-      const mockStream = (sdk as unknown as { __mockStream: ReturnType<typeof vi.fn> }).__mockStream;
 
       const events = [
         { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hi' } },
         { type: 'message_stop' },
       ];
 
-      mockStream.mockReturnValue({
+      mockAnthropicStream.mockReturnValue({
         [Symbol.asyncIterator]: async function* () {
           for (const e of events) yield e;
         },
