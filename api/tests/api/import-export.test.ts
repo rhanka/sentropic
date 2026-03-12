@@ -142,7 +142,7 @@ async function buildObjectExportZip(opts: {
     { path: 'workspaces.json', bytes: new TextEncoder().encode(stableStringify(workspaces)) },
     { path: `organization_${opts.orgId}.json`, bytes: new TextEncoder().encode(stableStringify(organization)) },
     { path: `folder_${opts.folderId}.json`, bytes: new TextEncoder().encode(stableStringify(folder)) },
-    { path: `initiative_${opts.initiativeId}.json`, bytes: new TextEncoder().encode(stableStringify(initiative)) },
+    { path: `usecase_${opts.initiativeId}.json`, bytes: new TextEncoder().encode(stableStringify(initiative)) },
   ];
   const manifestFiles = files.map((f) => ({
     path: f.path,
