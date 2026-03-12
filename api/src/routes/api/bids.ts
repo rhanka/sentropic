@@ -67,7 +67,7 @@ bidsRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidator('
 // Delete bid (cascades to bid_products)
 bidsRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const removed = await bidService.remove(id, workspaceId);
   if (!removed) return c.json({ message: 'Not found' }, 404);
   return c.body(null, 204);
@@ -111,8 +111,8 @@ bidsRouter.post('/:id/products', requireEditor, requireWorkspaceEditorRole(), zV
 // Detach product from bid
 bidsRouter.delete('/:id/products/:productId', requireEditor, requireWorkspaceEditorRole(), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
-  const bidId = c.req.param('id');
-  const productId = c.req.param('productId');
+  const bidId = c.req.param('id')!;
+  const productId = c.req.param('productId')!;
   const removed = await bidService.detachProduct(bidId, productId, workspaceId);
   if (!removed) return c.json({ message: 'Not found' }, 404);
   return c.body(null, 204);

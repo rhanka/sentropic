@@ -62,7 +62,7 @@ solutionsRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValida
 // Delete solution
 solutionsRouter.delete('/:id', requireEditor, requireWorkspaceEditorRole(), async (c) => {
   const { workspaceId } = c.get('user') as { workspaceId: string };
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const removed = await solutionService.remove(id, workspaceId);
   if (!removed) return c.json({ message: 'Not found' }, 404);
   return c.body(null, 204);
