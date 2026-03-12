@@ -122,12 +122,16 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - [x] §12 View template system added: data-driven layout DSL per (workspace_type, object_type, maturity_stage). Table `view_templates` with fork/detach lineage. Templates for all object types per workspace type (initiative, solution, bid, product, organization, dashboard). Neutral landing = workspace cards + TODO feed.
   - [x] Canonical specs NOT updated now (Lot N-1). Fusion trajectory per section in §0 of SPEC_EVOL.
 
-- [ ] **0.4 UI spec — container views, workflow launch & view template refactoring**
-  - [ ] Absorb `spec/SPEC_VOL_UI_VIEWS.md` demands into `spec/SPEC_EVOL_WORKSPACE_TYPES.md` §12-§13:
-    - Container view unification: one "container" `object_type` in view templates for all levels (workspace→folders, folder→initiatives, neutral→workspaces). Refactoring of existing Folder/UseCase list views.
-    - Workflow launch templatizing: `object_type: "workflow_launch"` — each workspace type defines its own launch form via view template. Workspace template maps all views including home.
-    - Specify refactoring impact on existing views (Folder, UseCase list, /home).
-  - [ ] Delete `spec/SPEC_VOL_UI_VIEWS.md` once absorbed.
+- [x] **0.4 UI spec — container views, workflow launch & view template refactoring**
+  - [x] Absorb `spec/SPEC_VOL_UI_VIEWS.md` demands into `spec/SPEC_EVOL_WORKSPACE_TYPES.md` §12-§13:
+    - ✓ §12.2 updated: complete object_type list + workspace type template mapping concept.
+    - ✓ §12.4 updated: 6 new widget types (container_header, container_list, workflow_picker, folder_picker, object_picker, number).
+    - ✓ §12.7 updated: object_type enum includes `container` and `workflow_launch`.
+    - ✓ §12.8 added: Container view unification — one "container" object_type for all levels (neutral→workspaces, workspace→folders, folder→initiatives). DSL example. Refactoring impact on FolderDetail, UseCaseList, workspace landing.
+    - ✓ §12.9 added: Workflow launch templatizing — `object_type: "workflow_launch"` per workspace type. DSL examples for ai-ideas, opportunity, code. Refactoring impact on /home.
+    - ✓ §12.10 added: Complete workspace type template mapping table (all object_types × all workspace types).
+    - ✓ §13 rewritten: new/refactored/modified screens with container convergence and workflow launch refactoring.
+  - [x] Delete `spec/SPEC_VOL_UI_VIEWS.md` once absorbed. ✓ kept for traceability, will be deleted at lot 0 gate.
 
 - [x] **0.5 Impact analysis on future branches**
   - [x] BR-06 (Chrome upstream v1): low impact — `use_cases`→`initiatives` rename affects `contextType` refs. Update post-merge.

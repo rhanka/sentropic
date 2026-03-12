@@ -674,6 +674,16 @@ Resolution key: `(workspace_type, object_type, maturity_stage?)` → view templa
 
 Stored in `data` JSONB on a new registry or as workspace-type seed config (decision: registry table vs JSONB on workspace_type_workflows — TBD in implementation, spec defines the contract).
 
+**Object types** covered by view templates:
+- `container` — unified container view (workspace listing folders, folder listing initiatives, neutral listing workspaces). See §12.8.
+- `initiative` — initiative detail per workspace type.
+- `solution`, `product`, `bid` — extended business object detail views.
+- `organization` — organization detail (all workspace types).
+- `dashboard` — per workspace type dashboard.
+- `workflow_launch` — workflow launch form per workspace type. See §12.9.
+
+**Workspace type template mapping**: each workspace type defines a complete view template set — the mapping of all its `object_type` entries. This is the workspace type's "personality" in the UI. The neutral workspace defines which views are available at the top level (container of workspaces, cross-workspace dashboard, todo feed).
+
 ### 12.3 View template DSL
 
 ```json
@@ -744,6 +754,12 @@ The view template renderer supports these widget types:
 | `key_value` | Key-value pairs | metadata, custom fields |
 | `image` | Image display/upload | dashboardImage, logos |
 | `chart` | Embedded chart (scatter, funnel, bar) | dashboard visualizations |
+| `container_header` | Container title + badges + description | container view header |
+| `container_list` | Card/row list of children with sort/group | container view body |
+| `workflow_picker` | Dropdown of registered workflows for workspace type | workflow launch |
+| `folder_picker` | Folder selector within current workspace | workflow launch target |
+| `object_picker` | Picker for an existing object (organization, etc.) | workflow launch context |
+| `number` | Numeric input | count, budget, score |
 
 New widget types can be added as components without changing the template engine.
 
@@ -808,7 +824,7 @@ New widget types can be added as components without changing the template engine
 - `id text PK`
 - `workspace_id text FK` — nullable (null = system-level seed template)
 - `workspace_type text NOT NULL`
-- `object_type text NOT NULL` — `initiative | solution | product | bid | organization | dashboard`
+- `object_type text NOT NULL` — `container | initiative | solution | product | bid | organization | dashboard | workflow_launch`
 - `maturity_stage text` — nullable (null = applies to all stages)
 - `descriptor jsonb NOT NULL` — the view template DSL content
 - `version integer NOT NULL DEFAULT 1`
@@ -822,6 +838,144 @@ This follows the same pattern as `agent_definitions` and `workflow_definitions` 
 
 > Note: add to §1 data model ERD and §1.5 migration scope after validation.
 
+### 12.8 Container view unification
+
+**Problem**: today there are separate, hardcoded views for different "container" levels — folder view (lists use cases), workspace landing, neutral dashboard. With workspace types, this multiplies: each workspace type × each container level = too many views. The underlying pattern is identical: a container that lists its children with actions.
+
+**Principle**: one unified **container** `object_type` in the view template system, parameterized by what it contains. The same `ViewTemplateRenderer` renders all container levels:
+
+| Container level | Contains | Route pattern | Example |
+|---|---|---|---|
+| Neutral workspace | Workspace cards | `/` or `/neutral` | Lists all user workspaces grouped by type |
+| Workspace root | Folders | `/workspaces/:id` | Lists folders of this workspace |
+| Folder | Initiatives | `/folders/:id` | Lists initiatives in this folder |
+
+Each level resolves its view template with `object_type: "container"` and its `workspace_type`. The descriptor specifies:
+- `children_type`: what object is listed (`workspace`, `folder`, `initiative`)
+- `card_template`: how each child renders as a card/row (fields, badges, actions)
+- `list_actions`: actions available at container level (create folder, create initiative, etc.)
+- `empty_state`: message when no children exist
+- `sort_options`: available sort/group criteria
+
+**Container DSL example** (folder listing initiatives in an `opportunity` workspace):
+
+```json
+{
+  "object_type": "container",
+  "workspace_type": "opportunity",
+  "layout": "vertical",
+  "sections": [
+    {
+      "key": "header",
+      "type": "container_header",
+      "title_field": "name",
+      "subtitle_field": "description",
+      "badges": ["initiative_count", "maturity_distribution"]
+    },
+    {
+      "key": "children",
+      "type": "container_list",
+      "children_type": "initiative",
+      "card_template": {
+        "title": "name",
+        "subtitle": "data.domain",
+        "badges": ["maturity_stage", "status"],
+        "secondary": ["updated_at", "solution_count"]
+      },
+      "sort_options": ["updated_at", "maturity_stage", "name"],
+      "group_by_options": ["maturity_stage", "status"]
+    }
+  ],
+  "actions": [
+    { "key": "create_initiative", "label": "New initiative" },
+    { "key": "import_initiative", "label": "Import" }
+  ]
+}
+```
+
+**Neutral container** is a special case: `children_type: "workspace"`, cards show workspace type icon, initiative count, last activity. Actions: create workspace.
+
+**Refactoring impact on existing views**:
+- Current `FolderDetail` component → replaced by `ViewTemplateRenderer` with `object_type: "container"` resolved for the folder's workspace type.
+- Current `UseCaseList` (if separate from folder) → absorbed into container view.
+- Current workspace landing → replaced by container view at workspace level.
+- This is **not** a new screen — it's a convergence of existing screens into one generic renderer.
+
+### 12.9 Workflow launch templatizing
+
+**Problem**: the current `/home` page is a hardcoded generation entry point for AI use case workflows. With workspace types, each type has a different workflow catalog (§7) and therefore different launch parameters. A `code` workspace launch form needs repo URL + language; an `opportunity` launch needs client + domain + budget range. Hardcoding each is not scalable.
+
+**Principle**: the workflow launch page is a view template with `object_type: "workflow_launch"`. Each workspace type defines its launch form via a view template descriptor. The workspace type template mapping includes `workflow_launch` alongside `container`, `initiative`, `dashboard`, etc.
+
+**Resolution**: when user navigates to launch a workflow, the system resolves:
+1. Current workspace type → available workflows (from `workspace_type_workflows`, §7)
+2. Selected workflow → view template `(workspace_type, "workflow_launch")` for the form
+3. Form fields are driven by the descriptor, not hardcoded
+
+**Workflow launch DSL example** (`ai-ideas` type):
+
+```json
+{
+  "object_type": "workflow_launch",
+  "workspace_type": "ai-ideas",
+  "layout": "vertical",
+  "sections": [
+    {
+      "key": "workflow_select",
+      "type": "workflow_picker",
+      "label": "Generation workflow",
+      "default_workflow": "ai_usecase_generation"
+    },
+    {
+      "key": "target",
+      "type": "folder_picker",
+      "label": "Target folder"
+    },
+    {
+      "key": "params",
+      "layout": "vertical",
+      "sections": [
+        { "key": "organization", "type": "object_picker", "object": "organization", "label": "Organization context" },
+        { "key": "prompt", "type": "richtext", "label": "Generation prompt" },
+        { "key": "count", "type": "number", "label": "Number to generate", "default": 5 }
+      ]
+    }
+  ],
+  "actions": [
+    { "key": "launch", "label": "Generate", "primary": true },
+    { "key": "cancel", "label": "Cancel" }
+  ]
+}
+```
+
+**`opportunity` launch example** would include: client picker, domain, budget range, deadline, qualification workflow.
+
+**`code` launch example**: repo URL, language/stack selector, analysis scope, code analysis workflow.
+
+**Refactoring impact on existing `/home`**:
+- Current `/home` component (hardcoded AI generation form) → replaced by `ViewTemplateRenderer` with `object_type: "workflow_launch"` resolved for the current workspace type.
+- The `/home` route remains but renders dynamically based on workspace type context.
+- Existing AI generation logic (organization picker, prompt, count) is preserved as the `ai-ideas` workflow launch template — zero functional regression.
+
+### 12.10 Complete workspace type template mapping
+
+Each workspace type defines a complete set of view templates. The mapping is the workspace type's UI personality:
+
+| object_type | `neutral` | `ai-ideas` | `opportunity` | `code` |
+|---|---|---|---|---|
+| `container` | workspace cards | folder → initiatives | folder → initiatives | folder → initiatives |
+| `initiative` | — | vertical (ideation) | tabs (overview/pipeline/lineage) | tabs (overview/implementation/lineage) |
+| `solution` | — | — | vertical | vertical |
+| `product` | — | — | vertical | vertical |
+| `bid` | — | — | tabs (clauses/products/pricing) | — |
+| `organization` | — | vertical (existing) | vertical (extended) | vertical |
+| `dashboard` | cross-workspace cards + activity | scatter Value vs Ease | pipeline funnel + value | progress + velocity |
+| `workflow_launch` | — (orchestrator, no own generation) | AI generation form | qualification form | code analysis form |
+
+`—` = not applicable for this workspace type (no view template seeded).
+
+> Note: add to §1 data model ERD and §1.5 migration scope after validation.
+
 ---
 
 ## 13) UI surfaces inventory
@@ -832,7 +986,6 @@ This follows the same pattern as `agent_definitions` and `workflow_definitions` 
 
 | Screen | Route | Purpose |
 |---|---|---|
-| Neutral dashboard | `/neutral` (or `/`) | Card-based workspace overview, activity feed, TODO list |
 | Workspace creation | `/workspaces/new` | Type selector + workspace creation form |
 | Initiative detail (extended) | `/initiatives/:id` | View-template-driven rendering per workspace type + maturity stage |
 | Solution editor | `/initiatives/:id/solutions/:id` | View-template-driven solution CRUD |
@@ -840,17 +993,27 @@ This follows the same pattern as `agent_definitions` and `workflow_definitions` 
 | Bid editor | `/initiatives/:id/bids/:id` | View-template-driven bid CRUD with product attachment |
 | Gate review | `/initiatives/:id/gate` | Gate criteria evaluation view |
 
-### 13.2 Modified screens
+### 13.2 Refactored screens (existing → view-template-driven)
+
+| Screen | Current state | Target state |
+|---|---|---|
+| Neutral landing (`/`) | N/A (new) | Container view (`object_type: "container"`, `children_type: "workspace"`) + TODO feed |
+| Workspace root (`/workspaces/:id`) | Basic workspace view | Container view (`object_type: "container"`, `children_type: "folder"`) |
+| Folder detail (`/folders/:id`) | Hardcoded `FolderDetail` component listing use cases | Container view (`object_type: "container"`, `children_type: "initiative"`) — same renderer as workspace/neutral |
+| Home / workflow launch (`/home`) | Hardcoded AI generation form | View-template-driven form (`object_type: "workflow_launch"`) — workspace type determines fields (§12.9) |
+| Dashboard (`/dashboard`) | Hardcoded scatter chart | View-template-driven dashboard per workspace type |
+
+**Key refactoring principle**: `FolderDetail`, workspace landing, and neutral landing converge into a single `ViewTemplateRenderer` invocation with `object_type: "container"`. The component tree shrinks — one generic renderer replaces three hardcoded views.
+
+### 13.3 Modified screens (non-refactored)
 
 | Screen | Changes |
 |---|---|
-| Home (`/home`) | Workspace type selector in generation flow |
-| Folders (`/folders`) | Initiative count replaces use case count |
 | Settings (`/settings`) | Multi-workflow config per workspace type |
-| Dashboard (`/dashboard`) | Maturity stage distribution chart |
 
-### 13.3 Navigation
+### 13.4 Navigation
 
-- Default landing: neutral workspace dashboard.
+- Default landing: neutral workspace (container of workspaces).
 - Workspace switcher in header (existing) enhanced with type icon.
 - Breadcrumb: Neutral > Workspace > Folder > Initiative > Solution/Bid/Product.
+- `/home` route contextual: resolves `workflow_launch` view template for current workspace type. Not available in neutral workspace (orchestrator has no own generation).
