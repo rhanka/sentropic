@@ -300,7 +300,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 - [x] API: auto-create neutral workspace on user registration/first login + migration backfill. ✓
 - [x] API: enforce neutral constraints (no memberships, no initiatives, no workflows). ✓
 - [x] API: enforce type immutability on workspace update. ✓
-- [ ] UI: add workspace type selector to workspace creation flow.
+- [x] UI: add workspace type selector to workspace creation flow. ✓
 - [ ] UI: expose type in workspace stores and display type icon in header.
 - [ ] Tests: workspace creation with type, neutral auto-creation, neutral constraints.
 

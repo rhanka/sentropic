@@ -12,8 +12,16 @@
   import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
   import { Check, Eye, EyeOff, Trash2, X } from '@lucide/svelte';
 
+  type WorkspaceType = 'ai-ideas' | 'opportunity' | 'code';
+  const WORKSPACE_TYPES: { value: WorkspaceType; labelKey: string }[] = [
+    { value: 'ai-ideas', labelKey: 'workspaceSettings.types.aiIdeas' },
+    { value: 'opportunity', labelKey: 'workspaceSettings.types.opportunity' },
+    { value: 'code', labelKey: 'workspaceSettings.types.code' },
+  ];
+
   let creatingWorkspace = false;
   let newWorkspaceName = '';
+  let newWorkspaceType: WorkspaceType = 'ai-ideas';
   let newWorkspaceInputRef: HTMLInputElement | null = null;
   let showWorkspaceExportDialog = false;
   let showWorkspaceImportDialog = false;
@@ -108,9 +116,10 @@
     if (!name) return;
     creatingWorkspace = true;
     try {
-      const res = await apiPost<{ id: string }>('/workspaces', { name });
+      const res = await apiPost<{ id: string }>('/workspaces', { name, type: newWorkspaceType });
       addToast({ type: 'success', message: t('workspaceSettings.toasts.created') });
       newWorkspaceName = '';
+      newWorkspaceType = 'ai-ideas';
       await loadUserWorkspaces();
       if (res?.id) setWorkspaceScope(res.id);
       showWorkspaceCreateDialog = false;
@@ -499,6 +508,17 @@
               bind:value={newWorkspaceName}
               bind:this={newWorkspaceInputRef}
             />
+          </label>
+          <label class="block text-sm">
+            <div class="text-slate-600">{$_('workspaceSettings.createDialog.typeLabel')}</div>
+            <select
+              class="mt-1 w-full rounded border border-slate-200 px-3 py-2 bg-white"
+              bind:value={newWorkspaceType}
+            >
+              {#each WORKSPACE_TYPES as wt}
+                <option value={wt.value}>{$_(wt.labelKey)}</option>
+              {/each}
+            </select>
           </label>
         </div>
         <div class="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
