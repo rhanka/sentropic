@@ -12,50 +12,7 @@
    */
 
   import ContainerView from './ContainerView.svelte';
-
-  /** Supported view modes */
-  export type ViewMode = 'container' | 'detail';
-
-  /** A single action button descriptor */
-  export type ViewAction = {
-    label: string;
-    href?: string;
-    onClick?: () => void;
-    variant?: 'primary' | 'secondary' | 'ghost';
-    icon?: any; // Lucide icon component
-  };
-
-  /** Column descriptor for container list/card views */
-  export type ViewColumn = {
-    key: string;
-    label: string;
-    sortable?: boolean;
-  };
-
-  /** View template descriptor */
-  export type ViewTemplateDescriptor = {
-    mode: ViewMode;
-    title?: string;
-    subtitle?: string;
-    columns?: ViewColumn[];
-    items?: any[];
-    actions?: ViewAction[];
-    sortKey?: string;
-    sortDirection?: 'asc' | 'desc';
-    groupKey?: string;
-    emptyMessage?: string;
-    loading?: boolean;
-    /** Card renderer: maps each item to card props */
-    cardRenderer?: (item: any) => {
-      title: string;
-      subtitle?: string;
-      icon?: any;
-      iconColorClass?: string;
-      badges?: Array<{ label: string; colorClass?: string }>;
-      href?: string;
-      onClick?: () => void;
-    };
-  };
+  import type { ViewTemplateDescriptor } from '$lib/types/view-template';
 
   export let descriptor: ViewTemplateDescriptor;
 </script>
