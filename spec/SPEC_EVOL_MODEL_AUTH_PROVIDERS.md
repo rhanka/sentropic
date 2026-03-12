@@ -136,5 +136,6 @@ W2:
 - This document stays focused on authentication/federation roadmap concerns.
 - Runtime ownership split (`openai.ts` vs Gemini paths, big-bang cutover) is specified in:
   - `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`
-- Codex-specific backend runtime usage from stored OAuth tokens is specified in:
-  - `spec/SPEC_EVOL_VSCODE_PLUGIN.md` (`BUG-L6-46`, `FEAT-L6-47`)
+- Delivered BR-05 Codex admin enrollment and OpenAI transport-source selection are specified in:
+  - `spec/SPEC_CHATBOT.md`
+  - `spec/SPEC_VSCODE_PLUGIN.md`
