@@ -132,17 +132,14 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
   - [x] BR-13 (Chrome plugin download): no impact — packaging/distribution only.
   - [x] Branches needing scope/dependency updates: **BR-06, BR-10, BR-11** (BR-10 is the most impacted).
 
-- [ ] **0.5 Rewrite branch plans**
-  - [ ] Rewrite `plan/04-BRANCH_feat-workspace-template-catalog.md` — align with this BRANCH.md (copy final lot structure).
-  - [ ] Rewrite `plan/06-BRANCH_feat-chrome-upstream-v1.md` — add BR-04 dependency awareness.
-  - [ ] Rewrite `plan/07-BRANCH_feat-release-ui-npm-and-pretest.md` — verify no BR-04 impact.
-  - [ ] Rewrite `plan/08-BRANCH_feat-model-runtime-claude-mistral.md` — verify no BR-04 impact.
-  - [ ] Rewrite `plan/09-BRANCH_feat-sso-google.md` — verify no BR-04 impact.
-  - [ ] Rewrite `plan/10-BRANCH_feat-vscode-plugin-v2-multi-agent.md` — add BR-04 dependency (workspace type for tool gating).
-  - [ ] Rewrite `plan/11-BRANCH_feat-chrome-upstream-multitab-voice.md` — add BR-04 awareness.
-  - [ ] Rewrite `plan/12-BRANCH_feat-release-chrome-vscode-ci-publish.md` — verify no BR-04 impact.
-  - [ ] Rewrite `PLAN.md` — new timeline, updated dependency graph, BR-04 as structural branch.
-  - [ ] Update `TODO.md` — roadmap sync.
+- [x] **0.5 Rewrite branch plans**
+  - [x] Rewrite `plan/04-BRANCH_feat-workspace-template-catalog.md` — now pointer to BRANCH.md.
+  - [x] Rewrite `plan/06-BRANCH_feat-chrome-upstream-v1.md` — BR-04 low impact note added.
+  - [x] BR-07, BR-08, BR-09, BR-12 — verified no BR-04 impact (no change needed).
+  - [x] Rewrite `plan/10-BRANCH_feat-vscode-plugin-v2-multi-agent.md` — BR-04 HIGH IMPACT dependency note.
+  - [x] Rewrite `plan/11-BRANCH_feat-chrome-upstream-multitab-voice.md` — BR-04 low impact note added.
+  - [x] Rewrite `PLAN.md` — new timeline, dependency graph with BR-04 as structural branch, wave scheduling.
+  - [x] Update `TODO.md` — BR-02/03/05 marked done, BR-04 scope updated.
 
 - [ ] **0.6 Rewrite BRANCH.md lots 1-N**
   - [ ] Based on finalized specs and data model, rewrite all lots (1 through N) in this BRANCH.md with:
