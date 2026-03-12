@@ -4,6 +4,8 @@ test.describe('Codex provider settings', () => {
   test.use({ storageState: './.auth/state.json' });
 
   test('admin can follow a mocked Codex device flow from settings', async ({ page }) => {
+    let openaiTransportMode: 'codex' | 'token' = 'token';
+    const postedModes: string[] = [];
     let providerState = {
       providerId: 'codex',
       label: 'Codex',
@@ -20,9 +22,22 @@ test.describe('Codex provider settings', () => {
       canConfigure: true,
     };
 
-    await page.route(/\/api\/v1\/settings\/provider-connections(?:\/codex\/enrollment\/(?:start|complete|disconnect))?(?:\?.*)?$/, async (route) => {
+    await page.route(/\/api\/v1\/settings\/provider-connections(?:\/openai\/mode|\/codex\/enrollment\/(?:start|complete|disconnect))?(?:\?.*)?$/, async (route) => {
       const url = new URL(route.request().url());
       const pathname = url.pathname;
+      const method = route.request().method();
+
+      if (pathname.endsWith('/openai/mode') && method === 'POST') {
+        const payload = route.request().postDataJSON() as { mode?: string } | undefined;
+        openaiTransportMode = payload?.mode === 'codex' ? 'codex' : 'token';
+        postedModes.push(openaiTransportMode);
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ mode: openaiTransportMode }),
+        });
+        return;
+      }
 
       if (pathname.endsWith('/codex/enrollment/start')) {
         providerState = {
@@ -84,6 +99,7 @@ test.describe('Codex provider settings', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
+          openaiTransportMode,
           providers: [
             providerState,
             {
@@ -126,6 +142,10 @@ test.describe('Codex provider settings', () => {
 
     await expect(page.getByRole('heading', { name: /Connexions providers|Provider connections/i })).toBeVisible();
     await expect(page.getByText('mock-admin@example.com')).toBeVisible();
+    const openAiKeyButton = page.getByRole('button', { name: /OpenAI key/i });
+    const codexTokenButton = page.getByRole('button', { name: /Codex token/i });
+    await expect(openAiKeyButton).toBeVisible();
+    await expect(codexTokenButton).toBeDisabled();
 
     await page.getByLabel(/Codex account label|Libellé compte Codex/i).fill('admin@example.com');
     await page.getByRole('button', { name: /Start sign-in|Démarrer la connexion/i }).click();
@@ -142,6 +162,14 @@ test.describe('Codex provider settings', () => {
 
     await expect(page.getByText('admin@example.com', { exact: true })).toBeVisible();
     await expect(page.getByText('Prêt', { exact: true })).toBeVisible();
+    await expect(codexTokenButton).toBeEnabled();
+
+    await codexTokenButton.click();
+    await expect(openAiKeyButton).toBeEnabled();
+    expect(postedModes).toEqual(['codex']);
+
+    await openAiKeyButton.click();
+    expect(postedModes).toEqual(['codex', 'token']);
 
     await page.getByRole('button', { name: /Disconnect|Déconnecter/i }).click();
     await expect(page.getByText('Non prêt', { exact: true }).first()).toBeVisible();
