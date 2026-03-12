@@ -407,12 +407,12 @@ Closed: 2026-03-12
 - Route `ui/src/routes/initiative/[id]/gate/` — gate review page.
 
 **Tasks:**
-- [ ] Implement gate evaluation service: resolve `gate_config`, evaluate `required_fields` + `guardrail_categories`, return `{ gate_passed, warnings, blockers }`.
-- [ ] Integrate gate check on `PATCH /api/v1/initiatives/:id` when `maturity_stage` changes.
-- [ ] Implement default gate configs per workspace type (seed on workspace creation).
-- [ ] UI: gate review page with criteria display and pass/fail indicators.
-- [ ] UI: maturity stage badge component with gate status.
-- [ ] Tests: gate evaluation (free/soft/hard modes), stage transitions.
+- [x] Implement gate evaluation service: resolve `gate_config`, evaluate `required_fields` + `guardrail_categories`, return `{ gate_passed, warnings, blockers }`.
+- [x] Integrate gate check on `PATCH /api/v1/initiatives/:id` when `maturity_stage` changes.
+- [x] Implement default gate configs per workspace type (seed on workspace creation).
+- [x] UI: gate review page with criteria display and pass/fail indicators.
+- [x] UI: maturity stage badge component with gate status.
+- [x] Tests: gate evaluation (free/soft/hard modes), stage transitions.
 
 **Lot 7 gate:**
 - [ ] `make typecheck-api ENV=test-br04`
