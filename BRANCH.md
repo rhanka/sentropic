@@ -129,13 +129,13 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
 ### Lot 1 — Provider Adapter Implementation (Claude + Mistral + Cohere)
 
 #### 1.1 Core type and registry extension
-- [ ] Extend `ProviderId` type in `api/src/services/provider-runtime.ts`: add `'claude' | 'mistral' | 'cohere'`.
-- [ ] Update `providerIds` array in same file.
-- [ ] Add env vars to `api/src/config/env.ts`: `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY` (all optional).
-- [ ] Extend `getEnvironmentCredential()` in `api/src/services/provider-credentials.ts` for the 3 new providers.
+- [x] Extend `ProviderId` type in `api/src/services/provider-runtime.ts`: add `'claude' | 'mistral' | 'cohere'`.
+- [x] Update `providerIds` array in same file.
+- [x] Add env vars to `api/src/config/env.ts`: `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY` (all optional).
+- [x] Extend `getEnvironmentCredential()` in `api/src/services/provider-credentials.ts` for the 3 new providers.
 
 #### 1.2 Claude (Anthropic) adapter
-- [ ] Create `api/src/services/providers/claude-provider.ts`:
+- [x] Create `api/src/services/providers/claude-provider.ts`:
   - Install `@anthropic-ai/sdk` via `make install-api @anthropic-ai/sdk`.
   - Implement `ClaudeProviderRuntime` class with `ProviderRuntime` interface.
   - Model catalog entries: `claude-sonnet-4-6` (standard, tools+streaming), `claude-opus-4-6` (advanced, tools+streaming+extended thinking).
@@ -146,7 +146,7 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
   - `normalizeError()`: map Anthropic error codes to `NormalizedProviderError`.
 
 #### 1.3 Mistral adapter
-- [ ] Create `api/src/services/providers/mistral-provider.ts`:
+- [x] Create `api/src/services/providers/mistral-provider.ts`:
   - Install `@mistralai/mistralai` via `make install-api @mistralai/mistralai`.
   - Implement `MistralProviderRuntime` class with `ProviderRuntime` interface.
   - Model catalog entries: `devstral-small-2505` (standard, tools+streaming), `mistral-large-2502` (advanced, tools+streaming).
@@ -157,7 +157,7 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
   - `normalizeError()`: map Mistral error codes.
 
 #### 1.4 Cohere adapter
-- [ ] Create `api/src/services/providers/cohere-provider.ts`:
+- [x] Create `api/src/services/providers/cohere-provider.ts`:
   - Install `cohere-ai` via `make install-api cohere-ai`.
   - Implement `CohereProviderRuntime` class with `ProviderRuntime` interface.
   - Model catalog entries: `command-a-03-2025` (standard, tools+streaming), `command-a-reasoning-03-2025` (advanced, tools+streaming).
@@ -169,7 +169,7 @@ All providers must emit identical `StreamEvent` types: `status`, `reasoning_delt
   - `normalizeError()`: map Cohere error codes.
 
 #### 1.5 Registry wiring
-- [ ] Update `api/src/services/provider-registry.ts`: instantiate and register `ClaudeProviderRuntime`, `MistralProviderRuntime`, `CohereProviderRuntime` in the constructor Map.
+- [x] Update `api/src/services/provider-registry.ts`: instantiate and register `ClaudeProviderRuntime`, `MistralProviderRuntime`, `CohereProviderRuntime` in the constructor Map.
 
 #### 1.6 LLM Runtime orchestrator extension
 - [ ] Update `api/src/services/llm-runtime/index.ts`:
