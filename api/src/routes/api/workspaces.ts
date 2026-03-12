@@ -62,15 +62,25 @@ workspacesRouter.get('/', async (c) => {
   return c.json({ items });
 });
 
+const workspaceTypeSchema = z.enum(['neutral', 'ai-ideas', 'opportunity', 'code']);
+export type WorkspaceType = z.infer<typeof workspaceTypeSchema>;
+
 const createWorkspaceSchema = z.object({
   name: z.string().min(1).max(128),
+  type: workspaceTypeSchema.default('ai-ideas'),
 });
 
 // Create workspace: creator becomes admin member
 workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSchema), async (c) => {
   const user = c.get('user') as { userId: string; role: string };
 
-  const { name } = c.req.valid('json');
+  const { name, type } = c.req.valid('json');
+
+  // Neutral workspaces are auto-created on registration; users cannot manually create them.
+  if (type === 'neutral') {
+    return c.json({ error: 'Neutral workspaces cannot be created manually' }, 400);
+  }
+
   const id = createId();
   const now = new Date();
 
@@ -79,6 +89,7 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
       id,
       ownerUserId: user.userId,
       name,
+      type,
       createdAt: now,
       updatedAt: now,
     });
