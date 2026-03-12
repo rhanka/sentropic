@@ -884,13 +884,20 @@ export interface ExecuteWithToolsStreamOptions {
   jobId?: string;
   messageId?: string;
   /**
-   * Résumé de reasoning (Responses API).
-   * IMPORTANT: si non fourni, on n'envoie pas de paramètre `reasoning` à OpenAI (comportement explicite).
+   * Résumé de reasoning (provider-agnostic).
+   * Passed through to the LLM runtime which maps to provider-native format:
+   * - OpenAI: `reasoning.summary`
+   * - Claude: ignored (no equivalent)
+   * - Mistral/Cohere: ignored (no reasoning support)
+   * If not provided, no reasoning parameter is sent.
    */
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
   /**
-   * Effort de reasoning (Responses API). Optionnel (override).
-   * Ex: 'high' pour des tâches complexes si modèle gpt-5.
+   * Effort de reasoning (provider-agnostic). Optionnel (override).
+   * Passed through to the LLM runtime which maps to provider-native format:
+   * - OpenAI: `reasoning.effort`
+   * - Claude: `thinking.budget_tokens` (for opus models only)
+   * - Mistral/Cohere: ignored (no reasoning support)
    */
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   /**

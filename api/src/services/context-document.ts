@@ -1,5 +1,6 @@
 import { defaultPrompts } from '../config/default-prompts';
 import { executeWithToolsStream } from './tools';
+import { getReasoningParamsForModel } from './model-catalog';
 import { callOpenAIResponseStream } from './llm-runtime';
 import { getNextSequence, writeStreamEvent } from './stream-service';
 import type { StreamEventType } from './llm-runtime';
@@ -272,8 +273,7 @@ export async function generateDocumentDetailedSummary(opts: {
       model: FORCED_DOCUMENT_MODEL,
       userPrompt: prompt,
       maxOutputTokens: 32000,
-      reasoningEffort: 'low',
-      reasoningSummary: 'concise',
+      ...getReasoningParamsForModel(FORCED_DOCUMENT_MODEL, 'low', 'concise'),
       signal: opts.signal,
       onStreamEvent: async (eventType, data) => {
         await write(eventType, { ...asRecord(data), phase: 'one_shot' });
@@ -318,8 +318,7 @@ export async function generateDocumentDetailedSummary(opts: {
       model: FORCED_DOCUMENT_MODEL,
       userPrompt: chunkPrompt,
       maxOutputTokens: 32000,
-      reasoningEffort: 'low',
-      reasoningSummary: 'concise',
+      ...getReasoningParamsForModel(FORCED_DOCUMENT_MODEL, 'low', 'concise'),
       signal: opts.signal,
       onStreamEvent: async (eventType, data) => {
         await write(eventType, {
