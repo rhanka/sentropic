@@ -2,6 +2,7 @@ import { db } from '../db/client';
 import { useCases, folders, organizations, contextDocuments } from '../db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { executeWithToolsStream } from './tools';
+import { getReasoningParamsForModel } from './model-catalog';
 import { defaultPrompts } from '../config/default-prompts';
 import { settingsService } from './settings';
 import { hydrateUseCases } from '../routes/api/use-cases';
@@ -256,7 +257,6 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
   // Récupérer le modèle (fourni ou par défaut)
   const aiSettings = await settingsService.getAISettings();
   const selectedModel = model || aiSettings.defaultModel;
-  const isGpt5 = typeof selectedModel === 'string' && selectedModel.startsWith('gpt-5');
   const promptId =
     typeof options.promptId === 'string' && options.promptId.trim().length > 0
       ? options.promptId.trim()
@@ -270,7 +270,7 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     useDocuments: documentsContexts.length > 0,
     documentsContexts,
     responseFormat: 'json_object',
-    ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
+    ...getReasoningParamsForModel(selectedModel, 'high', 'detailed'),
     promptId,
     streamId: finalStreamId,
     signal
