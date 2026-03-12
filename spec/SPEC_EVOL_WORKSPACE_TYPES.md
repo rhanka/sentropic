@@ -21,12 +21,17 @@ Each section below is tagged with its canonical spec target for post-implementat
 | §11 API contracts | `SPEC.md` | §3 |
 | §12 View template system | `SPEC.md` | §1, §5 (new pattern) |
 | §13 UI surfaces | `SPEC.md` | §1 |
+| §14 Workspace-type-aware chat & tool scoping | `SPEC_CHATBOT.md` | tool scoping section; `TOOLS.md` per-type tool sets |
+| §15 Cross-cutting exclusions & branch articulation | N/A (planning only) | removed after branch merge |
 
 ### Articulation with existing SPEC_EVOL files
 
 - **`SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §2.2** (Generic multi-workflow runtime): **absorbed** into §7 of this spec. After implementation, §2.2 must be removed from that file and replaced with a pointer to `SPEC.md`.
 - **`SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` §2.3** (Collaborative TODO runtime): **not absorbed**, remains deferred. Updated to note that neutral workspace todo automation (§3) does not cover collaborative editing.
 - **`SPEC_EVOL_BR15_AGENT_WORKFLOW_CONFIG_ROBUSTNESS.md`**: **not absorbed** (orthogonal concern: config robustness). BR-04 multi-workflow registry (§7) creates new surface for BR-15 to govern (open task-key configs). Dependency noted: BR-15 should be re-scoped after BR-04 to cover multi-workflow config authority.
+- **`SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`**: **not absorbed** (BR-08 scope). BR-04 §14 defines workspace-type-aware tool scoping which prepares the extension point for per-type model defaults (future). Cohere addition noted as new provider beyond current W2 scope.
+- **`SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`**: **not absorbed** (runtime refactoring). BR-04 does not touch LLM runtime. Provider abstraction already clean enough for new providers.
+- **Cross-cutting future branches** (§15): ChatPanel/ChatWidget modularization, document connectors (Google Workspace, SharePoint), RAG on document folders — all excluded from BR-04. Extension points prepared in §14 (tool scoping) and §15 (data model hooks).
 
 ---
 
@@ -1017,3 +1022,143 @@ Each workspace type defines a complete set of view templates. The mapping is the
 - Workspace switcher in header (existing) enhanced with type icon.
 - Breadcrumb: Neutral > Workspace > Folder > Initiative > Solution/Bid/Product.
 - `/home` route contextual: resolves `workflow_launch` view template for current workspace type. Not available in neutral workspace (orchestrator has no own generation).
+
+---
+
+## 14) Workspace-type-aware chat & tool scoping
+
+> → cible: `SPEC_CHATBOT.md` (tool scoping), `TOOLS.md` (per-type tool sets)
+
+### 14.1 Problem
+
+Current tool scoping in chat depends only on `contextType` (organization, folder, usecase, executive_summary) and workspace role (viewer/editor/admin). With workspace types, the same `contextType=initiative` in an `opportunity` workspace needs bid/solution/product tools, while in an `ai-ideas` workspace it needs generation tools only. The tool registry is workspace-type-blind.
+
+Key files impacted:
+- `api/src/services/tools.ts` — tool definitions (hardcoded set)
+- `api/src/services/tool-service.ts` — tool dispatch
+- `api/src/services/chat-service.ts` → `buildChatGenerationContext()` — tool set assembly
+- `ui/src/lib/utils/chat-tool-scope.ts` — client-side tool access control
+
+### 14.2 Target: workspace-type-aware tool resolution
+
+Tool availability becomes a function of `(workspace_type, context_type, role)` instead of just `(context_type, role)`.
+
+**Resolution chain**:
+1. Base tools always available: `web_search`, `web_extract`, `documents`, `history_analyze`
+2. Context-type tools (existing): `organizations_list`, `folders_list`, `usecases_list` → renamed to `initiatives_list`
+3. **Workspace-type tools** (new layer):
+   - `ai-ideas`: `read_initiative`, `update_initiative_field`, `comment_assistant` (existing, renamed)
+   - `opportunity`: all of `ai-ideas` + `solutions_list`, `solution_get`, `bids_list`, `bid_get`, `products_list`, `product_get`, `gate_review`
+   - `code`: `read_initiative`, `update_initiative_field` + code-specific tools (TBD, depends on BR-10 VSCode v2)
+   - `neutral`: cross-workspace tools only (`dispatch_todo`, `workspaces_list`, `initiative_search_cross_workspace`)
+
+**Implementation in BR-04**:
+- Add `workspace_type` parameter to `buildChatGenerationContext()` tool resolution
+- Register new tools for extended objects (solution, bid, product CRUD tools)
+- Update `chat-tool-scope.ts` to include workspace-type filtering
+- Tool definitions remain in `tools.ts` but selection is workspace-type-aware
+
+### 14.3 Existing tool rename impact
+
+BR-04 `use_cases` → `initiatives` rename affects:
+- Tool names: `read_usecase` → `read_initiative`, `update_usecase_field` → `update_initiative_field`, `usecases_list` → `initiatives_list`
+- Tool descriptions and parameter names
+- `contextType` values in `chatContexts` table: `usecase` → `initiative`
+- Client-side `chat-tool-scope.ts` references
+
+### 14.4 Chat × workspace type: what BR-04 does vs does NOT do
+
+**BR-04 delivers**:
+- Workspace-type-aware tool resolution in `buildChatGenerationContext()`
+- New tools for extended objects (solution, bid, product, gate CRUD)
+- Tool rename (`usecase` → `initiative` across all tool names/params)
+- `contextType` migration (`usecase` → `initiative` in `chatContexts`)
+
+**BR-04 does NOT deliver** (deferred to future branches):
+- ChatPanel/ChatWidget UI refactoring — separate branch (§15.1)
+- New LLM providers (Claude, Mistral, Cohere) — BR-08 scope
+- Document connectors (Google Workspace, SharePoint) — new branch (§15.2)
+- RAG / vector embeddings — new branch (§15.3)
+- Workspace-type-aware model defaults (e.g., opportunity workspace prefers a specific model) — future evolution
+
+---
+
+## 15) Cross-cutting exclusions & branch articulation
+
+> → cible: N/A (planning section, removed after branch merge)
+
+This section defines what BR-04 explicitly **excludes** and which future branches are expected to deliver these capabilities. BR-04 prepares extension points where noted.
+
+### 15.1 ChatPanel/ChatWidget modularization (new branch)
+
+**Current state**: `ChatPanel.svelte` (59K) and `ChatWidget.svelte` (37K) are monolithic components handling session lifecycle, message rendering, tool display, document upload, streaming, layout management.
+
+**Objective**: decompose into modular sub-components (message list, tool call renderer, document panel, input bar, session manager, stream handler) to enable parallel development.
+
+**BR-04 boundary**: BR-04 modifies ChatPanel/ChatWidget only for:
+- Workspace type context propagation (passing `workspace_type` to chat session)
+- Tool scope display updates (showing workspace-type-specific tools)
+- `usecase` → `initiative` rename in UI labels/references
+
+BR-04 does NOT refactor the component architecture. The modularization branch can start after BR-04 merge or in parallel if scoped to non-overlapping sub-components.
+
+**Dependency**: low. The modularization is structural (component splitting), BR-04 changes are functional (new props, renamed refs). Merge conflicts expected but mechanical.
+
+**Suggested branch**: `feat/chat-modularization` — no BR number assigned yet.
+
+### 15.2 Document connectors: Google Workspace & SharePoint (new branch)
+
+**Current state**: documents are uploaded locally and stored in S3-compatible storage. `contextDocuments` table tracks `filename`, `mimeType`, `storageKey`, `status`. No concept of external connector.
+
+**Target**: add connector abstraction to support Google Drive, Google Docs, SharePoint/OneDrive as document sources. Documents can be synced (metadata + content extraction) or linked (reference only).
+
+**Data model extension points** (NOT implemented in BR-04, but noted for future migration):
+- `contextDocuments.connector_type text DEFAULT 'local'` — `local | google_drive | sharepoint | onedrive`
+- `contextDocuments.external_ref text` — external URL or ID for linked documents
+- `contextDocuments.sync_status text` — `synced | stale | error` for connected documents
+- New table `document_connectors` — per-workspace connector config (OAuth tokens, folder mappings)
+
+**BR-04 boundary**: BR-04 does NOT touch document model. The `contextDocuments` table keeps its current schema. Document `contextType` values remain as-is (no rename needed — documents attach by context_id, not by type name).
+
+**Impact of BR-04 on this branch**: `use_cases` → `initiatives` rename means connector branch must use `initiative` as context type for initiative-attached documents. Low impact.
+
+**Suggested branch**: `feat/document-connectors` — no BR number assigned yet. Depends on BR-04 (for initiative rename) but can be developed in parallel on document-specific files.
+
+### 15.3 RAG on document folders (new branch)
+
+**Current state**: no vector embeddings, no semantic search. Documents are summarized by LLM and the summary is passed as chat context. The `documents` tool lists documents by context but has no retrieval scoring.
+
+**Target**: Retrieval-Augmented Generation on documents attached to a context (folder, organization, initiative). When the LLM needs document context, it retrieves relevant chunks rather than dumping full summaries.
+
+**Architecture sketch** (NOT implemented in BR-04):
+- Document processing pipeline extended: extract → chunk → embed → store
+- New table `document_chunks(id, document_id, chunk_index, content, embedding vector, metadata jsonb)`
+- Vector store: `pgvector` extension on PostgreSQL (preferred for single-DB simplicity)
+- Retrieval: `documents` tool gains a `semantic_search(query, context, top_k)` mode
+- Chat integration: `buildChatGenerationContext()` injects top-K relevant chunks instead of full summaries
+
+**BR-04 boundary**: BR-04 does NOT implement RAG. No schema changes for chunks/embeddings. The document processing pipeline is not modified.
+
+**Dependency**: depends on document connector branch (§15.2) for multi-source documents, but can also work with local-only documents first.
+
+**Suggested branch**: `feat/rag-documents` — no BR number assigned yet. Can be developed independently of BR-04 on document-specific files.
+
+### 15.4 LLM provider expansion: Cohere (extends BR-08)
+
+**Current state**: BR-08 (`feat/model-runtime-claude-mistral`) is planned to add Claude (Anthropic) and Mistral providers (see `SPEC_EVOL_MODEL_AUTH_PROVIDERS.md` §4.2 W2).
+
+**New demand**: add Cohere as a third new provider. The `ProviderRuntime` interface is already designed for extension. Cohere supports chat completion, embeddings (useful for RAG §15.3), and reranking.
+
+**BR-04 boundary**: BR-04 does NOT add any LLM provider. Provider registry and runtime are untouched.
+
+**Action**: extend BR-08 scope to include Cohere, or create a follow-up branch. Update `SPEC_EVOL_MODEL_AUTH_PROVIDERS.md` accordingly.
+
+### 15.5 Branch parallelization matrix
+
+| Future branch | Depends on BR-04? | Can parallel with BR-04? | Key conflict zones |
+|---|---|---|---|
+| `feat/chat-modularization` | low | yes (if scoped to non-functional refactoring) | ChatPanel/ChatWidget — mechanical merge conflicts |
+| `feat/document-connectors` | low (initiative rename) | yes (document-specific files) | `contextDocuments` schema if BR-04 adds migration |
+| `feat/rag-documents` | none | yes | document processing pipeline only |
+| BR-08 + Cohere | none | yes | provider-specific files only |
+| BR-10 (VSCode v2) | **high** | no — must wait for BR-04 | workspace-type-aware agent dispatch |
