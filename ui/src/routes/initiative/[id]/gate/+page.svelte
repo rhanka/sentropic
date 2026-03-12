@@ -56,13 +56,13 @@
 
       if (result.code === 'GATE_BLOCKED') {
         gateResult = result.gate;
-        addToast('Gate check failed. See blockers below.', 'error');
+        addToast({ message: 'Gate check failed. See blockers below.', type: 'error' });
         return;
       }
 
       // Update local initiative data
       initiative = { ...initiative, maturityStage: targetStage };
-      addToast(`Advanced to stage ${targetStage}`, 'success');
+      addToast({ message: `Advanced to stage ${targetStage}`, type: 'success' });
     } catch (e: any) {
       // Handle 422 gate blocked response
       if (e.status === 422) {
@@ -72,9 +72,9 @@
         } catch {
           // ignore parse errors
         }
-        addToast('Gate check failed', 'error');
+        addToast({ message: 'Gate check failed', type: 'error' });
       } else {
-        addToast(e.message || 'Failed to advance stage', 'error');
+        addToast({ message: e.message || 'Failed to advance stage', type: 'error' });
       }
     }
   }
