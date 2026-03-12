@@ -199,10 +199,10 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 - [x] Update `api/src/db/schema.ts` — rename `useCases` table + relations, add `type`/`gate_config` on `workspaces`, add `antecedent_id`/`maturity_stage`/`gate_status`/`template_snapshot_id` on `initiatives`, add 6 new tables with relations.
 - [x] Verify migration applies cleanly on fresh DB (`make db-migrate API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1014 ENV=feat-workspace-template-catalog`). ✓ 2026-03-12
 
-**Lot 1 gate:**
-- [ ] `make typecheck-api ENV=test-br04`
-- [ ] `make lint-api ENV=test-br04`
-- [ ] Migration applies + rollback SQL validated
+**Lot 1 gate:** ✓ closed 2026-03-12
+- [x] `make typecheck-api ENV=test-br04` ✓ 0 errors
+- [x] `make lint-api ENV=test-br04` ✓ 0 errors (185 pre-existing warnings)
+- [x] Migration applies + rollback SQL validated ✓ 2026-03-12
 
 ---
 
