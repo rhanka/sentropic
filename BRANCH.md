@@ -301,7 +301,7 @@ Deliver a typed workspace system (`neutral`, `ai-ideas`, `opportunity`, `code`) 
 - [x] API: enforce neutral constraints (no memberships, no initiatives, no workflows). ✓
 - [x] API: enforce type immutability on workspace update. ✓
 - [x] UI: add workspace type selector to workspace creation flow. ✓
-- [ ] UI: expose type in workspace stores and display type icon in header.
+- [x] UI: expose type in workspace stores and display type icon in header. ✓
 - [ ] Tests: workspace creation with type, neutral auto-creation, neutral constraints.
 
 **Lot 4 gate:**
