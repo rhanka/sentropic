@@ -59,6 +59,7 @@
     '/matrix',
     '/dashboard',
     '/dashboard-tmp',
+    '/neutral',
     '/settings',
     '/auth/devices',
   ];
