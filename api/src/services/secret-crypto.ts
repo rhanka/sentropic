@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 import { env } from '../config/env';
 
 const SECRET_PREFIX = 'enc:v1:';
+const GCM_AUTH_TAG_LENGTH = 16;
 
 const resolveSecretKey = (): Buffer => {
   const seed = env.JWT_SECRET || 'dev-secret-key-change-in-production-please';
@@ -10,7 +11,9 @@ const resolveSecretKey = (): Buffer => {
 
 export const encryptSecret = (value: string): string => {
   const iv = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', resolveSecretKey(), iv);
+  const cipher = createCipheriv('aes-256-gcm', resolveSecretKey(), iv, {
+    authTagLength: GCM_AUTH_TAG_LENGTH,
+  });
   const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
   return `${SECRET_PREFIX}${iv.toString('base64url')}:${tag.toString('base64url')}:${encrypted.toString('base64url')}`;
@@ -27,6 +30,7 @@ export const decryptSecret = (value: string): string => {
     'aes-256-gcm',
     resolveSecretKey(),
     Buffer.from(ivRaw, 'base64url'),
+    { authTagLength: GCM_AUTH_TAG_LENGTH },
   );
   decipher.setAuthTag(Buffer.from(tagRaw, 'base64url'));
   const decrypted = Buffer.concat([
