@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream';
 import { env } from '../../config/env';
 import type {
   CredentialValidationResult,
@@ -138,7 +139,7 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
   }
 
   private async *toAsyncIterable(
-    stream: Anthropic.MessageStream,
+    stream: MessageStream,
   ): AsyncGenerator<unknown> {
     for await (const event of stream) {
       yield event;
