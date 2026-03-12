@@ -313,8 +313,8 @@ const executeStructuredGenerationWithGeminiFallback = async (params: {
   structuredOutput: StructuredOutputConfig;
   promptId: string;
   streamId: string;
-  reasoningSummary?: 'detailed';
-  reasoningEffort?: 'high';
+  reasoningSummary?: 'auto' | 'concise' | 'detailed';
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   signal?: AbortSignal;
 }): Promise<string> => {
   const baseOptions = {
