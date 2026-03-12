@@ -30,7 +30,7 @@
   import MenuPopover from '$lib/components/MenuPopover.svelte';
   import { currentFolderId, foldersStore } from '$lib/stores/folders';
   import { organizationsStore } from '$lib/stores/organizations';
-  import { useCasesStore } from '$lib/stores/useCases';
+  import { initiativesStore } from '$lib/stores/initiatives';
   import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import { deleteDocument, listDocuments, uploadDocument, type ContextDocumentItem } from '$lib/utils/documents';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
@@ -358,7 +358,7 @@
       return folder?.name || '';
     }
     if (type === 'usecase') {
-      const useCase = $useCasesStore.find((u) => u.id === contextId);
+      const useCase = $initiativesStore.find((u) => u.id === contextId);
       return useCase?.data?.name || useCase?.name || '';
     }
     if (type === 'executive_summary') {
@@ -4502,7 +4502,7 @@
 
   $: if (
     mode === 'ai' &&
-    ($organizationsStore || $foldersStore || $useCasesStore)
+    ($organizationsStore || $foldersStore || $initiativesStore)
   ) {
     refreshContextLabels();
   }
