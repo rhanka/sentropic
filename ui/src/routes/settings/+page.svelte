@@ -103,7 +103,7 @@
   let aiSettings = {
     concurrency: 10,
     publishingConcurrency: 5,
-    defaultProviderId: 'openai' as 'openai' | 'gemini',
+    defaultProviderId: 'openai' as 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere',
     defaultModel: 'gpt-5.4',
     processingInterval: 1000
   };
@@ -117,7 +117,7 @@
   let isLoadingModelCatalog = false;
   let isSavingAISettings = false;
   let userAISettings = {
-    defaultProviderId: 'openai' as 'openai' | 'gemini',
+    defaultProviderId: 'openai' as 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere',
     defaultModel: 'gpt-4.1-nano',
   };
   let isLoadingUserAISettings = false;
@@ -532,7 +532,7 @@
     isLoadingUserAISettings = true;
     try {
       const payload = await apiGet<{
-        defaultProviderId: 'openai' | 'gemini';
+        defaultProviderId: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
         defaultModel: string;
       }>('/me/ai-settings');
       userAISettings.defaultProviderId = payload.defaultProviderId;
