@@ -277,15 +277,15 @@ Closed: 2026-03-12
 ### Lot 4 — Tests
 
 #### 4.1 API tests
-- [ ] **Existing tests to update**:
-  - `api/tests/api/models.test.ts` — verify catalog returns 5 providers and expected models.
-  - `api/tests/api/ai-settings.test.ts` — verify default selection with new providers.
-  - `api/tests/unit/provider-credentials.test.ts` — add credential resolution cases for claude/mistral/cohere.
-  - `api/tests/unit/model-selection-legacy.test.ts` — verify no regression with new provider IDs.
+- [x] **Existing tests to update**:
+  - `api/tests/api/models.test.ts` — already verifies catalog returns 5 providers and expected models (no change needed).
+  - `api/tests/api/ai-settings.test.ts` — added tests accepting anthropic/mistral/cohere as valid default_provider_id.
+  - `api/tests/unit/provider-credentials.test.ts` — added credential resolution cases for claude/mistral/cohere + key format tests.
+  - `api/tests/unit/model-selection-legacy.test.ts` — added no-migration tests for claude/mistral/cohere model IDs.
   - `api/tests/unit/gemini-provider-sse.test.ts` — no change expected (Gemini-specific).
   - `api/tests/unit/gemini-response-schema.test.ts` — no change expected.
   - `api/tests/unit/gemini-tool-handoff.test.ts` — no change expected.
-- [ ] **New tests to create**:
+- [x] **New tests to create**:
   - `api/tests/unit/claude-provider.test.ts` — unit test for Claude adapter (mock SDK, validate generate/streamGenerate/validateCredential/normalizeError).
   - `api/tests/unit/mistral-provider.test.ts` — unit test for Mistral adapter.
   - `api/tests/unit/cohere-provider.test.ts` — unit test for Cohere adapter.
