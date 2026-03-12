@@ -1,4 +1,4 @@
-export type ProviderId = 'openai' | 'gemini';
+export type ProviderId = 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
 
 export type ProviderStatus = 'ready' | 'planned';
 
@@ -51,7 +51,7 @@ export interface ProviderRuntime {
   normalizeError(error: unknown): NormalizedProviderError;
 }
 
-export const providerIds: ProviderId[] = ['openai', 'gemini'];
+export const providerIds: ProviderId[] = ['openai', 'gemini', 'anthropic', 'mistral', 'cohere'];
 
 export const isProviderId = (value: string): value is ProviderId => {
   return providerIds.includes(value as ProviderId);
