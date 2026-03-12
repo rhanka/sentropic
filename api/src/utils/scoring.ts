@@ -1,8 +1,8 @@
 import type { MatrixConfig } from '../types/matrix';
-import type { ScoreEntry, UseCaseData } from '../types/usecase';
+import type { ScoreEntry, InitiativeData } from '../types/initiative';
 
 // Re-export for backward compatibility
-export type { ScoreEntry } from '../types/usecase';
+export type { ScoreEntry } from '../types/initiative';
 
 const maxPossibleScore = (axes: { weight: number }[]) => {
   // Score maximum basé sur le poids des axes (rating max = 10)
@@ -65,7 +65,7 @@ export const calculateScores = (
  */
 export const calculateUseCaseScores = (
   matrix: MatrixConfig | null,
-  useCaseData: UseCaseData
+  useCaseData: InitiativeData
 ): {
   totalValueScore: number | null;
   totalComplexityScore: number | null;

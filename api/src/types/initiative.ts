@@ -1,5 +1,5 @@
 /**
- * Types pour les cas d'usage
+ * Types pour les initiative
  */
 
 export type ScoreEntry = {
@@ -9,11 +9,11 @@ export type ScoreEntry = {
 };
 
 /**
- * Structure du champ data JSONB dans use_cases
+ * Structure du champ data JSONB dans initiatives
  */
-export type UseCaseData = {
+export type InitiativeData = {
   // === Champs principaux (obligatoires) ===
-  name: string; // Nom du cas d'usage
+  name: string; // Nom du initiative
   description?: string; // Description courte (30-60 mots)
 
   // === Nouveaux champs ===
@@ -51,18 +51,18 @@ export type UseCaseData = {
 
 /**
  * Type helper pour JSONB compatible avec Drizzle ORM
- * Permet d'éviter l'utilisation de "as unknown as UseCaseData" en fournissant un type explicite
+ * Permet d'éviter l'utilisation de "as unknown as InitiativeData" en fournissant un type explicite
  * pour les colonnes JSONB qui acceptent n'importe quelle valeur JSON valide
  */
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-export type UseCaseDataJson = JsonValue & UseCaseData;
+export type InitiativeDataJson = JsonValue & InitiativeData;
 
 /**
  * Cas d'usage complet avec données hydratées depuis la DB
  * Note: totalValueScore et totalComplexityScore sont calculés dynamiquement
  * Note: name et description sont maintenant dans data JSONB
  */
-export type UseCase = {
+export type Initiative = {
   // === Gestion d'état (colonnes natives) ===
   id: string;
   folderId: string;
@@ -73,7 +73,7 @@ export type UseCase = {
   createdAt: Date | string;
 
   // === Données métier (JSONB, inclut name et description) ===
-  data: UseCaseData;
+  data: InitiativeData;
 
   // === Scores calculés dynamiquement (non stockés en DB) ===
   totalValueScore?: number | null;
