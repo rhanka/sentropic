@@ -1,3 +1,10 @@
+/**
+ * Multi-agent seed data per workspace type (§8.1).
+ *
+ * Open runtime types: agent keys are free strings (§7.3).
+ * Legacy type imports kept as string aliases for backward compatibility.
+ */
+
 import { defaultPrompts } from "./default-prompts";
 import type {
   GenerationAgentKey,
@@ -10,12 +17,16 @@ const readLegacyPromptTemplate = (promptId: string): string => {
 };
 
 export type DefaultGenerationAgentDefinition = {
-  key: GenerationAgentKey;
+  key: string;
   name: string;
   description: string;
   sourceLevel: "code";
   config: Record<string, unknown>;
 };
+
+// ---------------------------------------------------------------------------
+// ai-ideas agents (existing 6 agents, unchanged)
+// ---------------------------------------------------------------------------
 
 export const DEFAULT_GENERATION_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = [
   {
@@ -89,15 +100,104 @@ export const DEFAULT_GENERATION_AGENTS: ReadonlyArray<DefaultGenerationAgentDefi
   },
 ];
 
+// ---------------------------------------------------------------------------
+// opportunity agents (§8.1)
+// ---------------------------------------------------------------------------
+
+export const OPPORTUNITY_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = [
+  {
+    key: "demand_analyst",
+    name: "Demand analyst",
+    description: "Analyzes client demand, market context, and opportunity viability.",
+    sourceLevel: "code",
+    config: { role: "demand_analysis", domain: "opportunity" },
+  },
+  {
+    key: "solution_architect",
+    name: "Solution architect",
+    description: "Designs solution architecture from demand analysis outputs.",
+    sourceLevel: "code",
+    config: { role: "solution_architecture", domain: "opportunity" },
+  },
+  {
+    key: "bid_writer",
+    name: "Bid writer",
+    description: "Prepares bid documents from solution drafts and commercial terms.",
+    sourceLevel: "code",
+    config: { role: "bid_preparation", domain: "opportunity" },
+  },
+  {
+    key: "gate_reviewer",
+    name: "Gate reviewer",
+    description: "Evaluates initiative maturity against gate criteria for stage transitions.",
+    sourceLevel: "code",
+    config: { role: "gate_review", domain: "opportunity" },
+  },
+];
+
+// ---------------------------------------------------------------------------
+// code agents (§8.1)
+// ---------------------------------------------------------------------------
+
+export const CODE_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = [
+  {
+    key: "codebase_analyst",
+    name: "Codebase analyst",
+    description: "Scans codebase for patterns, dependencies, and architecture insights.",
+    sourceLevel: "code",
+    config: { role: "codebase_analysis", domain: "code" },
+  },
+  {
+    key: "issue_triager",
+    name: "Issue triager",
+    description: "Triages and prioritizes issues from codebase analysis.",
+    sourceLevel: "code",
+    config: { role: "issue_triage", domain: "code" },
+  },
+  {
+    key: "implementation_planner",
+    name: "Implementation planner",
+    description: "Generates implementation plans from triaged issues.",
+    sourceLevel: "code",
+    config: { role: "implementation_planning", domain: "code" },
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Workspace type → agent catalog
+// ---------------------------------------------------------------------------
+
+export type WorkspaceTypeAgentSeed = {
+  workspaceType: string;
+  agents: ReadonlyArray<DefaultGenerationAgentDefinition>;
+};
+
+export const WORKSPACE_TYPE_AGENT_SEEDS: ReadonlyArray<WorkspaceTypeAgentSeed> = [
+  { workspaceType: "ai-ideas", agents: DEFAULT_GENERATION_AGENTS },
+  { workspaceType: "opportunity", agents: OPPORTUNITY_AGENTS },
+  { workspaceType: "code", agents: CODE_AGENTS },
+  // neutral: no generation agents (orchestrator tools only, §8.2)
+];
+
+/** Look up the agent seed catalog for a workspace type. Returns undefined for neutral. */
+export function getAgentSeedsForType(workspaceType: string): WorkspaceTypeAgentSeed | undefined {
+  return WORKSPACE_TYPE_AGENT_SEEDS.find((s) => s.workspaceType === workspaceType);
+}
+
+// ---------------------------------------------------------------------------
+// Backward-compat exports
+// ---------------------------------------------------------------------------
+
 export const DEFAULT_GENERATION_AGENT_BY_KEY = new Map<
-  GenerationAgentKey,
+  string,
   DefaultGenerationAgentDefinition
 >(DEFAULT_GENERATION_AGENTS.map((item) => [item.key, item]));
 
-export const DEFAULT_GENERATION_AGENT_KEY_BY_TASK: Record<
-  InitiativeGenerationWorkflowTaskKey,
-  GenerationAgentKey
-> = {
+/**
+ * Legacy task-key → agent-key mapping for ai-ideas workflow.
+ * @deprecated Use runtime lookup from workflow_definition_tasks.agentDefinitionId instead (§7.3).
+ */
+export const DEFAULT_GENERATION_AGENT_KEY_BY_TASK: Record<string, string> = {
   generation_context_prepare: "generation_orchestrator",
   generation_matrix_prepare: "matrix_generation_agent",
   generation_usecase_list: "usecase_list_agent",
