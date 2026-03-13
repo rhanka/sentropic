@@ -822,6 +822,53 @@ export const gateReviewTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   }
 };
 
+// --- Cross-workspace tools (neutral workspace) ---
+
+export const workspaceListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'workspace_list',
+    description: 'List all workspaces accessible to the current user with summary stats.',
+    parameters: {
+      type: 'object',
+      properties: {}
+    }
+  }
+};
+
+export const initiativeSearchTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'initiative_search',
+    description: 'Search initiatives across all accessible workspaces by name, status, or maturity stage.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query (matches initiative name or description).' },
+        status: { type: 'string', description: 'Optional status filter.' },
+        maturityStage: { type: 'string', description: 'Optional maturity stage filter (e.g. G0, G2).' }
+      }
+    }
+  }
+};
+
+export const taskDispatchTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'task_dispatch',
+    description: 'Dispatch a task (todo) to a specific workspace on behalf of the current user.',
+    parameters: {
+      type: 'object',
+      properties: {
+        workspaceId: { type: 'string', description: 'Target workspace ID.' },
+        title: { type: 'string', description: 'Task title.' },
+        description: { type: 'string', description: 'Optional task description.' }
+      },
+      required: ['workspaceId', 'title']
+    }
+  }
+};
+
 export interface SearchResult {
   title: string;
   url: string;
