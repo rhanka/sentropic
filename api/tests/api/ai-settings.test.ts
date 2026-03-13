@@ -55,7 +55,7 @@ describe('AI Settings API', () => {
       expect(geminiResponse.status).toBe(200);
       const geminiData = await geminiResponse.json();
       expect(geminiData.defaultProviderId).toBe('gemini');
-      expect(geminiData.defaultModel).toBe('gemini-3.1-flash-lite');
+      expect(geminiData.defaultModel).toBe('gemini-3.1-flash-lite-preview');
 
       await settingsService.set('default_provider_id', 'openai', 'Default AI provider');
       await settingsService.set('default_model', 'gpt-4.1-nano', 'Modele IA par defaut');

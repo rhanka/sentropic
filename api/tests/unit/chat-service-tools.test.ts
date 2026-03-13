@@ -481,7 +481,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     ]);
   });
 
-it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is gemini', async () => {
+it('should evaluate reasoning effort with gemini-3.1-flash-lite-preview when provider is gemini', async () => {
     const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
     mock.mockReset();
@@ -519,7 +519,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
 
     expect(calls.length).toBeGreaterThanOrEqual(2);
     expect(calls[0]?.providerId).toBe('gemini');
-    expect(calls[0]?.model).toBe('gemini-3.1-flash-lite');
+    expect(calls[0]?.model).toBe('gemini-3.1-flash-lite-preview');
     expect(calls[1]?.providerId).toBe('gemini');
     expect(calls[1]?.model).toBe('gemini-3.1-pro-preview-customtools');
 
@@ -534,7 +534,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
     );
     expect(effortStatus).toBeDefined();
     expect((effortStatus as any).data?.effort).toBe('low');
-    expect((effortStatus as any).data?.by).toBe('gemini-3.1-flash-lite');
+    expect((effortStatus as any).data?.by).toBe('gemini-3.1-flash-lite-preview');
   });
 
   it('should expose requested web tools without business context', async () => {
