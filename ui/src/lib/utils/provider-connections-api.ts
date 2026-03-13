@@ -1,7 +1,7 @@
 import { apiGet, apiPost } from './api';
 
 export type ProviderConnectionState = {
-  providerId: 'codex' | 'openai' | 'gemini';
+  providerId: 'codex' | 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
   label: string;
   ready: boolean;
   connectionStatus: 'connected' | 'pending' | 'disconnected';
