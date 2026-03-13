@@ -43,6 +43,7 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
 - `BR08-FL4` | `closed` | Cohere embeddings (`embed-v4.0`) and reranking (`rerank-v3.5`) are **catalogued only** — implementation deferred to BR-17 (RAG).
 - `BR08-FL5` | `risk` | Reasoning system is deeply coupled to OpenAI Responses API (`reasoningEffort`, `reasoningSummary`, `isGpt5` guards). Must be generalized to provider-agnostic `supportsReasoning` checks. See Risk/Impact section.
 - `BR08-FL6` | `closed` | **Docker builds fixed by conductor.** All 6 gate checks now pass (typecheck-api, lint-api, test-api, typecheck-ui, lint-ui, test-ui). Resolved 2026-03-12 via `REGISTRY=local` override.
+- `BR08-FL7` | `blocked` | **Lot 4 quality gates: Docker OOM kills all UI containers and API containers.** typecheck-ui exits 137 (OOM killed during `svelte-check`), lint-ui fails with `missing dependency ui` compose error, test-ui exits 137 (OOM killed during `vitest run`), test-api postgres exits 0 then api exits 143 (SIGTERM/OOM). typecheck-api and lint-api pass (lighter memory footprint). Tried each failing command twice — same result. Conductor needs to free Docker memory (stop other compose projects, increase Docker memory limit, or prune unused images/containers).
 
 ## Questions / Notes
 - MPA-Q4: Provider request/response retention compliance baseline — deferred, no impact on adapter implementation.
