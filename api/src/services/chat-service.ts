@@ -4777,9 +4777,16 @@ Règles :
         currentMessages = [...currentMessages, { role: 'assistant', content: assistantText }];
       }
 
-      // Codex backend no longer accepts previous_response_id: replay tool calls locally.
-      if (useCodexTransport) {
-        previousResponseId = null;
+      // Non-Responses-API providers (Claude, Mistral, Cohere, Codex) need both
+      // function_call + function_call_output in rawInput so the runtime can
+      // reconstruct the assistant tool_use / tool_calls block before tool results.
+      const needsExplicitToolReplay =
+        useCodexTransport ||
+        selectedProviderId === 'anthropic' ||
+        selectedProviderId === 'mistral' ||
+        selectedProviderId === 'cohere';
+      if (needsExplicitToolReplay) {
+        if (useCodexTransport) previousResponseId = null;
         pendingResponsesRawInput = toolCalls.flatMap((toolCall) => {
           const output = responseToolOutputs.find((item) => item.call_id === toolCall.id);
           return output

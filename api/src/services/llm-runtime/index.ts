@@ -487,10 +487,32 @@ const buildClaudeMessages = (
       continue;
     }
 
-    claudeMessages.push({
-      role: role === 'assistant' ? 'assistant' : 'user',
-      content,
-    });
+    if (role === 'assistant') {
+      // Forward tool_calls as tool_use blocks so Claude can pair tool_results
+      const toolCalls = (message as { tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }> }).tool_calls;
+      if (toolCalls && toolCalls.length > 0) {
+        const contentBlocks: Array<Record<string, unknown>> = [];
+        if (content.trim()) {
+          contentBlocks.push({ type: 'text', text: content });
+        }
+        for (const tc of toolCalls) {
+          let parsedInput: unknown = {};
+          try { parsedInput = JSON.parse(tc.function.arguments || '{}'); } catch { /* keep empty */ }
+          contentBlocks.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.function.name,
+            input: parsedInput,
+          });
+        }
+        claudeMessages.push({ role: 'assistant', content: contentBlocks });
+      } else {
+        claudeMessages.push({ role: 'assistant', content });
+      }
+      continue;
+    }
+
+    claudeMessages.push({ role: 'user', content });
   }
 
   return {
@@ -1592,24 +1614,40 @@ export async function* callOpenAIResponseStream(
     const claudeTools = buildClaudeTools(filteredTools, normalizedToolChoice);
     const thinkingParams = mapClaudeReasoningParams(selectedModel, reasoningEffort);
 
-    // Handle rawInput: convert function_call_output items to tool_result messages
+    // Handle rawInput: inject assistant tool_use blocks then user tool_result blocks
     if (Array.isArray(rawInput) && rawInput.length > 0) {
+      // 1) Collect function_call items → assistant message with tool_use blocks
+      const toolUseBlocks: Array<Record<string, unknown>> = [];
       for (const item of rawInput) {
         const record = item as Record<string, unknown>;
-        const type = typeof record?.type === 'string' ? record.type : '';
-        if (type !== 'function_call_output') continue;
-        const callId = typeof record.call_id === 'string' ? record.call_id : '';
-        const output = stringifyContent(record.output);
-        claudeMessages.push({
-          role: 'user',
-          content: [
-            {
-              type: 'tool_result',
-              tool_use_id: callId,
-              content: output,
-            },
-          ],
-        });
+        if (record?.type === 'function_call') {
+          let parsedArgs: unknown = {};
+          try { parsedArgs = JSON.parse(typeof record.arguments === 'string' ? record.arguments : '{}'); } catch { /* keep empty */ }
+          toolUseBlocks.push({
+            type: 'tool_use',
+            id: typeof record.call_id === 'string' ? record.call_id : '',
+            name: typeof record.name === 'string' ? record.name : '',
+            input: parsedArgs,
+          });
+        }
+      }
+      if (toolUseBlocks.length > 0) {
+        claudeMessages.push({ role: 'assistant', content: toolUseBlocks });
+      }
+      // 2) Collect function_call_output items → user message with tool_result blocks
+      const toolResultBlocks: Array<Record<string, unknown>> = [];
+      for (const item of rawInput) {
+        const record = item as Record<string, unknown>;
+        if (record?.type === 'function_call_output') {
+          toolResultBlocks.push({
+            type: 'tool_result',
+            tool_use_id: typeof record.call_id === 'string' ? record.call_id : '',
+            content: stringifyContent(record.output),
+          });
+        }
+      }
+      if (toolResultBlocks.length > 0) {
+        claudeMessages.push({ role: 'user', content: toolResultBlocks });
       }
     }
 
