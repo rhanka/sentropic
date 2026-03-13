@@ -1,12 +1,17 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
+import { and, eq } from "drizzle-orm";
 import { requireWorkspaceAccessRole, requireWorkspaceEditorRole } from "../../middleware/workspace-rbac";
+import { requireAdmin } from "../../middleware/rbac";
 import {
   TodoOrchestrationError,
   todoOrchestrationService,
   type TodoActor,
 } from "../../services/todo-orchestration";
+import { db } from "../../db/client";
+import { workspaceTypeWorkflows, workflowDefinitions } from "../../db/schema";
+import { createId } from "../../utils/id";
 
 export const workflowConfigRouter = new Hono();
 
@@ -119,4 +124,136 @@ workflowConfigRouter.post("/:id/detach", requireWorkspaceEditorRole(), async (c)
   } catch (error) {
     return handleTodoError(c, error);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Workspace type workflow registry endpoints (§11.5)
+// ---------------------------------------------------------------------------
+
+const workspaceTypeParam = z.enum(["ai-ideas", "opportunity", "code"]);
+
+const registerWorkspaceTypeWorkflowSchema = z.object({
+  workflowDefinitionId: z.string().min(1),
+  isDefault: z.boolean().optional(),
+  triggerStage: z.string().optional().nullable(),
+  config: metadataSchema.optional(),
+});
+
+export const workspaceTypeWorkflowsRouter = new Hono();
+
+// GET /api/v1/workspace-types/:type/workflows — list registered workflows for a type
+workspaceTypeWorkflowsRouter.get("/:type/workflows", async (c) => {
+  const typeRaw = c.req.param("type");
+  const parsed = workspaceTypeParam.safeParse(typeRaw);
+  if (!parsed.success) {
+    return c.json({ error: `Invalid workspace type: ${typeRaw}` }, 400);
+  }
+
+  const rows = await db
+    .select({
+      id: workspaceTypeWorkflows.id,
+      workspaceType: workspaceTypeWorkflows.workspaceType,
+      workflowDefinitionId: workspaceTypeWorkflows.workflowDefinitionId,
+      isDefault: workspaceTypeWorkflows.isDefault,
+      triggerStage: workspaceTypeWorkflows.triggerStage,
+      config: workspaceTypeWorkflows.config,
+      createdAt: workspaceTypeWorkflows.createdAt,
+      updatedAt: workspaceTypeWorkflows.updatedAt,
+      workflowKey: workflowDefinitions.key,
+      workflowName: workflowDefinitions.name,
+    })
+    .from(workspaceTypeWorkflows)
+    .innerJoin(workflowDefinitions, eq(workspaceTypeWorkflows.workflowDefinitionId, workflowDefinitions.id))
+    .where(eq(workspaceTypeWorkflows.workspaceType, parsed.data));
+
+  return c.json({ items: rows });
+});
+
+// POST /api/v1/workspace-types/:type/workflows — register a workflow for a type (admin only)
+workspaceTypeWorkflowsRouter.post(
+  "/:type/workflows",
+  requireAdmin,
+  zValidator("json", registerWorkspaceTypeWorkflowSchema),
+  async (c) => {
+    const typeRaw = c.req.param("type");
+    const parsed = workspaceTypeParam.safeParse(typeRaw);
+    if (!parsed.success) {
+      return c.json({ error: `Invalid workspace type: ${typeRaw}` }, 400);
+    }
+
+    const body = c.req.valid("json");
+
+    // Verify the workflow definition exists
+    const [wfDef] = await db
+      .select({ id: workflowDefinitions.id })
+      .from(workflowDefinitions)
+      .where(eq(workflowDefinitions.id, body.workflowDefinitionId))
+      .limit(1);
+
+    if (!wfDef) {
+      return c.json({ error: "Workflow definition not found" }, 404);
+    }
+
+    // If isDefault, unset other defaults for this type
+    const now = new Date();
+    if (body.isDefault) {
+      await db
+        .update(workspaceTypeWorkflows)
+        .set({ isDefault: false, updatedAt: now })
+        .where(
+          and(
+            eq(workspaceTypeWorkflows.workspaceType, parsed.data),
+            eq(workspaceTypeWorkflows.isDefault, true),
+          ),
+        );
+    }
+
+    const id = createId();
+    await db.insert(workspaceTypeWorkflows).values({
+      id,
+      workspaceType: parsed.data,
+      workflowDefinitionId: body.workflowDefinitionId,
+      isDefault: body.isDefault ?? false,
+      triggerStage: body.triggerStage ?? null,
+      config: body.config ?? {},
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const [created] = await db
+      .select()
+      .from(workspaceTypeWorkflows)
+      .where(eq(workspaceTypeWorkflows.id, id))
+      .limit(1);
+
+    return c.json({ item: created }, 201);
+  },
+);
+
+// DELETE /api/v1/workspace-types/:type/workflows/:id — unregister
+workspaceTypeWorkflowsRouter.delete("/:type/workflows/:id", requireAdmin, async (c) => {
+  const typeRaw = c.req.param("type");
+  const parsed = workspaceTypeParam.safeParse(typeRaw);
+  if (!parsed.success) {
+    return c.json({ error: `Invalid workspace type: ${typeRaw}` }, 400);
+  }
+
+  const registrationId = c.req.param("id")!;
+  const [existing] = await db
+    .select({ id: workspaceTypeWorkflows.id })
+    .from(workspaceTypeWorkflows)
+    .where(
+      and(
+        eq(workspaceTypeWorkflows.id, registrationId),
+        eq(workspaceTypeWorkflows.workspaceType, parsed.data),
+      ),
+    )
+    .limit(1);
+
+  if (!existing) {
+    return c.json({ error: "Registration not found" }, 404);
+  }
+
+  await db.delete(workspaceTypeWorkflows).where(eq(workspaceTypeWorkflows.id, registrationId));
+  return c.json({ success: true });
 });
