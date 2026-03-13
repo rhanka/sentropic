@@ -13,7 +13,7 @@ const CLAUDE_MODELS: ModelCatalogEntry[] = [
   {
     providerId: 'anthropic',
     modelId: 'claude-sonnet-4-6',
-    label: 'Claude Sonnet 4.6',
+    label: 'Sonnet 4.6',
     reasoningTier: 'standard',
     supportsTools: true,
     supportsStreaming: true,
@@ -22,7 +22,7 @@ const CLAUDE_MODELS: ModelCatalogEntry[] = [
   {
     providerId: 'anthropic',
     modelId: 'claude-opus-4-6',
-    label: 'Claude Opus 4.6',
+    label: 'Opus 4.6',
     reasoningTier: 'advanced',
     supportsTools: true,
     supportsStreaming: true,

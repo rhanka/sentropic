@@ -52,9 +52,9 @@ describe('CohereProviderRuntime', () => {
   });
 
   describe('listModels', () => {
-    it('should return Cohere model catalog entries including deferred models', () => {
+    it('should return Cohere model catalog entries', () => {
       const models = runtime.listModels();
-      expect(models).toHaveLength(4);
+      expect(models).toHaveLength(2);
 
       const commandA = models.find((m) => m.modelId === 'command-a-03-2025');
       expect(commandA).toBeDefined();
@@ -62,18 +62,9 @@ describe('CohereProviderRuntime', () => {
       expect(commandA!.reasoningTier).toBe('standard');
       expect(commandA!.supportsTools).toBe(true);
 
-      const reasoning = models.find((m) => m.modelId === 'command-a-reasoning-03-2025');
+      const reasoning = models.find((m) => m.modelId === 'command-a-reasoning-08-2025');
       expect(reasoning).toBeDefined();
       expect(reasoning!.reasoningTier).toBe('advanced');
-
-      const embed = models.find((m) => m.modelId === 'embed-v4.0');
-      expect(embed).toBeDefined();
-      expect(embed!.supportsTools).toBe(false);
-      expect(embed!.supportsStreaming).toBe(false);
-
-      const rerank = models.find((m) => m.modelId === 'rerank-v3.5');
-      expect(rerank).toBeDefined();
-      expect(rerank!.supportsTools).toBe(false);
     });
   });
 

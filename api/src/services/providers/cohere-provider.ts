@@ -20,8 +20,8 @@ const COHERE_MODELS: ModelCatalogEntry[] = [
   },
   {
     providerId: 'cohere',
-    modelId: 'command-a-reasoning-03-2025',
-    label: 'Command A Reasoning',
+    modelId: 'command-a-reasoning-08-2025',
+    label: 'Command A R.',
     reasoningTier: 'advanced',
     supportsTools: true,
     supportsStreaming: true,

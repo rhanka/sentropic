@@ -73,11 +73,11 @@ describe('model selection legacy cutovers', () => {
     expect(
       normalizeLegacyModelSelection({
         providerId: 'mistral',
-        modelId: 'mistral-large-2502',
+        modelId: 'mistral-large-2512',
       })
     ).toEqual({
       providerId: 'mistral',
-      modelId: 'mistral-large-2502',
+      modelId: 'mistral-large-2512',
       migrated: false,
     });
   });

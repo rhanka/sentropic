@@ -58,13 +58,13 @@ describe('MistralProviderRuntime', () => {
       const models = runtime.listModels();
       expect(models).toHaveLength(2);
 
-      const devstral = models.find((m) => m.modelId === 'devstral-small-2505');
+      const devstral = models.find((m) => m.modelId === 'devstral-2512');
       expect(devstral).toBeDefined();
       expect(devstral!.providerId).toBe('mistral');
       expect(devstral!.reasoningTier).toBe('standard');
       expect(devstral!.supportsTools).toBe(true);
 
-      const large = models.find((m) => m.modelId === 'mistral-large-2502');
+      const large = models.find((m) => m.modelId === 'mistral-large-2512');
       expect(large).toBeDefined();
       expect(large!.reasoningTier).toBe('advanced');
     });
@@ -136,7 +136,7 @@ describe('MistralProviderRuntime', () => {
       const result = await runtime.generate({
         mode: 'chat-completions',
         requestOptions: {
-          model: 'mistral-large-2502',
+          model: 'mistral-large-2512',
           messages: [{ role: 'user', content: 'Hi' }],
         },
       });
@@ -169,7 +169,7 @@ describe('MistralProviderRuntime', () => {
       const iterable = await runtime.streamGenerate({
         mode: 'chat-completions',
         requestOptions: {
-          model: 'mistral-large-2502',
+          model: 'mistral-large-2512',
           messages: [{ role: 'user', content: 'Hello' }],
         },
       });
