@@ -4701,7 +4701,7 @@ Règles :
               { userId: options.userId, role: currentUserRole ?? 'editor', workspaceId: args.workspaceId },
               { title: args.title, description: typeof args.description === 'string' ? args.description : undefined, sessionId: options.sessionId }
             );
-            result = { status: 'completed', dispatched: true, ...taskResult };
+            result = { ...taskResult, status: 'completed', dispatched: true };
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
             streamSeq += 1;
           } else {
