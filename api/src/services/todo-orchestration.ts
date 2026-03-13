@@ -17,7 +17,6 @@ import {
 import { createId } from "../utils/id";
 import {
   DEFAULT_GENERATION_AGENTS,
-  DEFAULT_GENERATION_AGENT_KEY_BY_TASK,
   getAgentSeedsForType,
   type DefaultGenerationAgentDefinition,
 } from "../config/default-agents";
