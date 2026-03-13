@@ -37,12 +37,22 @@ import {
   documentsTool,
   historyAnalyzeTool,
   commentAssistantTool,
-  planTool
+  planTool,
+  solutionsListTool,
+  solutionGetTool,
+  bidsListTool,
+  bidGetTool,
+  productsListTool,
+  productGetTool,
+  gateReviewTool,
+  workspaceListTool,
+  initiativeSearchTool,
+  taskDispatchTool
 } from './tools';
 import { toolService } from './tool-service';
 import { todoOrchestrationService } from './todo-orchestration';
 import { ensureWorkspaceForUser } from './workspace-service';
-import { getWorkspaceRole, hasWorkspaceRole, isWorkspaceDeleted } from './workspace-access';
+import { getWorkspaceRole, getWorkspaceType, hasWorkspaceRole, isWorkspaceDeleted } from './workspace-access';
 import { env } from '../config/env';
 import { writeChatGenerationTrace } from './chat-trace';
 import { generateCommentResolutionProposal } from './context-comments';
@@ -2571,6 +2581,30 @@ export class ChatService {
         webExtractTool
       ]);
     }
+
+    // Workspace-type-aware tool layer (§14.2)
+    const wsType = await getWorkspaceType(sessionWorkspaceId);
+    if (wsType === 'opportunity') {
+      // Extended object tools for opportunity workspace
+      addTools([
+        solutionsListTool,
+        solutionGetTool,
+        bidsListTool,
+        bidGetTool,
+        productsListTool,
+        productGetTool,
+        gateReviewTool
+      ]);
+    } else if (wsType === 'neutral') {
+      // Cross-workspace tools for neutral workspace only
+      addTools([
+        workspaceListTool,
+        initiativeSearchTool,
+        taskDispatchTool
+      ]);
+    }
+    // ai-ideas and code: no extra tools beyond context-type tools
+
     const effectiveRequestedTools = new Set(requestedTools);
     if (todoToolRequested) {
       effectiveRequestedTools.add('plan');
