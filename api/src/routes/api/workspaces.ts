@@ -20,6 +20,7 @@ import { createId } from '../../utils/id';
 import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeutralWorkspace } from '../../services/workspace-access';
 import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
 import { getDefaultGateConfig } from '../../services/gate-service';
+import { todoOrchestrationService } from '../../services/todo-orchestration';
 
 export const workspacesRouter = new Hono();
 
@@ -106,6 +107,17 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
       createdAt: now,
     });
   });
+
+  // Seed default workflows and agents for this workspace type (§7.6, §8.1)
+  try {
+    await todoOrchestrationService.seedWorkflowsForType(
+      { userId: user.userId, role: user.role, workspaceId: id },
+      type,
+    );
+  } catch (seedErr) {
+    console.error('Failed to seed workflows for workspace type', type, seedErr);
+    // Non-fatal: workspace is created, seeding can be retried
+  }
 
   await notifyWorkspaceEvent(id, { action: 'created' });
   await notifyWorkspaceMembershipEvent(id, user.userId, { action: 'added', role: 'admin' });
