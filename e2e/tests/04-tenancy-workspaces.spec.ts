@@ -154,7 +154,7 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
     const pageB = await wsBContext.newPage();
 
     const openMentionMenu = async (page: typeof pageA, useCaseId: string) => {
-      await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+      await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
       await page.waitForLoadState('domcontentloaded');
 
       const section = page.locator('[data-comment-section="description"]');
