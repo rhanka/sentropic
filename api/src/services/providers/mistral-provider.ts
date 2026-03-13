@@ -11,8 +11,8 @@ import type {
 const MISTRAL_MODELS: ModelCatalogEntry[] = [
   {
     providerId: 'mistral',
-    modelId: 'devstral-small-2505',
-    label: 'Devstral Small',
+    modelId: 'devstral-2512',
+    label: 'Devstral 2',
     reasoningTier: 'standard',
     supportsTools: true,
     supportsStreaming: true,
@@ -20,8 +20,8 @@ const MISTRAL_MODELS: ModelCatalogEntry[] = [
   },
   {
     providerId: 'mistral',
-    modelId: 'mistral-large-2502',
-    label: 'Mistral Large',
+    modelId: 'mistral-large-2512',
+    label: 'Mistral 3',
     reasoningTier: 'advanced',
     supportsTools: true,
     supportsStreaming: true,
