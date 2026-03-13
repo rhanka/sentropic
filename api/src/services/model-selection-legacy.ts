@@ -15,7 +15,7 @@ const LEGACY_MODEL_CUTOVER_RULES: LegacyModelCutoverRule[] = [
   {
     providerId: 'gemini',
     fromModelId: 'gemini-2.5-flash-lite',
-    toModelId: 'gemini-3.1-flash-lite',
+    toModelId: 'gemini-3.1-flash-lite-preview',
   },
 ];
 

@@ -668,7 +668,7 @@ const compactConversationContext = async (input: {
     providerId: input.providerId,
     model:
       input.providerId === 'gemini'
-        ? 'gemini-3.1-flash-lite'
+        ? 'gemini-3.1-flash-lite-preview'
         : 'gpt-4.1-nano',
     userId: input.userId,
     workspaceId: input.workspaceId,
@@ -3077,7 +3077,7 @@ Règles :
       selectedProviderId === 'gemini' ? 'gemini' : 'openai';
     const evaluatorModel =
       selectedProviderId === 'gemini'
-        ? 'gemini-3.1-flash-lite'
+        ? 'gemini-3.1-flash-lite-preview'
         : 'gpt-4.1-nano';
     let reasoningEffortForThisMessage: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | undefined;
     // Default fallback if evaluator fails: medium.

@@ -134,7 +134,7 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
   - [x] Bug 11b — Claude reasoning 400: `max_tokens` must be greater than `thinking.budget_tokens`
   - [x] Bug 14 — Claude `response_format: json_object` rejeté par l'API Messages (Extra inputs not permitted)
   - [ ] Bug 15 — Bulles cas d'usage affichent le model_id brut (`claude-sonnet-4-6`) au lieu du label court (`Sonnet 4.6`)
-  - [ ] Bug 16 — Gemini Flash Lite: `gemini-3.1-flash-lite` non trouvé sur API v1beta, model ID probablement obsolète
+  - [x] Bug 16 — Gemini Flash Lite: `gemini-3.1-flash-lite` non trouvé sur API v1beta, model ID corrigé → `gemini-3.1-flash-lite-preview`
   - [ ] Bug 12 — Renommer `callOpenAIResponseStream` → nom provider-agnostic (cosmétique, trompeur)
   - [ ] Bug 13 — Vérifier l'opportunité de supprimer `callOpenAIStream` (ancien path sans Responses API)
   - [x] Validation — Anthropic Sonnet 4.6 (`claude-sonnet-4-6`)
@@ -182,11 +182,11 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
     - [x] Chat avec tool call
     - [x] Reasoning : à vérifier
     - [x] Génération IA (dossier)
-  - [ ] Non-régression — Gemini 3.1 Flash Lite
+  - [x] Non-régression — Gemini 3.1 Flash Lite
     - [x] Chat simple
-    - [ ] Chat avec tool call
-    - [ ] Reasoning : N/A
-    - [ ] Génération IA (dossier)
+    - [x] Chat avec tool call
+    - [x] Reasoning : N/A
+    - [x] Génération IA (dossier)
 
 - [ ] **Lot N-2 — UAT**
   - [ ] Web app
