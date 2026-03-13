@@ -23,7 +23,7 @@ import { extractDocumentInfoFromDocument } from './document-text';
 import { callLLM } from './llm-runtime';
 import { defaultPrompts } from '../config/default-prompts';
 import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from './context-comments';
-import { hasWorkspaceRole, getWorkspaceType } from './workspace-access';
+import { hasWorkspaceRole } from './workspace-access';
 import { evaluateGate } from './gate-service';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
 
