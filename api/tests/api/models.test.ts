@@ -45,7 +45,7 @@ describe('Models API', () => {
         .sort();
 
     expect(modelsByProvider('openai')).toEqual(['gpt-4.1-nano', 'gpt-5.4']);
-    expect(modelsByProvider('gemini')).toEqual(['gemini-3.1-flash-lite', 'gemini-3.1-pro-preview-customtools']);
+    expect(modelsByProvider('gemini')).toEqual(['gemini-3.1-flash-lite-preview', 'gemini-3.1-pro-preview-customtools']);
     expect(modelsByProvider('anthropic')).toEqual(['claude-opus-4-6', 'claude-sonnet-4-6']);
     expect(modelsByProvider('mistral')).toEqual(['devstral-2512', 'mistral-large-2512']);
     expect(modelsByProvider('cohere')).toEqual(['command-a-03-2025', 'command-a-reasoning-08-2025']);
@@ -84,7 +84,7 @@ describe('Models API', () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.defaults.provider_id).toBe('gemini');
-    expect(data.defaults.model_id).toBe('gemini-3.1-flash-lite');
+    expect(data.defaults.model_id).toBe('gemini-3.1-flash-lite-preview');
   });
 
   it('migrates legacy OpenAI defaults when user overrides with gpt-5.2', async () => {

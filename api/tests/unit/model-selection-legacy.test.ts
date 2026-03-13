@@ -24,11 +24,11 @@ describe('model selection legacy cutovers', () => {
     });
   });
 
-  it('maps gemini-2.5-flash-lite to gemini-3.1-flash-lite', () => {
+  it('maps gemini-2.5-flash-lite to gemini-3.1-flash-lite-preview', () => {
     expect(findLegacyModelCutoverRule('gemini-2.5-flash-lite')).toEqual({
       providerId: 'gemini',
       fromModelId: 'gemini-2.5-flash-lite',
-      toModelId: 'gemini-3.1-flash-lite',
+      toModelId: 'gemini-3.1-flash-lite-preview',
     });
 
     expect(
@@ -38,7 +38,7 @@ describe('model selection legacy cutovers', () => {
       })
     ).toEqual({
       providerId: 'gemini',
-      modelId: 'gemini-3.1-flash-lite',
+      modelId: 'gemini-3.1-flash-lite-preview',
       migrated: true,
     });
   });

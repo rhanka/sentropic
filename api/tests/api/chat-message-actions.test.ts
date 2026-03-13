@@ -93,7 +93,7 @@ describe('Chat message actions API', () => {
       .where(eq(chatMessages.sessionId, retryData.sessionId));
     expect(rows.length).toBe(2);
     const assistant = rows.find((row) => row.role === 'assistant');
-    expect(assistant?.model).toBe('gemini-3.1-flash-lite');
+    expect(assistant?.model).toBe('gemini-3.1-flash-lite-preview');
   });
 
   it('POST /chat/messages/:id/retry rejects assistant messages', async () => {
