@@ -4634,6 +4634,76 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
+          } else if (toolCall.name === 'solutions_list') {
+            const listResult = await toolService.listSolutions({
+              initiativeId: args.initiativeId,
+              workspaceId: sessionWorkspaceId,
+              select: Array.isArray(args.select) ? args.select : null
+            });
+            result = { status: 'completed', ...listResult };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+          } else if (toolCall.name === 'solution_get') {
+            const getResult = await toolService.getSolution(args.solutionId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
+            result = { status: 'completed', ...getResult };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+          } else if (toolCall.name === 'bids_list') {
+            const listResult = await toolService.listBids({
+              initiativeId: args.initiativeId,
+              workspaceId: sessionWorkspaceId,
+              select: Array.isArray(args.select) ? args.select : null
+            });
+            result = { status: 'completed', ...listResult };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+          } else if (toolCall.name === 'bid_get') {
+            const getResult = await toolService.getBid(args.bidId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
+            result = { status: 'completed', ...getResult };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+          } else if (toolCall.name === 'products_list') {
+            const listResult = await toolService.listProducts({
+              workspaceId: sessionWorkspaceId,
+              initiativeId: typeof args.initiativeId === 'string' ? args.initiativeId : undefined,
+              select: Array.isArray(args.select) ? args.select : null
+            });
+            result = { status: 'completed', ...listResult };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+          } else if (toolCall.name === 'product_get') {
+            const getResult = await toolService.getProduct(args.productId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
+            result = { status: 'completed', ...getResult };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+          } else if (toolCall.name === 'gate_review') {
+            const gateResult = await toolService.reviewGate(sessionWorkspaceId, args.initiativeId, args.targetStage);
+            result = { status: 'completed', ...gateResult };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+          } else if (toolCall.name === 'workspace_list') {
+            const listResult = await toolService.listWorkspacesForUser(options.userId);
+            result = { status: 'completed', ...listResult };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+          } else if (toolCall.name === 'initiative_search') {
+            const searchResult = await toolService.searchInitiativesCrossWorkspace(options.userId, {
+              query: typeof args.query === 'string' ? args.query : undefined,
+              status: typeof args.status === 'string' ? args.status : undefined,
+              maturityStage: typeof args.maturityStage === 'string' ? args.maturityStage : undefined
+            });
+            result = { status: 'completed', ...searchResult };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+          } else if (toolCall.name === 'task_dispatch') {
+            // task_dispatch delegates to the plan tool's create action
+            const taskResult = await todoOrchestrationService.createTodoFromChat(
+              { userId: options.userId, role: currentUserRole ?? 'editor', workspaceId: args.workspaceId },
+              { title: args.title, description: typeof args.description === 'string' ? args.description : undefined, sessionId: options.sessionId }
+            );
+            result = { status: 'completed', dispatched: true, ...taskResult };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
           } else {
             throw new Error(`Unknown tool: ${toolCall.name}`);
           }
