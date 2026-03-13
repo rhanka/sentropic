@@ -44,6 +44,10 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
 - `BR08-FL5` | `risk` | Reasoning system is deeply coupled to OpenAI Responses API (`reasoningEffort`, `reasoningSummary`, `isGpt5` guards). Must be generalized to provider-agnostic `supportsReasoning` checks. See Risk/Impact section.
 - `BR08-FL6` | `closed` | **Docker builds fixed by conductor.** All 6 gate checks now pass (typecheck-api, lint-api, test-api, typecheck-ui, lint-ui, test-ui). Resolved 2026-03-12 via `REGISTRY=local` override.
 - `BR08-FL7` | `blocked` | **Lot 4 quality gates: Docker OOM kills all UI containers and API containers.** typecheck-ui exits 137 (OOM killed during `svelte-check`), lint-ui fails with `missing dependency ui` compose error, test-ui exits 137 (OOM killed during `vitest run`), test-api postgres exits 0 then api exits 143 (SIGTERM/OOM). typecheck-api and lint-api pass (lighter memory footprint). Tried each failing command twice — same result. Conductor needs to free Docker memory (stop other compose projects, increase Docker memory limit, or prune unused images/containers).
+- `BR08-EX1` (approved): modify `docker-compose.yml` to add ANTHROPIC_API_KEY, MISTRAL_API_KEY, COHERE_API_KEY environment variables to API service.
+  - Reason: API container needs provider keys from host .env to function with new providers.
+  - Impact: 3 lines added to environment section, same pattern as OPENAI_API_KEY/GEMINI_API_KEY.
+  - Rollback: remove the 3 lines.
 
 ## Questions / Notes
 - MPA-Q4: Provider request/response retention compliance baseline — deferred, no impact on adapter implementation.
@@ -381,6 +385,12 @@ Lot 4 gate: **CLOSED** (2026-03-12)
 - **Root cause:** `listProviderConnections()` in `provider-connections.ts` only resolved credentials for openai and gemini. UI type `ProviderConnectionId` also only listed 3 providers.
 - **Fix:** Added anthropic/mistral/cohere credential resolution and state entries. Updated both API and UI types.
 - **Files:** `api/src/services/provider-connections.ts`, `ui/src/lib/utils/provider-connections-api.ts`
+
+#### Bug 4: "Anthropic Key not configured" — docker-compose.yml missing new provider API keys — FIXED
+- **Symptom:** Provider status shows "Key not configured" for Anthropic, Mistral, Cohere even when keys are set in host `.env`.
+- **Root cause:** `docker-compose.yml` did not pass `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY` from host to API container environment.
+- **Fix:** Added 3 env var lines to `docker-compose.yml` API service environment section (exception BR08-EX1).
+- **Files:** `docker-compose.yml`
 
 ### Lot N-2 — UAT
 - [ ] Web app
