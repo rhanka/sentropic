@@ -678,16 +678,20 @@ const CLAUDE_REASONING_BUDGET: Record<string, number> = {
 const mapClaudeReasoningParams = (
   model: string,
   reasoningEffort?: string
-): Record<string, unknown> | undefined => {
-  // Only claude-opus supports extended thinking
-  if (!model.includes('opus')) return undefined;
+): { thinkingParams: Record<string, unknown>; minMaxTokens: number } | undefined => {
+  // Extended thinking is available on Claude Opus and Sonnet (4+)
+  if (!model.includes('opus') && !model.includes('sonnet')) return undefined;
   if (!reasoningEffort || reasoningEffort === 'none') return undefined;
   const budgetTokens = CLAUDE_REASONING_BUDGET[reasoningEffort] ?? CLAUDE_REASONING_BUDGET.medium;
   return {
-    thinking: {
-      type: 'enabled',
-      budget_tokens: budgetTokens,
+    thinkingParams: {
+      thinking: {
+        type: 'enabled',
+        budget_tokens: budgetTokens,
+      },
     },
+    // Claude requires max_tokens > budget_tokens
+    minMaxTokens: budgetTokens + 4096,
   };
 };
 
@@ -1612,7 +1616,7 @@ export async function* callOpenAIResponseStream(
     const responseId = previousResponseId || `claude_${createId()}`;
     const { system, messages: claudeMessages } = buildClaudeMessages(messages);
     const claudeTools = buildClaudeTools(filteredTools, normalizedToolChoice);
-    const thinkingParams = mapClaudeReasoningParams(selectedModel, reasoningEffort);
+    const claudeReasoning = mapClaudeReasoningParams(selectedModel, reasoningEffort);
 
     // Handle rawInput: inject assistant tool_use blocks then user tool_result blocks
     if (Array.isArray(rawInput) && rawInput.length > 0) {
@@ -1658,17 +1662,22 @@ export async function* callOpenAIResponseStream(
         data: { state: 'response_created', response_id: responseId },
       };
 
+      const claudeBaseMaxTokens = typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+        ? Math.floor(maxOutputTokens)
+        : 4096;
+      const claudeMaxTokens = claudeReasoning
+        ? Math.max(claudeBaseMaxTokens, claudeReasoning.minMaxTokens)
+        : claudeBaseMaxTokens;
+
       const stream = await provider.streamGenerate({
         mode: 'messages',
         requestOptions: {
           model: selectedModel,
-          max_tokens: typeof maxOutputTokens === 'number' && maxOutputTokens > 0
-            ? Math.floor(maxOutputTokens)
-            : 4096,
+          max_tokens: claudeMaxTokens,
           ...(system ? { system } : {}),
           messages: claudeMessages as unknown[],
           ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
-          ...(thinkingParams ?? {}),
+          ...(claudeReasoning?.thinkingParams ?? {}),
           ...(effectiveStructuredOutput
             ? { response_format: { type: 'json_object' as const } }
             : effectiveResponseFormat === 'json_object'
