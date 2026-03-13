@@ -187,7 +187,7 @@ test.describe('Détail des cas d\'usage', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const page = await userAContext.newPage();
-    await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+    await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
 
     const chatButton = page.locator(
@@ -254,7 +254,7 @@ test.describe('Détail des cas d\'usage', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const page = await userAContext.newPage();
-    await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+    await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
 
     const descriptionSection = page.locator('[data-comment-section="description"]');
@@ -321,7 +321,7 @@ test.describe('Détail des cas d\'usage', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const page = await userAContext.newPage();
-    await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+    await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
 
     const actionsButton = page.locator('button[aria-label="Actions"]');
@@ -579,7 +579,7 @@ test.describe('Détail des cas d\'usage', () => {
     await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
     await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
 
-    await pageA.goto(`/usecase/${encodeURIComponent(lockUseCaseId)}`);
+    await pageA.goto(`/initiative/${encodeURIComponent(lockUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
     const waitForUseCaseViewA = async () => {
       for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -627,7 +627,7 @@ test.describe('Détail des cas d\'usage', () => {
     ).catch(() => {});
     await waitForNoLocker(pageA);
 
-    await pageB.goto(`/usecase/${encodeURIComponent(lockUseCaseId)}`);
+    await pageB.goto(`/initiative/${encodeURIComponent(lockUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
     const waitForUseCaseView = async () => {
       for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -703,7 +703,7 @@ test.describe('Détail des cas d\'usage', () => {
 
     // workspaceScopeId hydrated via storageState
 
-    await pageA.goto(`/usecase/${encodeURIComponent(lockUseCaseId)}`);
+    await pageA.goto(`/initiative/${encodeURIComponent(lockUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
     await pageA.waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
@@ -716,7 +716,7 @@ test.describe('Détail des cas d\'usage', () => {
       .catch(() => {});
     await waitForNoLocker(pageA);
 
-    await pageB.goto(`/usecase/${encodeURIComponent(lockUseCaseId)}`);
+    await pageB.goto(`/initiative/${encodeURIComponent(lockUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
     await pageB.waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
@@ -769,7 +769,7 @@ test.describe('Détail des cas d\'usage', () => {
     await runLockBreaksOnLeaveScenario({
       pageA,
       pageB,
-      url: `/usecase/${encodeURIComponent(lockUseCaseId)}`,
+      url: `/initiative/${encodeURIComponent(lockUseCaseId)}`,
       getEditableField: getUseCaseNameField,
       expectBadgeOnArrival: true,
       expectBadgeGoneAfterLeave: true,
@@ -810,7 +810,7 @@ test.describe('Détail des cas d\'usage', () => {
     const testUseCaseId = String((created as any)?.id ?? '');
     if (!testUseCaseId) throw new Error('testUseCaseId introuvable');
 
-    await pageA.goto(`/usecase/${encodeURIComponent(testUseCaseId)}`);
+    await pageA.goto(`/initiative/${encodeURIComponent(testUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     const editableFieldA = pageA.locator('h1 textarea, h1 input').first();
@@ -818,7 +818,7 @@ test.describe('Détail des cas d\'usage', () => {
     await editableFieldA.click();
     await waitForNoLocker(pageA);
 
-    await pageB.goto(`/usecase/${encodeURIComponent(testUseCaseId)}`);
+    await pageB.goto(`/initiative/${encodeURIComponent(testUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     await waitForLockedByOther(pageB);
@@ -837,7 +837,7 @@ test.describe('Détail des cas d\'usage', () => {
       .toBe(1);
     const releaseLabelBefore = (await releaseButton.getAttribute('aria-label')) || '';
 
-    await pageC.goto(`/usecase/${encodeURIComponent(testUseCaseId)}`);
+    await pageC.goto(`/initiative/${encodeURIComponent(testUseCaseId)}`);
     await pageC.waitForLoadState('domcontentloaded');
     await pageC.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     await waitForLockedByOther(pageC);

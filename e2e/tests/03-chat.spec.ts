@@ -320,7 +320,7 @@ test.describe.serial('Chat', () => {
       expect(r2b.requestBody?.primaryContextId).toBe(organizationId);
     }
 
-    // 3) /usecase/[id] → usecase + id from URL
+    // 3) /initiative/[id] → initiative + id from URL
     await page.goto('/usecase');
     await page.waitForLoadState('domcontentloaded');
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
