@@ -10,6 +10,10 @@ import {
   folders,
   organizations,
   initiatives,
+  solutions,
+  products,
+  bids,
+  workspaces,
   users,
   workspaceMemberships
 } from '../db/schema';
@@ -19,7 +23,8 @@ import { extractDocumentInfoFromDocument } from './document-text';
 import { callLLM } from './llm-runtime';
 import { defaultPrompts } from '../config/default-prompts';
 import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from './context-comments';
-import { hasWorkspaceRole } from './workspace-access';
+import { hasWorkspaceRole, getWorkspaceType } from './workspace-access';
+import { evaluateGate } from './gate-service';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
 
 export type InitiativeFieldUpdate = {
@@ -2346,6 +2351,128 @@ export class ToolService {
             ? 'medium'
             : 'high',
     };
+  }
+  // ---------------------------
+  // Extended objects (solutions, products, bids)
+  // ---------------------------
+
+  async listSolutions(opts: { initiativeId: string; workspaceId: string; select?: string[] | null }) {
+    const rows = await db.select().from(solutions)
+      .where(and(eq(solutions.initiativeId, opts.initiativeId), eq(solutions.workspaceId, opts.workspaceId)));
+    const select = Array.isArray(opts.select) ? opts.select.filter(Boolean) : null;
+    const items = rows.map((r) => {
+      const obj: Record<string, unknown> = { id: r.id, status: r.status, version: r.version, ...(r.data as Record<string, unknown> ?? {}) };
+      return select ? pickObjectFields(obj, select) : obj;
+    });
+    return { items, count: rows.length };
+  }
+
+  async getSolution(solutionId: string, opts?: { workspaceId?: string; select?: string[] | null }) {
+    if (!solutionId) throw new Error('solutionId is required');
+    const where = opts?.workspaceId
+      ? and(eq(solutions.id, solutionId), eq(solutions.workspaceId, opts.workspaceId))
+      : eq(solutions.id, solutionId);
+    const [row] = await db.select().from(solutions).where(where).limit(1);
+    if (!row) throw new Error('Solution not found');
+    const select = Array.isArray(opts?.select) ? opts?.select.filter(Boolean) : null;
+    const obj: Record<string, unknown> = { id: row.id, status: row.status, version: row.version, ...(row.data as Record<string, unknown> ?? {}) };
+    return { solutionId, data: select ? pickObjectFields(obj, select) : obj };
+  }
+
+  async listBids(opts: { initiativeId: string; workspaceId: string; select?: string[] | null }) {
+    const rows = await db.select().from(bids)
+      .where(and(eq(bids.initiativeId, opts.initiativeId), eq(bids.workspaceId, opts.workspaceId)));
+    const select = Array.isArray(opts.select) ? opts.select.filter(Boolean) : null;
+    const items = rows.map((r) => {
+      const obj: Record<string, unknown> = { id: r.id, status: r.status, version: r.version, ...(r.data as Record<string, unknown> ?? {}) };
+      return select ? pickObjectFields(obj, select) : obj;
+    });
+    return { items, count: rows.length };
+  }
+
+  async getBid(bidId: string, opts?: { workspaceId?: string; select?: string[] | null }) {
+    if (!bidId) throw new Error('bidId is required');
+    const where = opts?.workspaceId
+      ? and(eq(bids.id, bidId), eq(bids.workspaceId, opts.workspaceId))
+      : eq(bids.id, bidId);
+    const [row] = await db.select().from(bids).where(where).limit(1);
+    if (!row) throw new Error('Bid not found');
+    const select = Array.isArray(opts?.select) ? opts?.select.filter(Boolean) : null;
+    const obj: Record<string, unknown> = { id: row.id, status: row.status, version: row.version, ...(row.data as Record<string, unknown> ?? {}) };
+    return { bidId, data: select ? pickObjectFields(obj, select) : obj };
+  }
+
+  async listProducts(opts: { workspaceId: string; initiativeId?: string; select?: string[] | null }) {
+    const conditions = [eq(products.workspaceId, opts.workspaceId)];
+    if (opts.initiativeId) conditions.push(eq(products.initiativeId, opts.initiativeId));
+    const rows = await db.select().from(products).where(and(...conditions));
+    const select = Array.isArray(opts.select) ? opts.select.filter(Boolean) : null;
+    const items = rows.map((r) => {
+      const obj: Record<string, unknown> = { id: r.id, status: r.status, version: r.version, solutionId: r.solutionId, ...(r.data as Record<string, unknown> ?? {}) };
+      return select ? pickObjectFields(obj, select) : obj;
+    });
+    return { items, count: rows.length };
+  }
+
+  async getProduct(productId: string, opts?: { workspaceId?: string; select?: string[] | null }) {
+    if (!productId) throw new Error('productId is required');
+    const where = opts?.workspaceId
+      ? and(eq(products.id, productId), eq(products.workspaceId, opts.workspaceId))
+      : eq(products.id, productId);
+    const [row] = await db.select().from(products).where(where).limit(1);
+    if (!row) throw new Error('Product not found');
+    const select = Array.isArray(opts?.select) ? opts?.select.filter(Boolean) : null;
+    const obj: Record<string, unknown> = { id: row.id, status: row.status, version: row.version, solutionId: row.solutionId, ...(row.data as Record<string, unknown> ?? {}) };
+    return { productId, data: select ? pickObjectFields(obj, select) : obj };
+  }
+
+  async reviewGate(workspaceId: string, initiativeId: string, targetStage: string) {
+    return evaluateGate(workspaceId, initiativeId, targetStage);
+  }
+
+  // ---------------------------
+  // Cross-workspace tools (neutral)
+  // ---------------------------
+
+  async listWorkspacesForUser(userId: string) {
+    const memberships = await db.select({ workspaceId: workspaceMemberships.workspaceId, role: workspaceMemberships.role })
+      .from(workspaceMemberships).where(eq(workspaceMemberships.userId, userId));
+    if (memberships.length === 0) return { items: [], count: 0 };
+    const wsIds = memberships.map((m) => m.workspaceId);
+    const wsRows = await db.select().from(workspaces).where(inArray(workspaces.id, wsIds));
+    const roleMap = new Map(memberships.map((m) => [m.workspaceId, m.role]));
+    const items = wsRows.map((ws) => ({
+      id: ws.id, name: ws.name, type: ws.type, role: roleMap.get(ws.id) ?? 'viewer',
+    }));
+    return { items, count: items.length };
+  }
+
+  async searchInitiativesCrossWorkspace(userId: string, opts?: { query?: string; status?: string; maturityStage?: string }) {
+    const memberships = await db.select({ workspaceId: workspaceMemberships.workspaceId })
+      .from(workspaceMemberships).where(eq(workspaceMemberships.userId, userId));
+    if (memberships.length === 0) return { items: [], count: 0 };
+    const wsIds = memberships.map((m) => m.workspaceId);
+    const conditions = [inArray(initiatives.workspaceId, wsIds)];
+    if (opts?.status) conditions.push(eq(initiatives.status, opts.status));
+    const rows = await db.select().from(initiatives).where(and(...conditions));
+    let filtered = rows;
+    if (opts?.query) {
+      const q = opts.query.toLowerCase();
+      filtered = rows.filter((r) => {
+        const d = (r.data ?? {}) as Record<string, unknown>;
+        const name = typeof d.name === 'string' ? d.name : '';
+        const desc = typeof d.description === 'string' ? d.description : '';
+        return name.toLowerCase().includes(q) || desc.toLowerCase().includes(q);
+      });
+    }
+    if (opts?.maturityStage) {
+      filtered = filtered.filter((r) => r.maturityStage === opts.maturityStage);
+    }
+    const items = filtered.map((r) => {
+      const d = (r.data ?? {}) as Record<string, unknown>;
+      return { id: r.id, name: d.name ?? null, status: r.status, workspaceId: r.workspaceId, folderId: r.folderId };
+    });
+    return { items, count: items.length };
   }
 }
 
