@@ -5,7 +5,7 @@ vi.mock('../../src/services/settings', () => ({
   settingsService: {
     getAISettings: vi.fn().mockResolvedValue({
       defaultProviderId: 'mistral',
-      defaultModel: 'mistral-large-2502',
+      defaultModel: 'mistral-large-2512',
       concurrency: 1,
       publishingConcurrency: 1,
       processingInterval: 1000,
@@ -87,7 +87,7 @@ describe('Mistral stream event normalization', () => {
       callOpenAIStream({
         messages: [{ role: 'user', content: 'Hi' }],
         providerId: 'mistral',
-        model: 'mistral-large-2502',
+        model: 'mistral-large-2512',
       }),
     );
 
@@ -141,7 +141,7 @@ describe('Mistral stream event normalization', () => {
       callOpenAIStream({
         messages: [{ role: 'user', content: 'Search something' }],
         providerId: 'mistral',
-        model: 'mistral-large-2502',
+        model: 'mistral-large-2512',
       }),
     );
 
@@ -170,7 +170,7 @@ describe('Mistral stream event normalization', () => {
       callOpenAIStream({
         messages: [{ role: 'user', content: 'Hi' }],
         providerId: 'mistral',
-        model: 'mistral-large-2502',
+        model: 'mistral-large-2512',
       }),
     );
 

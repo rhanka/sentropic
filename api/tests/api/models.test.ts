@@ -47,9 +47,9 @@ describe('Models API', () => {
     expect(modelsByProvider('openai')).toEqual(['gpt-4.1-nano', 'gpt-5.4']);
     expect(modelsByProvider('gemini')).toEqual(['gemini-3.1-flash-lite', 'gemini-3.1-pro-preview-customtools']);
     expect(modelsByProvider('anthropic')).toEqual(['claude-opus-4-6', 'claude-sonnet-4-6']);
-    expect(modelsByProvider('mistral')).toEqual(['devstral-small-2505', 'mistral-large-2502']);
-    expect(modelsByProvider('cohere')).toEqual(['command-a-03-2025', 'command-a-reasoning-03-2025', 'embed-v4.0', 'rerank-v3.5']);
-    expect(data.models).toHaveLength(12);
+    expect(modelsByProvider('mistral')).toEqual(['devstral-2512', 'mistral-large-2512']);
+    expect(modelsByProvider('cohere')).toEqual(['command-a-03-2025', 'command-a-reasoning-08-2025']);
+    expect(data.models).toHaveLength(10);
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
