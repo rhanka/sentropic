@@ -27,25 +27,7 @@ const COHERE_MODELS: ModelCatalogEntry[] = [
     supportsStreaming: true,
     defaultContexts: ['chat', 'structured', 'summary'],
   },
-  // Catalogued only — implementation deferred to BR-17 (RAG)
-  {
-    providerId: 'cohere',
-    modelId: 'embed-v4.0',
-    label: 'Embed v4.0',
-    reasoningTier: 'none',
-    supportsTools: false,
-    supportsStreaming: false,
-    defaultContexts: [],
-  },
-  {
-    providerId: 'cohere',
-    modelId: 'rerank-v3.5',
-    label: 'Rerank v3.5',
-    reasoningTier: 'none',
-    supportsTools: false,
-    supportsStreaming: false,
-    defaultContexts: [],
-  },
+  // embed-v4.0 and rerank-v3.5 catalogued only — deferred to BR-17 (RAG), not exposed in runtime
 ];
 
 export type CohereGenerateRequest = {
