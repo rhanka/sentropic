@@ -22,7 +22,7 @@ import { todosRouter } from './todos';
 import { tasksRouter } from './tasks';
 import { runsRouter } from './runs';
 import { agentConfigRouter } from './agent-config';
-import { workflowConfigRouter } from './workflow-config';
+import { workflowConfigRouter, workspaceTypeWorkflowsRouter } from './workflow-config';
 import { locksRouter } from './locks';
 import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
@@ -110,6 +110,10 @@ apiRouter.route('/agent-config', agentConfigRouter);
 
 apiRouter.use('/workflow-config/*', requireAuth);
 apiRouter.route('/workflow-config', workflowConfigRouter);
+
+// Workspace type workflow registry (§11.5)
+apiRouter.use('/workspace-types/*', requireAuth);
+apiRouter.route('/workspace-types', workspaceTypeWorkflowsRouter);
 
 // Locks (authenticated; read is allowed, mutations require workspace editor/admin)
 apiRouter.use('/locks/*', requireAuth);
