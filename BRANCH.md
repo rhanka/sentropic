@@ -131,16 +131,17 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
     - `messages -> [2]: Missing required key "toolCallId"` persiste. Root cause à investiguer.
     - Fichier : `llm-runtime/index.ts` (`buildCohereMessages`)
   - [ ] Bug 6 — Cohere tool call format incomplet (réouvert avec bug 10)
+  - [x] Bug 11b — Claude reasoning 400: `max_tokens` must be greater than `thinking.budget_tokens`
   - [ ] Bug 12 — Renommer `callOpenAIResponseStream` → nom provider-agnostic (cosmétique, trompeur)
   - [ ] Bug 13 — Vérifier l'opportunité de supprimer `callOpenAIStream` (ancien path sans Responses API)
-  - [ ] Validation — Anthropic Sonnet 4.6 (`claude-sonnet-4-6`)
+  - [x] Validation — Anthropic Sonnet 4.6 (`claude-sonnet-4-6`)
     - [x] Chat simple
     - [x] Chat avec tool call
-    - [ ] Reasoning : N/A (pas d'extended thinking)
-  - [ ] Validation — Anthropic Opus 4.6 (`claude-opus-4-6`)
+    - [x] Reasoning (extended thinking)
+  - [x] Validation — Anthropic Opus 4.6 (`claude-opus-4-6`)
     - [x] Chat simple
     - [x] Chat avec tool call
-    - [ ] Reasoning (extended thinking)
+    - [x] Reasoning (extended thinking)
   - [ ] Validation — Mistral Devstral 2 (`devstral-2512`)
     - [x] Chat simple
     - [ ] Chat avec tool call
