@@ -392,6 +392,26 @@ Lot 4 gate: **CLOSED** (2026-03-12)
 - **Fix:** Added 3 env var lines to `docker-compose.yml` API service environment section (exception BR08-EX1).
 - **Files:** `docker-compose.yml`
 
+#### Bug 5: Mistral models rejected — "Invalid model: mistral-large-2502" — OPEN
+- **Symptom:** HTTP 400 `Invalid model: mistral-large-2502` from Mistral API. Same issue with `devstral-small-2505`.
+- **Root cause:** Model IDs in `MISTRAL_MODELS` catalog may be incorrect or outdated. Need to verify current Mistral API model IDs.
+- **Files:** `api/src/services/providers/mistral-provider.ts`
+
+#### Bug 6: Cohere command-a — Missing required key "toolCallId" — OPEN
+- **Symptom:** Error `messages -> [2]: Missing required key "toolCallId"` when using `command-a-03-2025`.
+- **Root cause:** Tool result messages sent to Cohere API are missing the `toolCallId` field. The message format conversion in llm-runtime is not properly mapping tool_call_id for Cohere's v2 API format.
+- **Files:** `api/src/services/llm-runtime/index.ts` (Cohere message conversion), `api/src/services/providers/cohere-provider.ts`
+
+#### Bug 7: Cohere command-a-reasoning — 404 model not found — OPEN
+- **Symptom:** 404 `model 'command-a-reasoning-03-2025' not found, make sure the correct model ID was used and that you have access to the model.`
+- **Root cause:** Either the model ID is wrong, or the user's Cohere API key doesn't have access to this model. Need to verify model ID and access rights.
+- **Files:** `api/src/services/providers/cohere-provider.ts`
+
+#### Bug 8: Claude sonnet/opus — tool_result without matching tool_use — OPEN
+- **Symptom:** HTTP 400 `messages.2.content.0: unexpected tool_use_id found in tool_result blocks: claude_call_1. Each tool_result block must have a corresponding tool_use block in the previous message.`
+- **Root cause:** The message history conversion for Claude is not properly ordering tool_use and tool_result blocks. Claude requires that each `tool_result` in a user message has a matching `tool_use` in the preceding assistant message. The conversation history mapping in llm-runtime is likely misplacing or dropping tool_use blocks.
+- **Files:** `api/src/services/llm-runtime/index.ts` (Claude message conversion)
+
 ### Lot N-2 — UAT
 - [ ] Web app
   - [ ] Start branch environment: `make dev API_PORT=8708 UI_PORT=5108 MAILDEV_UI_PORT=1008 ENV=feat-model-runtime-claude-mistral`
