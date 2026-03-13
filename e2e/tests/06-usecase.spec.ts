@@ -83,8 +83,8 @@ test.describe('Gestion des cas d\'usage', () => {
     throw new Error(`Use case ${useCaseId} introuvable via API après ${timeoutMs}ms`);
   };
 
-  test('redirige /usecase vers la nouvelle liste /folders (ou /folders/[id])', async ({ page }) => {
-    await page.goto('/usecase');
+  test('redirige /initiative vers la nouvelle liste /folders (ou /folders/[id])', async ({ page }) => {
+    await page.goto('/initiative');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForURL(/\/folders(\/[^/]+)?$/, { timeout: 10_000 });
     expect(page.url()).toMatch(/\/folders(\/[^/]+)?$/);
@@ -122,10 +122,10 @@ test.describe('Gestion des cas d\'usage', () => {
     await expect(useCaseCard).toBeVisible({ timeout: 30_000 });
 
     await Promise.all([
-      page.waitForURL(new RegExp(`/usecase/${useCaseId}$`), { timeout: 10_000 }),
+      page.waitForURL(new RegExp(`/initiative/${useCaseId}$`), { timeout: 10_000 }),
       useCaseCard.click()
     ]);
-    expect(page.url()).toMatch(new RegExp(`/usecase/${useCaseId}$`));
+    expect(page.url()).toMatch(new RegExp(`/initiative/${useCaseId}$`));
   });
 
   test.describe('Read-only (viewer)', () => {
@@ -156,7 +156,7 @@ test.describe('Gestion des cas d\'usage', () => {
       });
       const page = await context.newPage();
       try {
-        await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+        await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
         await page.waitForLoadState('domcontentloaded');
 
         const disabledField = page.locator('.editable-input:disabled, .editable-textarea:disabled').first();
@@ -181,7 +181,7 @@ test.describe('Gestion des cas d\'usage', () => {
       storageState: await withWorkspaceStorageState(USER_B_STATE, workspaceAId),
     });
     const pageB = await userBContext.newPage();
-    await pageB.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+    await pageB.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 

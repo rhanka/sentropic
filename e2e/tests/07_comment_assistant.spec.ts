@@ -85,7 +85,7 @@ test.describe.serial('Comment assistant', () => {
       }
     }, workspaceId);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+    await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
 
     await page.evaluate(() => {

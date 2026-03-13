@@ -93,7 +93,7 @@ test.describe.serial('Workflow métier complet', () => {
     await expect(useCaseCard).toBeVisible({ timeout: 10_000 });
 
     await Promise.all([
-      page.waitForURL(new RegExp(`/usecase/${useCaseId}$`), { timeout: 10_000 }),
+      page.waitForURL(new RegExp(`/initiative/${useCaseId}$`), { timeout: 10_000 }),
       useCaseCard.click()
     ]);
     await page.waitForLoadState('domcontentloaded');
