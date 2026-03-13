@@ -77,7 +77,7 @@ const patchMeSchema = z.object({
 
 const patchMyAISettingsSchema = z
   .object({
-    defaultProviderId: z.enum(['openai', 'gemini']).optional(),
+    defaultProviderId: z.enum(['openai', 'gemini', 'anthropic', 'mistral', 'cohere']).optional(),
     defaultModel: z.string().min(1).optional(),
   })
   .refine(
