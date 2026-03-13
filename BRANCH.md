@@ -132,48 +132,61 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
     - Fichier : `llm-runtime/index.ts` (`buildCohereMessages`)
   - [ ] Bug 6 — Cohere tool call format incomplet (réouvert avec bug 10)
   - [x] Bug 11b — Claude reasoning 400: `max_tokens` must be greater than `thinking.budget_tokens`
+  - [x] Bug 14 — Claude `response_format: json_object` rejeté par l'API Messages (Extra inputs not permitted)
+  - [ ] Bug 15 — Bulles cas d'usage affichent le model_id brut (`claude-sonnet-4-6`) au lieu du label court (`Sonnet 4.6`)
+  - [ ] Bug 16 — Gemini Flash Lite: `gemini-3.1-flash-lite` non trouvé sur API v1beta, model ID probablement obsolète
   - [ ] Bug 12 — Renommer `callOpenAIResponseStream` → nom provider-agnostic (cosmétique, trompeur)
   - [ ] Bug 13 — Vérifier l'opportunité de supprimer `callOpenAIStream` (ancien path sans Responses API)
   - [x] Validation — Anthropic Sonnet 4.6 (`claude-sonnet-4-6`)
     - [x] Chat simple
     - [x] Chat avec tool call
     - [x] Reasoning (extended thinking)
+    - [x] Génération IA (dossier)
   - [x] Validation — Anthropic Opus 4.6 (`claude-opus-4-6`)
     - [x] Chat simple
     - [x] Chat avec tool call
     - [x] Reasoning (extended thinking)
+    - [x] Génération IA (dossier)
   - [ ] Validation — Mistral Devstral 2 (`devstral-2512`)
     - [x] Chat simple
     - [ ] Chat avec tool call
     - [ ] Reasoning : N/A
+    - [ ] Génération IA (dossier)
   - [ ] Validation — Mistral 3 (`mistral-large-2512`)
     - [x] Chat simple
     - [ ] Chat avec tool call
     - [ ] Reasoning : N/A
+    - [ ] Génération IA (dossier)
   - [ ] Validation — Cohere Command A (`command-a-03-2025`)
     - [x] Chat simple
     - [ ] Chat avec tool call
     - [ ] Reasoning : N/A
+    - [ ] Génération IA (dossier)
   - [ ] Validation — Cohere Command A R. (`command-a-reasoning-08-2025`)
     - [x] Chat simple
     - [ ] Chat avec tool call
     - [ ] Reasoning (built-in, non configurable)
+    - [ ] Génération IA (dossier)
   - [ ] Non-régression — OpenAI GPT-5.4
     - [x] Chat simple
     - [ ] Chat avec tool call
     - [ ] Reasoning
-  - [ ] Non-régression — OpenAI GPT-4.1 Nano
+    - [ ] Génération IA (dossier)
+  - [x] Non-régression — OpenAI GPT-4.1 Nano
     - [x] Chat simple
-    - [ ] Chat avec tool call
-    - [ ] Reasoning : N/A
-  - [ ] Non-régression — Gemini 3.1 Pro
+    - [x] Chat avec tool call
+    - [x] Reasoning : N/A
+    - [x] Génération IA (dossier)
+  - [x] Non-régression — Gemini 3.1 Pro
     - [x] Chat simple
-    - [ ] Chat avec tool call
-    - [ ] Reasoning : à vérifier
+    - [x] Chat avec tool call
+    - [x] Reasoning : à vérifier
+    - [x] Génération IA (dossier)
   - [ ] Non-régression — Gemini 3.1 Flash Lite
     - [x] Chat simple
     - [ ] Chat avec tool call
     - [ ] Reasoning : N/A
+    - [ ] Génération IA (dossier)
 
 - [ ] **Lot N-2 — UAT**
   - [ ] Web app
