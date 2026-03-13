@@ -793,9 +793,7 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
         ...(system ? { system } : {}),
         messages: claudeMessages as unknown[],
         ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
-        ...(responseFormat === 'json_object'
-          ? { response_format: { type: 'json_object' as const } }
-          : {}),
+        // Claude API does not support response_format — JSON output must be requested via prompt
       } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
       credential: credentialResolution.credential ?? undefined,
       signal,
@@ -1678,11 +1676,7 @@ export async function* callOpenAIResponseStream(
           messages: claudeMessages as unknown[],
           ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
           ...(claudeReasoning?.thinkingParams ?? {}),
-          ...(effectiveStructuredOutput
-            ? { response_format: { type: 'json_object' as const } }
-            : effectiveResponseFormat === 'json_object'
-              ? { response_format: { type: 'json_object' as const } }
-              : {}),
+          // Claude API does not support response_format — JSON output must be requested via prompt
         } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
         credential: credentialResolution.credential ?? undefined,
         signal,
