@@ -6,10 +6,6 @@
  */
 
 import { defaultPrompts } from "./default-prompts";
-import type {
-  GenerationAgentKey,
-  InitiativeGenerationWorkflowTaskKey,
-} from "./default-workflows";
 
 const readLegacyPromptTemplate = (promptId: string): string => {
   const prompt = defaultPrompts.find((item) => item.id === promptId);
