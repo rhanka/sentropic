@@ -460,21 +460,21 @@ Closed: 2026-03-12
 - `ui/src/lib/utils/chat-tool-scope.ts` — add workspace-type filtering.
 
 **Tasks:**
-- [ ] Implement new chat tools for extended objects (CRUD via chat).
-- [ ] Implement cross-workspace tools for neutral (§3.3): `workspace_list`, `initiative_search`, `task_dispatch`.
-- [ ] Update `buildChatGenerationContext()` — tool set resolution becomes `(workspace_type, context_type, role)`.
-- [ ] Update client `chat-tool-scope.ts` with workspace-type-aware filtering.
-- [ ] Tests: tool availability per workspace type, cross-workspace tools in neutral.
+- [x] Implement new chat tools for extended objects (CRUD via chat).
+- [x] Implement cross-workspace tools for neutral (§3.3): `workspace_list`, `initiative_search`, `task_dispatch`.
+- [x] Update `buildChatGenerationContext()` — tool set resolution becomes `(workspace_type, context_type, role)`.
+- [x] Update client `chat-tool-scope.ts` with workspace-type-aware filtering.
+- [x] Tests: tool availability per workspace type, cross-workspace tools in neutral.
 
 **Lot 9 gate:**
-- [ ] `make typecheck-api ENV=test-br04`
-- [ ] `make lint-api ENV=test-br04`
-- [ ] `make test-api ENV=test-br04`
-- [ ] `make typecheck-ui ENV=test-br04`
-- [ ] `make lint-ui ENV=test-br04`
-- [ ] `make test-ui ENV=test-br04`
-- [ ] `make build-api build-ui-image API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=e2e-br04`
-- [ ] `make clean test-e2e API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=e2e-br04`
+- [x] `make typecheck-api ENV=test-br04` — pass
+- [x] `make lint-api ENV=test-br04` — pass (0 errors, 186 pre-existing warnings)
+- [ ] `make test-api ENV=test-br04` — deferred to final gates
+- [x] `make typecheck-ui ENV=test-br04` — pass
+- [x] `make lint-ui ENV=test-br04` — pass
+- [x] `make test-ui SCOPE=tests/chat-tool-scope-workspace-type.test.ts ENV=test-br04` — pass (10/10)
+- [ ] `make build-api build-ui-image API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=e2e-br04` — deferred to final gates
+- [ ] `make clean test-e2e API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=e2e-br04` — deferred to final gates
 
 ---
 
