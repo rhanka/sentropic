@@ -709,6 +709,119 @@ export const planTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   }
 };
 
+// --- Extended object tools (opportunity workspace) ---
+
+export const solutionsListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'solutions_list',
+    description: 'List solutions for an initiative in the current workspace.',
+    parameters: {
+      type: 'object',
+      properties: {
+        initiativeId: { type: 'string', description: 'Initiative ID to list solutions for.' },
+        select: { type: 'array', items: { type: 'string' }, description: 'Optional fields to select.' }
+      },
+      required: ['initiativeId']
+    }
+  }
+};
+
+export const solutionGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'solution_get',
+    description: 'Get details of a specific solution.',
+    parameters: {
+      type: 'object',
+      properties: {
+        solutionId: { type: 'string', description: 'Solution ID.' },
+        select: { type: 'array', items: { type: 'string' }, description: 'Optional fields to select.' }
+      },
+      required: ['solutionId']
+    }
+  }
+};
+
+export const bidsListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'bids_list',
+    description: 'List bids for an initiative in the current workspace.',
+    parameters: {
+      type: 'object',
+      properties: {
+        initiativeId: { type: 'string', description: 'Initiative ID to list bids for.' },
+        select: { type: 'array', items: { type: 'string' }, description: 'Optional fields to select.' }
+      },
+      required: ['initiativeId']
+    }
+  }
+};
+
+export const bidGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'bid_get',
+    description: 'Get details of a specific bid.',
+    parameters: {
+      type: 'object',
+      properties: {
+        bidId: { type: 'string', description: 'Bid ID.' },
+        select: { type: 'array', items: { type: 'string' }, description: 'Optional fields to select.' }
+      },
+      required: ['bidId']
+    }
+  }
+};
+
+export const productsListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'products_list',
+    description: 'List products in the current workspace, optionally filtered by initiative.',
+    parameters: {
+      type: 'object',
+      properties: {
+        initiativeId: { type: 'string', description: 'Optional initiative ID to filter products.' },
+        select: { type: 'array', items: { type: 'string' }, description: 'Optional fields to select.' }
+      }
+    }
+  }
+};
+
+export const productGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'product_get',
+    description: 'Get details of a specific product.',
+    parameters: {
+      type: 'object',
+      properties: {
+        productId: { type: 'string', description: 'Product ID.' },
+        select: { type: 'array', items: { type: 'string' }, description: 'Optional fields to select.' }
+      },
+      required: ['productId']
+    }
+  }
+};
+
+export const gateReviewTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'gate_review',
+    description: 'Review gate criteria for an initiative maturity stage transition. Returns warnings/blockers based on workspace gate configuration.',
+    parameters: {
+      type: 'object',
+      properties: {
+        initiativeId: { type: 'string', description: 'Initiative ID.' },
+        targetStage: { type: 'string', description: 'Target maturity stage (e.g. G0, G2, G5, G7).' }
+      },
+      required: ['initiativeId', 'targetStage']
+    }
+  }
+};
+
 export interface SearchResult {
   title: string;
   url: string;
