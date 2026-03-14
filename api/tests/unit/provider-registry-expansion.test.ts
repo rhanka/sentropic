@@ -62,11 +62,11 @@ describe('ProviderRegistry expansion', () => {
     expect(anthropic!.capabilities.supportsTools).toBe(true);
 
     const mistral = providers.find((p) => p.providerId === 'mistral');
-    expect(mistral!.capabilities.supportsReasoning).toBe(false);
+    expect(mistral!.capabilities.supportsReasoning).toBe(true);
     expect(mistral!.capabilities.supportsTools).toBe(true);
 
     const cohere = providers.find((p) => p.providerId === 'cohere');
-    expect(cohere!.capabilities.supportsReasoning).toBe(false);
+    expect(cohere!.capabilities.supportsReasoning).toBe(true);
     expect(cohere!.capabilities.supportsTools).toBe(true);
   });
 });
