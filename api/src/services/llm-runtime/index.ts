@@ -646,9 +646,29 @@ const buildCohereMessages = (
     );
     const role = (m.role === 'developer' ? 'system' : m.role) as CohereMessage['role'];
     const base: CohereMessage = { role, content };
+    if (role === 'assistant') {
+      // Forward toolCalls from assistant messages (camelCase for Cohere SDK)
+      const src = m as Record<string, unknown>;
+      const rawCalls = src.tool_calls ?? src.toolCalls;
+      if (Array.isArray(rawCalls) && rawCalls.length > 0) {
+        base.toolCalls = rawCalls.map((tc: Record<string, unknown>) => {
+          const fn = (tc.function ?? tc.fn) as Record<string, unknown> | undefined;
+          return {
+            id: typeof tc.id === 'string' ? tc.id : '',
+            type: 'function' as const,
+            function: {
+              name: typeof fn?.name === 'string' ? fn.name : '',
+              arguments: typeof fn?.arguments === 'string' ? fn.arguments : JSON.stringify(fn?.arguments ?? {}),
+            },
+          };
+        });
+      }
+    }
     if (role === 'tool') {
-      const toolCallId = (m as { tool_call_id?: string }).tool_call_id;
-      if (toolCallId) base.tool_call_id = toolCallId;
+      // Cohere SDK expects camelCase toolCallId
+      const src = m as Record<string, unknown>;
+      const toolCallId = (src.tool_call_id ?? src.toolCallId) as string | undefined;
+      if (toolCallId) base.toolCallId = toolCallId;
     }
     return base;
   });
@@ -1261,39 +1281,41 @@ export async function* callOpenAIStream(
         const event = chunk as Record<string, unknown>;
         const eventType = typeof event.type === 'string' ? event.type : '';
 
-        if (eventType === 'content-delta') {
-          const delta = event.delta as Record<string, unknown> | undefined;
-          const message = typeof delta?.message === 'string'
-            ? delta.message
-            : (delta?.message as Record<string, unknown> | undefined);
-          const content = typeof message === 'string'
-            ? message
-            : (message && typeof (message as Record<string, unknown>).content === 'string'
-              ? ((message as Record<string, unknown>).content as string)
-              : undefined);
-          // Cohere V2: delta.message.content.text
+        if (eventType === 'tool-plan-delta') {
+          // Cohere reasoning: tool plan is the model's thinking before tool calls
+          const deltaObj = event.delta as Record<string, unknown> | undefined;
+          const msgObj = deltaObj?.message as Record<string, unknown> | undefined;
+          const toolPlan = typeof msgObj?.toolPlan === 'string' ? msgObj.toolPlan : undefined;
+          if (toolPlan) {
+            yield { type: 'reasoning_delta', data: { delta: toolPlan } };
+          }
+        } else if (eventType === 'content-delta') {
+          // Cohere V2: delta.message.content.text or delta.message.content.thinking (reasoning model)
           const deltaObj = event.delta as Record<string, unknown> | undefined;
           const msgObj = deltaObj?.message as Record<string, unknown> | undefined;
           const contentObj = msgObj?.content as Record<string, unknown> | undefined;
-          const text = typeof contentObj?.text === 'string' ? contentObj.text : content;
-          if (text) {
+          const thinking = typeof contentObj?.thinking === 'string' ? contentObj.thinking : undefined;
+          const text = typeof contentObj?.text === 'string' ? contentObj.text : undefined;
+          if (thinking) {
+            yield { type: 'reasoning_delta', data: { delta: thinking } };
+          } else if (text) {
             yield { type: 'content_delta', data: { delta: text } };
           }
         } else if (eventType === 'tool-call-start') {
-          const delta = event.delta as Record<string, unknown> | undefined;
-          const toolCall = delta?.tool_call as Record<string, unknown> | undefined;
+          // Cohere SDK: delta.message.toolCalls (camelCase, single ToolCallV2)
+          const tcDelta = event.delta as Record<string, unknown> | undefined;
+          const tcMsg = tcDelta?.message as Record<string, unknown> | undefined;
+          const toolCall = (tcMsg?.toolCalls ?? tcDelta?.toolCall ?? tcDelta?.tool_call) as Record<string, unknown> | undefined;
           const toolCallId = typeof toolCall?.id === 'string' ? toolCall.id : `cohere_call_${Date.now()}`;
-          const name = typeof toolCall?.function === 'object' && toolCall.function
-            ? typeof (toolCall.function as Record<string, unknown>).name === 'string'
-              ? ((toolCall.function as Record<string, unknown>).name as string)
-              : ''
-            : (typeof toolCall?.name === 'string' ? toolCall.name : '');
+          const fn = toolCall?.function as Record<string, unknown> | undefined;
+          const name = typeof fn?.name === 'string' ? fn.name : '';
           yield { type: 'tool_call_start', data: { tool_call_id: toolCallId, name, args: '' } };
         } else if (eventType === 'tool-call-delta') {
-          const delta = event.delta as Record<string, unknown> | undefined;
-          const toolCall = delta?.tool_call as Record<string, unknown> | undefined;
-          const toolCallId = typeof toolCall?.id === 'string' ? toolCall.id : '';
-          const fn = toolCall?.function as Record<string, unknown> | undefined;
+          const tcDelta = event.delta as Record<string, unknown> | undefined;
+          const tcMsg = tcDelta?.message as Record<string, unknown> | undefined;
+          const toolCallDelta = (tcMsg?.toolCalls ?? tcDelta?.toolCall ?? tcDelta?.tool_call) as Record<string, unknown> | undefined;
+          const toolCallId = typeof toolCallDelta?.id === 'string' ? toolCallDelta.id : '';
+          const fn = toolCallDelta?.function as Record<string, unknown> | undefined;
           const args = typeof fn?.arguments === 'string' ? fn.arguments : '';
           if (args) {
             yield { type: 'tool_call_delta', data: { tool_call_id: toolCallId, delta: args } };
@@ -1946,18 +1968,45 @@ export async function* callOpenAIResponseStream(
     const cohereMessages = buildCohereMessages(messages);
     const cohereTools = buildCohereTools(filteredTools, normalizedToolChoice);
 
-    // Handle rawInput
+    // Handle rawInput: reconstruct assistant toolCalls + tool result messages
     if (Array.isArray(rawInput) && rawInput.length > 0) {
+      // 1) Collect function_call items → assistant message with toolCalls (skip empty/phantom entries)
+      const toolCallItems: Array<{ id: string; name: string; arguments: string }> = [];
       for (const item of rawInput) {
         const record = item as Record<string, unknown>;
-        const type = typeof record?.type === 'string' ? record.type : '';
-        if (type !== 'function_call_output') continue;
+        if (record?.type === 'function_call') {
+          const callId = typeof record.call_id === 'string' ? record.call_id : '';
+          const name = typeof record.name === 'string' ? record.name : '';
+          if (!callId || !name) continue; // skip phantom tool calls with empty id/name
+          toolCallItems.push({
+            id: callId,
+            name,
+            arguments: typeof record.arguments === 'string' ? record.arguments : JSON.stringify(record.arguments ?? {}),
+          });
+        }
+      }
+      if (toolCallItems.length > 0) {
+        cohereMessages.push({
+          role: 'assistant',
+          content: '',
+          toolCalls: toolCallItems.map((tc) => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: { name: tc.name, arguments: tc.arguments },
+          })),
+        });
+      }
+      // 2) Collect function_call_output items → tool messages (camelCase toolCallId for Cohere SDK)
+      for (const item of rawInput) {
+        const record = item as Record<string, unknown>;
+        if (record?.type !== 'function_call_output') continue;
         const callId = typeof record.call_id === 'string' ? record.call_id : '';
+        if (!callId) continue; // skip phantom outputs
         const output = stringifyContent(record.output);
         cohereMessages.push({
           role: 'tool',
           content: output,
-          tool_call_id: callId,
+          toolCallId: callId,
         });
       }
     }
@@ -1974,7 +2023,13 @@ export async function* callOpenAIResponseStream(
         requestOptions: {
           model: selectedModel,
           messages: cohereMessages,
-          ...(cohereTools ? { tools: cohereTools } : {}),
+          ...(cohereTools
+            ? {
+                tools: cohereTools,
+                // command-a-reasoning does not support tool_choice
+                ...(selectedModel.includes('reasoning') ? {} : { tool_choice: normalizedToolChoice === 'required' ? 'required' : normalizedToolChoice }),
+              }
+            : {}),
           ...(effectiveStructuredOutput
             ? { response_format: { type: 'json_object' } }
             : effectiveResponseFormat === 'json_object'
@@ -1989,6 +2044,7 @@ export async function* callOpenAIResponseStream(
       } satisfies CohereStreamGenerateRequest);
 
       let emittedContent = false;
+      let currentCohereToolCallId = '';
       for await (const chunk of stream) {
         if (signal?.aborted) {
           yield { type: 'error', data: { message: 'Stream aborted' } };
@@ -1996,35 +2052,51 @@ export async function* callOpenAIResponseStream(
         }
         const event = chunk as Record<string, unknown>;
         const eventType = typeof event.type === 'string' ? event.type : '';
-
-        if (eventType === 'content-delta') {
+        if (eventType === 'tool-plan-delta') {
+          // Cohere reasoning: tool plan is the model's thinking before tool calls
+          const deltaObj = event.delta as Record<string, unknown> | undefined;
+          const msgObj = deltaObj?.message as Record<string, unknown> | undefined;
+          const toolPlan = typeof msgObj?.toolPlan === 'string' ? msgObj.toolPlan : undefined;
+          if (toolPlan) {
+            yield { type: 'reasoning_delta', data: { delta: toolPlan } };
+          }
+        } else if (eventType === 'content-delta') {
           const deltaObj = event.delta as Record<string, unknown> | undefined;
           const msgObj = deltaObj?.message as Record<string, unknown> | undefined;
           const contentObj = msgObj?.content as Record<string, unknown> | undefined;
+          // Cohere reasoning model: thinking blocks use `thinking` key, text blocks use `text` key
+          const thinking = typeof contentObj?.thinking === 'string' ? contentObj.thinking : undefined;
           const text = typeof contentObj?.text === 'string' ? contentObj.text : undefined;
-          if (text) {
+          if (thinking) {
+            yield { type: 'reasoning_delta', data: { delta: thinking } };
+          } else if (text) {
             emittedContent = true;
             yield { type: 'content_delta', data: { delta: text } };
           }
         } else if (eventType === 'tool-call-start') {
-          const delta = event.delta as Record<string, unknown> | undefined;
-          const toolCall = delta?.tool_call as Record<string, unknown> | undefined;
-          const toolCallId = typeof toolCall?.id === 'string' ? toolCall.id : `cohere_call_${Date.now()}`;
-          const name = typeof toolCall?.function === 'object' && toolCall.function
-            ? typeof (toolCall.function as Record<string, unknown>).name === 'string'
-              ? ((toolCall.function as Record<string, unknown>).name as string)
-              : ''
-            : (typeof toolCall?.name === 'string' ? toolCall.name : '');
-          yield { type: 'tool_call_start', data: { tool_call_id: toolCallId, name, args: '' } };
-        } else if (eventType === 'tool-call-delta') {
-          const delta = event.delta as Record<string, unknown> | undefined;
-          const toolCall = delta?.tool_call as Record<string, unknown> | undefined;
+          // Cohere SDK: delta.message.toolCalls (camelCase, single ToolCallV2)
+          const tcDelta = event.delta as Record<string, unknown> | undefined;
+          const tcMsg = tcDelta?.message as Record<string, unknown> | undefined;
+          const toolCall = (tcMsg?.toolCalls ?? tcDelta?.toolCall ?? tcDelta?.tool_call) as Record<string, unknown> | undefined;
           const toolCallId = typeof toolCall?.id === 'string' ? toolCall.id : '';
           const fn = toolCall?.function as Record<string, unknown> | undefined;
-          const args = typeof fn?.arguments === 'string' ? fn.arguments : '';
-          if (args) {
-            yield { type: 'tool_call_delta', data: { tool_call_id: toolCallId, delta: args } };
+          const name = typeof fn?.name === 'string' ? fn.name : '';
+          if (toolCallId && name) {
+            currentCohereToolCallId = toolCallId;
+            yield { type: 'tool_call_start', data: { tool_call_id: toolCallId, name, args: '' } };
           }
+        } else if (eventType === 'tool-call-delta') {
+          // Cohere deltas don't carry id — use the id from the last tool-call-start
+          const tcDelta = event.delta as Record<string, unknown> | undefined;
+          const tcMsg = tcDelta?.message as Record<string, unknown> | undefined;
+          const toolCallDelta = (tcMsg?.toolCalls ?? tcDelta?.toolCall ?? tcDelta?.tool_call) as Record<string, unknown> | undefined;
+          const fn = toolCallDelta?.function as Record<string, unknown> | undefined;
+          const args = typeof fn?.arguments === 'string' ? fn.arguments : '';
+          if (currentCohereToolCallId && args) {
+            yield { type: 'tool_call_delta', data: { tool_call_id: currentCohereToolCallId, delta: args } };
+          }
+        } else if (eventType === 'tool-call-end') {
+          currentCohereToolCallId = '';
         } else if (eventType === 'message-end') {
           break;
         }
