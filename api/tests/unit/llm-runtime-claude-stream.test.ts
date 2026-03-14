@@ -83,10 +83,10 @@ describe('Claude stream event normalization', () => {
     );
     vi.spyOn(provider, 'streamGenerate').mockImplementation(mockStreamGenerate);
 
-    const { callOpenAIStream } = await import('../../src/services/llm-runtime');
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
 
     const events = await collectStreamEvents(
-      callOpenAIStream({
+      callOpenAIResponseStream({
         messages: [{ role: 'user', content: 'Hi' }],
         providerId: 'anthropic',
         model: 'claude-sonnet-4-6',
@@ -113,10 +113,10 @@ describe('Claude stream event normalization', () => {
       })(),
     );
 
-    const { callOpenAIStream } = await import('../../src/services/llm-runtime');
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
 
     const events = await collectStreamEvents(
-      callOpenAIStream({
+      callOpenAIResponseStream({
         messages: [{ role: 'user', content: 'Think about this' }],
         providerId: 'anthropic',
         model: 'claude-opus-4-6',
@@ -152,10 +152,10 @@ describe('Claude stream event normalization', () => {
       })(),
     );
 
-    const { callOpenAIStream } = await import('../../src/services/llm-runtime');
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
 
     const events = await collectStreamEvents(
-      callOpenAIStream({
+      callOpenAIResponseStream({
         messages: [{ role: 'user', content: 'Search for something' }],
         providerId: 'anthropic',
         model: 'claude-sonnet-4-6',
@@ -182,10 +182,10 @@ describe('Claude stream event normalization', () => {
       })(),
     );
 
-    const { callOpenAIStream } = await import('../../src/services/llm-runtime');
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
 
     const events = await collectStreamEvents(
-      callOpenAIStream({
+      callOpenAIResponseStream({
         messages: [{ role: 'user', content: 'Hi' }],
         providerId: 'anthropic',
         model: 'claude-sonnet-4-6',

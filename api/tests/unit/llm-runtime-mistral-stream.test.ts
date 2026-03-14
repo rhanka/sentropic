@@ -81,10 +81,10 @@ describe('Mistral stream event normalization', () => {
       })(),
     );
 
-    const { callOpenAIStream } = await import('../../src/services/llm-runtime');
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
 
     const events = await collectStreamEvents(
-      callOpenAIStream({
+      callOpenAIResponseStream({
         messages: [{ role: 'user', content: 'Hi' }],
         providerId: 'mistral',
         model: 'magistral-medium-2509',
@@ -135,10 +135,10 @@ describe('Mistral stream event normalization', () => {
       })(),
     );
 
-    const { callOpenAIStream } = await import('../../src/services/llm-runtime');
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
 
     const events = await collectStreamEvents(
-      callOpenAIStream({
+      callOpenAIResponseStream({
         messages: [{ role: 'user', content: 'Search something' }],
         providerId: 'mistral',
         model: 'magistral-medium-2509',
@@ -164,10 +164,10 @@ describe('Mistral stream event normalization', () => {
       })(),
     );
 
-    const { callOpenAIStream } = await import('../../src/services/llm-runtime');
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
 
     const events = await collectStreamEvents(
-      callOpenAIStream({
+      callOpenAIResponseStream({
         messages: [{ role: 'user', content: 'Hi' }],
         providerId: 'mistral',
         model: 'magistral-medium-2509',
