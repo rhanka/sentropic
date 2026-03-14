@@ -94,7 +94,7 @@ describe('Chat summary runtime (Lot 4)', () => {
   });
 
   it('compacts context when hard threshold is exceeded before model call', async () => {
-    const huge = 'A'.repeat(170_000);
+    const huge = 'A'.repeat(950_000);
     await insertMessage('user', huge);
     await insertMessage('assistant', 'Historique long.');
 
@@ -103,7 +103,7 @@ describe('Chat summary runtime (Lot 4)', () => {
     } as any);
     mockedCallLLMStream.mockImplementation(() =>
       stream([
-        { type: 'content_delta', data: { delta: 'Réponse finale compacte.' } },
+        { type: 'content_delta', data: { delta: 'low' } },
         { type: 'done', data: {} },
       ]),
     );
@@ -113,13 +113,15 @@ describe('Chat summary runtime (Lot 4)', () => {
       workspaceId,
       sessionId,
       content: 'Continue',
-      model: 'gpt-4.1-nano',
+      providerId: 'mistral',
+      model: 'devstral-2512',
     });
 
     await chatService.runAssistantGeneration({
       userId,
       sessionId,
       assistantMessageId: created.assistantMessageId,
+      providerId: 'mistral',
       model: created.model,
     });
 
@@ -138,10 +140,16 @@ describe('Chat summary runtime (Lot 4)', () => {
   });
 
   it('returns context_budget_risk deferred tool result before oversized tool dispatch', async () => {
-    const nearSoft = 'B'.repeat(106_000);
+    const nearSoft = 'B'.repeat(880_000);
     await insertMessage('user', nearSoft);
 
     mockedCallLLMStream
+      .mockImplementationOnce(() =>
+        stream([
+          { type: 'content_delta', data: { delta: 'low' } },
+          { type: 'done', data: {} },
+        ]),
+      )
       .mockImplementationOnce(() =>
         stream([
           {
@@ -167,13 +175,15 @@ describe('Chat summary runtime (Lot 4)', () => {
       workspaceId,
       sessionId,
       content: 'Fais une extraction web exhaustive',
-      model: 'gpt-4.1-nano',
+      providerId: 'mistral',
+      model: 'devstral-2512',
     });
 
     await chatService.runAssistantGeneration({
       userId,
       sessionId,
       assistantMessageId: created.assistantMessageId,
+      providerId: 'mistral',
       model: created.model,
       tools: ['web_search'],
     });
