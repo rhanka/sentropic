@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mockCohereChat = vi.fn();
 const mockCohereChatStream = vi.fn();
 
-vi.mock('cohere-ai', () => {
+vi.mock('cohere-ai/Client', () => {
   class MockCohereClient {
     v2 = {
       chat: mockCohereChat,
