@@ -226,11 +226,11 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
     - [x] magistral-medium-2509: chat ✓, tools ✓, reasoning ✓
     - [x] command-a-03-2025: chat ✓, tools ✓, reasoning N/A
     - [x] command-a-reasoning-08-2025: chat ✓, tools ✓, reasoning ✓
-    - [ ] gpt-5.4: chat ❌, tools ❌, reasoning ❌ — deferred to BR-14 (preexisting gap, not introduced by BR-08)
-    - [ ] gpt-4.1-nano: chat ❌ (unit stream), tools ❌ (unit stream) — covered by AI integ tests; unit stream deferred to BR-14
-    - [ ] gemini-3.1-pro-preview-customtools: chat ❌, tools ❌, reasoning ❌ — deferred to BR-14 (preexisting gap)
-    - [ ] gemini-3.1-flash-lite-preview: chat ❌, tools ❌, reasoning N/A — deferred to BR-14 (preexisting gap)
-    - [ ] devstral-2512: chat ❌, tools ❌, reasoning N/A — deferred to BR-14 (preexisting gap, uses same Mistral stream path as magistral)
+    - [x] gpt-5.4: chat ✓, tools ✓, reasoning ✓
+    - [x] gpt-4.1-nano: chat ✓, tools ✓, reasoning N/A
+    - [x] gemini-3.1-pro-preview-customtools: chat ✓, tools ✓, reasoning not implemented in stream code
+    - [x] gemini-3.1-flash-lite-preview: chat ✓, tools ✓, reasoning N/A
+    - [x] devstral-2512: chat ✓, tools ✓, reasoning N/A
   - [ ] Typecheck & Lint: `make typecheck-api typecheck-ui lint-api lint-ui ENV=test-feat-model-runtime-claude-mistral`
   - [ ] Retest API: `make test-api ENV=test-feat-model-runtime-claude-mistral`
   - [ ] Retest UI: `make test-ui ENV=test`
