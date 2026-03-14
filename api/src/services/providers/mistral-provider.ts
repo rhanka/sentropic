@@ -20,11 +20,12 @@ const MISTRAL_MODELS: ModelCatalogEntry[] = [
   },
   {
     providerId: 'mistral',
-    modelId: 'mistral-large-2512',
-    label: 'Mistral 3',
+    modelId: 'magistral-medium-2509',
+    label: 'Magistral Medium',
     reasoningTier: 'advanced',
     supportsTools: true,
     supportsStreaming: true,
+    supportsReasoning: true,
     defaultContexts: ['chat', 'structured', 'summary'],
   },
 ];
@@ -71,7 +72,7 @@ export class MistralProviderRuntime implements ProviderRuntime {
         supportsTools: true,
         supportsStreaming: true,
         supportsStructuredOutput: true,
-        supportsReasoning: false,
+        supportsReasoning: true,
       },
     };
   }
@@ -133,8 +134,6 @@ export class MistralProviderRuntime implements ProviderRuntime {
       throw new Error('MistralProviderRuntime.streamGenerate: unsupported mode');
     }
 
-    const opts = payload.requestOptions as Record<string, unknown>;
-    console.warn('[mistral-provider] streamGenerate', { keys: Object.keys(opts), toolCount: Array.isArray(opts.tools) ? opts.tools.length : 0, toolChoice: opts.toolChoice ?? opts.tool_choice ?? '(absent)', model: opts.model });
     const client = this.getClient(payload.credential);
     const stream = await client.chat.stream(payload.requestOptions);
 
