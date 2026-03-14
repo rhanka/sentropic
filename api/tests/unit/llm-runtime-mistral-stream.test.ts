@@ -155,6 +155,63 @@ describe('Mistral stream event normalization', () => {
     expect((toolDeltas[0].data as { delta: string }).delta).toBe('"test"}');
   });
 
+  it('should normalize magistral thinking chunks to reasoning_delta events', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('mistral');
+    vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
+      (async function* () {
+        yield {
+          data: {
+            choices: [{
+              delta: {
+                content: [
+                  { type: 'thinking', thinking: [{ type: 'text', text: 'Let me think...' }] },
+                ],
+              },
+            }],
+          },
+        };
+        yield {
+          data: {
+            choices: [{
+              delta: {
+                content: [
+                  { type: 'text', text: 'The answer is 42' },
+                ],
+              },
+            }],
+          },
+        };
+        yield {
+          data: {
+            choices: [{ delta: {}, finish_reason: 'stop' }],
+          },
+        };
+      })(),
+    );
+
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
+
+    const events = await collectStreamEvents(
+      callOpenAIResponseStream({
+        messages: [{ role: 'user', content: 'What is the meaning of life?' }],
+        providerId: 'mistral',
+        model: 'magistral-medium-2509',
+      }),
+    );
+
+    const reasoningDeltas = events.filter((e) => e.type === 'reasoning_delta');
+    expect(reasoningDeltas).toHaveLength(1);
+    expect((reasoningDeltas[0].data as { delta: string }).delta).toBe('Let me think...');
+
+    const contentDeltas = events.filter((e) => e.type === 'content_delta');
+    expect(contentDeltas).toHaveLength(1);
+    expect((contentDeltas[0].data as { delta: string }).delta).toBe('The answer is 42');
+
+    const doneEvents = events.filter((e) => e.type === 'done');
+    expect(doneEvents).toHaveLength(1);
+  });
+
   it('should emit status started event at the beginning', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
     const provider = providerRegistry.requireProvider('mistral');

@@ -189,6 +189,52 @@ describe('Cohere stream event normalization', () => {
     expect((toolStarts[0].data as { name: string }).name).toBe('calculator');
   });
 
+  it('should normalize thinking content-delta to reasoning_delta events', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('cohere');
+    vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
+      (async function* () {
+        // thinking blocks
+        yield {
+          type: 'content-delta',
+          delta: { message: { content: { thinking: 'Let me analyze...' } } },
+        };
+        yield {
+          type: 'content-delta',
+          delta: { message: { content: { thinking: ' the problem' } } },
+        };
+        // text block
+        yield {
+          type: 'content-delta',
+          delta: { message: { content: { text: 'The answer is 42' } } },
+        };
+        yield { type: 'message-end' };
+      })(),
+    );
+
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
+
+    const events = await collectStreamEvents(
+      callOpenAIResponseStream({
+        messages: [{ role: 'user', content: 'Think about this' }],
+        providerId: 'cohere',
+        model: 'command-a-reasoning-08-2025',
+      }),
+    );
+
+    const reasoningDeltas = events.filter((e) => e.type === 'reasoning_delta');
+    expect(reasoningDeltas).toHaveLength(2);
+    expect((reasoningDeltas[0].data as { delta: string }).delta).toBe('Let me analyze...');
+    expect((reasoningDeltas[1].data as { delta: string }).delta).toBe(' the problem');
+
+    const contentDeltas = events.filter((e) => e.type === 'content_delta');
+    expect(contentDeltas).toHaveLength(1);
+    expect((contentDeltas[0].data as { delta: string }).delta).toBe('The answer is 42');
+
+    const doneEvents = events.filter((e) => e.type === 'done');
+    expect(doneEvents).toHaveLength(1);
+  });
+
   it('should emit status started event at the beginning', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
     const provider = providerRegistry.requireProvider('cohere');
