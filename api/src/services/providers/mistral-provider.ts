@@ -25,7 +25,6 @@ const MISTRAL_MODELS: ModelCatalogEntry[] = [
     reasoningTier: 'advanced',
     supportsTools: true,
     supportsStreaming: true,
-    supportsReasoning: true,
     defaultContexts: ['chat', 'structured', 'summary'],
   },
 ];
