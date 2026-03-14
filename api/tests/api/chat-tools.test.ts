@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../../src/services/llm-runtime', () => ({
-  callOpenAIResponseStream: vi.fn(),
-  callOpenAI: vi.fn()
+  callLLMStream: vi.fn(),
+  callLLM: vi.fn()
 }));
 
 vi.mock('../../src/services/context-comments', () => ({
@@ -30,10 +30,10 @@ import {
 } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
-import { callOpenAIResponseStream } from '../../src/services/llm-runtime';
+import { callLLMStream } from '../../src/services/llm-runtime';
 import { generateCommentResolutionProposal } from '../../src/services/context-comments';
 
-const openAIStreamMock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+const llmStreamMock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
 const proposalMock = generateCommentResolutionProposal as unknown as ReturnType<typeof vi.fn>;
 
 const createStream = (events: Array<{ type: string; data?: Record<string, unknown> }>) =>
@@ -103,7 +103,7 @@ describe('Chat tools API - comment_assistant', () => {
     expect(otherUseCaseResponse.status).toBe(201);
     otherUseCaseId = (await otherUseCaseResponse.json()).id;
 
-    openAIStreamMock.mockImplementation(() =>
+    llmStreamMock.mockImplementation(() =>
       createStream([
         { type: 'content_delta', data: { delta: 'OK' } },
         { type: 'done', data: {} }
@@ -200,7 +200,7 @@ describe('Chat tools API - comment_assistant', () => {
       confirmation_options: ['Confirmer', 'Annuler']
     });
 
-    openAIStreamMock.mockImplementationOnce(() =>
+    llmStreamMock.mockImplementationOnce(() =>
       createStream([
         {
           type: 'tool_call_start',
@@ -261,7 +261,7 @@ describe('Chat tools API - comment_assistant', () => {
       updatedAt: now
     });
 
-    openAIStreamMock.mockImplementationOnce(() =>
+    llmStreamMock.mockImplementationOnce(() =>
       createStream([
         {
           type: 'tool_call_start',
@@ -325,7 +325,7 @@ describe('Chat tools API - comment_assistant', () => {
       updatedAt: now
     });
 
-    openAIStreamMock.mockImplementationOnce(() =>
+    llmStreamMock.mockImplementationOnce(() =>
       createStream([
         {
           type: 'tool_call_start',
@@ -398,7 +398,7 @@ describe('Chat tools API - comment_assistant', () => {
       updatedAt: now
     });
 
-    openAIStreamMock.mockImplementationOnce(() =>
+    llmStreamMock.mockImplementationOnce(() =>
       createStream([
         {
           type: 'tool_call_start',
@@ -469,7 +469,7 @@ describe('Chat tools API - comment_assistant', () => {
       confirmation_options: ['Confirmer', 'Annuler']
     });
 
-    openAIStreamMock.mockImplementationOnce(() =>
+    llmStreamMock.mockImplementationOnce(() =>
       createStream([
         {
           type: 'tool_call_start',
@@ -512,7 +512,7 @@ describe('Chat tools API - comment_assistant', () => {
   }, 15000);
 
   it('rejects comment_assistant outside the allowed usecase scope', async () => {
-    openAIStreamMock.mockImplementationOnce(() =>
+    llmStreamMock.mockImplementationOnce(() =>
       createStream([
         {
           type: 'tool_call_start',

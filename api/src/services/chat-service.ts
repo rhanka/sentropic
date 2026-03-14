@@ -2,7 +2,7 @@ import { and, asc, desc, eq, sql, inArray, gt, or } from 'drizzle-orm';
 import { db, pool } from '../db/client';
 import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue } from '../db/schema';
 import { createId } from '../utils/id';
-import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './llm-runtime';
+import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
 import {
   getModelCatalogPayload,
   inferProviderFromModelIdWithLegacy,
@@ -680,7 +680,7 @@ const compactConversationContext = async (input: {
     summaryInput,
   ].join('\n');
 
-  const summaryResponse = await callOpenAI({
+  const summaryResponse = await callLLM({
     providerId: input.providerId,
     model:
       input.providerId === 'gemini'
@@ -1289,7 +1289,7 @@ export class ChatService {
       last_user_message: (opts.lastUserMessage || '').trim()
     });
     try {
-      const res = await callOpenAI({
+      const res = await callLLM({
         model: 'gpt-4.1-nano',
         messages: [{ role: 'system', content: prompt }],
         maxOutputTokens: 32
@@ -3115,7 +3115,7 @@ Règles :
             .replace('{{context_excerpt}}', excerpt || '(vide)');
 
           let out = '';
-          for await (const ev of callOpenAIResponseStream({
+          for await (const ev of callLLMStream({
             providerId: evaluatorProviderId,
             model: evaluatorModel,
             userId: options.userId,
@@ -3396,7 +3396,7 @@ Règles :
 
       let shouldRetryWithoutPreviousResponse = false;
       try {
-        for await (const event of callOpenAIResponseStream({
+        for await (const event of callLLMStream({
           providerId: selectedProviderId,
           model: selectedModel,
           credential: options.providerApiKey ?? undefined,
@@ -4868,7 +4868,7 @@ Règles :
           meta: { kind: 'pass2_prompt', callSite: 'ChatService.runAssistantGeneration/pass2/beforeOpenAI', openaiApi: 'responses' }
         });
 
-        for await (const event of callOpenAIResponseStream({
+        for await (const event of callLLMStream({
           providerId: selectedProviderId,
           model: selectedModel,
           credential: options.providerApiKey ?? undefined,

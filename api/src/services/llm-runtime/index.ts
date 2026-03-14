@@ -130,7 +130,7 @@ const buildCredentialResolutionContext = (options: {
   });
 };
 
-export interface CallOpenAIOptions {
+export interface CallLLMOptions {
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
   providerId?: ProviderId;
   model?: string;
@@ -148,7 +148,7 @@ export interface CallOpenAIOptions {
   signal?: AbortSignal;
 }
 
-export interface CallOpenAIResponseOptions {
+export interface CallLLMStreamOptions {
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
   providerId?: ProviderId;
   model?: string;
@@ -740,7 +740,7 @@ const mapClaudeReasoningParams = (
 /**
  * Méthode unique pour tous les appels OpenAI (non-streaming)
  */
-export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
+export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
   const {
     messages,
     providerId,
@@ -979,8 +979,8 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
  * Streaming via Responses API (support reasoning, modèle unique)
  * - N'injecte pas de reasoning.effort par défaut (on ne le spécifie que si demandé)
  */
-export async function* callOpenAIResponseStream(
-  options: CallOpenAIResponseOptions
+export async function* callLLMStream(
+  options: CallLLMStreamOptions
 ): AsyncGenerator<StreamEvent, void, unknown> {
   const {
     messages,
@@ -1620,7 +1620,7 @@ export async function* callOpenAIResponseStream(
   // On désactive complètement `reasoning` pour ces familles afin d'éviter un 400.
   const supportsReasoningParams = !selectedModel.startsWith('gpt-4.1');
 
-  const mapReasoningEffort = (effort: CallOpenAIResponseOptions['reasoningEffort']): unknown => {
+  const mapReasoningEffort = (effort: CallLLMStreamOptions['reasoningEffort']): unknown => {
     if (!effort) return undefined;
     // OpenAI supports (notably for gpt-5-nano): minimal|low|medium|high.
     // App-level accepts: none|low|medium|high|xhigh.
