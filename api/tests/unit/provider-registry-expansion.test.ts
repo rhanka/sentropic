@@ -66,7 +66,7 @@ describe('ProviderRegistry expansion', () => {
     expect(mistral!.capabilities.supportsTools).toBe(true);
 
     const cohere = providers.find((p) => p.providerId === 'cohere');
-    expect(cohere!.capabilities.supportsReasoning).toBe(true);
+    expect(cohere!.capabilities.supportsReasoning).toBe(false);
     expect(cohere!.capabilities.supportsTools).toBe(true);
   });
 });
