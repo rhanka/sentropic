@@ -231,13 +231,15 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
     - [x] gemini-3.1-pro-preview-customtools: chat ✓, tools ✓, reasoning not implemented in stream code
     - [x] gemini-3.1-flash-lite-preview: chat ✓, tools ✓, reasoning N/A
     - [x] devstral-2512: chat ✓, tools ✓, reasoning N/A
-  - [ ] Typecheck & Lint: `make typecheck-api typecheck-ui lint-api lint-ui ENV=test-feat-model-runtime-claude-mistral`
-  - [ ] Retest API: `make test-api ENV=test-feat-model-runtime-claude-mistral`
-  - [ ] Retest UI: `make test-ui ENV=test`
-  - [ ] Retest E2E: `make clean test-e2e API_PORT=8708 UI_PORT=5108 MAILDEV_UI_PORT=1008 ENV=e2e-feat-model-runtime-claude-mistral`
-  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures
-  - [ ] Record explicit user sign-off if any AI flaky test is accepted
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers
-  - [ ] Final gate step 3: update `plan/08-BRANCH_feat-model-runtime-claude-mistral.md` with latest `BRANCH.md`
-  - [ ] Final gate step 4: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge
+  - Integration test coverage (real API calls):
+    - [x] OpenAI gpt-4.1-nano: chat ✓, tools ✓, generation ✓, enrichment ✓ (7 test files in `api/tests/ai/`)
+    - [ ] Anthropic, Mistral, Cohere, Gemini: zero integration tests — deferred to BR-14 (parameterize `TEST_MODEL`/`TEST_PROVIDER` + CI matrix per provider)
+  - [x] Typecheck & Lint: `make typecheck-api typecheck-ui lint-api lint-ui` — 0 errors
+  - [ ] Push branch and iterate via CI:
+    - [ ] Push to remote
+    - [ ] Create PR using `BRANCH.md` as body
+    - [ ] Fix CI failures (test-api, test-ui, test-e2e) iteratively
+    - [ ] Document AI flaky tests (non-blocking only under acceptance rule) with pass/fail signatures
+    - [ ] Record explicit user sign-off if any AI flaky test is accepted
+  - [ ] Final gate: update `plan/08-BRANCH_feat-model-runtime-claude-mistral.md` with latest `BRANCH.md`
+  - [ ] Final gate: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge
