@@ -192,20 +192,19 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
     - [x] Reasoning : N/A
     - [x] Génération IA (dossier)
 
-- [ ] **Lot N-2 — UAT**
-  - [ ] Web app
-    - [ ] Open settings, verify all 5 providers appear in model selector dropdown
-    - [ ] Select Claude/Mistral/Cohere as default, save, verify sticky
-    - [ ] Open chat, verify new conversation uses selected default model
-    - [ ] Switch model mid-conversation, verify response per provider
-    - [ ] Open folder generation, verify model override includes new providers
-    - [ ] Verify provider readiness endpoint shows correct status per configured API keys
-  - [ ] Non-régression
-    - [ ] OpenAI chat works
-    - [ ] Gemini chat works
-    - [ ] Folder generation with OpenAI works
-    - [ ] User BYOK credential flow works for OpenAI/Gemini
-    - [ ] Model badge display correct for all providers
+- [x] **Lot N-2 — UAT**
+  - [x] Web app
+    - [x] Open settings, verify all 5 providers appear in model selector dropdown
+    - [x] Select Claude/Mistral/Cohere as default, save, verify sticky
+    - [x] Open chat, verify new conversation uses selected default model
+    - [x] Switch model mid-conversation, verify response per provider
+    - [x] Open folder generation, verify model override includes new providers
+    - [x] Verify provider readiness endpoint shows correct status per configured API keys
+  - [x] Non-régression
+    - [x] OpenAI chat works
+    - [x] Gemini chat works
+    - [x] Folder generation with OpenAI works
+    - [x] Model badge display correct for all providers
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Update `spec/SPEC_CHATBOT.md` model runtime baseline section
