@@ -124,7 +124,7 @@
   - [ ] Upload with automatic summary (0.1k token/page)
   - [ ] Consult metadata and summary
 
-## Model runtime baseline (OpenAI + Gemini) — delivered
+## Model runtime baseline (5 providers) — delivered (BR-01 + BR-08)
 
 - Runtime model catalog is exposed by `GET /api/v1/models/catalog` and consumed by grouped selectors in:
   - chat composer,
@@ -151,11 +151,24 @@
   - new conversation starts from current effective user default.
 - Structured generation behavior:
   - `/folder/new` can override model per run without mutating user defaults.
-- Active user-facing catalog is intentionally reduced to four entries:
-  - `gpt-4.1-nano`,
-  - `gpt-5.2`,
-  - `gemini-2.5-flash-lite`,
-  - `gemini-3.1-pro-preview-customtools`.
+- **5 active providers** with centralized model catalog (labels served from backend):
+  - **OpenAI**: GPT-5.4, GPT-4.1, GPT-4.1 Nano.
+  - **Gemini**: Gemini 3.1 Pro Preview, Gemini 3.1 Flash Lite Preview.
+  - **Anthropic Claude**: Sonnet 4.6, Opus 4.6 — extended thinking (thinking budget_tokens), 1M token context.
+  - **Mistral**: Devstral 2, Magistral Medium — Magistral supports reasoning via thinking chunks.
+  - **Cohere**: Command A, Command A Reasoning — thinking blocks in `content-delta` stream (field `thinking` vs `text`), `tool-plan-delta` for reasoning with tools.
+- Streaming SSE normalization:
+  - all providers emit the same normalized SSE event types (`reasoning_delta`, `content_delta`, `tool_call_start`, `tool_call_delta`, `tool_call_result`, `status`, `error`, `done`),
+  - provider-specific reasoning formats are normalized to `reasoning_delta` (Claude extended thinking, Mistral/Magistral thinking chunks, Cohere thinking blocks).
+- Tool call parity across providers:
+  - all 5 providers support tool calls with consistent `tool_call_start`/`tool_call_delta`/`tool_call_result` streaming contract,
+  - provider-specific tool call ID formats are normalized at the adapter layer.
+- Per-model context budgets:
+  - Claude (Sonnet/Opus) and GPT-5.4: 1M tokens,
+  - Gemini Pro: 1M tokens,
+  - Devstral 2 and Cohere Command A/A R.: 256k tokens,
+  - Magistral Medium: 128k tokens,
+  - GPT-4.1 / GPT-4.1 Nano and Gemini Flash Lite: default budget.
 - Gemini-specific runtime/UI compatibility:
   - UI smooth pseudo-streaming for larger chunk deltas,
   - provider-side schema compatibility compiler before Gemini structured calls (unsupported keywords removed),
@@ -167,10 +180,14 @@
     - standard OpenAI key path,
     - connected Codex token path,
   - Codex mode is a transport/source choice on the existing OpenAI runtime path, not a dedicated provider surface.
+- Provider-agnostic reasoning system (BR-08):
+  - `supportsReasoning(selection)` replaces legacy `isGpt5` guards,
+  - reasoning effort evaluation pipeline skips when `supportsReasoning` is false,
+  - reasoning params mapped to provider-native format (OpenAI: `reasoningEffort`, Claude: `thinking.budget_tokens`, Mistral/Cohere: no-op).
 - Settings save propagation:
   - saving user defaults triggers a browser event to refresh new-conversation defaults immediately (no page reload).
 - Display normalization:
-  - long Gemini model IDs are compacted for badges (example: `gemini-3.1`).
+  - long model IDs are compacted for badges (example: `gemini-3.1`, `Sonnet 4.6`, `Command A R.`).
 
 ## BR-03 TODO/Steering/Workflow baseline — delivered
 

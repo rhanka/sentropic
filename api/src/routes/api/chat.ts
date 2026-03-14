@@ -58,7 +58,7 @@ const vscodeCodeAgentInput = z.object({
 const createMessageInput = z.object({
   sessionId: z.string().optional(),
   content: z.string().min(1),
-  providerId: z.enum(['openai', 'gemini']).optional(),
+  providerId: z.enum(['openai', 'gemini', 'anthropic', 'mistral', 'cohere']).optional(),
   providerApiKey: z.string().min(1).optional(),
   model: z.string().optional(),
   workspace_id: z.string().optional(),
@@ -80,7 +80,7 @@ const editMessageInput = z.object({
 });
 
 const retryMessageInput = z.object({
-  providerId: z.enum(['openai', 'gemini']).optional(),
+  providerId: z.enum(['openai', 'gemini', 'anthropic', 'mistral', 'cohere']).optional(),
   model: z.string().min(1).optional(),
   vscodeCodeAgent: vscodeCodeAgentInput.optional(),
 });

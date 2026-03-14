@@ -13,7 +13,7 @@ import { createId } from '../utils/id';
 import { decryptSecretOrNull, encryptSecret } from './secret-crypto';
 import { settingsService } from './settings';
 
-export type ProviderConnectionId = 'codex' | 'openai' | 'gemini';
+export type ProviderConnectionId = 'codex' | 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
 
 export type ProviderConnectionState = {
   providerId: ProviderConnectionId;
@@ -291,7 +291,7 @@ export const listProviderConnections = async (input?: {
   userId?: string | null;
 }): Promise<ProviderConnectionState[]> => {
   const userId = normalizeOptionalText(input?.userId);
-  const [codexConnection, openaiCredential, geminiCredential] = await Promise.all([
+  const [codexConnection, openaiCredential, geminiCredential, anthropicCredential, mistralCredential, cohereCredential] = await Promise.all([
     userId ? readCodexConnection(userId) : Promise.resolve(null),
     resolveProviderCredential({
       providerId: 'openai',
@@ -301,44 +301,47 @@ export const listProviderConnections = async (input?: {
       providerId: 'gemini',
       userId,
     }),
+    resolveProviderCredential({
+      providerId: 'anthropic',
+      userId,
+    }),
+    resolveProviderCredential({
+      providerId: 'mistral',
+      userId,
+    }),
+    resolveProviderCredential({
+      providerId: 'cohere',
+      userId,
+    }),
   ]);
+
+  const toSimpleProviderState = (
+    providerId: ProviderConnectionId,
+    label: string,
+    credential: { credential: string | null; source: ProviderCredentialSource },
+  ): ProviderConnectionState => ({
+    providerId,
+    label,
+    ready: Boolean(credential.credential),
+    connectionStatus: credential.credential ? 'connected' : 'disconnected',
+    enrollmentId: null,
+    enrollmentUrl: null,
+    enrollmentCode: null,
+    enrollmentExpiresAt: null,
+    managedBy: toManagedBy(credential.source),
+    accountLabel: null,
+    updatedAt: null,
+    updatedByUserId: null,
+    canConfigure: false,
+  });
 
   return [
     toCodexProviderState(codexConnection),
-    {
-      providerId: 'openai',
-      label: 'OpenAI',
-      ready: Boolean(openaiCredential.credential),
-      connectionStatus: openaiCredential.credential
-        ? 'connected'
-        : 'disconnected',
-      enrollmentId: null,
-      enrollmentUrl: null,
-      enrollmentCode: null,
-      enrollmentExpiresAt: null,
-      managedBy: toManagedBy(openaiCredential.source),
-      accountLabel: null,
-      updatedAt: null,
-      updatedByUserId: null,
-      canConfigure: false,
-    },
-    {
-      providerId: 'gemini',
-      label: 'Gemini',
-      ready: Boolean(geminiCredential.credential),
-      connectionStatus: geminiCredential.credential
-        ? 'connected'
-        : 'disconnected',
-      enrollmentId: null,
-      enrollmentUrl: null,
-      enrollmentCode: null,
-      enrollmentExpiresAt: null,
-      managedBy: toManagedBy(geminiCredential.source),
-      accountLabel: null,
-      updatedAt: null,
-      updatedByUserId: null,
-      canConfigure: false,
-    },
+    toSimpleProviderState('openai', 'OpenAI', openaiCredential),
+    toSimpleProviderState('gemini', 'Gemini', geminiCredential),
+    toSimpleProviderState('anthropic', 'Anthropic', anthropicCredential),
+    toSimpleProviderState('mistral', 'Mistral', mistralCredential),
+    toSimpleProviderState('cohere', 'Cohere', cohereCredential),
   ];
 };
 

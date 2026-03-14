@@ -3,8 +3,8 @@ import { and, eq } from 'drizzle-orm';
 
 vi.mock('../../src/services/llm-runtime', () => {
   return {
-    callOpenAI: vi.fn(),
-    callOpenAIResponseStream: vi.fn(),
+    callLLM: vi.fn(),
+    callLLMStream: vi.fn(),
   };
 });
 
@@ -19,7 +19,7 @@ import {
 } from '../../src/db/schema';
 import { createId } from '../../src/utils/id';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
-import { callOpenAI, callOpenAIResponseStream } from '../../src/services/llm-runtime';
+import { callLLM, callLLMStream } from '../../src/services/llm-runtime';
 import { chatService } from '../../src/services/chat-service';
 
 type StreamEvent = { type: string; data: unknown };
@@ -36,8 +36,8 @@ describe('Chat summary runtime (Lot 4)', () => {
   let sessionId: string;
   let sequence = 1;
 
-  const mockedCallOpenAI = vi.mocked(callOpenAI);
-  const mockedCallOpenAIResponseStream = vi.mocked(callOpenAIResponseStream);
+  const mockedCallLLM = vi.mocked(callLLM);
+  const mockedCallLLMStream = vi.mocked(callLLMStream);
 
   const insertMessage = async (role: 'user' | 'assistant', content: string) => {
     const id = createId();
@@ -77,8 +77,8 @@ describe('Chat summary runtime (Lot 4)', () => {
     });
 
     sequence = 1;
-    mockedCallOpenAI.mockReset();
-    mockedCallOpenAIResponseStream.mockReset();
+    mockedCallLLM.mockReset();
+    mockedCallLLMStream.mockReset();
   });
 
   afterEach(async () => {
@@ -94,16 +94,16 @@ describe('Chat summary runtime (Lot 4)', () => {
   });
 
   it('compacts context when hard threshold is exceeded before model call', async () => {
-    const huge = 'A'.repeat(170_000);
+    const huge = 'A'.repeat(950_000);
     await insertMessage('user', huge);
     await insertMessage('assistant', 'Historique long.');
 
-    mockedCallOpenAI.mockResolvedValue({
+    mockedCallLLM.mockResolvedValue({
       choices: [{ message: { content: '- Summary bullet 1\n- Summary bullet 2' } }],
     } as any);
-    mockedCallOpenAIResponseStream.mockImplementation(() =>
+    mockedCallLLMStream.mockImplementation(() =>
       stream([
-        { type: 'content_delta', data: { delta: 'Réponse finale compacte.' } },
+        { type: 'content_delta', data: { delta: 'low' } },
         { type: 'done', data: {} },
       ]),
     );
@@ -113,13 +113,15 @@ describe('Chat summary runtime (Lot 4)', () => {
       workspaceId,
       sessionId,
       content: 'Continue',
-      model: 'gpt-4.1-nano',
+      providerId: 'mistral',
+      model: 'devstral-2512',
     });
 
     await chatService.runAssistantGeneration({
       userId,
       sessionId,
       assistantMessageId: created.assistantMessageId,
+      providerId: 'mistral',
       model: created.model,
     });
 
@@ -134,14 +136,20 @@ describe('Chat summary runtime (Lot 4)', () => {
     expect(states).toContain('context_budget_update');
     expect(states).toContain('context_compaction_started');
     expect(states).toContain('context_compaction_done');
-    expect(mockedCallOpenAI).toHaveBeenCalledTimes(1);
+    expect(mockedCallLLM).toHaveBeenCalledTimes(1);
   });
 
   it('returns context_budget_risk deferred tool result before oversized tool dispatch', async () => {
-    const nearSoft = 'B'.repeat(106_000);
+    const nearSoft = 'B'.repeat(880_000);
     await insertMessage('user', nearSoft);
 
-    mockedCallOpenAIResponseStream
+    mockedCallLLMStream
+      .mockImplementationOnce(() =>
+        stream([
+          { type: 'content_delta', data: { delta: 'low' } },
+          { type: 'done', data: {} },
+        ]),
+      )
       .mockImplementationOnce(() =>
         stream([
           {
@@ -167,13 +175,15 @@ describe('Chat summary runtime (Lot 4)', () => {
       workspaceId,
       sessionId,
       content: 'Fais une extraction web exhaustive',
-      model: 'gpt-4.1-nano',
+      providerId: 'mistral',
+      model: 'devstral-2512',
     });
 
     await chatService.runAssistantGeneration({
       userId,
       sessionId,
       assistantMessageId: created.assistantMessageId,
+      providerId: 'mistral',
       model: created.model,
       tools: ['web_search'],
     });
