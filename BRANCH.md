@@ -216,10 +216,21 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
 - [ ] **Lot N — Final validation**
   - [x] CI: wire `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY` secrets in `ci.yml` (5 env blocks)
   - [x] SCW: add `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY`, `GEMINI_API_KEY` to `poc-containers` namespace
-  - [ ] Add missing stream reasoning tests:
-    - [ ] Magistral Medium: thinking chunks (`type: "thinking"` array in delta.content)
-    - [ ] Cohere Command A R.: thinking blocks (`content-delta` with `thinking` field)
-    - [ ] Gemini Pro: reasoning (if applicable, check stream format)
+  - [x] Add missing stream reasoning tests:
+    - [x] Magistral Medium: thinking chunks (`type: "thinking"` array in delta.content)
+    - [x] Cohere Command A R.: thinking blocks (`content-delta` with `thinking` field)
+    - [x] Gemini Pro: reasoning not implemented in streaming code, no test needed
+  - Test coverage per model (unit stream tests):
+    - [x] claude-sonnet-4-6: chat ✓, tools ✓, reasoning N/A
+    - [x] claude-opus-4-6: chat ✓, tools ✓, reasoning ✓
+    - [x] magistral-medium-2509: chat ✓, tools ✓, reasoning ✓
+    - [x] command-a-03-2025: chat ✓, tools ✓, reasoning N/A
+    - [x] command-a-reasoning-08-2025: chat ✓, tools ✓, reasoning ✓
+    - [ ] gpt-5.4: chat ❌, tools ❌, reasoning ❌ — deferred to BR-14 (preexisting gap, not introduced by BR-08)
+    - [ ] gpt-4.1-nano: chat ❌ (unit stream), tools ❌ (unit stream) — covered by AI integ tests; unit stream deferred to BR-14
+    - [ ] gemini-3.1-pro-preview-customtools: chat ❌, tools ❌, reasoning ❌ — deferred to BR-14 (preexisting gap)
+    - [ ] gemini-3.1-flash-lite-preview: chat ❌, tools ❌, reasoning N/A — deferred to BR-14 (preexisting gap)
+    - [ ] devstral-2512: chat ❌, tools ❌, reasoning N/A — deferred to BR-14 (preexisting gap, uses same Mistral stream path as magistral)
   - [ ] Typecheck & Lint: `make typecheck-api typecheck-ui lint-api lint-ui ENV=test-feat-model-runtime-claude-mistral`
   - [ ] Retest API: `make test-api ENV=test-feat-model-runtime-claude-mistral`
   - [ ] Retest UI: `make test-ui ENV=test`
