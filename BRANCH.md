@@ -139,7 +139,7 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
   - [x] Bug 18 — Mistral rejette `responseFormat: json_object` combiné avec `tools` (erreur 3051) → skip responseFormat quand tools présents
   - [x] Bug 19 — Cohere Command A R. `tool_choice` not supported → skip pour reasoning model
   - [x] Bug 20 — Cohere Command A R. reasoning non affiché → thinking blocks dans `content-delta` (champ `thinking` vs `text`)
-  - [ ] Bug 12 — Renommer `callOpenAIResponseStream` → nom provider-agnostic (cosmétique, trompeur)
+  - [x] Bug 12 — Renommer `callOpenAI`/`callOpenAIResponseStream` → `callLLM`/`callLLMStream` (provider-agnostic)
   - [x] Bug 13 — Supprimer `callOpenAIStream` (ancien path sans Responses API) → supprimée, tests migrés vers `callOpenAIResponseStream`
   - [x] Validation — Anthropic Sonnet 4.6 (`claude-sonnet-4-6`)
     - [x] Chat simple

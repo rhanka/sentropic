@@ -1,6 +1,6 @@
 import { env } from '../config/env';
 import fetch from "node-fetch";
-import { callOpenAIResponseStream } from './llm-runtime';
+import { callLLMStream } from './llm-runtime';
 import type { StreamEventType } from './llm-runtime';
 import type OpenAI from 'openai';
 import { generateStreamId, getNextSequence, writeStreamEvent } from './stream-service';
@@ -952,7 +952,7 @@ export const executeWithToolsStream = async (
   let accumulatedContent = '';
 
   if (!useWebSearch) {
-    for await (const event of callOpenAIResponseStream({
+    for await (const event of callLLMStream({
       messages: [{ role: 'user', content: prompt }],
       model,
       responseFormat,
@@ -982,7 +982,7 @@ export const executeWithToolsStream = async (
     ...(useDocuments && allowedDocumentsContexts.length > 0 ? [documentsTool] : [])
   ];
 
-  for await (const event of callOpenAIResponseStream({
+  for await (const event of callLLMStream({
     messages: [
       { role: 'system', content: WEB_TOOLS_SYSTEM_PROMPT },
       { role: 'user', content: prompt }
@@ -1167,7 +1167,7 @@ export const executeWithToolsStream = async (
 
   // 2e appel (streaming) avec les résultats — identique à executeWithTools
   accumulatedContent = '';
-  for await (const event of callOpenAIResponseStream({
+  for await (const event of callLLMStream({
       messages: [
       { role: 'system', content: WEB_TOOLS_FOLLOWUP_SYSTEM_PROMPT },
       { role: 'user', content: prompt },

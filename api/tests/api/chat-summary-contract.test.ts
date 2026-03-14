@@ -2,15 +2,15 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 vi.mock('../../src/services/llm-runtime', () => {
   return {
-    callOpenAI: vi.fn(),
-    callOpenAIResponseStream: vi.fn(),
+    callLLM: vi.fn(),
+    callLLMStream: vi.fn(),
   };
 });
 
 import { app } from '../../src/app';
 import { chatService } from '../../src/services/chat-service';
 import { queueManager } from '../../src/services/queue-manager';
-import { callOpenAIResponseStream } from '../../src/services/llm-runtime';
+import { callLLMStream } from '../../src/services/llm-runtime';
 import {
   authenticatedRequest,
   cleanupAuthData,
@@ -28,12 +28,12 @@ async function* stream(events: StreamEvent[]): AsyncGenerator<StreamEvent, void,
 describe('Chat summary contract endpoint', () => {
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
   let processJobsSpy: ReturnType<typeof vi.spyOn>;
-  const mockedCallOpenAIResponseStream = vi.mocked(callOpenAIResponseStream);
+  const mockedCallLLMStream = vi.mocked(callLLMStream);
 
   beforeEach(async () => {
     processJobsSpy = vi.spyOn(queueManager, 'processJobs').mockResolvedValue(undefined);
     user = await createAuthenticatedUser('editor');
-    mockedCallOpenAIResponseStream.mockReset();
+    mockedCallLLMStream.mockReset();
   });
 
   afterEach(async () => {
@@ -47,7 +47,7 @@ describe('Chat summary contract endpoint', () => {
   });
 
   it('exposes context budget status events in session bootstrap assistant details', async () => {
-    mockedCallOpenAIResponseStream.mockImplementation(() =>
+    mockedCallLLMStream.mockImplementation(() =>
       stream([
         { type: 'content_delta', data: { delta: 'Réponse test budget.' } },
         { type: 'done', data: {} },

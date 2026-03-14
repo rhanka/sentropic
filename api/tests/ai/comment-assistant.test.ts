@@ -18,13 +18,13 @@ import { chatService } from '../../src/services/chat-service';
 import { toolService } from '../../src/services/tool-service';
 import { createId } from '../../src/utils/id';
 
-const mockCallOpenAI = vi.fn();
-const mockCallOpenAIResponseStream = vi.fn();
+const mockCallLLM = vi.fn();
+const mockCallLLMStream = vi.fn();
 
 vi.mock('../../src/services/llm-runtime', async () => {
   return {
-    callOpenAI: (args: any) => mockCallOpenAI(args),
-    callOpenAIResponseStream: (args: any) => mockCallOpenAIResponseStream(args),
+    callLLM: (args: any) => mockCallLLM(args),
+    callLLMStream: (args: any) => mockCallLLMStream(args),
   };
 });
 
@@ -35,14 +35,14 @@ describe('AI - comment_assistant tool exposure', () => {
 
   beforeEach(async () => {
     await cleanupAuthData();
-    mockCallOpenAI.mockReset();
-    mockCallOpenAIResponseStream.mockReset();
+    mockCallLLM.mockReset();
+    mockCallLLMStream.mockReset();
 
-    mockCallOpenAI.mockResolvedValue({
+    mockCallLLM.mockResolvedValue({
       choices: [{ message: { content: 'Titre' } }],
     });
 
-    mockCallOpenAIResponseStream.mockImplementation((options: any) => {
+    mockCallLLMStream.mockImplementation((options: any) => {
       async function* stream() {
         void options;
         yield { type: 'content_delta', data: { delta: 'ok' } };
@@ -81,7 +81,7 @@ describe('AI - comment_assistant tool exposure', () => {
   });
 
   it('exposes comment_assistant tool by default when comment contexts exist', async () => {
-    mockCallOpenAIResponseStream.mockImplementation((options: any) => {
+    mockCallLLMStream.mockImplementation((options: any) => {
       async function* stream() {
         void options;
         yield { type: 'content_delta', data: { delta: 'ok' } };
@@ -112,7 +112,7 @@ describe('AI - comment_assistant tool exposure', () => {
     });
 
     const toolsFromCalls =
-      mockCallOpenAIResponseStream.mock.calls.map((call) => call[0]?.tools).find(Array.isArray) ?? [];
+      mockCallLLMStream.mock.calls.map((call) => call[0]?.tools).find(Array.isArray) ?? [];
     const toolNames = toolsFromCalls
       .map((t) => (t.type === 'function' ? t.function?.name : null))
       .filter(Boolean);

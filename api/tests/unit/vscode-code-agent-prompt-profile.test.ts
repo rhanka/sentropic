@@ -3,8 +3,8 @@ import { and, eq } from 'drizzle-orm';
 
 vi.mock('../../src/services/llm-runtime', () => {
   return {
-    callOpenAI: vi.fn(),
-    callOpenAIResponseStream: vi.fn(),
+    callLLM: vi.fn(),
+    callLLMStream: vi.fn(),
   };
 });
 
@@ -17,7 +17,7 @@ import {
   workspaceMemberships,
   workspaces,
 } from '../../src/db/schema';
-import { callOpenAIResponseStream } from '../../src/services/llm-runtime';
+import { callLLMStream } from '../../src/services/llm-runtime';
 import { chatService } from '../../src/services/chat-service';
 import type { VsCodeCodeAgentRuntimePayload } from '../../src/services/chat-service';
 import { createId } from '../../src/utils/id';
@@ -36,7 +36,7 @@ describe('VSCode code-agent prompt profile', () => {
   let workspaceId: string;
   let sessionId: string;
 
-  const mockedCallOpenAIResponseStream = vi.mocked(callOpenAIResponseStream);
+  const mockedCallLLMStream = vi.mocked(callLLMStream);
 
   beforeEach(async () => {
     userId = createId();
@@ -62,8 +62,8 @@ describe('VSCode code-agent prompt profile', () => {
       updatedAt: new Date(),
     });
 
-    mockedCallOpenAIResponseStream.mockReset();
-    mockedCallOpenAIResponseStream.mockImplementation(() =>
+    mockedCallLLMStream.mockReset();
+    mockedCallLLMStream.mockImplementation(() =>
       stream([
         { type: 'content_delta', data: { delta: 'Réponse test.' } },
         { type: 'done', data: {} },
@@ -122,8 +122,8 @@ describe('VSCode code-agent prompt profile', () => {
       ],
     });
 
-    expect(mockedCallOpenAIResponseStream).toHaveBeenCalled();
-    const firstCall = mockedCallOpenAIResponseStream.mock.calls[0]?.[0] as
+    expect(mockedCallLLMStream).toHaveBeenCalled();
+    const firstCall = mockedCallLLMStream.mock.calls[0]?.[0] as
       | { messages?: Array<{ role: string; content: string }> }
       | undefined;
     const systemPrompt = firstCall?.messages?.[0]?.content ?? '';
@@ -140,7 +140,7 @@ describe('VSCode code-agent prompt profile', () => {
       instructionFiles: [],
     });
 
-    const firstCall = mockedCallOpenAIResponseStream.mock.calls[0]?.[0] as
+    const firstCall = mockedCallLLMStream.mock.calls[0]?.[0] as
       | { messages?: Array<{ role: string; content: string }> }
       | undefined;
     const systemPrompt = firstCall?.messages?.[0]?.content ?? '';
@@ -180,7 +180,7 @@ describe('VSCode code-agent prompt profile', () => {
           },
         }),
       ).rejects.toThrow(/VSCode code-agent prompt is invalid/i);
-      expect(mockedCallOpenAIResponseStream).not.toHaveBeenCalled();
+      expect(mockedCallLLMStream).not.toHaveBeenCalled();
     } finally {
       promptSpy.mockRestore();
     }

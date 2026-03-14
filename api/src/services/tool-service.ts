@@ -16,7 +16,7 @@ import {
 import { createId } from '../utils/id';
 import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 import { extractDocumentInfoFromDocument } from './document-text';
-import { callOpenAI } from './llm-runtime';
+import { callLLM } from './llm-runtime';
 import { defaultPrompts } from '../config/default-prompts';
 import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from './context-comments';
 import { hasWorkspaceRole } from './workspace-access';
@@ -1745,7 +1745,7 @@ export class ToolService {
         ),
       );
 
-      const response = await callOpenAI({
+      const response = await callLLM({
         messages: [{ role: 'user', content: userPrompt }],
         model: options.model,
         maxOutputTokens: 25_000,
@@ -1778,7 +1778,7 @@ export class ToolService {
           options.perChunkMaxWords,
         ),
       );
-      const response = await callOpenAI({
+      const response = await callLLM({
         messages: [{ role: 'user', content: userPrompt }],
         model: options.model,
         maxOutputTokens: 6_000,
@@ -1800,7 +1800,7 @@ export class ToolService {
       ),
     );
 
-    const merged = await callOpenAI({
+    const merged = await callLLM({
       messages: [{ role: 'user', content: mergedPrompt }],
       model: options.model,
       maxOutputTokens: 20_000,

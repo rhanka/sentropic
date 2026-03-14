@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 
 vi.mock('../../src/services/llm-runtime', () => ({
-  callOpenAI: vi.fn(),
+  callLLM: vi.fn(),
 }));
 
 import { db } from '../../src/db/client';
@@ -10,9 +10,9 @@ import { chatMessages, chatSessions, users, workspaces, workspaceMemberships } f
 import { createId } from '../../src/utils/id';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
 import { toolService } from '../../src/services/tool-service';
-import { callOpenAI } from '../../src/services/llm-runtime';
+import { callLLM } from '../../src/services/llm-runtime';
 
-const mockedCallOpenAI = vi.mocked(callOpenAI);
+const mockedCallLLM = vi.mocked(callLLM);
 
 describe('toolService.analyzeHistory', () => {
   let userId: string;
@@ -80,7 +80,7 @@ describe('toolService.analyzeHistory', () => {
       },
     ]);
 
-    mockedCallOpenAI.mockReset();
+    mockedCallLLM.mockReset();
   });
 
   afterEach(async () => {
@@ -95,7 +95,7 @@ describe('toolService.analyzeHistory', () => {
   });
 
   it('returns answer + evidence + coverage on valid history scope', async () => {
-    mockedCallOpenAI.mockResolvedValue({
+    mockedCallLLM.mockResolvedValue({
       choices: [
         {
           message: {
@@ -122,7 +122,7 @@ describe('toolService.analyzeHistory', () => {
   });
 
   it('supports target_tool_call_id and truncation by max_turns', async () => {
-    mockedCallOpenAI.mockResolvedValue({
+    mockedCallLLM.mockResolvedValue({
       choices: [
         {
           message: {
@@ -147,7 +147,7 @@ describe('toolService.analyzeHistory', () => {
   });
 
   it('rejects history analysis when session workspace mismatches', async () => {
-    mockedCallOpenAI.mockResolvedValue({
+    mockedCallLLM.mockResolvedValue({
       choices: [{ message: { content: 'N/A' } }],
     } as any);
 
