@@ -214,6 +214,12 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
   - [x] `PLAN.md`: update BR-08 status to `done`
 
 - [ ] **Lot N — Final validation**
+  - [x] CI: wire `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY` secrets in `ci.yml` (5 env blocks)
+  - [x] SCW: add `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, `COHERE_API_KEY`, `GEMINI_API_KEY` to `poc-containers` namespace
+  - [ ] Add missing stream reasoning tests:
+    - [ ] Magistral Medium: thinking chunks (`type: "thinking"` array in delta.content)
+    - [ ] Cohere Command A R.: thinking blocks (`content-delta` with `thinking` field)
+    - [ ] Gemini Pro: reasoning (if applicable, check stream format)
   - [ ] Typecheck & Lint: `make typecheck-api typecheck-ui lint-api lint-ui ENV=test-feat-model-runtime-claude-mistral`
   - [ ] Retest API: `make test-api ENV=test-feat-model-runtime-claude-mistral`
   - [ ] Retest UI: `make test-ui ENV=test`
