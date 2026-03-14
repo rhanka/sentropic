@@ -19,6 +19,21 @@ import {
   type OpenAIGenerateRequest,
   type OpenAIStreamGenerateRequest
 } from '../providers/openai-provider';
+import {
+  ClaudeProviderRuntime,
+  type ClaudeGenerateRequest,
+  type ClaudeStreamGenerateRequest
+} from '../providers/claude-provider';
+import {
+  MistralProviderRuntime,
+  type MistralGenerateRequest,
+  type MistralStreamGenerateRequest
+} from '../providers/mistral-provider';
+import {
+  CohereProviderRuntime,
+  type CohereGenerateRequest,
+  type CohereStreamGenerateRequest
+} from '../providers/cohere-provider';
 import { isProviderId, type ProviderId } from '../provider-runtime';
 import { settingsService } from '../settings';
 import { createId } from '../../utils/id';
@@ -29,6 +44,18 @@ const getOpenAIProvider = (): OpenAIProviderRuntime => {
 
 const getGeminiProvider = (): GeminiProviderRuntime => {
   return providerRegistry.requireProvider('gemini') as GeminiProviderRuntime;
+};
+
+const getClaudeProvider = (): ClaudeProviderRuntime => {
+  return providerRegistry.requireProvider('anthropic') as ClaudeProviderRuntime;
+};
+
+const getMistralProvider = (): MistralProviderRuntime => {
+  return providerRegistry.requireProvider('mistral') as MistralProviderRuntime;
+};
+
+const getCohereProvider = (): CohereProviderRuntime => {
+  return providerRegistry.requireProvider('cohere') as CohereProviderRuntime;
 };
 
 const pickProviderCapabilities = (providerId: ProviderId) =>
@@ -103,7 +130,7 @@ const buildCredentialResolutionContext = (options: {
   });
 };
 
-export interface CallOpenAIOptions {
+export interface CallLLMOptions {
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
   providerId?: ProviderId;
   model?: string;
@@ -121,7 +148,7 @@ export interface CallOpenAIOptions {
   signal?: AbortSignal;
 }
 
-export interface CallOpenAIResponseOptions {
+export interface CallLLMStreamOptions {
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
   providerId?: ProviderId;
   model?: string;
@@ -417,10 +444,303 @@ const normalizeGeminiToolArgs = (
   }
 };
 
+// ---------------------------------------------------------------------------
+// Claude message format conversion
+// ---------------------------------------------------------------------------
+
+type ClaudeMessage = {
+  role: 'user' | 'assistant';
+  content: string | Array<Record<string, unknown>>;
+};
+
+const buildClaudeMessages = (
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+): { system: string; messages: ClaudeMessage[] } => {
+  const systemParts: string[] = [];
+  const claudeMessages: ClaudeMessage[] = [];
+
+  for (const message of messages) {
+    const role = message.role;
+    const content = stringifyContent(
+      (message as unknown as { content?: unknown }).content
+    );
+
+    if (role === 'system' || role === 'developer') {
+      if (content.trim()) systemParts.push(content);
+      continue;
+    }
+
+    if (role === 'tool') {
+      const toolCallId = typeof (message as { tool_call_id?: string }).tool_call_id === 'string'
+        ? (message as { tool_call_id?: string }).tool_call_id
+        : 'tool_call';
+      claudeMessages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: toolCallId,
+            content,
+          },
+        ],
+      });
+      continue;
+    }
+
+    if (role === 'assistant') {
+      // Forward tool_calls as tool_use blocks so Claude can pair tool_results
+      const toolCalls = (message as { tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }> }).tool_calls;
+      if (toolCalls && toolCalls.length > 0) {
+        const contentBlocks: Array<Record<string, unknown>> = [];
+        if (content.trim()) {
+          contentBlocks.push({ type: 'text', text: content });
+        }
+        for (const tc of toolCalls) {
+          let parsedInput: unknown = {};
+          try { parsedInput = JSON.parse(tc.function.arguments || '{}'); } catch { /* keep empty */ }
+          contentBlocks.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.function.name,
+            input: parsedInput,
+          });
+        }
+        claudeMessages.push({ role: 'assistant', content: contentBlocks });
+      } else {
+        claudeMessages.push({ role: 'assistant', content });
+      }
+      continue;
+    }
+
+    claudeMessages.push({ role: 'user', content });
+  }
+
+  return {
+    system: systemParts.join('\n\n'),
+    messages: claudeMessages,
+  };
+};
+
+const buildClaudeTools = (
+  tools?: OpenAI.Chat.Completions.ChatCompletionTool[],
+  toolChoice?: 'auto' | 'required' | 'none'
+): Array<Record<string, unknown>> | undefined => {
+  if (!tools || tools.length === 0 || toolChoice === 'none') return undefined;
+  return tools
+    .filter(isFunctionTool)
+    .filter((tool) => Boolean(tool.function?.name))
+    .map((tool) => ({
+      name: tool.function.name,
+      description: tool.function?.description || '',
+      input_schema: tool.function?.parameters ?? { type: 'object', properties: {} },
+    }));
+};
+
+const extractClaudeText = (payload: unknown): string => {
+  const record = payload as Record<string, unknown> | null;
+  if (!record) return '';
+  const content = Array.isArray(record.content)
+    ? (record.content as Array<Record<string, unknown>>)
+    : [];
+  return content
+    .filter((block) => block.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text as string)
+    .join('');
+};
+
+// ---------------------------------------------------------------------------
+// Mistral message format conversion (OpenAI-compatible)
+// ---------------------------------------------------------------------------
+
+type MistralMessage = {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  [key: string]: unknown;
+};
+
+const buildMistralMessages = (
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+): MistralMessage[] => {
+  return messages.map((m) => {
+    const content = stringifyContent(
+      (m as unknown as { content?: unknown }).content
+    );
+    const role = m.role as MistralMessage['role'];
+    const base: MistralMessage = { role, content };
+    if (role === 'assistant') {
+      // Forward tool_calls from assistant messages (camelCase for Mistral SDK)
+      const src = m as unknown as Record<string, unknown>;
+      const rawCalls = src.toolCalls ?? src.tool_calls;
+      if (Array.isArray(rawCalls) && rawCalls.length > 0) {
+        base.toolCalls = rawCalls.map((tc: Record<string, unknown>) => {
+          const fn = (tc.function ?? tc.fn) as Record<string, unknown> | undefined;
+          return {
+            id: typeof tc.id === 'string' ? tc.id : '',
+            type: 'function' as const,
+            function: {
+              name: typeof fn?.name === 'string' ? fn.name : '',
+              arguments: typeof fn?.arguments === 'string' ? fn.arguments : JSON.stringify(fn?.arguments ?? {}),
+            },
+          };
+        });
+      }
+    }
+    if (role === 'tool') {
+      // Mistral SDK expects camelCase toolCallId + name
+      const src = m as unknown as Record<string, unknown>;
+      const toolCallId = (src.toolCallId ?? src.tool_call_id) as string | undefined;
+      if (toolCallId) base.toolCallId = toolCallId;
+      const name = src.name as string | undefined;
+      if (name) base.name = name;
+    }
+    return base;
+  });
+};
+
+const buildMistralTools = (
+  tools?: OpenAI.Chat.Completions.ChatCompletionTool[],
+  toolChoice?: 'auto' | 'required' | 'none'
+): Array<Record<string, unknown>> | undefined => {
+  if (!tools || tools.length === 0 || toolChoice === 'none') return undefined;
+  return tools
+    .filter(isFunctionTool)
+    .filter((tool) => Boolean(tool.function?.name))
+    .map((tool) => ({
+      type: 'function',
+      function: {
+        name: tool.function.name,
+        description: tool.function?.description || '',
+        parameters: tool.function?.parameters ?? { type: 'object', properties: {} },
+      },
+    }));
+};
+
+const extractMistralText = (payload: unknown): string => {
+  const record = payload as Record<string, unknown> | null;
+  if (!record) return '';
+  const choices = Array.isArray(record.choices)
+    ? (record.choices as Array<Record<string, unknown>>)
+    : [];
+  const first = choices[0];
+  if (!first) return '';
+  const message = first.message as Record<string, unknown> | undefined;
+  return typeof message?.content === 'string' ? message.content : '';
+};
+
+// ---------------------------------------------------------------------------
+// Cohere message format conversion (V2 API - OpenAI-compatible)
+// ---------------------------------------------------------------------------
+
+type CohereMessage = {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  [key: string]: unknown;
+};
+
+const buildCohereMessages = (
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
+): CohereMessage[] => {
+  return messages.map((m) => {
+    const content = stringifyContent(
+      (m as unknown as { content?: unknown }).content
+    );
+    const role = (m.role === 'developer' ? 'system' : m.role) as CohereMessage['role'];
+    const base: CohereMessage = { role, content };
+    if (role === 'assistant') {
+      // Forward toolCalls from assistant messages (camelCase for Cohere SDK)
+      const src = m as unknown as Record<string, unknown>;
+      const rawCalls = src.tool_calls ?? src.toolCalls;
+      if (Array.isArray(rawCalls) && rawCalls.length > 0) {
+        base.toolCalls = rawCalls.map((tc: Record<string, unknown>) => {
+          const fn = (tc.function ?? tc.fn) as Record<string, unknown> | undefined;
+          return {
+            id: typeof tc.id === 'string' ? tc.id : '',
+            type: 'function' as const,
+            function: {
+              name: typeof fn?.name === 'string' ? fn.name : '',
+              arguments: typeof fn?.arguments === 'string' ? fn.arguments : JSON.stringify(fn?.arguments ?? {}),
+            },
+          };
+        });
+      }
+    }
+    if (role === 'tool') {
+      // Cohere SDK expects camelCase toolCallId
+      const src = m as unknown as Record<string, unknown>;
+      const toolCallId = (src.tool_call_id ?? src.toolCallId) as string | undefined;
+      if (toolCallId) base.toolCallId = toolCallId;
+    }
+    return base;
+  });
+};
+
+const buildCohereTools = (
+  tools?: OpenAI.Chat.Completions.ChatCompletionTool[],
+  toolChoice?: 'auto' | 'required' | 'none'
+): Array<Record<string, unknown>> | undefined => {
+  if (!tools || tools.length === 0 || toolChoice === 'none') return undefined;
+  return tools
+    .filter(isFunctionTool)
+    .filter((tool) => Boolean(tool.function?.name))
+    .map((tool) => ({
+      type: 'function',
+      function: {
+        name: tool.function.name,
+        description: tool.function?.description || '',
+        parameters: tool.function?.parameters ?? { type: 'object', properties: {} },
+      },
+    }));
+};
+
+const extractCohereText = (payload: unknown): string => {
+  const record = payload as Record<string, unknown> | null;
+  if (!record) return '';
+  const message = record.message as Record<string, unknown> | undefined;
+  if (!message) return '';
+  const content = Array.isArray(message.content)
+    ? (message.content as Array<Record<string, unknown>>)
+    : [];
+  return content
+    .filter((block) => block.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text as string)
+    .join('');
+};
+
+// ---------------------------------------------------------------------------
+// Reasoning parameter mapping
+// ---------------------------------------------------------------------------
+
+const CLAUDE_REASONING_BUDGET: Record<string, number> = {
+  low: 1024,
+  medium: 4096,
+  high: 16384,
+  xhigh: 32768,
+};
+
+const mapClaudeReasoningParams = (
+  model: string,
+  reasoningEffort?: string
+): { thinkingParams: Record<string, unknown>; minMaxTokens: number } | undefined => {
+  // Extended thinking is available on Claude Opus and Sonnet (4+)
+  if (!model.includes('opus') && !model.includes('sonnet')) return undefined;
+  if (!reasoningEffort || reasoningEffort === 'none') return undefined;
+  const budgetTokens = CLAUDE_REASONING_BUDGET[reasoningEffort] ?? CLAUDE_REASONING_BUDGET.medium;
+  return {
+    thinkingParams: {
+      thinking: {
+        type: 'enabled',
+        budget_tokens: budgetTokens,
+      },
+    },
+    // Claude requires max_tokens > budget_tokens
+    minMaxTokens: budgetTokens + 4096,
+  };
+};
+
 /**
  * Méthode unique pour tous les appels OpenAI (non-streaming)
  */
-export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
+export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Completions.ChatCompletion> => {
   const {
     messages,
     providerId,
@@ -451,6 +771,10 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
     capabilities.supportsTools && toolChoice !== 'none' ? tools : undefined;
   const normalizedToolChoice =
     !capabilities.supportsTools && toolChoice !== 'none' ? 'none' : toolChoice;
+  // Structured output routing constraint: warn if provider does not support structured output
+  if (!capabilities.supportsStructuredOutput && responseFormat) {
+    console.warn(`[llm-runtime] Provider ${selection.providerId} does not support structured output — responseFormat ignored`);
+  }
 
   if (!capabilities.supportsStreaming) {
     throw new Error(`Provider ${selection.providerId} does not support streaming`);
@@ -497,6 +821,137 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
     } as unknown as OpenAI.Chat.Completions.ChatCompletion;
   }
 
+  if (selection.providerId === 'anthropic') {
+    const provider = getClaudeProvider();
+    const { system, messages: claudeMessages } = buildClaudeMessages(messages);
+    const claudeTools = buildClaudeTools(filteredTools, normalizedToolChoice);
+    const raw = await provider.generate({
+      mode: 'messages',
+      requestOptions: {
+        model: selection.model,
+        max_tokens: typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+          ? Math.floor(maxOutputTokens)
+          : 4096,
+        ...(system ? { system } : {}),
+        messages: claudeMessages as unknown[],
+        ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
+        // Claude API does not support response_format — JSON output must be requested via prompt
+      } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
+      credential: credentialResolution.credential ?? undefined,
+      signal,
+    } satisfies ClaudeGenerateRequest);
+
+    const text = extractClaudeText(raw);
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return {
+      id: `claude_${createId()}`,
+      object: 'chat.completion',
+      created: nowSeconds,
+      model: selection.model,
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: {
+            role: 'assistant',
+            content: text,
+            refusal: null,
+          },
+          logprobs: null,
+        },
+      ],
+      usage: null,
+    } as unknown as OpenAI.Chat.Completions.ChatCompletion;
+  }
+
+  if (selection.providerId === 'mistral') {
+    const provider = getMistralProvider();
+    const mistralMessages = buildMistralMessages(messages);
+    const mistralTools = buildMistralTools(filteredTools, normalizedToolChoice);
+    const raw = await provider.generate({
+      mode: 'chat-completions',
+      requestOptions: {
+        model: selection.model,
+        messages: mistralMessages,
+        ...(mistralTools ? { tools: mistralTools } : {}),
+        ...(!mistralTools && responseFormat === 'json_object'
+          ? { responseFormat: { type: 'json_object' } }
+          : {}),
+        ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+          ? { max_tokens: Math.floor(maxOutputTokens) }
+          : {}),
+      },
+      credential: credentialResolution.credential ?? undefined,
+      signal,
+    } satisfies MistralGenerateRequest);
+
+    const text = extractMistralText(raw);
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return {
+      id: `mistral_${createId()}`,
+      object: 'chat.completion',
+      created: nowSeconds,
+      model: selection.model,
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: {
+            role: 'assistant',
+            content: text,
+            refusal: null,
+          },
+          logprobs: null,
+        },
+      ],
+      usage: null,
+    } as unknown as OpenAI.Chat.Completions.ChatCompletion;
+  }
+
+  if (selection.providerId === 'cohere') {
+    const provider = getCohereProvider();
+    const cohereMessages = buildCohereMessages(messages);
+    const cohereTools = buildCohereTools(filteredTools, normalizedToolChoice);
+    const raw = await provider.generate({
+      mode: 'chat',
+      requestOptions: {
+        model: selection.model,
+        messages: cohereMessages,
+        ...(cohereTools ? { tools: cohereTools } : {}),
+        ...(responseFormat === 'json_object'
+          ? { response_format: { type: 'json_object' } }
+          : {}),
+        ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+          ? { max_tokens: Math.floor(maxOutputTokens) }
+          : {}),
+      },
+      credential: credentialResolution.credential ?? undefined,
+      signal,
+    } satisfies CohereGenerateRequest);
+
+    const text = extractCohereText(raw);
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return {
+      id: `cohere_${createId()}`,
+      object: 'chat.completion',
+      created: nowSeconds,
+      model: selection.model,
+      choices: [
+        {
+          index: 0,
+          finish_reason: 'stop',
+          message: {
+            role: 'assistant',
+            content: text,
+            refusal: null,
+          },
+          logprobs: null,
+        },
+      ],
+      usage: null,
+    } as unknown as OpenAI.Chat.Completions.ChatCompletion;
+  }
+
   const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
     model: selection.model,
     messages,
@@ -521,260 +976,11 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
 };
 
 /**
- * Méthode pour les appels OpenAI en streaming
- * Retourne un AsyncIterable de StreamEvent normalisés
- */
-export async function* callOpenAIStream(
-  options: CallOpenAIOptions
-): AsyncGenerator<StreamEvent, void, unknown> {
-  const {
-    messages,
-    providerId,
-    model,
-    credential,
-    userId,
-    workspaceId,
-    tools,
-    toolChoice = 'auto',
-    responseFormat,
-    maxOutputTokens,
-    signal
-  } = options;
-
-  const selection = await resolveRuntimeSelection({
-    providerId,
-    model,
-    userId,
-  });
-  const credentialResolution = await buildCredentialResolutionContext({
-    providerId: selection.providerId,
-    credential,
-    userId,
-    workspaceId,
-  });
-  const capabilities = pickProviderCapabilities(selection.providerId);
-  const filteredTools =
-    capabilities.supportsTools && toolChoice !== 'none' ? tools : undefined;
-  const normalizedToolChoice =
-    !capabilities.supportsTools && toolChoice !== 'none' ? 'none' : toolChoice;
-
-  if (selection.providerId === 'gemini') {
-    try {
-      yield { type: 'status', data: { state: 'started' } };
-      const provider = getGeminiProvider();
-      const stream = await provider.streamGenerate({
-        mode: 'stream-generate-content',
-        requestOptions: {
-          model: selection.model,
-          body: buildGeminiRequestBody({
-            messages,
-            tools: filteredTools,
-            toolChoice: normalizedToolChoice,
-            responseFormat,
-            maxOutputTokens,
-          }),
-        },
-        credential: credentialResolution.credential ?? undefined,
-        signal,
-      } satisfies GeminiStreamGenerateRequest);
-
-      let toolCallIndex = 0;
-      for await (const chunk of stream) {
-        const record = chunk as Record<string, unknown>;
-        const candidates = Array.isArray(record.candidates)
-          ? (record.candidates as Array<Record<string, unknown>>)
-          : [];
-        const first = candidates[0];
-        if (!first) continue;
-        const content = first.content as Record<string, unknown> | undefined;
-        const parts = Array.isArray(content?.parts)
-          ? (content?.parts as Array<Record<string, unknown>>)
-          : [];
-        for (const part of parts) {
-          if (typeof part.text === 'string' && part.text) {
-            yield { type: 'content_delta', data: { delta: part.text } };
-          }
-          const functionCall = part.functionCall as Record<string, unknown> | undefined;
-          if (functionCall && typeof functionCall.name === 'string') {
-            toolCallIndex += 1;
-            const toolCallId = `gemini_call_${toolCallIndex}`;
-            yield {
-              type: 'tool_call_start',
-              data: {
-                tool_call_id: toolCallId,
-                name: functionCall.name,
-                args: normalizeGeminiToolArgs(functionCall.args),
-              },
-            };
-          }
-        }
-      }
-      yield { type: 'done', data: {} };
-      return;
-    } catch (error) {
-      const normalized = getGeminiProvider().normalizeError(error);
-      yield {
-        type: 'error',
-        data: {
-          message: normalized.message,
-          ...(normalized.code ? { code: normalized.code } : {}),
-        },
-      };
-      throw error;
-    }
-  }
-
-  const requestOptions: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-    model: selection.model,
-    messages,
-    stream: true,
-    ...(filteredTools && { tools: filteredTools }),
-    ...(normalizedToolChoice !== 'auto' && { tool_choice: normalizedToolChoice }),
-    ...(responseFormat && { response_format: { type: responseFormat } }),
-    ...(typeof maxOutputTokens === 'number' && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
-      ? { max_tokens: Math.floor(maxOutputTokens) }
-      : {})
-  };
-
-  // État pour tracker les tool calls en cours
-  const toolCallsInProgress = new Map<string, {
-    id: string;
-    name: string;
-    args: string;
-  }>();
-
-  try {
-    // Envoyer un événement status 'started'
-    yield { type: 'status', data: { state: 'started' } };
-
-    const provider = getOpenAIProvider();
-    const stream = await provider.streamGenerate({
-      mode: 'chat-completions',
-      requestOptions,
-      credential: credentialResolution.credential ?? undefined,
-      signal
-    } satisfies OpenAIStreamGenerateRequest) as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
-
-    for await (const chunk of stream) {
-      if (signal?.aborted) {
-        yield { type: 'error', data: { message: 'Stream aborted' } };
-        return;
-      }
-
-      const choice = chunk.choices[0];
-      if (!choice) continue;
-
-      const delta = choice.delta;
-
-      // Gérer le reasoning (pour modèles comme o1, o3, gpt-5)
-      // Le reasoning peut être dans delta.reasoning ou dans un champ spécifique
-      // Vérifier si le chunk contient des informations de reasoning
-      // Note: La structure exacte dépend de la version de l'API OpenAI
-      const reasoning = (delta as unknown as { reasoning?: unknown }).reasoning;
-      if (typeof reasoning === 'string' && reasoning) {
-        yield {
-          type: 'reasoning_delta',
-          data: { delta: reasoning }
-        };
-      }
-
-      // Gérer le contenu (content)
-      if (delta.content) {
-        yield {
-          type: 'content_delta',
-          data: { delta: delta.content }
-        };
-      }
-
-      // Gérer les tool calls
-      if (delta.tool_calls) {
-        for (const toolCallDelta of delta.tool_calls) {
-          const toolCallId = toolCallDelta.id;
-          const toolCallIndex = toolCallDelta.index;
-
-          // Utiliser index comme clé si id n'est pas encore disponible
-          const trackingKey = toolCallId || `index_${toolCallIndex}`;
-
-          // Nouveau tool call : index est défini et on n'a pas encore vu ce tool call
-          if (toolCallIndex !== undefined && !toolCallsInProgress.has(trackingKey)) {
-            const toolCallData = {
-              id: toolCallId || '',
-              name: toolCallDelta.function?.name || '',
-              args: toolCallDelta.function?.arguments || ''
-            };
-            
-            toolCallsInProgress.set(trackingKey, toolCallData);
-
-            // Si on a maintenant un id, mettre à jour la clé
-            if (toolCallId && trackingKey !== toolCallId) {
-              toolCallsInProgress.delete(trackingKey);
-              toolCallsInProgress.set(toolCallId, toolCallData);
-            }
-
-            yield {
-              type: 'tool_call_start',
-              data: {
-                tool_call_id: toolCallId || trackingKey,
-                name: toolCallDelta.function?.name || '',
-                args: toolCallDelta.function?.arguments || ''
-              }
-            };
-          }
-
-          // Delta d'arguments pour un tool call existant
-          if (toolCallDelta.function?.arguments) {
-            const existing = toolCallsInProgress.get(toolCallId || trackingKey);
-            if (existing) {
-              existing.args += toolCallDelta.function.arguments;
-              
-              yield {
-                type: 'tool_call_delta',
-                data: {
-                  tool_call_id: toolCallId || trackingKey,
-                  delta: toolCallDelta.function.arguments
-                }
-              };
-            }
-          }
-
-          // Mettre à jour le name si présent
-          if (toolCallDelta.function?.name) {
-            const existing = toolCallsInProgress.get(toolCallId || trackingKey);
-            if (existing && !existing.name) {
-              existing.name = toolCallDelta.function.name;
-            }
-          }
-        }
-      }
-
-      // Fin du stream (finish_reason indique la fin)
-      if (choice.finish_reason) {
-        // Nettoyer les tool calls en cours
-        toolCallsInProgress.clear();
-        
-        yield { type: 'done', data: {} };
-        return;
-      }
-    }
-  } catch (error) {
-    const normalized = getOpenAIProvider().normalizeError(error);
-    yield {
-      type: 'error',
-      data: {
-        message: normalized.message,
-        ...(normalized.code ? { code: normalized.code } : {})
-      }
-    };
-    throw error;
-  }
-}
-
-/**
  * Streaming via Responses API (support reasoning, modèle unique)
  * - N'injecte pas de reasoning.effort par défaut (on ne le spécifie que si demandé)
  */
-export async function* callOpenAIResponseStream(
-  options: CallOpenAIResponseOptions
+export async function* callLLMStream(
+  options: CallLLMStreamOptions
 ): AsyncGenerator<StreamEvent, void, unknown> {
   const {
     messages,
@@ -812,6 +1018,12 @@ export async function* callOpenAIResponseStream(
     !capabilities.supportsTools && options.toolChoice !== 'none'
       ? 'none'
       : options.toolChoice;
+  // Structured output routing constraint: warn and degrade if provider does not support structured output
+  if (!capabilities.supportsStructuredOutput && (structuredOutput || responseFormat)) {
+    console.warn(`[llm-runtime] Provider ${selection.providerId} does not support structured output — structuredOutput/responseFormat ignored`);
+  }
+  const effectiveStructuredOutput = capabilities.supportsStructuredOutput ? structuredOutput : undefined;
+  const effectiveResponseFormat = capabilities.supportsStructuredOutput ? responseFormat : undefined;
   const selectedModel = selection.model;
   const codexTransport =
     selection.providerId === 'openai' &&
@@ -834,8 +1046,8 @@ export async function* callOpenAIResponseStream(
       messages,
       tools: filteredTools,
       toolChoice: normalizedToolChoice,
-      responseFormat,
-      structuredOutput,
+      responseFormat: effectiveResponseFormat,
+      structuredOutput: effectiveStructuredOutput,
       maxOutputTokens,
       rawInput,
     });
@@ -931,11 +1143,484 @@ export async function* callOpenAIResponseStream(
     }
   }
 
+  if (selection.providerId === 'anthropic') {
+    const provider = getClaudeProvider();
+    const responseId = previousResponseId || `claude_${createId()}`;
+    const { system, messages: claudeMessages } = buildClaudeMessages(messages);
+    const claudeTools = buildClaudeTools(filteredTools, normalizedToolChoice);
+    const claudeReasoning = mapClaudeReasoningParams(selectedModel, reasoningEffort);
+
+    // Handle rawInput: inject assistant tool_use blocks then user tool_result blocks
+    if (Array.isArray(rawInput) && rawInput.length > 0) {
+      // 1) Collect function_call items → assistant message with tool_use blocks
+      const toolUseBlocks: Array<Record<string, unknown>> = [];
+      for (const item of rawInput) {
+        const record = item as Record<string, unknown>;
+        if (record?.type === 'function_call') {
+          let parsedArgs: unknown = {};
+          try { parsedArgs = JSON.parse(typeof record.arguments === 'string' ? record.arguments : '{}'); } catch { /* keep empty */ }
+          toolUseBlocks.push({
+            type: 'tool_use',
+            id: typeof record.call_id === 'string' ? record.call_id : '',
+            name: typeof record.name === 'string' ? record.name : '',
+            input: parsedArgs,
+          });
+        }
+      }
+      if (toolUseBlocks.length > 0) {
+        claudeMessages.push({ role: 'assistant', content: toolUseBlocks });
+      }
+      // 2) Collect function_call_output items → user message with tool_result blocks
+      const toolResultBlocks: Array<Record<string, unknown>> = [];
+      for (const item of rawInput) {
+        const record = item as Record<string, unknown>;
+        if (record?.type === 'function_call_output') {
+          toolResultBlocks.push({
+            type: 'tool_result',
+            tool_use_id: typeof record.call_id === 'string' ? record.call_id : '',
+            content: stringifyContent(record.output),
+          });
+        }
+      }
+      if (toolResultBlocks.length > 0) {
+        claudeMessages.push({ role: 'user', content: toolResultBlocks });
+      }
+    }
+
+    try {
+      yield { type: 'status', data: { state: 'started' } };
+      yield {
+        type: 'status',
+        data: { state: 'response_created', response_id: responseId },
+      };
+
+      const claudeBaseMaxTokens = typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+        ? Math.floor(maxOutputTokens)
+        : 4096;
+      const claudeMaxTokens = claudeReasoning
+        ? Math.max(claudeBaseMaxTokens, claudeReasoning.minMaxTokens)
+        : claudeBaseMaxTokens;
+
+      const stream = await provider.streamGenerate({
+        mode: 'messages',
+        requestOptions: {
+          model: selectedModel,
+          max_tokens: claudeMaxTokens,
+          ...(system ? { system } : {}),
+          messages: claudeMessages as unknown[],
+          ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
+          ...(claudeReasoning?.thinkingParams ?? {}),
+          // Claude API does not support response_format — JSON output must be requested via prompt
+        } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
+        credential: credentialResolution.credential ?? undefined,
+        signal,
+      } satisfies ClaudeStreamGenerateRequest);
+
+      let emittedContent = false;
+      for await (const chunk of stream) {
+        if (signal?.aborted) {
+          yield { type: 'error', data: { message: 'Stream aborted' } };
+          return;
+        }
+        const event = chunk as Record<string, unknown>;
+        const eventType = typeof event.type === 'string' ? event.type : '';
+
+        if (eventType === 'content_block_delta') {
+          const delta = event.delta as Record<string, unknown> | undefined;
+          if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+            yield { type: 'reasoning_delta', data: { delta: delta.thinking } };
+          } else if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+            emittedContent = true;
+            yield { type: 'content_delta', data: { delta: delta.text } };
+          } else if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+            const contentBlockIndex = typeof event.index === 'number' ? event.index : 0;
+            const toolCallId = `claude_call_${contentBlockIndex}`;
+            yield { type: 'tool_call_delta', data: { tool_call_id: toolCallId, delta: delta.partial_json } };
+          }
+        } else if (eventType === 'content_block_start') {
+          const contentBlock = event.content_block as Record<string, unknown> | undefined;
+          if (contentBlock?.type === 'tool_use') {
+            const contentBlockIndex = typeof event.index === 'number' ? event.index : 0;
+            const toolCallId = `claude_call_${contentBlockIndex}`;
+            const name = typeof contentBlock.name === 'string' ? contentBlock.name : '';
+            yield { type: 'tool_call_start', data: { tool_call_id: toolCallId, name, args: '' } };
+          }
+        } else if (eventType === 'message_stop') {
+          break;
+        }
+      }
+
+      if (!emittedContent && filteredTools && filteredTools.length > 0) {
+        yield {
+          type: 'status',
+          data: {
+            state: 'provider_completed_without_content',
+            provider_id: 'anthropic',
+          },
+        };
+      }
+      yield { type: 'done', data: {} };
+      return;
+    } catch (error) {
+      const normalized = provider.normalizeError(error);
+      yield {
+        type: 'error',
+        data: {
+          message: normalized.message,
+          ...(normalized.code ? { code: normalized.code } : {}),
+        },
+      };
+      throw error;
+    }
+  }
+
+  if (selection.providerId === 'mistral') {
+    const provider = getMistralProvider();
+    const responseId = previousResponseId || `mistral_${createId()}`;
+    const mistralMessages = buildMistralMessages(messages);
+    const mistralTools = buildMistralTools(filteredTools, normalizedToolChoice);
+
+    // Handle rawInput: reconstruct assistant toolCalls + tool results (camelCase for Mistral SDK)
+    if (Array.isArray(rawInput) && rawInput.length > 0) {
+      // 1) Collect function_call items → assistant message with toolCalls
+      const toolCallItems: Array<{ id: string; name: string; arguments: string }> = [];
+      for (const item of rawInput) {
+        const record = item as Record<string, unknown>;
+        if (record?.type === 'function_call') {
+          toolCallItems.push({
+            id: typeof record.call_id === 'string' ? record.call_id : '',
+            name: typeof record.name === 'string' ? record.name : '',
+            arguments: typeof record.arguments === 'string' ? record.arguments : JSON.stringify(record.arguments ?? {}),
+          });
+        }
+      }
+      if (toolCallItems.length > 0) {
+        mistralMessages.push({
+          role: 'assistant',
+          content: '',
+          toolCalls: toolCallItems.map((tc) => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: { name: tc.name, arguments: tc.arguments },
+          })),
+        });
+      }
+      // 2) Collect function_call_output items → tool messages with toolCallId + name
+      for (const item of rawInput) {
+        const record = item as Record<string, unknown>;
+        if (record?.type !== 'function_call_output') continue;
+        const callId = typeof record.call_id === 'string' ? record.call_id : '';
+        const output = stringifyContent(record.output);
+        // Find matching function_call to get the tool name
+        const matchingCall = toolCallItems.find((tc) => tc.id === callId);
+        mistralMessages.push({
+          role: 'tool',
+          content: output,
+          toolCallId: callId,
+          name: matchingCall?.name || 'unknown',
+        });
+      }
+    }
+
+    try {
+      yield { type: 'status', data: { state: 'started' } };
+      yield {
+        type: 'status',
+        data: { state: 'response_created', response_id: responseId },
+      };
+
+      const stream = await provider.streamGenerate({
+        mode: 'chat-completions',
+        requestOptions: {
+          model: selectedModel,
+          messages: mistralMessages,
+          ...(mistralTools ? { tools: mistralTools, toolChoice: normalizedToolChoice === 'required' ? 'any' : normalizedToolChoice } : {}),
+          // Mistral rejects responseFormat combined with tools (error 3051)
+          ...(!mistralTools && (effectiveStructuredOutput || effectiveResponseFormat === 'json_object')
+            ? { responseFormat: { type: 'json_object' } }
+            : {}),
+          ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+            ? { maxTokens: Math.floor(maxOutputTokens) }
+            : {}),
+        },
+        credential: credentialResolution.credential ?? undefined,
+        signal,
+      } satisfies MistralStreamGenerateRequest);
+
+      let emittedContent = false;
+      const mistralToolCallsInProgress = new Map<string, { id: string; name: string; args: string }>();
+
+      for await (const chunk of stream) {
+        if (signal?.aborted) {
+          yield { type: 'error', data: { message: 'Stream aborted' } };
+          return;
+        }
+        const record = chunk as Record<string, unknown>;
+        const data = (record.data ?? record) as Record<string, unknown>;
+        const choices = Array.isArray(data.choices)
+          ? (data.choices as Array<Record<string, unknown>>)
+          : [];
+        const choice = choices[0];
+        if (!choice) continue;
+
+        // Check finishReason BEFORE delta — last chunk may have finishReason but no delta
+        const rawFinishReason = choice.finishReason ?? choice.finish_reason;
+        const finishReason = typeof rawFinishReason === 'string' ? rawFinishReason : null;
+
+        const delta = choice.delta as Record<string, unknown> | undefined;
+
+        if (delta) {
+          // Magistral reasoning: content can be array of {type:"thinking"} / {type:"text"} chunks
+          if (Array.isArray(delta.content)) {
+            for (const chunk of delta.content as Array<Record<string, unknown>>) {
+              if (chunk.type === 'thinking') {
+                const thinkingParts = Array.isArray(chunk.thinking) ? chunk.thinking as Array<Record<string, unknown>> : [];
+                for (const part of thinkingParts) {
+                  if (typeof part.text === 'string' && part.text) {
+                    yield { type: 'reasoning_delta', data: { delta: part.text } };
+                  }
+                }
+              } else if (chunk.type === 'text') {
+                if (typeof chunk.text === 'string' && chunk.text) {
+                  emittedContent = true;
+                  yield { type: 'content_delta', data: { delta: chunk.text } };
+                }
+              }
+            }
+          } else if (typeof delta.content === 'string' && delta.content) {
+            emittedContent = true;
+            yield { type: 'content_delta', data: { delta: delta.content } };
+          }
+
+          // Mistral SDK returns camelCase (toolCalls) not snake_case (tool_calls)
+          const rawToolCalls = delta.toolCalls ?? delta.tool_calls;
+          const toolCalls = Array.isArray(rawToolCalls)
+            ? (rawToolCalls as Array<Record<string, unknown>>)
+            : [];
+          for (const tc of toolCalls) {
+            const tcId = typeof tc.id === 'string' ? tc.id : '';
+            const tcIndex = typeof tc.index === 'number' ? tc.index : 0;
+            const trackingKey = tcId || `mistral_index_${tcIndex}`;
+            const fn = tc.function as Record<string, unknown> | undefined;
+
+            if (!mistralToolCallsInProgress.has(trackingKey)) {
+              mistralToolCallsInProgress.set(trackingKey, {
+                id: tcId,
+                name: typeof fn?.name === 'string' ? fn.name : '',
+                args: typeof fn?.arguments === 'string' ? fn.arguments : '',
+              });
+              yield {
+                type: 'tool_call_start',
+                data: {
+                  tool_call_id: trackingKey,
+                  name: typeof fn?.name === 'string' ? fn.name : '',
+                  args: typeof fn?.arguments === 'string' ? fn.arguments : '',
+                },
+              };
+            } else if (typeof fn?.arguments === 'string' && fn.arguments) {
+              const existing = mistralToolCallsInProgress.get(trackingKey)!;
+              existing.args += fn.arguments;
+              yield { type: 'tool_call_delta', data: { tool_call_id: trackingKey, delta: fn.arguments } };
+            }
+          }
+        }
+
+        if (finishReason) break;
+      }
+
+      if (!emittedContent && filteredTools && filteredTools.length > 0) {
+        yield {
+          type: 'status',
+          data: {
+            state: 'provider_completed_without_content',
+            provider_id: 'mistral',
+          },
+        };
+      }
+      yield { type: 'done', data: {} };
+      return;
+    } catch (error) {
+      const normalized = provider.normalizeError(error);
+      yield {
+        type: 'error',
+        data: {
+          message: normalized.message,
+          ...(normalized.code ? { code: normalized.code } : {}),
+        },
+      };
+      throw error;
+    }
+  }
+
+  if (selection.providerId === 'cohere') {
+    const provider = getCohereProvider();
+    const responseId = previousResponseId || `cohere_${createId()}`;
+    const cohereMessages = buildCohereMessages(messages);
+    const cohereTools = buildCohereTools(filteredTools, normalizedToolChoice);
+
+    // Handle rawInput: reconstruct assistant toolCalls + tool result messages
+    if (Array.isArray(rawInput) && rawInput.length > 0) {
+      // 1) Collect function_call items → assistant message with toolCalls (skip empty/phantom entries)
+      const toolCallItems: Array<{ id: string; name: string; arguments: string }> = [];
+      for (const item of rawInput) {
+        const record = item as Record<string, unknown>;
+        if (record?.type === 'function_call') {
+          const callId = typeof record.call_id === 'string' ? record.call_id : '';
+          const name = typeof record.name === 'string' ? record.name : '';
+          if (!callId || !name) continue; // skip phantom tool calls with empty id/name
+          toolCallItems.push({
+            id: callId,
+            name,
+            arguments: typeof record.arguments === 'string' ? record.arguments : JSON.stringify(record.arguments ?? {}),
+          });
+        }
+      }
+      if (toolCallItems.length > 0) {
+        cohereMessages.push({
+          role: 'assistant',
+          content: '',
+          toolCalls: toolCallItems.map((tc) => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: { name: tc.name, arguments: tc.arguments },
+          })),
+        });
+      }
+      // 2) Collect function_call_output items → tool messages (camelCase toolCallId for Cohere SDK)
+      for (const item of rawInput) {
+        const record = item as Record<string, unknown>;
+        if (record?.type !== 'function_call_output') continue;
+        const callId = typeof record.call_id === 'string' ? record.call_id : '';
+        if (!callId) continue; // skip phantom outputs
+        const output = stringifyContent(record.output);
+        cohereMessages.push({
+          role: 'tool',
+          content: output,
+          toolCallId: callId,
+        });
+      }
+    }
+
+    try {
+      yield { type: 'status', data: { state: 'started' } };
+      yield {
+        type: 'status',
+        data: { state: 'response_created', response_id: responseId },
+      };
+
+      const stream = await provider.streamGenerate({
+        mode: 'chat',
+        requestOptions: {
+          model: selectedModel,
+          messages: cohereMessages,
+          ...(cohereTools
+            ? {
+                tools: cohereTools,
+                // command-a-reasoning does not support tool_choice
+                ...(selectedModel.includes('reasoning') ? {} : { tool_choice: normalizedToolChoice === 'required' ? 'required' : normalizedToolChoice }),
+              }
+            : {}),
+          ...(effectiveStructuredOutput
+            ? { response_format: { type: 'json_object' } }
+            : effectiveResponseFormat === 'json_object'
+              ? { response_format: { type: 'json_object' } }
+              : {}),
+          ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+            ? { max_tokens: Math.floor(maxOutputTokens) }
+            : {}),
+        },
+        credential: credentialResolution.credential ?? undefined,
+        signal,
+      } satisfies CohereStreamGenerateRequest);
+
+      let emittedContent = false;
+      let currentCohereToolCallId = '';
+      for await (const chunk of stream) {
+        if (signal?.aborted) {
+          yield { type: 'error', data: { message: 'Stream aborted' } };
+          return;
+        }
+        const event = chunk as Record<string, unknown>;
+        const eventType = typeof event.type === 'string' ? event.type : '';
+        if (eventType === 'tool-plan-delta') {
+          // Cohere reasoning: tool plan is the model's thinking before tool calls
+          const deltaObj = event.delta as Record<string, unknown> | undefined;
+          const msgObj = deltaObj?.message as Record<string, unknown> | undefined;
+          const toolPlan = typeof msgObj?.toolPlan === 'string' ? msgObj.toolPlan : undefined;
+          if (toolPlan) {
+            yield { type: 'reasoning_delta', data: { delta: toolPlan } };
+          }
+        } else if (eventType === 'content-delta') {
+          const deltaObj = event.delta as Record<string, unknown> | undefined;
+          const msgObj = deltaObj?.message as Record<string, unknown> | undefined;
+          const contentObj = msgObj?.content as Record<string, unknown> | undefined;
+          // Cohere reasoning model: thinking blocks use `thinking` key, text blocks use `text` key
+          const thinking = typeof contentObj?.thinking === 'string' ? contentObj.thinking : undefined;
+          const text = typeof contentObj?.text === 'string' ? contentObj.text : undefined;
+          if (thinking) {
+            yield { type: 'reasoning_delta', data: { delta: thinking } };
+          } else if (text) {
+            emittedContent = true;
+            yield { type: 'content_delta', data: { delta: text } };
+          }
+        } else if (eventType === 'tool-call-start') {
+          // Cohere SDK: delta.message.toolCalls (camelCase, single ToolCallV2)
+          const tcDelta = event.delta as Record<string, unknown> | undefined;
+          const tcMsg = tcDelta?.message as Record<string, unknown> | undefined;
+          const toolCall = (tcMsg?.toolCalls ?? tcDelta?.toolCall ?? tcDelta?.tool_call) as Record<string, unknown> | undefined;
+          const toolCallId = typeof toolCall?.id === 'string' ? toolCall.id : '';
+          const fn = toolCall?.function as Record<string, unknown> | undefined;
+          const name = typeof fn?.name === 'string' ? fn.name : '';
+          if (toolCallId && name) {
+            currentCohereToolCallId = toolCallId;
+            yield { type: 'tool_call_start', data: { tool_call_id: toolCallId, name, args: '' } };
+          }
+        } else if (eventType === 'tool-call-delta') {
+          // Cohere deltas don't carry id — use the id from the last tool-call-start
+          const tcDelta = event.delta as Record<string, unknown> | undefined;
+          const tcMsg = tcDelta?.message as Record<string, unknown> | undefined;
+          const toolCallDelta = (tcMsg?.toolCalls ?? tcDelta?.toolCall ?? tcDelta?.tool_call) as Record<string, unknown> | undefined;
+          const fn = toolCallDelta?.function as Record<string, unknown> | undefined;
+          const args = typeof fn?.arguments === 'string' ? fn.arguments : '';
+          if (currentCohereToolCallId && args) {
+            yield { type: 'tool_call_delta', data: { tool_call_id: currentCohereToolCallId, delta: args } };
+          }
+        } else if (eventType === 'tool-call-end') {
+          currentCohereToolCallId = '';
+        } else if (eventType === 'message-end') {
+          break;
+        }
+      }
+
+      if (!emittedContent && filteredTools && filteredTools.length > 0) {
+        yield {
+          type: 'status',
+          data: {
+            state: 'provider_completed_without_content',
+            provider_id: 'cohere',
+          },
+        };
+      }
+      yield { type: 'done', data: {} };
+      return;
+    } catch (error) {
+      const normalized = provider.normalizeError(error);
+      yield {
+        type: 'error',
+        data: {
+          message: normalized.message,
+          ...(normalized.code ? { code: normalized.code } : {}),
+        },
+      };
+      throw error;
+    }
+  }
+
   // Certains modèles (ex: gpt-4.1-nano-*) ne supportent pas `reasoning.summary`.
   // On désactive complètement `reasoning` pour ces familles afin d'éviter un 400.
   const supportsReasoningParams = !selectedModel.startsWith('gpt-4.1');
 
-  const mapReasoningEffort = (effort: CallOpenAIResponseOptions['reasoningEffort']): unknown => {
+  const mapReasoningEffort = (effort: CallLLMStreamOptions['reasoningEffort']): unknown => {
     if (!effort) return undefined;
     // OpenAI supports (notably for gpt-5-nano): minimal|low|medium|high.
     // App-level accepts: none|low|medium|high|xhigh.
@@ -992,18 +1677,18 @@ export async function* callOpenAIResponseStream(
 
   // Structured output via Responses API: text.format
   const textConfig: OpenAI.Responses.ResponseCreateParamsStreaming['text'] | undefined =
-    structuredOutput
+    effectiveStructuredOutput
       ? {
           format: {
             type: 'json_schema',
-            name: structuredOutput.name,
-            schema: structuredOutput.schema,
-            description: structuredOutput.description,
-            strict: structuredOutput.strict ?? true
+            name: effectiveStructuredOutput.name,
+            schema: effectiveStructuredOutput.schema,
+            description: effectiveStructuredOutput.description,
+            strict: effectiveStructuredOutput.strict ?? true
           }
         }
-      : responseFormat
-        ? { format: { type: responseFormat } }
+      : effectiveResponseFormat
+        ? { format: { type: effectiveResponseFormat } }
         : undefined;
 
   // Reasoning (Responses API):

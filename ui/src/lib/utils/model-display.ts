@@ -1,4 +1,4 @@
-const GEMINI_SHORT_ID_PATTERN = /^gemini-(\d+(?:\.\d+)?)/i;
+import { getModelLabel } from '$lib/stores/modelCatalog';
 
 export const formatCompactModelLabel = (
   model: string | null | undefined,
@@ -6,10 +6,5 @@ export const formatCompactModelLabel = (
   const raw = typeof model === 'string' ? model.trim() : '';
   if (!raw) return '';
 
-  const geminiMatch = raw.match(GEMINI_SHORT_ID_PATTERN);
-  if (geminiMatch?.[1]) {
-    return `gemini-${geminiMatch[1]}`;
-  }
-
-  return raw;
+  return getModelLabel(raw);
 };

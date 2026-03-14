@@ -26,6 +26,9 @@ const normalizeCredential = (value: string | null | undefined): string | null =>
 const getEnvironmentCredential = (providerId: ProviderId): string | null => {
   if (providerId === 'openai') return normalizeCredential(env.OPENAI_API_KEY);
   if (providerId === 'gemini') return normalizeCredential(env.GEMINI_API_KEY);
+  if (providerId === 'anthropic') return normalizeCredential(env.ANTHROPIC_API_KEY);
+  if (providerId === 'mistral') return normalizeCredential(env.MISTRAL_API_KEY);
+  if (providerId === 'cohere') return normalizeCredential(env.COHERE_API_KEY);
   return null;
 };
 

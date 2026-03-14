@@ -1,4 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+
+// Mock the store to return known labels
+vi.mock('$lib/stores/modelCatalog', () => {
+  const labels = new Map([
+    ['gpt-5.4', 'GPT-5.4'],
+    ['claude-sonnet-4-6', 'Sonnet 4.6'],
+    ['magistral-medium-2509', 'Magistral Medium'],
+    ['devstral-2512', 'Devstral 2'],
+  ]);
+  return {
+    getModelLabel: (id: string | null | undefined) => {
+      if (!id) return '';
+      return labels.get(id) ?? id;
+    },
+  };
+});
+
 import { formatCompactModelLabel } from '../../src/lib/utils/model-display';
 
 describe('model display utils', () => {
@@ -8,19 +25,14 @@ describe('model display utils', () => {
     expect(formatCompactModelLabel('   ')).toBe('');
   });
 
-  it('compacts long Gemini model identifiers', () => {
-    expect(formatCompactModelLabel('gemini-3.1-pro-preview-customtools')).toBe(
-      'gemini-3.1',
-    );
-    expect(formatCompactModelLabel('GEMINI-2.5-FLASH-LITE')).toBe(
-      'gemini-2.5',
-    );
-    expect(formatCompactModelLabel('gemini-3-flash-preview')).toBe(
-      'gemini-3',
-    );
+  it('returns short labels from catalog for known models', () => {
+    expect(formatCompactModelLabel('gpt-5.4')).toBe('GPT-5.4');
+    expect(formatCompactModelLabel('claude-sonnet-4-6')).toBe('Sonnet 4.6');
+    expect(formatCompactModelLabel('magistral-medium-2509')).toBe('Magistral Medium');
+    expect(formatCompactModelLabel('devstral-2512')).toBe('Devstral 2');
   });
 
-  it('keeps non-Gemini model identifiers unchanged', () => {
-    expect(formatCompactModelLabel('gpt-5.4')).toBe('gpt-5.4');
+  it('returns raw model id for unknown models', () => {
+    expect(formatCompactModelLabel('some-future-model')).toBe('some-future-model');
   });
 });

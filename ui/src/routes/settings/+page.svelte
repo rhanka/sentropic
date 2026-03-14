@@ -34,13 +34,13 @@
   import { Copy, Download, RefreshCw } from '@lucide/svelte';
 
   interface CatalogProvider {
-    provider_id: 'openai' | 'gemini';
+    provider_id: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
     label: string;
     status: 'ready' | 'planned';
   }
 
   interface CatalogModel {
-    provider_id: 'openai' | 'gemini';
+    provider_id: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
     model_id: string;
     label: string;
     default_contexts: string[];
@@ -50,7 +50,7 @@
     providers: CatalogProvider[];
     models: CatalogModel[];
     defaults: {
-      provider_id: 'openai' | 'gemini';
+      provider_id: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
       model_id: string;
     };
   }
@@ -103,7 +103,7 @@
   let aiSettings = {
     concurrency: 10,
     publishingConcurrency: 5,
-    defaultProviderId: 'openai' as 'openai' | 'gemini',
+    defaultProviderId: 'openai' as 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere',
     defaultModel: 'gpt-5.4',
     processingInterval: 1000
   };
@@ -117,26 +117,29 @@
   let isLoadingModelCatalog = false;
   let isSavingAISettings = false;
   let userAISettings = {
-    defaultProviderId: 'openai' as 'openai' | 'gemini',
+    defaultProviderId: 'openai' as 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere',
     defaultModel: 'gpt-4.1-nano',
   };
   let isLoadingUserAISettings = false;
   let isSavingUserAISettings = false;
 
-  const modelSelectionKey = (providerId: 'openai' | 'gemini', modelId: string) =>
+  const modelSelectionKey = (providerId: string, modelId: string) =>
     `${providerId}::${modelId}`;
+
+  const validProviderIds = ['openai', 'gemini', 'anthropic', 'mistral', 'cohere'] as const;
+  type ProviderIdType = (typeof validProviderIds)[number];
 
   const parseModelSelectionKey = (
     rawKey: string
-  ): { providerId: 'openai' | 'gemini'; modelId: string } | null => {
+  ): { providerId: ProviderIdType; modelId: string } | null => {
     const separatorIndex = rawKey.indexOf('::');
     if (separatorIndex <= 0) return null;
     const providerCandidate = rawKey.slice(0, separatorIndex);
     const modelId = rawKey.slice(separatorIndex + 2);
-    if ((providerCandidate !== 'openai' && providerCandidate !== 'gemini') || !modelId) {
+    if (!(validProviderIds as readonly string[]).includes(providerCandidate) || !modelId) {
       return null;
     }
-    return { providerId: providerCandidate, modelId };
+    return { providerId: providerCandidate as ProviderIdType, modelId };
   };
   
   // Gestion de la queue
@@ -529,7 +532,7 @@
     isLoadingUserAISettings = true;
     try {
       const payload = await apiGet<{
-        defaultProviderId: 'openai' | 'gemini';
+        defaultProviderId: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
         defaultModel: string;
       }>('/me/ai-settings');
       userAISettings.defaultProviderId = payload.defaultProviderId;

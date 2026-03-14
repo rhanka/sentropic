@@ -1,4 +1,5 @@
 import { executeWithToolsStream } from './tools';
+import { getReasoningParamsForModel } from './model-catalog';
 import { defaultPrompts } from '../config/default-prompts';
 import type { MatrixConfig } from '../types/matrix';
 
@@ -312,8 +313,8 @@ const executeStructuredGenerationWithGeminiFallback = async (params: {
   structuredOutput: StructuredOutputConfig;
   promptId: string;
   streamId: string;
-  reasoningSummary?: 'detailed';
-  reasoningEffort?: 'high';
+  reasoningSummary?: 'auto' | 'concise' | 'detailed';
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   signal?: AbortSignal;
 }): Promise<string> => {
   const baseOptions = {
@@ -434,7 +435,6 @@ export const generateUseCaseList = async (
       ? runtimePrompt.promptId.trim()
       : 'use_case_list';
   
-  const isGpt5 = typeof model === 'string' && model.startsWith('gpt-5');
   const content = await executeStructuredGenerationWithGeminiFallback({
     prompt,
     model,
@@ -445,7 +445,7 @@ export const generateUseCaseList = async (
       strict: true,
       schema: USE_CASE_LIST_STRUCTURED_SCHEMA,
     },
-    ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
+    ...getReasoningParamsForModel(model, 'high', 'detailed'),
     promptId: runtimePromptId,
     streamId: finalStreamId,
     signal,
@@ -523,7 +523,6 @@ export const generateUseCaseDetail = async (
       ? runtimePrompt.promptId.trim()
       : 'use_case_detail';
   
-  const isGpt5 = typeof model === 'string' && model.startsWith('gpt-5');
   const content = await executeStructuredGenerationWithGeminiFallback({
     prompt,
     model,
@@ -534,7 +533,7 @@ export const generateUseCaseDetail = async (
       strict: true,
       schema: USE_CASE_DETAIL_STRUCTURED_SCHEMA,
     },
-    ...(isGpt5 ? { reasoningSummary: 'detailed' as const, reasoningEffort: 'high' as const } : {}),
+    ...getReasoningParamsForModel(model, 'high', 'detailed'),
     promptId: runtimePromptId,
     streamId: finalStreamId,
     signal,

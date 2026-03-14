@@ -89,7 +89,7 @@ const OPENAI_MODELS: ModelCatalogEntry[] = [
     providerId: 'openai',
     modelId: 'gpt-4.1-nano',
     label: 'GPT-4.1 Nano',
-    reasoningTier: 'light',
+    reasoningTier: 'none',
     supportsTools: true,
     supportsStreaming: true,
     defaultContexts: ['doc'],

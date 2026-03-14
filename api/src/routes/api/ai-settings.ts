@@ -22,7 +22,7 @@ aiSettingsRouter.get('/', async (c) => {
 const updateAISettingsSchema = z.object({
   concurrency: z.number().min(1).max(50).optional(),
   publishingConcurrency: z.number().min(1).max(50).optional(),
-  defaultProviderId: z.enum(['openai', 'gemini']).optional(),
+  defaultProviderId: z.enum(['openai', 'gemini', 'anthropic', 'mistral', 'cohere']).optional(),
   defaultModel: z.string().min(1).optional(),
   processingInterval: z.number().min(1000).max(60000).optional(),
 });

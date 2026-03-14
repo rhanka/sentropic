@@ -1,6 +1,6 @@
 import { env } from '../config/env';
 import fetch from "node-fetch";
-import { callOpenAIResponseStream } from './llm-runtime';
+import { callLLMStream } from './llm-runtime';
 import type { StreamEventType } from './llm-runtime';
 import type OpenAI from 'openai';
 import { generateStreamId, getNextSequence, writeStreamEvent } from './stream-service';
@@ -884,13 +884,20 @@ export interface ExecuteWithToolsStreamOptions {
   jobId?: string;
   messageId?: string;
   /**
-   * Résumé de reasoning (Responses API).
-   * IMPORTANT: si non fourni, on n'envoie pas de paramètre `reasoning` à OpenAI (comportement explicite).
+   * Résumé de reasoning (provider-agnostic).
+   * Passed through to the LLM runtime which maps to provider-native format:
+   * - OpenAI: `reasoning.summary`
+   * - Claude: ignored (no equivalent)
+   * - Mistral/Cohere: ignored (no reasoning support)
+   * If not provided, no reasoning parameter is sent.
    */
   reasoningSummary?: 'auto' | 'concise' | 'detailed';
   /**
-   * Effort de reasoning (Responses API). Optionnel (override).
-   * Ex: 'high' pour des tâches complexes si modèle gpt-5.
+   * Effort de reasoning (provider-agnostic). Optionnel (override).
+   * Passed through to the LLM runtime which maps to provider-native format:
+   * - OpenAI: `reasoning.effort`
+   * - Claude: `thinking.budget_tokens` (for opus models only)
+   * - Mistral/Cohere: ignored (no reasoning support)
    */
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   /**
@@ -945,7 +952,7 @@ export const executeWithToolsStream = async (
   let accumulatedContent = '';
 
   if (!useWebSearch) {
-    for await (const event of callOpenAIResponseStream({
+    for await (const event of callLLMStream({
       messages: [{ role: 'user', content: prompt }],
       model,
       responseFormat,
@@ -975,7 +982,7 @@ export const executeWithToolsStream = async (
     ...(useDocuments && allowedDocumentsContexts.length > 0 ? [documentsTool] : [])
   ];
 
-  for await (const event of callOpenAIResponseStream({
+  for await (const event of callLLMStream({
     messages: [
       { role: 'system', content: WEB_TOOLS_SYSTEM_PROMPT },
       { role: 'user', content: prompt }
@@ -1160,7 +1167,7 @@ export const executeWithToolsStream = async (
 
   // 2e appel (streaming) avec les résultats — identique à executeWithTools
   accumulatedContent = '';
-  for await (const event of callOpenAIResponseStream({
+  for await (const event of callLLMStream({
       messages: [
       { role: 'system', content: WEB_TOOLS_FOLLOWUP_SYSTEM_PROMPT },
       { role: 'user', content: prompt },
