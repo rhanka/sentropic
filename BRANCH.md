@@ -149,12 +149,12 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
     - [x] Génération IA (dossier)
   - [ ] Validation — Mistral Devstral 2 (`devstral-2512`)
     - [x] Chat simple
-    - [ ] Chat avec tool call
+    - [x] Chat avec tool call
     - [ ] Reasoning : N/A
     - [ ] Génération IA (dossier)
   - [ ] Validation — Mistral 3 (`mistral-large-2512`)
     - [x] Chat simple
-    - [ ] Chat avec tool call
+    - [x] Chat avec tool call
     - [ ] Reasoning : N/A
     - [ ] Génération IA (dossier)
   - [ ] Validation — Cohere Command A (`command-a-03-2025`)

@@ -133,6 +133,8 @@ export class MistralProviderRuntime implements ProviderRuntime {
       throw new Error('MistralProviderRuntime.streamGenerate: unsupported mode');
     }
 
+    const opts = payload.requestOptions as Record<string, unknown>;
+    console.warn('[mistral-provider] streamGenerate', { keys: Object.keys(opts), toolCount: Array.isArray(opts.tools) ? opts.tools.length : 0, toolChoice: opts.toolChoice ?? opts.tool_choice ?? '(absent)', model: opts.model });
     const client = this.getClient(payload.credential);
     const stream = await client.chat.stream(payload.requestOptions);
 
