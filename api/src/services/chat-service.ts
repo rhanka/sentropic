@@ -2,10 +2,11 @@ import { and, asc, desc, eq, sql, inArray, gt, or } from 'drizzle-orm';
 import { db, pool } from '../db/client';
 import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue } from '../db/schema';
 import { createId } from '../utils/id';
-import { callOpenAI, callOpenAIResponseStream, type StreamEventType } from './llm-runtime';
+import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
 import {
   getModelCatalogPayload,
   inferProviderFromModelIdWithLegacy,
+  modelSupportsReasoning,
   resolveDefaultSelection,
 } from './model-catalog';
 import { getNextSequence, readStreamEvents, writeStreamEvent } from './stream-service';
@@ -208,9 +209,7 @@ const TODO_AUTONOMOUS_MAX_ITERATIONS = 60;
 const TODO_AUTONOMOUS_EXTENSION_STEP = 10;
 const CONTEXT_BUDGET_SOFT_THRESHOLD = 85;
 const CONTEXT_BUDGET_HARD_THRESHOLD = 92;
-const CONTEXT_BUDGET_DEFAULT_TOKENS = 32_000;
-const CONTEXT_BUDGET_OPENAI_GPT5_TOKENS = 128_000;
-const CONTEXT_BUDGET_GEMINI_TOKENS = 128_000;
+const CONTEXT_BUDGET_DEFAULT_TOKENS = 128_000;
 const CONTEXT_SUMMARY_RECENT_MESSAGES = 8;
 const CONTEXT_SUMMARY_MAX_CHARS = 32_000;
 const CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS = 700;
@@ -494,14 +493,32 @@ const toBudgetString = (value: unknown): string => {
   }
 };
 
+/** Per-model context window budgets (total tokens including input + output) */
+const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
+  // OpenAI
+  'gpt-5.4':       1_000_000,
+  'gpt-4.1':       1_000_000,
+  'gpt-4.1-nano':  1_000_000,
+  // Gemini
+  'gemini-3.1-pro-preview-customtools': 1_000_000,
+  'gemini-3.1-flash-lite-preview':      1_000_000,
+  // Anthropic
+  'claude-sonnet-4-6': 1_000_000,
+  'claude-opus-4-6':   1_000_000,
+  // Mistral
+  'devstral-2512':          256_000,
+  'magistral-medium-2509':  128_000,
+  // Cohere
+  'command-a-03-2025':           256_000,
+  'command-a-reasoning-08-2025': 256_000,
+};
+
 const inferContextBudgetMaxTokens = (
-  providerId: ProviderId,
+  _providerId: ProviderId,
   modelId: string | null | undefined,
 ): number => {
   const model = String(modelId ?? '').trim().toLowerCase();
-  if (providerId === 'gemini') return CONTEXT_BUDGET_GEMINI_TOKENS;
-  if (model.startsWith('gpt-5')) return CONTEXT_BUDGET_OPENAI_GPT5_TOKENS;
-  return CONTEXT_BUDGET_DEFAULT_TOKENS;
+  return MODEL_CONTEXT_BUDGETS[model] ?? CONTEXT_BUDGET_DEFAULT_TOKENS;
 };
 
 const estimateTokenCountFromChars = (charCount: number): number =>
@@ -663,11 +680,11 @@ const compactConversationContext = async (input: {
     summaryInput,
   ].join('\n');
 
-  const summaryResponse = await callOpenAI({
+  const summaryResponse = await callLLM({
     providerId: input.providerId,
     model:
       input.providerId === 'gemini'
-        ? 'gemini-3.1-flash-lite'
+        ? 'gemini-3.1-flash-lite-preview'
         : 'gpt-4.1-nano',
     userId: input.userId,
     workspaceId: input.workspaceId,
@@ -1272,7 +1289,7 @@ export class ChatService {
       last_user_message: (opts.lastUserMessage || '').trim()
     });
     try {
-      const res = await callOpenAI({
+      const res = await callLLM({
         model: 'gpt-4.1-nano',
         messages: [{ role: 'system', content: prompt }],
         maxOutputTokens: 32
@@ -3068,16 +3085,15 @@ Règles :
       (await getOpenAITransportMode()) === 'codex';
 
     // Reasoning-effort evaluation (best effort):
-    // - OpenAI gpt-5* keeps its existing evaluator behavior.
-    // - Gemini provider uses gemini-3.1-flash-lite for the same classification intent.
-    const isGpt5 = typeof selectedModel === 'string' && selectedModel.startsWith('gpt-5');
-    const shouldEvaluateReasoningEffort =
-      isGpt5 || selectedProviderId === 'gemini';
+    // - Runs for any model whose catalog entry has reasoningTier !== 'none'.
+    // - Evaluator uses a cheap model from the same provider family when available,
+    //   otherwise falls back to OpenAI gpt-4.1-nano.
+    const shouldEvaluateReasoningEffort = modelSupportsReasoning(selectedModel);
     const evaluatorProviderId: ProviderId =
       selectedProviderId === 'gemini' ? 'gemini' : 'openai';
     const evaluatorModel =
       selectedProviderId === 'gemini'
-        ? 'gemini-3.1-flash-lite'
+        ? 'gemini-3.1-flash-lite-preview'
         : 'gpt-4.1-nano';
     let reasoningEffortForThisMessage: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | undefined;
     // Default fallback if evaluator fails: medium.
@@ -3099,7 +3115,7 @@ Règles :
             .replace('{{context_excerpt}}', excerpt || '(vide)');
 
           let out = '';
-          for await (const ev of callOpenAIResponseStream({
+          for await (const ev of callLLMStream({
             providerId: evaluatorProviderId,
             model: evaluatorModel,
             userId: options.userId,
@@ -3380,7 +3396,7 @@ Règles :
 
       let shouldRetryWithoutPreviousResponse = false;
       try {
-        for await (const event of callOpenAIResponseStream({
+        for await (const event of callLLMStream({
           providerId: selectedProviderId,
           model: selectedModel,
           credential: options.providerApiKey ?? undefined,
@@ -3556,7 +3572,7 @@ Règles :
       }
 
       // Debug (requested): if we asked for reasoningSummary=detailed but saw none, log it.
-      if (isGpt5 && reasoningParts.length === 0) {
+      if (modelSupportsReasoning(selectedModel) && reasoningParts.length === 0) {
         try {
           console.warn('[chat] no_reasoning_delta_observed', {
             assistantMessageId: options.assistantMessageId,
@@ -4777,9 +4793,16 @@ Règles :
         currentMessages = [...currentMessages, { role: 'assistant', content: assistantText }];
       }
 
-      // Codex backend no longer accepts previous_response_id: replay tool calls locally.
-      if (useCodexTransport) {
-        previousResponseId = null;
+      // Non-Responses-API providers (Claude, Mistral, Cohere, Codex) need both
+      // function_call + function_call_output in rawInput so the runtime can
+      // reconstruct the assistant tool_use / tool_calls block before tool results.
+      const needsExplicitToolReplay =
+        useCodexTransport ||
+        selectedProviderId === 'anthropic' ||
+        selectedProviderId === 'mistral' ||
+        selectedProviderId === 'cohere';
+      if (needsExplicitToolReplay) {
+        if (useCodexTransport) previousResponseId = null;
         pendingResponsesRawInput = toolCalls.flatMap((toolCall) => {
           const output = responseToolOutputs.find((item) => item.call_id === toolCall.id);
           return output
@@ -4845,7 +4868,7 @@ Règles :
           meta: { kind: 'pass2_prompt', callSite: 'ChatService.runAssistantGeneration/pass2/beforeOpenAI', openaiApi: 'responses' }
         });
 
-        for await (const event of callOpenAIResponseStream({
+        for await (const event of callLLMStream({
           providerId: selectedProviderId,
           model: selectedModel,
           credential: options.providerApiKey ?? undefined,

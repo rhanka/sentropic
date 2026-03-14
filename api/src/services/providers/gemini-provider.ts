@@ -19,7 +19,7 @@ const GEMINI_MODELS: ModelCatalogEntry[] = [
   },
   {
     providerId: 'gemini',
-    modelId: 'gemini-3.1-flash-lite',
+    modelId: 'gemini-3.1-flash-lite-preview',
     label: 'Gemini 3.1 Flash Lite',
     reasoningTier: 'standard',
     supportsTools: true,

@@ -34,7 +34,7 @@ describe('user ai settings events', () => {
 
   it('supports multiple updates in sequence for chat consumers', () => {
     const capturedPayloads: Array<{
-      defaultProviderId: 'openai' | 'gemini';
+      defaultProviderId: 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
       defaultModel: string;
     }> = [];
     const handler = (event: Event) => {

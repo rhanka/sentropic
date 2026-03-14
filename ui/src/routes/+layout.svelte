@@ -36,6 +36,7 @@
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { addToast } from '$lib/stores/toast';
   import { themePreference } from '$lib/stores/themePreference';
+  import { loadModelCatalog } from '$lib/stores/modelCatalog';
 
   // Keep header visible on /auth/devices (required for navigation).
   const AUTH_ROUTES = ['/auth/login', '/auth/register', '/auth/magic-link'];
@@ -178,6 +179,7 @@
   onMount(async () => {
     themePreference.init();
     await initializeSession();
+    loadModelCatalog();
   });
 
   // Clear all user-scoped stores when the authenticated user changes (incl. logout),

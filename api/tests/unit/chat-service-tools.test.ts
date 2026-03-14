@@ -23,11 +23,11 @@ import { todoOrchestrationService } from '../../src/services/todo-orchestration'
 // IMPORTANT: this must be declared before importing chatService.
 vi.mock('../../src/services/llm-runtime', () => {
   return {
-    callOpenAIResponseStream: vi.fn(),
+    callLLMStream: vi.fn(),
   };
 });
 
-import { callOpenAIResponseStream } from '../../src/services/llm-runtime';
+import { callLLMStream } from '../../src/services/llm-runtime';
 import { chatService } from '../../src/services/chat-service';
 
 type StreamEvent = { type: string; data: unknown };
@@ -94,7 +94,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
   });
 
   it('should enable expected tools per primaryContextType and always include web_search/web_extract', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const seen: Array<{ context: string; names: string[] }> = [];
     mock.mockImplementation((opts: any) => {
       const tools = toolNames(opts?.tools);
@@ -162,7 +162,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
   });
 
   it('should execute matrix_get tool call and enforce context security (folderId must match)', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
 
     // First message: successful matrix_get then final content.
     mock
@@ -266,7 +266,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
   });
 
   it('should merge local tool definitions, pause on local tool call, and prepare resume payload', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     let seenToolNames: string[] = [];
 
     mock.mockImplementation((opts: any) => {
@@ -338,7 +338,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
   });
 
   it('should keep local tools available when server tool filter is provided', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     let seenToolNames: string[] = [];
 
     mock.mockImplementation((opts: any) => {
@@ -384,7 +384,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
   });
 
   it('should strip local tool metadata from OpenAI resume rawInput', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const seenRawInputs: unknown[] = [];
 
     mock.mockReset();
@@ -481,8 +481,8 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     ]);
   });
 
-it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is gemini', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+it('should evaluate reasoning effort with gemini-3.1-flash-lite-preview when provider is gemini', async () => {
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
     mock.mockReset();
     mock.mockImplementation((opts: any) => {
@@ -519,7 +519,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
 
     expect(calls.length).toBeGreaterThanOrEqual(2);
     expect(calls[0]?.providerId).toBe('gemini');
-    expect(calls[0]?.model).toBe('gemini-3.1-flash-lite');
+    expect(calls[0]?.model).toBe('gemini-3.1-flash-lite-preview');
     expect(calls[1]?.providerId).toBe('gemini');
     expect(calls[1]?.model).toBe('gemini-3.1-pro-preview-customtools');
 
@@ -534,11 +534,11 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
     );
     expect(effortStatus).toBeDefined();
     expect((effortStatus as any).data?.effort).toBe('low');
-    expect((effortStatus as any).data?.by).toBe('gemini-3.1-flash-lite');
+    expect((effortStatus as any).data?.by).toBe('gemini-3.1-flash-lite-preview');
   });
 
   it('should expose requested web tools without business context', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     let seenToolNames: string[] = [];
 
     mock.mockImplementation((opts: any) => {
@@ -569,7 +569,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
   });
 
   it('should expose and execute unified todo tool when explicitly requested', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
     mock.mockImplementation((opts: any) => {
@@ -635,7 +635,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
   });
 
   it('should expose unified plan tool in active TODO mode', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
     mock.mockImplementation((opts: any) => {
@@ -677,7 +677,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
   });
 
   it('should keep unified todo tool available when user explicitly asks to replace with a new TODO list', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
     mock.mockImplementation((opts: any) => {
@@ -719,7 +719,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
   });
 
   it('should continue beyond 10 iterations when active TODO can progress without user input', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
     const msg = await chatService.createUserMessageWithAssistantPlaceholder({
@@ -789,7 +789,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
   });
 
   it('should inject strict TODO orchestration rules in system prompt when an active session TODO exists', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     let systemPrompt = '';
 
     mock.mockImplementation((opts: any) => {
@@ -842,7 +842,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
   });
 
   it('should block structural todo_update mutation without explicit user intent in active TODO mode', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
     const msg = await chatService.createUserMessageWithAssistantPlaceholder({
@@ -925,7 +925,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
   });
 
   it('should allow structural todo_update mutation when user intent is explicit', async () => {
-    const mock = callOpenAIResponseStream as unknown as ReturnType<typeof vi.fn>;
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
     const msg = await chatService.createUserMessageWithAssistantPlaceholder({

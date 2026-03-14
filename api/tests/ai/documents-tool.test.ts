@@ -19,10 +19,10 @@ vi.mock('../../src/services/document-text', async () => {
   };
 });
 
-const mockCallOpenAI = vi.fn();
+const mockCallLLM = vi.fn();
 vi.mock('../../src/services/llm-runtime', async () => {
   return {
-    callOpenAI: (args: any) => mockCallOpenAI(args),
+    callLLM: (args: any) => mockCallLLM(args),
   };
 });
 
@@ -40,7 +40,7 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
       .onConflictDoNothing();
 
     mockExtract.mockReset();
-    mockCallOpenAI.mockReset();
+    mockCallLLM.mockReset();
     docId = '';
   });
 
@@ -87,7 +87,7 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
     expect(res.contentWords).toBeDefined();
     expect(res.clipped).toBe(true);
     expect(res.content).toContain('Résumé détaillé indisponible');
-    expect(mockCallOpenAI).not.toHaveBeenCalled();
+    expect(mockCallLLM).not.toHaveBeenCalled();
     expect(mockExtract).toHaveBeenCalledTimes(1);
   });
 
@@ -122,7 +122,7 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
       .mockImplementation((_text: string) => ['CHUNK_A', 'CHUNK_B', 'CHUNK_C']);
 
     // 3 chunks + 1 merge call = 4 calls.
-    mockCallOpenAI
+    mockCallLLM
       .mockResolvedValueOnce({ choices: [{ message: { content: 'notes A' } }] })
       .mockResolvedValueOnce({ choices: [{ message: { content: 'notes B' } }] })
       .mockResolvedValueOnce({ choices: [{ message: { content: 'notes C' } }] })
@@ -139,17 +139,17 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
 
     expect(res.mode).toBe('full_text');
     expect(res.analysis.length).toBeGreaterThan(0);
-    expect(mockCallOpenAI).toHaveBeenCalledTimes(4);
+    expect(mockCallLLM).toHaveBeenCalledTimes(4);
 
     // Per-chunk calls are bounded
     for (let i = 0; i < 3; i += 1) {
-      const args = mockCallOpenAI.mock.calls[i]?.[0];
+      const args = mockCallLLM.mock.calls[i]?.[0];
       expect(args?.model).toBe('gpt-4.1-nano');
       expect(args?.maxOutputTokens).toBe(6000);
     }
 
     // Merge call is bounded (avoid truncation)
-    const mergeArgs = mockCallOpenAI.mock.calls[3]?.[0];
+    const mergeArgs = mockCallLLM.mock.calls[3]?.[0];
     expect(mergeArgs?.model).toBe('gpt-4.1-nano');
     expect(mergeArgs?.maxOutputTokens).toBe(20000);
 

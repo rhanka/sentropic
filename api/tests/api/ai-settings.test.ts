@@ -55,7 +55,7 @@ describe('AI Settings API', () => {
       expect(geminiResponse.status).toBe(200);
       const geminiData = await geminiResponse.json();
       expect(geminiData.defaultProviderId).toBe('gemini');
-      expect(geminiData.defaultModel).toBe('gemini-3.1-flash-lite');
+      expect(geminiData.defaultModel).toBe('gemini-3.1-flash-lite-preview');
 
       await settingsService.set('default_provider_id', 'openai', 'Default AI provider');
       await settingsService.set('default_model', 'gpt-4.1-nano', 'Modele IA par defaut');
@@ -150,6 +150,57 @@ describe('AI Settings API', () => {
       expect(response.status).toBe(400);
       const data = await response.json();
       expect(data.message).toContain('Invalid provider id');
+    });
+
+    it('accepts anthropic as a valid default_provider_id', async () => {
+      const setSpy = vi.spyOn(settingsService, 'set').mockResolvedValue();
+      try {
+        const response = await authenticatedRequest(
+          app,
+          'PUT',
+          '/api/v1/ai-settings/default_provider_id',
+          user.sessionToken!,
+          { value: 'anthropic' }
+        );
+        expect(response.status).toBe(200);
+        expect(setSpy).toHaveBeenCalledWith('default_provider_id', 'anthropic', undefined);
+      } finally {
+        setSpy.mockRestore();
+      }
+    });
+
+    it('accepts mistral as a valid default_provider_id', async () => {
+      const setSpy = vi.spyOn(settingsService, 'set').mockResolvedValue();
+      try {
+        const response = await authenticatedRequest(
+          app,
+          'PUT',
+          '/api/v1/ai-settings/default_provider_id',
+          user.sessionToken!,
+          { value: 'mistral' }
+        );
+        expect(response.status).toBe(200);
+        expect(setSpy).toHaveBeenCalledWith('default_provider_id', 'mistral', undefined);
+      } finally {
+        setSpy.mockRestore();
+      }
+    });
+
+    it('accepts cohere as a valid default_provider_id', async () => {
+      const setSpy = vi.spyOn(settingsService, 'set').mockResolvedValue();
+      try {
+        const response = await authenticatedRequest(
+          app,
+          'PUT',
+          '/api/v1/ai-settings/default_provider_id',
+          user.sessionToken!,
+          { value: 'cohere' }
+        );
+        expect(response.status).toBe(200);
+        expect(setSpy).toHaveBeenCalledWith('default_provider_id', 'cohere', undefined);
+      } finally {
+        setSpy.mockRestore();
+      }
     });
 
     it('does not reload queue settings for non-queue keys', async () => {

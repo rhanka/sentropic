@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:nodemailer --external:officeparser --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap && esbuild src/workers/docx-render.worker.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/workers/docx-render.worker.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:nodemailer --external:officeparser --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap && esbuild tests/utils/seed-test-data.ts --bundle --platform=node --target=node20 --format=esm --outdir=dist/tests --outbase=tests --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:nodemailer --external:officeparser --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --external:buffer --external:@aws-sdk/* --sourcemap && esbuild src/workers/docx-render.worker.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/workers/docx-render.worker.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:nodemailer --external:officeparser --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --external:buffer --external:@aws-sdk/* --sourcemap && esbuild tests/utils/seed-test-data.ts --bundle --platform=node --target=node20 --format=esm --outdir=dist/tests --outbase=tests --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:buffer --external:@aws-sdk/* --sourcemap",
     "start": "node dist/index.js",
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\"",
@@ -41,11 +41,14 @@
     "openapi:html": "tsx src/openapi/html.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@aws-sdk/client-s3": "^3.980.0",
     "@hono/node-server": "1.19.11",
     "@hono/zod-validator": "^0.7.6",
+    "@mistralai/mistralai": "^1.15.1",
     "@simplewebauthn/server": "^13.2.2",
     "better-queue": "^3.8.12",
+    "cohere-ai": "^7.20.0",
     "docx": "^9.5.1",
     "drizzle-orm": "^0.36.4",
     "hono-rate-limiter": "^0.5.3",

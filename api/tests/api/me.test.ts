@@ -123,7 +123,7 @@ describe('Me API', () => {
     expect(geminiResponse.status).toBe(200);
     const geminiData = await geminiResponse.json();
     expect(geminiData.defaultProviderId).toBe('gemini');
-    expect(geminiData.defaultModel).toBe('gemini-3.1-flash-lite');
+    expect(geminiData.defaultModel).toBe('gemini-3.1-flash-lite-preview');
   });
 
   it('should delete user workspace data on DELETE /me', async () => {
