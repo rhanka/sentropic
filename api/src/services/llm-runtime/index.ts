@@ -854,8 +854,8 @@ export const callOpenAI = async (options: CallOpenAIOptions): Promise<OpenAI.Cha
         model: selection.model,
         messages: mistralMessages,
         ...(mistralTools ? { tools: mistralTools } : {}),
-        ...(responseFormat === 'json_object'
-          ? { response_format: { type: 'json_object' } }
+        ...(!mistralTools && responseFormat === 'json_object'
+          ? { responseFormat: { type: 'json_object' } }
           : {}),
         ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
           ? { max_tokens: Math.floor(maxOutputTokens) }
@@ -1145,8 +1145,8 @@ export async function* callOpenAIStream(
           model: selection.model,
           messages: mistralMessages,
           ...(mistralTools ? { tools: mistralTools } : {}),
-          ...(responseFormat === 'json_object'
-            ? { response_format: { type: 'json_object' } }
+          ...(!mistralTools && responseFormat === 'json_object'
+            ? { responseFormat: { type: 'json_object' } }
             : {}),
           ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
             ? { max_tokens: Math.floor(maxOutputTokens) }
@@ -1823,11 +1823,10 @@ export async function* callOpenAIResponseStream(
           model: selectedModel,
           messages: mistralMessages,
           ...(mistralTools ? { tools: mistralTools, toolChoice: normalizedToolChoice === 'required' ? 'any' : normalizedToolChoice } : {}),
-          ...(effectiveStructuredOutput
+          // Mistral rejects responseFormat combined with tools (error 3051)
+          ...(!mistralTools && (effectiveStructuredOutput || effectiveResponseFormat === 'json_object')
             ? { responseFormat: { type: 'json_object' } }
-            : effectiveResponseFormat === 'json_object'
-              ? { responseFormat: { type: 'json_object' } }
-              : {}),
+            : {}),
           ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
             ? { maxTokens: Math.floor(maxOutputTokens) }
             : {}),
