@@ -140,7 +140,7 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
   - [x] Bug 19 — Cohere Command A R. `tool_choice` not supported → skip pour reasoning model
   - [x] Bug 20 — Cohere Command A R. reasoning non affiché → thinking blocks dans `content-delta` (champ `thinking` vs `text`)
   - [ ] Bug 12 — Renommer `callOpenAIResponseStream` → nom provider-agnostic (cosmétique, trompeur)
-  - [ ] Bug 13 — Vérifier l'opportunité de supprimer `callOpenAIStream` (ancien path sans Responses API)
+  - [x] Bug 13 — Supprimer `callOpenAIStream` (ancien path sans Responses API) → supprimée, tests migrés vers `callOpenAIResponseStream`
   - [x] Validation — Anthropic Sonnet 4.6 (`claude-sonnet-4-6`)
     - [x] Chat simple
     - [x] Chat avec tool call

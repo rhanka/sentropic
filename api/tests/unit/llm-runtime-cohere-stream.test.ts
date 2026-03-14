@@ -87,10 +87,10 @@ describe('Cohere stream event normalization', () => {
       })(),
     );
 
-    const { callOpenAIStream } = await import('../../src/services/llm-runtime');
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
 
     const events = await collectStreamEvents(
-      callOpenAIStream({
+      callOpenAIResponseStream({
         messages: [{ role: 'user', content: 'Hi' }],
         providerId: 'cohere',
         model: 'command-a-03-2025',
@@ -133,10 +133,10 @@ describe('Cohere stream event normalization', () => {
       })(),
     );
 
-    const { callOpenAIStream } = await import('../../src/services/llm-runtime');
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
 
     const events = await collectStreamEvents(
-      callOpenAIStream({
+      callOpenAIResponseStream({
         messages: [{ role: 'user', content: 'Search' }],
         providerId: 'cohere',
         model: 'command-a-03-2025',
@@ -161,9 +161,12 @@ describe('Cohere stream event normalization', () => {
         yield {
           type: 'tool-call-start',
           delta: {
-            tool_call: {
-              id: 'cohere_tc_2',
-              name: 'calculator',
+            message: {
+              toolCalls: {
+                id: 'cohere_tc_2',
+                type: 'function',
+                function: { name: 'calculator', arguments: '' },
+              },
             },
           },
         };
@@ -171,10 +174,10 @@ describe('Cohere stream event normalization', () => {
       })(),
     );
 
-    const { callOpenAIStream } = await import('../../src/services/llm-runtime');
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
 
     const events = await collectStreamEvents(
-      callOpenAIStream({
+      callOpenAIResponseStream({
         messages: [{ role: 'user', content: 'Calculate' }],
         providerId: 'cohere',
         model: 'command-a-03-2025',
@@ -195,10 +198,10 @@ describe('Cohere stream event normalization', () => {
       })(),
     );
 
-    const { callOpenAIStream } = await import('../../src/services/llm-runtime');
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
 
     const events = await collectStreamEvents(
-      callOpenAIStream({
+      callOpenAIResponseStream({
         messages: [{ role: 'user', content: 'Hi' }],
         providerId: 'cohere',
         model: 'command-a-03-2025',
