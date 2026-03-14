@@ -118,9 +118,9 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
   - [x] Bug 2 — Cohere rerank/embed exposed → removed from COHERE_MODELS
   - [x] Bug 3 — Missing provider status indicators → added credential resolution
   - [x] Bug 4 — docker-compose missing API keys → added 3 env vars (BR08-EX1)
-  - [x] Bug 5 — Mistral invalid model IDs → `devstral-2512`, `mistral-large-2512`
+  - [x] Bug 5 — Mistral invalid model IDs → `devstral-2512`, `magistral-medium-2509`
   - [x] Bug 7 — Cohere reasoning model 404 → `command-a-reasoning-08-2025`
-  - [x] Bug 11 — Labels trop longs → `Sonnet 4.6`, `Opus 4.6`, `Devstral 2`, `Mistral 3`, `Command A`, `Command A R.`
+  - [x] Bug 11 — Labels trop longs → `Sonnet 4.6`, `Opus 4.6`, `Devstral 2`, `Magistral Medium`, `Command A`, `Command A R.`
   - [x] Bug 8 — Claude tool_result/tool_use ID mismatch
     - Streaming génère `claude_call_${index}` au lieu du vrai `contentBlock.id` (`toolu_xxxxx`). Faux IDs stockés en DB → mismatch au replay.
     - Fichier : `llm-runtime/index.ts` lignes ~1127, ~1134, ~1730, ~1737
@@ -152,10 +152,10 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
     - [x] Chat avec tool call
     - [ ] Reasoning : N/A
     - [ ] Génération IA (dossier)
-  - [ ] Validation — Mistral 3 (`mistral-large-2512`)
-    - [x] Chat simple
-    - [x] Chat avec tool call
-    - [ ] Reasoning : N/A
+  - [ ] Validation — Magistral Medium (`magistral-medium-2509`)
+    - [ ] Chat simple
+    - [ ] Chat avec tool call
+    - [ ] Reasoning
     - [ ] Génération IA (dossier)
   - [ ] Validation — Cohere Command A (`command-a-03-2025`)
     - [x] Chat simple
