@@ -1852,54 +1852,68 @@ export async function* callOpenAIResponseStream(
         const choice = choices[0];
         if (!choice) continue;
 
+        // Check finishReason BEFORE delta — last chunk may have finishReason but no delta
+        const rawFinishReason = choice.finishReason ?? choice.finish_reason;
+        const finishReason = typeof rawFinishReason === 'string' ? rawFinishReason : null;
+
         const delta = choice.delta as Record<string, unknown> | undefined;
-        if (!delta) continue;
 
-        // Diagnostic: log delta keys to detect camelCase vs snake_case
-        const deltaKeys = Object.keys(delta).filter(k => k !== 'content' || delta.content);
-        if (deltaKeys.length > 0) {
-          console.warn('[mistral-stream] delta keys:', deltaKeys, 'tool_calls?', !!delta.tool_calls, 'toolCalls?', !!delta.toolCalls);
-        }
+        if (delta) {
+          // Magistral reasoning: content can be array of {type:"thinking"} / {type:"text"} chunks
+          if (Array.isArray(delta.content)) {
+            for (const chunk of delta.content as Array<Record<string, unknown>>) {
+              if (chunk.type === 'thinking') {
+                const thinkingParts = Array.isArray(chunk.thinking) ? chunk.thinking as Array<Record<string, unknown>> : [];
+                for (const part of thinkingParts) {
+                  if (typeof part.text === 'string' && part.text) {
+                    yield { type: 'reasoning_delta', data: { delta: part.text } };
+                  }
+                }
+              } else if (chunk.type === 'text') {
+                if (typeof chunk.text === 'string' && chunk.text) {
+                  emittedContent = true;
+                  yield { type: 'content_delta', data: { delta: chunk.text } };
+                }
+              }
+            }
+          } else if (typeof delta.content === 'string' && delta.content) {
+            emittedContent = true;
+            yield { type: 'content_delta', data: { delta: delta.content } };
+          }
 
-        if (typeof delta.content === 'string' && delta.content) {
-          emittedContent = true;
-          yield { type: 'content_delta', data: { delta: delta.content } };
-        }
+          // Mistral SDK returns camelCase (toolCalls) not snake_case (tool_calls)
+          const rawToolCalls = delta.toolCalls ?? delta.tool_calls;
+          const toolCalls = Array.isArray(rawToolCalls)
+            ? (rawToolCalls as Array<Record<string, unknown>>)
+            : [];
+          for (const tc of toolCalls) {
+            const tcId = typeof tc.id === 'string' ? tc.id : '';
+            const tcIndex = typeof tc.index === 'number' ? tc.index : 0;
+            const trackingKey = tcId || `mistral_index_${tcIndex}`;
+            const fn = tc.function as Record<string, unknown> | undefined;
 
-        // Mistral SDK returns camelCase (toolCalls) not snake_case (tool_calls)
-        const rawToolCalls = delta.toolCalls ?? delta.tool_calls;
-        const toolCalls = Array.isArray(rawToolCalls)
-          ? (rawToolCalls as Array<Record<string, unknown>>)
-          : [];
-        for (const tc of toolCalls) {
-          const tcId = typeof tc.id === 'string' ? tc.id : '';
-          const tcIndex = typeof tc.index === 'number' ? tc.index : 0;
-          const trackingKey = tcId || `mistral_index_${tcIndex}`;
-          const fn = tc.function as Record<string, unknown> | undefined;
-
-          if (!mistralToolCallsInProgress.has(trackingKey)) {
-            mistralToolCallsInProgress.set(trackingKey, {
-              id: tcId,
-              name: typeof fn?.name === 'string' ? fn.name : '',
-              args: typeof fn?.arguments === 'string' ? fn.arguments : '',
-            });
-            yield {
-              type: 'tool_call_start',
-              data: {
-                tool_call_id: trackingKey,
+            if (!mistralToolCallsInProgress.has(trackingKey)) {
+              mistralToolCallsInProgress.set(trackingKey, {
+                id: tcId,
                 name: typeof fn?.name === 'string' ? fn.name : '',
                 args: typeof fn?.arguments === 'string' ? fn.arguments : '',
-              },
-            };
-          } else if (typeof fn?.arguments === 'string' && fn.arguments) {
-            const existing = mistralToolCallsInProgress.get(trackingKey)!;
-            existing.args += fn.arguments;
-            yield { type: 'tool_call_delta', data: { tool_call_id: trackingKey, delta: fn.arguments } };
+              });
+              yield {
+                type: 'tool_call_start',
+                data: {
+                  tool_call_id: trackingKey,
+                  name: typeof fn?.name === 'string' ? fn.name : '',
+                  args: typeof fn?.arguments === 'string' ? fn.arguments : '',
+                },
+              };
+            } else if (typeof fn?.arguments === 'string' && fn.arguments) {
+              const existing = mistralToolCallsInProgress.get(trackingKey)!;
+              existing.args += fn.arguments;
+              yield { type: 'tool_call_delta', data: { tool_call_id: trackingKey, delta: fn.arguments } };
+            }
           }
         }
 
-        const rawFinishReason = choice.finishReason ?? choice.finish_reason;
-        const finishReason = typeof rawFinishReason === 'string' ? rawFinishReason : null;
         if (finishReason) break;
       }
 
