@@ -124,19 +124,21 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
   - [x] Bug 8 — Claude tool_result/tool_use ID mismatch
     - Streaming génère `claude_call_${index}` au lieu du vrai `contentBlock.id` (`toolu_xxxxx`). Faux IDs stockés en DB → mismatch au replay.
     - Fichier : `llm-runtime/index.ts` lignes ~1127, ~1134, ~1730, ~1737
-  - [ ] Bug 9 — Mistral tools jamais appelés + poisson rouge
-    - `buildMistralMessages` ne forward pas les `tool_calls` des messages assistant → pas de continuation.
+  - [x] Bug 9 — Mistral tools jamais appelés + poisson rouge
+    - `buildMistralMessages` ne forward pas les `tool_calls` des messages assistant → camelCase fix + rawInput handler
     - Fichier : `llm-runtime/index.ts` (`buildMistralMessages`)
-  - [ ] Bug 10 — Cohere toolCallId toujours manquant
-    - `messages -> [2]: Missing required key "toolCallId"` persiste. Root cause à investiguer.
-    - Fichier : `llm-runtime/index.ts` (`buildCohereMessages`)
-  - [ ] Bug 6 — Cohere tool call format incomplet (réouvert avec bug 10)
+  - [x] Bug 10 — Cohere toolCallId toujours manquant
+    - `messages -> [2]: Missing required key "toolCallId"` → camelCase `toolCallId` + id tracking pour `tool-call-delta` + phantom filtering
+    - Fichier : `llm-runtime/index.ts` (`buildCohereMessages`, streaming blocks)
+  - [x] Bug 6 — Cohere tool call format incomplet (résolu avec bug 10)
   - [x] Bug 11b — Claude reasoning 400: `max_tokens` must be greater than `thinking.budget_tokens`
   - [x] Bug 14 — Claude `response_format: json_object` rejeté par l'API Messages (Extra inputs not permitted)
   - [x] Bug 15 — Bulles cas d'usage affichent le model_id brut (`claude-sonnet-4-6`) au lieu du label court (`Sonnet 4.6`)
   - [x] Bug 16 — Gemini Flash Lite: `gemini-3.1-flash-lite` non trouvé sur API v1beta, model ID corrigé → `gemini-3.1-flash-lite-preview`
   - [x] Bug 17 — Context budget hardcodé 32k pour tous sauf GPT-5/Gemini → budgets par modèle (Claude/GPT/Gemini 1M, Devstral 256k, Magistral 128k, Cohere 256k)
   - [x] Bug 18 — Mistral rejette `responseFormat: json_object` combiné avec `tools` (erreur 3051) → skip responseFormat quand tools présents
+  - [x] Bug 19 — Cohere Command A R. `tool_choice` not supported → skip pour reasoning model
+  - [x] Bug 20 — Cohere Command A R. reasoning non affiché → thinking blocks dans `content-delta` (champ `thinking` vs `text`)
   - [ ] Bug 12 — Renommer `callOpenAIResponseStream` → nom provider-agnostic (cosmétique, trompeur)
   - [ ] Bug 13 — Vérifier l'opportunité de supprimer `callOpenAIStream` (ancien path sans Responses API)
   - [x] Validation — Anthropic Sonnet 4.6 (`claude-sonnet-4-6`)
@@ -149,31 +151,31 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
     - [x] Chat avec tool call
     - [x] Reasoning (extended thinking)
     - [x] Génération IA (dossier)
-  - [ ] Validation — Mistral Devstral 2 (`devstral-2512`)
+  - [x] Validation — Mistral Devstral 2 (`devstral-2512`)
     - [x] Chat simple
     - [x] Chat avec tool call
     - [x] Reasoning : N/A
     - [x] Génération IA (dossier)
-  - [ ] Validation — Magistral Medium (`magistral-medium-2509`)
-    - [ ] Chat simple
-    - [ ] Chat avec tool call
-    - [ ] Reasoning
+  - [x] Validation — Magistral Medium (`magistral-medium-2509`)
+    - [x] Chat simple
+    - [x] Chat avec tool call
+    - [x] Reasoning
     - [x] Génération IA (dossier)
-  - [ ] Validation — Cohere Command A (`command-a-03-2025`)
+  - [x] Validation — Cohere Command A (`command-a-03-2025`)
     - [x] Chat simple
-    - [ ] Chat avec tool call
-    - [ ] Reasoning : N/A
-    - [ ] Génération IA (dossier)
-  - [ ] Validation — Cohere Command A R. (`command-a-reasoning-08-2025`)
+    - [x] Chat avec tool call
+    - [x] Reasoning : N/A
+    - [x] Génération IA (dossier)
+  - [x] Validation — Cohere Command A R. (`command-a-reasoning-08-2025`)
     - [x] Chat simple
-    - [ ] Chat avec tool call
-    - [ ] Reasoning (built-in, non configurable)
-    - [ ] Génération IA (dossier)
-  - [ ] Non-régression — OpenAI GPT-5.4
+    - [x] Chat avec tool call
+    - [x] Reasoning (thinking blocks in content-delta stream)
+    - [x] Génération IA (dossier)
+  - [x] Non-régression — OpenAI GPT-5.4
     - [x] Chat simple
-    - [ ] Chat avec tool call
-    - [ ] Reasoning
-    - [ ] Génération IA (dossier)
+    - [x] Chat avec tool call
+    - [x] Reasoning
+    - [x] Génération IA (dossier)
   - [x] Non-régression — OpenAI GPT-4.1 Nano
     - [x] Chat simple
     - [x] Chat avec tool call
