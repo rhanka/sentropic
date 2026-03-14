@@ -235,3 +235,94 @@ describe('Mistral stream event normalization', () => {
     expect((events[0].data as { state: string }).state).toBe('started');
   });
 });
+
+describe('Devstral stream event normalization', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should normalize content delta for devstral-2512', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('mistral');
+    vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
+      (async function* () {
+        yield { data: { choices: [{ delta: { content: 'Hello' } }] } };
+        yield { data: { choices: [{ delta: { content: ' from Devstral' } }] } };
+        yield { data: { choices: [{ delta: {}, finish_reason: 'stop' }] } };
+      })(),
+    );
+
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
+
+    const events = await collectStreamEvents(
+      callOpenAIResponseStream({
+        messages: [{ role: 'user', content: 'Hi' }],
+        providerId: 'mistral',
+        model: 'devstral-2512',
+      }),
+    );
+
+    const contentDeltas = events.filter((e) => e.type === 'content_delta');
+    expect(contentDeltas).toHaveLength(2);
+    expect((contentDeltas[0].data as { delta: string }).delta).toBe('Hello');
+    expect((contentDeltas[1].data as { delta: string }).delta).toBe(' from Devstral');
+
+    const doneEvents = events.filter((e) => e.type === 'done');
+    expect(doneEvents).toHaveLength(1);
+  });
+
+  it('should normalize tool calls for devstral-2512', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('mistral');
+    vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
+      (async function* () {
+        yield {
+          data: {
+            choices: [{
+              delta: {
+                tool_calls: [{
+                  id: 'call_dev_1',
+                  index: 0,
+                  function: { name: 'run_code', arguments: '{"lang":' },
+                }],
+              },
+            }],
+          },
+        };
+        yield {
+          data: {
+            choices: [{
+              delta: {
+                tool_calls: [{
+                  id: 'call_dev_1',
+                  index: 0,
+                  function: { arguments: '"python"}' },
+                }],
+              },
+            }],
+          },
+        };
+        yield { data: { choices: [{ delta: {}, finish_reason: 'tool_calls' }] } };
+      })(),
+    );
+
+    const { callOpenAIResponseStream } = await import('../../src/services/llm-runtime');
+
+    const events = await collectStreamEvents(
+      callOpenAIResponseStream({
+        messages: [{ role: 'user', content: 'Run some code' }],
+        providerId: 'mistral',
+        model: 'devstral-2512',
+      }),
+    );
+
+    const toolStarts = events.filter((e) => e.type === 'tool_call_start');
+    expect(toolStarts).toHaveLength(1);
+    expect((toolStarts[0].data as { name: string }).name).toBe('run_code');
+    expect((toolStarts[0].data as { tool_call_id: string }).tool_call_id).toBe('call_dev_1');
+
+    const toolDeltas = events.filter((e) => e.type === 'tool_call_delta');
+    expect(toolDeltas).toHaveLength(1);
+    expect((toolDeltas[0].data as { delta: string }).delta).toBe('"python"}');
+  });
+});
