@@ -19,10 +19,10 @@ vi.mock('../../src/services/document-text', async () => {
   };
 });
 
-const mockCallOpenAI = vi.fn();
+const mockCallLLM = vi.fn();
 vi.mock('../../src/services/llm-runtime', async () => {
   return {
-    callOpenAI: (args: any) => mockCallOpenAI(args),
+    callLLM: (args: any) => mockCallLLM(args),
   };
 });
 
@@ -38,7 +38,7 @@ describe('ToolService (documents) - unit', () => {
     }
     docId = '';
     mockExtract.mockReset();
-    mockCallOpenAI.mockReset();
+    mockCallLLM.mockReset();
   });
 
   it('getDocumentContent: maxChars clips full_text when <= 10k words', async () => {
@@ -154,7 +154,7 @@ describe('ToolService (documents) - unit', () => {
     expect(res.clipped).toBe(false);
     expect(res.content).toContain('court');
     expect(mockExtract).not.toHaveBeenCalled();
-    expect(mockCallOpenAI).not.toHaveBeenCalled();
+    expect(mockCallLLM).not.toHaveBeenCalled();
 
     // Tools must not persist/modify anything in DB.
     const [row] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, docId)).limit(1);
@@ -192,7 +192,7 @@ describe('ToolService (documents) - unit', () => {
       headingsH1: [],
     });
 
-    mockCallOpenAI.mockResolvedValueOnce({
+    mockCallLLM.mockResolvedValueOnce({
       choices: [{ message: { content: 'analyse '.repeat(1500) } }],
     });
 
@@ -275,7 +275,7 @@ describe('ToolService (documents) - unit', () => {
     expect(res.contentMode).toBe('full_text');
     expect(res.content).toContain('texte');
     expect(res.words).toBeGreaterThan(0);
-    expect(mockCallOpenAI).not.toHaveBeenCalled();
+    expect(mockCallLLM).not.toHaveBeenCalled();
   });
 
   it('listContextDocuments: summaryAvailable reflects presence of data.summary', async () => {
@@ -360,7 +360,7 @@ describe('ToolService (documents) - unit', () => {
     });
 
     // 2 chunk calls + 1 merge call
-    mockCallOpenAI
+    mockCallLLM
       .mockResolvedValueOnce({ choices: [{ message: { content: 'notes chunk 1' } }] })
       .mockResolvedValueOnce({ choices: [{ message: { content: 'notes chunk 2' } }] })
       .mockResolvedValueOnce({ choices: [{ message: { content: 'réponse finale' } }] });
@@ -376,7 +376,7 @@ describe('ToolService (documents) - unit', () => {
 
     expect(res.mode).toBe('full_text');
     expect(res.analysis.length).toBeGreaterThan(0);
-    expect(mockCallOpenAI).toHaveBeenCalledTimes(3);
+    expect(mockCallLLM).toHaveBeenCalledTimes(3);
 
     estimateSpy.mockRestore();
     chunkSpy.mockRestore();

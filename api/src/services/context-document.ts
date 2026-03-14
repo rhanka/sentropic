@@ -1,7 +1,7 @@
 import { defaultPrompts } from '../config/default-prompts';
 import { executeWithToolsStream } from './tools';
 import { getReasoningParamsForModel } from './model-catalog';
-import { callOpenAIResponseStream } from './llm-runtime';
+import { callLLMStream } from './llm-runtime';
 import { getNextSequence, writeStreamEvent } from './stream-service';
 import type { StreamEventType } from './llm-runtime';
 
@@ -169,7 +169,7 @@ async function runResponsesContinuation(opts: {
   let text = '';
   let responseId = opts.previousResponseId || '';
 
-  for await (const event of callOpenAIResponseStream({
+  for await (const event of callLLMStream({
     messages: [{ role: 'user', content: opts.userPrompt }],
     model: opts.model,
     maxOutputTokens: opts.maxOutputTokens,

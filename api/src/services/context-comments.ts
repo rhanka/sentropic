@@ -1,4 +1,4 @@
-import { callOpenAIResponseStream } from './llm-runtime';
+import { callLLMStream } from './llm-runtime';
 import { defaultPrompts } from '../config/default-prompts';
 
 export type CommentContextType = 'organization' | 'folder' | 'usecase' | 'matrix' | 'executive_summary';
@@ -95,7 +95,7 @@ export async function generateCommentResolutionProposal(opts: {
     .replace('{{users_json}}', JSON.stringify(opts.users ?? [], null, 2));
 
   let raw = '';
-  for await (const event of callOpenAIResponseStream({
+  for await (const event of callLLMStream({
     messages: [{ role: 'system', content: prompt }],
     responseFormat: 'json_object',
     maxOutputTokens: 800
