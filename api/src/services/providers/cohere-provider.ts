@@ -1,4 +1,4 @@
-import { CohereClient } from 'cohere-ai';
+import { CohereClient } from 'cohere-ai/Client';
 import { env } from '../../config/env';
 import type {
   CredentialValidationResult,
