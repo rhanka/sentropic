@@ -48,7 +48,7 @@ describe('MistralProviderRuntime', () => {
         supportsTools: true,
         supportsStreaming: true,
         supportsStructuredOutput: true,
-        supportsReasoning: false,
+        supportsReasoning: true,
       });
     });
   });
