@@ -209,9 +209,7 @@ const TODO_AUTONOMOUS_MAX_ITERATIONS = 60;
 const TODO_AUTONOMOUS_EXTENSION_STEP = 10;
 const CONTEXT_BUDGET_SOFT_THRESHOLD = 85;
 const CONTEXT_BUDGET_HARD_THRESHOLD = 92;
-const CONTEXT_BUDGET_DEFAULT_TOKENS = 32_000;
-const CONTEXT_BUDGET_OPENAI_GPT5_TOKENS = 128_000;
-const CONTEXT_BUDGET_GEMINI_TOKENS = 128_000;
+const CONTEXT_BUDGET_DEFAULT_TOKENS = 128_000;
 const CONTEXT_SUMMARY_RECENT_MESSAGES = 8;
 const CONTEXT_SUMMARY_MAX_CHARS = 32_000;
 const CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS = 700;
@@ -495,14 +493,32 @@ const toBudgetString = (value: unknown): string => {
   }
 };
 
+/** Per-model context window budgets (total tokens including input + output) */
+const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
+  // OpenAI
+  'gpt-5.4':       1_000_000,
+  'gpt-4.1':       1_000_000,
+  'gpt-4.1-nano':  1_000_000,
+  // Gemini
+  'gemini-3.1-pro-preview-customtools': 1_000_000,
+  'gemini-3.1-flash-lite-preview':      1_000_000,
+  // Anthropic
+  'claude-sonnet-4-6': 1_000_000,
+  'claude-opus-4-6':   1_000_000,
+  // Mistral
+  'devstral-2512':          256_000,
+  'magistral-medium-2509':  128_000,
+  // Cohere
+  'command-a-03-2025':           256_000,
+  'command-a-reasoning-08-2025': 256_000,
+};
+
 const inferContextBudgetMaxTokens = (
-  providerId: ProviderId,
+  _providerId: ProviderId,
   modelId: string | null | undefined,
 ): number => {
   const model = String(modelId ?? '').trim().toLowerCase();
-  if (providerId === 'gemini') return CONTEXT_BUDGET_GEMINI_TOKENS;
-  if (model.startsWith('gpt-5')) return CONTEXT_BUDGET_OPENAI_GPT5_TOKENS;
-  return CONTEXT_BUDGET_DEFAULT_TOKENS;
+  return MODEL_CONTEXT_BUDGETS[model] ?? CONTEXT_BUDGET_DEFAULT_TOKENS;
 };
 
 const estimateTokenCountFromChars = (charCount: number): number =>

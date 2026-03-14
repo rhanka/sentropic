@@ -135,6 +135,7 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
   - [x] Bug 14 — Claude `response_format: json_object` rejeté par l'API Messages (Extra inputs not permitted)
   - [ ] Bug 15 — Bulles cas d'usage affichent le model_id brut (`claude-sonnet-4-6`) au lieu du label court (`Sonnet 4.6`)
   - [x] Bug 16 — Gemini Flash Lite: `gemini-3.1-flash-lite` non trouvé sur API v1beta, model ID corrigé → `gemini-3.1-flash-lite-preview`
+  - [x] Bug 17 — Context budget hardcodé 32k pour tous sauf GPT-5/Gemini → budgets par modèle (Claude/GPT/Gemini 1M, Devstral 256k, Magistral 128k, Cohere 256k)
   - [ ] Bug 12 — Renommer `callOpenAIResponseStream` → nom provider-agnostic (cosmétique, trompeur)
   - [ ] Bug 13 — Vérifier l'opportunité de supprimer `callOpenAIStream` (ancien path sans Responses API)
   - [x] Validation — Anthropic Sonnet 4.6 (`claude-sonnet-4-6`)
