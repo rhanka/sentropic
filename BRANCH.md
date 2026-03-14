@@ -207,10 +207,11 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
     - [x] Model badge display correct for all providers
 
 - [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Update `spec/SPEC_CHATBOT.md` model runtime baseline section
-  - [ ] Update `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`: mark W2 provider expansion as delivered
-  - [ ] Update `plan/08-BRANCH_feat-model-runtime-claude-mistral.md` status
-  - [ ] Update `PLAN.md` BR-08 status to `done`
+  - [ ] `spec/SPEC_CHATBOT.md`: update model runtime baseline section with 5-provider architecture (Claude, Mistral, Cohere additions), streaming event normalization, reasoning per provider
+  - [ ] `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`: mark W2 provider expansion as delivered; move remaining items (BYOK → BR-15, SSO → BR-09) to their respective branches; if nothing remains, delete file
+  - [ ] `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`: keep as-is — describes runtime split which is deferred to BR-14
+  - [ ] `plan/08-BRANCH_feat-model-runtime-claude-mistral.md`: overwrite with current `BRANCH.md` content
+  - [ ] `PLAN.md`: update BR-08 status to `done`
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint: `make typecheck-api typecheck-ui lint-api lint-ui ENV=test-feat-model-runtime-claude-mistral`
@@ -221,4 +222,5 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
   - [ ] Record explicit user sign-off if any AI flaky test is accepted
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge
+  - [ ] Final gate step 3: update `plan/08-BRANCH_feat-model-runtime-claude-mistral.md` with latest `BRANCH.md`
+  - [ ] Final gate step 4: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge
