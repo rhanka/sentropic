@@ -569,7 +569,7 @@ const buildMistralMessages = (
     const base: MistralMessage = { role, content };
     if (role === 'assistant') {
       // Forward tool_calls from assistant messages (camelCase for Mistral SDK)
-      const src = m as Record<string, unknown>;
+      const src = m as unknown as Record<string, unknown>;
       const rawCalls = src.toolCalls ?? src.tool_calls;
       if (Array.isArray(rawCalls) && rawCalls.length > 0) {
         base.toolCalls = rawCalls.map((tc: Record<string, unknown>) => {
@@ -587,7 +587,7 @@ const buildMistralMessages = (
     }
     if (role === 'tool') {
       // Mistral SDK expects camelCase toolCallId + name
-      const src = m as Record<string, unknown>;
+      const src = m as unknown as Record<string, unknown>;
       const toolCallId = (src.toolCallId ?? src.tool_call_id) as string | undefined;
       if (toolCallId) base.toolCallId = toolCallId;
       const name = src.name as string | undefined;
@@ -648,7 +648,7 @@ const buildCohereMessages = (
     const base: CohereMessage = { role, content };
     if (role === 'assistant') {
       // Forward toolCalls from assistant messages (camelCase for Cohere SDK)
-      const src = m as Record<string, unknown>;
+      const src = m as unknown as Record<string, unknown>;
       const rawCalls = src.tool_calls ?? src.toolCalls;
       if (Array.isArray(rawCalls) && rawCalls.length > 0) {
         base.toolCalls = rawCalls.map((tc: Record<string, unknown>) => {
@@ -666,7 +666,7 @@ const buildCohereMessages = (
     }
     if (role === 'tool') {
       // Cohere SDK expects camelCase toolCallId
-      const src = m as Record<string, unknown>;
+      const src = m as unknown as Record<string, unknown>;
       const toolCallId = (src.tool_call_id ?? src.toolCallId) as string | undefined;
       if (toolCallId) base.toolCallId = toolCallId;
     }
