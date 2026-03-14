@@ -55,7 +55,7 @@ Cross-reference baseline specs:
 | BR-06 | `feat/chrome-upstream-v1` | Upstream remote control foundation (single-tab) | W1 | `plan` | BR-00 | `plan/06-BRANCH_feat-chrome-upstream-v1.md` |
 | BR-07 | `feat/release-ui-npm-and-pretest` | UI npm publish + Playwright pretest/debug agent | W1 | `plan` | BR-00 | `plan/07-BRANCH_feat-release-ui-npm-and-pretest.md` |
 | BR-13 | `feat/chrome-plugin-download-distribution` | Package Chrome plugin and expose downloadable URL in `/settings` | W1 | `done` | BR-06 | `plan/13-BRANCH_feat-chrome-plugin-download-distribution.md` |
-| BR-08 | `feat/model-runtime-claude-mistral` | Expand model runtime to Claude + Mistral | W2 | `plan` | BR-01 | `plan/08-BRANCH_feat-model-runtime-claude-mistral.md` |
+| BR-08 | `feat/model-runtime-claude-mistral` | Expand model runtime to Claude + Mistral + Cohere | W2 | `done` | BR-01 | `plan/08-BRANCH_feat-model-runtime-claude-mistral.md` |
 | BR-09 | `feat/sso-google` | Google SSO (admin/user) | W2 | `plan` | BR-00 | `plan/09-BRANCH_feat-sso-google.md` |
 | BR-10 | `feat/vscode-plugin-v2-multi-agent` | VSCode v2 multi-agent + multi-model | W2 | `plan` | BR-05, BR-08 | `plan/10-BRANCH_feat-vscode-plugin-v2-multi-agent.md` |
 | BR-11 | `feat/chrome-upstream-multitab-voice` | Chrome multi-tab orchestration + voice | W2 | `plan` | BR-06, BR-08 | `plan/11-BRANCH_feat-chrome-upstream-multitab-voice.md` |

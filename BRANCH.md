@@ -206,12 +206,12 @@ Expand the multi-provider AI runtime from 2 providers (OpenAI, Gemini) to 5 prov
     - [x] Folder generation with OpenAI works
     - [x] Model badge display correct for all providers
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] `spec/SPEC_CHATBOT.md`: update model runtime baseline section with 5-provider architecture (Claude, Mistral, Cohere additions), streaming event normalization, reasoning per provider
-  - [ ] `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`: mark W2 provider expansion as delivered; move remaining items (BYOK → BR-15, SSO → BR-09) to their respective branches; if nothing remains, delete file
-  - [ ] `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`: keep as-is — describes runtime split which is deferred to BR-14
-  - [ ] `plan/08-BRANCH_feat-model-runtime-claude-mistral.md`: overwrite with current `BRANCH.md` content
-  - [ ] `PLAN.md`: update BR-08 status to `done`
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] `spec/SPEC_CHATBOT.md`: update model runtime baseline section with 5-provider architecture (Claude, Mistral, Cohere additions), streaming event normalization, reasoning per provider
+  - [x] `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`: mark W2 provider expansion as delivered; move remaining items (BYOK → BR-15, SSO → BR-09) to their respective branches; if nothing remains, delete file
+  - [x] `spec/SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md`: keep as-is — describes runtime split which is deferred to BR-14
+  - [x] `plan/08-BRANCH_feat-model-runtime-claude-mistral.md`: overwrite with current `BRANCH.md` content
+  - [x] `PLAN.md`: update BR-08 status to `done`
 
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint: `make typecheck-api typecheck-ui lint-api lint-ui ENV=test-feat-model-runtime-claude-mistral`

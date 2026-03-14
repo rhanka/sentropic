@@ -117,19 +117,25 @@ W2:
 
 - Delivered BR-01 runtime scope has been moved to `spec/SPEC_CHATBOT.md` to keep one canonical implementation spec.
 - This EVOL document now tracks remaining roadmap deltas (not yet delivered), primarily:
-  - OpenAI/ChatGPT SSO and Google SSO federation milestones,
-  - W2 provider expansion (`Claude`, `Mistral`) and associated routing/fallback policies.
+  - SSO federation milestones (Google SSO),
+  - BYOK credential flow.
+
+## 7.1) Consolidation note (2026-03-14, BR-08)
+
+- **W2 provider expansion delivered** (BR-08 `done`): 5 providers active (OpenAI, Gemini, Claude, Mistral, Cohere). Consolidated into `spec/SPEC_CHATBOT.md` (model runtime baseline section).
+- Remaining items in this document:
+  - **BYOK credential flow** — deferred to BR-15 (`feat/byok-finops`).
+  - **Google SSO** — deferred to BR-09 (`feat/sso-google`).
 
 ## 8) Open questions
 
 - `MPA-Q4`: What is the compliance baseline for provider request/response retention?
-- `MPA-Q5`: Do we require provider-level fallback in the same request, or only user-driven retry?
+- `MPA-Q5`: Do we require provider-level fallback in the same request, or only user-driven retry? — **Resolved**: user-driven retry only (BR-08 FL2).
 
 ## 9) Risks
 
 - Provider SDK/API instability across releases.
 - SSO edge-cases with account linking and duplicate identities.
-- Regression risk in streaming/tool-call orchestration when introducing adapters.
 
 ## 10) Split note (runtime vs auth)
 
@@ -139,3 +145,10 @@ W2:
 - Delivered BR-05 Codex admin enrollment and OpenAI transport-source selection are specified in:
   - `spec/SPEC_CHATBOT.md`
   - `spec/SPEC_VSCODE_PLUGIN.md`
+
+## 11) Remaining roadmap items
+
+| Item | Target branch | Status |
+|---|---|---|
+| BYOK credential flow (per-user keys, encryption-at-rest) | BR-15 (`feat/byok-finops`) | deferred |
+| Google SSO (admin + user, account linking) | BR-09 (`feat/sso-google`) | deferred |
