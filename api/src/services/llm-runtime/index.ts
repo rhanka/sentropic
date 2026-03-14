@@ -567,9 +567,31 @@ const buildMistralMessages = (
     );
     const role = m.role as MistralMessage['role'];
     const base: MistralMessage = { role, content };
+    if (role === 'assistant') {
+      // Forward tool_calls from assistant messages (camelCase for Mistral SDK)
+      const src = m as Record<string, unknown>;
+      const rawCalls = src.toolCalls ?? src.tool_calls;
+      if (Array.isArray(rawCalls) && rawCalls.length > 0) {
+        base.toolCalls = rawCalls.map((tc: Record<string, unknown>) => {
+          const fn = (tc.function ?? tc.fn) as Record<string, unknown> | undefined;
+          return {
+            id: typeof tc.id === 'string' ? tc.id : '',
+            type: 'function' as const,
+            function: {
+              name: typeof fn?.name === 'string' ? fn.name : '',
+              arguments: typeof fn?.arguments === 'string' ? fn.arguments : JSON.stringify(fn?.arguments ?? {}),
+            },
+          };
+        });
+      }
+    }
     if (role === 'tool') {
-      const toolCallId = (m as { tool_call_id?: string }).tool_call_id;
-      if (toolCallId) base.tool_call_id = toolCallId;
+      // Mistral SDK expects camelCase toolCallId + name
+      const src = m as Record<string, unknown>;
+      const toolCallId = (src.toolCallId ?? src.tool_call_id) as string | undefined;
+      if (toolCallId) base.toolCallId = toolCallId;
+      const name = src.name as string | undefined;
+      if (name) base.name = name;
     }
     return base;
   });
@@ -1746,18 +1768,44 @@ export async function* callOpenAIResponseStream(
     const mistralMessages = buildMistralMessages(messages);
     const mistralTools = buildMistralTools(filteredTools, normalizedToolChoice);
 
-    // Handle rawInput
+    // Handle rawInput: reconstruct assistant toolCalls + tool results (camelCase for Mistral SDK)
     if (Array.isArray(rawInput) && rawInput.length > 0) {
+      // 1) Collect function_call items → assistant message with toolCalls
+      const toolCallItems: Array<{ id: string; name: string; arguments: string }> = [];
       for (const item of rawInput) {
         const record = item as Record<string, unknown>;
-        const type = typeof record?.type === 'string' ? record.type : '';
-        if (type !== 'function_call_output') continue;
+        if (record?.type === 'function_call') {
+          toolCallItems.push({
+            id: typeof record.call_id === 'string' ? record.call_id : '',
+            name: typeof record.name === 'string' ? record.name : '',
+            arguments: typeof record.arguments === 'string' ? record.arguments : JSON.stringify(record.arguments ?? {}),
+          });
+        }
+      }
+      if (toolCallItems.length > 0) {
+        mistralMessages.push({
+          role: 'assistant',
+          content: '',
+          toolCalls: toolCallItems.map((tc) => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: { name: tc.name, arguments: tc.arguments },
+          })),
+        });
+      }
+      // 2) Collect function_call_output items → tool messages with toolCallId + name
+      for (const item of rawInput) {
+        const record = item as Record<string, unknown>;
+        if (record?.type !== 'function_call_output') continue;
         const callId = typeof record.call_id === 'string' ? record.call_id : '';
         const output = stringifyContent(record.output);
+        // Find matching function_call to get the tool name
+        const matchingCall = toolCallItems.find((tc) => tc.id === callId);
         mistralMessages.push({
           role: 'tool',
           content: output,
-          tool_call_id: callId,
+          toolCallId: callId,
+          name: matchingCall?.name || 'unknown',
         });
       }
     }
@@ -1774,14 +1822,14 @@ export async function* callOpenAIResponseStream(
         requestOptions: {
           model: selectedModel,
           messages: mistralMessages,
-          ...(mistralTools ? { tools: mistralTools } : {}),
+          ...(mistralTools ? { tools: mistralTools, toolChoice: normalizedToolChoice === 'required' ? 'any' : normalizedToolChoice } : {}),
           ...(effectiveStructuredOutput
-            ? { response_format: { type: 'json_object' } }
+            ? { responseFormat: { type: 'json_object' } }
             : effectiveResponseFormat === 'json_object'
-              ? { response_format: { type: 'json_object' } }
+              ? { responseFormat: { type: 'json_object' } }
               : {}),
           ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
-            ? { max_tokens: Math.floor(maxOutputTokens) }
+            ? { maxTokens: Math.floor(maxOutputTokens) }
             : {}),
         },
         credential: credentialResolution.credential ?? undefined,
@@ -1807,13 +1855,21 @@ export async function* callOpenAIResponseStream(
         const delta = choice.delta as Record<string, unknown> | undefined;
         if (!delta) continue;
 
+        // Diagnostic: log delta keys to detect camelCase vs snake_case
+        const deltaKeys = Object.keys(delta).filter(k => k !== 'content' || delta.content);
+        if (deltaKeys.length > 0) {
+          console.warn('[mistral-stream] delta keys:', deltaKeys, 'tool_calls?', !!delta.tool_calls, 'toolCalls?', !!delta.toolCalls);
+        }
+
         if (typeof delta.content === 'string' && delta.content) {
           emittedContent = true;
           yield { type: 'content_delta', data: { delta: delta.content } };
         }
 
-        const toolCalls = Array.isArray(delta.tool_calls)
-          ? (delta.tool_calls as Array<Record<string, unknown>>)
+        // Mistral SDK returns camelCase (toolCalls) not snake_case (tool_calls)
+        const rawToolCalls = delta.toolCalls ?? delta.tool_calls;
+        const toolCalls = Array.isArray(rawToolCalls)
+          ? (rawToolCalls as Array<Record<string, unknown>>)
           : [];
         for (const tc of toolCalls) {
           const tcId = typeof tc.id === 'string' ? tc.id : '';
@@ -1842,7 +1898,8 @@ export async function* callOpenAIResponseStream(
           }
         }
 
-        const finishReason = typeof choice.finish_reason === 'string' ? choice.finish_reason : null;
+        const rawFinishReason = choice.finishReason ?? choice.finish_reason;
+        const finishReason = typeof rawFinishReason === 'string' ? rawFinishReason : null;
         if (finishReason) break;
       }
 
