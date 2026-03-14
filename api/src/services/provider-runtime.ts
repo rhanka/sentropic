@@ -27,6 +27,7 @@ export interface ModelCatalogEntry {
   reasoningTier: ReasoningTier;
   supportsTools: boolean;
   supportsStreaming: boolean;
+  supportsReasoning?: boolean;
   defaultContexts: DefaultContext[];
 }
 
