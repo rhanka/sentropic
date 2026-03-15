@@ -20,7 +20,6 @@ jobs:
       workers: ${{ steps.filter.outputs.workers }}
       ui: ${{ steps.filter.outputs.ui }}
       ai: ${{ steps.filter.outputs.ai }}
-      vscode: ${{ steps.filter.outputs.vscode }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -37,11 +36,6 @@ jobs:
               - 'api/**'
             ui:
               - 'ui/**'
-            vscode:
-              - 'ui/vscode-ext/**'
-              - 'e2e/tests/vscode/**'
-              - 'docker-compose.e2e-vscode.yml'
-              - '.github/workflows/ci.yml'
 
   # Build E2E Docker image
   build-e2e:
@@ -285,7 +279,7 @@ jobs:
   e2e-vscode:
     runs-on: ubuntu-latest
     needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api-image, build-ui, build-e2e, security-sast-sca]
-    if: needs.changes.outputs.vscode == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
