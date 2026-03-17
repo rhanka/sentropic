@@ -515,6 +515,7 @@ Workflow keys are logical identifiers (e.g. `ai_usecase_generation`, not `ai_use
 | Workspace type | Default workflow key | Seed tasks |
 |---|---|---|
 | `ai-ideas` | `ai_usecase_generation` | context_prepare, matrix_prepare, usecase_list, todo_sync, usecase_detail, executive_summary |
+| `opportunity` | `opportunity_identification` | context_prepare, matrix_prepare, opportunity_list, todo_sync, opportunity_detail, executive_summary |
 | `opportunity` | `opportunity_qualification` | context_prepare, demand_analysis, solution_draft, bid_preparation, gate_review |
 | `code` | `code_analysis` | context_prepare, codebase_scan, issue_triage, implementation_plan |
 
@@ -595,6 +596,45 @@ Moved from `default-prompts.ts` (`chat_system_base`, `chat_code_agent`) to `defa
 | neutral | "Assistant de coordination multi-workspace" (new) |
 
 Chat-level prompts (reasoning eval, session title, conversation auto) remain common to all types, stored in `default-chat-system.ts`.
+
+### 8.4 Opportunity identification workflow — neutral prompts (E, F)
+
+The `opportunity_identification` workflow is a clone of `ai_usecase_generation` with neutral prompts. It uses the same task sequence (context_prepare → matrix_prepare → opportunity_list → todo_sync → opportunity_detail → executive_summary) but all agents carry neutral prompts.
+
+#### Neutral prompt guidelines
+
+- No mention of "AI", "IA", "use case IA", "cas d'usage d'IA" — replaced by "opportunity", "initiative", "business opportunity".
+- `opportunity_list_agent` prompt: "Generate a list of business opportunities based on the user's request, the organization context, and market analysis." Uses web_search for market intelligence, not AI trends.
+- `opportunity_detail_agent` prompt: frames `problem` as "the client/market problem this opportunity addresses", `solution` as "the proposed solution/product/service".
+- `executive_synthesis_agent` prompt: neutral synthesis focused on business value, market fit, competitive positioning — not AI adoption.
+- `matrix_generation_agent` prompt: adapts matrix descriptions to the organization's business context, not AI maturity.
+
+#### Neutral data fields (F)
+
+The initiative `data` JSONB schema for opportunity type:
+- **Kept unchanged**: name, description, problem, solution, benefits, risks, constraints, prerequisites, nextSteps, deadline, metrics, domain, contact, process, references, valueScores, complexityScores.
+- **Optional/absent**: `technologies` (included only if relevant to the opportunity).
+- **Not populated**: `dataSources`, `dataObjects` — the opportunity prompts do not ask for these fields. They remain in the JSONB schema (flexible) but are not generated.
+- `problem` is framed as: "the potential problem the target company/market has that this opportunity addresses".
+- `solution` is framed as: "the proposed solution, product, or service offering".
+
+### 8.5 Neutral default matrix for opportunity (E)
+
+The default matrix for `opportunity` workspaces differs from `ai-ideas`:
+
+**Value axes** (unchanged IDs, neutralized descriptions):
+- `business_value` — descriptions neutralized (no AI references, focus on business impact).
+- `time_criticality` — unchanged (already generic).
+- `risk_reduction_opportunity` — unchanged (already generic).
+
+**Complexity axes** (modified):
+- `implementation_effort` — descriptions neutralized (no API/PoC IA references, focus on general implementation).
+- `regulatory_compliance` (replaces `data_compliance`) — descriptions adapted to general regulatory context, not data/AI-specific compliance.
+- `resource_availability` (replaces `data_availability`) — descriptions adapted to general resource/budget/team availability, not data pipeline availability.
+- `change_management` — descriptions neutralized (no "agent" references, focus on general organizational change).
+- **`ai_maturity` axis removed** — not relevant for general business opportunities.
+
+The neutral matrix is defined in `default-matrix-opportunity.ts` alongside the existing `default-matrix.ts` (AI). The workspace type determines which default matrix is used when creating a new folder.
 
 ---
 
