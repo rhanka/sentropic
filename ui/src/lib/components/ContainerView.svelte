@@ -13,7 +13,8 @@
    */
 
   import { ArrowUpDown } from '@lucide/svelte';
-  import type { CardProps, ViewAction, ViewColumn } from '$lib/types/view-template';
+  import type { CardProps, ViewAction, ViewColumn, ViewFileMenu } from '$lib/types/view-template';
+  import FileMenu from '$lib/components/FileMenu.svelte';
 
   export let title: string | undefined = undefined;
   export let subtitle: string | undefined = undefined;
@@ -26,6 +27,8 @@
   export let emptyMessage: string | undefined = undefined;
   export let loading = false;
   export let cardRenderer: ((item: any) => CardProps) | undefined = undefined;
+  export let fileMenu: ViewFileMenu | undefined = undefined;
+  export let headerOnly = false;
 
   // Internal sort state (overrides props when user clicks)
   let internalSortKey = sortKey;
@@ -88,7 +91,7 @@
 
 <div class="space-y-4">
   <!-- Header -->
-  {#if title || actions.length > 0}
+  {#if title || actions.length > 0 || fileMenu}
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div>
         {#if title}
@@ -98,36 +101,53 @@
           <p class="mt-1 text-sm text-slate-500">{subtitle}</p>
         {/if}
       </div>
-      {#if actions.length > 0}
-        <div class="flex gap-2">
-          {#each actions as action}
-            {#if action.href}
-              <a
-                href={action.href}
-                class="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium shadow-sm transition {variantClasses[action.variant ?? 'secondary']}"
-              >
-                {#if action.icon}
-                  <svelte:component this={action.icon} class="h-4 w-4" />
-                {/if}
-                {action.label}
-              </a>
-            {:else}
-              <button
-                on:click={action.onClick}
-                class="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium shadow-sm transition {variantClasses[action.variant ?? 'secondary']}"
-              >
-                {#if action.icon}
-                  <svelte:component this={action.icon} class="h-4 w-4" />
-                {/if}
-                {action.label}
-              </button>
-            {/if}
-          {/each}
-        </div>
-      {/if}
+      <div class="flex items-center gap-2">
+        {#if fileMenu}
+          <FileMenu
+            showNew={fileMenu.showNew ?? false}
+            showImport={fileMenu.showImport ?? false}
+            showExport={fileMenu.showExport ?? false}
+            showPrint={fileMenu.showPrint ?? false}
+            showDelete={fileMenu.showDelete ?? false}
+            onNew={fileMenu.onNew ?? null}
+            onImport={fileMenu.onImport ?? null}
+            onExport={fileMenu.onExport ?? null}
+            onPrint={fileMenu.onPrint ?? null}
+            onDelete={fileMenu.onDelete ?? null}
+          />
+        {/if}
+        {#if actions.length > 0}
+          <div class="flex gap-2">
+            {#each actions as action}
+              {#if action.href}
+                <a
+                  href={action.href}
+                  class="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium shadow-sm transition {variantClasses[action.variant ?? 'secondary']}"
+                >
+                  {#if action.icon}
+                    <svelte:component this={action.icon} class="h-4 w-4" />
+                  {/if}
+                  {action.label}
+                </a>
+              {:else}
+                <button
+                  on:click={action.onClick}
+                  class="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium shadow-sm transition {variantClasses[action.variant ?? 'secondary']}"
+                >
+                  {#if action.icon}
+                    <svelte:component this={action.icon} class="h-4 w-4" />
+                  {/if}
+                  {action.label}
+                </button>
+              {/if}
+            {/each}
+          </div>
+        {/if}
+      </div>
     </div>
   {/if}
 
+  {#if !headerOnly}
   <!-- Sort controls -->
   {#if columns.some((c) => c.sortable)}
     <div class="flex flex-wrap gap-2 text-xs text-slate-500">
@@ -231,5 +251,6 @@
         {/each}
       </div>
     {/each}
+  {/if}
   {/if}
 </div>
