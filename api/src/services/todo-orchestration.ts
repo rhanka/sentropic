@@ -12,6 +12,7 @@ import {
   workflowDefinitionTasks,
   workflowDefinitions,
   workspaceMemberships,
+  workspaces,
   workspaceTypeWorkflows,
 } from "../db/schema";
 import { createId } from "../utils/id";
@@ -2044,17 +2045,30 @@ export class TodoOrchestrationService {
   }
 
   /**
-   * @deprecated Delegates to generic ensureWorkflowDefinition + getInitiativeGenerationWorkflowTaskAssignments.
-   * Kept for backward compat with startInitiativeGenerationWorkflow.
+   * Resolve the correct workflow definition for the workspace type and ensure it exists.
    */
   private async ensureInitiativeGenerationWorkflowDefinition(
     actor: TodoActor,
-  ): Promise<{ workflowDefinitionId: string; taskAssignments: InitiativeGenerationWorkflowTaskAssignments }> {
-    const generationAgentIds = await this.ensureDefaultGenerationAgents(actor);
+  ): Promise<{ workflowDefinitionId: string; workflowKey: string; taskAssignments: InitiativeGenerationWorkflowTaskAssignments }> {
+    // Resolve workspace type to pick the correct workflow
+    const [ws] = await db
+      .select({ type: workspaces.type })
+      .from(workspaces)
+      .where(eq(workspaces.id, actor.workspaceId))
+      .limit(1);
+    const wsType = ws?.type ?? 'ai-ideas';
+    const typeSeed = getWorkflowSeedsForType(wsType);
+    const workflowSeed = typeSeed?.workflows[0] ?? DEFAULT_USE_CASE_GENERATION_WORKFLOW;
+
+    const agentSeed = getAgentSeedsForType(wsType);
+    const agentIds = agentSeed
+      ? await this.seedAgentsForType(actor, agentSeed.agents)
+      : await this.ensureDefaultGenerationAgents(actor);
+
     const workflowDefinitionId = await this.ensureWorkflowDefinition(
       actor,
-      DEFAULT_USE_CASE_GENERATION_WORKFLOW,
-      generationAgentIds,
+      workflowSeed,
+      agentIds,
     );
 
     const taskAssignments = await this.getInitiativeGenerationWorkflowTaskAssignments(
@@ -2062,14 +2076,14 @@ export class TodoOrchestrationService {
       workflowDefinitionId,
     );
 
-    return { workflowDefinitionId, taskAssignments };
+    return { workflowDefinitionId, workflowKey: workflowSeed.key, taskAssignments };
   }
 
   async startInitiativeGenerationWorkflow(
     actor: TodoActor,
     input: StartInitiativeGenerationWorkflowInput,
   ): Promise<InitiativeGenerationWorkflowRuntime> {
-    const { workflowDefinitionId, taskAssignments } = await this.ensureInitiativeGenerationWorkflowDefinition(actor);
+    const { workflowDefinitionId, workflowKey, taskAssignments } = await this.ensureInitiativeGenerationWorkflowDefinition(actor);
 
     const workflowRunId = createId();
     const now = new Date();
@@ -2087,7 +2101,7 @@ export class TodoOrchestrationService {
       startedAt: now,
       completedAt: null,
       metadata: normalizeMetadata({
-        workflowKey: USE_CASE_GENERATION_WORKFLOW_KEY,
+        workflowKey,
         folderId: input.folderId,
         organizationId: input.organizationId ?? null,
         matrixMode: input.matrixMode,
@@ -2108,7 +2122,7 @@ export class TodoOrchestrationService {
       actorType: "user",
       actorId: actor.userId,
       payload: {
-        workflowKey: USE_CASE_GENERATION_WORKFLOW_KEY,
+        workflowKey,
         workflowDefinitionId,
         folderId: input.folderId,
         organizationId: input.organizationId ?? null,
