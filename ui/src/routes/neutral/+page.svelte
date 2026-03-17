@@ -15,6 +15,7 @@
   import type { ViewTemplateDescriptor } from '$lib/types/view-template';
   import { Lightbulb, Target, Code2, Home, Plus } from '@lucide/svelte';
   import type { WorkspaceType } from '$lib/stores/workspaceScope';
+  import FileMenu from '$lib/components/FileMenu.svelte';
 
   type DashboardWorkspace = {
     id: string;
@@ -85,20 +86,13 @@
     title: $_('neutral.dashboardTitle'),
     subtitle: $_('neutral.dashboardSubtitle'),
     items: dashboardWorkspaces,
-    columns: [
-      { key: 'name', label: $_('neutral.colName'), sortable: true },
-      { key: 'type', label: $_('neutral.colType'), sortable: true },
-      { key: 'initiativeCount', label: $_('neutral.colInitiatives'), sortable: true },
-      { key: 'lastActivity', label: $_('neutral.colLastActivity'), sortable: true },
-    ],
-    sortKey: 'lastActivity',
-    sortDirection: 'desc',
+    columns: [],
     loading,
     emptyMessage: $_('neutral.emptyWorkspaces'),
     actions: [
       {
         label: $_('neutral.newWorkspace'),
-        href: '/settings',
+        href: '/settings?action=createWorkspace',
         variant: 'primary',
         icon: Plus,
       },
@@ -138,6 +132,20 @@
 </script>
 
 <section class="space-y-6">
+  <div class="flex items-center justify-between">
+    <h1 class="text-3xl font-semibold">{$_('neutral.dashboardTitle')}</h1>
+    <FileMenu
+      showNew={true}
+      showImport={false}
+      showExport={false}
+      showPrint={false}
+      showDelete={false}
+      onNew={() => goto('/settings?action=createWorkspace')}
+      triggerTitle={$_('neutral.actions')}
+      triggerAriaLabel={$_('neutral.actions')}
+    />
+  </div>
+
   {#if error}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
       {error}
