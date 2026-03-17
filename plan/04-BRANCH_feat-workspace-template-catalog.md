@@ -25,7 +25,7 @@ This file is a pointer — `BRANCH.md` is the authoritative tracking document.
 - [x] **Bug 5** — Sortable columns in neutral view: removed. Deferred to BR-18 for global implementation.
 - [x] **Bug 6** — Folder initiative count always 0. Fixed: UI store field renamed from `useCaseCount` to `initiativeCount` to match API rename.
 - [ ] **Bug 7** — `startInitiativeGenerationWorkflow` hardcodes `ai_usecase_generation_v1` workflow regardless of workspace type. Fix: resolve workflow by workspace type via `getWorkflowSeedsForType`.
-- [x] **Bug 8** — Cannot delete a workspace from admin settings UI. Investigate cascade FK.
+- [x] **Bug 8** — Cannot delete a workspace from admin settings UI. Fixed: added BR-04 tables (workflow_definitions, agent_definitions, execution_runs/events, entity_links, guardrails) to workspace deletion cascade.
 - [x] **Bug 9** — Workspace cards in neutral view use a new card component instead of the shared card component used for folders/organizations/initiatives. Fix: use the same card component for consistency.
 
 ## Agent/Prompt Restructuration (Bug 1 — §8.3 spec evol)
