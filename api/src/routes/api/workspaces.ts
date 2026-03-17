@@ -12,9 +12,17 @@ import {
   organizations,
   users,
   workspaceMemberships,
-  workspaces
+  workspaces,
+  workflowDefinitionTasks,
+  workflowDefinitions,
+  agentDefinitions,
+  workspaceTypeWorkflows,
+  executionRuns,
+  executionEvents,
+  entityLinks,
+  guardrails,
 } from '../../db/schema';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { requireEditor } from '../../middleware/rbac';
 import { createId } from '../../utils/id';
 import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeutralWorkspace } from '../../services/workspace-access';
@@ -267,12 +275,27 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
     // Jobs (history references are set null)
     await tx.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
 
+    // BR-04 tables: execution events/runs, entity links, guardrails
+    await tx.delete(executionEvents).where(eq(executionEvents.workspaceId, workspaceId));
+    await tx.delete(executionRuns).where(eq(executionRuns.workspaceId, workspaceId));
+    await tx.delete(entityLinks).where(eq(entityLinks.workspaceId, workspaceId));
+    await tx.delete(guardrails).where(eq(guardrails.workspaceId, workspaceId));
+
+    // BR-04 tables: workflow tasks → workflow definitions → workspace type workflows, agent definitions
+    const wfIds = (await tx.select({ id: workflowDefinitions.id }).from(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, workspaceId))).map(r => r.id);
+    if (wfIds.length > 0) {
+      await tx.delete(workflowDefinitionTasks).where(inArray(workflowDefinitionTasks.workflowDefinitionId, wfIds));
+      await tx.delete(workspaceTypeWorkflows).where(inArray(workspaceTypeWorkflows.workflowDefinitionId, wfIds));
+    }
+    await tx.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, workspaceId));
+    await tx.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, workspaceId));
+
     // Core business tables
     await tx.delete(initiatives).where(eq(initiatives.workspaceId, workspaceId));
     await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
 
-    // Memberships (FK cascade also applies, but explicit is fine)
+    // Memberships
     await tx.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
 
     // Finally delete workspace
