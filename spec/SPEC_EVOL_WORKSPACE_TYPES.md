@@ -552,6 +552,52 @@ These are chat tools (§3.3), not workflow agents.
 
 ---
 
+### 8.3 Agent/prompt restructuration — delete `default-prompts.ts`
+
+#### Problem
+`default-prompts.ts` contains 19 prompts mixing infrastructure (chat reasoning eval) with business logic (use-case generation). Business prompts are AI-oriented and cannot serve `opportunity` or `code` workspaces. Agents for `opportunity` and `code` are empty shells (no prompts, no generation logic).
+
+#### Target: each agent carries its own prompt
+
+**`default-prompts.ts` is deleted entirely.** All content migrates to specialized files:
+
+| Target file | Content |
+|---|---|
+| `default-chat-system.ts` | Chat system prompt per workspace type (cadrage AI / opportunity / code) + chat-level prompts common to all types (reasoning eval, session title, conversation auto) |
+| `default-agents-ai-ideas.ts` | AI-specific agents with prompts: `generation_orchestrator`, `matrix_generation_agent` (AI matrix prompt), `usecase_list_agent` (AI list prompt), `todo_projection_agent`, `usecase_detail_agent` (AI detail prompt), `executive_synthesis_agent` (AI synthesis prompt) |
+| `default-agents-opportunity.ts` | Opportunity-specific agents with neutral prompts: `opportunity_orchestrator`, `matrix_generation_agent` (neutral matrix prompt), `opportunity_list_agent` (neutral list prompt), `todo_projection_agent`, `opportunity_detail_agent` (neutral detail prompt), `executive_synthesis_agent` (neutral synthesis prompt) |
+| `default-agents-code.ts` | Code-specific agents with prompts: `codebase_analyst`, `issue_triager`, `implementation_planner` |
+| `default-agents-shared.ts` | Agents available on ALL workspace types: `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` — each with its prompt |
+
+`structured_json_repair` prompt moves to a local constant in `context-initiative.ts` (utility, not an agent).
+
+#### Agent prompt storage
+
+Each agent definition carries its prompt in `config.promptTemplate` (string). No more `promptId` pointing to `default-prompts.ts`. Agents are seeded code-based (`sourceLevel: "code"`) with their prompt baked in.
+
+#### Workspace type → agent seed
+
+| Workspace type | Specific agents | Shared agents (all types) |
+|---|---|---|
+| ai-ideas | `generation_orchestrator`, `matrix_generation_agent`, `usecase_list_agent`, `todo_projection_agent`, `usecase_detail_agent`, `executive_synthesis_agent` | `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` |
+| opportunity | `opportunity_orchestrator`, `matrix_generation_agent` (neutral prompt), `opportunity_list_agent`, `todo_projection_agent`, `opportunity_detail_agent`, `executive_synthesis_agent` (neutral prompt) | same shared agents |
+| code | `codebase_analyst`, `issue_triager`, `implementation_planner` | same shared agents |
+
+#### Chat system prompt per workspace type
+
+Moved from `default-prompts.ts` (`chat_system_base`, `chat_code_agent`) to `default-chat-system.ts`:
+
+| Workspace type | Chat cadrage |
+|---|---|
+| ai-ideas | "Assistant IA pour application B2B d'idées d'IA" (existing) |
+| opportunity | "Assistant pour la gestion d'opportunités commerciales" (new, neutral) |
+| code | "Assistant pour l'analyse et le développement de code" (existing `chat_code_agent`) |
+| neutral | "Assistant de coordination multi-workspace" (new) |
+
+Chat-level prompts (reasoning eval, session title, conversation auto) remain common to all types, stored in `default-chat-system.ts`.
+
+---
+
 ## 9) Template catalog per workspace type × maturity stage
 
 > → cible: `SPEC_TEMPLATING.md` §2 (families extension)
