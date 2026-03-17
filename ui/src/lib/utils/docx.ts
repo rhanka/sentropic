@@ -4,7 +4,7 @@ import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
 type DocxGeneratePayload = {
   templateId: 'usecase-onepage' | 'executive-synthesis-multipage';
-  entityType: 'usecase' | 'folder';
+  entityType: 'initiative' | 'folder';
   entityId: string;
   provided?: Record<string, unknown>;
   controls?: Record<string, unknown>;

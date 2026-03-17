@@ -65,11 +65,11 @@
   let activeChatSession: ChatSession | null = null;
   let pendingChatSessionDeleteConfirm = false;
   let commentContext: {
-    type: 'organization' | 'folder' | 'usecase' | 'executive_summary';
+    type: 'organization' | 'folder' | 'initiative' | 'executive_summary';
     id?: string;
   } | null = null;
   let commentContextOverride: {
-    type: 'organization' | 'folder' | 'usecase' | 'executive_summary';
+    type: 'organization' | 'folder' | 'initiative' | 'executive_summary';
     id?: string;
   } | null = null;
 
@@ -1650,13 +1650,13 @@
     params: Record<string, string>,
     folderId: string | null,
   ): {
-    type: 'organization' | 'folder' | 'usecase' | 'executive_summary';
+    type: 'organization' | 'folder' | 'initiative' | 'executive_summary';
     id?: string;
   } | null => {
-    if (routeId === '/usecase/[id]' && params.id) {
-      return { type: 'usecase', id: params.id };
+    if (routeId === '/initiative/[id]' && params.id) {
+      return { type: 'initiative', id: params.id };
     }
-    if (routeId === '/usecase' && folderId) {
+    if (routeId === '/initiative' && folderId) {
       return { type: 'folder', id: folderId };
     }
     if (routeId === '/dashboard' && folderId) {
