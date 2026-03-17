@@ -15,6 +15,7 @@
   import type { ViewTemplateDescriptor } from '$lib/types/view-template';
   import { Lightbulb, Target, Code2, Home, FileText } from '@lucide/svelte';
   import type { WorkspaceType } from '$lib/stores/workspaceScope';
+  import WorkspaceCreateDialog from '$lib/components/WorkspaceCreateDialog.svelte';
 
   type DashboardWorkspace = {
     id: string;
@@ -28,6 +29,7 @@
   let loading = true;
   let dashboardWorkspaces: DashboardWorkspace[] = [];
   let error: string | null = null;
+  let showCreateDialog = false;
 
   const WORKSPACE_TYPE_ICONS: Record<WorkspaceType, { icon: any; colorClass: string; borderClass: string; bgClass: string; textClass: string; hoverTextClass: string }> = {
     neutral: { icon: Home, colorClass: 'bg-slate-100 text-slate-500', borderClass: 'border-slate-200', bgClass: 'bg-slate-50', textClass: 'text-slate-800', hoverTextClass: 'group-hover:text-slate-900' },
@@ -97,7 +99,7 @@
       showExport: false,
       showPrint: false,
       showDelete: false,
-      onNew: () => goto('/settings?action=createWorkspace'),
+      onNew: () => (showCreateDialog = true),
     },
     // When items exist, only render the header — cards are rendered below
     // in folder-style layout for visual consistency (Bug 9).
@@ -176,3 +178,14 @@
     </div>
   {/if}
 </section>
+
+<WorkspaceCreateDialog
+  bind:open={showCreateDialog}
+  on:created={async (e) => {
+    await loadDashboard();
+    if (e.detail?.id) {
+      setWorkspaceScope(e.detail.id);
+      goto('/folders');
+    }
+  }}
+/>
