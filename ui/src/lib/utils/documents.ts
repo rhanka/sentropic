@@ -1,7 +1,7 @@
 import { API_BASE_URL } from '$lib/config';
 import { getApiAuthToken, getApiBaseUrl } from '$lib/core/api-client';
 
-export type DocumentContextType = 'organization' | 'folder' | 'usecase' | 'chat_session';
+export type DocumentContextType = 'organization' | 'folder' | 'initiative' | 'chat_session';
 
 function getUrlBaseForBrowser(): string {
   // In production Docker UI build, API_BASE_URL is typically "/api/v1" (relative)

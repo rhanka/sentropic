@@ -292,7 +292,7 @@
   };
   type IconComponent = typeof FileText;
   type ChatContextEntry = {
-    contextType: 'organization' | 'folder' | 'usecase' | 'executive_summary';
+    contextType: 'organization' | 'folder' | 'initiative' | 'executive_summary';
     contextId?: string;
     label: string;
     active: boolean;
@@ -336,7 +336,7 @@
   const getContextIcon = (type: ChatContextEntry['contextType']) => {
     if (type === 'organization') return Building2;
     if (type === 'folder') return Folder;
-    if (type === 'usecase') return Lightbulb;
+    if (type === 'initiative') return Lightbulb;
     if (type === 'executive_summary') return ScrollText;
     return FileText;
   };
@@ -357,7 +357,7 @@
       const folder = $foldersStore.find((f) => f.id === contextId);
       return folder?.name || '';
     }
-    if (type === 'usecase') {
+    if (type === 'initiative') {
       const useCase = $initiativesStore.find((u) => u.id === contextId);
       return useCase?.data?.name || useCase?.name || '';
     }
@@ -398,7 +398,7 @@
               : folder.name,
           );
         }
-      } else if (type === 'usecase') {
+      } else if (type === 'initiative') {
         const useCase = await apiGet<{
           data?: { name?: string };
           name?: string;
@@ -1704,13 +1704,13 @@
     const routeId = $contextStore.route.id;
     const params = $contextStore.params;
 
-    // /usecase/[id] → usecase
-    if (routeId === '/usecase/[id]' && params.id) {
-      return { primaryContextType: 'usecase', primaryContextId: params.id };
+    // /initiative/[id] → initiative
+    if (routeId === '/initiative/[id]' && params.id) {
+      return { primaryContextType: 'initiative', primaryContextId: params.id };
     }
 
-    // /usecase → use case list; when a folder is selected, treat chat context as folder
-    if (routeId === '/usecase' && $currentFolderId) {
+    // /initiative → initiative list; when a folder is selected, treat chat context as folder
+    if (routeId === '/initiative' && $currentFolderId) {
       return {
         primaryContextType: 'folder',
         primaryContextId: $currentFolderId,
