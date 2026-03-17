@@ -52,9 +52,10 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-12 | `feat/release-chrome-vscode-ci-publish` | plan | BR-05, BR-06, BR-07, BR-13 | none |
 | BR-13 | `feat/chrome-plugin-download-distribution` | done | BR-06 | — |
 | BR-14 | `feat/chat-modularization` | plan | BR-04 (low) | low (ChatPanel/ChatWidget refactoring) |
-| BR-15 | _(reserved: agent workflow config robustness)_ | plan | BR-04 | — |
+| BR-15 | `feat/spectral-site-tools` | API capture + auto-generated per-site tools via Spectral-like analysis | plan | BR-06 | `plan/15-BRANCH_feat-spectral-site-tools.md` |
 | BR-16 | `feat/document-connectors` | plan | BR-04 (low) | low (initiative rename in contextType) |
 | BR-17 | `feat/rag-documents` | plan | BR-16 (optional), BR-08 (Cohere embeddings) | none |
+| BR-18 | `feat/sortable-list-views` | Sortable columns for all list views (folders, initiatives, workspaces) | plan | none | none |
 
 ## 4) Dependency graph
 
