@@ -497,6 +497,96 @@ Closed: 2026-03-12
 
 ---
 
+### Segment B' — Workflow engine correction, opportunity neutralisation, multi-org
+
+#### Lot 9bis — Generic workflow engine correction + agent/prompt restructuration (§7.4, §8.3)
+
+The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` still hardcodes the AI workflow. This lot delivers the real refactoring.
+
+**Tasks:**
+- [ ] Delete `api/src/config/default-prompts.ts` entirely.
+- [ ] Create `api/src/config/default-chat-system.ts`: chat system prompt per workspace type + common chat prompts (reasoning eval, session title, conversation auto).
+- [ ] Create `api/src/config/default-agents-ai-ideas.ts`: AI agents with prompts in `config.promptTemplate`.
+- [ ] Create `api/src/config/default-agents-opportunity.ts`: opportunity agents with neutral prompts.
+- [ ] Create `api/src/config/default-agents-shared.ts`: shared agents for all workspace types (demand_analyst, solution_architect, bid_writer, gate_reviewer, comment_assistant, history_analyzer, document_summarizer, document_analyzer).
+- [ ] Create `api/src/config/default-agents-code.ts`: code agents with prompts.
+- [ ] Move `structured_json_repair` to local constant in `api/src/services/context-initiative.ts`.
+- [ ] Update `api/src/config/default-agents.ts`: import from split files, include shared agents for all types.
+- [ ] Migrate all `readLegacyPromptTemplate()` / `defaultPrompts.find(...)` to agent-based prompt resolution.
+- [ ] Refactor `startInitiativeGenerationWorkflow` in `todo-orchestration.ts` into truly generic `startWorkflow(workspaceId, workflowKey)` — resolves workflow from DB → ordered tasks → agent per task → prompt from agent `config.promptTemplate`. Remove all generation-specific hardcoded logic from orchestration layer.
+- [ ] Update `chat-service.ts`: resolve chat system prompt from `default-chat-system.ts` by workspace type.
+
+**Lot 9bis gate:**
+- [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make lint-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make test-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+
+---
+
+#### Lot 9ter — Opportunity identification workflow + neutral prompts/matrix/fields (§8.4, §8.5, E, F)
+
+**Tasks:**
+- [ ] Add `opportunity_identification` workflow seed in `default-workflows.ts` (tasks: context_prepare, matrix_prepare, opportunity_list, todo_sync, opportunity_detail, executive_summary). Set as default workflow for `opportunity` workspace type.
+- [ ] Draft neutral prompts for opportunity agents: list (business opportunities, not AI), detail (client problem / proposed solution), matrix (neutral axes), synthesis (business-focused).
+- [ ] Create `api/src/config/default-matrix-opportunity.ts`: neutral matrix (no `ai_maturity`, `data_compliance` → `regulatory_compliance`, `data_availability` → `resource_availability`, neutralized descriptions).
+- [ ] Wire workspace type → default matrix selection on folder creation.
+- [ ] Opportunity prompts do NOT populate `dataSources`/`dataObjects`. Frame `problem` as client/market problem, `solution` as proposed offering.
+
+**Lot 9ter gate:**
+- [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make lint-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make test-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+
+---
+
+#### Lot 9quater — Multi-org, batch org generation, matrix customisation (B, B', C, D)
+
+**Tasks:**
+- [ ] B: Multi-org per opportunity — `organizationIds` array in initiative data JSONB alongside existing `organizationId`. Prompts produce initiatives mapped to organisations.
+- [ ] B: Auto-create orgs option — new task `create_organizations` in `opportunity_identification` workflow before `opportunity_list`. Prompt retrieves existing orgs to avoid duplicates. Also available for `ai_usecase_generation` workflow.
+- [ ] B': Batch org generation — `organization_batch_agent` creates org list from prompt (e.g. "top 10 pharma in Montreal"). Standalone action or workflow task.
+- [ ] C: Matrix adaptable per org — `matrixSource` option (`organization` | `prompt` | `default`) in workflow config.
+- [ ] D: Matrix axes customisation — prompt allows proposing adapted axis names/descriptions per opportunity domain.
+
+**Lot 9quater gate:**
+- [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make lint-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make test-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+
+---
+
+#### UAT Checkpoint B'
+
+- [ ] **Workspace opportunity — generation**
+  - [ ] Create folder → uses `opportunity_identification` workflow (not AI workflow)
+  - [ ] Prompts are neutral (no AI/IA mention)
+  - [ ] Matrix is neutral (no `ai_maturity`, axes `regulatory_compliance`/`resource_availability`)
+  - [ ] Initiative detail: no `dataSources`/`dataObjects`, `problem` = client problem, `solution` = proposed offering
+  - [ ] Chat system prompt mentions opportunity management (not AI)
+  - [ ] Executive summary is business-focused
+- [ ] **Workspace ai-ideas — non-regression**
+  - [ ] Generation still uses AI workflow with AI prompts
+  - [ ] Matrix includes `ai_maturity`
+  - [ ] Initiative detail has `dataSources`/`dataObjects`
+  - [ ] Chat system prompt mentions AI assistant
+- [ ] **Multi-org (B)**
+  - [ ] Opportunity references multiple organisations
+  - [ ] Auto-create orgs option works
+  - [ ] Existing orgs not duplicated
+- [ ] **Batch org (B')**
+  - [ ] Create orgs from prompt
+- [ ] **Matrix (C, D)**
+  - [ ] Matrix can reuse org matrix or generate new
+  - [ ] Axes can be customised (not just scale descriptions)
+- [ ] **Bug fixes non-regression**
+  - [ ] No ZodError on initiative lock/presence
+  - [ ] Folder initiative count correct
+  - [ ] FileMenu in neutral works
+  - [ ] Workspace create dialog opens inline
+  - [ ] Workspace deletion works (cascade)
+
+---
+
 ### Segment C — View templates, container refactoring, workflow launch, template catalog (~100 commits)
 
 #### Lot 10 — View template API & seed data
