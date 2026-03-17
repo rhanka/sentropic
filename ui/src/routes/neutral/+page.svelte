@@ -11,9 +11,10 @@
   import { goto } from '$app/navigation';
   import { apiGet } from '$lib/utils/api';
   import { setWorkspaceScope, workspaceScope } from '$lib/stores/workspaceScope';
+  import ViewTemplateRenderer from '$lib/components/ViewTemplateRenderer.svelte';
+  import type { ViewTemplateDescriptor } from '$lib/types/view-template';
   import { Lightbulb, Target, Code2, Home, FileText } from '@lucide/svelte';
   import type { WorkspaceType } from '$lib/stores/workspaceScope';
-  import FileMenu from '$lib/components/FileMenu.svelte';
 
   type DashboardWorkspace = {
     id: string;
@@ -79,41 +80,48 @@
     return d.toLocaleDateString();
   }
 
+  // FileMenu is passed through the descriptor — ViewTemplateRenderer renders it
+  // in the title header row. No manual FileMenu + header div needed.
+  // No actions array — the FileMenu handles creation via onNew.
+  $: descriptor = {
+    mode: 'container',
+    title: $_('neutral.dashboardTitle'),
+    subtitle: $_('neutral.dashboardSubtitle'),
+    items: dashboardWorkspaces,
+    columns: [],
+    loading,
+    emptyMessage: $_('neutral.emptyWorkspaces'),
+    fileMenu: {
+      showNew: true,
+      showImport: false,
+      showExport: false,
+      showPrint: false,
+      showDelete: false,
+      onNew: () => goto('/settings?action=createWorkspace'),
+    },
+    // When items exist, only render the header — cards are rendered below
+    // in folder-style layout for visual consistency (Bug 9).
+    headerOnly: !loading && dashboardWorkspaces.length > 0,
+  } as ViewTemplateDescriptor;
+
   onMount(() => {
     void loadDashboard();
   });
 </script>
 
 <section class="space-y-6">
-  <div class="flex items-center justify-between">
-    <h1 class="text-3xl font-semibold">{$_('neutral.dashboardTitle')}</h1>
-    <FileMenu
-      showNew={true}
-      showImport={false}
-      showExport={false}
-      showPrint={false}
-      showDelete={false}
-      onNew={() => goto('/settings?action=createWorkspace')}
-      triggerTitle={$_('neutral.actions')}
-      triggerAriaLabel={$_('neutral.actions')}
-    />
-  </div>
-
   {#if error}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
       {error}
     </div>
   {/if}
 
-  {#if loading}
-    <div class="rounded border border-blue-200 bg-blue-50 p-4">
-      <p class="text-sm text-blue-700">{$_('neutral.loading')}</p>
-    </div>
-  {:else if dashboardWorkspaces.length === 0}
-    <div class="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
-      <p class="text-sm text-slate-500">{$_('neutral.emptyWorkspaces')}</p>
-    </div>
-  {:else}
+  <!-- ViewTemplateRenderer handles title, FileMenu, loading skeleton, and empty state.
+       When items exist, headerOnly=true so the card grid is rendered directly below. -->
+  <ViewTemplateRenderer {descriptor} />
+
+  {#if !loading && dashboardWorkspaces.length > 0}
+    <!-- Workspace cards — folder-style layout (Bug 9 harmonization) -->
     <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
       {#each dashboardWorkspaces as ws}
         {@const cfg = WORKSPACE_TYPE_ICONS[ws.type] ?? WORKSPACE_TYPE_ICONS['ai-ideas']}
