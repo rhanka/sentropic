@@ -19,8 +19,11 @@ See `BRANCH.md` for full scope boundaries, decision log, and lot-based plan.
 This file is a pointer — `BRANCH.md` is the authoritative tracking document.
 
 ## UAT Bug Fixes (pre Lot N-2)
-- [ ] **Bug 2** — ZodError `objectType: "usecase"` in initiative lock/presence. UI sends `'usecase'` but API enum expects `'initiative'` (BR-08 rename). Fix: replace `'usecase'` with `'initiative'` in `ui/src/lib/utils/object-lock.ts`, `ui/src/lib/utils/comments.ts`, `ui/src/lib/utils/documents.ts`, `ui/src/routes/initiative/[id]/+page.svelte` lock/presence calls.
-- [ ] **Bug 3** — Missing folder action menu ("+") in neutral workspace view. Add standard folder menu to `/neutral` page replacing "Nouveau workspace" button position.
-- [ ] **Bug 4** — "Nouveau workspace" redirects to `/settings` instead of opening creation modal directly. Fix: open workspace creation modal inline or via query param.
-- [ ] **Bug 5** — Sortable columns in neutral view: remove tri/sorting from neutral page (inconsistent with other list views). Deferred to BR-18 for global implementation.
-- [ ] **Bug 6** — Initiative count always 0 in neutral workspace cards. Fix: correct the `GET /neutral/dashboard` SQL/query to count initiatives per workspace.
+- [x] **Bug 2** — ZodError `objectType: "usecase"` in initiative lock/presence. Fixed: replaced `'usecase'` with `'initiative'` in all UI API-facing calls.
+- [ ] **Bug 3** — Missing folder action menu ("+") in neutral workspace view. Fix: integrate FileMenu into ViewTemplateRenderer, remove duplicate "Nouveau workspace" button.
+- [ ] **Bug 4** — "Nouveau workspace" redirects to `/settings` instead of opening creation modal directly. Fix: extract WorkspaceCreateDialog component, open inline.
+- [x] **Bug 5** — Sortable columns in neutral view: removed. Deferred to BR-18 for global implementation.
+- [x] **Bug 6** — Folder initiative count always 0. Fixed: UI store field renamed from `useCaseCount` to `initiativeCount` to match API rename.
+- [ ] **Bug 7** — `startInitiativeGenerationWorkflow` hardcodes `ai_usecase_generation_v1` workflow regardless of workspace type. Fix: resolve workflow by workspace type via `getWorkflowSeedsForType`.
+- [ ] **Bug 8** — Cannot delete a workspace from admin settings UI. Investigate cascade FK.
+- [ ] **Bug 9** — Workspace cards in neutral view use a new card component instead of the shared card component used for folders/organizations/initiatives. Fix: use the same card component for consistency.
