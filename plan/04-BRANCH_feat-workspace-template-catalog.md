@@ -28,7 +28,7 @@ This file is a pointer — `BRANCH.md` is the authoritative tracking document.
 - [x] **Bug 8** — Cannot delete a workspace from admin settings UI. Fixed: added BR-04 tables (workflow_definitions, agent_definitions, execution_runs/events, entity_links, guardrails) to workspace deletion cascade.
 - [x] **Bug 9** — Workspace cards in neutral view use a new card component instead of the shared card component used for folders/organizations/initiatives. Fix: use the same card component for consistency.
 
-## Agent/Prompt Restructuration (Bug 1 — §8.3 spec evol)
+## Lot — Generic workflow engine + agent/prompt restructuration + opportunity neutralisation (Bug 1, §7.4, §8.3, §8.4, §8.5)
 - [ ] Delete `api/src/config/default-prompts.ts` entirely.
 - [ ] Create `api/src/config/default-chat-system.ts`: chat system prompt per workspace type + common chat prompts (reasoning eval, session title, conversation auto).
 - [ ] Create `api/src/config/default-agents-ai-ideas.ts`: AI-specific agents with prompts integrated in `config.promptTemplate` (generation_orchestrator, matrix_generation_agent, usecase_list_agent, todo_projection_agent, usecase_detail_agent, executive_synthesis_agent).
@@ -41,3 +41,8 @@ This file is a pointer — `BRANCH.md` is the authoritative tracking document.
 - [ ] Update `api/src/services/chat-service.ts`: resolve chat system prompt from `default-chat-system.ts` by workspace type instead of hardcoded `chat_system_base`.
 - [ ] Update all services that call `readLegacyPromptTemplate()` or reference `defaultPrompts.find(...)`: migrate to agent-based prompt resolution.
 - [ ] Draft neutral prompts for opportunity agents (list, detail, matrix, synthesis).
+- [ ] **Generic workflow engine (§7.4)**: refactor `startInitiativeGenerationWorkflow` in `todo-orchestration.ts` into generic `startWorkflow(workspaceId, workflowKey)` that resolves workflow from DB → ordered tasks → agent per task → prompt from agent config. Remove generation-specific hardcoded logic from orchestration layer.
+- [ ] **Opportunity identification workflow**: add `opportunity_identification` workflow seed in `default-workflows.ts` (clone of `ai_usecase_generation` with neutral task keys: context_prepare, matrix_prepare, opportunity_list, todo_sync, opportunity_detail, executive_summary). Set as default workflow for `opportunity` workspace type.
+- [ ] **Neutral default matrix (§8.5)**: create `api/src/config/default-matrix-opportunity.ts` with neutralized axes (remove `ai_maturity`, rename `data_compliance` → `regulatory_compliance`, `data_availability` → `resource_availability`, neutralize all descriptions). Wire workspace type → default matrix selection on folder creation.
+- [ ] **Neutral initiative data fields (§8.4 F)**: opportunity prompts do not populate `dataSources`/`dataObjects`. Frame `problem` and `solution` for business context.
+- [ ] **Chat system prompt per type**: create `default-chat-system.ts`, resolve chat system prompt by workspace type in `chat-service.ts`.
