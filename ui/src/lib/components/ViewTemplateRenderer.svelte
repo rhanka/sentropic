@@ -30,6 +30,8 @@
     emptyMessage={descriptor.emptyMessage}
     loading={descriptor.loading ?? false}
     cardRenderer={descriptor.cardRenderer}
+    fileMenu={descriptor.fileMenu}
+    headerOnly={descriptor.headerOnly ?? false}
   />
 {:else if descriptor.mode === 'detail'}
   <!-- Detail mode: extensible slot for future detail renderers -->

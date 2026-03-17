@@ -28,6 +28,20 @@ export type CardProps = {
   onClick?: () => void;
 };
 
+/** FileMenu configuration for ViewTemplateRenderer */
+export type ViewFileMenu = {
+  showNew?: boolean;
+  showImport?: boolean;
+  showExport?: boolean;
+  showPrint?: boolean;
+  showDelete?: boolean;
+  onNew?: () => void;
+  onImport?: () => void;
+  onExport?: () => void;
+  onPrint?: () => void;
+  onDelete?: () => void;
+};
+
 /** View template descriptor */
 export type ViewTemplateDescriptor = {
   mode: ViewMode;
@@ -43,4 +57,9 @@ export type ViewTemplateDescriptor = {
   loading?: boolean;
   /** Card renderer: maps each item to card props */
   cardRenderer?: (item: any) => CardProps;
+  /** Optional FileMenu rendered in the title header row */
+  fileMenu?: ViewFileMenu;
+  /** When true, only render the header (title + fileMenu + actions) — skip the card grid.
+   *  Useful when the parent page renders its own card layout below the header. */
+  headerOnly?: boolean;
 };
