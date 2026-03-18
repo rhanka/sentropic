@@ -13,7 +13,7 @@ import { getNextSequence, readStreamEvents, writeStreamEvent } from './stream-se
 import { settingsService } from './settings';
 import type OpenAI from 'openai';
 import { getOpenAITransportMode } from './provider-connections';
-import { defaultPrompts } from '../config/default-prompts';
+import { CHAT_SYSTEM_PROMPTS, CHAT_COMMON_PROMPTS } from '../config/default-chat-system';
 import {
   readInitiativeTool,
   updateInitiativeFieldTool,
@@ -1270,7 +1270,16 @@ export class ChatService {
   }
 
   private getPromptTemplate(id: string): string {
-    return defaultPrompts.find((p) => p.id === id)?.content || '';
+    const chatSystemMap: Record<string, string> = {
+      'chat_system_base': CHAT_SYSTEM_PROMPTS['ai-ideas'],
+      'chat_code_agent': CHAT_SYSTEM_PROMPTS['code'],
+    };
+    const chatCommonMap: Record<string, string> = {
+      'chat_reasoning_effort_eval': CHAT_COMMON_PROMPTS.reasoning_effort_eval,
+      'chat_session_title': CHAT_COMMON_PROMPTS.session_title,
+      'chat_conversation_auto': CHAT_COMMON_PROMPTS.conversation_auto,
+    };
+    return chatSystemMap[id] || chatCommonMap[id] || '';
   }
 
   private renderTemplate(template: string, vars: Record<string, string>): string {
@@ -3135,7 +3144,7 @@ Règles :
     let reasoningEffortBy: string | undefined;
     if (shouldEvaluateReasoningEffort) {
       try {
-        const evalTemplate = defaultPrompts.find((p) => p.id === 'chat_reasoning_effort_eval')?.content || '';
+        const evalTemplate = CHAT_COMMON_PROMPTS.reasoning_effort_eval || '';
         if (evalTemplate) {
           const lastUserMessage =
             [...conversation].reverse().find((m) => m.role === 'user')?.content?.trim() || '';

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { executeWithToolsStream } from '../../services/tools';
-import { defaultPrompts } from '../../config/default-prompts';
+import { LEGACY_PROMPT_CATALOG } from '../../config/default-chat-system';
 
 const promptsRouter = new Hono();
 
@@ -21,7 +21,7 @@ const updatePromptsSchema = z.object({
 
 // GET /api/v1/prompts - Récupérer tous les prompts
 promptsRouter.get('/', (c) => {
-  return c.json({ prompts: defaultPrompts });
+  return c.json({ prompts: LEGACY_PROMPT_CATALOG });
 });
 
 // PUT /api/v1/prompts - Mettre à jour les prompts

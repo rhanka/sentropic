@@ -10,7 +10,7 @@ import { parseMatrixConfig } from '../../utils/matrix';
 import { calculateInitiativeScores, type ScoreEntry } from '../../utils/scoring';
 import type { InitiativeData, Initiative, InitiativeDataJson } from '../../types/initiative';
 import { defaultMatrixConfig } from '../../config/default-matrix';
-// import { defaultPrompts } from '../../config/default-prompts'; // Commented out - unused
+// default-prompts removed (BR-04); prompts now in split agent files + default-chat-system
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
 import { todoOrchestrationService } from '../../services/todo-orchestration';
@@ -41,8 +41,7 @@ async function notifyFolderEvent(folderId: string): Promise<void> {
   }
 }
 
-// Récupération des prompts depuis la configuration centralisée (désactivé - non utilisé)
-// const folderNamePrompt = defaultPrompts.find(p => p.id === 'folder_name')?.content || '';
+// folder_name prompt now in ORGANIZATION_PROMPTS (default-chat-system.ts) - currently unused
 
 const scoreEntry = z.object({
   axisId: z.string(),
