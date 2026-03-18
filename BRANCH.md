@@ -843,3 +843,16 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] Attach executed command list in PR notes.
 - [ ] User sign-off on final UAT.
 - [ ] Merge to main.
+
+---
+
+#### UAT Checkpoint B' — Bug Report (2026-03-17)
+
+- [ ] **Bug A** — Clicking a workspace card from neutral landing does not switch to the clicked workspace (stays on previous).
+- [ ] **Bug B** — Opening an initiative shows "invalid query" toast.
+- [ ] **Bug C** — Document section in initiative shows "invalid query" (likely same root cause as B).
+- [ ] **Bug D** — `dataSources` and `dataObjects` fields displayed but empty in opportunity initiatives — should be hidden when not populated.
+- [ ] **Bug E** — Opportunity folder matrix still shows `ai_maturity` axis — neutral matrix not applied on folder creation.
+- [ ] **Bug F** — "invalid query" affects both opportunity and ai-ideas workspaces — likely a broken API endpoint or Zod validation.
+- [ ] **Bug G** — After generation, folder initiative count stays at 0 until page refresh.
+- [ ] **Bug H** — Chat returns HTTP 400 ZodError: `contextType "usecase"` still sent somewhere (expected "initiative"). Affects chat in all workspace types.
