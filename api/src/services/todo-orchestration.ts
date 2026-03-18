@@ -180,7 +180,9 @@ export type WorkflowTaskAssignments = Record<string, string | null>;
 
 /**
  * @deprecated Legacy typed interface for ai-ideas generation workflow.
- * Kept for backward compat — callers should migrate to WorkflowTaskAssignments.
+ * Superseded by generic dispatch (§7.4) which builds assignments from agent config.role
+ * via ROLE_TO_LEGACY_FIELD / ROLE_TO_LEGACY_ALIAS maps.
+ * Kept for backward compat with queue-manager which reads named fields.
  */
 export interface InitiativeGenerationWorkflowTaskAssignments {
   contextPrepareAgentId: string | null;
@@ -217,6 +219,44 @@ export interface StartInitiativeGenerationWorkflowInput {
   initiativeCount?: number;
   locale: string;
 }
+
+/**
+ * A resolved workflow task with its associated agent definition config.
+ * Used by the generic dispatch loop (§7.4) to determine queue job routing.
+ */
+interface ResolvedWorkflowTask {
+  taskKey: string;
+  orderIndex: number;
+  agentDefinitionId: string | null;
+  agentRole: string | null;
+  agentPromptTemplate: string | null;
+}
+
+/**
+ * Maps agent config.role values to legacy InitiativeGenerationWorkflowTaskAssignments fields.
+ * Ensures backward compat with queue-manager which reads named fields from taskAssignments.
+ */
+const ROLE_TO_LEGACY_FIELD: Record<string, keyof InitiativeGenerationWorkflowTaskAssignments> = {
+  orchestrator: "contextPrepareAgentId",
+  matrix_generation: "matrixPrepareAgentId",
+  usecase_list_generation: "initiativeListAgentId",
+  opportunity_list_generation: "initiativeListAgentId",
+  todo_projection: "todoSyncAgentId",
+  usecase_detail_generation: "initiativeDetailAgentId",
+  opportunity_detail_generation: "initiativeDetailAgentId",
+  executive_summary_generation: "executiveSummaryAgentId",
+};
+
+/**
+ * Maps agent config.role to the queue-manager-compatible legacy alias fields.
+ * usecaseListAgentId and usecaseDetailAgentId are aliases used by queue-manager.
+ */
+const ROLE_TO_LEGACY_ALIAS: Record<string, keyof InitiativeGenerationWorkflowTaskAssignments> = {
+  usecase_list_generation: "usecaseListAgentId",
+  opportunity_list_generation: "usecaseListAgentId",
+  usecase_detail_generation: "usecaseDetailAgentId",
+  opportunity_detail_generation: "usecaseDetailAgentId",
+};
 
 interface TaskBundle {
   task: typeof tasks.$inferSelect;
@@ -2006,16 +2046,26 @@ export class TodoOrchestrationService {
     };
   }
 
-  private async getInitiativeGenerationWorkflowTaskAssignments(
+  /**
+   * Resolve workflow_definition_tasks from DB ordered by orderIndex, joining each task's
+   * agent_definition to read config.role and config.promptTemplate (§7.4 generic dispatch).
+   */
+  private async resolveWorkflowTasksWithAgents(
     workspaceId: string,
     workflowDefinitionId: string,
-  ): Promise<InitiativeGenerationWorkflowTaskAssignments> {
-    const workflowTasks = await db
+  ): Promise<ResolvedWorkflowTask[]> {
+    const rows = await db
       .select({
         taskKey: workflowDefinitionTasks.taskKey,
+        orderIndex: workflowDefinitionTasks.orderIndex,
         agentDefinitionId: workflowDefinitionTasks.agentDefinitionId,
+        agentConfig: agentDefinitions.config,
       })
       .from(workflowDefinitionTasks)
+      .leftJoin(
+        agentDefinitions,
+        eq(workflowDefinitionTasks.agentDefinitionId, agentDefinitions.id),
+      )
       .where(
         and(
           eq(workflowDefinitionTasks.workspaceId, workspaceId),
@@ -2024,24 +2074,54 @@ export class TodoOrchestrationService {
       )
       .orderBy(asc(workflowDefinitionTasks.orderIndex), asc(workflowDefinitionTasks.createdAt));
 
-    const byTaskKey = new Map<string, string | null>();
-    for (const task of workflowTasks) {
-      byTaskKey.set(task.taskKey, task.agentDefinitionId ?? null);
+    return rows.map((row) => {
+      const config = row.agentConfig as Record<string, unknown> | null;
+      return {
+        taskKey: row.taskKey,
+        orderIndex: row.orderIndex,
+        agentDefinitionId: row.agentDefinitionId ?? null,
+        agentRole: (config?.role as string) ?? null,
+        agentPromptTemplate: (config?.promptTemplate as string) ?? null,
+      };
+    });
+  }
+
+  /**
+   * Build InitiativeGenerationWorkflowTaskAssignments from resolved tasks (§7.4).
+   * Uses agent config.role to populate legacy named fields for backward compat with queue-manager.
+   */
+  private buildTaskAssignmentsFromResolvedTasks(
+    resolvedTasks: ResolvedWorkflowTask[],
+  ): InitiativeGenerationWorkflowTaskAssignments {
+    const assignments: InitiativeGenerationWorkflowTaskAssignments = {
+      contextPrepareAgentId: null,
+      matrixPrepareAgentId: null,
+      initiativeListAgentId: null,
+      todoSyncAgentId: null,
+      initiativeDetailAgentId: null,
+      executiveSummaryAgentId: null,
+      usecaseListAgentId: null,
+      usecaseDetailAgentId: null,
+    };
+
+    for (const task of resolvedTasks) {
+      // Always populate generic task-key → agentId mapping
+      assignments[task.taskKey] = task.agentDefinitionId;
+
+      // Populate legacy named fields based on agent role
+      if (task.agentRole) {
+        const legacyField = ROLE_TO_LEGACY_FIELD[task.agentRole];
+        if (legacyField) {
+          assignments[legacyField] = task.agentDefinitionId;
+        }
+        const aliasField = ROLE_TO_LEGACY_ALIAS[task.agentRole];
+        if (aliasField) {
+          assignments[aliasField] = task.agentDefinitionId;
+        }
+      }
     }
 
-    const initiativeListAgentId = byTaskKey.get("generation_usecase_list") ?? byTaskKey.get("generation_initiative_list") ?? null;
-    const initiativeDetailAgentId = byTaskKey.get("generation_usecase_detail") ?? byTaskKey.get("generation_initiative_detail") ?? null;
-
-    return {
-      contextPrepareAgentId: byTaskKey.get("generation_context_prepare") ?? null,
-      matrixPrepareAgentId: byTaskKey.get("generation_matrix_prepare") ?? null,
-      initiativeListAgentId,
-      todoSyncAgentId: byTaskKey.get("generation_todo_sync") ?? null,
-      initiativeDetailAgentId,
-      executiveSummaryAgentId: byTaskKey.get("generation_executive_summary") ?? null,
-      usecaseListAgentId: initiativeListAgentId,
-      usecaseDetailAgentId: initiativeDetailAgentId,
-    };
+    return assignments;
   }
 
   /**
@@ -2049,7 +2129,7 @@ export class TodoOrchestrationService {
    */
   private async ensureInitiativeGenerationWorkflowDefinition(
     actor: TodoActor,
-  ): Promise<{ workflowDefinitionId: string; workflowKey: string; taskAssignments: InitiativeGenerationWorkflowTaskAssignments }> {
+  ): Promise<{ workflowDefinitionId: string; workflowKey: string; taskAssignments: InitiativeGenerationWorkflowTaskAssignments; resolvedTasks: ResolvedWorkflowTask[] }> {
     // Resolve workspace type to pick the correct workflow
     const [ws] = await db
       .select({ type: workspaces.type })
@@ -2071,19 +2151,24 @@ export class TodoOrchestrationService {
       agentIds,
     );
 
-    const taskAssignments = await this.getInitiativeGenerationWorkflowTaskAssignments(
+    // §7.4: resolve tasks from DB with agent definitions instead of hardcoded mapping
+    const resolvedTasks = await this.resolveWorkflowTasksWithAgents(
       actor.workspaceId,
       workflowDefinitionId,
     );
+    const taskAssignments = this.buildTaskAssignmentsFromResolvedTasks(resolvedTasks);
 
-    return { workflowDefinitionId, workflowKey: workflowSeed.key, taskAssignments };
+    return { workflowDefinitionId, workflowKey: workflowSeed.key, taskAssignments, resolvedTasks };
   }
 
   async startInitiativeGenerationWorkflow(
     actor: TodoActor,
     input: StartInitiativeGenerationWorkflowInput,
-  ): Promise<InitiativeGenerationWorkflowRuntime> {
-    const { workflowDefinitionId, workflowKey, taskAssignments } = await this.ensureInitiativeGenerationWorkflowDefinition(actor);
+  ): Promise<InitiativeGenerationWorkflowRuntime & { resolvedTasks: ResolvedWorkflowTask[] }> {
+    const { workflowDefinitionId, workflowKey, taskAssignments, resolvedTasks } = await this.ensureInitiativeGenerationWorkflowDefinition(actor);
+
+    // §7.4: resolve first agent from ordered tasks (typically the orchestrator)
+    const firstAgent = resolvedTasks.length > 0 ? resolvedTasks[0] : null;
 
     const workflowRunId = createId();
     const now = new Date();
@@ -2094,7 +2179,7 @@ export class TodoOrchestrationService {
       todoId: null,
       taskId: null,
       workflowDefinitionId,
-      agentDefinitionId: taskAssignments.contextPrepareAgentId,
+      agentDefinitionId: firstAgent?.agentDefinitionId ?? null,
       mode: "full_auto",
       status: "in_progress",
       startedByUserId: actor.userId,
@@ -2138,6 +2223,7 @@ export class TodoOrchestrationService {
       workflowRunId,
       workflowDefinitionId,
       taskAssignments,
+      resolvedTasks,
     };
   }
 
@@ -2146,22 +2232,92 @@ export class TodoOrchestrationService {
     input: StartInitiativeGenerationWorkflowInput,
   ): Promise<StartInitiativeGenerationWorkflowDispatchResult> {
     const workflowRuntime = await this.startInitiativeGenerationWorkflow(actor, input);
+    const { resolvedTasks } = workflowRuntime;
 
+    // §7.4: dispatch queue jobs by iterating resolved tasks and matching agent config.role
     let matrixJobId: string | undefined;
-    if (input.matrixMode === "generate" && input.organizationId) {
-      matrixJobId = await queueManager.addJob(
-        "matrix_generate",
+    let jobId: string | undefined;
+
+    for (const task of resolvedTasks) {
+      switch (task.agentRole) {
+        case "matrix_generation": {
+          // Matrix generation is only dispatched when matrixMode=generate + organizationId present
+          if (input.matrixMode === "generate" && input.organizationId) {
+            matrixJobId = await queueManager.addJob(
+              "matrix_generate",
+              {
+                folderId: input.folderId,
+                organizationId: input.organizationId,
+                model: input.model,
+                initiatedByUserId: actor.userId,
+                locale: input.locale,
+                workflow: {
+                  workflowRunId: workflowRuntime.workflowRunId,
+                  workflowDefinitionId: workflowRuntime.workflowDefinitionId,
+                  taskKey: task.taskKey,
+                  agentDefinitionId: task.agentDefinitionId,
+                  taskAssignments: workflowRuntime.taskAssignments,
+                },
+              },
+              { workspaceId: actor.workspaceId, maxRetries: 1 },
+            );
+          }
+          break;
+        }
+
+        case "usecase_list_generation":
+        case "opportunity_list_generation": {
+          // Initiative/opportunity list generation — the main entry point for the generation chain
+          jobId = await queueManager.addJob(
+            "initiative_list",
+            {
+              folderId: input.folderId,
+              input: input.input,
+              organizationId: input.organizationId,
+              matrixMode: input.matrixMode,
+              model: input.model,
+              initiativeCount: input.initiativeCount,
+              initiatedByUserId: actor.userId,
+              locale: input.locale,
+              workflow: {
+                workflowRunId: workflowRuntime.workflowRunId,
+                workflowDefinitionId: workflowRuntime.workflowDefinitionId,
+                taskKey: task.taskKey,
+                agentDefinitionId: task.agentDefinitionId,
+                taskAssignments: workflowRuntime.taskAssignments,
+              },
+            },
+            { workspaceId: actor.workspaceId, maxRetries: 1 },
+          );
+          break;
+        }
+
+        // Other roles (orchestrator, todo_projection, detail, summary) are dispatched
+        // downstream by the queue-manager chain, not at workflow start time.
+        default:
+          break;
+      }
+    }
+
+    // Fallback: if no list generation task was found (should not happen with valid workflow),
+    // enqueue with legacy task key to maintain backward compat
+    if (!jobId) {
+      jobId = await queueManager.addJob(
+        "initiative_list",
         {
           folderId: input.folderId,
+          input: input.input,
           organizationId: input.organizationId,
+          matrixMode: input.matrixMode,
           model: input.model,
+          initiativeCount: input.initiativeCount,
           initiatedByUserId: actor.userId,
           locale: input.locale,
           workflow: {
             workflowRunId: workflowRuntime.workflowRunId,
             workflowDefinitionId: workflowRuntime.workflowDefinitionId,
-            taskKey: "generation_matrix_prepare",
-            agentDefinitionId: workflowRuntime.taskAssignments.matrixPrepareAgentId,
+            taskKey: "generation_initiative_list",
+            agentDefinitionId: workflowRuntime.taskAssignments.initiativeListAgentId,
             taskAssignments: workflowRuntime.taskAssignments,
           },
         },
@@ -2169,30 +2325,10 @@ export class TodoOrchestrationService {
       );
     }
 
-    const jobId = await queueManager.addJob(
-      "initiative_list",
-      {
-        folderId: input.folderId,
-        input: input.input,
-        organizationId: input.organizationId,
-        matrixMode: input.matrixMode,
-        model: input.model,
-        initiativeCount: input.initiativeCount,
-        initiatedByUserId: actor.userId,
-        locale: input.locale,
-        workflow: {
-          workflowRunId: workflowRuntime.workflowRunId,
-          workflowDefinitionId: workflowRuntime.workflowDefinitionId,
-          taskKey: "generation_initiative_list",
-          agentDefinitionId: workflowRuntime.taskAssignments.initiativeListAgentId,
-          taskAssignments: workflowRuntime.taskAssignments,
-        },
-      },
-      { workspaceId: actor.workspaceId, maxRetries: 1 },
-    );
-
     return {
-      ...workflowRuntime,
+      workflowRunId: workflowRuntime.workflowRunId,
+      workflowDefinitionId: workflowRuntime.workflowDefinitionId,
+      taskAssignments: workflowRuntime.taskAssignments,
       jobId,
       matrixJobId,
     };
