@@ -100,6 +100,7 @@ Format JSON attendu:
     - la demande utilisateur spécifique suivante: {{user_input}},
     - le nom de dossier fourni par l'utilisateur (si non vide): {{folder_name}},
     - les informations de l'organisation: {{organization_info}},
+    - les organisations disponibles dans le workspace: {{organizations_list}},
     - le nombre de cas d'usage à générer: {{use_case_count}}
 Pour chaque cas d'usage, propose un titre court et explicite.
 Format: JSON
@@ -113,6 +114,8 @@ IMPORTANT:
 - Génère le titre et la description pour chaque cas d'usage
 - La description doit être en markdown, avec mise en exergue en gras, et le cas échéant en liste bullet point pour être percutante
 - Pour chaque cas d'usage, numérote les références (1, 2, 3...) et utilise [1], [2], [3] dans la description pour référencer ces numéros
+- Si des organisations sont listées dans {{organizations_list}}, mappe chaque cas d'usage à une ou plusieurs organisations pertinentes via le champ "organizationIds" (tableau d'IDs). Un cas d'usage peut concerner plusieurs organisations si le périmètre le justifie.
+- Si aucune organisation n'est disponible, omets le champ "organizationIds"
 
 Réponds UNIQUEMENT avec un JSON valide:
 {
@@ -121,12 +124,14 @@ Réponds UNIQUEMENT avec un JSON valide:
     {
       "titre": "titre court 1",
       "description": "Description courte (60-100 mots) du cas d'usage",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "organizationIds": ["org_id_1", "org_id_2"]
     },
     {
       "titre": "titre court 2",
       "description": "Description courte (60-100 mots) du cas d'usage",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "organizationIds": ["org_id_1"]
     },
     ...
   ]

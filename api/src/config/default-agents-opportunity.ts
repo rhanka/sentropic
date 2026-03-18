@@ -21,11 +21,18 @@ export const OPPORTUNITY_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition>
     key: "matrix_generation_agent",
     name: "Matrix generation agent",
     description:
-      "Generates organization-specific matrix descriptions for opportunity scoring.",
+      "Generates organization-specific matrix descriptions for opportunity scoring. Supports custom axes when customAxes flag is enabled (D).",
     sourceLevel: "code",
     config: {
       role: "matrix_generation",
       promptId: "opportunity_matrix_template",
+      /**
+       * customAxes support (D):
+       * When customAxes is true, the prompt template is replaced at runtime by
+       * customAxesPromptTemplate which allows the LLM to propose new axis names.
+       * When false (default), standard behavior: adapt descriptions only, keep axis IDs.
+       */
+      customAxes: false,
       promptTemplate: `Tu dois adapter les descriptions de niveaux d'une matrice de priorisation d'opportunités pour l'organisation suivante:
 - Nom: {{organization_name}}
 - Contexte organisation: {{organization_info}}
@@ -86,6 +93,61 @@ Format JSON attendu:
     }
   ]
 }`,
+      customAxesPromptTemplate: `Tu dois proposer une matrice de priorisation d'opportunités adaptée au domaine spécifique de l'organisation suivante:
+- Nom: {{organization_name}}
+- Contexte organisation: {{organization_info}}
+
+Matrice de référence (structure de base):
+{{base_matrix}}
+
+Objectif:
+- Proposer des axes de valeur et de complexité adaptés au domaine d'activité de l'organisation.
+- Tu peux renommer les axes (nouveaux axisId en snake_case) et proposer de nouvelles descriptions si le domaine le justifie.
+- Conserver la même structure globale (valueAxes + complexityAxes) et les mêmes poids/seuils.
+- Fournir exactement 5 niveaux (1..5) pour chaque axe.
+
+Contraintes obligatoires:
+- Ne jamais changer les poids ni les seuils de la matrice de base.
+- Les axisId doivent être en snake_case, uniques, et refléter le domaine.
+- Pour chaque axe, fournir un "axisName" (nom lisible) et une "axisDescription" (description courte de l'axe).
+- Descriptions concrètes, orientées métier, 1 phrase par niveau.
+- Pas de markdown, pas de liste, pas d'entête.
+- Proposer 3 axes de valeur et 3-5 axes de complexité adaptés au domaine.
+
+IMPORTANT:
+- Répondre UNIQUEMENT avec un JSON valide, sans texte avant/après.
+
+Format JSON attendu:
+{
+  "valueAxes": [
+    {
+      "axisId": "custom_axis_id",
+      "axisName": "Nom lisible de l'axe",
+      "axisDescription": "Description courte de ce que mesure cet axe",
+      "levelDescriptions": [
+        { "level": 1, "description": "..." },
+        { "level": 2, "description": "..." },
+        { "level": 3, "description": "..." },
+        { "level": 4, "description": "..." },
+        { "level": 5, "description": "..." }
+      ]
+    }
+  ],
+  "complexityAxes": [
+    {
+      "axisId": "custom_axis_id",
+      "axisName": "Nom lisible de l'axe",
+      "axisDescription": "Description courte de ce que mesure cet axe",
+      "levelDescriptions": [
+        { "level": 1, "description": "..." },
+        { "level": 2, "description": "..." },
+        { "level": 3, "description": "..." },
+        { "level": 4, "description": "..." },
+        { "level": 5, "description": "..." }
+      ]
+    }
+  ]
+}`,
     },
   },
   {
@@ -101,6 +163,7 @@ Format JSON attendu:
     - la demande utilisateur spécifique suivante: {{user_input}},
     - le nom de dossier fourni par l'utilisateur (si non vide): {{folder_name}},
     - les informations de l'organisation: {{organization_info}},
+    - les organisations disponibles dans le workspace: {{organizations_list}},
     - le nombre d'opportunités à générer: {{use_case_count}}
 Pour chaque opportunité, propose un titre court et explicite.
 Format: JSON
@@ -114,6 +177,8 @@ IMPORTANT:
 - Génère le titre et la description pour chaque opportunité
 - La description doit être en markdown, avec mise en exergue en gras, et le cas échéant en liste bullet point pour être percutante
 - Pour chaque opportunité, numérote les références (1, 2, 3...) et utilise [1], [2], [3] dans la description pour référencer ces numéros
+- Si des organisations sont listées dans {{organizations_list}}, mappe chaque opportunité à une ou plusieurs organisations pertinentes via le champ "organizationIds" (tableau d'IDs). Une opportunité peut concerner plusieurs organisations si le périmètre le justifie.
+- Si aucune organisation n'est disponible, omets le champ "organizationIds"
 
 Réponds UNIQUEMENT avec un JSON valide:
 {
@@ -122,12 +187,14 @@ Réponds UNIQUEMENT avec un JSON valide:
     {
       "titre": "titre court 1",
       "description": "Description courte (60-100 mots) de l'opportunité business",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "organizationIds": ["org_id_1", "org_id_2"]
     },
     {
       "titre": "titre court 2",
       "description": "Description courte (60-100 mots) de l'opportunité business",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "organizationIds": ["org_id_1"]
     },
     ...
   ]
