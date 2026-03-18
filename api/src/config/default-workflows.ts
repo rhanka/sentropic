@@ -114,6 +114,59 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
 // opportunity workflows (§7.6)
 // ---------------------------------------------------------------------------
 
+export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
+  key: "opportunity_identification",
+  name: "Opportunity identification workflow",
+  description: "Workflow for identifying and prioritizing business opportunities from organization context.",
+  config: {
+    domain: "opportunity",
+  },
+  tasks: [
+    {
+      taskKey: "context_prepare",
+      title: "Context preparation",
+      description: "Normalize request payload and organization context before opportunity identification.",
+      orderIndex: 0,
+      agentKey: "opportunity_orchestrator",
+    },
+    {
+      taskKey: "matrix_prepare",
+      title: "Matrix preparation",
+      description: "Generate matrix configuration when matrix mode requires dynamic generation.",
+      orderIndex: 1,
+      agentKey: "matrix_generation_agent",
+    },
+    {
+      taskKey: "opportunity_list",
+      title: "Opportunity list generation",
+      description: "Generate draft opportunity list from normalized context.",
+      orderIndex: 2,
+      agentKey: "opportunity_list_agent",
+    },
+    {
+      taskKey: "todo_sync",
+      title: "TODO synchronization",
+      description: "Synchronize generated items with chat session TODO runtime projection.",
+      orderIndex: 3,
+      agentKey: "todo_projection_agent",
+    },
+    {
+      taskKey: "opportunity_detail",
+      title: "Opportunity detail generation",
+      description: "Generate detail payload for each draft opportunity.",
+      orderIndex: 4,
+      agentKey: "opportunity_detail_agent",
+    },
+    {
+      taskKey: "executive_summary",
+      title: "Executive synthesis generation",
+      description: "Generate executive summary once all opportunities are completed.",
+      orderIndex: 5,
+      agentKey: "executive_synthesis_agent",
+    },
+  ],
+};
+
 export const OPPORTUNITY_QUALIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
   key: "opportunity_qualification",
   name: "Opportunity qualification workflow",
@@ -215,8 +268,8 @@ export const WORKSPACE_TYPE_WORKFLOW_SEEDS: ReadonlyArray<WorkspaceTypeWorkflowS
   },
   {
     workspaceType: "opportunity",
-    workflows: [OPPORTUNITY_QUALIFICATION_WORKFLOW],
-    defaultWorkflowKey: "opportunity_qualification",
+    workflows: [OPPORTUNITY_IDENTIFICATION_WORKFLOW, OPPORTUNITY_QUALIFICATION_WORKFLOW],
+    defaultWorkflowKey: "opportunity_identification",
   },
   {
     workspaceType: "code",
