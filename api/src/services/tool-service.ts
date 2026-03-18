@@ -21,7 +21,7 @@ import { createId } from '../utils/id';
 import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 import { extractDocumentInfoFromDocument } from './document-text';
 import { callLLM } from './llm-runtime';
-import { defaultPrompts } from '../config/default-prompts';
+import { SHARED_AGENTS } from '../config/default-agents-shared';
 import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from './context-comments';
 import { hasWorkspaceRole } from './workspace-access';
 import { evaluateGate } from './gate-service';
@@ -1675,10 +1675,20 @@ export class ToolService {
   }
 
   private getPromptTemplateOrThrow(promptId: string): string {
-    const template =
-      defaultPrompts.find((prompt) => prompt.id === promptId)?.content || '';
-    if (!template) throw new Error(`Prompt ${promptId} non trouvé`);
-    return template;
+    for (const agent of SHARED_AGENTS) {
+      if (agent.config.promptId === promptId) {
+        const t = typeof agent.config.promptTemplate === 'string' ? agent.config.promptTemplate : '';
+        if (t) return t;
+      }
+      if (agent.config.mergePromptTemplate && promptId.endsWith('_merge')) {
+        const baseId = promptId.replace(/_merge$/, '');
+        if (agent.config.promptId === baseId) {
+          const t = typeof agent.config.mergePromptTemplate === 'string' ? agent.config.mergePromptTemplate : '';
+          if (t) return t;
+        }
+      }
+    }
+    throw new Error(`Prompt ${promptId} non trouvé`);
   }
 
   private renderTemplate(

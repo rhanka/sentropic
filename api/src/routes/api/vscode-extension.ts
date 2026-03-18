@@ -4,7 +4,7 @@ import { db } from '../../db/client';
 import { workspaceMemberships, workspaces } from '../../db/schema';
 import { sql } from 'drizzle-orm';
 import { env } from '../../config/env';
-import { defaultPrompts } from '../../config/default-prompts';
+import { CHAT_SYSTEM_PROMPTS } from '../../config/default-chat-system';
 import { getUserWorkspaces } from '../../services/workspace-access';
 import { createId } from '../../utils/id';
 import { requireEditor } from '../../middleware/rbac';
@@ -27,7 +27,7 @@ const readConfig = () => {
 };
 
 const getDefaultCodeAgentPromptTemplate = (): string =>
-  defaultPrompts.find((prompt) => prompt.id === 'chat_code_agent')?.content?.trim() || '';
+  (CHAT_SYSTEM_PROMPTS['code'] || '').trim();
 
 const readConfiguredCodeAgentPromptTemplate = async (): Promise<string | null> => {
   const promptsRecord = (await db.get(
