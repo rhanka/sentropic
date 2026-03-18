@@ -503,6 +503,12 @@ Replace generation-specific dispatch in `todo-orchestration.ts`:
 
 **Target**: `startWorkflow(workspaceId, workflowKey)` resolves the workflow from `workspace_type_workflows` → `workflow_definitions` → ordered `workflow_definition_tasks`, then dispatches generically. The generation-specific logic moves into the agents themselves (via `config.promptTemplate`), not the orchestration layer.
 
+The generic dispatch spans TWO services:
+- `todo-orchestration.ts`: resolves workflow tasks from DB, builds an `agentMap: Record<string, string>` (task key → agent definition ID), dispatches jobs with the agentMap.
+- `queue-manager.ts`: receives jobs with the agentMap, resolves agent prompt from DB via agent definition ID. NO hardcoded task assignment fields, NO legacy named fields (`usecaseDetailAgentId`, etc.), NO switch on task keys. The `GenerationWorkflowRuntimeContext` carries `agentMap` instead of named `taskAssignments`.
+
+**Zero legacy**: after §7.4 is complete, there must be NO reference to `usecaseListAgentId`, `usecaseDetailAgentId`, `ROLE_TO_LEGACY_FIELD`, `ROLE_TO_LEGACY_ALIAS`, or any hardcoded task-key-to-agent mapping. Agent resolution is ALWAYS by task key lookup in the agentMap or by querying the DB.
+
 ### 7.5 Workflow versioning
 
 Workflow keys are logical identifiers (e.g. `ai_usecase_generation`, not `ai_usecase_generation_v1`). Versioning is managed by the registry:
