@@ -1973,6 +1973,8 @@
           .filter((c) => !!c.contextType)
           .map((c) => ({
             ...c,
+            // Migrate stale "usecase" context type to "initiative"
+            contextType: c.contextType === ('usecase' as any) ? 'initiative' : c.contextType,
             used: typeof c.used === 'boolean' ? c.used : true,
           }));
       }
