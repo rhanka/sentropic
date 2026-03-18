@@ -62,11 +62,19 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
   },
   tasks: [
     {
+      taskKey: "generation_create_organizations",
+      title: "Organization batch creation",
+      description:
+        "Auto-create organizations from user prompt before use-case generation. Skipped when autoCreateOrganizations is false.",
+      orderIndex: 0,
+      agentKey: "organization_batch_agent",
+    },
+    {
       taskKey: "generation_context_prepare",
       title: "Generation context preparation",
       description:
         "Normalize request payload and folder context before generation runtime starts.",
-      orderIndex: 0,
+      orderIndex: 1,
       agentKey: "generation_orchestrator",
     },
     {
@@ -74,14 +82,14 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       title: "Matrix preparation",
       description:
         "Generate matrix configuration when matrix mode requires dynamic generation.",
-      orderIndex: 1,
+      orderIndex: 2,
       agentKey: "matrix_generation_agent",
     },
     {
       taskKey: "generation_usecase_list",
       title: "Use-case list generation",
       description: "Generate draft use-case list from normalized context.",
-      orderIndex: 2,
+      orderIndex: 3,
       agentKey: "usecase_list_agent",
     },
     {
@@ -89,14 +97,14 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       title: "TODO synchronization",
       description:
         "Synchronize generated items with chat session TODO runtime projection.",
-      orderIndex: 3,
+      orderIndex: 4,
       agentKey: "todo_projection_agent",
     },
     {
       taskKey: "generation_usecase_detail",
       title: "Use-case detail generation",
       description: "Generate detail payload for each draft use case.",
-      orderIndex: 4,
+      orderIndex: 5,
       agentKey: "usecase_detail_agent",
     },
     {
@@ -104,7 +112,7 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       title: "Executive synthesis generation",
       description:
         "Generate executive summary once all use cases are completed.",
-      orderIndex: 5,
+      orderIndex: 6,
       agentKey: "executive_synthesis_agent",
     },
   ],
@@ -123,45 +131,52 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
   },
   tasks: [
     {
+      taskKey: "create_organizations",
+      title: "Organization batch creation",
+      description: "Auto-create organizations from user prompt before opportunity identification. Skipped when autoCreateOrganizations is false.",
+      orderIndex: 0,
+      agentKey: "organization_batch_agent",
+    },
+    {
       taskKey: "context_prepare",
       title: "Context preparation",
       description: "Normalize request payload and organization context before opportunity identification.",
-      orderIndex: 0,
+      orderIndex: 1,
       agentKey: "opportunity_orchestrator",
     },
     {
       taskKey: "matrix_prepare",
       title: "Matrix preparation",
       description: "Generate matrix configuration when matrix mode requires dynamic generation.",
-      orderIndex: 1,
+      orderIndex: 2,
       agentKey: "matrix_generation_agent",
     },
     {
       taskKey: "opportunity_list",
       title: "Opportunity list generation",
       description: "Generate draft opportunity list from normalized context.",
-      orderIndex: 2,
+      orderIndex: 3,
       agentKey: "opportunity_list_agent",
     },
     {
       taskKey: "todo_sync",
       title: "TODO synchronization",
       description: "Synchronize generated items with chat session TODO runtime projection.",
-      orderIndex: 3,
+      orderIndex: 4,
       agentKey: "todo_projection_agent",
     },
     {
       taskKey: "opportunity_detail",
       title: "Opportunity detail generation",
       description: "Generate detail payload for each draft opportunity.",
-      orderIndex: 4,
+      orderIndex: 5,
       agentKey: "opportunity_detail_agent",
     },
     {
       taskKey: "executive_summary",
       title: "Executive synthesis generation",
       description: "Generate executive summary once all opportunities are completed.",
-      orderIndex: 5,
+      orderIndex: 6,
       agentKey: "executive_synthesis_agent",
     },
   ],
