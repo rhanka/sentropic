@@ -11,6 +11,7 @@ import {
 import { generateOrganizationMatrixTemplate, mergeOrganizationMatrixTemplate } from './context-matrix';
 import { parseMatrixConfig } from '../utils/matrix';
 import { defaultMatrixConfig } from '../config/default-matrix';
+import { opportunityMatrixConfig } from '../config/default-matrix-opportunity';
 import type { MatrixConfig } from '../types/matrix';
 import type { InitiativeData, InitiativeDataJson } from '../types/initiative';
 import { validateScores, fixScores } from '../utils/score-validation';
@@ -545,6 +546,40 @@ export class QueueManager {
       agent?.config ?? {},
       fallbackPromptId,
     );
+  }
+
+  /**
+   * Resolve the base matrix config from the agent definition's config.baseMatrixId.
+   * Returns opportunityMatrixConfig when baseMatrixId is "opportunity", defaultMatrixConfig otherwise.
+   */
+  private async resolveBaseMatrixFromAgent(
+    workspaceId: string,
+    agentDefinitionId: string | null | undefined,
+  ): Promise<MatrixConfig> {
+    if (!agentDefinitionId || !agentDefinitionId.trim()) {
+      return defaultMatrixConfig;
+    }
+
+    const [agent] = await db
+      .select({ config: agentDefinitions.config })
+      .from(agentDefinitions)
+      .where(
+        and(
+          eq(agentDefinitions.workspaceId, workspaceId),
+          eq(agentDefinitions.id, agentDefinitionId),
+        ),
+      )
+      .limit(1);
+
+    const config = agent?.config;
+    if (config && typeof config === 'object' && !Array.isArray(config)) {
+      const baseMatrixId = (config as Record<string, unknown>).baseMatrixId;
+      if (baseMatrixId === 'opportunity') {
+        return opportunityMatrixConfig;
+      }
+    }
+
+    return defaultMatrixConfig;
   }
 
   private getAutoGenerationFieldLabel(contextType: CommentContextType, sectionKey: string, locale: AppLocale): string {
@@ -1483,21 +1518,23 @@ export class QueueManager {
     );
 
     const streamId = `matrix_${folderId}`;
+    const matrixAgentId = workflow?.agentDefinitionId ?? workflow?.taskAssignments.matrixPrepareAgentId ?? null;
     const matrixPromptOverride = await this.resolveGenerationPromptOverride(
       folder.workspaceId,
-      workflow?.agentDefinitionId ?? workflow?.taskAssignments.matrixPrepareAgentId ?? null,
+      matrixAgentId,
       'organization_matrix_template',
     );
+    const baseMatrix = await this.resolveBaseMatrixFromAgent(folder.workspaceId, matrixAgentId);
     const template = await generateOrganizationMatrixTemplate(
       organization.name,
       organizationInfo,
-      defaultMatrixConfig,
+      baseMatrix,
       selectedModel,
       signal,
       streamId,
       matrixPromptOverride,
     );
-    const generatedMatrix = mergeOrganizationMatrixTemplate(defaultMatrixConfig, template);
+    const generatedMatrix = mergeOrganizationMatrixTemplate(baseMatrix, template);
 
     const nextOrgData = {
       ...orgData,
