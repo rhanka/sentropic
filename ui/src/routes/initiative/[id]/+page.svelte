@@ -615,7 +615,7 @@
 
     <div class="print-hidden">
       <DocumentsBlock
-        contextType="usecase"
+        contextType="initiative"
         contextId={useCase.id}
         on:state={(event) => {
           hasDocuments = (event.detail?.items || []).length > 0;
