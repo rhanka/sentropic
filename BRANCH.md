@@ -856,3 +856,16 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] **Bug F** — "invalid query" affects both opportunity and ai-ideas workspaces — likely a broken API endpoint or Zod validation.
 - [ ] **Bug G** — After generation, folder initiative count stays at 0 until page refresh.
 - [ ] **Bug H** — Chat returns HTTP 400 ZodError: `contextType "usecase"` still sent somewhere (expected "initiative"). Affects chat in all workspace types.
+
+#### UAT Checkpoint B' — Round 2 (2026-03-18)
+
+Closed:
+- [x] Bug A — workspace switch: OK
+- [x] Bug E — matrice neutre: OK
+- [x] Bugs B/C/F — invalid query: OK
+- [x] Bug G — compteur initiatives: OK
+
+Persistent/new:
+- [ ] **Bug D'** — dataSources and dataObjects still present in generation output AND display. The opportunity prompt still asks for these fields. Fix: update opportunity_detail_agent prompt to NOT request dataSources/dataObjects. Also verify InitiativeDetail.svelte hide condition works.
+- [ ] **Bug I** — Initiative count hardcoded to 10 in opportunity generation. The generation prompt/config should respect the user's requested count.
+- [ ] **Bug J** — Chat tools (usecase_get, read_initiative) return technical errors. Tool names or dispatch may still reference legacy usecase endpoints.
