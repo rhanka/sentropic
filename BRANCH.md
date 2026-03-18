@@ -520,7 +520,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] Update `chat-service.ts`: resolve chat system prompt from `default-chat-system.ts` by workspace type.
 - [x] Refactor `queue-manager.ts` `GenerationWorkflowRuntimeContext`: replace `taskAssignments` (6 named fields) with `agentMap: Record<string, string>` (task key → agent definition ID). Remove `cloneGenerationWorkflowRuntimeContextForTask` switch. All `process*` functions resolve agent by task key from agentMap.
 - [x] Refactor `todo-orchestration.ts`: remove `ROLE_TO_LEGACY_FIELD`, `ROLE_TO_LEGACY_ALIAS`, `InitiativeGenerationWorkflowTaskAssignments` named fields. Pass `agentMap` to job dispatching instead of legacy assignments.
-- [ ] Refactor `chat-service.ts` tool dispatch: align tool names (`usecase_get` → `read_initiative`), remove all legacy tool name variants, use ONE canonical name per tool.
+- [x] Refactor `chat-service.ts` tool dispatch: align tool names (`usecase_get` → `read_initiative`), remove all legacy tool name variants, use ONE canonical name per tool.
 - [x] **Zero-legacy verification**: `grep -r "usecaseListAgentId\|usecaseDetailAgentId\|ROLE_TO_LEGACY\|cloneGenerationWorkflowRuntimeContextForTask" api/src/` returns 0 results.
 
 **Lot 9bis gate:**
