@@ -37,7 +37,7 @@ import {
   type GuardrailCategory,
   type TaskStatus,
 } from "./todo-runtime";
-import { queueManager } from "./queue-manager";
+import { queueManager, type GenerationWorkflowTaskKey } from "./queue-manager";
 
 export interface TodoActor {
   userId: string;
@@ -210,6 +210,14 @@ export interface StartInitiativeGenerationWorkflowDispatchResult extends Initiat
   matrixJobId?: string;
 }
 
+/**
+ * Matrix source selection (C):
+ * - "organization": reuse the org's existing matrixConfig
+ * - "prompt": run the matrix_generation_agent to generate from prompt
+ * - "default": use workspace type default matrix (defaultMatrixConfig or opportunityMatrixConfig)
+ */
+export type MatrixSource = "organization" | "prompt" | "default";
+
 export interface StartInitiativeGenerationWorkflowInput {
   folderId: string;
   organizationId?: string;
@@ -218,6 +226,16 @@ export interface StartInitiativeGenerationWorkflowInput {
   model: string;
   initiativeCount?: number;
   locale: string;
+  /** When true, the create_organizations task is dispatched before context_prepare (B) */
+  autoCreateOrganizations?: boolean;
+  /**
+   * Matrix source selection (C):
+   * - "organization": reuse the org's existing matrixConfig
+   * - "prompt": run the matrix_generation_agent to generate from prompt
+   * - "default": use workspace type default matrix
+   * When provided, overrides the legacy matrixMode logic.
+   */
+  matrixSource?: MatrixSource;
 }
 
 /**
@@ -2194,6 +2212,8 @@ export class TodoOrchestrationService {
         initiativeCount: input.initiativeCount,
         locale: input.locale,
         input: input.input,
+        autoCreateOrganizations: input.autoCreateOrganizations ?? false,
+        matrixSource: input.matrixSource ?? null,
       }),
       createdAt: now,
       updatedAt: now,
@@ -2214,6 +2234,8 @@ export class TodoOrchestrationService {
         matrixMode: input.matrixMode,
         model: input.model,
         initiativeCount: input.initiativeCount,
+        autoCreateOrganizations: input.autoCreateOrganizations ?? false,
+        matrixSource: input.matrixSource ?? null,
       },
       sequence: 1,
       createdAt: now,
@@ -2240,9 +2262,37 @@ export class TodoOrchestrationService {
 
     for (const task of resolvedTasks) {
       switch (task.agentRole) {
+        case "organization_batch": {
+          // Organization batch creation is only dispatched when autoCreateOrganizations is true (B)
+          if (input.autoCreateOrganizations) {
+            await queueManager.addJob(
+              "organization_batch_create",
+              {
+                folderId: input.folderId,
+                input: input.input,
+                model: input.model,
+                initiatedByUserId: actor.userId,
+                locale: input.locale,
+                workflow: {
+                  workflowRunId: workflowRuntime.workflowRunId,
+                  workflowDefinitionId: workflowRuntime.workflowDefinitionId,
+                  taskKey: task.taskKey as GenerationWorkflowTaskKey,
+                  agentDefinitionId: task.agentDefinitionId,
+                  taskAssignments: workflowRuntime.taskAssignments,
+                },
+              },
+              { workspaceId: actor.workspaceId, maxRetries: 1 },
+            );
+          }
+          break;
+        }
+
         case "matrix_generation": {
-          // Matrix generation is only dispatched when matrixMode=generate + organizationId present
-          if (input.matrixMode === "generate" && input.organizationId) {
+          // Matrix generation dispatch (C): matrixSource=prompt or legacy matrixMode=generate
+          const shouldGenerateMatrix =
+            input.matrixSource === "prompt" ||
+            (!input.matrixSource && input.matrixMode === "generate" && input.organizationId);
+          if (shouldGenerateMatrix) {
             matrixJobId = await queueManager.addJob(
               "matrix_generate",
               {
@@ -2254,7 +2304,7 @@ export class TodoOrchestrationService {
                 workflow: {
                   workflowRunId: workflowRuntime.workflowRunId,
                   workflowDefinitionId: workflowRuntime.workflowDefinitionId,
-                  taskKey: task.taskKey,
+                  taskKey: task.taskKey as GenerationWorkflowTaskKey,
                   agentDefinitionId: task.agentDefinitionId,
                   taskAssignments: workflowRuntime.taskAssignments,
                 },
@@ -2282,7 +2332,7 @@ export class TodoOrchestrationService {
               workflow: {
                 workflowRunId: workflowRuntime.workflowRunId,
                 workflowDefinitionId: workflowRuntime.workflowDefinitionId,
-                taskKey: task.taskKey,
+                taskKey: task.taskKey as GenerationWorkflowTaskKey,
                 agentDefinitionId: task.agentDefinitionId,
                 taskAssignments: workflowRuntime.taskAssignments,
               },
