@@ -2119,7 +2119,9 @@ export class QueueManager {
     if (this.cancelAllInProgress || this.paused) {
       console.warn('⏸️ Skipping workflow detail fanout due to pause/cancel');
     } else {
-      const detailWorkflow = cloneWorkflowContextForTask(workflow, 'generation_initiative_detail');
+      // Resolve the detail task key from agentMap (may be 'generation_initiative_detail' or 'opportunity_detail')
+      const detailTaskKey = Object.keys(workflow.agentMap).find(k => k.includes('detail')) ?? 'generation_initiative_detail';
+      const detailWorkflow = cloneWorkflowContextForTask(workflow, detailTaskKey);
       for (const initiative of draftInitiatives) {
         try {
           const initiativeName = (initiative.data as InitiativeData)?.name || 'Cas d\'usage sans nom';
@@ -2363,9 +2365,11 @@ export class QueueManager {
           return;
         }
 
+        // Resolve executive summary task key from agentMap
+        const summaryTaskKey = Object.keys(workflow.agentMap).find(k => k.includes('executive_summary') || k.includes('summary')) ?? 'generation_executive_summary';
         const executiveSummaryWorkflow = cloneWorkflowContextForTask(
           workflow,
-          'generation_executive_summary'
+          summaryTaskKey
         );
         try {
           await this.addJob('executive_summary', {
