@@ -44,6 +44,9 @@ export type InitiativeData = {
     excerpt?: string;
   }>;
 
+  // === Multi-org support (B) ===
+  organizationIds?: string[];
+
   // === Scores détaillés (pour recalcul dynamique) ===
   valueScores?: ScoreEntry[];
   complexityScores?: ScoreEntry[];

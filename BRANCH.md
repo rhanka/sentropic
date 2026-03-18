@@ -542,11 +542,11 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 #### Lot 9quater — Multi-org, batch org generation, matrix customisation (B, B', C, D)
 
 **Tasks:**
-- [ ] B: Multi-org per opportunity — `organizationIds` array in initiative data JSONB alongside existing `organizationId`. Prompts produce initiatives mapped to organisations.
+- [x] B: Multi-org per opportunity — `organizationIds` array in initiative data JSONB alongside existing `organizationId`. Prompts produce initiatives mapped to organisations.
 - [ ] B: Auto-create orgs option — new task `create_organizations` in `opportunity_identification` workflow before `opportunity_list`. Prompt retrieves existing orgs to avoid duplicates. Also available for `ai_usecase_generation` workflow.
 - [ ] B': Batch org generation — `organization_batch_agent` creates org list from prompt (e.g. "top 10 pharma in Montreal"). Standalone action or workflow task.
 - [ ] C: Matrix adaptable per org — `matrixSource` option (`organization` | `prompt` | `default`) in workflow config.
-- [ ] D: Matrix axes customisation — prompt allows proposing adapted axis names/descriptions per opportunity domain.
+- [x] D: Matrix axes customisation — prompt allows proposing adapted axis names/descriptions per opportunity domain.
 
 **Lot 9quater gate:**
 - [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
