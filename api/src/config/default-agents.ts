@@ -5,162 +5,28 @@
  * Legacy type imports kept as string aliases for backward compatibility.
  */
 
-import { defaultPrompts } from "./default-prompts";
+import { AI_IDEAS_AGENTS } from './default-agents-ai-ideas';
+import { OPPORTUNITY_AGENTS } from './default-agents-opportunity';
+import { CODE_AGENTS } from './default-agents-code';
+import { SHARED_AGENTS } from './default-agents-shared';
 
-const readLegacyPromptTemplate = (promptId: string): string => {
-  const prompt = defaultPrompts.find((item) => item.id === promptId);
-  return typeof prompt?.content === "string" ? prompt.content : "";
-};
-
-export type DefaultGenerationAgentDefinition = {
-  key: string;
-  name: string;
-  description: string;
-  sourceLevel: "code";
-  config: Record<string, unknown>;
-};
+export type { DefaultGenerationAgentDefinition } from './default-agents-types';
+import type { DefaultGenerationAgentDefinition } from './default-agents-types';
 
 // ---------------------------------------------------------------------------
-// ai-ideas agents (existing 6 agents, unchanged)
+// Backward-compat: keep DEFAULT_GENERATION_AGENTS pointing to AI-Ideas agents
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_GENERATION_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = [
-  {
-    key: "generation_orchestrator",
-    name: "Generation orchestrator",
-    description:
-      "Orchestrates AI use-case generation lifecycle and runtime context handoff.",
-    sourceLevel: "code",
-    config: {
-      role: "orchestrator",
-      workflowKey: "ai_usecase_generation_v1",
-    },
-  },
-  {
-    key: "matrix_generation_agent",
-    name: "Matrix generation agent",
-    description:
-      "Generates organization-specific matrix descriptions for use-case scoring.",
-    sourceLevel: "code",
-    config: {
-      role: "matrix_generation",
-      promptId: "organization_matrix_template",
-      promptTemplate: readLegacyPromptTemplate("organization_matrix_template"),
-    },
-  },
-  {
-    key: "usecase_list_agent",
-    name: "Use-case list agent",
-    description:
-      "Generates a structured list of candidate use-cases from folder context.",
-    sourceLevel: "code",
-    config: {
-      role: "usecase_list_generation",
-      promptId: "use_case_list",
-      promptTemplate: readLegacyPromptTemplate("use_case_list"),
-    },
-  },
-  {
-    key: "todo_projection_agent",
-    name: "TODO projection agent",
-    description:
-      "Projects generated list outputs to TODO runtime tracking structures.",
-    sourceLevel: "code",
-    config: {
-      role: "todo_projection",
-    },
-  },
-  {
-    key: "usecase_detail_agent",
-    name: "Use-case detail agent",
-    description:
-      "Generates one detailed use-case payload with validated score blocks.",
-    sourceLevel: "code",
-    config: {
-      role: "usecase_detail_generation",
-      promptId: "use_case_detail",
-      promptTemplate: readLegacyPromptTemplate("use_case_detail"),
-    },
-  },
-  {
-    key: "executive_synthesis_agent",
-    name: "Executive synthesis agent",
-    description:
-      "Generates executive summary narrative and prioritization synthesis.",
-    sourceLevel: "code",
-    config: {
-      role: "executive_summary_generation",
-      promptId: "executive_summary",
-      promptTemplate: readLegacyPromptTemplate("executive_summary"),
-    },
-  },
-];
+export const DEFAULT_GENERATION_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = AI_IDEAS_AGENTS;
+
+// Re-export split catalogs for direct consumers
+export { AI_IDEAS_AGENTS } from './default-agents-ai-ideas';
+export { OPPORTUNITY_AGENTS } from './default-agents-opportunity';
+export { CODE_AGENTS } from './default-agents-code';
+export { SHARED_AGENTS } from './default-agents-shared';
 
 // ---------------------------------------------------------------------------
-// opportunity agents (§8.1)
-// ---------------------------------------------------------------------------
-
-export const OPPORTUNITY_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = [
-  {
-    key: "demand_analyst",
-    name: "Demand analyst",
-    description: "Analyzes client demand, market context, and opportunity viability.",
-    sourceLevel: "code",
-    config: { role: "demand_analysis", domain: "opportunity" },
-  },
-  {
-    key: "solution_architect",
-    name: "Solution architect",
-    description: "Designs solution architecture from demand analysis outputs.",
-    sourceLevel: "code",
-    config: { role: "solution_architecture", domain: "opportunity" },
-  },
-  {
-    key: "bid_writer",
-    name: "Bid writer",
-    description: "Prepares bid documents from solution drafts and commercial terms.",
-    sourceLevel: "code",
-    config: { role: "bid_preparation", domain: "opportunity" },
-  },
-  {
-    key: "gate_reviewer",
-    name: "Gate reviewer",
-    description: "Evaluates initiative maturity against gate criteria for stage transitions.",
-    sourceLevel: "code",
-    config: { role: "gate_review", domain: "opportunity" },
-  },
-];
-
-// ---------------------------------------------------------------------------
-// code agents (§8.1)
-// ---------------------------------------------------------------------------
-
-export const CODE_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = [
-  {
-    key: "codebase_analyst",
-    name: "Codebase analyst",
-    description: "Scans codebase for patterns, dependencies, and architecture insights.",
-    sourceLevel: "code",
-    config: { role: "codebase_analysis", domain: "code" },
-  },
-  {
-    key: "issue_triager",
-    name: "Issue triager",
-    description: "Triages and prioritizes issues from codebase analysis.",
-    sourceLevel: "code",
-    config: { role: "issue_triage", domain: "code" },
-  },
-  {
-    key: "implementation_planner",
-    name: "Implementation planner",
-    description: "Generates implementation plans from triaged issues.",
-    sourceLevel: "code",
-    config: { role: "implementation_planning", domain: "code" },
-  },
-];
-
-// ---------------------------------------------------------------------------
-// Workspace type → agent catalog
+// Workspace type → agent catalog (with shared agents for all types)
 // ---------------------------------------------------------------------------
 
 export type WorkspaceTypeAgentSeed = {
@@ -169,9 +35,9 @@ export type WorkspaceTypeAgentSeed = {
 };
 
 export const WORKSPACE_TYPE_AGENT_SEEDS: ReadonlyArray<WorkspaceTypeAgentSeed> = [
-  { workspaceType: "ai-ideas", agents: DEFAULT_GENERATION_AGENTS },
-  { workspaceType: "opportunity", agents: OPPORTUNITY_AGENTS },
-  { workspaceType: "code", agents: CODE_AGENTS },
+  { workspaceType: "ai-ideas", agents: [...AI_IDEAS_AGENTS, ...SHARED_AGENTS] },
+  { workspaceType: "opportunity", agents: [...OPPORTUNITY_AGENTS, ...SHARED_AGENTS] },
+  { workspaceType: "code", agents: [...CODE_AGENTS, ...SHARED_AGENTS] },
   // neutral: no generation agents (orchestrator tools only, §8.2)
 ];
 
