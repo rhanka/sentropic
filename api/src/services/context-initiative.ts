@@ -259,8 +259,6 @@ const USE_CASE_DETAIL_STRUCTURED_SCHEMA: Record<string, unknown> = {
       items: { type: 'string', minLength: 3 },
     },
     nextSteps: { type: 'array', items: { type: 'string' } },
-    dataSources: { type: 'array', items: { type: 'string' } },
-    dataObjects: { type: 'array', items: { type: 'string' } },
     references: {
       type: 'array',
       items: {
@@ -316,8 +314,6 @@ const USE_CASE_DETAIL_STRUCTURED_SCHEMA: Record<string, unknown> = {
     'risks',
     'constraints',
     'nextSteps',
-    'dataSources',
-    'dataObjects',
     'references',
     'valueScores',
     'complexityScores',
@@ -428,6 +424,7 @@ export const generateInitiativeList = async (
     promptTemplate?: string;
     promptId?: string;
   },
+  outputSchema?: Record<string, unknown>,
 ): Promise<InitiativeList> => {
   const initiativeListPrompt =
     (typeof runtimePrompt?.promptTemplate === 'string' &&
@@ -466,6 +463,8 @@ export const generateInitiativeList = async (
       ? runtimePrompt.promptId.trim()
       : 'use_case_list';
   
+  const resolvedListSchema = outputSchema ?? USE_CASE_LIST_STRUCTURED_SCHEMA;
+
   const content = await executeStructuredGenerationWithGeminiFallback({
     prompt,
     model,
@@ -474,22 +473,22 @@ export const generateInitiativeList = async (
     structuredOutput: {
       name: 'use_case_list',
       strict: true,
-      schema: USE_CASE_LIST_STRUCTURED_SCHEMA,
+      schema: resolvedListSchema,
     },
     ...getReasoningParamsForModel(model, 'high', 'detailed'),
     promptId: runtimePromptId,
     streamId: finalStreamId,
     signal,
   });
-  
+
   if (!content) throw new Error('Aucune réponse reçue pour la liste de cas d\'usage');
-  
+
   try {
     return await parseStructuredJsonWithSingleRepair<InitiativeList>({
       rawContent: content,
       model,
       schemaName: 'use_case_list',
-      schema: USE_CASE_LIST_STRUCTURED_SCHEMA,
+      schema: resolvedListSchema,
       signal,
     });
   } catch (e) {
@@ -516,6 +515,10 @@ export const generateInitiativeDetail = async (
     promptTemplate?: string;
     promptId?: string;
   },
+  options?: {
+    excludeFields?: string[];
+  },
+  outputSchema?: Record<string, unknown>,
 ): Promise<InitiativeDetail> => {
   const initiativeDetailPrompt =
     (typeof runtimePrompt?.promptTemplate === 'string' &&
@@ -554,6 +557,8 @@ export const generateInitiativeDetail = async (
       ? runtimePrompt.promptId.trim()
       : 'use_case_detail';
   
+  const resolvedDetailSchema = outputSchema ?? USE_CASE_DETAIL_STRUCTURED_SCHEMA;
+
   const content = await executeStructuredGenerationWithGeminiFallback({
     prompt,
     model,
@@ -562,22 +567,22 @@ export const generateInitiativeDetail = async (
     structuredOutput: {
       name: 'use_case_detail',
       strict: true,
-      schema: USE_CASE_DETAIL_STRUCTURED_SCHEMA,
+      schema: resolvedDetailSchema,
     },
     ...getReasoningParamsForModel(model, 'high', 'detailed'),
     promptId: runtimePromptId,
     streamId: finalStreamId,
     signal,
   });
-  
+
   if (!content) throw new Error(`Aucune réponse reçue pour le cas d'usage: ${initiative}`);
-  
+
   try {
     const detail = await parseStructuredJsonWithSingleRepair<InitiativeDetail>({
       rawContent: content,
       model,
       schemaName: 'use_case_detail',
-      schema: USE_CASE_DETAIL_STRUCTURED_SCHEMA,
+      schema: resolvedDetailSchema,
       signal,
     });
     // Normalize list fields to avoid marker-only entries and nested bullet formatting.
@@ -589,8 +594,8 @@ export const generateInitiativeDetail = async (
       risks: normalizeStringListField(detail?.risks),
       constraints: normalizeStringListField(detail?.constraints),
       nextSteps: normalizeStringListField(detail?.nextSteps),
-      dataSources: normalizeStringListField(detail?.dataSources),
-      dataObjects: normalizeStringListField(detail?.dataObjects),
+      ...(detail?.dataSources != null ? { dataSources: normalizeStringListField(detail.dataSources) } : {}),
+      ...(detail?.dataObjects != null ? { dataObjects: normalizeStringListField(detail.dataObjects) } : {}),
     };
 
     // Safety net: constraints are mandatory for the product workflow.

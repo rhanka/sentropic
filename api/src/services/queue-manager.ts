@@ -142,6 +142,7 @@ function cloneWorkflowContextForTask(
 type GenerationPromptOverride = {
   promptId: string;
   promptTemplate?: string;
+  outputSchema?: Record<string, unknown>;
 };
 
 export const resolveGenerationPromptOverrideFromConfig = (
@@ -160,7 +161,11 @@ export const resolveGenerationPromptOverrideFromConfig = (
     typeof config.promptTemplate === 'string' && config.promptTemplate.trim().length > 0
       ? config.promptTemplate
       : undefined;
-  return { promptId, promptTemplate };
+  const outputSchema =
+    config.outputSchema && typeof config.outputSchema === 'object' && !Array.isArray(config.outputSchema)
+      ? (config.outputSchema as Record<string, unknown>)
+      : undefined;
+  return { promptId, promptTemplate, outputSchema };
 };
 
 function sanitizeJobResultForPublic(result: unknown): unknown {
@@ -2021,6 +2026,7 @@ export class QueueManager {
       signal,
       streamId,
       listPromptOverride,
+      listPromptOverride.outputSchema,
     );
     
     // Mettre à jour le nom du dossier
@@ -2267,6 +2273,8 @@ export class QueueManager {
       signal,
       streamId,
       detailPromptOverride,
+      undefined, // options
+      detailPromptOverride.outputSchema,
     );
     
     // Valider les scores générés
