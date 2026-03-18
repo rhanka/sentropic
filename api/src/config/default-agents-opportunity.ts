@@ -321,7 +321,7 @@ OBLIGATOIRE:
 - Veille à ce que chaque axe de la matrice fournie ait bien son score correspondant dans les sections valueScores et complexityScores
 - Pour les scores, utilise UNIQUEMENT les valeurs Fibonacci: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100]
 - Justifie chaque score Fibonacci choisi dans la description
-- NE PAS inclure les champs "dataSources" et "dataObjects" — ils ne sont pas pertinents pour les opportunités business`,
+- Ne pas ajouter de champs qui ne sont pas dans le format JSON ci-dessus`,
     },
   },
   {
