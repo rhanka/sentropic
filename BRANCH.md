@@ -505,7 +505,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 
 **Tasks:**
 - [ ] Delete `api/src/config/default-prompts.ts` entirely.
-- [ ] Create `api/src/config/default-chat-system.ts`: chat system prompt per workspace type + common chat prompts (reasoning eval, session title, conversation auto).
+- [x] Create `api/src/config/default-chat-system.ts`: chat system prompt per workspace type + common chat prompts (reasoning eval, session title, conversation auto).
 - [x] Create `api/src/config/default-agents-ai-ideas.ts`: AI agents with prompts in `config.promptTemplate`.
 - [x] Create `api/src/config/default-agents-opportunity.ts`: opportunity agents with neutral prompts.
 - [x] Create `api/src/config/default-agents-shared.ts`: shared agents for all workspace types (demand_analyst, solution_architect, bid_writer, gate_reviewer, comment_assistant, history_analyzer, document_summarizer, document_analyzer).
@@ -514,7 +514,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] Update `api/src/config/default-agents.ts`: import from split files, include shared agents for all types.
 - [ ] Migrate all `readLegacyPromptTemplate()` / `defaultPrompts.find(...)` to agent-based prompt resolution.
 - [ ] Refactor `startInitiativeGenerationWorkflow` in `todo-orchestration.ts` into truly generic `startWorkflow(workspaceId, workflowKey)` — resolves workflow from DB → ordered tasks → agent per task → prompt from agent `config.promptTemplate`. Remove all generation-specific hardcoded logic from orchestration layer.
-- [ ] Update `chat-service.ts`: resolve chat system prompt from `default-chat-system.ts` by workspace type.
+- [x] Update `chat-service.ts`: resolve chat system prompt from `default-chat-system.ts` by workspace type.
 
 **Lot 9bis gate:**
 - [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
