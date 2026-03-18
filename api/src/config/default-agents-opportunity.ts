@@ -160,6 +160,27 @@ Format JSON attendu:
     config: {
       role: "opportunity_list_generation",
       promptId: "opportunity_list",
+      outputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          dossier: { type: 'string' },
+          initiatives: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                titre: { type: 'string' },
+                description: { type: 'string' },
+                ref: { type: 'string' },
+              },
+              required: ['titre', 'description', 'ref'],
+            },
+          },
+        },
+        required: ['dossier', 'initiatives'],
+      },
       promptTemplate: `Génère une liste d'opportunités business selon la demande suivante:
     - la demande utilisateur spécifique suivante: {{user_input}},
     - le nom de dossier fourni par l'utilisateur (si non vide): {{folder_name}},
@@ -221,6 +242,88 @@ Réponds UNIQUEMENT avec un JSON valide:
     config: {
       role: "opportunity_detail_generation",
       promptId: "opportunity_detail",
+      outputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string' },
+          description: { type: 'string' },
+          problem: { type: 'string' },
+          solution: { type: 'string' },
+          domain: { type: 'string' },
+          technologies: { type: 'array', items: { type: 'string' } },
+          leadtime: { type: 'string' },
+          prerequisites: { type: 'string' },
+          contact: { type: 'string' },
+          benefits: { type: 'array', items: { type: 'string' } },
+          metrics: { type: 'array', items: { type: 'string' } },
+          risks: { type: 'array', items: { type: 'string' } },
+          constraints: {
+            type: 'array',
+            minItems: 1,
+            items: { type: 'string', minLength: 3 },
+          },
+          nextSteps: { type: 'array', items: { type: 'string' } },
+          references: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                title: { type: 'string' },
+                url: { type: 'string' },
+                excerpt: { type: 'string' },
+              },
+              required: ['title', 'url', 'excerpt'],
+            },
+          },
+          valueScores: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                axisId: { type: 'string' },
+                rating: { type: 'number', enum: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100] },
+                description: { type: 'string' },
+              },
+              required: ['axisId', 'rating', 'description'],
+            },
+          },
+          complexityScores: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                axisId: { type: 'string' },
+                rating: { type: 'number', enum: [0, 1, 3, 5, 8, 13, 21, 34, 55, 89, 100] },
+                description: { type: 'string' },
+              },
+              required: ['axisId', 'rating', 'description'],
+            },
+          },
+        },
+        required: [
+          'name',
+          'description',
+          'problem',
+          'solution',
+          'domain',
+          'technologies',
+          'leadtime',
+          'prerequisites',
+          'contact',
+          'benefits',
+          'metrics',
+          'risks',
+          'constraints',
+          'nextSteps',
+          'references',
+          'valueScores',
+          'complexityScores',
+        ],
+      },
       promptTemplate: `Génère une opportunité business détaillée pour l'opportunité suivante: {{use_case}}"
 
     Le contexte initial de l'opportunité était le suivant: {{user_input}}.
