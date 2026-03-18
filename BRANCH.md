@@ -530,7 +530,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] Refactor `chat-service.ts` tool dispatch: align tool names (`usecase_get` → `read_initiative`), remove all legacy tool name variants, use ONE canonical name per tool.
 - [x] Migrate `context-initiative.ts` structured output schemas to agent config: each agent carries `config.outputSchema` (JSON Schema). `generateInitiativeDetail` receives the schema from the agent, not from `USE_CASE_DETAIL_STRUCTURED_SCHEMA` hardcode. AI agents include `dataSources`/`dataObjects` in their schema, opportunity agents do not.
 - [x] Migrate `context-initiative.ts` list generation schema to agent config similarly (`USE_CASE_LIST_STRUCTURED_SCHEMA`).
-- [ ] Remove hardcoded schemas from `context-initiative.ts` — schemas live in agent definitions only.
+- [x] Remove hardcoded schemas from `context-initiative.ts` — schemas live in agent definitions only.
 - [x] **Zero-legacy verification**: `grep -r "usecaseListAgentId\|usecaseDetailAgentId\|ROLE_TO_LEGACY\|cloneGenerationWorkflowRuntimeContextForTask\|USE_CASE_DETAIL_STRUCTURED_SCHEMA\|USE_CASE_LIST_STRUCTURED_SCHEMA" api/src/` returns 0 results.
 
 **Lot 9bis gate:**

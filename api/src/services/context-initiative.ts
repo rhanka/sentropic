@@ -215,6 +215,7 @@ type StructuredOutputConfig = {
   schema: Record<string, unknown>;
 };
 
+/** @deprecated Fallback only — schema now comes from agent config.outputSchema */
 const USE_CASE_LIST_STRUCTURED_SCHEMA: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
@@ -237,6 +238,7 @@ const USE_CASE_LIST_STRUCTURED_SCHEMA: Record<string, unknown> = {
   required: ['dossier', 'initiatives'],
 };
 
+/** @deprecated Fallback only — schema now comes from agent config.outputSchema */
 const USE_CASE_DETAIL_STRUCTURED_SCHEMA: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
