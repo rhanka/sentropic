@@ -1090,6 +1090,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
       {/if}
 
       <!-- Sources -->
+      {#if (useCase?.data?.dataSources || useCase?.dataSources) && (useCase?.data?.dataSources || useCase?.dataSources || []).length > 0}
       <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="dataSources">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2 group">
@@ -1103,14 +1104,14 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </h3>
         </div>
         {#if isPrinting}
-          <ul 
+          <ul
             class="space-y-2"
             style={dataSourcesScaleFactor < 1 ? `font-size: ${dataSourcesScaleFactor}em; line-height: ${Math.max(1.2, dataSourcesScaleFactor * 1.5)}em;` : ''}
           >
             {#each parsedDataSources as source}
               <li class="flex items-start gap-2 text-sm text-slate-600">
-                <Check 
-                  class="w-4 h-4 text-blue-500 mt-0.5" 
+                <Check
+                  class="w-4 h-4 text-blue-500 mt-0.5"
                   style={dataSourcesScaleFactor < 1 ? `width: ${dataSourcesScaleFactor * 1}em !important; height: ${dataSourcesScaleFactor * 1}em !important;` : ''}
                 />
                 <span>{@html source}</span>
@@ -1137,8 +1138,10 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </div>
         {/if}
       </div>
+      {/if}
 
       <!-- Données liées -->
+      {#if (useCase?.data?.dataObjects || useCase?.dataObjects) && (useCase?.data?.dataObjects || useCase?.dataObjects || []).length > 0}
       <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-comment-section="dataObjects">
         <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
           <h3 class="font-semibold flex items-center gap-2">
@@ -1152,14 +1155,14 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </h3>
         </div>
         {#if isPrinting}
-          <ul 
+          <ul
             class="space-y-2"
             style={dataObjectsScaleFactor < 1 ? `font-size: ${dataObjectsScaleFactor}em; line-height: ${Math.max(1.2, dataObjectsScaleFactor * 1.5)}em;` : ''}
           >
             {#each parsedDataObjects as data}
               <li class="flex items-start gap-2 text-sm text-slate-600">
-                <Database 
-                  class="w-4 h-4 text-blue-500 mt-0.5" 
+                <Database
+                  class="w-4 h-4 text-blue-500 mt-0.5"
                   style={dataObjectsScaleFactor < 1 ? `width: ${dataObjectsScaleFactor * 1}em !important; height: ${dataObjectsScaleFactor * 1}em !important;` : ''}
                 />
                 <span>{@html data}</span>
@@ -1186,6 +1189,7 @@ $: solutionHtml = (useCase?.data?.solution || useCase?.solution)
           </div>
         {/if}
       </div>
+      {/if}
     </div>
   </div>
 
