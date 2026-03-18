@@ -496,10 +496,10 @@ export class QueueManager {
   }
 
   private async notifyInitiativeEvent(initiativeId: string): Promise<void> {
-    const notifyPayload = JSON.stringify({ use_case_id: initiativeId });
+    const notifyPayload = JSON.stringify({ initiative_id: initiativeId });
     const client = await pool.connect();
     try {
-      await client.query(`NOTIFY usecase_events, '${notifyPayload.replace(/'/g, "''")}'`);
+      await client.query(`NOTIFY initiative_events, '${notifyPayload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
     }
