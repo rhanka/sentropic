@@ -522,6 +522,16 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] Refactor `todo-orchestration.ts`: remove `ROLE_TO_LEGACY_FIELD`, `ROLE_TO_LEGACY_ALIAS`, `InitiativeGenerationWorkflowTaskAssignments` named fields. Pass `agentMap` to job dispatching instead of legacy assignments.
 - [x] Refactor `chat-service.ts` tool dispatch: align tool names (`usecase_get` → `read_initiative`), remove all legacy tool name variants, use ONE canonical name per tool.
 - [x] **Zero-legacy verification**: `grep -r "usecaseListAgentId\|usecaseDetailAgentId\|ROLE_TO_LEGACY\|cloneGenerationWorkflowRuntimeContextForTask" api/src/` returns 0 results.
+- [x] Migrate all `readLegacyPromptTemplate()` / `defaultPrompts.find(...)` to agent-based prompt resolution.
+- [x] Refactor `startInitiativeGenerationWorkflow` in `todo-orchestration.ts` into truly generic `startWorkflow(workspaceId, workflowKey)` — resolves workflow from DB → ordered tasks → agent per task → prompt from agent `config.promptTemplate`. Remove all generation-specific hardcoded logic from orchestration layer.
+- [x] Update `chat-service.ts`: resolve chat system prompt from `default-chat-system.ts` by workspace type.
+- [x] Refactor `queue-manager.ts` `GenerationWorkflowRuntimeContext`: replace `taskAssignments` (6 named fields) with `agentMap: Record<string, string>` (task key → agent definition ID). Remove `cloneGenerationWorkflowRuntimeContextForTask` switch. All `process*` functions resolve agent by task key from agentMap.
+- [x] Refactor `todo-orchestration.ts`: remove `ROLE_TO_LEGACY_FIELD`, `ROLE_TO_LEGACY_ALIAS`, `InitiativeGenerationWorkflowTaskAssignments` named fields. Pass `agentMap` to job dispatching instead of legacy assignments.
+- [x] Refactor `chat-service.ts` tool dispatch: align tool names (`usecase_get` → `read_initiative`), remove all legacy tool name variants, use ONE canonical name per tool.
+- [ ] Migrate `context-initiative.ts` structured output schemas to agent config: each agent carries `config.outputSchema` (JSON Schema). `generateInitiativeDetail` receives the schema from the agent, not from `USE_CASE_DETAIL_STRUCTURED_SCHEMA` hardcode. AI agents include `dataSources`/`dataObjects` in their schema, opportunity agents do not.
+- [ ] Migrate `context-initiative.ts` list generation schema to agent config similarly (`USE_CASE_LIST_STRUCTURED_SCHEMA`).
+- [ ] Remove hardcoded schemas from `context-initiative.ts` — schemas live in agent definitions only.
+- [x] **Zero-legacy verification**: `grep -r "usecaseListAgentId\|usecaseDetailAgentId\|ROLE_TO_LEGACY\|cloneGenerationWorkflowRuntimeContextForTask\|USE_CASE_DETAIL_STRUCTURED_SCHEMA\|USE_CASE_LIST_STRUCTURED_SCHEMA" api/src/` returns 0 results.
 
 **Lot 9bis gate:**
 - [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
