@@ -105,58 +105,37 @@ function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkfl
   if (!isGenerationWorkflowTaskKey(record.taskKey)) {
     return null;
   }
-  const assignments = record.taskAssignments;
-  if (!assignments || typeof assignments !== 'object') {
-    return null;
-  }
-  const parsedAssignments = assignments as Record<string, unknown>;
   const toNullableString = (candidate: unknown): string | null =>
     typeof candidate === 'string' && candidate.trim() ? candidate : null;
+
+  // Parse agentMap: Record<string, string> (task key → agent definition ID)
+  const rawMap = record.agentMap;
+  const agentMap: Record<string, string> = {};
+  if (rawMap && typeof rawMap === 'object' && !Array.isArray(rawMap)) {
+    for (const [k, v] of Object.entries(rawMap as Record<string, unknown>)) {
+      if (typeof v === 'string' && v.trim()) {
+        agentMap[k] = v;
+      }
+    }
+  }
+
   return {
     workflowRunId: record.workflowRunId,
     workflowDefinitionId: record.workflowDefinitionId,
     taskKey: record.taskKey,
     agentDefinitionId: toNullableString(record.agentDefinitionId),
-    taskAssignments: {
-      contextPrepareAgentId: toNullableString(parsedAssignments.contextPrepareAgentId),
-      matrixPrepareAgentId: toNullableString(parsedAssignments.matrixPrepareAgentId),
-      usecaseListAgentId: toNullableString(parsedAssignments.usecaseListAgentId),
-      todoSyncAgentId: toNullableString(parsedAssignments.todoSyncAgentId),
-      usecaseDetailAgentId: toNullableString(parsedAssignments.usecaseDetailAgentId),
-      executiveSummaryAgentId: toNullableString(parsedAssignments.executiveSummaryAgentId),
-    },
+    agentMap,
   };
 }
 
-function cloneGenerationWorkflowRuntimeContextForTask(
+function cloneWorkflowContextForTask(
   workflow: GenerationWorkflowRuntimeContext,
   taskKey: GenerationWorkflowTaskKey
 ): GenerationWorkflowRuntimeContext {
-  const agentDefinitionId = (() => {
-    switch (taskKey) {
-      case 'generation_context_prepare':
-        return workflow.taskAssignments.contextPrepareAgentId;
-      case 'generation_matrix_prepare':
-        return workflow.taskAssignments.matrixPrepareAgentId;
-      case 'generation_initiative_list':
-        return workflow.taskAssignments.usecaseListAgentId;
-      case 'generation_todo_sync':
-        return workflow.taskAssignments.todoSyncAgentId;
-      case 'generation_initiative_detail':
-        return workflow.taskAssignments.usecaseDetailAgentId;
-      case 'generation_executive_summary':
-        return workflow.taskAssignments.executiveSummaryAgentId;
-      default:
-        return null;
-    }
-  })();
-
   return {
-    workflowRunId: workflow.workflowRunId,
-    workflowDefinitionId: workflow.workflowDefinitionId,
+    ...workflow,
     taskKey,
-    agentDefinitionId,
-    taskAssignments: { ...workflow.taskAssignments },
+    agentDefinitionId: workflow.agentMap[taskKey] ?? null,
   };
 }
 
@@ -281,21 +260,12 @@ export type GenerationWorkflowTaskKey =
   | 'opportunity_detail'
   | 'executive_summary';
 
-export interface GenerationWorkflowTaskAssignments {
-  contextPrepareAgentId: string | null;
-  matrixPrepareAgentId: string | null;
-  usecaseListAgentId: string | null;
-  todoSyncAgentId: string | null;
-  usecaseDetailAgentId: string | null;
-  executiveSummaryAgentId: string | null;
-}
-
 export interface GenerationWorkflowRuntimeContext {
   workflowRunId: string;
   workflowDefinitionId: string;
   taskKey: GenerationWorkflowTaskKey;
-  agentDefinitionId?: string | null;
-  taskAssignments: GenerationWorkflowTaskAssignments;
+  agentDefinitionId: string | null;
+  agentMap: Record<string, string>; // task key → agent definition ID
 }
 
 export interface OrganizationEnrichJobData {
@@ -1518,7 +1488,7 @@ export class QueueManager {
     );
 
     const streamId = `matrix_${folderId}`;
-    const matrixAgentId = workflow?.agentDefinitionId ?? workflow?.taskAssignments.matrixPrepareAgentId ?? null;
+    const matrixAgentId = workflow?.agentDefinitionId ?? null;
     const matrixPromptOverride = await this.resolveGenerationPromptOverride(
       folder.workspaceId,
       matrixAgentId,
@@ -2037,7 +2007,7 @@ export class QueueManager {
     const streamId = `folder_${folderId}`;
     const listPromptOverride = await this.resolveGenerationPromptOverride(
       workspaceId,
-      workflow?.agentDefinitionId ?? workflow?.taskAssignments.usecaseListAgentId ?? null,
+      workflow?.agentDefinitionId ?? null,
       'use_case_list',
     );
     const initiativeList = await generateInitiativeList(
@@ -2149,7 +2119,7 @@ export class QueueManager {
     if (this.cancelAllInProgress || this.paused) {
       console.warn('⏸️ Skipping workflow detail fanout due to pause/cancel');
     } else {
-      const detailWorkflow = cloneGenerationWorkflowRuntimeContextForTask(workflow, 'generation_initiative_detail');
+      const detailWorkflow = cloneWorkflowContextForTask(workflow, 'generation_initiative_detail');
       for (const initiative of draftInitiatives) {
         try {
           const initiativeName = (initiative.data as InitiativeData)?.name || 'Cas d\'usage sans nom';
@@ -2281,7 +2251,7 @@ export class QueueManager {
     const streamId = `usecase_${initiativeId}`;
     const detailPromptOverride = await this.resolveGenerationPromptOverride(
       folder.workspaceId,
-      workflow?.agentDefinitionId ?? workflow?.taskAssignments.usecaseDetailAgentId ?? null,
+      workflow?.agentDefinitionId ?? null,
       'use_case_detail',
     );
     const initiativeDetail = await generateInitiativeDetail(
@@ -2393,7 +2363,7 @@ export class QueueManager {
           return;
         }
 
-        const executiveSummaryWorkflow = cloneGenerationWorkflowRuntimeContextForTask(
+        const executiveSummaryWorkflow = cloneWorkflowContextForTask(
           workflow,
           'generation_executive_summary'
         );
@@ -2434,7 +2404,7 @@ export class QueueManager {
     const workspaceIdForPrompt = folderBefore?.workspaceId ?? "";
     const executivePromptOverride = await this.resolveGenerationPromptOverride(
       workspaceIdForPrompt,
-      workflow?.agentDefinitionId ?? workflow?.taskAssignments.executiveSummaryAgentId ?? null,
+      workflow?.agentDefinitionId ?? null,
       'executive_summary',
     );
 
