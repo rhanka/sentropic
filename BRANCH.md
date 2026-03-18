@@ -504,7 +504,7 @@ Closed: 2026-03-12
 The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` still hardcodes the AI workflow. This lot delivers the real refactoring.
 
 **Tasks:**
-- [ ] Delete `api/src/config/default-prompts.ts` entirely.
+- [x] Delete `api/src/config/default-prompts.ts` entirely.
 - [x] Create `api/src/config/default-chat-system.ts`: chat system prompt per workspace type + common chat prompts (reasoning eval, session title, conversation auto).
 - [x] Create `api/src/config/default-agents-ai-ideas.ts`: AI agents with prompts in `config.promptTemplate`.
 - [x] Create `api/src/config/default-agents-opportunity.ts`: opportunity agents with neutral prompts.
