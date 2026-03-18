@@ -510,7 +510,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] Create `api/src/config/default-agents-opportunity.ts`: opportunity agents with neutral prompts.
 - [x] Create `api/src/config/default-agents-shared.ts`: shared agents for all workspace types (demand_analyst, solution_architect, bid_writer, gate_reviewer, comment_assistant, history_analyzer, document_summarizer, document_analyzer).
 - [x] Create `api/src/config/default-agents-code.ts`: code agents with prompts.
-- [ ] Move `structured_json_repair` to local constant in `api/src/services/context-initiative.ts`.
+- [x] Move `structured_json_repair` to local constant in `api/src/services/context-initiative.ts`.
 - [ ] Update `api/src/config/default-agents.ts`: import from split files, include shared agents for all types.
 - [ ] Migrate all `readLegacyPromptTemplate()` / `defaultPrompts.find(...)` to agent-based prompt resolution.
 - [ ] Refactor `startInitiativeGenerationWorkflow` in `todo-orchestration.ts` into truly generic `startWorkflow(workspaceId, workflowKey)` — resolves workflow from DB → ordered tasks → agent per task → prompt from agent `config.promptTemplate`. Remove all generation-specific hardcoded logic from orchestration layer.

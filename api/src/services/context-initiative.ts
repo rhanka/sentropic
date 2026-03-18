@@ -1,7 +1,39 @@
 import { executeWithToolsStream } from './tools';
 import { getReasoningParamsForModel } from './model-catalog';
-import { defaultPrompts } from '../config/default-prompts';
+import { AI_IDEAS_AGENTS } from '../config/default-agents-ai-ideas';
 import type { MatrixConfig } from '../types/matrix';
+
+const getAgentPromptTemplate = (promptId: string): string => {
+  for (const agent of AI_IDEAS_AGENTS) {
+    if (agent.config.promptId === promptId) {
+      return typeof agent.config.promptTemplate === 'string' ? agent.config.promptTemplate : '';
+    }
+  }
+  return '';
+};
+
+const STRUCTURED_JSON_REPAIR_PROMPT = `You are a strict JSON repair engine.
+
+Your task:
+- Repair the malformed JSON response so it becomes one valid JSON object.
+- Keep the original semantic intent and values as much as possible.
+- Respect the target schema.
+- Do not add commentary.
+
+Target schema name:
+{{schema_name}}
+
+Target schema JSON:
+{{schema_json}}
+
+Malformed JSON response:
+{{malformed_json}}
+
+Rules:
+- Return ONLY one valid JSON object.
+- No markdown fences.
+- No extra text before or after JSON.
+- If a field is missing, infer the safest schema-compliant value from context.`;
 
 export interface InitiativeListItem {
   titre: string;
@@ -355,8 +387,7 @@ const parseStructuredJsonWithSingleRepair = async <T>(params: {
   try {
     return parseJsonLenient<T>(params.rawContent);
   } catch {
-    const repairPromptTemplate =
-      defaultPrompts.find((p) => p.id === 'structured_json_repair')?.content || '';
+    const repairPromptTemplate = STRUCTURED_JSON_REPAIR_PROMPT;
     if (!repairPromptTemplate) {
       throw new Error('Prompt structured_json_repair non trouvé');
     }
@@ -402,7 +433,7 @@ export const generateInitiativeList = async (
     (typeof runtimePrompt?.promptTemplate === 'string' &&
     runtimePrompt.promptTemplate.trim().length > 0
       ? runtimePrompt.promptTemplate
-      : defaultPrompts.find(p => p.id === 'use_case_list')?.content) || '';
+      : getAgentPromptTemplate('use_case_list')) || '';
   
   if (!initiativeListPrompt) {
     throw new Error('Prompt use_case_list non trouvé');
@@ -490,7 +521,7 @@ export const generateInitiativeDetail = async (
     (typeof runtimePrompt?.promptTemplate === 'string' &&
     runtimePrompt.promptTemplate.trim().length > 0
       ? runtimePrompt.promptTemplate
-      : defaultPrompts.find(p => p.id === 'use_case_detail')?.content) || '';
+      : getAgentPromptTemplate('use_case_detail')) || '';
   
   if (!initiativeDetailPrompt) {
     throw new Error('Prompt use_case_detail non trouvé');
