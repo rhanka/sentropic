@@ -62,9 +62,10 @@
     }
   }
 
-  function handleWorkspaceClick(ws: DashboardWorkspace) {
+  async function handleWorkspaceClick(ws: DashboardWorkspace) {
     setWorkspaceScope(ws.id);
-    goto('/folders');
+    // Await navigation to ensure workspace scope is fully applied before /folders mounts
+    await goto('/folders');
   }
 
   function formatRelativeDate(dateStr: string | null): string {
