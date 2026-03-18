@@ -133,8 +133,9 @@ function sseFolderEvent(folderId: string, data: unknown): string {
 }
 
 function sseInitiativeEvent(initiativeId: string, data: unknown): string {
-  const payload = JSON.stringify({ initiativeId, data });
-  return `event: initiative_update\nid: initiative:${initiativeId}:${Date.now()}\ndata: ${payload}\n\n`;
+  // Client streamHub expects event type "usecase_update" with "useCaseId" field
+  const payload = JSON.stringify({ useCaseId: initiativeId, data });
+  return `event: usecase_update\nid: initiative:${initiativeId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
 function sseWorkspaceEvent(workspaceId: string, data: unknown): string {
@@ -446,7 +447,7 @@ streamsRouter.get('/sse', async (c) => {
           if (!row?.id || typeof row.id !== 'string') return;
           // Utiliser hydrateInitiative pour avoir la même structure que GET /use-cases (camelCase)
           const hydrated = await hydrateInitiative(row);
-          push(sseInitiativeEvent(initiativeId, { initiative: hydrated }));
+          push(sseInitiativeEvent(initiativeId, { useCase: hydrated }));
         } catch {
           // ignore
         }
