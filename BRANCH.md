@@ -506,7 +506,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 **Tasks:**
 - [ ] Delete `api/src/config/default-prompts.ts` entirely.
 - [ ] Create `api/src/config/default-chat-system.ts`: chat system prompt per workspace type + common chat prompts (reasoning eval, session title, conversation auto).
-- [ ] Create `api/src/config/default-agents-ai-ideas.ts`: AI agents with prompts in `config.promptTemplate`.
+- [x] Create `api/src/config/default-agents-ai-ideas.ts`: AI agents with prompts in `config.promptTemplate`.
 - [ ] Create `api/src/config/default-agents-opportunity.ts`: opportunity agents with neutral prompts.
 - [ ] Create `api/src/config/default-agents-shared.ts`: shared agents for all workspace types (demand_analyst, solution_architect, bid_writer, gate_reviewer, comment_assistant, history_analyzer, document_summarizer, document_analyzer).
 - [ ] Create `api/src/config/default-agents-code.ts`: code agents with prompts.
