@@ -89,27 +89,13 @@ export const readInitiativeTool: OpenAI.Chat.Completions.ChatCompletionTool = {
 };
 
 /**
- * Alias (Option B): `usecase_get` — preferred name for the use case read tool.
- * Keeps backward-compatibility with the legacy `read_initiative` tool id.
- */
-export const initiativeGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-  type: 'function',
-  function: {
-    name: 'usecase_get',
-    description:
-      "Lit un use case (structure initiatives.data). (Nom standard Option B: usecase_get). IMPORTANT: utilise `select` dès que possible pour ne récupérer que les champs nécessaires.",
-    parameters: readInitiativeTool.function.parameters
-  }
-};
-
-/**
  * Tool générique: met à jour un ou plusieurs champs de `initiatives.data.*`.
  * Le mapping DB est pris en charge côté `tool-service.ts`.
  */
-export const updateInitiativeFieldTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const updateInitiativeTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: "function",
   function: {
-    name: "update_initiative_field",
+    name: "update_initiative",
     description:
       "OBLIGATOIRE : Utilise ce tool quand l'utilisateur demande de modifier, reformuler ou mettre à jour des champs du use case. Ne réponds pas dans le texte, utilise ce tool pour appliquer les modifications directement en base de données. Met à jour un ou plusieurs champs d'un use case (JSONB initiatives.data). Utilise des paths dot-notation. Exemples de paths : 'description', 'problem', 'solution', 'solution.bullets' (pour un tableau), 'solution.bullets.0' (pour un élément spécifique).",
     parameters: {
@@ -131,20 +117,6 @@ export const updateInitiativeFieldTool: OpenAI.Chat.Completions.ChatCompletionTo
       },
       required: ["initiativeId", "updates"]
     }
-  }
-};
-
-/**
- * Alias (Option B): `usecase_update` — preferred name for updating a use case.
- * Keeps backward-compatibility with the legacy `update_initiative_field` tool id.
- */
-export const initiativeUpdateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
-  type: 'function',
-  function: {
-    name: 'usecase_update',
-    description:
-      "OBLIGATOIRE : Utilise ce tool quand l'utilisateur demande de modifier des champs du use case. (Nom standard Option B: usecase_update). Met à jour un ou plusieurs champs d'un use case (JSONB initiatives.data) via des paths dot-notation.",
-    parameters: updateInitiativeFieldTool.function.parameters
   }
 };
 
