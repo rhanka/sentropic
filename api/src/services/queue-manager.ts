@@ -74,15 +74,25 @@ function parseJsonField<T = unknown>(value: unknown): T | null {
   }
 }
 
+const GENERATION_WORKFLOW_TASK_KEYS = new Set<string>([
+  'generation_create_organizations',
+  'generation_context_prepare',
+  'generation_matrix_prepare',
+  'generation_initiative_list',
+  'generation_todo_sync',
+  'generation_initiative_detail',
+  'generation_executive_summary',
+  'create_organizations',
+  'context_prepare',
+  'matrix_prepare',
+  'opportunity_list',
+  'todo_sync',
+  'opportunity_detail',
+  'executive_summary',
+]);
+
 function isGenerationWorkflowTaskKey(value: unknown): value is GenerationWorkflowTaskKey {
-  return (
-    value === 'generation_context_prepare' ||
-    value === 'generation_matrix_prepare' ||
-    value === 'generation_initiative_list' ||
-    value === 'generation_todo_sync' ||
-    value === 'generation_initiative_detail' ||
-    value === 'generation_executive_summary'
-  );
+  return typeof value === 'string' && GENERATION_WORKFLOW_TASK_KEYS.has(value);
 }
 
 function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkflowRuntimeContext | null {
@@ -243,6 +253,7 @@ export function buildGeneratedInitiativePayloadForPersistence(
 
 export type JobType =
   | 'organization_enrich'
+  | 'organization_batch_create'
   | 'matrix_generate'
   | 'initiative_list'
   | 'initiative_detail'
@@ -254,12 +265,20 @@ export type JobType =
 export type MatrixMode = 'organization' | 'generate' | 'default';
 
 export type GenerationWorkflowTaskKey =
+  | 'generation_create_organizations'
   | 'generation_context_prepare'
   | 'generation_matrix_prepare'
   | 'generation_initiative_list'
   | 'generation_todo_sync'
   | 'generation_initiative_detail'
-  | 'generation_executive_summary';
+  | 'generation_executive_summary'
+  | 'create_organizations'
+  | 'context_prepare'
+  | 'matrix_prepare'
+  | 'opportunity_list'
+  | 'todo_sync'
+  | 'opportunity_detail'
+  | 'executive_summary';
 
 export interface GenerationWorkflowTaskAssignments {
   contextPrepareAgentId: string | null;
