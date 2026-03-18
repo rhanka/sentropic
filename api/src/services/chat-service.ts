@@ -16,9 +16,7 @@ import { getOpenAITransportMode } from './provider-connections';
 import { CHAT_SYSTEM_PROMPTS, CHAT_COMMON_PROMPTS } from '../config/default-chat-system';
 import {
   readInitiativeTool,
-  updateInitiativeFieldTool,
-  initiativeGetTool,
-  initiativeUpdateTool,
+  updateInitiativeTool,
   webSearchTool,
   webExtractTool,
   searchWeb,
@@ -2544,11 +2542,9 @@ export class ChatService {
     contextsOverride.forEach((c) => contextTypes.add(c.contextType));
 
     if (contextTypes.has('initiative')) {
-      // Prefer Option B tool ids, but keep legacy ids for backward-compatibility.
       addTools([
-        initiativeGetTool,
         readInitiativeTool,
-        ...(readOnly ? [] : [initiativeUpdateTool, updateInitiativeFieldTool]),
+        ...(readOnly ? [] : [updateInitiativeTool]),
         webSearchTool,
         webExtractTool
       ]);
@@ -2733,14 +2729,14 @@ export class ChatService {
 Tu travailles sur le initiative ${primaryContextId}. Tu peux répondre aux questions générales de l'utilisateur en t'appuyant sur l'historique de la conversation.
 
 Tools disponibles :
-- \`initiative_get\` : Lit l'état actuel du initiative
-- \`initiative_update\` : Met à jour des champs du initiative (modifications appliquées directement en DB)${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
+- \`read_initiative\` : Lit l'état actuel du initiative
+- \`update_initiative\` : Met à jour des champs du initiative (modifications appliquées directement en DB)${readOnly ? ' (DÉSACTIVÉ en mode lecture seule)' : ''}
 - \`web_search\` : Recherche d'informations récentes sur le web pour trouver de nouvelles URLs ou obtenir des résumés. Utilise ce tool quand tu dois chercher de nouvelles informations ou URLs pertinentes.
 - \`web_extract\` : Extrait le contenu complet d'une ou plusieurs URLs existantes. CRITIQUE : Utilise ce tool quand l'utilisateur demande des détails sur les références (URLs déjà présentes dans le initiative). Si tu dois extraire plusieurs URLs (par exemple 9 URLs), tu DOIS toutes les passer dans UN SEUL appel avec le paramètre \`urls\` en array. NE FAIS JAMAIS plusieurs appels séparés (un par URL). Exemple : si tu as 9 URLs, appelle une seule fois avec \`{"urls": ["url1", "url2", ..., "url9"]}\` au lieu de faire 9 appels séparés.
 
 Quand l'utilisateur demande explicitement de modifier, reformuler ou mettre à jour des champs du initiative (par exemple : "reformuler le problème", "mettre en bullet points", "modifier la description"), tu DOIS utiliser les tools disponibles :
-1. D'abord utiliser \`initiative_get\` pour lire l'état actuel du initiative
-2. Ensuite utiliser \`initiative_update\` pour appliquer directement les modifications demandées${readOnly ? ' (si disponible; sinon, propose une suggestion sans modifier en DB)' : ''}
+1. D'abord utiliser \`read_initiative\` pour lire l'état actuel du initiative
+2. Ensuite utiliser \`update_initiative\` pour appliquer directement les modifications demandées${readOnly ? ' (si disponible; sinon, propose une suggestion sans modifier en DB)' : ''}
 
 Les modifications sont appliquées immédiatement en base de données via les tools. Ne réponds pas simplement dans le texte quand il s'agit de modifier le initiative, utilise les tools pour effectuer les modifications réelles.
 
@@ -2751,14 +2747,14 @@ Tu peux utiliser \`web_search\` et \`web_extract\` pour enrichir les référence
 - \`web_extract\` : Pour extraire le contenu complet des URLs déjà présentes dans le initiative.
 
 **Workflow pour analyser les références** : Si l'utilisateur demande des détails sur les références (par exemple "regarde les références en détail", "résume les références"), tu DOIS :
-1. D'abord appeler \`initiative_get\` pour lire le initiative et obtenir les références dans \`data.references\` (qui est un array d'objets \`{title: string, url: string}\`)
+1. D'abord appeler \`read_initiative\` pour lire le initiative et obtenir les références dans \`data.references\` (qui est un array d'objets \`{title: string, url: string}\`)
 2. Extraire toutes les URLs depuis \`data.references\` (chaque objet a une propriété \`url\`) et les mettre dans un array
 3. Appeler \`web_extract\` UNE SEULE FOIS avec TOUTES les URLs dans le paramètre \`urls\`. Exemple concret : si \`data.references\` contient 9 objets avec des URLs, tu dois appeler \`web_extract\` une seule fois avec \`{"urls": ["https://url1.com", "https://url2.com", "https://url3.com", ..., "https://url9.com"]}\`. NE FAIS JAMAIS 9 appels séparés avec une URL chacun.
 4. Utiliser le contenu extrait (qui sera dans \`result.results\`, un array d'objets \`{url: string, content: string}\`) pour répondre à la demande de l'utilisateur
 
 Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solution en bullet point", tu dois :
-1. Appeler initiative_get pour lire le initiative actuel
-2. Appeler initiative_update avec les modifications (par exemple : path: 'problem', path: 'solution')
+1. Appeler read_initiative pour lire le initiative actuel
+2. Appeler update_initiative avec les modifications (par exemple : path: 'problem', path: 'solution')
 3. Les modifications sont alors appliquées directement en base de données`;
     } else if (primaryContextType === 'organization') {
       const orgLine = primaryContextId
@@ -3884,7 +3880,7 @@ Règles :
           }
           let result: unknown;
 
-          if (toolCall.name === 'read_usecase' || toolCall.name === 'initiative_get') {
+          if (toolCall.name === 'read_initiative') {
             if (!allowedByType.usecase.has(args.initiativeId)) {
               throw new Error('Security: initiativeId does not match allowed contexts');
             }
@@ -3902,7 +3898,7 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'update_usecase_field' || toolCall.name === 'initiative_update') {
+          } else if (toolCall.name === 'update_initiative') {
             if (readOnly) {
               throw new Error('Read-only workspace: initiative update is disabled');
             }
