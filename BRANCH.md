@@ -507,7 +507,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] Delete `api/src/config/default-prompts.ts` entirely.
 - [ ] Create `api/src/config/default-chat-system.ts`: chat system prompt per workspace type + common chat prompts (reasoning eval, session title, conversation auto).
 - [x] Create `api/src/config/default-agents-ai-ideas.ts`: AI agents with prompts in `config.promptTemplate`.
-- [ ] Create `api/src/config/default-agents-opportunity.ts`: opportunity agents with neutral prompts.
+- [x] Create `api/src/config/default-agents-opportunity.ts`: opportunity agents with neutral prompts.
 - [ ] Create `api/src/config/default-agents-shared.ts`: shared agents for all workspace types (demand_analyst, solution_architect, bid_writer, gate_reviewer, comment_assistant, history_analyzer, document_summarizer, document_analyzer).
 - [ ] Create `api/src/config/default-agents-code.ts`: code agents with prompts.
 - [ ] Move `structured_json_repair` to local constant in `api/src/services/context-initiative.ts`.
@@ -527,7 +527,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 
 **Tasks:**
 - [ ] Add `opportunity_identification` workflow seed in `default-workflows.ts` (tasks: context_prepare, matrix_prepare, opportunity_list, todo_sync, opportunity_detail, executive_summary). Set as default workflow for `opportunity` workspace type.
-- [ ] Draft neutral prompts for opportunity agents: list (business opportunities, not AI), detail (client problem / proposed solution), matrix (neutral axes), synthesis (business-focused).
+- [x] Draft neutral prompts for opportunity agents: list (business opportunities, not AI), detail (client problem / proposed solution), matrix (neutral axes), synthesis (business-focused).
 - [ ] Create `api/src/config/default-matrix-opportunity.ts`: neutral matrix (no `ai_maturity`, `data_compliance` → `regulatory_compliance`, `data_availability` → `resource_availability`, neutralized descriptions).
 - [ ] Wire workspace type → default matrix selection on folder creation.
 - [ ] Opportunity prompts do NOT populate `dataSources`/`dataObjects`. Frame `problem` as client/market problem, `solution` as proposed offering.
