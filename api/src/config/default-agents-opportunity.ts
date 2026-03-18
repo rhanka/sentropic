@@ -25,6 +25,7 @@ export const OPPORTUNITY_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition>
     sourceLevel: "code",
     config: {
       role: "matrix_generation",
+      baseMatrixId: "opportunity",
       promptId: "opportunity_matrix_template",
       /**
        * customAxes support (D):
