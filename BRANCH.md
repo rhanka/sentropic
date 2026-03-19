@@ -604,6 +604,44 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 
 ---
 
+### Segment B'' — Complete usecase → initiative rename (data + code)
+
+#### Lot 9.5 — Migration complète usecase → initiative
+
+**Scope**: complete the rename that Lot 2 started but left unfinished in data and code.
+
+**Tasks:**
+- [ ] Migration 0024: add `UPDATE chat_contexts SET context_type = 'initiative' WHERE context_type = 'usecase'`
+- [ ] Migration 0024: add `UPDATE chat_sessions SET primary_context_type = 'initiative' WHERE primary_context_type = 'usecase'`
+- [ ] Migration 0024: add UPDATE for all other tables with `'usecase'` values (`comments.context_type`, `object_locks.object_type`, `context_modification_history.context_type`)
+- [ ] DB dev: execute the UPDATE statements directly (migration already applied)
+- [ ] API code: grep/replace all remaining `'usecase'` string values in `api/src/` (import-export.ts, streams.ts, admin.ts, folders.ts, docx.ts, todo-orchestration.ts, etc.)
+- [ ] UI code: grep/replace all remaining `'usecase'` string values in `ui/src/` (~490 occurrences across 20 files — excluding i18n keys and CSS class names)
+- [ ] Remove temporary `'usecase'` acceptance in chat-service.ts (added in pre-lot fix)
+- [ ] **Zero-legacy verification**: `grep -rn "'usecase'" api/src/ ui/src/ | grep -v locales | grep -v .test. | grep -v node_modules | grep -v .css | grep -v i18n` returns 0 results
+
+**Lot 9.5 gate:**
+- [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make typecheck-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make lint-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make lint-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make test-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make test-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+
+---
+
+#### UAT Checkpoint B''
+
+- [ ] Chat on initiative page: tools `read_initiative` and `update_initiative` available and functional
+- [ ] Chat update_initiative: modifies the initiative field in DB
+- [ ] Chat: no infinite loop on tool retry
+- [ ] Chat reload: reasoning/tools displayed after page refresh
+- [ ] Import/export: works with renamed context types
+- [ ] SSE stream events: initiative updates propagated correctly
+- [ ] Non-regression: all previous UAT B' checks still pass
+
+---
+
 ### Segment C — View templates, container refactoring, workflow launch, template catalog (~100 commits)
 
 #### Lot 10 — View template API & seed data
