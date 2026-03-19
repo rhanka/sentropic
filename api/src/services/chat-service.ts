@@ -2205,7 +2205,7 @@ export class ChatService {
     const appendContext = async (type: ChatContextType | null, idRaw: string | null | undefined) => {
       const id = (idRaw ?? '').trim();
       if (!type || !id) return;
-      if (type === 'organization' || type === 'initiative') {
+      if (type === 'organization' || type === 'initiative' || type === 'usecase') { // TODO Lot 9.5: remove 'usecase'
         pushUnique(type, id);
         return;
       }
@@ -2282,7 +2282,7 @@ export class ChatService {
     const appendContext = async (type: ChatContextType | null, idRaw: string | null | undefined) => {
       const id = (idRaw ?? '').trim();
       if (!type || !id) return;
-      if (type === 'initiative') {
+      if (type === 'initiative' || type === 'usecase') { // TODO Lot 9.5: remove 'usecase'
         pushUnique('initiative', id);
         return;
       }
@@ -2441,7 +2441,7 @@ export class ChatService {
     for (const c of allowedContexts) {
       if (c.contextType === 'organization') allowedByType.organization.add(c.contextId);
       if (c.contextType === 'folder') allowedByType.folder.add(c.contextId);
-      if (c.contextType === 'initiative') allowedByType.usecase.add(c.contextId);
+      if (c.contextType === 'initiative' || c.contextType === 'usecase') allowedByType.usecase.add(c.contextId); // TODO Lot 9.5: remove 'usecase' after data migration
       if (c.contextType === 'executive_summary') allowedByType.executive_summary.add(c.contextId);
     }
     const allowedFolderIds = new Set<string>([
@@ -2541,7 +2541,7 @@ export class ChatService {
     if (primaryContextType) contextTypes.add(primaryContextType);
     contextsOverride.forEach((c) => contextTypes.add(c.contextType));
 
-    if (contextTypes.has('initiative')) {
+    if (contextTypes.has('initiative') || contextTypes.has('usecase')) { // TODO Lot 9.5: remove 'usecase' after data migration
       addTools([
         readInitiativeTool,
         ...(readOnly ? [] : [updateInitiativeTool]),
@@ -2723,7 +2723,7 @@ export class ChatService {
 
     // Enrichir le system prompt avec le contexte si disponible
     let contextBlock = '';
-    if (primaryContextType === 'initiative' && primaryContextId) {
+    if ((primaryContextType === 'initiative' || primaryContextType === 'usecase') && primaryContextId) { // TODO Lot 9.5: remove 'usecase'
       contextBlock = ` 
 
 Tu travailles sur le initiative ${primaryContextId}. Tu peux répondre aux questions générales de l'utilisateur en t'appuyant sur l'historique de la conversation.
