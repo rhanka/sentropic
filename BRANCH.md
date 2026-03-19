@@ -344,25 +344,7 @@ Closed: 2026-03-12
 
 ---
 
-#### UAT Checkpoint A
-
-- [ ] **Web app**
-  - [ ] Login → lands on neutral workspace (card-based dashboard).
-  - [ ] Workspace switcher shows type icons.
-  - [ ] Create a new `ai-ideas` workspace → verify type is set.
-  - [ ] Create a new `opportunity` workspace → verify type is set.
-  - [ ] Navigate to existing workspaces → type displays correctly, existing data intact.
-  - [ ] Folder view lists "initiatives" (not "use cases") — labels updated.
-  - [ ] Initiative detail page renders correctly (renamed route, store, component).
-  - [ ] Dashboard scatter chart works (renamed references).
-  - [ ] Chat tools show `read_initiative`, `update_initiative_field` (renamed).
-  - [ ] Neutral workspace: cannot create initiatives, cannot share/delegate.
-  - [ ] Generation workflow still works for `ai-ideas` workspace (non-regression).
-- [ ] **Chrome plugin** (if impacted)
-  - [ ] Chat tools display updated names.
-  - [ ] Context type references work (`initiative` instead of `usecase`).
-- [ ] **VSCode plugin** (if impacted)
-  - [ ] Plugin connects and functions with renamed endpoints.
+#### UAT Checkpoint A — SKIPPED (not proposed, deferred to B')
 
 ---
 
@@ -478,22 +460,9 @@ Closed: 2026-03-12
 
 ---
 
-#### UAT Checkpoint B
+#### UAT Checkpoint B — Deferred to B' (bugs found during testing)
 
-- [ ] **Web app**
-  - [ ] In `opportunity` workspace: create initiative → create solution → create product → create bid → attach products to bid.
-  - [ ] Verify solution/product/bid lifecycle (status transitions).
-  - [ ] Gate system: advance initiative from G0→G2 (soft gate) → verify warnings displayed.
-  - [ ] Gate system: attempt G2→G5 without required fields (hard gate) → verify blocked.
-  - [ ] Multi-workflow: settings shows registered workflows per workspace type.
-  - [ ] Chat in `opportunity` workspace: tools `solutions_list`, `bid_get` etc. available.
-  - [ ] Chat in `ai-ideas` workspace: extended object tools NOT available (scoped).
-  - [ ] Chat in neutral workspace: `workspace_list`, `initiative_search` tools available.
-  - [ ] Generation workflow in `ai-ideas` still works (non-regression after generic dispatch).
-- [ ] **Chrome plugin**
-  - [ ] Chat tool scoping reflects workspace type.
-- [ ] **VSCode plugin**
-  - [ ] Plugin tools work with renamed endpoints.
+Summary of bugs found: ZodError usecase→initiative (Bug 2), missing FileMenu neutral (Bug 3), workspace creation redirects (Bug 4), sortable columns inconsistency (Bug 5), initiative count 0 (Bug 6), workflow hardcoded AI (Bug 7), workspace deletion FK (Bug 8), non-standard cards (Bug 9). All fixed in subsequent lots. Full UAT deferred to B'.
 
 ---
 
@@ -570,7 +539,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] B': Batch org generation — `organization_batch_agent` creates org list from prompt (e.g. "top 10 pharma in Montreal"). Standalone action or workflow task.
 - [x] C: Matrix adaptable per org — `matrixSource` option (`organization` | `prompt` | `default`) in workflow config.
 - [x] D: Matrix axes customisation — prompt allows proposing adapted axis names/descriptions per opportunity domain.
-- [ ] **Bug a/b** — Chat tools `update_initiative`/`read_initiative` fail because `chat_contexts` DB data has `context_type = 'usecase'` (not `'initiative'`). Temporary fix: accept both `'usecase'` and `'initiative'` in `chat-service.ts` context type comparisons. Will be removed in Lot 10 when data is migrated.
+- [x] **Bug a/b** — Chat tools `update_initiative`/`read_initiative` fail because `chat_contexts` DB data has `context_type = 'usecase'` (not `'initiative'`). Temporary fix: accept both `'usecase'` and `'initiative'` in `chat-service.ts` context type comparisons. Will be removed in Lot 10 when data is migrated.
 - [ ] **Bug c** — Chat reasoning/tools not displayed after refresh. Verify root cause (SSE event names or context type mismatch) and fix.
 
 **Lot 9quater gate:**
@@ -609,6 +578,19 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
   - [ ] FileMenu in neutral works
   - [ ] Workspace create dialog opens inline
   - [ ] Workspace deletion works (cascade)
+
+---
+
+#### Lot rattrapage tests (deferred gates from lots 3-9quater)
+
+- [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make typecheck-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make lint-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make lint-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make test-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make test-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make build-api build-ui-image API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=e2e-feat-workspace-template-catalog`
+- [ ] `make clean test-e2e API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=e2e-feat-workspace-template-catalog`
 
 ---
 
