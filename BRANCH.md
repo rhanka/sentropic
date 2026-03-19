@@ -511,10 +511,11 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] Create `api/src/config/default-agents-shared.ts`: shared agents for all workspace types (demand_analyst, solution_architect, bid_writer, gate_reviewer, comment_assistant, history_analyzer, document_summarizer, document_analyzer).
 - [x] Create `api/src/config/default-agents-code.ts`: code agents with prompts.
 - [x] Move `structured_json_repair` to local constant in `api/src/services/context-initiative.ts`.
-- [ ] Update `api/src/config/default-agents.ts`: import from split files, include shared agents for all types.
+- [x] Update `api/src/config/default-agents.ts`: import from split files, include shared agents for all types.
 - [x] Migrate all `readLegacyPromptTemplate()` / `defaultPrompts.find(...)` to agent-based prompt resolution.
 - [x] Refactor `startInitiativeGenerationWorkflow` in `todo-orchestration.ts` into truly generic `startWorkflow(workspaceId, workflowKey)` — resolves workflow from DB → ordered tasks → agent per task → prompt from agent `config.promptTemplate`. Remove all generation-specific hardcoded logic from orchestration layer.
 - [x] Update `chat-service.ts`: resolve chat system prompt from `default-chat-system.ts` by workspace type.
+- [x] Update `api/src/config/default-agents.ts`: import from split files, include shared agents for all types.
 - [x] Migrate all `readLegacyPromptTemplate()` / `defaultPrompts.find(...)` to agent-based prompt resolution.
 - [x] Refactor `startInitiativeGenerationWorkflow` in `todo-orchestration.ts` into truly generic `startWorkflow(workspaceId, workflowKey)` — resolves workflow from DB → ordered tasks → agent per task → prompt from agent `config.promptTemplate`. Remove all generation-specific hardcoded logic from orchestration layer.
 - [x] Update `chat-service.ts`: resolve chat system prompt from `default-chat-system.ts` by workspace type.
@@ -526,6 +527,11 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] Refactor `startInitiativeGenerationWorkflow` in `todo-orchestration.ts` into truly generic `startWorkflow(workspaceId, workflowKey)` — resolves workflow from DB → ordered tasks → agent per task → prompt from agent `config.promptTemplate`. Remove all generation-specific hardcoded logic from orchestration layer.
 - [x] Update `chat-service.ts`: resolve chat system prompt from `default-chat-system.ts` by workspace type.
 - [x] Refactor `queue-manager.ts` `GenerationWorkflowRuntimeContext`: replace `taskAssignments` (6 named fields) with `agentMap: Record<string, string>` (task key → agent definition ID). Remove `cloneGenerationWorkflowRuntimeContextForTask` switch. All `process*` functions resolve agent by task key from agentMap.
+- [x] Refactor `todo-orchestration.ts`: remove `ROLE_TO_LEGACY_FIELD`, `ROLE_TO_LEGACY_ALIAS`, `InitiativeGenerationWorkflowTaskAssignments` named fields. Pass `agentMap` to job dispatching instead of legacy assignments.
+- [x] Refactor `chat-service.ts` tool dispatch: align tool names (`usecase_get` → `read_initiative`), remove all legacy tool name variants, use ONE canonical name per tool.
+- [x] Migrate `context-initiative.ts` structured output schemas to agent config: each agent carries `config.outputSchema` (JSON Schema). `generateInitiativeDetail` receives the schema from the agent, not from `USE_CASE_DETAIL_STRUCTURED_SCHEMA` hardcode. AI agents include `dataSources`/`dataObjects` in their schema, opportunity agents do not.
+- [x] Migrate `context-initiative.ts` list generation schema to agent config similarly (`USE_CASE_LIST_STRUCTURED_SCHEMA`).
+- [x] Remove hardcoded schemas from `context-initiative.ts` — schemas live in agent definitions only.
 - [x] Refactor `todo-orchestration.ts`: remove `ROLE_TO_LEGACY_FIELD`, `ROLE_TO_LEGACY_ALIAS`, `InitiativeGenerationWorkflowTaskAssignments` named fields. Pass `agentMap` to job dispatching instead of legacy assignments.
 - [x] Refactor `chat-service.ts` tool dispatch: align tool names (`usecase_get` → `read_initiative`), remove all legacy tool name variants, use ONE canonical name per tool.
 - [x] Migrate `context-initiative.ts` structured output schemas to agent config: each agent carries `config.outputSchema` (JSON Schema). `generateInitiativeDetail` receives the schema from the agent, not from `USE_CASE_DETAIL_STRUCTURED_SCHEMA` hardcode. AI agents include `dataSources`/`dataObjects` in their schema, opportunity agents do not.
@@ -547,7 +553,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] Draft neutral prompts for opportunity agents: list (business opportunities, not AI), detail (client problem / proposed solution), matrix (neutral axes), synthesis (business-focused).
 - [x] Create `api/src/config/default-matrix-opportunity.ts`: neutral matrix (no `ai_maturity`, `data_compliance` → `regulatory_compliance`, `data_availability` → `resource_availability`, neutralized descriptions).
 - [x] Wire workspace type → default matrix selection on folder creation.
-- [ ] Opportunity prompts do NOT populate `dataSources`/`dataObjects`. Frame `problem` as client/market problem, `solution` as proposed offering.
+- [x] Opportunity prompts do NOT populate `dataSources`/`dataObjects`. Frame `problem` as client/market problem, `solution` as proposed offering.
 
 **Lot 9ter gate:**
 - [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
@@ -564,6 +570,8 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] B': Batch org generation — `organization_batch_agent` creates org list from prompt (e.g. "top 10 pharma in Montreal"). Standalone action or workflow task.
 - [x] C: Matrix adaptable per org — `matrixSource` option (`organization` | `prompt` | `default`) in workflow config.
 - [x] D: Matrix axes customisation — prompt allows proposing adapted axis names/descriptions per opportunity domain.
+- [ ] **Bug a/b** — Chat tools `update_initiative`/`read_initiative` fail because `chat_contexts` DB data has `context_type = 'usecase'` (not `'initiative'`). Temporary fix: accept both `'usecase'` and `'initiative'` in `chat-service.ts` context type comparisons. Will be removed in Lot 10 when data is migrated.
+- [ ] **Bug c** — Chat reasoning/tools not displayed after refresh. Verify root cause (SSE event names or context type mismatch) and fix.
 
 **Lot 9quater gate:**
 - [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
@@ -604,23 +612,17 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 
 ---
 
-### Segment B'' — Complete usecase → initiative rename (data + code)
-
-#### Lot 9.5 — Migration complète usecase → initiative
-
-**Scope**: complete the rename that Lot 2 started but left unfinished in data and code.
+#### Lot 10 — Complete usecase → initiative rename (code + data migration)
 
 **Tasks:**
-- [ ] Migration 0024: add `UPDATE chat_contexts SET context_type = 'initiative' WHERE context_type = 'usecase'`
-- [ ] Migration 0024: add `UPDATE chat_sessions SET primary_context_type = 'initiative' WHERE primary_context_type = 'usecase'`
-- [ ] Migration 0024: add UPDATE for all other tables with `'usecase'` values (`comments.context_type`, `object_locks.object_type`, `context_modification_history.context_type`)
-- [ ] DB dev: execute the UPDATE statements directly (migration already applied)
-- [ ] API code: grep/replace all remaining `'usecase'` string values in `api/src/` (import-export.ts, streams.ts, admin.ts, folders.ts, docx.ts, todo-orchestration.ts, etc.)
-- [ ] UI code: grep/replace all remaining `'usecase'` string values in `ui/src/` (~490 occurrences across 20 files — excluding i18n keys and CSS class names)
-- [ ] Remove temporary `'usecase'` acceptance in chat-service.ts (added in pre-lot fix)
-- [ ] **Zero-legacy verification**: `grep -rn "'usecase'" api/src/ ui/src/ | grep -v locales | grep -v .test. | grep -v node_modules | grep -v .css | grep -v i18n` returns 0 results
+- [ ] Migration 0024: add `UPDATE chat_contexts SET context_type = 'initiative' WHERE context_type = 'usecase'` and `UPDATE chat_sessions SET primary_context_type = 'initiative' WHERE primary_context_type = 'usecase'`. Also update `comments`, `context_documents`, `context_modification_history`, `object_locks` if they contain `'usecase'` values.
+- [ ] Execute UPDATE on dev DB directly (migration already applied).
+- [ ] Grep/replace `'usecase'` → `'initiative'` in all API code (`import-export.ts`, `streams.ts`, `admin.ts`, `folders.ts`, `docx.ts`, `todo-orchestration.ts`, and any other file).
+- [ ] Grep/replace `usecase` → `initiative` in all UI code (490 occurrences across 20 files — stores, components, routes, CSS).
+- [ ] Remove temporary `'usecase'` acceptance in `chat-service.ts` (added in Lot 9quater fix).
+- [ ] **Zero-legacy verification**: `grep -rn "'usecase'" api/src/ ui/src/ | grep -v locales | grep -v .test. | grep -v node_modules | grep -v "\.css"` returns 0 results.
 
-**Lot 9.5 gate:**
+**Lot 10 gate:**
 - [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
 - [ ] `make typecheck-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
 - [ ] `make lint-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
@@ -630,21 +632,9 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 
 ---
 
-#### UAT Checkpoint B''
-
-- [ ] Chat on initiative page: tools `read_initiative` and `update_initiative` available and functional
-- [ ] Chat update_initiative: modifies the initiative field in DB
-- [ ] Chat: no infinite loop on tool retry
-- [ ] Chat reload: reasoning/tools displayed after page refresh
-- [ ] Import/export: works with renamed context types
-- [ ] SSE stream events: initiative updates propagated correctly
-- [ ] Non-regression: all previous UAT B' checks still pass
-
----
-
 ### Segment C — View templates, container refactoring, workflow launch, template catalog (~100 commits)
 
-#### Lot 10 — View template API & seed data
+#### Lot 11 — View template API & seed data
 
 **API files (new):**
 - `api/src/routes/api/view-templates.ts` — CRUD for view templates.
@@ -662,14 +652,14 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] Seed view templates on workspace creation (same pattern as workflows/agents).
 - [ ] Tests: CRUD, resolution, fork/detach, seed on workspace creation.
 
-**Lot 10 gate:**
+**Lot 11 gate:**
 - [ ] `make typecheck-api ENV=test-br04`
 - [ ] `make lint-api ENV=test-br04`
 - [ ] `make test-api ENV=test-br04`
 
 ---
 
-#### Lot 11 — ViewTemplateRenderer & container view refactoring
+#### Lot 12 — ViewTemplateRenderer & container view refactoring
 
 **UI files (new/modified):**
 - `ui/src/lib/components/ViewTemplateRenderer.svelte` — extend with all widget types (§12.4).
@@ -686,14 +676,14 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] Refactor neutral landing → container view from API view template.
 - [ ] Tests: widget rendering, container view at all levels.
 
-**Lot 11 gate:**
+**Lot 12 gate:**
 - [ ] `make typecheck-ui ENV=test-br04`
 - [ ] `make lint-ui ENV=test-br04`
 - [ ] `make test-ui ENV=test-br04`
 
 ---
 
-#### Lot 12 — Initiative detail view-template-driven + extended object views
+#### Lot 13 — Initiative detail view-template-driven + extended object views
 
 **UI files (new/modified):**
 - `ui/src/lib/components/InitiativeDetail.svelte` — refactor to use `ViewTemplateRenderer` (vertical for ai-ideas, tabs for opportunity/code).
@@ -712,14 +702,14 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] Implement `ChildListWidget` for embedded solution/product/bid lists in initiative detail.
 - [ ] Tests: view rendering per workspace type, CRUD operations.
 
-**Lot 12 gate:**
+**Lot 13 gate:**
 - [ ] `make typecheck-ui ENV=test-br04`
 - [ ] `make lint-ui ENV=test-br04`
 - [ ] `make test-ui ENV=test-br04`
 
 ---
 
-#### Lot 13 — Workflow launch templatizing & template catalog
+#### Lot 14 — Workflow launch templatizing & template catalog
 
 **UI files (new/modified):**
 - `ui/src/routes/home/+page.svelte` — refactor to `ViewTemplateRenderer` with `object_type: "workflow_launch"` per §12.9.
@@ -735,7 +725,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] Template catalog UI in settings (per workspace type) — list/manage template families (§9).
 - [ ] Tests: workflow launch per workspace type, template catalog display.
 
-**Lot 13 gate:**
+**Lot 14 gate:**
 - [ ] `make typecheck-api ENV=test-br04`
 - [ ] `make lint-api ENV=test-br04`
 - [ ] `make test-api ENV=test-br04`
@@ -770,7 +760,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 
 ### Segment D — Document generation, dashboard, polish, E2E, final validation (~100 commits)
 
-#### Lot 14 — Document generation (Mode A + Mode B)
+#### Lot 15 — Document generation (Mode A + Mode B)
 
 **API files (new/modified):**
 - `api/src/services/docx-service.ts` — extend template families for opportunity objects (§9.1): `opportunity-brief`, `solution-proposal`, `bid-document`, `product-datasheet`.
@@ -783,14 +773,14 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] Integrate document generation tasks in opportunity workflow (Mode A).
 - [ ] Tests: template rendering for new object types, chat tool generation.
 
-**Lot 14 gate:**
+**Lot 15 gate:**
 - [ ] `make typecheck-api ENV=test-br04`
 - [ ] `make lint-api ENV=test-br04`
 - [ ] `make test-api ENV=test-br04`
 
 ---
 
-#### Lot 15 — Dashboard per workspace type & neutral todo automation
+#### Lot 16 — Dashboard per workspace type & neutral todo automation
 
 **UI files (new/modified):**
 - `ui/src/routes/dashboard/+page.svelte` — refactor to view-template-driven dashboard per workspace type.
@@ -806,7 +796,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] Implement neutral todo automation: event listener on `execution_events` → auto-create todos in neutral workspace.
 - [ ] Tests: dashboard rendering per type, todo automation events.
 
-**Lot 15 gate:**
+**Lot 16 gate:**
 - [ ] `make typecheck-api ENV=test-br04`
 - [ ] `make lint-api ENV=test-br04`
 - [ ] `make test-api ENV=test-br04`
@@ -816,7 +806,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 
 ---
 
-#### Lot 16 — E2E tests & cross-cutting polish
+#### Lot 17 — E2E tests & cross-cutting polish
 
 **E2E files (new/modified):**
 - `e2e/tests/` — new E2E scenarios:
@@ -836,7 +826,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] Accessibility pass on new views.
 - [ ] Performance check: view template resolution, container view rendering.
 
-**Lot 16 gate:**
+**Lot 17 gate:**
 - [ ] `make typecheck-api ENV=test-br04`
 - [ ] `make lint-api ENV=test-br04`
 - [ ] `make test-api ENV=test-br04`
@@ -906,7 +896,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] **Bug A** — Clicking a workspace card from neutral landing does not switch to the clicked workspace (stays on previous).
 - [ ] **Bug B** — Opening an initiative shows "invalid query" toast.
 - [ ] **Bug C** — Document section in initiative shows "invalid query" (likely same root cause as B).
-- [ ] **Bug D** — `dataSources` and `dataObjects` fields displayed but empty in opportunity initiatives — should be hidden when not populated.
+- [x] **Bug D** — `dataSources` and `dataObjects` fields displayed but empty in opportunity initiatives — should be hidden when not populated.
 - [ ] **Bug E** — Opportunity folder matrix still shows `ai_maturity` axis — neutral matrix not applied on folder creation.
 - [ ] **Bug F** — "invalid query" affects both opportunity and ai-ideas workspaces — likely a broken API endpoint or Zod validation.
 - [ ] **Bug G** — After generation, folder initiative count stays at 0 until page refresh.
@@ -921,6 +911,6 @@ Closed:
 - [x] Bug G — compteur initiatives: OK
 
 Persistent/new:
-- [ ] **Bug D'** — dataSources and dataObjects still present in generation output AND display. The opportunity prompt still asks for these fields. Fix: update opportunity_detail_agent prompt to NOT request dataSources/dataObjects. Also verify InitiativeDetail.svelte hide condition works.
+- [x] **Bug D'** — dataSources and dataObjects still present in generation output AND display. The opportunity prompt still asks for these fields. Fix: update opportunity_detail_agent prompt to NOT request dataSources/dataObjects. Also verify InitiativeDetail.svelte hide condition works.
 - [ ] **Bug I** — Initiative count hardcoded to 10 in opportunity generation. The generation prompt/config should respect the user's requested count.
 - [ ] **Bug J** — Chat tools (usecase_get, read_initiative) return technical errors. Tool names or dispatch may still reference legacy usecase endpoints.
