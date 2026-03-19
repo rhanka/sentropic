@@ -1155,12 +1155,12 @@ Tool availability becomes a function of `(workspace_type, context_type, role)` i
 BR-04 `use_cases` → `initiatives` rename affects:
 - Tool names: `read_usecase` → `read_initiative`, `update_usecase_field` → `update_initiative`, `usecases_list` → `initiatives_list`
 - Tool descriptions and parameter names
-- `contextType` values in DB: `'usecase'` → `'initiative'` in `chat_contexts.context_type`, `chat_sessions.primary_context_type`, `comments.context_type`, `object_locks.object_type`, `context_modification_history.context_type`. Migration in 0024.
-- All hardcoded `'usecase'` string values in API code (`import-export.ts`, `streams.ts`, `admin.ts`, `folders.ts`, `docx.ts`, `todo-orchestration.ts`) and UI code (~490 occurrences across 20 files)
+- `contextType` values in DB tables: `usecase` → `initiative` in `chat_contexts`, `chat_sessions` (primary_context_type), `comments`, `context_documents`, `context_modification_history`, `object_locks`
+- Migration 0024 must include `UPDATE` statements for data values (not just table/column renames)
+- All API code that writes or reads `'usecase'` as a string value: `import-export.ts`, `streams.ts`, `admin.ts`, `folders.ts`, `docx.ts`, `todo-orchestration.ts`
+- All UI code (490 occurrences across 20 files: stores, components, routes, CSS)
 - Client-side `chat-tool-scope.ts` references
-- SSE event names (`usecase_update` → `initiative_update`)
-
-**Note**: this rename must be complete — no backward compat aliases. Zero occurrences of `'usecase'` as a value in code or DB after completion (i18n keys and CSS class names excluded).
+- Zero-legacy target: `grep -rn "'usecase'" api/src/ ui/src/` returns 0 results (excluding locales/tests)
 
 ### 14.4 Chat × workspace type: what BR-04 does vs does NOT do
 
