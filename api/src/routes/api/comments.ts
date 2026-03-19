@@ -10,7 +10,7 @@ import { createId } from '../../utils/id';
 
 export const commentsRouter = new Hono();
 
-const contextTypeSchema = z.enum(['organization', 'folder', 'initiative', 'matrix', 'executive_summary']);
+const contextTypeSchema = z.enum(['organization', 'folder', 'initiative', 'usecase', 'matrix', 'executive_summary']); // TODO Lot 10: remove 'usecase'
 const statusSchema = z.enum(['open', 'closed']);
 
 function escapeNotifyPayload(payload: Record<string, unknown>): string {
