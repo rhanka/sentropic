@@ -348,11 +348,19 @@ chatRouter.get('/sessions/:id/history', async (c) => {
   const sessionId = c.req.param('id')!;
   const detailMode =
     c.req.query('runtimeDetails') === 'full' ? 'full' : 'summary';
-  const result = await chatService.getSessionHistory({
-    sessionId,
-    userId: user.userId,
-    detailMode,
-  });
+  let result;
+  try {
+    result = await chatService.getSessionHistory({
+      sessionId,
+      userId: user.userId,
+      detailMode,
+    });
+  } catch (e: any) {
+    if (e?.message === 'Session not found') {
+      return c.json({ message: 'Session not found' }, 404);
+    }
+    throw e;
+  }
 
   const encoder = new TextEncoder();
 
