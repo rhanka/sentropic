@@ -540,7 +540,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] C: Matrix adaptable per org — `matrixSource` option (`organization` | `prompt` | `default`) in workflow config.
 - [x] D: Matrix axes customisation — prompt allows proposing adapted axis names/descriptions per opportunity domain.
 - [x] **Bug a/b** — Chat tools `update_initiative`/`read_initiative` fail because `chat_contexts` DB data has `context_type = 'usecase'` (not `'initiative'`). Temporary fix: accept both `'usecase'` and `'initiative'` in `chat-service.ts` context type comparisons. Will be removed in Lot 10 when data is migrated.
-- [ ] **Bug c** — Chat reasoning/tools not displayed after refresh. Verify root cause (SSE event names or context type mismatch) and fix.
+- [x] **Bug c** — Chat reasoning/tools not displayed after refresh. Root cause: commit `1c59d52e` on main removed lazy-load mechanism for runtime details. Fix: restore runtimeSummary display + lazy-load on expand in ChatPanel.
 
 **Lot 9quater gate:**
 - [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
