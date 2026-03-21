@@ -557,29 +557,27 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 
 #### UAT Checkpoint B'
 
-- [ ] **Workspace opportunity — generation**
-  - [ ] Create folder → uses `opportunity_identification` workflow (not AI workflow)
-  - [ ] Prompts are neutral (no AI/IA mention)
-  - [ ] Matrix is neutral (no `ai_maturity`, axes `regulatory_compliance`/`resource_availability`)
-  - [ ] Initiative detail: no `dataSources`/`dataObjects`, `problem` = client problem, `solution` = proposed offering
-  - [ ] Chat system prompt mentions opportunity management (not AI)
-  - [ ] Executive summary is business-focused
-- [ ] **Workspace ai-ideas — non-regression**
-  - [ ] Generation still uses AI workflow with AI prompts
-  - [ ] Matrix includes `ai_maturity`
-  - [ ] Initiative detail has `dataSources`/`dataObjects`
-  - [ ] Chat system prompt mentions AI assistant
-- [x] **Multi-org (B) — backend only**
-  - [x] Backend: `organizationIds` array in initiative data, workflow task `create_organizations`, prompts map initiatives to orgs
-- [ ] **Matrix (C, D)**
-  - [ ] Matrix can reuse org matrix or generate new
-  - [ ] Axes can be customised (not just scale descriptions)
-- [ ] **Bug fixes non-regression**
-  - [ ] No ZodError on initiative lock/presence
-  - [ ] Folder initiative count correct
-  - [ ] FileMenu in neutral works
-  - [ ] Workspace create dialog opens inline
-  - [ ] Workspace deletion works (cascade)
+- [x] **Workspace opportunity — generation**
+  - [x] Create folder → uses `opportunity_identification` workflow (not AI workflow)
+  - [x] Prompts are neutral (no AI/IA mention)
+  - [x] Matrix is neutral (no `ai_maturity`, axes `regulatory_compliance`/`resource_availability`)
+  - [x] Initiative detail: no `dataSources`/`dataObjects`, `problem` = client problem, `solution` = proposed offering
+  - [x] Chat system prompt mentions opportunity management (not AI)
+  - [x] Executive summary is business-focused
+- [x] **Workspace ai-ideas — non-regression**
+  - [x] Generation still uses AI workflow with AI prompts
+  - [x] Matrix includes `ai_maturity`
+  - [x] Initiative detail has `dataSources`/`dataObjects`
+  - [x] Chat system prompt mentions AI assistant
+- [x] **Matrix (C, D)**
+  - [x] Matrix can reuse org matrix or generate new
+  - [x] Axes can be customised (not just scale descriptions)
+- [x] **Bug fixes non-regression**
+  - [x] No ZodError on initiative lock/presence
+  - [x] Folder initiative count correct
+  - [x] FileMenu in neutral works
+  - [x] Workspace create dialog opens inline
+  - [x] Workspace deletion works (cascade)
 
 ---
 
