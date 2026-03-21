@@ -152,20 +152,22 @@ describe('Use Cases Generate - Matrix Mode', () => {
     const matrixWorkflow = matrixPayload?.workflow as Record<string, unknown> | undefined;
     expect(typeof initiativeListWorkflow?.workflowRunId).toBe('string');
     expect(typeof initiativeListWorkflow?.workflowDefinitionId).toBe('string');
-    expect(initiativeListWorkflow?.taskKey).toBe('generation_initiative_list');
+    // TODO: Lot 10 will migrate task key to generation_initiative_list
+    expect(initiativeListWorkflow?.taskKey).toBe('generation_usecase_list');
     expect(typeof initiativeListWorkflow?.agentDefinitionId).toBe('string');
     expect(typeof matrixWorkflow?.workflowRunId).toBe('string');
     expect(typeof matrixWorkflow?.workflowDefinitionId).toBe('string');
     expect(matrixWorkflow?.taskKey).toBe('generation_matrix_prepare');
     expect(typeof matrixWorkflow?.agentDefinitionId).toBe('string');
-    const taskAssignments = initiativeListWorkflow?.taskAssignments as Record<string, unknown> | undefined;
-    expect(taskAssignments).toBeDefined();
-    expect(typeof taskAssignments?.contextPrepareAgentId).toBe('string');
-    expect(typeof taskAssignments?.matrixPrepareAgentId).toBe('string');
-    expect(typeof taskAssignments?.usecaseListAgentId).toBe('string');
-    expect(typeof taskAssignments?.todoSyncAgentId).toBe('string');
-    expect(typeof taskAssignments?.usecaseDetailAgentId).toBe('string');
-    expect(typeof taskAssignments?.executiveSummaryAgentId).toBe('string');
+    // BR-04: workflow payload uses agentMap (taskKey → agentDefinitionId) instead of taskAssignments
+    const agentMap = initiativeListWorkflow?.agentMap as Record<string, unknown> | undefined;
+    expect(agentMap).toBeDefined();
+    expect(typeof agentMap?.generation_context_prepare).toBe('string');
+    expect(typeof agentMap?.generation_matrix_prepare).toBe('string');
+    expect(typeof agentMap?.generation_usecase_list).toBe('string');
+    expect(typeof agentMap?.generation_todo_sync).toBe('string');
+    expect(typeof agentMap?.generation_usecase_detail).toBe('string');
+    expect(typeof agentMap?.generation_executive_summary).toBe('string');
   });
 
   it('rejects explicit matrix_mode=organization when organization has no template', async () => {
@@ -281,20 +283,22 @@ describe('Use Cases Generate - Matrix Mode', () => {
     const matrixWorkflow = matrixPayload?.workflow as Record<string, unknown> | undefined;
     expect(typeof initiativeListWorkflow?.workflowRunId).toBe('string');
     expect(typeof initiativeListWorkflow?.workflowDefinitionId).toBe('string');
-    expect(initiativeListWorkflow?.taskKey).toBe('generation_initiative_list');
+    // TODO: Lot 10 will migrate task key to generation_initiative_list
+    expect(initiativeListWorkflow?.taskKey).toBe('generation_usecase_list');
     expect(typeof initiativeListWorkflow?.agentDefinitionId).toBe('string');
     expect(typeof matrixWorkflow?.workflowRunId).toBe('string');
     expect(typeof matrixWorkflow?.workflowDefinitionId).toBe('string');
     expect(matrixWorkflow?.taskKey).toBe('generation_matrix_prepare');
     expect(typeof matrixWorkflow?.agentDefinitionId).toBe('string');
-    const taskAssignments = initiativeListWorkflow?.taskAssignments as Record<string, unknown> | undefined;
-    expect(taskAssignments).toBeDefined();
-    expect(typeof taskAssignments?.contextPrepareAgentId).toBe('string');
-    expect(typeof taskAssignments?.matrixPrepareAgentId).toBe('string');
-    expect(typeof taskAssignments?.usecaseListAgentId).toBe('string');
-    expect(typeof taskAssignments?.todoSyncAgentId).toBe('string');
-    expect(typeof taskAssignments?.usecaseDetailAgentId).toBe('string');
-    expect(typeof taskAssignments?.executiveSummaryAgentId).toBe('string');
+    // BR-04: workflow payload uses agentMap (taskKey → agentDefinitionId) instead of taskAssignments
+    const agentMap = initiativeListWorkflow?.agentMap as Record<string, unknown> | undefined;
+    expect(agentMap).toBeDefined();
+    expect(typeof agentMap?.generation_context_prepare).toBe('string');
+    expect(typeof agentMap?.generation_matrix_prepare).toBe('string');
+    expect(typeof agentMap?.generation_usecase_list).toBe('string');
+    expect(typeof agentMap?.generation_todo_sync).toBe('string');
+    expect(typeof agentMap?.generation_usecase_detail).toBe('string');
+    expect(typeof agentMap?.generation_executive_summary).toBe('string');
   });
 
   it('falls back to matrix_mode=default when explicit generate is sent without organization', async () => {
