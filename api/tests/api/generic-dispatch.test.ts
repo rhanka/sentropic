@@ -68,7 +68,7 @@ describe("Generic dispatch and backward compat", () => {
             eq(workflowDefinitionTasks.workflowDefinitionId, wfDef.id),
           ),
         );
-      expect(wfTasks.length).toBe(6); // 6 tasks in ai-ideas workflow
+      expect(wfTasks.length).toBe(7); // 7 tasks in ai-ideas workflow (incl. generation_create_organizations)
 
       // Check agents seeded
       const agents = await db
@@ -238,12 +238,10 @@ describe("Generic dispatch and backward compat", () => {
 
       expect(result.workflowRunId).toBeTruthy();
       expect(result.workflowDefinitionId).toBeTruthy();
-      expect(result.taskAssignments).toBeTruthy();
-      // Legacy fields still present
-      expect(result.taskAssignments.contextPrepareAgentId).toBeTruthy();
-      expect(result.taskAssignments.initiativeListAgentId).toBeTruthy();
-      // Backward compat aliases
-      expect(result.taskAssignments.usecaseListAgentId).toBe(result.taskAssignments.initiativeListAgentId);
+      // BR-04: agentMap maps task keys to agent definition IDs (replaces taskAssignments)
+      expect(result.agentMap).toBeTruthy();
+      expect(result.agentMap["generation_context_prepare"]).toBeTruthy();
+      expect(result.agentMap["generation_usecase_list"]).toBeTruthy();
     });
   });
 });
