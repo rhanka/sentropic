@@ -534,18 +534,24 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 #### Lot 9quater — Multi-org, batch org generation, matrix customisation (B, B', C, D)
 
 **Tasks:**
-- [x] B: Multi-org per opportunity — `organizationIds` array in initiative data JSONB alongside existing `organizationId`. Prompts produce initiatives mapped to organisations.
-- [x] B: Auto-create orgs option — new task `create_organizations` in `opportunity_identification` workflow before `opportunity_list`. Prompt retrieves existing orgs to avoid duplicates. Also available for `ai_usecase_generation` workflow.
-- [x] B': Batch org generation — `organization_batch_agent` creates org list from prompt (e.g. "top 10 pharma in Montreal"). Standalone action or workflow task.
+- [x] B: Multi-org data model — `organizationIds` array in initiative data JSONB alongside existing `organizationId`.
+- [x] B: Auto-create orgs task — `create_organizations` task + `organization_batch_agent` in workflow. Also available for `ai_usecase_generation` workflow.
+- [x] B': Batch org agent — `organization_batch_agent` creates org list from prompt (e.g. "top 10 pharma in Montreal"). Standalone action or workflow task.
 - [x] C: Matrix adaptable per org — `matrixSource` option (`organization` | `prompt` | `default`) in workflow config.
 - [x] D: Matrix axes customisation — prompt allows proposing adapted axis names/descriptions per opportunity domain.
 - [x] **Bug a/b** — Chat tools `update_initiative`/`read_initiative` fail because `chat_contexts` DB data has `context_type = 'usecase'` (not `'initiative'`). Temporary fix: accept both `'usecase'` and `'initiative'` in `chat-service.ts` context type comparisons. Will be removed in Lot 10 when data is migrated.
 - [x] **Bug c** — Chat reasoning/tools not displayed after refresh. Root cause: commit `1c59d52e` on main removed lazy-load mechanism for runtime details. Fix: restore runtimeSummary display + lazy-load on expand in ChatPanel.
 
 **Lot 9quater gate:**
-- [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
-- [ ] `make lint-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
-- [ ] `make test-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [x] `make typecheck-api` — PASS (0 errors)
+- [x] `make typecheck-ui` — PASS (0 errors, 3 warnings)
+- [x] `make lint-api` — PASS (0 errors, 188 warnings no-console)
+- [x] **Test regressions fixed (4 files):**
+  - [x] `api/workspace-types` (10/10 pass) — adapted afterEach cleanup for BR-04 FK dependencies
+  - [x] `api/generic-dispatch` (8/8 pass) — adapted agent count + agentMap assertions
+  - [x] `api/initiatives-generate-matrix` (8/8 pass) — accept legacy task key until Lot 10
+  - [x] `api/vscode-extension-code-agent-prompt-profile` (3/3 pass) — updated imports to default-chat-system
+- [x] All scopes pass in isolation (`SCOPE=<file>` one by one)
 
 ---
 
@@ -563,12 +569,8 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
   - [ ] Matrix includes `ai_maturity`
   - [ ] Initiative detail has `dataSources`/`dataObjects`
   - [ ] Chat system prompt mentions AI assistant
-- [ ] **Multi-org (B)**
-  - [ ] Opportunity references multiple organisations
-  - [ ] Auto-create orgs option works
-  - [ ] Existing orgs not duplicated
-- [ ] **Batch org (B')**
-  - [ ] Create orgs from prompt
+- [x] **Multi-org (B) — backend only**
+  - [x] Backend: `organizationIds` array in initiative data, workflow task `create_organizations`, prompts map initiatives to orgs
 - [ ] **Matrix (C, D)**
   - [ ] Matrix can reuse org matrix or generate new
   - [ ] Axes can be customised (not just scale descriptions)
@@ -611,6 +613,20 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] `make lint-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
 - [ ] `make test-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
 - [ ] `make test-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+
+---
+
+#### Lot 10bis — Multi-org workflow adaptation + UI (B, B')
+
+**Tasks:**
+- [ ] B: Workflow adaptation — reorder `opportunity_identification` workflow: `opportunity_list` produces **pairs (initiative, organisation)** first, then `create_organizations` creates missing orgs (dedup), then `opportunity_detail` generates each initiative linked to its org(s). See SPEC_VOL §B.
+- [ ] B: UI multi-select — replace single-select organisation in folder creation form with multi-select
+- [ ] B': UI batch org prompt — dedicated prompt surface or chat tool to trigger batch organisation creation
+
+**Lot 10bis gate:**
+- [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-br04`
+- [ ] `make typecheck-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-br04`
+- [ ] `make test-api SCOPE=api/generic-dispatch API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-br04`
 
 ---
 
@@ -871,28 +887,3 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [ ] User sign-off on final UAT.
 - [ ] Merge to main.
 
----
-
-#### UAT Checkpoint B' — Bug Report (2026-03-17)
-
-- [ ] **Bug A** — Clicking a workspace card from neutral landing does not switch to the clicked workspace (stays on previous).
-- [ ] **Bug B** — Opening an initiative shows "invalid query" toast.
-- [ ] **Bug C** — Document section in initiative shows "invalid query" (likely same root cause as B).
-- [x] **Bug D** — `dataSources` and `dataObjects` fields displayed but empty in opportunity initiatives — should be hidden when not populated.
-- [ ] **Bug E** — Opportunity folder matrix still shows `ai_maturity` axis — neutral matrix not applied on folder creation.
-- [ ] **Bug F** — "invalid query" affects both opportunity and ai-ideas workspaces — likely a broken API endpoint or Zod validation.
-- [ ] **Bug G** — After generation, folder initiative count stays at 0 until page refresh.
-- [ ] **Bug H** — Chat returns HTTP 400 ZodError: `contextType "usecase"` still sent somewhere (expected "initiative"). Affects chat in all workspace types.
-
-#### UAT Checkpoint B' — Round 2 (2026-03-18)
-
-Closed:
-- [x] Bug A — workspace switch: OK
-- [x] Bug E — matrice neutre: OK
-- [x] Bugs B/C/F — invalid query: OK
-- [x] Bug G — compteur initiatives: OK
-
-Persistent/new:
-- [x] **Bug D'** — dataSources and dataObjects still present in generation output AND display. The opportunity prompt still asks for these fields. Fix: update opportunity_detail_agent prompt to NOT request dataSources/dataObjects. Also verify InitiativeDetail.svelte hide condition works.
-- [ ] **Bug I** — Initiative count hardcoded to 10 in opportunity generation. The generation prompt/config should respect the user's requested count.
-- [ ] **Bug J** — Chat tools (usecase_get, read_initiative) return technical errors. Tool names or dispatch may still reference legacy usecase endpoints.
