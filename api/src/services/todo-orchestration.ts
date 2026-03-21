@@ -23,7 +23,6 @@ import {
 } from "../config/default-agents";
 import {
   DEFAULT_USE_CASE_GENERATION_WORKFLOW,
-  USE_CASE_GENERATION_WORKFLOW_KEY,
   getWorkflowSeedsForType,
   type DefaultWorkflowDefinition,
 } from "../config/default-workflows";
