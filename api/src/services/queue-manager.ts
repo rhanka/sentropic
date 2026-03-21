@@ -332,7 +332,8 @@ export interface ChatMessageJobData {
   providerId?: ProviderId;
   providerApiKey?: string;
   model?: string;
-  contexts?: Array<{ contextType: 'organization' | 'folder' | 'initiative' | 'executive_summary'; contextId: string }>;
+  // TODO Lot 10: remove 'usecase' once data migration is complete
+  contexts?: Array<{ contextType: 'organization' | 'folder' | 'initiative' | 'executive_summary' | 'usecase'; contextId: string }>;
   tools?: string[];
   localToolDefinitions?: Array<{
     name: string;
@@ -2129,7 +2130,7 @@ export class QueueManager {
     } else {
       // Resolve the detail task key from agentMap (may be 'generation_initiative_detail' or 'opportunity_detail')
       const detailTaskKey = Object.keys(workflow.agentMap).find(k => k.includes('detail')) ?? 'generation_initiative_detail';
-      const detailWorkflow = cloneWorkflowContextForTask(workflow, detailTaskKey);
+      const detailWorkflow = cloneWorkflowContextForTask(workflow, detailTaskKey as GenerationWorkflowTaskKey);
       for (const initiative of draftInitiatives) {
         try {
           const initiativeName = (initiative.data as InitiativeData)?.name || 'Cas d\'usage sans nom';
@@ -2379,7 +2380,7 @@ export class QueueManager {
         const summaryTaskKey = Object.keys(workflow.agentMap).find(k => k.includes('executive_summary') || k.includes('summary')) ?? 'generation_executive_summary';
         const executiveSummaryWorkflow = cloneWorkflowContextForTask(
           workflow,
-          summaryTaskKey
+          summaryTaskKey as GenerationWorkflowTaskKey
         );
         try {
           await this.addJob('executive_summary', {
