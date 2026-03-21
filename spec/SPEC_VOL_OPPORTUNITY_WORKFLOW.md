@@ -9,12 +9,15 @@ Status: Raw product intent (2026-03-17). Needs spec phase before implementation.
 
 ## B. Organisation(s) / opportunite
 - An opportunity should reference multiple organisations.
-- Workflow option: auto-create organisations (using org generation prompt) before creating use cases.
-- Prompt must retrieve existing orgs to avoid duplicates and map initiatives to orgs.
+- The `opportunity_list` task must produce **pairs (initiative, organisation)** — e.g. "architecture cloud Azure, BRP", "4 squads agiles, Bombardier". The organisations are derived from the prompt context, not pre-selected.
+- After listing pairs, `create_organizations` creates the organisations that don't already exist (dedup against existing orgs).
+- Then `opportunity_detail` generates each initiative linked to its organisation(s) via `organizationIds`.
+- **UI (deferred)**: multi-select organisation in folder creation form + prompt surface for batch org creation.
 - This multi-org option should also be available for AI use-case generation.
 
 ## B'. Batch organisation generation
 - Agent-driven batch creation from a prompt (e.g. "top 10 pharma companies in Montreal").
+- **UI (deferred)**: dedicated prompt surface or chat tool to trigger batch org creation.
 - Could be a separate branch.
 
 ## C. Matrix / workflow opportunite
