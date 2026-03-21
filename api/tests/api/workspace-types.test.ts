@@ -1,8 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { workspaces, workspaceMemberships } from '../../src/db/schema';
-import { eq, and } from 'drizzle-orm';
+import {
+  workspaces,
+  workspaceMemberships,
+  workspaceTypeWorkflows,
+  workflowDefinitionTasks,
+  workflowDefinitions,
+  agentDefinitions,
+} from '../../src/db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import { ensureNeutralWorkspace } from '../../src/services/workspace-service';
 
 async function importApp() {
@@ -26,6 +33,15 @@ describe('Workspace type system', () => {
 
   afterEach(async () => {
     for (const id of createdWorkspaceIds) {
+      // Delete BR-04 FK dependencies before workspaces
+      const wfDefs = await db.select({ id: workflowDefinitions.id }).from(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, id));
+      const wfDefIds = wfDefs.map((w) => w.id);
+      if (wfDefIds.length > 0) {
+        await db.delete(workspaceTypeWorkflows).where(inArray(workspaceTypeWorkflows.workflowDefinitionId, wfDefIds));
+        await db.delete(workflowDefinitionTasks).where(inArray(workflowDefinitionTasks.workflowDefinitionId, wfDefIds));
+      }
+      await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, id));
+      await db.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, id));
       await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, id));
       await db.delete(workspaces).where(eq(workspaces.id, id));
     }
