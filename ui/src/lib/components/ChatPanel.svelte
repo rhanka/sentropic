@@ -216,6 +216,7 @@
     messages: LocalMessage[];
     timelineItems: ProjectedTimelineItem[];
     initialEvents: Map<string, StreamEvent[]>;
+    runtimeSummaries: Map<string, RuntimeSegmentSummary>;
     checkpoints: ChatCheckpoint[];
     documents: ContextDocumentItem[];
     todoRuntime: Record<string, unknown> | null;
@@ -1373,12 +1374,15 @@
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
+  let runtimeSummaryByMessageId = new Map<string, RuntimeSegmentSummary>();
   let projectedStreamEventsById = new Map<string, StreamEvent[]>();
   let projectedAssistantComputationByMessageId = new Map<
     string,
     ProjectedAssistantComputation
   >();
   let projectionEventsVersion = 0;
+  const loadedRuntimeDetailsMessageIds = new Set<string>();
+  const loadingRuntimeDetailsMessageIds = new Set<string>();
   let historyTimelineSessionId: string | null = null;
   let todoRuntimePanel: TodoRuntimePanelState | null = null;
   let todoRuntimeCollapsed = false;
@@ -1520,6 +1524,81 @@
     return [];
   };
 
+  const loadRuntimeDetailsForMessage = async (
+    targetSessionId: string,
+    messageId: string,
+  ): Promise<void> => {
+    if (loadedRuntimeDetailsMessageIds.has(messageId)) return;
+    if (loadingRuntimeDetailsMessageIds.has(messageId)) return;
+    loadingRuntimeDetailsMessageIds.add(messageId);
+    try {
+      const response = await apiFetch(
+        `/chat/sessions/${targetSessionId}/history?runtimeDetails=full`,
+        {
+          method: 'GET',
+          headers: { Accept: 'application/x-ndjson' },
+        },
+      );
+      if (!response.body) return;
+      const decoder = new TextDecoder();
+      const reader = response.body.getReader();
+      let buffer = '';
+      const collectedEvents: StreamEvent[] = [];
+      const processLine = (rawLine: string) => {
+        const line = rawLine.trim();
+        if (!line) return;
+        const payload = JSON.parse(line) as
+          | SessionHistoryMetaLine
+          | SessionHistoryTimelineLine;
+        if (payload.type !== 'timeline_item') return;
+        const item = payload.item;
+        if (String(item.message.id ?? '').trim() !== messageId) return;
+        if (item.kind !== 'runtime-segment' && item.kind !== 'assistant-segment') return;
+        if (item.segment.events && item.segment.events.length > 0) {
+          collectedEvents.push(
+            ...item.segment.events.map((e: StreamEvent) => ({
+              eventType: e.eventType,
+              data: e.data,
+              sequence: e.sequence,
+              createdAt: e.createdAt,
+            })),
+          );
+        }
+      };
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary = buffer.indexOf('\n');
+        while (boundary >= 0) {
+          processLine(buffer.slice(0, boundary));
+          buffer = buffer.slice(boundary + 1);
+          boundary = buffer.indexOf('\n');
+        }
+      }
+      buffer += decoder.decode();
+      if (buffer.trim().length > 0) processLine(buffer);
+      if (collectedEvents.length > 0) {
+        initialEventsByMessageId = new Map(initialEventsByMessageId);
+        initialEventsByMessageId.set(
+          messageId,
+          mergeProjectionHistoryEvents(
+            initialEventsByMessageId.get(messageId) ?? [],
+            collectedEvents,
+          ),
+        );
+        projectedAssistantComputationByMessageId = new Map(
+          projectedAssistantComputationByMessageId,
+        );
+        projectedAssistantComputationByMessageId.delete(messageId);
+        projectionEventsVersion += 1;
+      }
+      loadedRuntimeDetailsMessageIds.add(messageId);
+    } finally {
+      loadingRuntimeDetailsMessageIds.delete(messageId);
+    }
+  };
+
   const buildProjectedTimeline = (
     timeline: readonly LocalMessage[],
   ): ProjectedTimelineItem[] => {
@@ -1578,10 +1657,26 @@
       const streamId = message._streamId ?? message.id;
       const assistantProjection = getProjectedAssistantComputation(message);
       const projectedSegments = assistantProjection.segments;
-      const segments =
+      const baseSegments =
         projectedSegments.length > 0
           ? projectedSegments
           : buildFallbackProjectedSegments(message);
+      const hasRuntimeSegmentAlready = baseSegments.some((s) => s.kind === 'runtime');
+      const storedSummary = runtimeSummaryByMessageId.get(message.id);
+      const segments =
+        !hasRuntimeSegmentAlready && storedSummary
+          ? [
+              {
+                id: `runtime:history-summary:${message.id}`,
+                kind: 'runtime' as const,
+                events: [] as StreamEvent[],
+                content: '',
+                steerCountBefore: 0,
+                runtimeSummary: storedSummary,
+              },
+              ...baseSegments,
+            ]
+          : baseSegments;
       const linkedSteers = (steerIdsByAssistantId.get(message.id) ?? [])
         .map((steerId) => timeline.find((entry) => entry.id === steerId) ?? null)
         .filter((entry): entry is LocalMessage => entry !== null);
@@ -3485,6 +3580,7 @@
       messages: [],
       timelineItems: [],
       initialEvents: new Map(),
+      runtimeSummaries: new Map(),
       checkpoints: [],
       documents: [],
       todoRuntime: null,
@@ -3551,6 +3647,13 @@
             item.segment.events,
           ),
         );
+      }
+      if (
+        item.kind === 'runtime-segment' &&
+        item.segment.runtimeSummary &&
+        (item.segment.runtimeSummary.hasReasoning || item.segment.runtimeSummary.hasTools)
+      ) {
+        snapshot.runtimeSummaries.set(item.message.id, item.segment.runtimeSummary);
       }
       const existingTimelineIndex = snapshot.timelineItems.findIndex(
         (entry) => entry.key === item.key,
@@ -3657,6 +3760,14 @@
           ),
         );
       }
+      if (
+        item.kind === 'runtime-segment' &&
+        item.segment.runtimeSummary &&
+        (item.segment.runtimeSummary.hasReasoning || item.segment.runtimeSummary.hasTools)
+      ) {
+        runtimeSummaryByMessageId = new Map(runtimeSummaryByMessageId);
+        runtimeSummaryByMessageId.set(item.message.id, item.segment.runtimeSummary);
+      }
 
       const existingTimelineIndex = nextHistory.findIndex(
         (entry) => entry.key === item.key,
@@ -3733,6 +3844,11 @@
     try {
       const res = await apiGet<{ sessions: ChatSession[] }>('/chat/sessions');
       sessions = res.sessions ?? [];
+      // If the current sessionId is stale (e.g. from a different workspace), clear it
+      if (sessionId && !sessions.some((s) => s.id === sessionId)) {
+        sessionId = null;
+        messages = [];
+      }
       if (!sessionId && sessions.length > 0) {
         void selectSession(sessions[0].id);
       }
@@ -3767,6 +3883,9 @@
         projectedAssistantComputationByMessageId = new Map();
         projectionEventsVersion += 1;
         initialEventsByMessageId = new Map();
+        runtimeSummaryByMessageId = new Map();
+        loadedRuntimeDetailsMessageIds.clear();
+        loadingRuntimeDetailsMessageIds.clear();
         applySessionCheckpoints([]);
         sessionDocs = [];
         sessionDocsError = null;
@@ -3884,12 +4003,15 @@
     projectedStreamEventsById = new Map();
     projectedAssistantComputationByMessageId = new Map();
     projectionEventsVersion += 1;
+    loadedRuntimeDetailsMessageIds.clear();
+    loadingRuntimeDetailsMessageIds.clear();
     resetLocalToolInterceptionState();
     messages = snapshot.messages;
     historyTimelineItems = snapshot.timelineItems;
     stagedHistoryTimelineItems = [];
     historyTimelineSessionId = snapshot.sessionId;
     initialEventsByMessageId = snapshot.initialEvents;
+    runtimeSummaryByMessageId = snapshot.runtimeSummaries;
     applySessionCheckpoints(snapshot.checkpoints);
     sessionDocs = snapshot.documents;
     sessionDocsError = null;
@@ -3946,6 +4068,9 @@
     sessionDocs = [];
     sessionDocsError = null;
     initialEventsByMessageId = new Map();
+    runtimeSummaryByMessageId = new Map();
+    loadedRuntimeDetailsMessageIds.clear();
+    loadingRuntimeDetailsMessageIds.clear();
     projectedAssistantComputationByMessageId = new Map();
     optimisticSteerMessages = [];
     resetTodoRuntimePanel();
@@ -5079,6 +5204,7 @@
                     runtimeSummary={item.segment.runtimeSummary}
                     initiallyExpanded={false}
                     deferCollapsedDetails={!useUnifiedActiveRunPresentation(item.message)}
+                    requestDeferredDetails={sessionId ? (() => { const sid = sessionId; return sid ? loadRuntimeDetailsForMessage(sid, item.message.id) : Promise.resolve(); }) : undefined}
                     showRuntimeInlinePreview={item.isActiveRuntimeSegment}
                     acknowledgementText={item.acknowledgementText}
                     onTodoRuntime={handleTodoRuntimeToolResult}
