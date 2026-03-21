@@ -355,8 +355,8 @@ chatRouter.get('/sessions/:id/history', async (c) => {
       userId: user.userId,
       detailMode,
     });
-  } catch (e: any) {
-    if (e?.message === 'Session not found') {
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message === 'Session not found') {
       return c.json({ message: 'Session not found' }, 404);
     }
     throw e;

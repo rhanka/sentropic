@@ -64,7 +64,8 @@ import {
   type ChatHistoryStreamEvent,
 } from './chat-session-history';
 
-export type ChatContextType = 'organization' | 'folder' | 'initiative' | 'executive_summary';
+// TODO Lot 10: remove 'usecase' once data migration is complete
+export type ChatContextType = 'organization' | 'folder' | 'initiative' | 'executive_summary' | 'usecase';
 
 const CHAT_CONTEXT_TYPES = ['organization', 'folder', 'initiative', 'executive_summary'] as const;
 function isChatContextType(value: unknown): value is ChatContextType {
@@ -2191,9 +2192,10 @@ export class ChatService {
     workspaceId: string;
     sessionId: string;
     extraContexts?: Array<{ contextType: ChatContextType; contextId: string }>;
-  }): Promise<Array<{ contextType: 'organization' | 'folder' | 'initiative' | 'chat_session'; contextId: string }>> {
-    const out: Array<{ contextType: 'organization' | 'folder' | 'initiative' | 'chat_session'; contextId: string }> = [];
-    const pushUnique = (contextType: 'organization' | 'folder' | 'initiative' | 'chat_session', contextId: string) => {
+  // TODO Lot 10: remove 'usecase' once data migration is complete
+  }): Promise<Array<{ contextType: 'organization' | 'folder' | 'initiative' | 'usecase' | 'chat_session'; contextId: string }>> {
+    const out: Array<{ contextType: 'organization' | 'folder' | 'initiative' | 'usecase' | 'chat_session'; contextId: string }> = [];
+    const pushUnique = (contextType: 'organization' | 'folder' | 'initiative' | 'usecase' | 'chat_session', contextId: string) => {
       if (!contextId) return;
       const key = `${contextType}:${contextId}`;
       if (out.some((c) => `${c.contextType}:${c.contextId}` === key)) return;

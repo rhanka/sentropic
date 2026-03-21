@@ -13,7 +13,8 @@
   import { currentFolderId } from '$lib/stores/folders';
   import { Download, Upload, X } from '@lucide/svelte';
 
-  type ExportScope = 'workspace' | 'folder' | 'initiative' | 'organization' | 'matrix';
+  // TODO Lot 10: remove 'usecase' once data migration is complete
+  type ExportScope = 'workspace' | 'folder' | 'initiative' | 'organization' | 'matrix' | 'usecase';
 
   export let open = false;
   export let mode: 'export' | 'import' = 'export';
