@@ -590,6 +590,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] fix(ui): StreamMessage use `initiative_` prefix in folders and initiative detail pages
 - [x] fix(ui): remove BR-03 scope boundary notice from settings panel
 - [x] fix(deps): npm audit fix + UI Dockerfile audit --omit=dev
+- [x] fix(test): `import-export.test.ts` — use `initiative_` prefix in test zip
 
 #### Lot rattrapage tests (deferred gates from lots 3-9quater)
 
