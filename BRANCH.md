@@ -581,7 +581,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 
 ---
 
-#### Lot CI/Test stabilization (post-UAT C)
+#### Lot N 
 
 - [x] fix(api): import handler — use `initiative_` file prefix instead of `usecase_` in preview and import
 - [x] fix(api): rename `usecase_` streamId prefix to `initiative_` in queue-manager
@@ -603,27 +603,16 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] fix(ci): split E2E group-c (03+05+07) → group-c (03) + group-e (05+07) to avoid lock/presence concurrence
 - [x] fix(ci): split AI test suite into 3 balanced shards (~60s each) for isolation
 - [x] feat(make): add `doc-backup`, `doc-backup-prod`, `doc-restore` targets (MinIO `mc mirror` via `docker compose exec`)
+- [x] fix(api): separate `chat` queue class from `ai` generation — chat not blocked by generation concurrency
 - [ ] **UAT smoke (surfaces impactées)**
-  - [ ] Import/export : exporter workspace → importer dans un autre → preview détecte les initiatives
-  - [ ] Import depuis page dossier (Actions → Importer) → dialog fonctionne
-  - [ ] Streaming génération initiative (StreamMessage `initiative_`) sur page dossier et initiative detail
+  - [x] Import/export : exporter workspace → importer dans un autre → preview détecte les initiatives
+  - [x] Import depuis page dossier (Actions → Importer) → dialog fonctionne
+  - [x] Streaming génération initiative (StreamMessage `initiative_`) sur page dossier et initiative detail
   - [ ] Chat tool toggles : "Initiatives (lecture)" et "Initiatives (mise à jour)" visibles et fonctionnels
   - [ ] Chat session maintenue entre 2 messages consécutifs
   - [ ] Chat context organisation : `primaryContextType=organization` sur `/organizations/{id}`
   - [ ] Navigation directe `/initiative/{id}` → pas de 404 / page blanche
   - [ ] Paramètres : pas de bandeau "scope boundary" BR-03
-
-#### Lot rattrapage tests (deferred gates from lots 3-9quater)
-
-- [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
-- [ ] `make typecheck-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
-- [ ] `make lint-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
-- [ ] `make lint-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
-- [ ] `make test-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
-- [ ] `make test-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
-- [ ] `make build-api build-ui-image API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=e2e-feat-workspace-template-catalog`
-- [ ] `make clean test-e2e API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=e2e-feat-workspace-template-catalog`
-
 
 
 ---

@@ -934,6 +934,7 @@ export class QueueManager {
     return `
       CASE type
         WHEN 'docx_generate' THEN 'publishing'
+        WHEN 'chat_message' THEN 'chat'
         ELSE 'ai'
       END
     `;
@@ -1005,12 +1006,12 @@ export class QueueManager {
     try {
       const inFlight = new Set<Promise<void>>();
       const queueClassExpr = sql.raw(this.queueClassSqlExpr());
-      const queueClasses: Array<'ai' | 'publishing'> = ['publishing', 'ai'];
+      const queueClasses: Array<'ai' | 'chat' | 'publishing'> = ['chat', 'publishing', 'ai'];
 
       const sleep = async (ms: number) => new Promise((r) => setTimeout(r, ms));
 
       const getProcessingCountByClass = async (
-        queueClass: 'ai' | 'publishing'
+        queueClass: 'ai' | 'chat' | 'publishing'
       ): Promise<number> => {
         try {
           const rows = (await db.all(sql`
@@ -1035,7 +1036,7 @@ export class QueueManager {
       };
 
       const claimPendingJobsByClass = async (
-        queueClass: 'ai' | 'publishing',
+        queueClass: 'ai' | 'chat' | 'publishing',
         limit: number
       ): Promise<JobQueueRow[]> => {
         if (limit <= 0) return [];
@@ -1069,7 +1070,7 @@ export class QueueManager {
         if (this.cancelAllInProgress) break;
 
         for (const queueClass of queueClasses) {
-          const classLimit = queueClass === 'ai' ? this.maxConcurrentJobs : this.maxPublishingJobs;
+          const classLimit = queueClass === 'publishing' ? this.maxPublishingJobs : this.maxConcurrentJobs;
           const classProcessing = await getProcessingCountByClass(queueClass);
           const slots = Math.max(0, classLimit - classProcessing);
           if (slots <= 0) continue;
