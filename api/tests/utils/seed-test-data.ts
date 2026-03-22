@@ -22,6 +22,10 @@ import {
   chatStreamEvents,
   contextModificationHistory,
   comments,
+  workspaceTypeWorkflows,
+  workflowDefinitionTasks,
+  workflowDefinitions,
+  agentDefinitions,
   ADMIN_WORKSPACE_ID,
 } from '../../src/db/schema.js';
 import { testMatrix } from './test-data.js';
@@ -60,8 +64,12 @@ export async function seedTestData() {
     await db.delete(jobQueue); // Clean job queue to avoid interference
     await db.delete(settings); // Clean settings to ensure clean state
     await db.delete(contextDocuments); // FK -> workspaces (documents are workspace-scoped)
-    await db.delete(workspaceMemberships); // FK -> workspaces/users
-    await db.delete(workspaces); // After all workspace-scoped tables are deleted
+    await db.delete(workspaceTypeWorkflows);
+    await db.delete(workflowDefinitionTasks);
+    await db.delete(workflowDefinitions);
+    await db.delete(agentDefinitions);
+    await db.delete(workspaceMemberships);
+    await db.delete(workspaces);
     
     // Note: businessConfig is kept as it contains business configuration
     // that might be needed. If you want to clean it too, uncomment:
