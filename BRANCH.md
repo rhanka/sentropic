@@ -602,6 +602,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] fix(e2e): remove `describe.serial` from all E2E specs — prevents masking skipped tests as passing
 - [x] fix(ci): split E2E group-c (03+05+07) → group-c (03) + group-e (05+07) to avoid lock/presence concurrence
 - [x] fix(ci): split AI test suite into 3 balanced shards (~60s each) for isolation
+- [x] feat(make): add `doc-backup`, `doc-backup-prod`, `doc-restore` targets (MinIO `mc mirror` via `docker compose exec`)
 - [ ] **UAT smoke (surfaces impactées)**
   - [ ] Import/export : exporter workspace → importer dans un autre → preview détecte les initiatives
   - [ ] Import depuis page dossier (Actions → Importer) → dialog fonctionne
