@@ -34,6 +34,76 @@
 
 Screens and responsibilities are implemented in Svelte with SvelteKit (file-based routing) and Svelte stores for shared state. The TypeScript REST API is the source of truth (no critical persistence in localStorage).
 
+### Workspace type system
+
+The platform supports multiple workspace types, each with its own domain personality:
+
+| Type | Purpose | Default workflow family | Delegable | Auto-created |
+|---|---|---|---|---|
+| `neutral` | Orchestrator dashboard, cross-workspace tools, task dispatch | None (orchestrator only) | No (non-delegable) | Yes (one per user) |
+| `ai-ideas` | AI use case ideation and qualification | `ai_usecase_generation` | Yes | No (user-created) |
+| `opportunity` | Commercial opportunity management (demand, bid, contract, delivery) | `opportunity_identification` | Yes | No (user-created) |
+| `code` | Developer/code project workspace (VSCode integration) | `code_analysis` | Yes | No (user-created) |
+
+A workspace type is set at creation and cannot be changed (type immutability). The `neutral` workspace is auto-created per user on registration or first login (one per user, cannot be hidden or deleted). All other types are user-created via the workspace creation flow.
+
+### Neutral workspace
+
+The neutral workspace is the user's default landing. It aggregates activity across all owned/accessible workspaces and provides cross-workspace orchestration.
+
+**Landing view**: card-based dashboard showing each owned workspace (name, type, last activity, active initiative count, pending gate reviews). Quick actions include creating a new workspace (type selector) and navigating to a workspace. A cross-workspace activity feed shows recent events (initiative created, gate passed, bid finalized, etc.).
+
+**Cross-workspace tools** (available from neutral workspace chat):
+- `workspace_list` — list owned + accessible workspaces with summary stats
+- `workspace_create` — create a new typed workspace
+- `initiative_search` — search initiatives across workspaces (by name, status, maturity stage)
+- `task_dispatch` — create a todo in a target workspace on behalf of the user
+
+**Todo automation**: the neutral workspace auto-creates todos from events in other workspaces (e.g., initiative reaches a gate, bid finalized, comment assigned). Mechanism: event listener on `execution_events` creating normal todos with `metadata.source` tracing the origin.
+
+**Constraints**: non-delegable (no `workspace_memberships` for neutral workspaces), no initiatives directly in neutral workspace, no generation workflows attached.
+
+### Initiative model (universal business object)
+
+"Initiative" is the universal business object (renamed from "use case"). An initiative can be an AI use case idea (`ai-ideas`), a commercial opportunity (`opportunity`), or a code project (`code`). The workspace type determines the initiative's personality (relevant fields, workflows, gates).
+
+**Maturity lifecycle** — initiatives follow a gate review model:
+
+| Stage | Label | Meaning |
+|---|---|---|
+| `G0` | Idea | Raw idea/demand captured |
+| `G2` | Qualified | Feasibility confirmed, scope defined |
+| `G5` | Designed | Solution designed, ready for bid/build |
+| `G7` | Delivered | Product delivered, in operation |
+
+Gate transitions are governed by the workspace's `gate_config` (free / soft-gate / hard-gate). Gate criteria are evaluated via the `guardrails` table.
+
+**Lineage**: `antecedent_id` creates a directed graph of initiative derivation (e.g., AI idea spawns an opportunity). Lineage is informational, not structural (no cascade delete).
+
+**Template snapshot**: `template_snapshot_id` records which template version produced the initiative for traceability.
+
+### Extended business objects
+
+**Solution** — attached to an initiative (1:N). Represents a proposed technical/business solution. Lifecycle: `draft -> validated -> archived`. Versioned.
+
+**Product** — attached to a solution (1:N) and to an initiative (direct FK). Lifecycle: `draft -> active -> delivered -> archived`. `solution_id` nullable (product may exist independently).
+
+**Bid / Contract** — attached to an initiative (1:N). Data-driven object (clauses, profiles, pricing). Lifecycle: `draft -> review -> finalized -> contract`. References N products via `bid_products` junction. A finalized bid becomes a contract (same row, status = `contract`).
+
+**Business chain** (opportunity workspace):
+```
+Initiative (demand/opportunity)
+  -> Solution (proposed answer)
+    -> Product (deliverables)
+  -> Bid (commercial proposal, references products)
+    -> Contract (finalized bid)
+      -> Delivery tracking (via product status)
+```
+
+**Portfolio view**: aggregate view across initiatives (no dedicated table). API query + UI dashboard: group by workspace/folder/maturity stage/status.
+
+### Screens
+
 1. Home `Index` (/)
    - CTA to start and redirect to `/home`.
    - No state; UI toasts only.
@@ -315,7 +385,8 @@ Screens and responsibilities are implemented in Svelte with SvelteKit (file-base
   - New extension sessions use restricted toolset (web tools + local tab tools).
 
 Key backend/API variables:
-- Entity management: `Organization`, `Folder`, `UseCase`, `MatrixConfig` (axes, weights, thresholds, descriptions), `BusinessConfig` (sectors, processes).
+- Entity management: `Organization`, `Folder`, `Initiative` (renamed from `UseCase`), `MatrixConfig` (axes, weights, thresholds, descriptions), `BusinessConfig` (sectors, processes).
+- Extended objects: `Solution`, `Product`, `Bid`, `BidProduct` (opportunity domain).
 - Generation context: `currentOrganizationId`, folder→organization association, prompts/configs.
 - Aggregations: counts by level, scoring, normalization for charts.
 
@@ -325,14 +396,19 @@ Base: **PostgreSQL 17** (Docker volume `pg_data`). ORM: **Drizzle** (`api/src/db
 
 Principle: **workspace tenancy** (private-by-default):
 - `workspaces` table
-- All business objects are scoped by `workspace_id` (`organizations`, `folders`, `use_cases`, `job_queue`, etc.)
+- All business objects are scoped by `workspace_id` (`organizations`, `folders`, `initiatives`, `solutions`, `products`, `bids`, `job_queue`, etc.)
 
 Main tables (simplified):
-- `workspaces`: `id`, `owner_user_id` (unique nullable), `name`, timestamps
+- `workspaces`: `id`, `owner_user_id` (unique nullable), `name`, `type` (`neutral|ai-ideas|opportunity|code`, default `ai-ideas`), `gate_config` (JSONB, nullable), timestamps
 - `users`: `id`, `email`, `display_name`, `role`, `account_status`, `approval_due_at`, `email_verified`, timestamps
 - `organizations`: `id`, `workspace_id`, `name`, `status` (`draft|enriching|completed`), `data` (**JSONB**: contains `industry`, `size`, `products`, `processes`, `kpis`, `references`, etc.)
 - `folders`: `id`, `workspace_id`, `name`, `organization_id?`, `matrix_config` (JSON text), `status` (`generating|completed`), `executive_summary` (JSON text)
-- `use_cases`: `id`, `workspace_id`, `folder_id`, `organization_id?`, `status` (`draft|generating|detailing|completed`), `model?`, `data` (**JSONB**: contains `name`, `description`, `valueScores`, `complexityScores`, `references`, etc.)
+- `initiatives` (renamed from `use_cases`): `id`, `workspace_id`, `folder_id`, `organization_id?`, `status` (`draft|generating|detailing|completed`), `model?`, `antecedent_id` (self-FK, lineage), `maturity_stage` (`G0|G2|G5|G7`, nullable), `gate_status` (`pending|approved|rejected`, nullable), `template_snapshot_id`, `data` (**JSONB**: contains `name`, `description`, `valueScores`, `complexityScores`, `references`, etc.)
+- `solutions`: `id`, `workspace_id`, `initiative_id`, `status` (`draft|validated|archived`), `version`, `data` (JSONB), timestamps
+- `products`: `id`, `workspace_id`, `initiative_id`, `solution_id` (nullable), `status` (`draft|active|delivered|archived`), `version`, `data` (JSONB), timestamps
+- `bids`: `id`, `workspace_id`, `initiative_id`, `status` (`draft|review|finalized|contract`), `version`, `data` (JSONB: clauses, profiles, pricing), timestamps
+- `bid_products`: `id`, `bid_id`, `product_id`, `data` (JSONB: unit price, conditions), timestamps. Unique on `(bid_id, product_id)`
+- `workspace_type_workflows`: `id`, `workspace_type`, `workflow_definition_id`, `is_default`, `trigger_stage`, `config` (JSONB), timestamps. Unique on `(workspace_type, workflow_definition_id)`
 - `job_queue`: `id`, `workspace_id`, `type`, `status`, `data` (JSON string), `result?`, `error?`, timestamps
 
 Auth & sessions:
@@ -343,18 +419,48 @@ Auth & sessions:
 - `email_verification_codes`: codes email (hash + verificationToken)
 
 Streaming/chat:
-- `chat_sessions` (inclut `workspace_id` pour le scoping standard)
+- `chat_sessions` (includes `workspace_id` for standard scoping)
 - `chat_messages`
 - `chat_stream_events`
 - `chat_generation_traces` (debug)
-- `extension_tool_permissions` (règles allow/deny par `user_id` + `workspace_id` + `tool_name` + `origin`)
+- `extension_tool_permissions` (allow/deny rules per `user_id` + `workspace_id` + `tool_name` + `origin`)
+
+### 2.2) Gate system
+
+Gate behavior is per workspace type (no folder-level override in v1).
+
+`workspaces.gate_config` JSONB structure:
+```json
+{
+  "mode": "free | soft | hard",
+  "stages": ["G0", "G2", "G5", "G7"],
+  "criteria": {
+    "G2": { "required_fields": ["data.description", "data.domain"], "guardrail_categories": ["scope"] },
+    "G5": { "required_fields": ["data.solution"], "guardrail_categories": ["scope", "quality"] },
+    "G7": { "required_fields": [], "guardrail_categories": ["approval"] }
+  }
+}
+```
+
+**Gate evaluation** — on initiative `maturity_stage` change:
+1. `free`: allow transition, no checks.
+2. `soft`: evaluate criteria, warn if not met, allow anyway.
+3. `hard`: evaluate criteria, block if not met.
+4. Criteria: `required_fields` checks initiative `data` JSONB; `guardrail_categories` evaluates active guardrails.
+5. Response: `{ gate_passed: boolean, warnings: [], blockers: [] }`.
+
+**Default gate configs per workspace type**:
+- `ai-ideas`: `{ "mode": "free", "stages": ["G0", "G2"] }` (lightweight, ideation-focused)
+- `opportunity`: `{ "mode": "soft", "stages": ["G0", "G2", "G5", "G7"] }` (full lifecycle with soft gates)
+- `code`: `{ "mode": "free", "stages": ["G0", "G2", "G5"] }` (dev lifecycle, free by default)
+- `neutral`: no gate config (no initiatives)
 
 ### 2.1) Score computation method (server)
 
 Definitions:
 - Let `value_axes = [{ name, weight, level_descriptions? }]` and `complexity_axes = [...]`.
 - Let `value_thresholds = [{ level ∈ {1..5}, points, threshold }, ...]` and `complexity_thresholds = [...]`.
-- Each use case has `value_scores = [{ axisId: name, rating ∈ {1..5}, description }]` and `complexity_scores = [...]`.
+- Each initiative has `value_scores = [{ axisId: name, rating ∈ {1..5}, description }]` and `complexity_scores = [...]`.
 
 Axis point computation:
 - For each value axis `a` with weight `w_a` and rating `r_a`, read `points(r_a)` from `value_thresholds` (the entry where `level = r_a`).
@@ -472,25 +578,55 @@ Main endpoints (API v1):
   - POST `/api/v1/organizations/{id}/enrich` → async AI enrichment (queue)
   - POST `/api/v1/organizations/ai-enrich` → sync AI enrichment (no persistence)
 
+- Workspaces (type system)
+  - POST `/api/v1/workspaces` → create (includes `type` field, required for non-neutral)
+  - GET `/api/v1/workspaces` → list (response includes `type`)
+  - GET `/api/v1/workspaces/{id}` → retrieve (includes `type`, `gate_config`)
+
 - Folders
   - GET `/api/v1/folders` → list (+ organization_id filter)
   - POST `/api/v1/folders` → create (name, description, organizationId?)
   - GET `/api/v1/folders/{id}` → retrieve (incl. `matrix_config`)
   - PUT `/api/v1/folders/{id}` → update (name, description, organizationId, matrix_config)
-  - DELETE `/api/v1/folders/{id}` → delete (cascade use_cases)
+  - DELETE `/api/v1/folders/{id}` → delete (cascade initiatives)
 
-- Use Cases
-  - GET `/api/v1/use-cases?folder_id=...` → list by folder
-  - POST `/api/v1/use-cases` → create
-  - GET `/api/v1/use-cases/{id}` → retrieve
-  - PUT `/api/v1/use-cases/{id}` → update
-  - DELETE `/api/v1/use-cases/{id}` → delete
-  - POST `/api/v1/use-cases/generate` → start generation (job queue): body `{ input, folder_id?, organization_id?, matrix_mode?, use_case_count?, model? }` → returns `{ created_folder_id?, folder_id, matrix_mode, jobId, matrixJobId? }`
+- Initiatives (renamed from Use Cases)
+  - GET `/api/v1/initiatives?folder_id=...` → list by folder
+  - POST `/api/v1/initiatives` → create
+  - GET `/api/v1/initiatives/{id}` → retrieve (includes `maturity_stage`, `gate_status`, `antecedent_id`)
+  - PUT `/api/v1/initiatives/{id}` → update
+  - PATCH `/api/v1/initiatives/{id}` → partial update (supports `maturity_stage` transition with gate evaluation)
+  - DELETE `/api/v1/initiatives/{id}` → delete
+  - POST `/api/v1/initiatives/generate` → start generation (job queue): body `{ input, folder_id?, organization_id?, matrix_mode?, use_case_count?, model? }` → returns `{ created_folder_id?, folder_id, matrix_mode, jobId, matrixJobId? }`
+  - Backward-compatible alias: `/api/v1/use-cases/*` forwards to `/api/v1/initiatives/*`
+
+- Extended objects (solutions, products, bids)
+  - GET/POST `/api/v1/initiatives/{id}/solutions` → CRUD solutions for an initiative
+  - GET/PUT/DELETE `/api/v1/solutions/{id}`
+  - GET/POST `/api/v1/initiatives/{id}/products` → CRUD products
+  - GET/POST `/api/v1/solutions/{id}/products` → CRUD products for a solution
+  - GET/PUT/DELETE `/api/v1/products/{id}`
+  - GET/POST `/api/v1/initiatives/{id}/bids` → CRUD bids
+  - GET/PUT/DELETE `/api/v1/bids/{id}`
+  - POST `/api/v1/bids/{id}/products` → attach products to bid
+  - DELETE `/api/v1/bids/{id}/products/{productId}` → detach product from bid
+
+- Gate review
+  - POST `/api/v1/initiatives/{id}/gate-review` → evaluate gate criteria for maturity stage transition. Request: `{ target_stage: "G2" }`. Response: `{ gate_passed, warnings, blockers }`
+
+- Workflow registry (per workspace type)
+  - GET `/api/v1/workspace-types/{type}/workflows` → list registered workflows for a type
+  - POST `/api/v1/workspace-types/{type}/workflows` → register a workflow for a type
+  - DELETE `/api/v1/workspace-types/{type}/workflows/{id}` → unregister
+
+- Cross-workspace (neutral)
+  - GET `/api/v1/neutral/dashboard` → aggregated dashboard data across workspaces
+  - POST `/api/v1/neutral/dispatch-todo` → create todo in target workspace
 
 - DOCX publishing
   - POST `/api/v1/docx/generate` → enqueue DOCX generation job (`docx_generate`)
   - GET `/api/v1/docx/jobs/{id}/download` → download rendered binary when job is completed
-  - GET `/api/v1/use-cases/{id}/docx` → `410 Gone` (legacy synchronous route disabled)
+  - GET `/api/v1/initiatives/{id}/docx` → `410 Gone` (legacy synchronous route disabled)
 
 - Analytics
   - GET `/api/v1/analytics/summary?folder_id=...` → summary stats
@@ -527,82 +663,106 @@ Computation rules:
 - Scores are recalculated server-side per 2.1.
 - Aggregation endpoints for the dashboard return `value_norm`, `ease`, and max bounds directly.
 
-## 4) LLM generation (OpenAI, Node)
+## 4) LLM generation and multi-workflow runtime
 
 Dedicated TypeScript services:
-- `api/src/services/queue-manager.ts` → **PostgreSQL** queue manager (table `job_queue`) for async jobs
+- `api/src/services/queue-manager.ts` → **PostgreSQL** queue manager (table `job_queue`) for async jobs. Uses `agentMap: Record<string, string>` (task key to agent definition ID) for generic agent resolution.
 - `api/src/services/context-organization.ts` → AI organization enrichment
-- `api/src/services/context-usecase.ts` → AI use case generation
+- `api/src/services/context-initiative.ts` → AI initiative generation (renamed from `context-usecase.ts`)
+- `api/src/services/todo-orchestration.ts` → generic workflow dispatch (`startWorkflow(workspaceId, workflowKey)`)
 - `api/src/services/settings.ts` → settings and configuration management
-- `api/src/services/tools.ts` → general utilities and tools
+- `api/src/services/tools.ts` → chat tool definitions and dispatch
 
 AI generation functions:
 - `generateFolderNameAndDescription(input, model, organization?)`
-- `generateUseCaseList(input, model, organization?)`
-- `generateUseCaseDetail(title, input, matrix_config, model, organization?)` → returns strict JSON; API validates (Zod), computes scores, and persists.
+- `generateInitiativeList(input, model, organization?)` (renamed from `generateUseCaseList`)
+- `generateInitiativeDetail(title, input, matrix_config, model, organization?)` → returns strict JSON; API validates (Zod), computes scores, and persists.
 
 Parameters: prompts, models, limits (retries/parallelism) stored in DB (`/settings`). `OPENAI_API_KEY` server-side only. Concurrency controlled (p-limit) + exponential retries.
 
-### 4.1) Prompts and orchestration
+### 4.1) Multi-workflow registry
 
-**Available prompts:**
-- `use_case_list_prompt` → use case list generation
-- `use_case_detail_prompt` → detailed use case generation with scoring
-- `folder_name_prompt` → folder name and description generation
-- `organization_info_prompt` → organization information enrichment
+`workspace_type_workflows` maps workspace types to available workflows. Each workspace type has 0..N registered workflows, one marked `is_default`. `trigger_stage` optionally binds a workflow to a maturity gate.
 
-**Prompt ↔ endpoint mapping:**
-- `/api/v1/use-cases/generate` :
+**Open task-key mapping**: `workflow_definition_tasks.task_key` is a free `text` field. Agent resolution: task key -> lookup `agentDefinitionId` on the `workflow_definition_tasks` row. Type safety via Zod validation of workflow structure.
+
+**Generic dispatch**: `startWorkflow(workspaceId, workflowKey)` resolves the workflow from `workspace_type_workflows` -> `workflow_definitions` -> ordered `workflow_definition_tasks`, then dispatches generically. The `GenerationWorkflowRuntimeContext` carries `agentMap: Record<string, string>` (task key to agent definition ID).
+
+**Seed workflows per type**:
+
+| Workspace type | Default workflow key | Seed tasks |
+|---|---|---|
+| `ai-ideas` | `ai_usecase_generation` | context_prepare, matrix_prepare, usecase_list, todo_sync, usecase_detail, executive_summary |
+| `opportunity` | `opportunity_identification` | context_prepare, matrix_prepare, opportunity_list, todo_sync, opportunity_detail, executive_summary |
+| `opportunity` | `opportunity_qualification` | context_prepare, demand_analysis, solution_draft, bid_preparation, gate_review |
+| `code` | `code_analysis` | context_prepare, codebase_scan, issue_triage, implementation_plan |
+
+### 4.2) Agent/prompt architecture
+
+Each agent definition carries its prompt in `config.promptTemplate`. No `promptId` pointing to legacy prompt files. Agents are seeded code-based (`sourceLevel: "code"`):
+
+- `default-chat-system.ts` — chat system prompt per workspace type + common chat prompts (reasoning eval, session title)
+- `default-agents-ai-ideas.ts` — AI-specific agents with prompts
+- `default-agents-opportunity.ts` — opportunity-specific agents with neutral prompts
+- `default-agents-code.ts` — code-specific agents with prompts
+- `default-agents-shared.ts` — agents available on all workspace types (demand_analyst, solution_architect, bid_writer, gate_reviewer, comment_assistant, history_analyzer, document_summarizer, document_analyzer)
+
+### 4.3) Prompt and endpoint mapping
+
+- `/api/v1/initiatives/generate`:
   - If `folder_id` is not provided: creates a folder `folders.status="generating"` (name/description may be generated via prompt)
   - Resolve `matrix_mode` (`organization` | `generate` | `default`) from payload + organization context
-  - If `matrix_mode=generate` and organization is selected: enqueue `matrix_generate` in parallel with `usecase_list`
-  - Enqueue `usecase_list` job (list prompt), then `usecase_detail` jobs (detail prompt)
-  - Persistence in `use_cases.data` (JSONB) + stream events in `chat_stream_events`
-- `/api/v1/organizations/{id}/enrich` : enqueue `organization_enrich` job (organization prompt)
-- `/api/v1/organizations/ai-enrich` : sync enrichment (returns data, no persistence)
+  - If `matrix_mode=generate` and organization is selected: enqueue `matrix_generate` in parallel with `initiative_list`
+  - Enqueue `initiative_list` job, then `initiative_detail` jobs
+  - Persistence in `initiatives.data` (JSONB) + stream events in `chat_stream_events`
+- `/api/v1/organizations/{id}/enrich`: enqueue `organization_enrich` job
+- `/api/v1/organizations/ai-enrich`: sync enrichment (returns data, no persistence)
 
-**Generation workflow:**
+### 4.4) Workspace-type-aware chat tool scoping
 
-```mermaid
-flowchart TD
-  A[Home form submit] -->|input, folder_id?, organization_id?| B{folder_id?}
-  B -- yes --> C[Prompt: folder_name_prompt]
-  C --> D[POST /api/v1/folders]
-  B -- no --> D
-  D --> E[Prompt: use_case_list_prompt]
-  E --> F{N titles}
-  F -->|for each| G[Prompt: use_case_detail_prompt]
-  G --> H[Validate JSON + Compute scores]
-  H --> I[POST /api/v1/use-cases]
-  I --> J[Return summary + IDs]
-```
+Tool availability is a function of `(workspace_type, context_type, role)`:
+
+1. **Base tools** (always available): `web_search`, `web_extract`, `documents`, `history_analyze`
+2. **Context-type tools**: `organizations_list`, `folders_list`, `initiatives_list`
+3. **Workspace-type tools**:
+   - `ai-ideas`: `read_initiative`, `update_initiative_field`, `comment_assistant`
+   - `opportunity`: all of `ai-ideas` + `solutions_list`, `solution_get`, `bids_list`, `bid_get`, `products_list`, `product_get`, `gate_review`
+   - `code`: `read_initiative`, `update_initiative_field` + code-specific tools
+   - `neutral`: cross-workspace tools only (`dispatch_todo`, `workspaces_list`, `initiative_search_cross_workspace`)
+
+Implementation: `workspace_type` parameter added to `buildChatGenerationContext()` tool resolution. Tool definitions in `tools.ts`, selection is workspace-type-aware. Client-side `chat-tool-scope.ts` includes workspace-type filtering.
 
 ## 5) SvelteKit UI (static build, i18n FR/EN)
 
 Routing (adapter-static):
-- `/` → Index
+- `/` → Index (redirects to neutral workspace landing)
 - `/home` → Home (generation)
 - `/folder/new` → Folder creation
 - `/folders` → Folders
 - `/folders/[id]` → Folder detail
-- `/usecase` → UseCaseList
-- `/usecase/[id]` → UseCaseDetail
+- `/initiative` → InitiativeList (renamed from `/usecase`)
+- `/initiative/[id]` → InitiativeDetail (renamed from `/usecase/[id]`)
+- `/initiative/[id]/gate` → Gate review page
 - `/dashboard` → Dashboard
 - `/matrix` → Matrix
 - `/organizations` (+ `/organizations/new`, `/organizations/[id]`) → Organizations
 - `/settings` → Settings
+- `/neutral` → Neutral workspace landing (card-based workspace dashboard)
 - `/auth/login`, `/auth/register`, `/auth/devices`, `/auth/magic-link/verify` → Authentication
 - `+error.svelte` → NotFound
 
 State management:
-- Stores Svelte: `organizationsStore`, `foldersStore`, `useCasesStore`, `matrixStore`, `settingsStore`.
+- Stores Svelte: `organizationsStore`, `foldersStore`, `initiativesStore` (renamed from `useCasesStore`), `matrixStore`, `settingsStore`.
  - Stores sync via the backend API; no critical local persistence. Caches may exist in `sessionStorage` if needed for UX.
 
 Key components:
-- Editors (textarea/input) for all `UseCaseDetail` fields with optimistic updates and save on PUT.
+- Editors (textarea/input) for all `InitiativeDetail` fields with optimistic updates and save on PUT.
 - `RatingsTable` tables for value/complexity axes; direct store binding + recompute (server-side API or client-side display only).
 - `Matrix` page: weight/threshold forms, dialog to edit level descriptions.
-- `Dashboard`: charts (Recharts → Svelte alternatives: `layercake`, `apexcharts` svelte, or `recharts` via wrapper if needed); backend can provide pre-normalized data.
+- `Dashboard`: charts (Recharts -> Svelte alternatives: `layercake`, `apexcharts` svelte, or `recharts` via wrapper if needed); backend can provide pre-normalized data.
+- `ViewTemplateRenderer.svelte` — generic view template renderer (container + detail modes).
+- `ContainerView.svelte` — container view sub-component (workspace->folders, folder->initiatives, neutral->workspaces).
+- `GateReview.svelte` — gate criteria evaluation view with pass/fail indicators.
 
 ## 6) DevOps & Tooling (Docker, Make, CI/CD)
 
