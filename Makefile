@@ -994,6 +994,76 @@ db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump
 db-fresh: db-backup db-reset db-init ## Fresh start: backup, reset, and initialize database
 	@echo "✅ Fresh database setup completed!"
 
+# -----------------------------------------------------------------------------
+# Document storage backup/restore (MinIO / S3)
+
+DOC_BUCKET ?= $(or $(DOC_STORAGE_BUCKET),top-ai-ideas-dev)
+DOC_SOURCE ?= prod
+
+# Note: mc mirror is not an atomic S3 snapshot — it lists objects at start then copies them.
+# Objects created after listing starts are excluded, but an object mid-upload at list time
+# may be partially copied. For write-once documents this is safe in practice.
+
+MINIO_EXEC = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T --user $$(id -u):$$(id -g) -e MC_CONFIG_DIR=/tmp/.mc-$$$$ minio
+
+.PHONY: doc-backup
+doc-backup: backup-dir up ## Backup local documents to file
+	@echo "💾 Creating backup from local documents..."
+	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
+	BACKUP_FILE="data/backup/docs-app-$${TIMESTAMP}.tar.gz"; \
+	echo "▶ Backing up to $${BACKUP_FILE}..."; \
+	$(MINIO_EXEC) sh -c "\
+		mc alias set local http://localhost:9000 \$${MINIO_ROOT_USER:-minioadmin} \$${MINIO_ROOT_PASSWORD:-minioadmin} --api s3v4 2>/dev/null; \
+		rm -rf /backups/tmp/docs-$${TIMESTAMP} && mkdir -p /backups/tmp/docs-$${TIMESTAMP}; \
+		mc mirror --overwrite local/$(DOC_BUCKET) /backups/tmp/docs-$${TIMESTAMP}/ \
+	" && \
+	cd data/backup/tmp/docs-$${TIMESTAMP} && tar czf ../../docs-app-$${TIMESTAMP}.tar.gz . && cd ../../../.. && \
+	rm -rf data/backup/tmp/docs-$${TIMESTAMP} && \
+	echo "✅ Backup created: $${BACKUP_FILE}"
+
+.PHONY: doc-backup-prod
+doc-backup-prod: backup-dir up ## Backup production documents to local file (uses DOC_STORAGE_*_PROD from .env)
+	@echo "💾 Creating backup from production documents..."
+	@if [ -z "$$DOC_STORAGE_ENDPOINT_PROD" ]; then \
+		echo "❌ Error: DOC_STORAGE_ENDPOINT_PROD must be set in .env file"; \
+		exit 1; \
+	fi
+	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
+	BACKUP_FILE="data/backup/docs-prod-$${TIMESTAMP}.tar.gz"; \
+	echo "▶ Backing up to $${BACKUP_FILE}..."; \
+	$(MINIO_EXEC) sh -c "\
+		mc alias set prodstore $$DOC_STORAGE_ENDPOINT_PROD $$DOC_STORAGE_ACCESS_KEY_PROD $$DOC_STORAGE_SECRET_KEY_PROD --api s3v4 2>/dev/null; \
+		rm -rf /backups/tmp/docs-$${TIMESTAMP} && mkdir -p /backups/tmp/docs-$${TIMESTAMP}; \
+		mc mirror --overwrite prodstore/$$DOC_STORAGE_BUCKET_NAME_PROD /backups/tmp/docs-$${TIMESTAMP}/ \
+	" && \
+	cd data/backup/tmp/docs-$${TIMESTAMP} && tar czf ../../docs-prod-$${TIMESTAMP}.tar.gz . && cd ../../../.. && \
+	rm -rf data/backup/tmp/docs-$${TIMESTAMP} && \
+	echo "✅ Backup created: $${BACKUP_FILE}"
+
+.PHONY: doc-restore
+doc-restore: up ## Restore document backup to local MinIO [BACKUP_FILE=filename.tar.gz]
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "❌ Error: BACKUP_FILE must be specified (e.g., BACKUP_FILE=docs-prod-2026-03-22T12-00-00.tar.gz or BACKUP_FILE=docs-app-2026-03-22T12-00-00.tar.gz)"; \
+		echo "Available backups:"; \
+		ls -1 data/backup/docs-*.tar.gz 2>/dev/null | sed 's|data/backup/||' | awk '{print "  BACKUP_FILE=" $$1}' || echo "  No backups found"; \
+		exit 1; \
+	fi
+	@if [ ! -f "data/backup/$(BACKUP_FILE)" ]; then \
+		echo "❌ Error: Backup file not found: data/backup/$(BACKUP_FILE)"; \
+		exit 1; \
+	fi
+	@echo "📥 Restoring documents from $(BACKUP_FILE)..."
+	@TMPNAME="doc-restore-$$(date +%s)"; \
+	mkdir -p data/backup/tmp/$$TMPNAME && \
+	tar xzf data/backup/$(BACKUP_FILE) -C data/backup/tmp/$$TMPNAME && \
+	$(MINIO_EXEC) sh -c "\
+		mc alias set local http://localhost:9000 \$${MINIO_ROOT_USER:-minioadmin} \$${MINIO_ROOT_PASSWORD:-minioadmin} --api s3v4 2>/dev/null; \
+		mc mb --ignore-existing local/$(DOC_BUCKET); \
+		mc mirror --overwrite /backups/tmp/$$TMPNAME/ local/$(DOC_BUCKET)/ \
+	" && \
+	rm -rf data/backup/tmp/$$TMPNAME
+	@echo "✅ Documents restored to local bucket $(DOC_BUCKET)"
+
 .PHONY: restart-api
 restart-api: ## Restart API service
 	@echo "🔄 Restarting API service..."

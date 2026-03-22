@@ -1,5 +1,8 @@
 # Feature: VSCode Plugin v2 Multi-Agent
 
+## BR-04 dependency note (HIGH IMPACT)
+Must depend on BR-04. Multi-agent orchestration depends on workspace type for tool gating and workflow selection. Multi-workflow registry (BR-04 §7) replaces single hardcoded workflow. Agent lanes must be workspace-type-aware. Background tool lifecycle intersects with generic dispatch. Re-scope Lot 0/1 after BR-04 merge.
+
 ## Objective
 Deliver VSCode plugin v2 with multi-agent and multi-model orchestration while reusing shared chat core and API orchestration source of truth.
 Include background/detached tool execution lifecycle (without requiring explicit agent lane UX for the operator).

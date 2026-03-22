@@ -53,8 +53,8 @@ let showLostDevice = false;
         sessionStorage.setItem('refreshToken', data.refreshToken);
       }
 
-      // Redirect to dashboard or previous page
-      const returnUrl = new URLSearchParams(window.location.search).get('returnUrl') || '/home';
+      // Redirect to neutral workspace landing (default) or previous page
+      const returnUrl = new URLSearchParams(window.location.search).get('returnUrl') || '/neutral';
       goto(returnUrl);
     } catch (err: any) {
       error = getWebAuthnErrorMessage(err);

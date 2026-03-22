@@ -129,7 +129,7 @@
     // Si le dossier est en cours de génération et n'a pas encore de cas d'usage, ne pas naviguer
     if (folderStatus === 'generating') {
       const folder = $foldersStore.find(f => f.id === folderId);
-      const count = folder?.useCaseCount ?? 0;
+      const count = folder?.initiativeCount ?? 0;
       if (count === 0) return;
     }
     
@@ -139,7 +139,7 @@
   };
 
   const getUseCaseCount = (folderId: string) => {
-    return $foldersStore.find(f => f.id === folderId)?.useCaseCount ?? 0;
+    return $foldersStore.find(f => f.id === folderId)?.initiativeCount ?? 0;
   };
 
   const handleDeleteFolder = async (id: string) => {
@@ -216,8 +216,8 @@
           {#each $foldersStore as folder}
             {@const isGenerating = folder.status === 'generating'}
             {@const isDraft = folder.status === 'draft'}
-            {@const useCaseCount = getUseCaseCount(folder.id)}
-            {@const canClick = !isGenerating || useCaseCount > 0}
+            {@const initiativeCount = getUseCaseCount(folder.id)}
+            {@const canClick = !isGenerating || initiativeCount > 0}
             <article 
               class="rounded border border-slate-200 bg-white shadow-sm transition-shadow group flex flex-col h-full {canClick ? 'hover:shadow-md cursor-pointer' : 'opacity-60 cursor-not-allowed'}" 
               {...(canClick ? { role: 'button', tabindex: 0 } : {})}
@@ -253,10 +253,10 @@
                   <p class="text-sm text-slate-600 line-clamp-2 mb-3">{folder.description}</p>
                 {/if}
                 <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-sm text-slate-500">
-                  {#if !(isGenerating && useCaseCount === 0)}
+                  {#if !(isGenerating && initiativeCount === 0)}
 	                  <span class="flex items-center gap-1 whitespace-nowrap">
 	                    <FileText class="w-4 h-4 flex-shrink-0" />
-	                    {$_('folders.useCaseCount', { values: { count: useCaseCount } })}
+	                    {$_('folders.useCaseCount', { values: { count: initiativeCount } })}
 	                  </span>
                   {/if}
                   <div class="flex items-center gap-2 flex-wrap">
@@ -264,7 +264,7 @@
                   </div>
                 </div>
 
-                {#if isGenerating && useCaseCount === 0}
+                {#if isGenerating && initiativeCount === 0}
                   <div class="mt-2">
                     <StreamMessage streamId={`folder_${folder.id}`} status={folder.status} maxHistory={6} />
                   </div>

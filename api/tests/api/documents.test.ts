@@ -173,7 +173,7 @@ describe('Documents API', () => {
 
   it('GET /documents/:id returns metadata', async () => {
     const form = new FormData();
-    form.set('context_type', 'usecase');
+    form.set('context_type', 'initiative');
     form.set('context_id', 'uc_1');
     form.set('file', new File([new Uint8Array([1, 2, 3])], 'Doc 3.pdf', { type: 'application/pdf' }));
     const up = await authenticatedMultipartRequest(app, '/api/v1/documents', user.sessionToken!, form);
@@ -188,7 +188,7 @@ describe('Documents API', () => {
     expect(res.status).toBe(200);
     const doc = await res.json();
     expect(doc.id).toBe(createdDocId);
-    expect(doc.context_type).toBe('usecase');
+    expect(doc.context_type).toBe('initiative');
     expect(doc.context_id).toBe('uc_1');
   });
 

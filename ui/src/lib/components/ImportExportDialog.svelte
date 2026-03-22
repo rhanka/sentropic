@@ -13,7 +13,8 @@
   import { currentFolderId } from '$lib/stores/folders';
   import { Download, Upload, X } from '@lucide/svelte';
 
-  type ExportScope = 'workspace' | 'folder' | 'usecase' | 'organization' | 'matrix';
+  // TODO Lot 10: remove 'usecase' once data migration is complete
+  type ExportScope = 'workspace' | 'folder' | 'initiative' | 'organization' | 'matrix' | 'usecase';
 
   export let open = false;
   export let mode: 'export' | 'import' = 'export';
@@ -81,7 +82,7 @@
   const scopeOptions: Array<{ value: ExportScope; label: string }> = [
     { value: 'workspace', label: $_('importExport.scope.workspace') },
     { value: 'folder', label: $_('importExport.scope.folder') },
-    { value: 'usecase', label: $_('importExport.scope.usecase') },
+    { value: 'initiative', label: $_('importExport.scope.usecase') },
     { value: 'organization', label: $_('importExport.scope.organization') },
     { value: 'matrix', label: $_('importExport.scope.matrix') },
   ];

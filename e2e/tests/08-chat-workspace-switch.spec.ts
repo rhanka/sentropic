@@ -4,7 +4,7 @@ import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.setTimeout(240_000);
 
-test.describe.serial('Chat session/workspace switch', () => {
+test.describe('Chat session/workspace switch', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
 

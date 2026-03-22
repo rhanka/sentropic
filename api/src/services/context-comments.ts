@@ -1,7 +1,7 @@
 import { callLLMStream } from './llm-runtime';
-import { defaultPrompts } from '../config/default-prompts';
+import { SHARED_AGENTS } from '../config/default-agents-shared';
 
-export type CommentContextType = 'organization' | 'folder' | 'usecase' | 'matrix' | 'executive_summary';
+export type CommentContextType = 'organization' | 'folder' | 'initiative' | 'matrix' | 'executive_summary';
 
 export type CommentThreadSummary = {
   threadId: string;
@@ -82,8 +82,9 @@ export async function generateCommentResolutionProposal(opts: {
     };
   }
 
+  const commentAgent = SHARED_AGENTS.find((a) => a.config.promptId === DEFAULT_PROMPT_ID);
   const promptTemplate =
-    defaultPrompts.find((p) => p.id === DEFAULT_PROMPT_ID)?.content ||
+    (typeof commentAgent?.config.promptTemplate === 'string' ? commentAgent.config.promptTemplate : '') ||
     `You are a comment resolution assistant. Produce a JSON proposal with clear next actions.`;
 
   const prompt = promptTemplate

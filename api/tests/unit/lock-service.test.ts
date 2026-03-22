@@ -61,8 +61,8 @@ describe('lock-service', () => {
   });
 
   it('forceUnlock requires admin workspace role', async () => {
-    const objectType = 'usecase';
-    const objectId = `usecase_${Date.now()}`;
+    const objectType = 'initiative';
+    const objectId = `initiative_${Date.now()}`;
     await acquireLock({ userId: editor.id, workspaceId, objectType, objectId });
 
     await expect(

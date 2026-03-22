@@ -36,7 +36,7 @@ describe("Workflow config API", () => {
     const putRes = await authenticatedRequest(app, "PUT", "/api/v1/workflow-config", editor.sessionToken, {
       items: [
         {
-          key: "usecase-generation",
+          key: "initiative-generation",
           name: "Usecase generation",
           description: "BR-03 workflow",
           config: { variant: "default" },
@@ -67,7 +67,7 @@ describe("Workflow config API", () => {
       `/api/v1/workflow-config/${workflow.id}/fork`,
       editor.sessionToken,
       {
-        key: "usecase-generation-user",
+        key: "initiative-generation-user",
         name: "Usecase generation user",
       },
     );

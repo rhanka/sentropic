@@ -22,7 +22,7 @@ test.describe('Access control — UI admin', () => {
   });
 });
 
-test.describe.serial('Access control — roles workspace', () => {
+test.describe('Access control — roles workspace', () => {
   test.use({ storageState: USER_B_STATE });
   const workspaceName = `Workspace Access ${Date.now()}`;
   let workspaceId = '';
@@ -205,7 +205,7 @@ test.describe.serial('Access control — roles workspace', () => {
     await userAApi.dispose();
 
     const openComments = async (page: import('@playwright/test').Page) => {
-      await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+      await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
       await page.waitForLoadState('domcontentloaded');
 
       const section = page.locator('[data-comment-section="description"]');

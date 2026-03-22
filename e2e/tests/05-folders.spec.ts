@@ -100,7 +100,7 @@ test.describe('Gestion des dossiers', () => {
         await firstFolder.click();
         
         // Attendre la redirection vers /usecase avec timeout
-        await page.waitForURL(/\/usecase/, { timeout: 2000 });
+        await page.waitForURL(/\/initiative/, { timeout: 2000 });
         
         // Vérifier le titre "Cas d'usage"
         await expect(page.locator('h1')).toContainText('Cas d\'usage');
@@ -244,7 +244,7 @@ test.describe('Gestion des dossiers', () => {
         const folderItems = page.locator('.grid.gap-4 > article').filter({ hasNotText: 'Génération en cours' });
         if (await folderItems.count() === 0) return;
         await folderItems.first().click();
-        await page.waitForURL(/\/usecase/, { timeout: 2000 });
+        await page.waitForURL(/\/initiative/, { timeout: 2000 });
 
         const disabledField = page.locator('.editable-input:disabled, .editable-textarea:disabled').first();
         await expect(disabledField).toBeVisible({ timeout: 10_000 });

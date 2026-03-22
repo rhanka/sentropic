@@ -4,13 +4,13 @@
   // which sanitizes HTML via DOMPurify to protect against XSS.
   
   import { onMount, onDestroy, tick } from 'svelte';
-  import { useCasesStore, fetchUseCases } from '$lib/stores/useCases';
+  import { initiativesStore, fetchInitiatives } from '$lib/stores/initiatives';
   import { foldersStore, fetchFolders, currentFolderId } from '$lib/stores/folders';
   import { addToast, removeToast } from '$lib/stores/toast';
   import { apiGet, apiPost } from '$lib/utils/api';
   import { streamHub } from '$lib/stores/streamHub';
-  import UseCaseScatterPlot from '$lib/components/UseCaseScatterPlot.svelte';
-  import UseCaseDetail from '$lib/components/UseCaseDetail.svelte';
+  import InitiativeScatterPlot from '$lib/components/InitiativeScatterPlot.svelte';
+  import InitiativeDetail from '$lib/components/InitiativeDetail.svelte';
   import CommentBadge from '$lib/components/CommentBadge.svelte';
   import type { MatrixConfig } from '$lib/types/matrix';
   import References from '$lib/components/References.svelte';
@@ -552,12 +552,12 @@
         const data: any = evt.data ?? {};
         if (!useCaseId) return;
         if (data?.deleted) {
-          useCasesStore.update((items) => items.filter((uc) => uc.id !== useCaseId));
+          initiativesStore.update((items) => items.filter((uc) => uc.id !== useCaseId));
           return;
         }
         if (data?.useCase) {
           const updated = data.useCase;
-          useCasesStore.update((items) => {
+          initiativesStore.update((items) => {
             const idx = items.findIndex((uc) => uc.id === updated.id);
             if (idx === -1) return [updated, ...items];
             const next = [...items];
@@ -629,8 +629,8 @@
       foldersStore.set(folders);
       
       // Charger les cas d'usage
-      const useCases = await fetchUseCases();
-      useCasesStore.set(useCases);
+      const useCases = await fetchInitiatives();
+      initiativesStore.set(useCases);
       
       // Sélectionner le dossier persistant uniquement s'il existe dans le scope courant
       const persistedFolderId = $currentFolderId;
@@ -1032,8 +1032,8 @@
 
   // Filtrer les cas d'usage par dossier sélectionné
   $: filteredUseCases = selectedFolderId 
-    ? $useCasesStore.filter(uc => uc.folderId === selectedFolderId)
-    : $useCasesStore;
+    ? $initiativesStore.filter(uc => uc.folderId === selectedFolderId)
+    : $initiativesStore;
   $: workspaceId = $workspaceScope.selectedId ?? null;
   $: commentUserId = $session.user?.id ?? null;
 
@@ -1553,7 +1553,7 @@
           </div>
           
           <div class="flex justify-center">
-            <UseCaseScatterPlot 
+            <InitiativeScatterPlot 
               bind:this={scatterPlotRef}
               useCases={completedUseCases} 
               {matrix} 
@@ -1774,7 +1774,7 @@
           class="space-y-6 usecase-annex-section {index === 23 ? 'force-page-break-before' : ''}" 
           data-usecase-id={useCase.id} 
           data-usecase-title={useCase?.data?.name || useCase?.name || $_('usecase.useCase')}>
-            <UseCaseDetail
+            <InitiativeDetail
               useCase={useCase}
               matrix={matrix}
               calculatedScores={useCaseScoresMap.get(useCase.id) || null}

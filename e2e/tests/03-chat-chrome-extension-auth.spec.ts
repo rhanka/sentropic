@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe.serial('Chrome extension auth chrome-specific UX', () => {
+test.describe('Chrome extension auth chrome-specific UX', () => {
   const UI_BASE_URL = process.env.UI_BASE_URL || 'http://localhost:5173';
   const EXTENSION_API_BASE_URL = new URL('/api/v1', UI_BASE_URL).toString().replace(/\/$/, '');
   const chatButtonSelector =

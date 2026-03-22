@@ -1,4 +1,4 @@
-import { defaultPrompts } from '../config/default-prompts';
+import { SHARED_AGENTS } from '../config/default-agents-shared';
 import { executeWithToolsStream } from './tools';
 import { getReasoningParamsForModel } from './model-catalog';
 import { callLLMStream } from './llm-runtime';
@@ -211,7 +211,8 @@ export async function generateDocumentSummary(opts: {
   streamId: string;
   signal?: AbortSignal;
 }): Promise<string> {
-  const template = defaultPrompts.find((p) => p.id === 'document_summary')?.content || '';
+  const docSummarizerAgent = SHARED_AGENTS.find((a) => a.config.promptId === 'document_summary');
+  const template = typeof docSummarizerAgent?.config.promptTemplate === 'string' ? docSummarizerAgent.config.promptTemplate : '';
   if (!template) throw new Error('Prompt document_summary non trouvé');
 
   const userPrompt = template
@@ -251,7 +252,8 @@ export async function generateDocumentDetailedSummary(opts: {
   const fullText = (opts.text || '').trim();
   if (!fullText) throw new Error('Aucun texte à résumer (détaillé)');
 
-  const template = defaultPrompts.find((p) => p.id === 'document_detailed_summary')?.content || '';
+  const docSummarizerAgent = SHARED_AGENTS.find((a) => a.config.promptId === 'document_summary');
+  const template = typeof docSummarizerAgent?.config.detailedSummaryPromptTemplate === 'string' ? docSummarizerAgent.config.detailedSummaryPromptTemplate : '';
   if (!template) throw new Error('Prompt document_detailed_summary non trouvé');
 
   const estTokens = estimateTokensFromText(fullText);

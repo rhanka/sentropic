@@ -5,7 +5,7 @@ import { readStreamEvents } from '../../services/stream-service';
 import { sql } from 'drizzle-orm';
 import { and, eq, gt } from 'drizzle-orm';
 import type { Notification } from 'pg';
-import { hydrateUseCase } from './use-cases';
+import { hydrateInitiative } from './initiatives';
 import { hydrateOrganization } from './organizations';
 import { listPresence } from '../../services/lock-presence';
 import { clearLocksForUser } from '../../services/lock-service';
@@ -18,13 +18,13 @@ import {
   jobQueue,
   objectLocks,
   organizations,
-  useCases,
+  initiatives,
   users
 } from '../../db/schema';
 
 export const streamsRouter = new Hono();
 
-type LockObjectType = 'organization' | 'folder' | 'usecase';
+type LockObjectType = 'organization' | 'folder' | 'initiative';
 
 const sseConnectionsByUser = new Map<string, number>();
 
@@ -58,7 +58,7 @@ type JobSnapshotRow = {
   error: unknown;
 };
 
-const PRESENCE_OBJECT_TYPES: LockObjectType[] = ['organization', 'folder', 'usecase'];
+const PRESENCE_OBJECT_TYPES: LockObjectType[] = ['organization', 'folder', 'initiative'];
 
 function coercePresenceObjectType(value: string): LockObjectType | null {
   return PRESENCE_OBJECT_TYPES.includes(value as LockObjectType) ? (value as LockObjectType) : null;
@@ -132,9 +132,10 @@ function sseFolderEvent(folderId: string, data: unknown): string {
   return `event: folder_update\nid: folder:${folderId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
-function sseUseCaseEvent(useCaseId: string, data: unknown): string {
-  const payload = JSON.stringify({ useCaseId, data });
-  return `event: usecase_update\nid: usecase:${useCaseId}:${Date.now()}\ndata: ${payload}\n\n`;
+function sseInitiativeEvent(initiativeId: string, data: unknown): string {
+  // Client streamHub expects event type "usecase_update" with "useCaseId" field
+  const payload = JSON.stringify({ useCaseId: initiativeId, data });
+  return `event: usecase_update\nid: initiative:${initiativeId}:${Date.now()}\ndata: ${payload}\n\n`;
 }
 
 function sseWorkspaceEvent(workspaceId: string, data: unknown): string {
@@ -310,12 +311,12 @@ streamsRouter.get('/sse', async (c) => {
               .limit(1);
             return !!r;
           }
-          if (streamId.startsWith('usecase_')) {
-            const id = streamId.slice('usecase_'.length);
+          if (streamId.startsWith('initiative_')) {
+            const id = streamId.slice('initiative_'.length);
             const [r] = await db
-              .select({ id: useCases.id })
-              .from(useCases)
-              .where(and(eq(useCases.id, id), eq(useCases.workspaceId, targetWorkspaceId)))
+              .select({ id: initiatives.id })
+              .from(initiatives)
+              .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, targetWorkspaceId)))
               .limit(1);
             return !!r;
           }
@@ -437,16 +438,16 @@ streamsRouter.get('/sse', async (c) => {
         }
       };
 
-      const emitUseCaseSnapshot = async (useCaseId: string) => {
+      const emitInitiativeSnapshot = async (initiativeId: string) => {
         try {
           const [row] = await db
             .select()
-            .from(useCases)
-            .where(and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, targetWorkspaceId)));
+            .from(initiatives)
+            .where(and(eq(initiatives.id, initiativeId), eq(initiatives.workspaceId, targetWorkspaceId)));
           if (!row?.id || typeof row.id !== 'string') return;
-          // Utiliser hydrateUseCase pour avoir la même structure que GET /use-cases (camelCase)
-          const hydrated = await hydrateUseCase(row);
-          push(sseUseCaseEvent(useCaseId, { useCase: hydrated }));
+          // Utiliser hydrateInitiative pour avoir la même structure que GET /use-cases (camelCase)
+          const hydrated = await hydrateInitiative(row);
+          push(sseInitiativeEvent(initiativeId, { useCase: hydrated }));
         } catch {
           // ignore
         }
@@ -604,7 +605,7 @@ streamsRouter.get('/sse', async (c) => {
           await client.query('UNLISTEN job_events');
           await client.query('UNLISTEN organization_events');
           await client.query('UNLISTEN folder_events');
-          await client.query('UNLISTEN usecase_events');
+          await client.query('UNLISTEN initiative_events');
           await client.query('UNLISTEN lock_events');
           await client.query('UNLISTEN presence_events');
           await client.query('UNLISTEN workspace_events');
@@ -674,10 +675,10 @@ streamsRouter.get('/sse', async (c) => {
             const folderId = payload.folder_id;
             if (!folderId || typeof folderId !== 'string') return;
             void emitFolderSnapshot(folderId);
-          } else if (msg.channel === 'usecase_events') {
-            const useCaseId = payload.use_case_id;
-            if (!useCaseId || typeof useCaseId !== 'string') return;
-            void emitUseCaseSnapshot(useCaseId);
+          } else if (msg.channel === 'initiative_events') {
+            const initiativeId = payload.initiative_id;
+            if (!initiativeId || typeof initiativeId !== 'string') return;
+            void emitInitiativeSnapshot(initiativeId);
           } else if (msg.channel === 'lock_events') {
             const objectType = payload.object_type;
             const objectId = payload.object_id;
@@ -734,7 +735,7 @@ streamsRouter.get('/sse', async (c) => {
       await client.query('LISTEN job_events');
       await client.query('LISTEN organization_events');
       await client.query('LISTEN folder_events');
-      await client.query('LISTEN usecase_events');
+      await client.query('LISTEN initiative_events');
       await client.query('LISTEN stream_events');
       await client.query('LISTEN lock_events');
       await client.query('LISTEN presence_events');

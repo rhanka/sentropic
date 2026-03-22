@@ -2,6 +2,8 @@ import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { workspaceMemberships, workspaces } from '../db/schema';
 
+export type WorkspaceType = 'neutral' | 'ai-ideas' | 'opportunity' | 'code';
+
 export type WorkspaceRole = 'viewer' | 'commenter' | 'editor' | 'admin';
 
 export async function getWorkspaceRole(userId: string, workspaceId: string): Promise<WorkspaceRole | null> {
@@ -79,6 +81,7 @@ export async function getUserWorkspaces(userId: string): Promise<
   Array<{
     id: string;
     name: string;
+    type: string;
     role: WorkspaceRole;
     isCodeWorkspace: boolean;
     hiddenAt: Date | null;
@@ -108,6 +111,7 @@ export async function getUserWorkspaces(userId: string): Promise<
     .select({
       id: workspaces.id,
       name: workspaces.name,
+      type: workspaces.type,
       hiddenAt: workspaces.hiddenAt,
       createdAt: workspaces.createdAt,
       role: workspaceMemberships.role,
@@ -126,9 +130,31 @@ export async function getUserWorkspaces(userId: string): Promise<
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
+    type: r.type,
     isCodeWorkspace: codeWorkspaceIds.has(r.id),
     hiddenAt: r.hiddenAt,
     createdAt: r.createdAt,
     role: r.role as WorkspaceRole,
   }));
+}
+
+/**
+ * Get workspace type by ID. Returns null if workspace not found.
+ */
+export async function getWorkspaceType(workspaceId: string): Promise<WorkspaceType | null> {
+  const [ws] = await db
+    .select({ type: workspaces.type })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1);
+  return (ws?.type as WorkspaceType) ?? null;
+}
+
+/**
+ * Returns true if the workspace is neutral.
+ * Throws if the workspace is not found.
+ */
+export async function isNeutralWorkspace(workspaceId: string): Promise<boolean> {
+  const type = await getWorkspaceType(workspaceId);
+  return type === 'neutral';
 }

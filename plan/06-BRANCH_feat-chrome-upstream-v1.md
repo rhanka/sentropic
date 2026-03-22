@@ -1,5 +1,8 @@
 # Feature: Chrome Upstream v1
 
+## BR-04 dependency note
+Low impact: BR-04 renames `use_cases` → `initiatives` and `contextType=usecase` refs. Update context type references after BR-04 merge.
+
 ## Objective
 Deliver upstream remote control foundation for Chrome plugin with secure single-tab orchestration and compatibility with existing local tools.
 

@@ -9,7 +9,11 @@ import {
   contextModificationHistory,
   folders,
   organizations,
-  useCases,
+  initiatives,
+  solutions,
+  products,
+  bids,
+  workspaces,
   users,
   workspaceMemberships
 } from '../db/schema';
@@ -17,26 +21,27 @@ import { createId } from '../utils/id';
 import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 import { extractDocumentInfoFromDocument } from './document-text';
 import { callLLM } from './llm-runtime';
-import { defaultPrompts } from '../config/default-prompts';
+import { SHARED_AGENTS } from '../config/default-agents-shared';
 import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from './context-comments';
 import { hasWorkspaceRole } from './workspace-access';
+import { evaluateGate } from './gate-service';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
 
-export type UseCaseFieldUpdate = {
+export type InitiativeFieldUpdate = {
   /**
    * Path du champ à modifier.
    *
    * Convention:
-   * - si `path` commence par "data.", on cible le JSONB `use_cases.data`
+   * - si `path` commence par "data.", on cible le JSONB `initiatives.data`
    * - sinon, on considère que c'est un champ dans `data` (ex: "description" => "data.description")
    */
   path: string;
   value: unknown;
 };
 
-export type UpdateUseCaseFieldsInput = {
-  useCaseId: string;
-  updates: UseCaseFieldUpdate[];
+export type UpdateInitiativeFieldsInput = {
+  initiativeId: string;
+  updates: InitiativeFieldUpdate[];
   /** Contexte chat (optionnel) */
   userId?: string | null;
   sessionId?: string | null;
@@ -492,23 +497,23 @@ export class ToolService {
 
   /**
    * Tool pour lire un use case complet.
-   * Retourne la structure `use_cases.data` complète.
+   * Retourne la structure `initiatives.data` complète.
    */
-  async readUseCase(
-    useCaseId: string,
+  async readInitiative(
+    initiativeId: string,
     opts?: { workspaceId?: string | null; select?: string[] | null }
   ): Promise<{
-    useCaseId: string;
+    initiativeId: string;
     data: unknown;
     selected?: string[] | null;
   }> {
-    if (!useCaseId) throw new Error('useCaseId is required');
+    if (!initiativeId) throw new Error('initiativeId is required');
 
     const workspaceId = (opts?.workspaceId ?? '').trim();
     const where = workspaceId
-      ? and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, workspaceId))
-      : eq(useCases.id, useCaseId);
-    const [row] = await db.select().from(useCases).where(where);
+      ? and(eq(initiatives.id, initiativeId), eq(initiatives.workspaceId, workspaceId))
+      : eq(initiatives.id, initiativeId);
+    const [row] = await db.select().from(initiatives).where(where);
     if (!row) throw new Error('Use case not found');
 
     const data = (row.data ?? {}) as Record<string, unknown>;
@@ -526,12 +531,12 @@ export class ToolService {
           out[k] = data[k];
         }
       }
-      return { useCaseId, data: out, selected: select };
+      return { initiativeId, data: out, selected: select };
     }
 
     // Retourner la structure data complète (par défaut)
     return {
-      useCaseId,
+      initiativeId,
       data,
       selected: null
     };
@@ -539,24 +544,24 @@ export class ToolService {
 
   /**
    * Tool générique: met à jour un ou plusieurs champs d'un use case.
-   * Cible principale: `use_cases.data.*` (JSONB).
+   * Cible principale: `initiatives.data.*` (JSONB).
    */
-  async updateUseCaseFields(input: UpdateUseCaseFieldsInput & { workspaceId?: string | null; locale?: string }): Promise<{
-    useCaseId: string;
+  async updateInitiativeFields(input: UpdateInitiativeFieldsInput & { workspaceId?: string | null; locale?: string }): Promise<{
+    initiativeId: string;
     applied: Array<{ path: string; oldValue: unknown; newValue: unknown }>;
   }> {
-    if (!input.useCaseId) throw new Error('useCaseId is required');
+    if (!input.initiativeId) throw new Error('initiativeId is required');
     if (!Array.isArray(input.updates) || input.updates.length === 0) throw new Error('updates is required');
     if (input.updates.length > 50) throw new Error('Too many updates (max 50)');
 
     const workspaceId = (input.workspaceId ?? '').trim();
     const where = workspaceId
-      ? and(eq(useCases.id, input.useCaseId), eq(useCases.workspaceId, workspaceId))
-      : eq(useCases.id, input.useCaseId);
-    const [row] = await db.select().from(useCases).where(where);
+      ? and(eq(initiatives.id, input.initiativeId), eq(initiatives.workspaceId, workspaceId))
+      : eq(initiatives.id, input.initiativeId);
+    const [row] = await db.select().from(initiatives).where(where);
     if (!row) throw new Error('Use case not found');
 
-    // `use_cases.data` est directement l'objet métier (pas de wrapper "data")
+    // `initiatives.data` est directement l'objet métier (pas de wrapper "data")
     const originalData = (row.data ?? {}) as unknown;
     const beforeData = deepClone(originalData) as unknown;
 
@@ -601,19 +606,19 @@ export class ToolService {
     const client = await pool.connect();
     try {
       await client.query(
-        `UPDATE use_cases SET "data" = ${updateExpression} WHERE id = $1`,
-        [input.useCaseId]
+        `UPDATE initiatives SET "data" = ${updateExpression} WHERE id = $1`,
+        [input.initiativeId]
       );
     } finally {
       client.release();
     }
     
     // Récupérer les données finales pour l'historique (après update)
-    const [updatedRow] = await db.select().from(useCases).where(where);
+    const [updatedRow] = await db.select().from(initiatives).where(where);
     const finalData = (updatedRow?.data ?? {}) as unknown;
 
     // Émettre un événement usecase_update pour rafraîchir l'UI en temps réel
-    await this.notifyUseCaseEvent(input.useCaseId);
+    await this.notifyInitiativeEvent(input.initiativeId);
 
     // Historique + snapshot (si sessionId fourni)
     const sessionId = input.sessionId ?? null;
@@ -625,8 +630,8 @@ export class ToolService {
       await db.insert(chatContexts).values({
         id: createId(),
         sessionId,
-        contextType: 'usecase',
-        contextId: input.useCaseId,
+        contextType: 'initiative',
+        contextId: input.initiativeId,
         snapshotBefore: beforeData,
         snapshotAfter: finalData,
         modifications: applied,
@@ -635,12 +640,12 @@ export class ToolService {
       });
     }
 
-    let seq = await getNextModificationSequence('usecase', input.useCaseId);
+    let seq = await getNextModificationSequence('initiative', input.initiativeId);
     for (const item of applied) {
       await db.insert(contextModificationHistory).values({
         id: createId(),
-        contextType: 'usecase',
-        contextId: input.useCaseId,
+        contextType: 'initiative',
+        contextId: input.initiativeId,
         sessionId,
         messageId,
         field: item.path,
@@ -673,8 +678,8 @@ export class ToolService {
     if (commentAuthorId && commentWorkspaceId) {
       await this.createAutoFieldComments({
         workspaceId: commentWorkspaceId,
-        contextType: 'usecase',
-        contextId: input.useCaseId,
+        contextType: 'initiative',
+        contextId: input.initiativeId,
         sectionKeys: applied.map((item) => item.path),
         createdBy: commentAuthorId,
         assignedTo: commentAuthorId,
@@ -683,7 +688,7 @@ export class ToolService {
       });
     }
 
-    return { useCaseId: input.useCaseId, applied };
+    return { initiativeId: input.initiativeId, applied };
   }
 
   // ---------------------------
@@ -1141,7 +1146,7 @@ export class ToolService {
   // Use cases list (folder scope)
   // ---------------------------
 
-  async listUseCasesForFolder(
+  async listInitiativesForFolder(
     folderId: string,
     opts?: { workspaceId?: string | null; idsOnly?: boolean | null; select?: string[] | null }
   ): Promise<
@@ -1151,10 +1156,10 @@ export class ToolService {
     if (!folderId) throw new Error('folderId is required');
     const workspaceId = (opts?.workspaceId ?? '').trim();
     const where = workspaceId
-      ? and(eq(useCases.folderId, folderId), eq(useCases.workspaceId, workspaceId))
-      : eq(useCases.folderId, folderId);
+      ? and(eq(initiatives.folderId, folderId), eq(initiatives.workspaceId, workspaceId))
+      : eq(initiatives.folderId, folderId);
 
-    const rows = await db.select().from(useCases).where(where);
+    const rows = await db.select().from(initiatives).where(where);
 
     if (opts?.idsOnly) {
       return { ids: rows.map((r) => r.id), count: rows.length };
@@ -1410,11 +1415,11 @@ export class ToolService {
   /**
    * Émet un événement usecase_update via NOTIFY PostgreSQL pour rafraîchir l'UI en temps réel
    */
-  private async notifyUseCaseEvent(useCaseId: string): Promise<void> {
-    const notifyPayload = JSON.stringify({ use_case_id: useCaseId });
+  private async notifyInitiativeEvent(initiativeId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ initiative_id: initiativeId });
     const client = await pool.connect();
     try {
-      await client.query(`NOTIFY usecase_events, '${notifyPayload.replace(/'/g, "''")}'`);
+      await client.query(`NOTIFY initiative_events, '${notifyPayload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
     }
@@ -1565,7 +1570,7 @@ export class ToolService {
           .map((s) => {
             const sectionKey = String(s ?? '').trim();
             if (!sectionKey) return '';
-            return opts.contextType === 'usecase' && sectionKey.startsWith('data.')
+            return opts.contextType === 'initiative' && sectionKey.startsWith('data.')
               ? sectionKey.slice('data.'.length)
               : sectionKey;
           })
@@ -1670,10 +1675,20 @@ export class ToolService {
   }
 
   private getPromptTemplateOrThrow(promptId: string): string {
-    const template =
-      defaultPrompts.find((prompt) => prompt.id === promptId)?.content || '';
-    if (!template) throw new Error(`Prompt ${promptId} non trouvé`);
-    return template;
+    for (const agent of SHARED_AGENTS) {
+      if (agent.config.promptId === promptId) {
+        const t = typeof agent.config.promptTemplate === 'string' ? agent.config.promptTemplate : '';
+        if (t) return t;
+      }
+      if (agent.config.mergePromptTemplate && promptId.endsWith('_merge')) {
+        const baseId = promptId.replace(/_merge$/, '');
+        if (agent.config.promptId === baseId) {
+          const t = typeof agent.config.mergePromptTemplate === 'string' ? agent.config.mergePromptTemplate : '';
+          if (t) return t;
+        }
+      }
+    }
+    throw new Error(`Prompt ${promptId} non trouvé`);
   }
 
   private renderTemplate(
@@ -1820,7 +1835,7 @@ export class ToolService {
 
   async listContextDocuments(opts: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
     contextId: string;
   }): Promise<{
     items: Array<{
@@ -1862,7 +1877,7 @@ export class ToolService {
 
   async getDocumentSummary(opts: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
     contextId: string;
     documentId: string;
   }): Promise<{
@@ -1891,7 +1906,7 @@ export class ToolService {
 
   async getDocumentContent(opts: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
     contextId: string;
     documentId: string;
     maxChars?: number | null;
@@ -2060,7 +2075,7 @@ export class ToolService {
 
   async analyzeDocument(opts: {
     workspaceId: string;
-    contextType: 'organization' | 'folder' | 'usecase' | 'chat_session';
+    contextType: 'organization' | 'folder' | 'initiative' | 'chat_session';
     contextId: string;
     documentId: string;
     prompt: string;
@@ -2346,6 +2361,128 @@ export class ToolService {
             ? 'medium'
             : 'high',
     };
+  }
+  // ---------------------------
+  // Extended objects (solutions, products, bids)
+  // ---------------------------
+
+  async listSolutions(opts: { initiativeId: string; workspaceId: string; select?: string[] | null }) {
+    const rows = await db.select().from(solutions)
+      .where(and(eq(solutions.initiativeId, opts.initiativeId), eq(solutions.workspaceId, opts.workspaceId)));
+    const select = Array.isArray(opts.select) ? opts.select.filter(Boolean) : null;
+    const items = rows.map((r) => {
+      const obj: Record<string, unknown> = { id: r.id, status: r.status, version: r.version, ...(r.data as Record<string, unknown> ?? {}) };
+      return select ? pickObjectFields(obj, select) : obj;
+    });
+    return { items, count: rows.length };
+  }
+
+  async getSolution(solutionId: string, opts?: { workspaceId?: string; select?: string[] | null }) {
+    if (!solutionId) throw new Error('solutionId is required');
+    const where = opts?.workspaceId
+      ? and(eq(solutions.id, solutionId), eq(solutions.workspaceId, opts.workspaceId))
+      : eq(solutions.id, solutionId);
+    const [row] = await db.select().from(solutions).where(where).limit(1);
+    if (!row) throw new Error('Solution not found');
+    const select = Array.isArray(opts?.select) ? opts?.select.filter(Boolean) : null;
+    const obj: Record<string, unknown> = { id: row.id, status: row.status, version: row.version, ...(row.data as Record<string, unknown> ?? {}) };
+    return { solutionId, data: select ? pickObjectFields(obj, select) : obj };
+  }
+
+  async listBids(opts: { initiativeId: string; workspaceId: string; select?: string[] | null }) {
+    const rows = await db.select().from(bids)
+      .where(and(eq(bids.initiativeId, opts.initiativeId), eq(bids.workspaceId, opts.workspaceId)));
+    const select = Array.isArray(opts.select) ? opts.select.filter(Boolean) : null;
+    const items = rows.map((r) => {
+      const obj: Record<string, unknown> = { id: r.id, status: r.status, version: r.version, ...(r.data as Record<string, unknown> ?? {}) };
+      return select ? pickObjectFields(obj, select) : obj;
+    });
+    return { items, count: rows.length };
+  }
+
+  async getBid(bidId: string, opts?: { workspaceId?: string; select?: string[] | null }) {
+    if (!bidId) throw new Error('bidId is required');
+    const where = opts?.workspaceId
+      ? and(eq(bids.id, bidId), eq(bids.workspaceId, opts.workspaceId))
+      : eq(bids.id, bidId);
+    const [row] = await db.select().from(bids).where(where).limit(1);
+    if (!row) throw new Error('Bid not found');
+    const select = Array.isArray(opts?.select) ? opts?.select.filter(Boolean) : null;
+    const obj: Record<string, unknown> = { id: row.id, status: row.status, version: row.version, ...(row.data as Record<string, unknown> ?? {}) };
+    return { bidId, data: select ? pickObjectFields(obj, select) : obj };
+  }
+
+  async listProducts(opts: { workspaceId: string; initiativeId?: string; select?: string[] | null }) {
+    const conditions = [eq(products.workspaceId, opts.workspaceId)];
+    if (opts.initiativeId) conditions.push(eq(products.initiativeId, opts.initiativeId));
+    const rows = await db.select().from(products).where(and(...conditions));
+    const select = Array.isArray(opts.select) ? opts.select.filter(Boolean) : null;
+    const items = rows.map((r) => {
+      const obj: Record<string, unknown> = { id: r.id, status: r.status, version: r.version, solutionId: r.solutionId, ...(r.data as Record<string, unknown> ?? {}) };
+      return select ? pickObjectFields(obj, select) : obj;
+    });
+    return { items, count: rows.length };
+  }
+
+  async getProduct(productId: string, opts?: { workspaceId?: string; select?: string[] | null }) {
+    if (!productId) throw new Error('productId is required');
+    const where = opts?.workspaceId
+      ? and(eq(products.id, productId), eq(products.workspaceId, opts.workspaceId))
+      : eq(products.id, productId);
+    const [row] = await db.select().from(products).where(where).limit(1);
+    if (!row) throw new Error('Product not found');
+    const select = Array.isArray(opts?.select) ? opts?.select.filter(Boolean) : null;
+    const obj: Record<string, unknown> = { id: row.id, status: row.status, version: row.version, solutionId: row.solutionId, ...(row.data as Record<string, unknown> ?? {}) };
+    return { productId, data: select ? pickObjectFields(obj, select) : obj };
+  }
+
+  async reviewGate(workspaceId: string, initiativeId: string, targetStage: string) {
+    return evaluateGate(workspaceId, initiativeId, targetStage);
+  }
+
+  // ---------------------------
+  // Cross-workspace tools (neutral)
+  // ---------------------------
+
+  async listWorkspacesForUser(userId: string) {
+    const memberships = await db.select({ workspaceId: workspaceMemberships.workspaceId, role: workspaceMemberships.role })
+      .from(workspaceMemberships).where(eq(workspaceMemberships.userId, userId));
+    if (memberships.length === 0) return { items: [], count: 0 };
+    const wsIds = memberships.map((m) => m.workspaceId);
+    const wsRows = await db.select().from(workspaces).where(inArray(workspaces.id, wsIds));
+    const roleMap = new Map(memberships.map((m) => [m.workspaceId, m.role]));
+    const items = wsRows.map((ws) => ({
+      id: ws.id, name: ws.name, type: ws.type, role: roleMap.get(ws.id) ?? 'viewer',
+    }));
+    return { items, count: items.length };
+  }
+
+  async searchInitiativesCrossWorkspace(userId: string, opts?: { query?: string; status?: string; maturityStage?: string }) {
+    const memberships = await db.select({ workspaceId: workspaceMemberships.workspaceId })
+      .from(workspaceMemberships).where(eq(workspaceMemberships.userId, userId));
+    if (memberships.length === 0) return { items: [], count: 0 };
+    const wsIds = memberships.map((m) => m.workspaceId);
+    const conditions = [inArray(initiatives.workspaceId, wsIds)];
+    if (opts?.status) conditions.push(eq(initiatives.status, opts.status));
+    const rows = await db.select().from(initiatives).where(and(...conditions));
+    let filtered = rows;
+    if (opts?.query) {
+      const q = opts.query.toLowerCase();
+      filtered = rows.filter((r) => {
+        const d = (r.data ?? {}) as Record<string, unknown>;
+        const name = typeof d.name === 'string' ? d.name : '';
+        const desc = typeof d.description === 'string' ? d.description : '';
+        return name.toLowerCase().includes(q) || desc.toLowerCase().includes(q);
+      });
+    }
+    if (opts?.maturityStage) {
+      filtered = filtered.filter((r) => r.maturityStage === opts.maturityStage);
+    }
+    const items = filtered.map((r) => {
+      const d = (r.data ?? {}) as Record<string, unknown>;
+      return { id: r.id, name: d.name ?? null, status: r.status, workspaceId: r.workspaceId, folderId: r.folderId };
+    });
+    return { items, count: items.length };
   }
 }
 
