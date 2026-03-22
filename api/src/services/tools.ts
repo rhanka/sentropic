@@ -97,7 +97,7 @@ export const updateInitiativeTool: OpenAI.Chat.Completions.ChatCompletionTool = 
   function: {
     name: "update_initiative",
     description:
-      "OBLIGATOIRE : Utilise ce tool quand l'utilisateur demande de modifier, reformuler ou mettre à jour des champs du use case. Ne réponds pas dans le texte, utilise ce tool pour appliquer les modifications directement en base de données. Met à jour un ou plusieurs champs d'un use case (JSONB initiatives.data). Utilise des paths dot-notation. Exemples de paths : 'description', 'problem', 'solution', 'solution.bullets' (pour un tableau), 'solution.bullets.0' (pour un élément spécifique).",
+      "OBLIGATOIRE : Utilise ce tool quand l'utilisateur demande de modifier, reformuler ou mettre à jour des champs de l'initiative. Ne réponds pas dans le texte, utilise ce tool pour appliquer les modifications directement en base de données. Met à jour un ou plusieurs champs d'une initiative (JSONB initiatives.data). Chaque update est un objet {path, value}. Paths disponibles : 'description' (string), 'problem' (string), 'solution' (string), 'benefits' (array de strings), 'risks' (array de strings), 'constraints' (array de strings), 'metrics' (array de strings), 'nextSteps' (array de strings), 'technologies' (array de strings), 'dataSources' (array de strings), 'dataObjects' (array de strings). Exemple pour un champ string : {path: 'problem', value: 'Nouveau texte'}. Exemple pour un champ liste : {path: 'metrics', value: ['Métrique 1', 'Métrique 2', 'Métrique 3']}.",
     parameters: {
       type: "object",
       properties: {

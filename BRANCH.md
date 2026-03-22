@@ -604,6 +604,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] fix(ci): split AI test suite into 3 balanced shards (~60s each) for isolation
 - [x] feat(make): add `doc-backup`, `doc-backup-prod`, `doc-restore` targets (MinIO `mc mirror` via `docker compose exec`)
 - [x] fix(api): separate `chat` queue class from `ai` generation — chat not blocked by generation concurrency
+- [x] fix(api): improve `update_initiative` tool description — explicit paths, types, and examples for list fields
 - [x] **Doc consolidation**
   - [x] `SPEC_EVOL_WORKSPACE_TYPES.md` §1-§6, §14 → merge into `SPEC.md`
   - [x] `SPEC_EVOL_WORKSPACE_TYPES.md` §7 → merge into `SPEC.md` + update §2.2 in `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`
