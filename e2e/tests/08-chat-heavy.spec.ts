@@ -5,7 +5,7 @@ import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 // Keep a generous timeout for upload + summarization + tool execution flow.
 test.setTimeout(180_000);
 
-test.describe.serial('Chat heavy flows', () => {
+test.describe('Chat heavy flows', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const ADMIN_STATE = './.auth/state.json';
   const USER_A_STATE = './.auth/user-a.json';

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 // UX: on mobile, the chat is docked full screen (100vw). When navigating from the burger menu,
 // the chat should auto-close so the destination page is visible.
-test.describe.serial('Chat (mobile docked) — navigation closes chat', () => {
+test.describe('Chat (mobile docked) — navigation closes chat', () => {
   test('devrait fermer le chat docké (mobile) après clic sur un item du menu burger', async ({ page }) => {
     // Mobile viewport to force docked full-screen
     await page.setViewportSize({ width: 390, height: 844 });

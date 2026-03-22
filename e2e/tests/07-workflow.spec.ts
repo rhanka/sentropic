@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
-test.describe.serial('Workflow métier complet', () => {
+test.describe('Workflow métier complet', () => {
   // Ce spec crée du contenu et enchaîne plusieurs pages: le laisser plus de marge + éviter la concurrence.
   test.setTimeout(4 * 60_000);
 

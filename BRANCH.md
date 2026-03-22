@@ -599,6 +599,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] fix(e2e): `03-chat-chrome-extension.spec.ts` — fresh session for restricted toolset + menu locator fix
 - [x] fix(e2e): `07-matrix.spec.ts` — lock race (explicit release via API) + export click force
 - [x] fix(e2e): `07-import-export.spec.ts` — rename labels "Cas d'usage"→"Initiatives"
+- [x] fix(e2e): remove `describe.serial` from all E2E specs — prevents masking skipped tests as passing
 
 #### Lot rattrapage tests (deferred gates from lots 3-9quater)
 

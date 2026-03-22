@@ -22,7 +22,7 @@ test.describe('Access control — UI admin', () => {
   });
 });
 
-test.describe.serial('Access control — roles workspace', () => {
+test.describe('Access control — roles workspace', () => {
   test.use({ storageState: USER_B_STATE });
   const workspaceName = `Workspace Access ${Date.now()}`;
   let workspaceId = '';
