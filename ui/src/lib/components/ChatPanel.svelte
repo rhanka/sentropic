@@ -1918,13 +1918,13 @@
     {
       id: 'usecase_read',
       label: $_('chat.tools.usecaseRead.label'),
-      toolIds: ['usecases_list', 'usecase_get', 'read_usecase'],
+      toolIds: ['initiatives_list', 'read_initiative', 'usecases_list', 'usecase_get', 'read_usecase'],
       icon: Lightbulb,
     },
     {
       id: 'usecase_update',
       label: $_('chat.tools.usecaseUpdate.label'),
-      toolIds: ['usecase_update', 'update_usecase_field'],
+      toolIds: ['update_initiative', 'usecase_update', 'update_usecase_field'],
       icon: Lightbulb,
     },
     {
@@ -3845,7 +3845,7 @@
       const res = await apiGet<{ sessions: ChatSession[] }>('/chat/sessions');
       sessions = res.sessions ?? [];
       // If the current sessionId is stale (e.g. from a different workspace), clear it
-      if (sessionId && !sessions.some((s) => s.id === sessionId)) {
+      if (sessionId && !sessions.some((s) => s.id === sessionId) && messages.length === 0) {
         sessionId = null;
         messages = [];
       }
@@ -4414,7 +4414,9 @@
       updateComposerHeight();
       if (res.sessionId && res.sessionId !== sessionId) {
         sessionId = res.sessionId;
-        void loadSessions();
+        if (!sessions.some((s) => s.id === res.sessionId)) {
+          sessions = [{ id: res.sessionId, title: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as ChatSession, ...sessions];
+        }
       }
 
       const nowIso = new Date().toISOString();

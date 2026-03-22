@@ -586,6 +586,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] fix(api): import handler — use `initiative_` file prefix instead of `usecase_` in preview and import
 - [x] fix(api): rename `usecase_` streamId prefix to `initiative_` in queue-manager
 - [x] fix(ui): export scope `usecase`→`initiative` + wait `workspaceScopeHydrated` before `loadUseCase()`
+- [x] fix(ui): TOOL_TOGGLES add `read_initiative`/`update_initiative` IDs + remove stale session clear from `loadSessions()`
 
 #### Lot rattrapage tests (deferred gates from lots 3-9quater)
 
