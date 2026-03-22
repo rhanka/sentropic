@@ -206,9 +206,13 @@ describe('Chat AI - Tool Calls Integration', () => {
         } as any)
         .where(eq(initiatives.id, initiativeId));
 
-      // Message qui pourrait déclencher web_extract (si l'IA le juge nécessaire)
+      // Message explicite pour déclencher web_extract avec les URLs des references
       const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
-        content: `Analyze the references for initiative ${initiativeId}`,
+        content: [
+          `Tu DOIS appeler le tool \`web_extract\` maintenant avec exactement ces 2 URLs :`,
+          `urls: ["https://example.com/article1", "https://example.com/article2"]`,
+          `N'invente aucune autre URL. N'appelle aucun autre tool avant. Après le résultat, réponds OK.`
+        ].join('\n'),
         primaryContextType: 'initiative',
         primaryContextId: initiativeId,
         model: getTestModel()

@@ -592,6 +592,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] fix(deps): npm audit fix + UI Dockerfile audit --omit=dev
 - [x] fix(test): `import-export.test.ts` — use `initiative_` prefix in test zip
 - [x] fix(test): `initiative-generation-async.test.ts` — clean zombie jobs + purge queue before auth cleanup
+- [x] fix(test): `chat-tools.test.ts` — deterministic `web_extract` prompt with explicit URLs
 
 #### Lot rattrapage tests (deferred gates from lots 3-9quater)
 
