@@ -41,7 +41,7 @@ test.describe('Import / Export', () => {
     const folderId = String(folderJson?.id || '');
     if (!folderId) throw new Error('folderId introuvable');
 
-    const useCaseRes = await userAApi.post(`/api/v1/use-cases?workspace_id=${sourceWorkspaceId}`, {
+    const useCaseRes = await userAApi.post(`/api/v1/initiatives?workspace_id=${sourceWorkspaceId}`, {
       data: {
         folderId,
         organizationId,
@@ -130,7 +130,7 @@ test.describe('Import / Export', () => {
     await expect(page.getByText('Types à importer')).toBeVisible({ timeout: 30_000 });
     const orgCheckbox = page.getByRole('checkbox', { name: /^Organisations/ });
     const foldersCheckbox = page.getByRole('checkbox', { name: /^Dossiers/ });
-    const usecasesCheckbox = page.getByRole('checkbox', { name: /^Cas d\'usage/ });
+    const usecasesCheckbox = page.getByRole('checkbox', { name: /^Initiatives/ });
     const matrixCheckbox = page.getByRole('checkbox', { name: /^Matrices/ });
     await expect(orgCheckbox).toBeVisible();
     await expect(foldersCheckbox).toBeVisible();
@@ -177,7 +177,7 @@ test.describe('Import / Export', () => {
     await expect(importAction).toBeVisible();
     await importAction.click();
 
-    const importDialog = page.locator('h3:has-text("Importer un cas d\'usage")');
+    const importDialog = page.locator('h3:has-text("Importer une initiative")');
     await expect(importDialog).toBeVisible({ timeout: 10_000 });
     const dialog = page.locator('div').filter({ has: importDialog }).first();
 
