@@ -28,13 +28,11 @@ Open objective:
 - deterministic dedicated-field vs JSON save semantics,
 - authoritative workflow task I/O contracts consumed by runtime.
 
-### 2.2 Generic multi-workflow runtime → **absorbed into BR-04**
+### 2.2 Generic multi-workflow runtime → **delivered (BR-04)**
 
-This section has been absorbed into `spec/SPEC_EVOL_WORKSPACE_TYPES.md` §7 (Multi-workflow registry).
+Delivered in BR-04 and consolidated into `spec/SPEC.md` §4.1 (Multi-workflow registry).
 
-BR-04 delivers: open task-key mapping, per-workspace-type workflow catalog, generic dispatch, workflow versioning. See that spec for full design.
-
-After BR-04 implementation, this pointer will be removed and the canonical spec updated.
+Scope delivered: open task-key mapping, per-workspace-type workflow catalog, generic dispatch via `startWorkflow(workspaceId, workflowKey)`, agent-based prompt resolution, `agentMap` runtime context. See `SPEC.md` §4 for canonical spec.
 
 ### 2.3 Collaborative TODO runtime (future branch)
 
