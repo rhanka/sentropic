@@ -8,7 +8,7 @@ const WORKSPACE_A_ID = 'e2e-ws-a';
 const WORKSPACE_B_ID = 'e2e-ws-b';
 
 
-test.describe.serial('Tenancy / cloisonnement workspace', () => {
+test.describe('Tenancy / cloisonnement workspace', () => {
 
   test.describe('Workspace A', () => {
     test('ne devrait pas voir les données du workspace B', async ({ browser }) => {
