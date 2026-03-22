@@ -56,6 +56,7 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-16 | `feat/document-connectors` | plan | BR-04 (low) | low (initiative rename in contextType) |
 | BR-17 | `feat/rag-documents` | plan | BR-16 (optional), BR-08 (Cohere embeddings) | none |
 | BR-18 | `feat/sortable-list-views` | Sortable columns for all list views (folders, initiatives, workspaces) | plan | none | none |
+| BR-19 | `feat/agent-sandbox-skills` | V8 sandbox for tool execution + skill catalog replacing hardcoded tool dispatch | plan | BR-04 | **high** (replaces tool dispatch in chat-service, queue-manager, ChatPanel tool toggles) |
 
 ## 4) Dependency graph
 
@@ -76,8 +77,11 @@ graph TD
   BR12[BR-12 release chrome+vscode ci]
   BR13[BR-13 chrome download ✓]
   BR14[BR-14 chat modularization]
+  BR15[BR-15 spectral site tools]
   BR16[BR-16 document connectors]
   BR17[BR-17 RAG documents]
+  BR18[BR-18 sortable list views]
+  BR19[BR-19 agent sandbox + skills]
 
   BR00 --> BR01
   BR00 --> BR02
@@ -106,6 +110,9 @@ graph TD
   BR04 -.->|low| BR16
   BR16 -.-> BR17
   BR08 -.->|Cohere embeddings| BR17
+  BR04 -.->|high| BR19
+  BR19 --> BR15
+  BR19 -.->|skills replace tools| BR10
 ```
 
 ## 5) Scheduling post-BR-04
@@ -114,6 +121,7 @@ graph TD
 **Wave B** (after BR-04 + partial Wave A): BR-07 (UI npm, after BR-14) + BR-11 (Chrome multitab, after BR-06+BR-08) + BR-17 (RAG, after BR-08, optional BR-16)
 **Wave C** (after BR-04 + BR-08): BR-10 (VSCode v2)
 **Wave D** (after Wave B/C): BR-12 (CI publish, after BR-05+BR-06+BR-07+BR-13)
+**Wave E** (after BR-04): BR-19 (Agent sandbox + skill catalog — structural, replaces tool dispatch layer). Then BR-15 (spectral site tools — registers generated tools as skills in BR-19 catalog)
 
 ## 6) Environment convention
 
