@@ -600,6 +600,8 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] fix(e2e): `07-matrix.spec.ts` — lock race (explicit release via API) + export click force
 - [x] fix(e2e): `07-import-export.spec.ts` — rename labels "Cas d'usage"→"Initiatives"
 - [x] fix(e2e): remove `describe.serial` from all E2E specs — prevents masking skipped tests as passing
+- [x] fix(ci): split E2E group-c (03+05+07) → group-c (03) + group-e (05+07) to avoid lock/presence concurrence
+- [x] fix(ci): split AI test suite into 3 balanced shards (~60s each) for isolation
 
 #### Lot rattrapage tests (deferred gates from lots 3-9quater)
 
