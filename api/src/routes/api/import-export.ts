@@ -1069,7 +1069,7 @@ importsRouter.post('/preview', async (c) => {
       if (Array.isArray(obj.comments) && obj.comments.length > 0) hasComments = true;
       continue;
     }
-    if (entry.path.startsWith('usecase_')) {
+    if (entry.path.startsWith('initiative_')) {
       const text = await zip.file(entry.path)?.async('string');
       if (!text) continue;
       const obj = JSON.parse(text) as Record<string, unknown>;
@@ -1078,7 +1078,7 @@ importsRouter.post('/preview', async (c) => {
       const name =
         (typeof data?.name === 'string' && data.name.trim()) ||
         (typeof obj.name === 'string' && obj.name.trim()) ||
-        "Cas d'usage";
+        'Initiative';
       if (id) objects.usecases.push({ id, name });
       if (Array.isArray(obj.comments) && obj.comments.length > 0) hasComments = true;
       continue;
@@ -1273,7 +1273,7 @@ importsRouter.post('/', async (c) => {
       }
       continue;
     }
-    if (entry.path.startsWith('usecase_')) {
+    if (entry.path.startsWith('initiative_')) {
       if (!isTypeSelected('usecases')) continue;
       const obj = await readJsonObject(entry.path);
       const id = obj && typeof obj.id === 'string' ? obj.id : '';
