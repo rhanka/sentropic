@@ -410,7 +410,7 @@ export function getPublicJobStreamId(job: Pick<Job, 'id' | 'type' | 'data'>): st
     const initiativeId =
       (job.data as InitiativeDetailJobData).initiativeId ??
       String(rawData.use_case_id ?? '');
-    return `usecase_${initiativeId}`;
+    return `initiative_${initiativeId}`;
   }
   if (job?.type === 'executive_summary' && ((job.data as ExecutiveSummaryJobData | undefined)?.folderId || rawData.folder_id)) {
     const folderId =
@@ -2259,7 +2259,7 @@ export class QueueManager {
     });
     
     // Générer le détail
-    const streamId = `usecase_${initiativeId}`;
+    const streamId = `initiative_${initiativeId}`;
     const detailPromptOverride = await this.resolveGenerationPromptOverride(
       folder.workspaceId,
       workflow?.agentDefinitionId ?? null,
