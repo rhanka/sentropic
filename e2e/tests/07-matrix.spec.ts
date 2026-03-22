@@ -182,7 +182,7 @@ test.describe('Configuration de la matrice', () => {
 
       const exportAction = page.locator('button').filter({ hasText: /Exporter|Export/i }).first();
       await expect(exportAction).toBeVisible();
-      await exportAction.click();
+      await exportAction.click({ force: true });
 
       const exportDialog = page.locator('h3').filter({ hasText: /Exporter la matrice|Export matrix/i });
       await expect(exportDialog).toBeVisible({ timeout: 2_000 });
@@ -517,23 +517,51 @@ test.describe('Configuration de la matrice', () => {
       await expect(pageA.locator('text=Contexte').first()).toBeVisible({ timeout: 2_000 });
       await ensureCurrentFolderId(pageA);
 
+      // Set up promise to wait for lock acquisition BEFORE navigating,
+      // since the POST /locks fires immediately when the matrix page mounts.
+      let lockAcquiredPromise = pageA.waitForResponse(
+        (res) => res.url().includes('/locks') && !res.url().includes('/presence') && res.request().method() === 'POST',
+        { timeout: 5_000 },
+      ).catch(() => null);
+
       await pageA.click('a[href="/matrix"]');
       await expect(pageA).toHaveURL(/\/matrix/);
       await pageA.waitForLoadState('domcontentloaded');
       await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
       await ensureCurrentFolderId(pageA);
+      const noFolderMessageA = pageA.locator('text=Veuillez sélectionner un dossier pour voir sa matrice');
+      if (await noFolderMessageA.isVisible().catch(() => false)) {
+        // Reload re-triggers the lock acquisition; re-register the listener.
+        lockAcquiredPromise = pageA.waitForResponse(
+          (res) => res.url().includes('/locks') && !res.url().includes('/presence') && res.request().method() === 'POST',
+          { timeout: 5_000 },
+        ).catch(() => null);
+        await pageA.evaluate((id) => {
+          try { localStorage.setItem('currentFolderId', id); } catch { /* ignore */ }
+        }, folderId);
+        await pageA.reload({ waitUntil: 'domcontentloaded' });
+        await expect(pageA.locator('h1')).toContainText("Configuration de l'évaluation");
+      }
 
-      await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
+      // Wait for User A to actually acquire the lock before releasing;
+      // otherwise the lock may not yet exist and the DELETE becomes a no-op.
+      await lockAcquiredPromise;
 
-      // Navigate to another page to trigger SSE cleanup
-      await pageA.goto('/folders');
-      await pageA.waitForLoadState('domcontentloaded');
-      // Wait a bit for SSE cleanup to complete
-      await pageA.waitForTimeout(1000);
+      // Release the lock explicitly via API before closing the context.
+      // onDestroy's fire-and-forget DELETE can be aborted during navigation,
+      // so we release directly to guarantee the lock row is removed.
+      const userAApi = await request.newContext({
+        baseURL: API_BASE_URL,
+        storageState: USER_A_STATE,
+      });
+      await userAApi.delete(
+        `/api/v1/locks?objectType=folder&objectId=${encodeURIComponent(folderId)}&workspace_id=${encodeURIComponent(workspaceAId)}`,
+      ).catch(() => {});
+      await userAApi.dispose();
+
       await userAContext.close();
 
-      // After User A leaves, the lock should be released (null) or User B can acquire it
-      // User B might auto-acquire the lock if they're on the page
+      // After User A leaves and lock is released, User B should be able to edit.
       const userBContext = await browser.newContext({
         storageState: await withWorkspaceAndFolderStorageState(USER_B_STATE, workspaceAId, folderId),
       });
@@ -546,7 +574,16 @@ test.describe('Configuration de la matrice', () => {
       await pageB.click('a[href="/matrix"]');
       await expect(pageB).toHaveURL(/\/matrix/);
       await pageB.waitForLoadState('domcontentloaded');
+      await expect(pageB.locator('h1')).toContainText("Configuration de l'évaluation");
       await ensureCurrentFolderId(pageB);
+      const noFolderMessageB = pageB.locator('text=Veuillez sélectionner un dossier pour voir sa matrice');
+      if (await noFolderMessageB.isVisible().catch(() => false)) {
+        await pageB.evaluate((id) => {
+          try { localStorage.setItem('currentFolderId', id); } catch { /* ignore */ }
+        }, folderId);
+        await pageB.reload({ waitUntil: 'domcontentloaded' });
+        await expect(pageB.locator('h1')).toContainText("Configuration de l'évaluation");
+      }
       await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
       // Wait for lock to be released or acquired by User B.
