@@ -596,6 +596,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] fix(test): `seed-test-data.ts` — add BR-04 table cleanup (workspaceTypeWorkflows, workflowDefinitions, agentDefinitions)
 - [x] fix(e2e): `05-usecase-detail.spec.ts` — rename usecase→initiative labels and routes
 - [x] fix(e2e): `03-chat.spec.ts` — send button, context route, delete confirm, clipboard, stale ref after edit
+- [x] fix(e2e): `03-chat-chrome-extension.spec.ts` — fresh session for restricted toolset + menu locator fix
 
 #### Lot rattrapage tests (deferred gates from lots 3-9quater)
 
