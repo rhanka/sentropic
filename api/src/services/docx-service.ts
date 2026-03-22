@@ -24,7 +24,7 @@ import {
 } from 'docx';
 import { marked } from 'marked';
 import type { MatrixConfig } from '../types/matrix';
-import type { UseCase } from '../types/usecase';
+import type { Initiative } from '../types/initiative';
 import { fibonacciToStars } from '../utils/fibonacci-mapping';
 import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 
@@ -73,7 +73,7 @@ type DashboardImageInput = {
 };
 
 export type DocxTemplateId = 'usecase-onepage' | 'executive-synthesis-multipage';
-export type DocxEntityType = 'usecase' | 'folder';
+export type DocxEntityType = 'initiative' | 'folder';
 
 type BaseRunStyle = {
   style?: string;
@@ -146,7 +146,7 @@ type ExecutiveSummaryContent = {
 export type ExecutiveSynthesisDocxInput = {
   folderName: string;
   executiveSummary: ExecutiveSummaryContent;
-  useCases: UseCase[];
+  initiatives: Initiative[];
   matrix: MatrixConfig | null;
   provided?: Record<string, unknown>;
   controls?: Record<string, unknown>;
@@ -1001,7 +1001,7 @@ async function expandIncludes(
     }
 
     if (templateRef === 'usecase-onepage.docx') {
-      const renderedIncludedBody = await renderIncludedUseCaseBodyXml(
+      const renderedIncludedBody = await renderIncludedInitiativeBodyXml(
         includeContext,
         state,
         includeInstanceId,
@@ -1031,7 +1031,7 @@ async function expandIncludes(
   return nextXml;
 }
 
-async function renderIncludedUseCaseBodyXml(
+async function renderIncludedInitiativeBodyXml(
   includeContext: unknown,
   state: LoopExpansionState,
   includeInstanceId: number,
@@ -1806,8 +1806,8 @@ function buildAxes(
     .filter(Boolean) as Array<{ title: string; score: number; stars: string; crosses: string; description: string }>;
 }
 
-function buildTemplateData(useCase: UseCase, matrix: MatrixConfig | null): TemplateData {
-  const d = useCase.data;
+function buildTemplateData(initiative: Initiative, matrix: MatrixConfig | null): TemplateData {
+  const d = initiative.data;
 
   return {
     name: safeText(d.name),
@@ -1836,11 +1836,11 @@ function buildTemplateData(useCase: UseCase, matrix: MatrixConfig | null): Templ
     complexityAxes: buildAxes(matrix?.complexityAxes ?? [], d.complexityScores),
     deadline: safeText(d.deadline),
     contact: safeText(d.contact),
-    totalValueScore: useCase.totalValueScore ?? '',
-    totalComplexityScore: useCase.totalComplexityScore ?? '',
-    totalValueStars: renderStarGauge(Number(useCase.totalValueScore ?? 0)),
-    totalComplexityStars: renderStarGauge(Number(useCase.totalComplexityScore ?? 0)),
-    totalComplexityCrosses: renderCrossGauge(Number(useCase.totalComplexityScore ?? 0)),
+    totalValueScore: initiative.totalValueScore ?? '',
+    totalComplexityScore: initiative.totalComplexityScore ?? '',
+    totalValueStars: renderStarGauge(Number(initiative.totalValueScore ?? 0)),
+    totalComplexityStars: renderStarGauge(Number(initiative.totalComplexityScore ?? 0)),
+    totalComplexityCrosses: renderCrossGauge(Number(initiative.totalComplexityScore ?? 0)),
   };
 }
 
@@ -2332,16 +2332,16 @@ function buildExecutiveSynthesisContext(input: ExecutiveSynthesisDocxInput): Rec
   const normalizedReferences = normalizeExecutiveSummaryReferences(executiveSummary.references);
   const locale = safeText(input.locale).toLowerCase().startsWith('en') ? 'en' : 'fr';
 
-  const usecasesForAnnex = input.useCases.map((useCase) => ({
-    ...useCase,
-    data: buildTemplateData(useCase, input.matrix),
+  const usecasesForAnnex = input.initiatives.map((initiative) => ({
+    ...initiative,
+    data: buildTemplateData(initiative, input.matrix),
   }));
 
-  const medianValue = median(usecasesForAnnex.map((useCase) => useCase.totalValueScore));
-  const medianComplexity = median(usecasesForAnnex.map((useCase) => useCase.totalComplexityScore));
-  const quickWinsCount = usecasesForAnnex.filter((useCase) => {
-    const value = useCase.totalValueScore ?? 0;
-    const complexity = useCase.totalComplexityScore ?? 0;
+  const medianValue = median(usecasesForAnnex.map((initiative) => initiative.totalValueScore));
+  const medianComplexity = median(usecasesForAnnex.map((initiative) => initiative.totalComplexityScore));
+  const quickWinsCount = usecasesForAnnex.filter((initiative) => {
+    const value = initiative.totalValueScore ?? 0;
+    const complexity = initiative.totalComplexityScore ?? 0;
     return value >= medianValue && complexity <= medianComplexity;
   }).length;
 
@@ -2408,8 +2408,8 @@ function buildExecutiveSynthesisContext(input: ExecutiveSynthesisDocxInput): Rec
   };
 }
 
-export async function generateUseCaseDocx(useCase: UseCase, matrix: MatrixConfig | null): Promise<Buffer> {
-  const data = buildTemplateData(useCase, matrix);
+export async function generateInitiativeDocx(initiative: Initiative, matrix: MatrixConfig | null): Promise<Buffer> {
+  const data = buildTemplateData(initiative, matrix);
   return renderDocxTemplate('usecase-onepage.docx', data, basePayloads(data));
 }
 
@@ -2421,7 +2421,7 @@ export async function generateExecutiveSynthesisDocx(input: ExecutiveSynthesisDo
     message: 'Starting executive synthesis rendering',
   });
   logDocx(
-    `executive synthesis start folder="${safeText(input.folderName)}" usecases=${input.useCases.length}`,
+    `executive synthesis start folder="${safeText(input.folderName)}" usecases=${input.initiatives.length}`,
     input.requestId
   );
   const context = buildExecutiveSynthesisContext(input);

@@ -1,5 +1,8 @@
 # Feature: Chrome Upstream Multi-Tab + Voice
 
+## BR-04 dependency note
+Low impact: BR-04 renames `use_cases` → `initiatives` and `contextType=usecase` refs. Same as BR-06, update context type references after BR-04 merge.
+
 ## Objective
 Extend Chrome upstream control to multi-tab orchestration and voice commands with explicit permission and consent safeguards.
 

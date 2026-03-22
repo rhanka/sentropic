@@ -3,7 +3,7 @@ import { API_BASE_URL } from '$lib/config';
 import { browser } from '$app/environment';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
-export type LockObjectType = 'organization' | 'folder' | 'usecase';
+export type LockObjectType = 'organization' | 'folder' | 'initiative';
 
 export type LockSnapshot = {
   id: string;

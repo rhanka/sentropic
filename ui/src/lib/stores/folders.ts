@@ -10,7 +10,7 @@ export type Folder = {
   organizationName?: string | null;
   matrixConfig?: any;
   hasMatrix?: boolean; // Indicates if folder has a matrix configuration
-  useCaseCount?: number;
+  initiativeCount?: number;
   executiveSummary?: {
     introduction?: string;
     analyse?: string;

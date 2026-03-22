@@ -5,17 +5,17 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../db/client';
-import { folders, useCases } from '../db/schema';
+import { folders, initiatives } from '../db/schema';
 import type { MatrixConfig } from '../types/matrix';
-import type { ScoreEntry, UseCase, UseCaseData } from '../types/usecase';
+import type { ScoreEntry, Initiative, InitiativeData } from '../types/initiative';
 import {
   type DocxEntityType,
   type DocxTemplateId,
   generateExecutiveSynthesisDocx,
-  generateUseCaseDocx,
+  generateInitiativeDocx,
 } from './docx-service';
 import { parseMatrixConfig } from '../utils/matrix';
-import { calculateUseCaseScores } from '../utils/scoring';
+import { calculateInitiativeScores } from '../utils/scoring';
 
 export type DocxGenerateRequest = {
   templateId: DocxTemplateId;
@@ -41,8 +41,8 @@ export type DocxGenerateResult = {
   mimeType: string;
 };
 
-type UseCaseOnePageSource = {
-  useCase: UseCase;
+type InitiativeOnePageSource = {
+  initiative: Initiative;
   matrix: MatrixConfig | null;
 };
 
@@ -55,7 +55,7 @@ type ExecutiveSynthesisSource = {
     synthese_executive?: string;
     references?: Array<{ title?: string; url?: string; excerpt?: string }>;
   };
-  useCases: UseCase[];
+  initiatives: Initiative[];
   matrix: MatrixConfig | null;
 };
 
@@ -64,9 +64,9 @@ type RegistryEntry = {
   generate: (input: DocxGenerateRequest) => Promise<DocxGenerateResult>;
 };
 
-type SerializedUseCase = typeof useCases.$inferSelect;
+type SerializedInitiative = typeof initiatives.$inferSelect;
 
-type LegacyUseCaseRow = SerializedUseCase & {
+type LegacyInitiativeRow = SerializedInitiative & {
   name?: string | null;
   description?: string | null;
   process?: string | null;
@@ -128,19 +128,19 @@ const parseJson = <T>(value: string | null | undefined): T | undefined => {
   }
 };
 
-function extractUseCaseData(row: SerializedUseCase): Partial<UseCaseData> {
-  let data: Partial<UseCaseData> = {};
+function extractInitiativeData(row: SerializedInitiative): Partial<InitiativeData> {
+  let data: Partial<InitiativeData> = {};
   try {
     if (row.data && typeof row.data === 'object') {
-      data = row.data as Partial<UseCaseData>;
+      data = row.data as Partial<InitiativeData>;
     } else if (typeof row.data === 'string') {
-      data = JSON.parse(row.data) as Partial<UseCaseData>;
+      data = JSON.parse(row.data) as Partial<InitiativeData>;
     }
   } catch {
     data = {};
   }
 
-  const legacyRow = row as LegacyUseCaseRow;
+  const legacyRow = row as LegacyInitiativeRow;
   if (!data.name && legacyRow.name) data.name = legacyRow.name;
   if (!data.description && legacyRow.description) data.description = legacyRow.description;
   if (!data.process && legacyRow.process) data.process = legacyRow.process;
@@ -188,14 +188,14 @@ function extractUseCaseData(row: SerializedUseCase): Partial<UseCaseData> {
   return data;
 }
 
-async function hydrateUseCase(row: SerializedUseCase): Promise<UseCase> {
+async function hydrateInitiative(row: SerializedInitiative): Promise<Initiative> {
   const [folder] = await db
     .select()
     .from(folders)
     .where(and(eq(folders.id, row.folderId), eq(folders.workspaceId, row.workspaceId)));
   const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
-  const data = extractUseCaseData(row);
-  const computedScores = calculateUseCaseScores(matrix, data as UseCaseData);
+  const data = extractInitiativeData(row);
+  const computedScores = calculateInitiativeScores(matrix, data as InitiativeData);
 
   return {
     id: row.id,
@@ -204,13 +204,13 @@ async function hydrateUseCase(row: SerializedUseCase): Promise<UseCase> {
     status: row.status ?? 'completed',
     model: row.model,
     createdAt: row.createdAt,
-    data: data as UseCaseData,
+    data: data as InitiativeData,
     totalValueScore: computedScores?.totalValueScore ?? null,
     totalComplexityScore: computedScores?.totalComplexityScore ?? null,
   };
 }
 
-async function hydrateUseCases(rows: SerializedUseCase[]): Promise<UseCase[]> {
+async function hydrateInitiatives(rows: SerializedInitiative[]): Promise<Initiative[]> {
   if (!rows.length) return [];
 
   const folderIds = [...new Set(rows.map((row) => row.folderId))];
@@ -228,8 +228,8 @@ async function hydrateUseCases(rows: SerializedUseCase[]): Promise<UseCase[]> {
   return rows.map((row) => {
     const folder = foldersMap.get(row.folderId);
     const matrix = parseMatrixConfig(folder?.matrixConfig ?? null);
-    const data = extractUseCaseData(row);
-    const computedScores = calculateUseCaseScores(matrix, data as UseCaseData);
+    const data = extractInitiativeData(row);
+    const computedScores = calculateInitiativeScores(matrix, data as InitiativeData);
 
     return {
       id: row.id,
@@ -238,10 +238,10 @@ async function hydrateUseCases(rows: SerializedUseCase[]): Promise<UseCase[]> {
       status: row.status ?? 'completed',
       model: row.model,
       createdAt: row.createdAt,
-      data: data as UseCaseData,
+      data: data as InitiativeData,
       totalValueScore: computedScores?.totalValueScore ?? null,
       totalComplexityScore: computedScores?.totalComplexityScore ?? null,
-    } satisfies UseCase;
+    } satisfies Initiative;
   });
 }
 
@@ -330,40 +330,40 @@ function parseExecutiveSummary(value: string | null): {
   }
 }
 
-async function generateUseCaseOnePage(
+async function generateInitiativeOnePage(
   input: DocxGenerateRequest
 ): Promise<DocxGenerateResult> {
-  const source = await loadUseCaseOnePageSource(input);
-  const buffer = await generateUseCaseDocx(source.useCase, source.matrix);
-  const nameSlug = slugify(source.useCase.data.name) || 'usecase';
+  const source = await loadInitiativeOnePageSource(input);
+  const buffer = await generateInitiativeDocx(source.initiative, source.matrix);
+  const nameSlug = slugify(source.initiative.data.name) || 'initiative';
 
   return {
     buffer,
     mimeType: DOCX_MIME,
-    fileName: `usecase-${source.useCase.id}-${nameSlug}.docx`,
+    fileName: `usecase-${source.initiative.id}-${nameSlug}.docx`,
   };
 }
 
-async function loadUseCaseOnePageSource(
+async function loadInitiativeOnePageSource(
   input: DocxGenerateRequest
-): Promise<UseCaseOnePageSource> {
+): Promise<InitiativeOnePageSource> {
   const [record] = await db
     .select()
-    .from(useCases)
-    .where(and(eq(useCases.id, input.entityId), eq(useCases.workspaceId, input.workspaceId)));
+    .from(initiatives)
+    .where(and(eq(initiatives.id, input.entityId), eq(initiatives.workspaceId, input.workspaceId)));
 
   if (!record) {
     throw new Error('not_found');
   }
 
-  const hydrated = await hydrateUseCase(record);
+  const hydrated = await hydrateInitiative(record);
   const [folder] = await db
     .select({ matrixConfig: folders.matrixConfig })
     .from(folders)
     .where(and(eq(folders.id, hydrated.folderId), eq(folders.workspaceId, input.workspaceId)));
 
   return {
-    useCase: hydrated,
+    initiative: hydrated,
     matrix: parseMatrixConfig(folder?.matrixConfig ?? null),
   };
 }
@@ -375,7 +375,7 @@ async function generateExecutiveSynthesis(
   const buffer = await generateExecutiveSynthesisDocx({
     folderName: source.folderName,
     executiveSummary: source.executiveSummary,
-    useCases: source.useCases,
+    initiatives: source.initiatives,
     matrix: source.matrix,
     provided: input.provided ?? {},
     controls: input.controls ?? {},
@@ -411,25 +411,25 @@ async function loadExecutiveSynthesisSource(
 
   const rows = await db
     .select()
-    .from(useCases)
-    .where(and(eq(useCases.folderId, folder.id), eq(useCases.workspaceId, input.workspaceId)))
-    .orderBy(asc(useCases.createdAt));
+    .from(initiatives)
+    .where(and(eq(initiatives.folderId, folder.id), eq(initiatives.workspaceId, input.workspaceId)))
+    .orderBy(asc(initiatives.createdAt));
 
-  const hydratedUseCases = await hydrateUseCases(rows);
+  const hydratedInitiatives = await hydrateInitiatives(rows);
   const matrix = parseMatrixConfig(folder.matrixConfig ?? null);
 
   return {
     folderName: folder.name,
     executiveSummary: parseExecutiveSummary(folder.executiveSummary ?? null),
-    useCases: hydratedUseCases,
+    initiatives: hydratedInitiatives,
     matrix,
   };
 }
 
 const registry: Record<DocxTemplateId, RegistryEntry> = {
   'usecase-onepage': {
-    entityType: 'usecase',
-    generate: generateUseCaseOnePage,
+    entityType: 'initiative',
+    generate: generateInitiativeOnePage,
   },
   'executive-synthesis-multipage': {
     entityType: 'folder',
@@ -475,7 +475,7 @@ export async function computeDocxSourceHash(
   const templateFingerprint = await computeTemplateFingerprint(input.templateId);
 
   if (input.templateId === 'usecase-onepage') {
-    const source = await loadUseCaseOnePageSource(input);
+    const source = await loadInitiativeOnePageSource(input);
     return hashDocxSnapshot({
       templateId: input.templateId,
       templateFingerprint,

@@ -2,11 +2,11 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db } from '../../db/client';
-import { useCases, folders } from '../../db/schema';
+import { initiatives, folders } from '../../db/schema';
 import { and, eq } from 'drizzle-orm';
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
-import { hydrateUseCases } from './use-cases';
+import { hydrateInitiatives } from './initiatives';
 import { requireEditor } from '../../middleware/rbac';
 import { resolveLocaleFromHeaders } from '../../utils/locale';
 
@@ -28,9 +28,9 @@ analyticsRouter.get('/summary', async (c) => {
 
   const rows = await db
     .select()
-    .from(useCases)
-    .where(and(eq(useCases.workspaceId, workspaceId), eq(useCases.folderId, folderId)));
-  const items = await hydrateUseCases(rows);
+    .from(initiatives)
+    .where(and(eq(initiatives.workspaceId, workspaceId), eq(initiatives.folderId, folderId)));
+  const items = await hydrateInitiatives(rows);
   const totals = items.reduce(
     (acc, item) => {
       acc.total += 1;
@@ -63,9 +63,9 @@ analyticsRouter.get('/scatter', async (c) => {
 
   const rows = await db
     .select()
-    .from(useCases)
-    .where(and(eq(useCases.workspaceId, workspaceId), eq(useCases.folderId, folderId)));
-  const items = await hydrateUseCases(rows);
+    .from(initiatives)
+    .where(and(eq(initiatives.workspaceId, workspaceId), eq(initiatives.folderId, folderId)));
+  const items = await hydrateInitiatives(rows);
   const mapped = items.map((item) => ({
     id: item.id,
     name: item.data.name,

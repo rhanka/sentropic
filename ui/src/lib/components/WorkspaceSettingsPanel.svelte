@@ -10,11 +10,9 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import FileMenu from '$lib/components/FileMenu.svelte';
   import ImportExportDialog from '$lib/components/ImportExportDialog.svelte';
-  import { Check, Eye, EyeOff, Trash2, X } from '@lucide/svelte';
+  import { Check, Eye, EyeOff, Trash2 } from '@lucide/svelte';
+  import WorkspaceCreateDialog from '$lib/components/WorkspaceCreateDialog.svelte';
 
-  let creatingWorkspace = false;
-  let newWorkspaceName = '';
-  let newWorkspaceInputRef: HTMLInputElement | null = null;
   let showWorkspaceExportDialog = false;
   let showWorkspaceImportDialog = false;
   let showWorkspaceCreateDialog = false;
@@ -102,24 +100,6 @@
       if (membersReloadTimer) clearTimeout(membersReloadTimer);
     };
   });
-
-  async function createWorkspace() {
-    const name = newWorkspaceName.trim();
-    if (!name) return;
-    creatingWorkspace = true;
-    try {
-      const res = await apiPost<{ id: string }>('/workspaces', { name });
-      addToast({ type: 'success', message: t('workspaceSettings.toasts.created') });
-      newWorkspaceName = '';
-      await loadUserWorkspaces();
-      if (res?.id) setWorkspaceScope(res.id);
-      showWorkspaceCreateDialog = false;
-    } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? t('workspaceSettings.errors.create') });
-    } finally {
-      creatingWorkspace = false;
-    }
-  }
 
   async function hideWorkspace(id: string) {
     try {
@@ -476,50 +456,6 @@
     on:imported={handleImportComplete}
   />
 
-  {#if showWorkspaceCreateDialog}
-    <div class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg max-w-md w-full mx-4">
-        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h3 class="text-lg font-semibold">{$_('workspaceSettings.createDialog.title')}</h3>
-          <button
-            class="text-slate-400 hover:text-slate-600"
-            aria-label={$_('common.close')}
-            type="button"
-            on:click={() => (showWorkspaceCreateDialog = false)}
-          >
-            <X class="w-5 h-5" />
-          </button>
-        </div>
-        <div class="px-5 py-4 space-y-4">
-          <label class="block text-sm">
-            <div class="text-slate-600">{$_('workspaceSettings.createDialog.nameLabel')}</div>
-            <input
-              class="mt-1 w-full rounded border border-slate-200 px-3 py-2"
-              placeholder={$_('workspaceSettings.createDialog.namePlaceholder')}
-              bind:value={newWorkspaceName}
-              bind:this={newWorkspaceInputRef}
-            />
-          </label>
-        </div>
-        <div class="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
-          <button
-            class="px-3 py-2 rounded border border-slate-200 text-slate-700 hover:bg-slate-50"
-            type="button"
-            on:click={() => (showWorkspaceCreateDialog = false)}
-          >
-            {$_('common.cancel')}
-          </button>
-          <button
-            class="px-3 py-2 rounded bg-primary text-white disabled:opacity-50"
-            type="button"
-            on:click={createWorkspace}
-            disabled={creatingWorkspace || !newWorkspaceName.trim()}
-          >
-            {$_('common.create')}
-          </button>
-        </div>
-      </div>
-    </div>
-  {/if}
+  <WorkspaceCreateDialog bind:open={showWorkspaceCreateDialog} />
 
   </div>

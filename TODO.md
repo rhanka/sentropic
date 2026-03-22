@@ -192,15 +192,13 @@ Roadmap specifications:
   - [x] Deliver provider abstraction + model catalog and runtime routing with at least 2 providers (`OpenAI`, `Google/Gemini`).
   - [x] Support global and per-user BYOK precedence rules.
   - [x] Consolidate delivered behavior into `spec/SPEC_CHATBOT.md` and keep only remaining deltas in `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`.
-- [ ] **BR-02** `feat/sso-chatgpt`
-  - [ ] Deliver OpenAI/ChatGPT SSO for admin and standard users.
-- [ ] **BR-03** `feat/todo-steering-workflow-core`
-  - [ ] Deliver TODO management v1 (plan/checkpoints/status) + steering mode v1.
-  - [ ] Deliver base workflow/autonomous agent orchestration with human approval points.
-- [ ] **BR-04** `feat/workspace-template-catalog`
-  - [ ] Deliver workspace multi-template foundation (`ai-ideas`, `todo`) with template-scoped workflow metadata.
-- [ ] **BR-05** `feat/vscode-plugin-v1`
-  - [ ] Deliver VSCode plugin v1 (`plan`, `tools`, `summary`, `checkpoint`).
+- [x] **BR-02** `feat/sso-chatgpt` — done (product pivot, docs/process only).
+- [x] **BR-03** `feat/todo-steering-workflow-core` — done, merged.
+  - [x] Delivered TODO management v1, steering mode v1, workflow core (14 new tables, 19+ endpoints).
+- [ ] **BR-04** `feat/workspace-template-catalog` — **active** (scope expanded).
+  - [ ] Deliver workspace type system (neutral, ai-ideas, opportunity, code), initiative lifecycle with maturity gates, extended objects (solutions, products, bids), multi-workflow registry, template-driven artifact production. ~400 commits, 4 segments. See `BRANCH.md` and `spec/SPEC_EVOL_WORKSPACE_TYPES.md`.
+- [x] **BR-05** `feat/vscode-plugin-v1` — done, merged.
+  - [x] Delivered VSCode plugin v1 (plan, tools, summary, checkpoint, Codex sign-in).
 - [ ] **BR-06** `feat/chrome-upstream-v1`
   - [ ] Deliver upstream chrome control foundation (remote control + upstream sync, single-tab baseline).
 - [ ] **BR-07** `feat/release-ui-npm-and-pretest`
@@ -209,8 +207,9 @@ Roadmap specifications:
 
 #### Week 2 target (deadline: 2026-03-08)
 
-- [ ] **BR-08** `feat/model-runtime-claude-mistral`
-  - [ ] Expand to 4 target model families (`OpenAI`, `Gemini`, `Claude`, `Mistral`).
+- [ ] **BR-08** `feat/model-runtime-claude-mistral-cohere`
+  - [ ] Expand to 5 target model families (`OpenAI`, `Gemini`, `Claude`, `Mistral`, `Cohere`).
+  - [ ] Cohere embeddings capability as prerequisite for RAG (BR-17).
 - [ ] **BR-09** `feat/sso-google`
   - [ ] Deliver Google SSO for admin and standard users.
 - [ ] **BR-10** `feat/vscode-plugin-v2-multi-agent`
@@ -219,6 +218,20 @@ Roadmap specifications:
   - [ ] Deliver multi-tab upstream and voice controls.
 - [ ] **BR-12** `feat/release-chrome-vscode-ci-publish`
   - [ ] Publish Chrome plugin and VSCode plugin automatically from CI.
+- [ ] **BR-14** `feat/chat-modularization`
+  - [ ] Decompose ChatPanel.svelte (59K) and ChatWidget.svelte (37K) into modular sub-components.
+  - [ ] Enable parallel development on chat-related branches without merge conflicts.
+  - [ ] Low BR-04 dependency — parallelizable on non-overlapping files.
+- [ ] **BR-16** `feat/document-connectors`
+  - [ ] Add connector abstraction for Google Workspace (Drive, Docs, Sheets) and SharePoint/OneDrive.
+  - [ ] Extend `contextDocuments` model with `connector_type`, `external_ref`, `sync_status`.
+  - [ ] Impact on chat `documents` tool — connected docs accessible same as local.
+  - [ ] Low BR-04 dependency (initiative rename in contextType).
+- [ ] **BR-17** `feat/rag-documents`
+  - [ ] Implement Retrieval-Augmented Generation on document folders.
+  - [ ] Document chunking + vector embeddings (pgvector).
+  - [ ] Semantic search mode for `documents` tool in chat.
+  - [ ] Depends on BR-16 (optional, works with local docs) + BR-08 (Cohere embeddings).
 
 #### Branch closure rules for this roadmap
 

@@ -15,7 +15,7 @@ describe('workflow placeholder extraction', () => {
 
   it('extracts placeholders recursively from section payload', () => {
     const section = extractWorkflowSectionPlaceholders('task.prompt', {
-      title: 'Generate {{usecase_name}}',
+      title: 'Generate {{initiative_name}}',
       body: ['Target {{organization_name}}', { note: 'Matrix {{matrix_id}}' }],
       metadata: {
         untouched: 12,
@@ -23,7 +23,7 @@ describe('workflow placeholder extraction', () => {
     });
 
     expect(section.sectionKey).toBe('task.prompt');
-    expect(section.placeholders).toEqual(['usecase_name', 'organization_name', 'matrix_id']);
+    expect(section.placeholders).toEqual(['initiative_name', 'organization_name', 'matrix_id']);
   });
 
   it('extracts section-scoped placeholders for save/update flow', () => {
@@ -35,7 +35,7 @@ describe('workflow placeholder extraction', () => {
       {
         sectionKey: 'task.summary',
         value: {
-          prompt: 'Summarize {{usecase_name}} for {{folder_name}}',
+          prompt: 'Summarize {{initiative_name}} for {{folder_name}}',
         },
       },
       {
@@ -51,7 +51,7 @@ describe('workflow placeholder extraction', () => {
       },
       {
         sectionKey: 'task.summary',
-        placeholders: ['usecase_name', 'folder_name'],
+        placeholders: ['initiative_name', 'folder_name'],
       },
       {
         sectionKey: 'task.no_placeholders',

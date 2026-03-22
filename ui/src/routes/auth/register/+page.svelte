@@ -212,7 +212,7 @@
       success = get(_)('auth.register.success.redirecting');
 
       setTimeout(() => {
-        goto('/home');
+        goto('/neutral');
       }, 2000);
     } catch (err: any) {
       error = getWebAuthnErrorMessage(err);

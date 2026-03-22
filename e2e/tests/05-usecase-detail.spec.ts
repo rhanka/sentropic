@@ -4,7 +4,7 @@ import { runLockBreaksOnLeaveScenario } from '../helpers/lock-scenarios';
 import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Détail des cas d\'usage', () => {
-  const FILE_TAG = 'e2e:usecase-detail.spec.ts';
+  const FILE_TAG = 'e2e:initiative-detail.spec.ts';
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
@@ -66,7 +66,7 @@ test.describe('Détail des cas d\'usage', () => {
     const organizationId = String(orgJson?.id || '');
 
     const folderRes = await userAApi.post(`/api/v1/folders?workspace_id=${workspaceAId}`, {
-      data: { name: 'Dossier Test', description: 'Dossier pour tests usecase-detail', organizationId },
+      data: { name: 'Dossier Test', description: 'Dossier pour tests initiative-detail', organizationId },
     });
     if (!folderRes.ok()) throw new Error(`Impossible de créer dossier (status ${folderRes.status()})`);
     const folderJson = await folderRes.json().catch(() => null);
@@ -74,7 +74,7 @@ test.describe('Détail des cas d\'usage', () => {
     if (!folderId) throw new Error('folderId introuvable');
 
     // Créer un cas d'usage dans ce dossier
-    const useCaseRes = await userAApi.post(`/api/v1/use-cases?workspace_id=${workspaceAId}`, {
+    const useCaseRes = await userAApi.post(`/api/v1/initiatives?workspace_id=${workspaceAId}`, {
       data: { folderId, name: 'Cas d\'usage Test', problem: 'Problème test', solution: 'Solution test' },
     });
     if (!useCaseRes.ok()) throw new Error(`Impossible de créer cas d'usage (status ${useCaseRes.status()})`);
@@ -84,7 +84,7 @@ test.describe('Détail des cas d\'usage', () => {
     useCaseName = String(useCaseJson?.name || '');
 
     const lockName = `UC Lock ${Date.now()}`;
-    const createLockRes = await userAApi.post(`/api/v1/use-cases?workspace_id=${workspaceAId}`, {
+    const createLockRes = await userAApi.post(`/api/v1/initiatives?workspace_id=${workspaceAId}`, {
       data: { name: lockName, description: 'Use case lock test', folderId },
     });
     if (!createLockRes.ok()) throw new Error(`Impossible de créer un cas d'usage lock (status ${createLockRes.status()})`);
@@ -100,7 +100,7 @@ test.describe('Détail des cas d\'usage', () => {
 
   test('devrait afficher la page de détail d\'un cas d\'usage', async ({ page }) => {
     // D'abord aller à la liste des cas d'usage
-    await page.goto('/usecase');
+    await page.goto('/initiative');
     await page.waitForLoadState('domcontentloaded');
     
     // Chercher un cas d'usage cliquable
@@ -121,7 +121,7 @@ test.describe('Détail des cas d\'usage', () => {
         
         // Vérifier qu'on est sur une page de détail
         const currentUrl = page.url();
-        expect(currentUrl).toMatch(/\/usecase\/[a-zA-Z0-9-]+/);
+        expect(currentUrl).toMatch(/\/initiative\/[a-zA-Z0-9-]+/);
         
         // Vérifier les éléments de base de la page de détail
         await expect(page.locator('h1, h2')).toBeVisible();
@@ -132,7 +132,7 @@ test.describe('Détail des cas d\'usage', () => {
   test('devrait afficher les informations détaillées du cas d\'usage', async ({ page }) => {
     // Simuler l'accès direct à une page de détail (si on connaît un ID)
     // Pour ce test, on va d'abord naviguer depuis la liste
-    await page.goto('/usecase');
+    await page.goto('/initiative');
     await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
@@ -156,7 +156,7 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('devrait permettre de modifier un cas d\'usage', async ({ page }) => {
-    await page.goto('/usecase');
+    await page.goto('/initiative');
     await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
@@ -187,7 +187,7 @@ test.describe('Détail des cas d\'usage', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const page = await userAContext.newPage();
-    await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+    await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
 
     const chatButton = page.locator(
@@ -215,7 +215,7 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('devrait permettre de supprimer un cas d\'usage depuis la page de détail', async ({ page }) => {
-    await page.goto('/usecase');
+    await page.goto('/initiative');
     await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
@@ -243,7 +243,7 @@ test.describe('Détail des cas d\'usage', () => {
           
           // Vérifier qu'on est redirigé vers la liste
           await page.waitForLoadState('domcontentloaded');
-          await expect(page).toHaveURL('/usecase');
+          await expect(page).toHaveURL('/initiative');
         }
       }
     }
@@ -254,7 +254,7 @@ test.describe('Détail des cas d\'usage', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const page = await userAContext.newPage();
-    await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+    await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
 
     const descriptionSection = page.locator('[data-comment-section="description"]');
@@ -321,7 +321,7 @@ test.describe('Détail des cas d\'usage', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const page = await userAContext.newPage();
-    await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+    await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
 
     const actionsButton = page.locator('button[aria-label="Actions"]');
@@ -332,7 +332,7 @@ test.describe('Détail des cas d\'usage', () => {
     await expect(exportAction).toBeVisible();
     await exportAction.click();
 
-    const exportDialog = page.locator('h3:has-text("Exporter le cas d\'usage")');
+    const exportDialog = page.locator('h3:has-text("Exporter l\'initiative")');
     await expect(exportDialog).toBeVisible({ timeout: 10_000 });
 
     const [download] = await Promise.all([
@@ -344,7 +344,7 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('devrait afficher les scores de valeur et complexité en détail', async ({ page }) => {
-    await page.goto('/usecase');
+    await page.goto('/initiative');
     await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
@@ -370,7 +370,7 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('devrait afficher les sections Problème et Solution', async ({ page }) => {
-    await page.goto('/usecase');
+    await page.goto('/initiative');
     await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
@@ -420,7 +420,7 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('devrait permettre d\'éditer problem et solution', async ({ page }) => {
-    await page.goto('/usecase');
+    await page.goto('/initiative');
     await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
@@ -497,7 +497,7 @@ test.describe('Détail des cas d\'usage', () => {
   });
 
   test('devrait gérer les cas d\'usage en cours de génération', async ({ page }) => {
-    await page.goto('/usecase');
+    await page.goto('/initiative');
     await page.waitForLoadState('domcontentloaded');
     
     const generatingCards = page.locator('article.opacity-60.cursor-not-allowed');
@@ -509,12 +509,12 @@ test.describe('Détail des cas d\'usage', () => {
       await firstGeneratingCard.click();
       
       // Vérifier qu'on reste sur la page de liste (pas de redirection)
-      await expect(page).toHaveURL('/usecase');
+      await expect(page).toHaveURL('/initiative');
     }
   });
 
   test('devrait afficher le contenu du cas d\'usage en mode impression (une seule page)', async ({ page }) => {
-    await page.goto('/usecase');
+    await page.goto('/initiative');
     await page.waitForLoadState('domcontentloaded');
     
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
@@ -579,12 +579,12 @@ test.describe('Détail des cas d\'usage', () => {
     await pageA.addInitScript(setScope('workspaceScopeId'), workspaceAId);
     await pageB.addInitScript(setScope('workspaceScopeId'), workspaceAId);
 
-    await pageA.goto(`/usecase/${encodeURIComponent(lockUseCaseId)}`);
+    await pageA.goto(`/initiative/${encodeURIComponent(lockUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
     const waitForUseCaseViewA = async () => {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const response = await pageA
-          .waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 })
+          .waitForResponse((res) => res.url().includes(`/api/v1/initiatives/${lockUseCaseId}`), { timeout: 10_000 })
           .catch(() => null);
         if (response && [401, 403, 404].includes(response.status())) {
           await pageA.evaluate((id) => {
@@ -627,12 +627,12 @@ test.describe('Détail des cas d\'usage', () => {
     ).catch(() => {});
     await waitForNoLocker(pageA);
 
-    await pageB.goto(`/usecase/${encodeURIComponent(lockUseCaseId)}`);
+    await pageB.goto(`/initiative/${encodeURIComponent(lockUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
     const waitForUseCaseView = async () => {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const response = await pageB
-          .waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 })
+          .waitForResponse((res) => res.url().includes(`/api/v1/initiatives/${lockUseCaseId}`), { timeout: 10_000 })
           .catch(() => null);
         if (response && [401, 403, 404].includes(response.status())) {
           await pageB.evaluate((id) => {
@@ -703,9 +703,9 @@ test.describe('Détail des cas d\'usage', () => {
 
     // workspaceScopeId hydrated via storageState
 
-    await pageA.goto(`/usecase/${encodeURIComponent(lockUseCaseId)}`);
+    await pageA.goto(`/initiative/${encodeURIComponent(lockUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
-    await pageA.waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
+    await pageA.waitForResponse((res) => res.url().includes(`/api/v1/initiatives/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
 
     const editableFieldA = getUseCaseNameField(pageA);
@@ -716,9 +716,9 @@ test.describe('Détail des cas d\'usage', () => {
       .catch(() => {});
     await waitForNoLocker(pageA);
 
-    await pageB.goto(`/usecase/${encodeURIComponent(lockUseCaseId)}`);
+    await pageB.goto(`/initiative/${encodeURIComponent(lockUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
-    await pageB.waitForResponse((res) => res.url().includes(`/api/v1/use-cases/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
+    await pageB.waitForResponse((res) => res.url().includes(`/api/v1/initiatives/${lockUseCaseId}`), { timeout: 10_000 }).catch(() => {});
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     await pageB.waitForResponse((res) => res.url().includes('/api/v1/locks/presence'), { timeout: 10_000 }).catch(() => {});
 
@@ -769,7 +769,7 @@ test.describe('Détail des cas d\'usage', () => {
     await runLockBreaksOnLeaveScenario({
       pageA,
       pageB,
-      url: `/usecase/${encodeURIComponent(lockUseCaseId)}`,
+      url: `/initiative/${encodeURIComponent(lockUseCaseId)}`,
       getEditableField: getUseCaseNameField,
       expectBadgeOnArrival: true,
       expectBadgeGoneAfterLeave: true,
@@ -802,7 +802,7 @@ test.describe('Détail des cas d\'usage', () => {
     // workspaceScopeId hydrated via storageState
 
     const testName = `UC Lock 3 users ${Date.now()}`;
-    const createRes = await userAApi.post(`/api/v1/use-cases?workspace_id=${workspaceAId}`, {
+    const createRes = await userAApi.post(`/api/v1/initiatives?workspace_id=${workspaceAId}`, {
       data: { name: testName, description: 'Use case lock 3 users', folderId },
     });
     if (!createRes.ok()) throw new Error(`Impossible de créer le cas d'usage (status ${createRes.status()})`);
@@ -810,7 +810,7 @@ test.describe('Détail des cas d\'usage', () => {
     const testUseCaseId = String((created as any)?.id ?? '');
     if (!testUseCaseId) throw new Error('testUseCaseId introuvable');
 
-    await pageA.goto(`/usecase/${encodeURIComponent(testUseCaseId)}`);
+    await pageA.goto(`/initiative/${encodeURIComponent(testUseCaseId)}`);
     await pageA.waitForLoadState('domcontentloaded');
     await pageA.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     const editableFieldA = pageA.locator('h1 textarea, h1 input').first();
@@ -818,7 +818,7 @@ test.describe('Détail des cas d\'usage', () => {
     await editableFieldA.click();
     await waitForNoLocker(pageA);
 
-    await pageB.goto(`/usecase/${encodeURIComponent(testUseCaseId)}`);
+    await pageB.goto(`/initiative/${encodeURIComponent(testUseCaseId)}`);
     await pageB.waitForLoadState('domcontentloaded');
     await pageB.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     await waitForLockedByOther(pageB);
@@ -837,7 +837,7 @@ test.describe('Détail des cas d\'usage', () => {
       .toBe(1);
     const releaseLabelBefore = (await releaseButton.getAttribute('aria-label')) || '';
 
-    await pageC.goto(`/usecase/${encodeURIComponent(testUseCaseId)}`);
+    await pageC.goto(`/initiative/${encodeURIComponent(testUseCaseId)}`);
     await pageC.waitForLoadState('domcontentloaded');
     await pageC.waitForRequest((req) => req.url().includes('/streams/sse'), { timeout: 5000 }).catch(() => {});
     await waitForLockedByOther(pageC);

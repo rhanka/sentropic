@@ -8,7 +8,7 @@ setupDebugBuffer();
 // Ces flows dépendent de l'IA + jobs async; ça peut être lent.
 test.setTimeout(8 * 60_000);
 
-test.describe.serial('Génération IA', () => {
+test.describe('Génération IA', () => {
   // Ces tests sont coûteux (jobs async, appels externes mockés/ratelimités). Les retries globales (retries: 2)
   // triplent inutilement la durée et masquent les flakys. On les désactive pour ce fichier.
   test.describe.configure({ retries: 0 });

@@ -540,11 +540,6 @@
     </div>
   {/if}
 
-  <div class="rounded border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
-    <div class="font-medium">{$_('settings.runtime.scopeBoundary.title')}</div>
-    <p class="mt-1">{$_('settings.runtime.scopeBoundary.description')}</p>
-  </div>
-
   {#if isLoading}
     <p class="text-sm text-slate-600">{$_('settings.runtime.loading')}</p>
   {:else}

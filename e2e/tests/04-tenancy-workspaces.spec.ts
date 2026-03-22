@@ -8,7 +8,7 @@ const WORKSPACE_A_ID = 'e2e-ws-a';
 const WORKSPACE_B_ID = 'e2e-ws-b';
 
 
-test.describe.serial('Tenancy / cloisonnement workspace', () => {
+test.describe('Tenancy / cloisonnement workspace', () => {
 
   test.describe('Workspace A', () => {
     test('ne devrait pas voir les données du workspace B', async ({ browser }) => {
@@ -154,7 +154,7 @@ test.describe.serial('Tenancy / cloisonnement workspace', () => {
     const pageB = await wsBContext.newPage();
 
     const openMentionMenu = async (page: typeof pageA, useCaseId: string) => {
-      await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+      await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
       await page.waitForLoadState('domcontentloaded');
 
       const section = page.locator('[data-comment-section="description"]');

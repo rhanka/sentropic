@@ -192,7 +192,7 @@ describe('Security Headers Tests', () => {
       const endpoints = [
         () => authenticatedRequest(app, 'GET', '/api/v1/organizations', user.sessionToken),
         () => authenticatedRequest(app, 'GET', '/api/v1/folders', user.sessionToken),
-        () => authenticatedRequest(app, 'GET', '/api/v1/useCases', user.sessionToken),
+        () => authenticatedRequest(app, 'GET', '/api/v1/initiatives', user.sessionToken),
         () => authenticatedRequest(app, 'GET', '/api/v1/settings', user.sessionToken),
         () => unauthenticatedRequest(app, 'GET', '/api/v1/health')
       ];

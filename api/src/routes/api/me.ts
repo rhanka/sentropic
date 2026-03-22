@@ -11,7 +11,7 @@ import {
   emailVerificationCodes,
   folders,
   magicLinks,
-  useCases,
+  initiatives,
   userSessions,
   users,
   webauthnChallenges,
@@ -218,20 +218,20 @@ meRouter.delete('/', async (c) => {
       .select({ id: folders.id })
       .from(folders)
       .where(eq(folders.workspaceId, workspaceId));
-    const useCaseRows = await tx
-      .select({ id: useCases.id })
-      .from(useCases)
-      .where(eq(useCases.workspaceId, workspaceId));
+    const initiativeRows = await tx
+      .select({ id: initiatives.id })
+      .from(initiatives)
+      .where(eq(initiatives.workspaceId, workspaceId));
 
     const organizationIds = organizationRows.map((r) => r.id);
     const folderIds = folderRows.map((r) => r.id);
-    const useCaseIds = useCaseRows.map((r) => r.id);
+    const initiativeIds = initiativeRows.map((r) => r.id);
 
-    // Stream events for structured generations (organization_/folder_/usecase_)
+    // Stream events for structured generations (organization_/folder_/initiative_)
     const streamIds: string[] = [];
     for (const id of organizationIds) streamIds.push(`organization_${id}`);
     for (const id of folderIds) streamIds.push(`folder_${id}`);
-    for (const id of useCaseIds) streamIds.push(`usecase_${id}`);
+    for (const id of initiativeIds) streamIds.push(`initiative_${id}`);
     if (streamIds.length) {
       await tx.delete(chatStreamEvents).where(inArray(chatStreamEvents.streamId, streamIds));
     }
@@ -252,14 +252,14 @@ meRouter.delete('/', async (c) => {
         .delete(contextModificationHistory)
         .where(and(eq(contextModificationHistory.contextType, 'folder'), inArray(contextModificationHistory.contextId, folderIds)));
     }
-    if (useCaseIds.length) {
+    if (initiativeIds.length) {
       await tx
         .delete(contextModificationHistory)
-        .where(and(eq(contextModificationHistory.contextType, 'usecase'), inArray(contextModificationHistory.contextId, useCaseIds)));
+        .where(and(eq(contextModificationHistory.contextType, 'initiative'), inArray(contextModificationHistory.contextId, initiativeIds)));
     }
 
     // Delete business objects (workspace scoped)
-    await tx.delete(useCases).where(eq(useCases.workspaceId, workspaceId));
+    await tx.delete(initiatives).where(eq(initiatives.workspaceId, workspaceId));
     await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
 

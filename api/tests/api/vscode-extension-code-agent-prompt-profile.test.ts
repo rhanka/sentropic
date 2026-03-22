@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { app } from '../../src/app';
-import { defaultPrompts } from '../../src/config/default-prompts';
+import { LEGACY_PROMPT_CATALOG } from '../../src/config/default-chat-system';
 import { db } from '../../src/db/client';
 import {
   authenticatedRequest,
@@ -40,7 +40,7 @@ describe('VSCode extension code-agent prompt profile API', () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     const expectedPrompt =
-      defaultPrompts.find((prompt) => prompt.id === 'chat_code_agent')?.content?.trim() || '';
+      LEGACY_PROMPT_CATALOG.find((prompt) => prompt.id === 'chat_code_agent')?.content?.trim() || '';
 
     expect(payload).toEqual({
       promptId: 'chat_code_agent',

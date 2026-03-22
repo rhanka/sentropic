@@ -1,6 +1,6 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from '$lib/utils/api';
 
-export type CommentContextType = 'organization' | 'folder' | 'usecase' | 'matrix' | 'executive_summary';
+export type CommentContextType = 'organization' | 'folder' | 'initiative' | 'matrix' | 'executive_summary';
 export type CommentStatus = 'open' | 'closed';
 
 export type CommentUser = {

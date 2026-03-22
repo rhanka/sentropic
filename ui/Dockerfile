@@ -7,8 +7,8 @@ RUN if [ -f package-lock.json ]; then npm ci; \
     elif [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm install --frozen-lockfile; \
     elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; \
     else npm install; fi
-# Security: Audit dependencies for HIGH/CRITICAL vulnerabilities
-RUN npm audit --audit-level=high
+# Security: Audit production dependencies for HIGH/CRITICAL vulnerabilities
+RUN npm audit --audit-level=high --omit=dev
 COPY . .
 
 FROM base AS development

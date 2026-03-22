@@ -7,18 +7,28 @@ import {
   chatSessions,
   contextDocuments,
   jobQueue,
-  useCases,
+  initiatives,
   folders,
   organizations,
   users,
   workspaceMemberships,
-  workspaces
+  workspaces,
+  workflowDefinitionTasks,
+  workflowDefinitions,
+  agentDefinitions,
+  workspaceTypeWorkflows,
+  executionRuns,
+  executionEvents,
+  entityLinks,
+  guardrails,
 } from '../../db/schema';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { requireEditor } from '../../middleware/rbac';
 import { createId } from '../../utils/id';
-import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess } from '../../services/workspace-access';
+import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeutralWorkspace } from '../../services/workspace-access';
 import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
+import { getDefaultGateConfig } from '../../services/gate-service';
+import { todoOrchestrationService } from '../../services/todo-orchestration';
 
 export const workspacesRouter = new Hono();
 
@@ -62,23 +72,38 @@ workspacesRouter.get('/', async (c) => {
   return c.json({ items });
 });
 
+const workspaceTypeSchema = z.enum(['neutral', 'ai-ideas', 'opportunity', 'code']);
+export type WorkspaceType = z.infer<typeof workspaceTypeSchema>;
+
 const createWorkspaceSchema = z.object({
   name: z.string().min(1).max(128),
+  type: workspaceTypeSchema.default('ai-ideas'),
 });
 
 // Create workspace: creator becomes admin member
 workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSchema), async (c) => {
   const user = c.get('user') as { userId: string; role: string };
 
-  const { name } = c.req.valid('json');
+  const { name, type } = c.req.valid('json');
+
+  // Neutral workspaces are auto-created on registration; users cannot manually create them.
+  if (type === 'neutral') {
+    return c.json({ error: 'Neutral workspaces cannot be created manually' }, 400);
+  }
+
   const id = createId();
   const now = new Date();
+
+  // Seed default gate config for this workspace type (§6.3)
+  const defaultGateConfig = getDefaultGateConfig(type as import('../../services/workspace-access').WorkspaceType);
 
   await db.transaction(async (tx) => {
     await tx.insert(workspaces).values({
       id,
       ownerUserId: user.userId,
       name,
+      type,
+      gateConfig: defaultGateConfig ?? undefined,
       createdAt: now,
       updatedAt: now,
     });
@@ -91,6 +116,17 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
     });
   });
 
+  // Seed default workflows and agents for this workspace type (§7.6, §8.1)
+  try {
+    await todoOrchestrationService.seedWorkflowsForType(
+      { userId: user.userId, role: user.role, workspaceId: id },
+      type,
+    );
+  } catch (seedErr) {
+    console.error('Failed to seed workflows for workspace type', type, seedErr);
+    // Non-fatal: workspace is created, seeding can be retried
+  }
+
   await notifyWorkspaceEvent(id, { action: 'created' });
   await notifyWorkspaceMembershipEvent(id, user.userId, { action: 'added', role: 'admin' });
 
@@ -100,25 +136,70 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
 // Update workspace metadata (admin-only)
 const updateWorkspaceSchema = z.object({
   name: z.string().min(1).max(128),
+  type: z.string().optional(),
 });
 
 workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSchema), async (c) => {
   const user = c.get('user') as { userId: string; role: string };
 
   const workspaceId = c.req.param('id')!;
+
+  // Workspace type is immutable after creation.
+  const { name, type } = c.req.valid('json');
+  if (type !== undefined) {
+    return c.json({ error: 'Workspace type cannot be changed after creation' }, 400);
+  }
+
   try {
     await requireWorkspaceAdmin(user.userId, workspaceId);
   } catch {
     return c.json({ error: 'Insufficient permissions' }, 403);
   }
-
-  const { name } = c.req.valid('json');
   const now = new Date();
   const [ws] = await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, workspaceId)).limit(1);
   if (!ws) return c.json({ message: 'Not found' }, 404);
   await db.update(workspaces).set({ name, updatedAt: now }).where(eq(workspaces.id, workspaceId));
   await notifyWorkspaceEvent(workspaceId, { action: 'renamed' });
   return c.json({ success: true });
+});
+
+// Update gate_config for a workspace (admin-only)
+const gateConfigSchema = z.object({
+  mode: z.enum(['free', 'soft', 'hard']),
+  stages: z.array(z.string()),
+  criteria: z.record(z.object({
+    required_fields: z.array(z.string()),
+    guardrail_categories: z.array(z.string()),
+  })).optional(),
+});
+
+workspacesRouter.patch('/:id/gate-config', requireEditor, zValidator('json', gateConfigSchema), async (c) => {
+  const user = c.get('user') as { userId: string; role: string };
+  const workspaceId = c.req.param('id')!;
+
+  try {
+    await requireWorkspaceAdmin(user.userId, workspaceId);
+  } catch {
+    return c.json({ error: 'Insufficient permissions' }, 403);
+  }
+
+  const [ws] = await db
+    .select({ id: workspaces.id, type: workspaces.type })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1);
+  if (!ws) return c.json({ message: 'Not found' }, 404);
+
+  // Neutral workspaces do not support gate config
+  if (ws.type === 'neutral') {
+    return c.json({ error: 'Neutral workspaces do not support gate configuration' }, 400);
+  }
+
+  const gateConfig = c.req.valid('json');
+  const now = new Date();
+  await db.update(workspaces).set({ gateConfig, updatedAt: now }).where(eq(workspaces.id, workspaceId));
+  await notifyWorkspaceEvent(workspaceId, { action: 'gate_config_updated' });
+  return c.json({ success: true, gate_config: gateConfig });
 });
 
 // --- Hide / Unhide / Delete (admin-only) ---
@@ -194,12 +275,27 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
     // Jobs (history references are set null)
     await tx.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
 
+    // BR-04 tables: execution events/runs, entity links, guardrails
+    await tx.delete(executionEvents).where(eq(executionEvents.workspaceId, workspaceId));
+    await tx.delete(executionRuns).where(eq(executionRuns.workspaceId, workspaceId));
+    await tx.delete(entityLinks).where(eq(entityLinks.workspaceId, workspaceId));
+    await tx.delete(guardrails).where(eq(guardrails.workspaceId, workspaceId));
+
+    // BR-04 tables: workflow tasks → workflow definitions → workspace type workflows, agent definitions
+    const wfIds = (await tx.select({ id: workflowDefinitions.id }).from(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, workspaceId))).map(r => r.id);
+    if (wfIds.length > 0) {
+      await tx.delete(workflowDefinitionTasks).where(inArray(workflowDefinitionTasks.workflowDefinitionId, wfIds));
+      await tx.delete(workspaceTypeWorkflows).where(inArray(workspaceTypeWorkflows.workflowDefinitionId, wfIds));
+    }
+    await tx.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, workspaceId));
+    await tx.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, workspaceId));
+
     // Core business tables
-    await tx.delete(useCases).where(eq(useCases.workspaceId, workspaceId));
+    await tx.delete(initiatives).where(eq(initiatives.workspaceId, workspaceId));
     await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
 
-    // Memberships (FK cascade also applies, but explicit is fine)
+    // Memberships
     await tx.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
 
     // Finally delete workspace
@@ -267,6 +363,12 @@ workspacesRouter.post('/:id/members', requireEditor, zValidator('json', addMembe
   const actor = c.get('user') as { userId: string; role: string };
 
   const workspaceId = c.req.param('id')!;
+
+  // Neutral workspaces are personal and non-delegable.
+  if (await isNeutralWorkspace(workspaceId)) {
+    return c.json({ error: 'Neutral workspaces do not support memberships' }, 400);
+  }
+
   try {
     await requireWorkspaceAdmin(actor.userId, workspaceId);
   } catch {

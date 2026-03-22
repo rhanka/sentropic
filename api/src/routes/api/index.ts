@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { organizationsRouter } from './organizations';
 import { foldersRouter } from './folders';
-import { useCasesRouter } from './use-cases';
+import { initiativesRouter } from './initiatives';
 import { healthRouter } from './health';
 import { settingsRouter } from './settings';
 import { businessConfigRouter } from './business-config';
@@ -16,18 +16,22 @@ import queueRouter from './queue';
 import aiSettingsRouter from './ai-settings';
 import { modelsRouter } from './models';
 import { workspacesRouter } from './workspaces';
+import { neutralRouter } from './neutral';
 import { plansRouter } from './plans';
 import { todosRouter } from './todos';
 import { tasksRouter } from './tasks';
 import { runsRouter } from './runs';
 import { agentConfigRouter } from './agent-config';
-import { workflowConfigRouter } from './workflow-config';
+import { workflowConfigRouter, workspaceTypeWorkflowsRouter } from './workflow-config';
 import { locksRouter } from './locks';
 import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
 import { chromeExtensionRouter } from './chrome-extension';
 import { vscodeExtensionRouter } from './vscode-extension';
+import { solutionsRouter } from './solutions';
+import { productsRouter } from './products';
+import { bidsRouter } from './bids';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
@@ -43,10 +47,24 @@ apiRouter.route('/organizations', organizationsRouter);
 apiRouter.use('/folders/*', requireAuth);
 apiRouter.route('/folders', foldersRouter);
 
-apiRouter.use('/use-cases/*', requireAuth);
-apiRouter.route('/use-cases', useCasesRouter);
+apiRouter.use('/initiatives/*', requireAuth);
+apiRouter.route('/initiatives', initiativesRouter);
 
-// DOCX export routes (nested under /use-cases, shares auth middleware above)
+// Backward-compatible alias: /use-cases/* → /initiatives/*
+apiRouter.use('/use-cases/*', requireAuth);
+apiRouter.route('/use-cases', initiativesRouter);
+
+// Extended business objects (BR-04 Lot 6)
+apiRouter.use('/solutions/*', requireAuth);
+apiRouter.route('/solutions', solutionsRouter);
+
+apiRouter.use('/products/*', requireAuth);
+apiRouter.route('/products', productsRouter);
+
+apiRouter.use('/bids/*', requireAuth);
+apiRouter.route('/bids', bidsRouter);
+
+// DOCX export routes
 apiRouter.use('/docx/*', requireAuth);
 apiRouter.route('/', docxRouter);
 
@@ -69,6 +87,10 @@ apiRouter.route('/vscode-extension', vscodeExtensionRouter);
 apiRouter.use('/workspaces/*', requireAuth);
 apiRouter.route('/workspaces', workspacesRouter);
 
+// Neutral orchestrator routes (authenticated; workspace-agnostic dashboard)
+apiRouter.use('/neutral/*', requireAuth);
+apiRouter.route('/neutral', neutralRouter);
+
 // TODO orchestration routes (authenticated; workspace role checks are enforced per endpoint)
 apiRouter.use('/plans/*', requireAuth);
 apiRouter.route('/plans', plansRouter);
@@ -88,6 +110,10 @@ apiRouter.route('/agent-config', agentConfigRouter);
 
 apiRouter.use('/workflow-config/*', requireAuth);
 apiRouter.route('/workflow-config', workflowConfigRouter);
+
+// Workspace type workflow registry (§11.5)
+apiRouter.use('/workspace-types/*', requireAuth);
+apiRouter.route('/workspace-types', workspaceTypeWorkflowsRouter);
 
 // Locks (authenticated; read is allowed, mutations require workspace editor/admin)
 apiRouter.use('/locks/*', requireAuth);

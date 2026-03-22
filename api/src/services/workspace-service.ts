@@ -107,25 +107,62 @@ export async function ensureWorkspaceForUser(
 
   if (!createIfMissing) return { workspaceId: null };
 
+  // Auto-create a neutral workspace for the user (personal home).
+  const neutralId = await ensureNeutralWorkspace(userId);
+  return { workspaceId: neutralId };
+}
+
+/**
+ * Ensure the user has exactly one neutral workspace.
+ * Creates it (with admin membership) if missing. Returns the workspace ID.
+ */
+export async function ensureNeutralWorkspace(userId: string): Promise<string> {
+  // Check if user already has a neutral workspace
+  const [existing] = await db
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(and(eq(workspaces.ownerUserId, userId), eq(workspaces.type, 'neutral')))
+    .limit(1);
+
+  if (existing) {
+    // Ensure membership exists (idempotent)
+    await db
+      .insert(workspaceMemberships)
+      .values({
+        workspaceId: existing.id,
+        userId,
+        role: 'admin',
+        createdAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [workspaceMemberships.workspaceId, workspaceMemberships.userId],
+        set: { role: 'admin' },
+      });
+    return existing.id;
+  }
+
   const id = crypto.randomUUID();
+  const now = new Date();
   await db.transaction(async (tx) => {
     await tx.insert(workspaces).values({
       id,
       ownerUserId: userId,
       name: 'My Workspace',
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      type: 'neutral',
+      createdAt: now,
+      updatedAt: now,
     });
 
     await tx.insert(workspaceMemberships).values({
       workspaceId: id,
       userId,
       role: 'admin',
-      createdAt: new Date(),
+      createdAt: now,
     });
   });
 
-  return { workspaceId: id };
+  logger.info({ userId, workspaceId: id }, 'Auto-created neutral workspace for user');
+  return id;
 }
 
 

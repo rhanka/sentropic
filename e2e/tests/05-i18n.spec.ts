@@ -149,7 +149,7 @@ test.describe('Internationalization reliability', () => {
     await expect(page.getByRole('link', { name: 'Accueil' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Dossiers' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Organisations' })).toBeVisible();
-    await expect(page.getByRole('link', { name: "Cas d'usage" })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Initiatives' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Évaluation' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
   });
@@ -166,7 +166,7 @@ test.describe('Internationalization reliability', () => {
     await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Folders' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Organizations' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Use cases' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Initiatives' })).toBeVisible();
 
     await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');

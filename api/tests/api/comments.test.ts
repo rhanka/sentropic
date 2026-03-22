@@ -7,7 +7,7 @@ import {
   cleanupAuthData
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { comments, organizations, folders, useCases, workspaceMemberships } from '../../src/db/schema';
+import { comments, organizations, folders, initiatives, workspaceMemberships } from '../../src/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 
@@ -17,7 +17,7 @@ describe('Comments API', () => {
   let admin: any;
   let organizationId: string;
   let folderId: string;
-  let useCaseId: string;
+  let initiativeId: string;
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor', `owner-${createTestId()}@example.com`);
@@ -50,19 +50,19 @@ describe('Comments API', () => {
     expect(folderRes.status).toBe(201);
     folderId = (await folderRes.json()).id;
 
-    const useCaseRes = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, {
+    const initiativeRes = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, {
       name: `Test Use Case ${createTestId()}`,
       description: 'Use case for comments',
       folderId
     });
-    expect(useCaseRes.status).toBe(201);
-    useCaseId = (await useCaseRes.json()).id;
+    expect(initiativeRes.status).toBe(201);
+    initiativeId = (await initiativeRes.json()).id;
   });
 
   afterEach(async () => {
     if (user.workspaceId) {
       await db.delete(comments).where(eq(comments.workspaceId, user.workspaceId));
-      await db.delete(useCases).where(eq(useCases.workspaceId, user.workspaceId));
+      await db.delete(initiatives).where(eq(initiatives.workspaceId, user.workspaceId));
       await db.delete(folders).where(eq(folders.workspaceId, user.workspaceId));
       await db.delete(organizations).where(eq(organizations.workspaceId, user.workspaceId));
       await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, user.workspaceId));
@@ -77,8 +77,8 @@ describe('Comments API', () => {
     await db.insert(comments).values({
       id: commentId,
       workspaceId: user.workspaceId!,
-      contextType: 'usecase',
-      contextId: useCaseId,
+      contextType: 'initiative',
+      contextId: initiativeId,
       sectionKey: 'header',
       createdBy: user.id,
       assignedTo: user.id,
@@ -93,7 +93,7 @@ describe('Comments API', () => {
     const res = await authenticatedRequest(
       app,
       'GET',
-      `/api/v1/comments?context_type=usecase&context_id=${useCaseId}`,
+      `/api/v1/comments?context_type=initiative&context_id=${initiativeId}`,
       user.sessionToken!
     );
     expect(res.status).toBe(200);
@@ -104,8 +104,8 @@ describe('Comments API', () => {
 
   it('rejects creation when assigned_to is not in workspace', async () => {
     const res = await authenticatedRequest(app, 'POST', '/api/v1/comments', user.sessionToken!, {
-      context_type: 'usecase',
-      context_id: useCaseId,
+      context_type: 'initiative',
+      context_id: initiativeId,
       content: 'Assign to invalid user',
       assigned_to: 'missing-user'
     });
@@ -114,8 +114,8 @@ describe('Comments API', () => {
 
   it('allows only creator or admin to close and reopen a thread', async () => {
     const createRes = await authenticatedRequest(app, 'POST', '/api/v1/comments', user.sessionToken!, {
-      context_type: 'usecase',
-      context_id: useCaseId,
+      context_type: 'initiative',
+      context_id: initiativeId,
       content: 'Comment to close'
     });
     expect(createRes.status).toBe(201);

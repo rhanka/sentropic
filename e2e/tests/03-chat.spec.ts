@@ -5,7 +5,7 @@ test.setTimeout(180_000); // CI/dev can be slower; keep E2E stable while debuggi
 
 // Important: ces tests manipulent le même compte + les mêmes sessions.
 // En parallèle (workers>1), ils se marchent dessus (création/suppression sessions) → flaky.
-test.describe.serial('Chat', () => {
+test.describe('Chat', () => {
   const assistantWrapper = (page: any) => page.locator('div.flex.justify-start');
   const assistantBubble = (page: any) =>
     assistantWrapper(page).locator('div.rounded.bg-white.border.border-slate-200');
@@ -27,15 +27,32 @@ test.describe.serial('Chat', () => {
     await page.keyboard.press('Control+A');
     await page.keyboard.press('Backspace');
     await page.keyboard.type(message);
+    // When a previous assistant response is still streaming, pressing Enter
+    // or clicking the action button triggers sendComposerSteer (which posts
+    // to /chat/messages/<id>/steer) instead of sendMessage (/chat/messages).
+    // Wait for the send button (data-testid="chat-composer-send-button") to
+    // appear — its test-id flips to "chat-composer-steer-button" while the
+    // assistant is active — then click it so the action fires sendMessage.
+    const sendBtn = page.getByTestId('chat-composer-send-button');
+    // Single assertion: toBeEnabled waits for both existence and enabled state.
+    // The button's data-testid flips between "chat-composer-send-button" and
+    // "chat-composer-steer-button" depending on assistant state, so we use
+    // a long timeout to wait for the assistant to finish.
+    await expect(sendBtn).toBeEnabled({ timeout: 60_000 });
+    // Use pathname.endsWith to avoid capturing /chat/messages/<id>/steer
+    // which is also a POST and contains '/chat/messages' in the URL.
+    const matchesChatMessages = (url: string) => {
+      try { return new URL(url).pathname.endsWith('/chat/messages'); } catch { return false; }
+    };
     const [req, res] = await Promise.all([
-      page.waitForRequest((req: any) => req.method() === 'POST' && req.url().includes('/api/v1/chat/messages'), {
+      page.waitForRequest((req: any) => req.method() === 'POST' && matchesChatMessages(req.url()), {
         timeout: 30_000
       }),
       page.waitForResponse((res: any) => {
         const r = res.request();
-        return r.method() === 'POST' && res.url().includes('/api/v1/chat/messages');
+        return r.method() === 'POST' && matchesChatMessages(res.url());
       }, { timeout: 30_000 }),
-      page.keyboard.press('Enter')
+      sendBtn.click()
     ]);
     let requestBody: any = null;
     try {
@@ -281,20 +298,44 @@ test.describe.serial('Chat', () => {
     expect(r1.requestBody?.primaryContextType ?? null).toBeNull();
     expect(r1.requestBody?.primaryContextId ?? null).toBeNull();
 
+    // Close chat to stop streaming before navigating
+    const closeChat = async () => {
+      const closeBtn = page.locator('#chat-widget-dialog').getByRole('button', { name: /Fermer|Close/i }).first();
+      if (await closeBtn.isVisible().catch(() => false)) {
+        await closeBtn.click();
+        await expect(composer).not.toBeVisible({ timeout: 2_000 });
+      }
+    };
+    const openChatFresh = async () => {
+      await expect(chatButton).toBeVisible({ timeout: 5_000 });
+      await chatButton.click();
+      // Ensure Chat IA tab is active (not Commentaires)
+      const chatTab = page.locator('button, [role="tab"]').filter({ hasText: /^Chat IA$/i }).first();
+      if (await chatTab.isVisible().catch(() => false)) {
+        await chatTab.click();
+      }
+      await expect(composer).toBeVisible({ timeout: 5_000 });
+      const newSessionBtn = page.locator('button[aria-label="Nouvelle session"]');
+      if (await newSessionBtn.isVisible().catch(() => false)) {
+        await newSessionBtn.click();
+      }
+    };
+
+    await closeChat();
+
     // 2) /organizations → no contextId (expect no primaryContextType)
     await page.goto('/organizations');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.locator('h1')).toContainText(/Organisations|Organizations/i, { timeout: 1000 });
-    await expect(chatButton).toBeVisible({ timeout: 1000 });
-    await chatButton.click();
-    await expect(composer).toBeVisible({ timeout: 1000 });
+    await expect(page.locator('h1')).toContainText(/Organisations|Organizations/i, { timeout: 5_000 });
+    await openChatFresh();
     const r2 = await sendMessageAndWaitApi(page, composer, 'Test context organisations');
     expect(r2.requestBody?.primaryContextType ?? null).toBeNull();
     expect(r2.requestBody?.primaryContextId ?? null).toBeNull();
 
+    await closeChat();
+
     // 2bis) /organizations/[id] → organization + id from URL
     // Click the first organization row/card to navigate to detail.
-    // Close the chat panel first to avoid intercepting clicks on the underlying cards.
     const closeButton = page
       .locator('#chat-widget-dialog')
       .getByRole('button', { name: /Fermer|Close/i })
@@ -305,23 +346,32 @@ test.describe.serial('Chat', () => {
     }
     const organizationRows = page.locator('article.rounded.border.border-slate-200');
     if ((await organizationRows.count()) > 0) {
+      // Set up the response waiter BEFORE clicking, so we don't miss the
+      // organization-detail API call that fires during SvelteKit navigation.
+      const orgDetailResponse = page.waitForResponse(
+        (res: any) => res.url().includes('/api/v1/organizations/') && res.status() === 200,
+        { timeout: 10_000 }
+      );
       await organizationRows.first().click();
       await page.waitForURL(/\/organizations\/[^/?#]+$/, { timeout: 10_000 });
       await page.waitForLoadState('domcontentloaded');
+      // Wait for the organization detail API call to complete, which ensures
+      // SvelteKit's load function has finished and $page store is current.
+      await orgDetailResponse;
       const m = page.url().match(/\/organizations\/([^/?#]+)/);
       const organizationId = m ? m[1] : '';
       expect(organizationId).toBeTruthy();
 
-      await expect(chatButton).toBeVisible({ timeout: 1000 });
-      await chatButton.click();
-      await expect(composer).toBeVisible({ timeout: 1000 });
+      await openChatFresh();
       const r2b = await sendMessageAndWaitApi(page, composer, 'Test context organisation detail');
       expect(r2b.requestBody?.primaryContextType).toBe('organization');
       expect(r2b.requestBody?.primaryContextId).toBe(organizationId);
+
+      await closeChat();
     }
 
-    // 3) /usecase/[id] → usecase + id from URL
-    await page.goto('/usecase');
+    // 3) /initiative/[id] → initiative + id from URL
+    await page.goto('/initiative');
     await page.waitForLoadState('domcontentloaded');
     const useCaseCards = page.locator('article.rounded.border.border-slate-200');
     if ((await useCaseCards.count()) === 0) {
@@ -333,14 +383,12 @@ test.describe.serial('Chat', () => {
     if (isGenerating) return;
     await firstCard.click();
     await page.waitForLoadState('domcontentloaded');
-    const match = page.url().match(/\/usecase\/([^/?#]+)/);
+    const match = page.url().match(/\/initiative\/([^/?#]+)/);
     const useCaseId = match ? match[1] : '';
     expect(useCaseId).toBeTruthy();
-    await expect(chatButton).toBeVisible({ timeout: 1000 });
-    await chatButton.click();
-    await expect(composer).toBeVisible({ timeout: 1000 });
-    const r3 = await sendMessageAndWaitApi(page, composer, 'Test context usecase detail');
-    expect(r3.requestBody?.primaryContextType).toBe('usecase');
+    await openChatFresh();
+    const r3 = await sendMessageAndWaitApi(page, composer, 'Test context initiative detail');
+    expect(r3.requestBody?.primaryContextType).toBe('initiative');
     expect(r3.requestBody?.primaryContextId).toBe(useCaseId);
   });
 
@@ -367,7 +415,7 @@ test.describe.serial('Chat', () => {
     await expect(composer).toBeVisible({ timeout: 1000 });
     await menuButton.click();
     const menu = page
-      .locator('div.absolute')
+      .locator('div.fixed.shadow-lg, div.absolute.shadow-lg')
       .filter({ hasText: /Contexte\(s\)|Context\(s\)/i })
       .first();
     await expect(menu.locator('button', { hasText: orgName })).toBeVisible({ timeout: 1000 });
@@ -386,7 +434,7 @@ test.describe.serial('Chat', () => {
     await expect(composer).toBeVisible({ timeout: 1000 });
     await menuButton.click();
     const menu2 = page
-      .locator('div.absolute')
+      .locator('div.fixed.shadow-lg, div.absolute.shadow-lg')
       .filter({ hasText: /Contexte\(s\)|Context\(s\)/i })
       .first();
     await expect(menu2.locator('button', { hasText: orgName })).toHaveCount(0);
@@ -412,7 +460,7 @@ test.describe.serial('Chat', () => {
     await expect(composer).toBeVisible({ timeout: 1000 });
     await menuButton.click();
     const menu3 = page
-      .locator('div.absolute')
+      .locator('div.fixed.shadow-lg, div.absolute.shadow-lg')
       .filter({ hasText: /Contexte\(s\)|Context\(s\)/i })
       .first();
     await expect(menu3.locator('button', { hasText: orgName })).toBeVisible({ timeout: 1000 });
@@ -503,15 +551,24 @@ test.describe.serial('Chat', () => {
     const message1 = `Réponds brièvement (test E2E)`;
     const firstSend = await sendMessageAndWaitApi(page, composer, message1);
     expect(firstSend.sessionId).toBeTruthy();
-    
-    // Attendre que le message utilisateur apparaisse
+
+    // Attendre que le message utilisateur apparaisse (CI can be slower than local)
     const userMessage1 = page.locator('.userMarkdown').filter({ hasText: message1 }).first();
-    await expect(userMessage1).toBeVisible({ timeout: 1000 });
-    
+    await expect(userMessage1).toBeVisible({ timeout: 5_000 });
+
     // Attendre qu'un message assistant apparaisse (placeholder streaming ou contenu final)
     const assistantWrappers = assistantWrapper(page);
     await expect.poll(async () => await assistantWrappers.count(), { timeout: 30_000 }).toBeGreaterThan(0);
-    
+
+    // Wait for the first assistant run to complete before sending the second
+    // message.  While the assistant is still processing, pressing Enter
+    // triggers sendComposerSteer (steer the running assistant) instead of
+    // sendMessage (new chat message).  The send button's test-id flips from
+    // 'chat-composer-steer-button' to 'chat-composer-send-button' once the
+    // assistant finishes.
+    const sendButton = page.getByTestId('chat-composer-send-button');
+    await expect(sendButton).toBeVisible({ timeout: 60_000 });
+
     // Envoyer un deuxième message dans la même session avec une autre réponse spécifique
     const message2 = `Deuxième message (test E2E)`;
     const secondSend = await sendMessageAndWaitApi(page, composer, message2);
@@ -570,16 +627,25 @@ test.describe.serial('Chat', () => {
     await saveButton.click();
     await expect(page.locator('.userMarkdown').filter({ hasText: updatedMessage }).first()).toBeVisible({ timeout: 5000 });
 
-    await userGroup.hover();
-    const copyButton = userGroup.getByRole('button', { name: /Copier|Copy/i });
+    // Wait for the new assistant response after edit
+    await expect(assistantBubble(page).last()).toBeVisible({ timeout: 45_000 });
+
+    // Copy — grant clipboard permissions for headless mode
+    await page.context().grantPermissions(['clipboard-write', 'clipboard-read']);
+    const updatedUserGroup = page.locator('div.flex.flex-col.items-end.group').last();
+    await updatedUserGroup.hover();
+    const copyButton = updatedUserGroup.getByRole('button', { name: /Copier|Copy/i });
     await expect(copyButton).toBeVisible({ timeout: 5000 });
     await copyButton.click();
 
-    const assistantGroup = assistantResponse.locator('xpath=ancestor::div[contains(@class,"flex") and contains(@class,"justify-start")]').first();
+    // Feedback — use the LAST assistant bubble (after edit re-generation)
+    const lastAssistantBubble = assistantBubble(page).last();
+    const assistantGroup = lastAssistantBubble.locator('xpath=ancestor::div[contains(@class,"flex") and contains(@class,"justify-start")]').first();
     const usefulButton = assistantGroup.getByRole('button', { name: /^Utile$|^Useful$/i });
     await toggleUsefulFeedback(page, usefulButton, true);
     await toggleUsefulFeedback(page, usefulButton, false);
 
+    // Retry
     const retryButton = assistantGroup.getByRole('button', { name: /Réessayer|Retry/i });
     const [retryResponse] = await Promise.all([
       page.waitForResponse((res) => {
@@ -749,19 +815,18 @@ test.describe.serial('Chat', () => {
     await expect(deleteButton).toBeVisible({ timeout: 1000 });
     await expect(deleteButton).toBeEnabled({ timeout: 5000 });
     
-    // Configurer le handler pour le dialogue de confirmation
-    page.on('dialog', dialog => {
-      expect(dialog.type()).toBe('confirm');
-      dialog.accept();
-    });
-    
-    // Déclencher la suppression et attendre un signal déterministe côté API
+    // Click delete button to show inline confirmation
+    await deleteButton.click();
+    // Click the inline "Supprimer" confirm button
+    const confirmDeleteBtn = page.locator('button').filter({ hasText: /^Supprimer$/ }).first();
+    await expect(confirmDeleteBtn).toBeVisible({ timeout: 2_000 });
+
     const [deleteResponse] = await Promise.all([
       page.waitForResponse((res) => {
         const req = res.request();
         return req.method() === 'DELETE' && res.url().includes('/api/v1/chat/sessions/');
       }, { timeout: 15_000 }),
-      deleteButton.click()
+      confirmDeleteBtn.click()
     ]);
     expect(deleteResponse.ok()).toBeTruthy();
     const deletedSessionId = decodeURIComponent(
