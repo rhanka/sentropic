@@ -9,7 +9,7 @@ describe('sanitizeGeminiResponseSchema', () => {
       additionalProperties: false,
       properties: {
         dossier: { type: 'string' },
-        useCases: {
+        initiatives: {
           type: 'array',
           items: {
             type: 'object',
@@ -22,7 +22,7 @@ describe('sanitizeGeminiResponseSchema', () => {
           },
         },
       },
-      required: ['dossier', 'useCases'],
+      required: ['dossier', 'initiatives'],
     } as Record<string, unknown>;
 
     const sanitized = sanitizeGeminiResponseSchema(schema);
@@ -31,7 +31,7 @@ describe('sanitizeGeminiResponseSchema', () => {
       type: 'object',
       properties: {
         dossier: { type: 'string' },
-        useCases: {
+        initiatives: {
           type: 'array',
           items: {
             type: 'object',
@@ -43,7 +43,7 @@ describe('sanitizeGeminiResponseSchema', () => {
           },
         },
       },
-      required: ['dossier', 'useCases'],
+      required: ['dossier', 'initiatives'],
     });
   });
 

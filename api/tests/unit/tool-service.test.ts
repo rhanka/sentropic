@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { toolService } from '../../src/services/tool-service';
 import { db } from '../../src/db/client';
 import {
-  useCases,
+  initiatives,
   chatContexts,
   contextModificationHistory,
   chatSessions,
@@ -16,7 +16,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 
 describe('Tool Service', () => {
-  let testUseCaseId: string;
+  let testInitiativeId: string;
   let testFolderId: string;
   let testUserId: string;
   let testSessionId: string;
@@ -38,7 +38,7 @@ describe('Tool Service', () => {
     await db.insert(chatSessions).values({
       id: testSessionId,
       userId: testUserId,
-      primaryContextType: 'usecase',
+      primaryContextType: 'initiative',
       primaryContextId: createId(),
       createdAt: new Date(),
       updatedAt: new Date()
@@ -56,9 +56,9 @@ describe('Tool Service', () => {
     });
 
     // Créer un use case de test avec des données JSONB
-    testUseCaseId = createId();
-    await db.insert(useCases).values({
-      id: testUseCaseId,
+    testInitiativeId = createId();
+    await db.insert(initiatives).values({
+      id: testInitiativeId,
       folderId: testFolderId,
       data: {
         name: 'Test Use Case',
@@ -78,36 +78,36 @@ describe('Tool Service', () => {
 
   afterEach(async () => {
     // Cleanup dans l'ordre inverse des dépendances
-    await db.delete(contextModificationHistory).where(eq(contextModificationHistory.contextId, testUseCaseId));
-    await db.delete(chatContexts).where(eq(chatContexts.contextId, testUseCaseId));
-    await db.delete(useCases).where(eq(useCases.id, testUseCaseId));
+    await db.delete(contextModificationHistory).where(eq(contextModificationHistory.contextId, testInitiativeId));
+    await db.delete(chatContexts).where(eq(chatContexts.contextId, testInitiativeId));
+    await db.delete(initiatives).where(eq(initiatives.id, testInitiativeId));
     await db.delete(folders).where(eq(folders.id, testFolderId));
     await db.delete(chatSessions).where(eq(chatSessions.id, testSessionId));
     await db.delete(users).where(eq(users.id, testUserId));
   });
 
-  describe('readUseCase', () => {
+  describe('readInitiative', () => {
     it('should read use case data', async () => {
-      const result = await toolService.readUseCase(testUseCaseId);
+      const result = await toolService.readInitiative(testInitiativeId);
 
-      expect(result.useCaseId).toBe(testUseCaseId);
+      expect(result.initiativeId).toBe(testInitiativeId);
       expect(result.data).toBeDefined();
       expect((result.data as any).name).toBe('Test Use Case');
       expect((result.data as any).description).toBe('Test description');
     });
 
-    it('should throw error if useCaseId is empty', async () => {
-      await expect(toolService.readUseCase('')).rejects.toThrow('useCaseId is required');
+    it('should throw error if initiativeId is empty', async () => {
+      await expect(toolService.readInitiative('')).rejects.toThrow('initiativeId is required');
     });
 
     it('should throw error if use case not found', async () => {
-      await expect(toolService.readUseCase('non-existent-id')).rejects.toThrow('Use case not found');
+      await expect(toolService.readInitiative('non-existent-id')).rejects.toThrow('Use case not found');
     });
 
     it('should return empty object if data is empty', async () => {
-      const useCaseIdEmpty = createId();
-      await db.insert(useCases).values({
-        id: useCaseIdEmpty,
+      const initiativeIdEmpty = createId();
+      await db.insert(initiatives).values({
+        id: initiativeIdEmpty,
         folderId: testFolderId,
         data: {},
         status: 'completed',
@@ -115,38 +115,38 @@ describe('Tool Service', () => {
         updatedAt: new Date()
       });
 
-      const result = await toolService.readUseCase(useCaseIdEmpty);
+      const result = await toolService.readInitiative(initiativeIdEmpty);
       expect(result.data).toEqual({});
 
       // Cleanup
-      await db.delete(useCases).where(eq(useCases.id, useCaseIdEmpty));
+      await db.delete(initiatives).where(eq(initiatives.id, initiativeIdEmpty));
     });
   });
 
-  describe('updateUseCaseFields', () => {
+  describe('updateInitiativeFields', () => {
     it('should update a single field', async () => {
-      const result = await toolService.updateUseCaseFields({
-        useCaseId: testUseCaseId,
+      const result = await toolService.updateInitiativeFields({
+        initiativeId: testInitiativeId,
         updates: [
           { path: 'data.name', value: 'Updated Name' }
         ]
       });
 
-      expect(result.useCaseId).toBe(testUseCaseId);
+      expect(result.initiativeId).toBe(testInitiativeId);
       expect(result.applied.length).toBe(1);
       expect(result.applied[0].path).toBe('data.name');
       expect(result.applied[0].oldValue).toBe('Test Use Case');
       expect(result.applied[0].newValue).toBe('Updated Name');
 
       // Vérifier que la DB est mise à jour
-      const [updated] = await db.select().from(useCases).where(eq(useCases.id, testUseCaseId));
+      const [updated] = await db.select().from(initiatives).where(eq(initiatives.id, testInitiativeId));
       expect((updated.data as any).name).toBe('Updated Name');
       expect((updated.data as any).description).toBe('Test description'); // Non modifié
     });
 
     it('should update multiple fields', async () => {
-      const result = await toolService.updateUseCaseFields({
-        useCaseId: testUseCaseId,
+      const result = await toolService.updateInitiativeFields({
+        initiativeId: testInitiativeId,
         updates: [
           { path: 'data.name', value: 'New Name' },
           { path: 'data.description', value: 'New Description' }
@@ -155,14 +155,14 @@ describe('Tool Service', () => {
 
       expect(result.applied.length).toBe(2);
       
-      const [updated] = await db.select().from(useCases).where(eq(useCases.id, testUseCaseId));
+      const [updated] = await db.select().from(initiatives).where(eq(initiatives.id, testInitiativeId));
       expect((updated.data as any).name).toBe('New Name');
       expect((updated.data as any).description).toBe('New Description');
     });
 
     it('should update nested fields', async () => {
-      const result = await toolService.updateUseCaseFields({
-        useCaseId: testUseCaseId,
+      const result = await toolService.updateInitiativeFields({
+        initiativeId: testInitiativeId,
         updates: [
           { path: 'data.references.0.title', value: 'Updated Title' }
         ]
@@ -170,14 +170,14 @@ describe('Tool Service', () => {
 
       expect(result.applied.length).toBe(1);
       
-      const [updated] = await db.select().from(useCases).where(eq(useCases.id, testUseCaseId));
+      const [updated] = await db.select().from(initiatives).where(eq(initiatives.id, testInitiativeId));
       expect((updated.data as any).references[0].title).toBe('Updated Title');
       expect((updated.data as any).references[0].url).toBe('https://example.com/1'); // Non modifié
     });
 
     it('should accept path without data. prefix', async () => {
-      const result = await toolService.updateUseCaseFields({
-        useCaseId: testUseCaseId,
+      const result = await toolService.updateInitiativeFields({
+        initiativeId: testInitiativeId,
         updates: [
           { path: 'name', value: 'Name without prefix' }
         ]
@@ -188,8 +188,8 @@ describe('Tool Service', () => {
     });
 
     it('should create context modification history', async () => {
-      await toolService.updateUseCaseFields({
-        useCaseId: testUseCaseId,
+      await toolService.updateInitiativeFields({
+        initiativeId: testInitiativeId,
         updates: [
           { path: 'data.name', value: 'Updated' }
         ]
@@ -198,18 +198,18 @@ describe('Tool Service', () => {
       const history = await db
         .select()
         .from(contextModificationHistory)
-        .where(eq(contextModificationHistory.contextId, testUseCaseId));
+        .where(eq(contextModificationHistory.contextId, testInitiativeId));
 
       expect(history.length).toBe(1);
-      expect(history[0].contextType).toBe('usecase');
+      expect(history[0].contextType).toBe('initiative');
       expect(history[0].field).toBe('data.name');
       expect(history[0].oldValue).toBe('Test Use Case');
       expect(history[0].newValue).toBe('Updated');
     });
 
     it('should create chat context snapshot if sessionId provided', async () => {
-      await toolService.updateUseCaseFields({
-        useCaseId: testUseCaseId,
+      await toolService.updateInitiativeFields({
+        initiativeId: testInitiativeId,
         sessionId: testSessionId,
         updates: [
           { path: 'data.name', value: 'Updated with Session' }
@@ -219,29 +219,29 @@ describe('Tool Service', () => {
       const contexts = await db
         .select()
         .from(chatContexts)
-        .where(eq(chatContexts.contextId, testUseCaseId));
+        .where(eq(chatContexts.contextId, testInitiativeId));
 
       expect(contexts.length).toBe(1);
       expect(contexts[0].sessionId).toBe(testSessionId);
-      expect(contexts[0].contextType).toBe('usecase');
+      expect(contexts[0].contextType).toBe('initiative');
       expect((contexts[0].snapshotBefore as any).name).toBe('Test Use Case');
       expect((contexts[0].snapshotAfter as any).name).toBe('Updated with Session');
       expect(contexts[0].modifications).toBeDefined();
     });
 
-    it('should throw error if useCaseId is empty', async () => {
+    it('should throw error if initiativeId is empty', async () => {
       await expect(
-        toolService.updateUseCaseFields({
-          useCaseId: '',
+        toolService.updateInitiativeFields({
+          initiativeId: '',
           updates: [{ path: 'data.name', value: 'Test' }]
         })
-      ).rejects.toThrow('useCaseId is required');
+      ).rejects.toThrow('initiativeId is required');
     });
 
     it('should throw error if updates array is empty', async () => {
       await expect(
-        toolService.updateUseCaseFields({
-          useCaseId: testUseCaseId,
+        toolService.updateInitiativeFields({
+          initiativeId: testInitiativeId,
           updates: []
         })
       ).rejects.toThrow('updates is required');
@@ -254,8 +254,8 @@ describe('Tool Service', () => {
       }));
 
       await expect(
-        toolService.updateUseCaseFields({
-          useCaseId: testUseCaseId,
+        toolService.updateInitiativeFields({
+          initiativeId: testInitiativeId,
           updates
         })
       ).rejects.toThrow('Too many updates (max 50)');
@@ -263,8 +263,8 @@ describe('Tool Service', () => {
 
     it('should throw error if use case not found', async () => {
       await expect(
-        toolService.updateUseCaseFields({
-          useCaseId: 'non-existent-id',
+        toolService.updateInitiativeFields({
+          initiativeId: 'non-existent-id',
           updates: [{ path: 'data.name', value: 'Test' }]
         })
       ).rejects.toThrow('Use case not found');
@@ -284,22 +284,22 @@ describe('Tool Service', () => {
         }
       };
 
-      await toolService.updateUseCaseFields({
-        useCaseId: testUseCaseId,
+      await toolService.updateInitiativeFields({
+        initiativeId: testInitiativeId,
         updates: [
           { path: 'data.complex', value: complexValue }
         ]
       });
 
-      const [updated] = await db.select().from(useCases).where(eq(useCases.id, testUseCaseId));
+      const [updated] = await db.select().from(initiatives).where(eq(initiatives.id, testInitiativeId));
       expect((updated.data as any).complex).toEqual(complexValue);
     });
 
     it('should execute NOTIFY without error', async () => {
       // Le NOTIFY est difficile à tester unitairement, on vérifie juste que ça ne throw pas
       await expect(
-        toolService.updateUseCaseFields({
-          useCaseId: testUseCaseId,
+        toolService.updateInitiativeFields({
+          initiativeId: testInitiativeId,
           updates: [
             { path: 'data.name', value: 'Test Notify' }
           ]
@@ -312,7 +312,7 @@ describe('Tool Service', () => {
     let workspaceId: string;
     let organizationId: string;
     let folderId: string;
-    let useCaseId: string;
+    let initiativeId: string;
     let msgCompanyUpdateId: string;
     let msgFolderUpdateId: string;
     let msgExecutiveSummaryUpdateId: string;
@@ -389,9 +389,9 @@ describe('Tool Service', () => {
         createdAt: new Date()
       });
 
-      useCaseId = createId();
-      await db.insert(useCases).values({
-        id: useCaseId,
+      initiativeId = createId();
+      await db.insert(initiatives).values({
+        id: initiativeId,
         workspaceId,
         folderId,
         status: 'completed',
@@ -422,7 +422,7 @@ describe('Tool Service', () => {
           )
         );
 
-      await db.delete(useCases).where(eq(useCases.id, useCaseId));
+      await db.delete(initiatives).where(eq(initiatives.id, initiativeId));
       await db.delete(folders).where(eq(folders.id, folderId));
       await db.delete(organizations).where(eq(organizations.id, organizationId));
       await db.delete(chatMessages).where(eq(chatMessages.sessionId, testSessionId));
@@ -539,12 +539,12 @@ describe('Tool Service', () => {
       expect(contexts.length).toBe(1);
     });
 
-    it('should list use cases for a folder with select', async () => {
-      const res = await toolService.listUseCasesForFolder(folderId, { workspaceId, select: ['name'] });
+    it('should list initiatives for a folder with select', async () => {
+      const res = await toolService.listInitiativesForFolder(folderId, { workspaceId, select: ['name'] });
       expect('items' in res).toBe(true);
       if ('items' in res) {
         expect(res.items.length).toBe(1);
-        expect(res.items[0].id).toBe(useCaseId);
+        expect(res.items[0].id).toBe(initiativeId);
         expect(res.items[0].data.name).toBe('UC 1');
         expect((res.items[0].data as any).description).toBeUndefined();
       }

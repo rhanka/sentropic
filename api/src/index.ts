@@ -12,7 +12,7 @@ import { lt } from 'drizzle-orm';
 
 const port = env.PORT;
 
-type LockObjectType = 'organization' | 'folder' | 'usecase';
+type LockObjectType = 'organization' | 'folder' | 'initiative';
 
 async function notifyLockEvent(workspaceId: string, objectType: LockObjectType, objectId: string): Promise<void> {
   const payload = JSON.stringify({

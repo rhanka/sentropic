@@ -2,10 +2,12 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db, pool } from '../../db/client';
-import { folders, organizations, useCases } from '../../db/schema';
+import { folders, organizations, initiatives, workspaces } from '../../db/schema';
 import { createId } from '../../utils/id';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { defaultMatrixConfig } from '../../config/default-matrix';
+import { opportunityMatrixConfig } from '../../config/default-matrix-opportunity';
+import type { MatrixConfig } from '../../types/matrix';
 import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
@@ -102,6 +104,28 @@ const parseMatrix = (value: string | null) => {
   }
 };
 
+/** Resolve default matrix config by workspace type (§8.5). */
+function getDefaultMatrixForWorkspaceType(workspaceType: string | null | undefined): MatrixConfig {
+  switch (workspaceType) {
+    case 'opportunity':
+      return opportunityMatrixConfig;
+    case 'ai-ideas':
+    case 'code':
+    default:
+      return defaultMatrixConfig;
+  }
+}
+
+/** Look up workspace type from DB. */
+async function resolveWorkspaceType(workspaceId: string): Promise<string> {
+  const [ws] = await db
+    .select({ type: workspaces.type })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1);
+  return ws?.type ?? 'ai-ideas';
+}
+
 // parseExecutiveSummary function (currently unused)
 // const parseExecutiveSummary = (value: string | null) => {
 //   if (!value) return null;
@@ -116,9 +140,9 @@ foldersRouter.get('/', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
   const targetWorkspaceId = user.workspaceId;
   const organizationId = c.req.query('organization_id');
-  const includeUseCaseCounts = c.req.query('include_usecase_counts') === 'true';
+  const includeInitiativeCounts = c.req.query('include_usecase_counts') === 'true';
   
-  if (includeUseCaseCounts) {
+  if (includeInitiativeCounts) {
     const rows = organizationId
       ? await db.select({
           id: folders.id,
@@ -129,11 +153,11 @@ foldersRouter.get('/', async (c) => {
           matrixConfig: folders.matrixConfig,
           status: folders.status,
           createdAt: folders.createdAt,
-          useCaseCount: sql<number>`count(${useCases.id})`.mapWith(Number)
+          initiativeCount: sql<number>`count(${initiatives.id})`.mapWith(Number)
         })
         .from(folders)
         .leftJoin(organizations, and(eq(folders.organizationId, organizations.id), eq(organizations.workspaceId, targetWorkspaceId)))
-        .leftJoin(useCases, and(eq(useCases.folderId, folders.id), eq(useCases.workspaceId, targetWorkspaceId)))
+        .leftJoin(initiatives, and(eq(initiatives.folderId, folders.id), eq(initiatives.workspaceId, targetWorkspaceId)))
         .where(and(eq(folders.workspaceId, targetWorkspaceId), eq(folders.organizationId, organizationId)))
         .groupBy(
           folders.id,
@@ -155,11 +179,11 @@ foldersRouter.get('/', async (c) => {
           matrixConfig: folders.matrixConfig,
           status: folders.status,
           createdAt: folders.createdAt,
-          useCaseCount: sql<number>`count(${useCases.id})`.mapWith(Number)
+          initiativeCount: sql<number>`count(${initiatives.id})`.mapWith(Number)
         })
         .from(folders)
         .leftJoin(organizations, and(eq(folders.organizationId, organizations.id), eq(organizations.workspaceId, targetWorkspaceId)))
-        .leftJoin(useCases, and(eq(useCases.folderId, folders.id), eq(useCases.workspaceId, targetWorkspaceId)))
+        .leftJoin(initiatives, and(eq(initiatives.folderId, folders.id), eq(initiatives.workspaceId, targetWorkspaceId)))
         .where(eq(folders.workspaceId, targetWorkspaceId))
         .groupBy(
           folders.id,
@@ -223,9 +247,11 @@ foldersRouter.post('/', requireEditor, requireWorkspaceEditorRole(), zValidator(
   const payload = c.req.valid('json');
   const id = createId();
   const organizationId = payload.organizationId;
-  
-  // Utiliser la matrice fournie ou la matrice par défaut
-  const matrixToUse = payload.matrixConfig || defaultMatrixConfig;
+
+  // Resolve workspace type to select the correct default matrix (§8.5)
+  const wsType = await resolveWorkspaceType(workspaceId);
+  const typeDefaultMatrix = getDefaultMatrixForWorkspaceType(wsType);
+  const matrixToUse = payload.matrixConfig || typeDefaultMatrix;
 
   // Validate organization belongs to workspace (if provided)
   if (organizationId) {
@@ -276,6 +302,10 @@ foldersRouter.post(
     const { name, description, organizationId } = c.req.valid('json');
     const id = createId();
 
+    // Resolve workspace type to select the correct default matrix (§8.5)
+    const wsType = await resolveWorkspaceType(workspaceId);
+    const typeDefaultMatrix = getDefaultMatrixForWorkspaceType(wsType);
+
     // Validate organization belongs to workspace (if provided)
     if (organizationId) {
       const [org] = await db
@@ -294,7 +324,7 @@ foldersRouter.post(
       name,
       description,
       organizationId,
-      matrixConfig: JSON.stringify(defaultMatrixConfig),
+      matrixConfig: JSON.stringify(typeDefaultMatrix),
       status: 'draft',
     });
 
@@ -463,14 +493,18 @@ foldersRouter.get('/:id/matrix', async (c) => {
   if (!folder) {
     return c.json({ message: 'Not found' }, 404);
   }
+  const wsType = await resolveWorkspaceType(targetWorkspaceId);
+  const typeDefaultMatrix = getDefaultMatrixForWorkspaceType(wsType);
   return c.json(
-    parseMatrix(folder.matrixConfig ?? null) ?? defaultMatrixConfig
+    parseMatrix(folder.matrixConfig ?? null) ?? typeDefaultMatrix
   );
 });
 
-// Endpoint pour récupérer la matrice de base par défaut
+// Endpoint pour récupérer la matrice de base par défaut (workspace-type-aware)
 foldersRouter.get('/matrix/default', async (c) => {
-  return c.json(defaultMatrixConfig);
+  const user = c.get('user') as { workspaceId: string };
+  const wsType = await resolveWorkspaceType(user.workspaceId);
+  return c.json(getDefaultMatrixForWorkspaceType(wsType));
 });
 
 // Endpoint pour lister les dossiers avec leurs matrices (pour copier)

@@ -1,7 +1,7 @@
 import { test, expect, request } from '@playwright/test';
 test.setTimeout(180_000);
 
-test.describe.serial('Comment assistant', () => {
+test.describe('Comment assistant', () => {
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
@@ -85,7 +85,7 @@ test.describe.serial('Comment assistant', () => {
       }
     }, workspaceId);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.goto(`/usecase/${encodeURIComponent(useCaseId)}`);
+    await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
 
     await page.evaluate(() => {

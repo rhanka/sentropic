@@ -14,7 +14,7 @@ export const testOrganizations = {
   },
 };
 
-export const testUseCases = {
+export const testInitiatives = {
   valid: {
     input: 'Optimisation des opérations de production manufacturière',
     expectedCount: 6,

@@ -1,5 +1,5 @@
 import { db } from '../db/client.js';
-import { organizations, folders, useCases } from '../db/schema.js';
+import { organizations, folders, initiatives } from '../db/schema.js';
 
 async function extractTestData() {
   console.log('🔍 Extracting test data from existing database...\n');
@@ -24,11 +24,11 @@ async function extractTestData() {
     });
 
     // Récupérer tous les cas d'usage
-    const useCasesData = await db.select().from(useCases);
+    const initiativesData = await db.select().from(initiatives);
     console.log('=== USE CASES ===');
-    useCasesData.forEach((useCase, index) => {
+    initiativesData.forEach((initiative, index) => {
       console.log(`Use Case ${index + 1}:`);
-      console.log(JSON.stringify(useCase, null, 2));
+      console.log(JSON.stringify(initiative, null, 2));
       console.log('');
     });
 
@@ -46,12 +46,12 @@ async function extractTestData() {
 
     // Trouver les cas d'usage liés à Rio Tinto
     if (rioTinto) {
-      type UseCaseRowLike = { organizationId?: string | null };
-      const rioTintoUseCases = useCasesData.filter((uc) => {
-        const row = uc as unknown as UseCaseRowLike;
+      type InitiativeRowLike = { organizationId?: string | null };
+      const rioTintoInitiatives = initiativesData.filter((uc) => {
+        const row = uc as unknown as InitiativeRowLike;
         return row.organizationId === rioTinto.id;
       });
-      console.log(`\nRio Tinto use cases: ${rioTintoUseCases.length}`);
+      console.log(`\nRio Tinto initiatives: ${rioTintoInitiatives.length}`);
     }
 
   } catch (error) {

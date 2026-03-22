@@ -68,7 +68,7 @@ export const deleteOrganization = async (id: string): Promise<void> => {
       const details = (error.data as any).details as { folders?: number; useCases?: number };
       const folders = details.folders || 0;
       const useCases = details.useCases || 0;
-      throw new Error(`Impossible de supprimer l'organisation (${folders} dossier(s) et ${useCases} cas d'usage)`);
+      throw new Error(`Impossible de supprimer l'organisation (${folders} dossier(s) et ${useCases} initiatives)`);
     }
     throw error;
   }

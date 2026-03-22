@@ -3,22 +3,23 @@ import { and, sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichOrganization, type OrganizationData } from './context-organization';
 import {
-  generateUseCaseList,
-  generateUseCaseDetail,
-  type UseCaseDetail,
-  type UseCaseListItem,
-} from './context-usecase';
+  generateInitiativeList,
+  generateInitiativeDetail,
+  type InitiativeDetail,
+  type InitiativeListItem,
+} from './context-initiative';
 import { generateOrganizationMatrixTemplate, mergeOrganizationMatrixTemplate } from './context-matrix';
 import { parseMatrixConfig } from '../utils/matrix';
 import { defaultMatrixConfig } from '../config/default-matrix';
+import { opportunityMatrixConfig } from '../config/default-matrix-opportunity';
 import type { MatrixConfig } from '../types/matrix';
-import type { UseCaseData, UseCaseDataJson } from '../types/usecase';
+import type { InitiativeData, InitiativeDataJson } from '../types/initiative';
 import { validateScores, fixScores } from '../utils/score-validation';
 import {
   comments,
   folders,
   organizations,
-  useCases,
+  initiatives,
   agentDefinitions,
   jobQueue,
   ADMIN_WORKSPACE_ID,
@@ -74,15 +75,27 @@ function parseJsonField<T = unknown>(value: unknown): T | null {
   }
 }
 
+const GENERATION_WORKFLOW_TASK_KEYS = new Set<string>([
+  'generation_create_organizations',
+  'generation_context_prepare',
+  'generation_matrix_prepare',
+  'generation_initiative_list',
+  'generation_usecase_list',
+  'generation_todo_sync',
+  'generation_initiative_detail',
+  'generation_usecase_detail',
+  'generation_executive_summary',
+  'create_organizations',
+  'context_prepare',
+  'matrix_prepare',
+  'opportunity_list',
+  'todo_sync',
+  'opportunity_detail',
+  'executive_summary',
+]);
+
 function isGenerationWorkflowTaskKey(value: unknown): value is GenerationWorkflowTaskKey {
-  return (
-    value === 'generation_context_prepare' ||
-    value === 'generation_matrix_prepare' ||
-    value === 'generation_usecase_list' ||
-    value === 'generation_todo_sync' ||
-    value === 'generation_usecase_detail' ||
-    value === 'generation_executive_summary'
-  );
+  return typeof value === 'string' && GENERATION_WORKFLOW_TASK_KEYS.has(value);
 }
 
 function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkflowRuntimeContext | null {
@@ -94,64 +107,44 @@ function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkfl
   if (!isGenerationWorkflowTaskKey(record.taskKey)) {
     return null;
   }
-  const assignments = record.taskAssignments;
-  if (!assignments || typeof assignments !== 'object') {
-    return null;
-  }
-  const parsedAssignments = assignments as Record<string, unknown>;
   const toNullableString = (candidate: unknown): string | null =>
     typeof candidate === 'string' && candidate.trim() ? candidate : null;
+
+  // Parse agentMap: Record<string, string> (task key → agent definition ID)
+  const rawMap = record.agentMap;
+  const agentMap: Record<string, string> = {};
+  if (rawMap && typeof rawMap === 'object' && !Array.isArray(rawMap)) {
+    for (const [k, v] of Object.entries(rawMap as Record<string, unknown>)) {
+      if (typeof v === 'string' && v.trim()) {
+        agentMap[k] = v;
+      }
+    }
+  }
+
   return {
     workflowRunId: record.workflowRunId,
     workflowDefinitionId: record.workflowDefinitionId,
     taskKey: record.taskKey,
     agentDefinitionId: toNullableString(record.agentDefinitionId),
-    taskAssignments: {
-      contextPrepareAgentId: toNullableString(parsedAssignments.contextPrepareAgentId),
-      matrixPrepareAgentId: toNullableString(parsedAssignments.matrixPrepareAgentId),
-      usecaseListAgentId: toNullableString(parsedAssignments.usecaseListAgentId),
-      todoSyncAgentId: toNullableString(parsedAssignments.todoSyncAgentId),
-      usecaseDetailAgentId: toNullableString(parsedAssignments.usecaseDetailAgentId),
-      executiveSummaryAgentId: toNullableString(parsedAssignments.executiveSummaryAgentId),
-    },
+    agentMap,
   };
 }
 
-function cloneGenerationWorkflowRuntimeContextForTask(
+function cloneWorkflowContextForTask(
   workflow: GenerationWorkflowRuntimeContext,
   taskKey: GenerationWorkflowTaskKey
 ): GenerationWorkflowRuntimeContext {
-  const agentDefinitionId = (() => {
-    switch (taskKey) {
-      case 'generation_context_prepare':
-        return workflow.taskAssignments.contextPrepareAgentId;
-      case 'generation_matrix_prepare':
-        return workflow.taskAssignments.matrixPrepareAgentId;
-      case 'generation_usecase_list':
-        return workflow.taskAssignments.usecaseListAgentId;
-      case 'generation_todo_sync':
-        return workflow.taskAssignments.todoSyncAgentId;
-      case 'generation_usecase_detail':
-        return workflow.taskAssignments.usecaseDetailAgentId;
-      case 'generation_executive_summary':
-        return workflow.taskAssignments.executiveSummaryAgentId;
-      default:
-        return null;
-    }
-  })();
-
   return {
-    workflowRunId: workflow.workflowRunId,
-    workflowDefinitionId: workflow.workflowDefinitionId,
+    ...workflow,
     taskKey,
-    agentDefinitionId,
-    taskAssignments: { ...workflow.taskAssignments },
+    agentDefinitionId: workflow.agentMap[taskKey] ?? null,
   };
 }
 
 type GenerationPromptOverride = {
   promptId: string;
   promptTemplate?: string;
+  outputSchema?: Record<string, unknown>;
 };
 
 export const resolveGenerationPromptOverrideFromConfig = (
@@ -170,7 +163,11 @@ export const resolveGenerationPromptOverrideFromConfig = (
     typeof config.promptTemplate === 'string' && config.promptTemplate.trim().length > 0
       ? config.promptTemplate
       : undefined;
-  return { promptId, promptTemplate };
+  const outputSchema =
+    config.outputSchema && typeof config.outputSchema === 'object' && !Array.isArray(config.outputSchema)
+      ? (config.outputSchema as Record<string, unknown>)
+      : undefined;
+  return { promptId, promptTemplate, outputSchema };
 };
 
 function sanitizeJobResultForPublic(result: unknown): unknown {
@@ -197,7 +194,7 @@ export function normalizeAutoGenerationSectionKeys(
         .map((s) => {
           const sectionKey = String(s ?? '').trim();
           if (!sectionKey) return '';
-          return contextType === 'usecase' && sectionKey.startsWith('data.')
+          return contextType === 'initiative' && sectionKey.startsWith('data.')
             ? sectionKey.slice('data.'.length)
             : sectionKey;
         })
@@ -206,46 +203,47 @@ export function normalizeAutoGenerationSectionKeys(
   );
 }
 
-export function buildGeneratedUseCasePayloadForPersistence(
-  existingData: Partial<UseCaseData>,
-  useCaseDetail: UseCaseDetail
-): { useCaseData: UseCaseData; generatedUseCaseFields: string[] } {
-  const useCaseData: UseCaseData = {
-    name: existingData.name || useCaseDetail.name,
-    description: existingData.description || useCaseDetail.description,
-    problem: useCaseDetail.problem,
-    solution: useCaseDetail.solution,
-    domain: useCaseDetail.domain,
-    technologies: useCaseDetail.technologies,
-    deadline: useCaseDetail.leadtime,
-    contact: useCaseDetail.contact,
-    benefits: useCaseDetail.benefits,
-    constraints: useCaseDetail.constraints,
-    metrics: useCaseDetail.metrics,
-    risks: useCaseDetail.risks,
-    nextSteps: useCaseDetail.nextSteps,
-    dataSources: useCaseDetail.dataSources,
-    dataObjects: useCaseDetail.dataObjects,
-    references: useCaseDetail.references || [],
-    valueScores: useCaseDetail.valueScores,
-    complexityScores: useCaseDetail.complexityScores
+export function buildGeneratedInitiativePayloadForPersistence(
+  existingData: Partial<InitiativeData>,
+  initiativeDetail: InitiativeDetail
+): { initiativeData: InitiativeData; generatedInitiativeFields: string[] } {
+  const initiativeData: InitiativeData = {
+    name: existingData.name || initiativeDetail.name,
+    description: existingData.description || initiativeDetail.description,
+    problem: initiativeDetail.problem,
+    solution: initiativeDetail.solution,
+    domain: initiativeDetail.domain,
+    technologies: initiativeDetail.technologies,
+    deadline: initiativeDetail.leadtime,
+    contact: initiativeDetail.contact,
+    benefits: initiativeDetail.benefits,
+    constraints: initiativeDetail.constraints,
+    metrics: initiativeDetail.metrics,
+    risks: initiativeDetail.risks,
+    nextSteps: initiativeDetail.nextSteps,
+    dataSources: initiativeDetail.dataSources,
+    dataObjects: initiativeDetail.dataObjects,
+    references: initiativeDetail.references || [],
+    valueScores: initiativeDetail.valueScores,
+    complexityScores: initiativeDetail.complexityScores
   };
-  const generatedUseCaseFields = Object.keys(useCaseData)
+  const generatedInitiativeFields = Object.keys(initiativeData)
     .filter((field) => {
       const beforeValue = (existingData as Record<string, unknown>)[field];
-      const afterValue = (useCaseData as unknown as Record<string, unknown>)[field];
+      const afterValue = (initiativeData as unknown as Record<string, unknown>)[field];
       return !isSameValue(beforeValue, afterValue);
     })
     .map((field) => `data.${field}`);
 
-  return { useCaseData, generatedUseCaseFields };
+  return { initiativeData, generatedInitiativeFields };
 }
 
 export type JobType =
   | 'organization_enrich'
+  | 'organization_batch_create'
   | 'matrix_generate'
-  | 'usecase_list'
-  | 'usecase_detail'
+  | 'initiative_list'
+  | 'initiative_detail'
   | 'executive_summary'
   | 'chat_message'
   | 'document_summary'
@@ -254,28 +252,27 @@ export type JobType =
 export type MatrixMode = 'organization' | 'generate' | 'default';
 
 export type GenerationWorkflowTaskKey =
+  | 'generation_create_organizations'
   | 'generation_context_prepare'
   | 'generation_matrix_prepare'
-  | 'generation_usecase_list'
+  | 'generation_initiative_list'
   | 'generation_todo_sync'
-  | 'generation_usecase_detail'
-  | 'generation_executive_summary';
-
-export interface GenerationWorkflowTaskAssignments {
-  contextPrepareAgentId: string | null;
-  matrixPrepareAgentId: string | null;
-  usecaseListAgentId: string | null;
-  todoSyncAgentId: string | null;
-  usecaseDetailAgentId: string | null;
-  executiveSummaryAgentId: string | null;
-}
+  | 'generation_initiative_detail'
+  | 'generation_executive_summary'
+  | 'create_organizations'
+  | 'context_prepare'
+  | 'matrix_prepare'
+  | 'opportunity_list'
+  | 'todo_sync'
+  | 'opportunity_detail'
+  | 'executive_summary';
 
 export interface GenerationWorkflowRuntimeContext {
   workflowRunId: string;
   workflowDefinitionId: string;
   taskKey: GenerationWorkflowTaskKey;
-  agentDefinitionId?: string | null;
-  taskAssignments: GenerationWorkflowTaskAssignments;
+  agentDefinitionId: string | null;
+  agentMap: Record<string, string>; // task key → agent definition ID
 }
 
 export interface OrganizationEnrichJobData {
@@ -295,21 +292,21 @@ export interface MatrixGenerateJobData {
   workflow?: GenerationWorkflowRuntimeContext;
 }
 
-export interface UseCaseListJobData {
+export interface InitiativeListJobData {
   folderId: string;
   input: string;
   organizationId?: string;
   matrixMode?: MatrixMode;
   model?: string;
-  useCaseCount?: number;
+  initiativeCount?: number;
   initiatedByUserId?: string;
   locale?: string;
   workflow?: GenerationWorkflowRuntimeContext;
 }
 
-export interface UseCaseDetailJobData {
-  useCaseId: string;
-  useCaseName: string;
+export interface InitiativeDetailJobData {
+  initiativeId: string;
+  initiativeName: string;
   folderId: string;
   matrixMode?: MatrixMode;
   model?: string;
@@ -335,7 +332,8 @@ export interface ChatMessageJobData {
   providerId?: ProviderId;
   providerApiKey?: string;
   model?: string;
-  contexts?: Array<{ contextType: 'organization' | 'folder' | 'usecase' | 'executive_summary'; contextId: string }>;
+  // TODO Lot 10: remove 'usecase' once data migration is complete
+  contexts?: Array<{ contextType: 'organization' | 'folder' | 'initiative' | 'executive_summary' | 'usecase'; contextId: string }>;
   tools?: string[];
   localToolDefinitions?: Array<{
     name: string;
@@ -370,8 +368,8 @@ export interface DocxGenerateJobData {
 export type JobData =
   | OrganizationEnrichJobData
   | MatrixGenerateJobData
-  | UseCaseListJobData
-  | UseCaseDetailJobData
+  | InitiativeListJobData
+  | InitiativeDetailJobData
   | ExecutiveSummaryJobData
   | ChatMessageJobData
   | DocumentSummaryJobData
@@ -396,9 +394,9 @@ export function getPublicJobStreamId(job: Pick<Job, 'id' | 'type' | 'data'>): st
   if (job?.type === 'organization_enrich' && (job.data as OrganizationEnrichJobData | undefined)?.organizationId) {
     return `organization_${(job.data as OrganizationEnrichJobData).organizationId}`;
   }
-  if (job?.type === 'usecase_list' && ((job.data as UseCaseListJobData | undefined)?.folderId || rawData.folder_id)) {
+  if (job?.type === 'initiative_list' && ((job.data as InitiativeListJobData | undefined)?.folderId || rawData.folder_id)) {
     const folderId =
-      (job.data as UseCaseListJobData).folderId ??
+      (job.data as InitiativeListJobData).folderId ??
       String(rawData.folder_id ?? '');
     return `folder_${folderId}`;
   }
@@ -408,11 +406,11 @@ export function getPublicJobStreamId(job: Pick<Job, 'id' | 'type' | 'data'>): st
       String(rawData.folder_id ?? '');
     return `matrix_${folderId}`;
   }
-  if (job?.type === 'usecase_detail' && ((job.data as UseCaseDetailJobData | undefined)?.useCaseId || rawData.use_case_id)) {
-    const useCaseId =
-      (job.data as UseCaseDetailJobData).useCaseId ??
+  if (job?.type === 'initiative_detail' && ((job.data as InitiativeDetailJobData | undefined)?.initiativeId || rawData.use_case_id)) {
+    const initiativeId =
+      (job.data as InitiativeDetailJobData).initiativeId ??
       String(rawData.use_case_id ?? '');
-    return `usecase_${useCaseId}`;
+    return `initiative_${initiativeId}`;
   }
   if (job?.type === 'executive_summary' && ((job.data as ExecutiveSummaryJobData | undefined)?.folderId || rawData.folder_id)) {
     const folderId =
@@ -475,11 +473,11 @@ export class QueueManager {
     }
   }
 
-  private async notifyUseCaseEvent(useCaseId: string): Promise<void> {
-    const notifyPayload = JSON.stringify({ use_case_id: useCaseId });
+  private async notifyInitiativeEvent(initiativeId: string): Promise<void> {
+    const notifyPayload = JSON.stringify({ initiative_id: initiativeId });
     const client = await pool.connect();
     try {
-      await client.query(`NOTIFY usecase_events, '${notifyPayload.replace(/'/g, "''")}'`);
+      await client.query(`NOTIFY initiative_events, '${notifyPayload.replace(/'/g, "''")}'`);
     } finally {
       client.release();
     }
@@ -526,6 +524,40 @@ export class QueueManager {
       agent?.config ?? {},
       fallbackPromptId,
     );
+  }
+
+  /**
+   * Resolve the base matrix config from the agent definition's config.baseMatrixId.
+   * Returns opportunityMatrixConfig when baseMatrixId is "opportunity", defaultMatrixConfig otherwise.
+   */
+  private async resolveBaseMatrixFromAgent(
+    workspaceId: string,
+    agentDefinitionId: string | null | undefined,
+  ): Promise<MatrixConfig> {
+    if (!agentDefinitionId || !agentDefinitionId.trim()) {
+      return defaultMatrixConfig;
+    }
+
+    const [agent] = await db
+      .select({ config: agentDefinitions.config })
+      .from(agentDefinitions)
+      .where(
+        and(
+          eq(agentDefinitions.workspaceId, workspaceId),
+          eq(agentDefinitions.id, agentDefinitionId),
+        ),
+      )
+      .limit(1);
+
+    const config = agent?.config;
+    if (config && typeof config === 'object' && !Array.isArray(config)) {
+      const baseMatrixId = (config as Record<string, unknown>).baseMatrixId;
+      if (baseMatrixId === 'opportunity') {
+        return opportunityMatrixConfig;
+      }
+    }
+
+    return defaultMatrixConfig;
   }
 
   private getAutoGenerationFieldLabel(contextType: CommentContextType, sectionKey: string, locale: AppLocale): string {
@@ -663,7 +695,7 @@ export class QueueManager {
 
   private async hasAnyContextDocuments(
     workspaceId: string,
-    contextType: 'organization' | 'folder' | 'usecase',
+    contextType: 'organization' | 'folder' | 'initiative',
     contextId: string
   ): Promise<boolean> {
     const [row] = await db
@@ -902,6 +934,7 @@ export class QueueManager {
     return `
       CASE type
         WHEN 'docx_generate' THEN 'publishing'
+        WHEN 'chat_message' THEN 'chat'
         ELSE 'ai'
       END
     `;
@@ -973,12 +1006,12 @@ export class QueueManager {
     try {
       const inFlight = new Set<Promise<void>>();
       const queueClassExpr = sql.raw(this.queueClassSqlExpr());
-      const queueClasses: Array<'ai' | 'publishing'> = ['publishing', 'ai'];
+      const queueClasses: Array<'ai' | 'chat' | 'publishing'> = ['chat', 'publishing', 'ai'];
 
       const sleep = async (ms: number) => new Promise((r) => setTimeout(r, ms));
 
       const getProcessingCountByClass = async (
-        queueClass: 'ai' | 'publishing'
+        queueClass: 'ai' | 'chat' | 'publishing'
       ): Promise<number> => {
         try {
           const rows = (await db.all(sql`
@@ -1003,14 +1036,14 @@ export class QueueManager {
       };
 
       const claimPendingJobsByClass = async (
-        queueClass: 'ai' | 'publishing',
+        queueClass: 'ai' | 'chat' | 'publishing',
         limit: number
       ): Promise<JobQueueRow[]> => {
         if (limit <= 0) return [];
         const orderByExpr =
           queueClass === 'ai'
             ? sql.raw(
-                "CASE type WHEN 'chat_message' THEN 0 WHEN 'matrix_generate' THEN 1 WHEN 'usecase_list' THEN 1 ELSE 2 END, created_at ASC"
+                "CASE type WHEN 'chat_message' THEN 0 WHEN 'matrix_generate' THEN 1 WHEN 'initiative_list' THEN 1 ELSE 2 END, created_at ASC"
               )
             : sql.raw('created_at ASC');
         const now = new Date();
@@ -1037,7 +1070,7 @@ export class QueueManager {
         if (this.cancelAllInProgress) break;
 
         for (const queueClass of queueClasses) {
-          const classLimit = queueClass === 'ai' ? this.maxConcurrentJobs : this.maxPublishingJobs;
+          const classLimit = queueClass === 'publishing' ? this.maxPublishingJobs : this.maxConcurrentJobs;
           const classProcessing = await getProcessingCountByClass(queueClass);
           const slots = Math.max(0, classLimit - classProcessing);
           if (slots <= 0) continue;
@@ -1105,7 +1138,7 @@ export class QueueManager {
       return msg.includes('AbortError') || msg.includes('aborted') || msg.includes('Request was aborted');
     };
 
-    const isRetryableUseCaseError = (err: unknown): boolean => {
+    const isRetryableInitiativeError = (err: unknown): boolean => {
       const msg = err instanceof Error ? err.message : String(err);
       // JSON/format issues (LLM returned non-JSON or concatenated junk)
       if (msg.includes('Erreur lors du parsing') || msg.includes('Invalid JSON') || msg.includes('Unexpected non-whitespace character') || msg.includes('No JSON object boundaries')) {
@@ -1148,11 +1181,11 @@ export class QueueManager {
         case 'matrix_generate':
           await this.processMatrixGenerate(jobData as unknown as MatrixGenerateJobData, controller.signal);
           break;
-        case 'usecase_list':
-          await this.processUseCaseList(jobData as unknown as UseCaseListJobData, controller.signal);
+        case 'initiative_list':
+          await this.processInitiativeList(jobData as unknown as InitiativeListJobData, controller.signal);
           break;
-        case 'usecase_detail':
-          await this.processUseCaseDetail(jobData as unknown as UseCaseDetailJobData, controller.signal);
+        case 'initiative_detail':
+          await this.processInitiativeDetail(jobData as unknown as InitiativeDetailJobData, controller.signal);
           break;
         case 'executive_summary':
           await this.processExecutiveSummary(jobData as unknown as ExecutiveSummaryJobData, controller.signal);
@@ -1192,7 +1225,7 @@ export class QueueManager {
 
       // Retry logic (bounded) for use case generation jobs only.
       // IMPORTANT: never retry on AbortError (user/admin cancel).
-      if ((jobType === 'usecase_list' || jobType === 'usecase_detail') && retryMax > 0 && retryAttempt < retryMax && !isAbort(error) && isRetryableUseCaseError(error)) {
+      if ((jobType === 'initiative_list' || jobType === 'initiative_detail') && retryMax > 0 && retryAttempt < retryMax && !isAbort(error) && isRetryableInitiativeError(error)) {
         const nextAttempt = retryAttempt + 1;
         const nextData =
           jobData && typeof jobData === 'object'
@@ -1464,21 +1497,23 @@ export class QueueManager {
     );
 
     const streamId = `matrix_${folderId}`;
+    const matrixAgentId = workflow?.agentDefinitionId ?? null;
     const matrixPromptOverride = await this.resolveGenerationPromptOverride(
       folder.workspaceId,
-      workflow?.agentDefinitionId ?? workflow?.taskAssignments.matrixPrepareAgentId ?? null,
+      matrixAgentId,
       'organization_matrix_template',
     );
+    const baseMatrix = await this.resolveBaseMatrixFromAgent(folder.workspaceId, matrixAgentId);
     const template = await generateOrganizationMatrixTemplate(
       organization.name,
       organizationInfo,
-      defaultMatrixConfig,
+      baseMatrix,
       selectedModel,
       signal,
       streamId,
       matrixPromptOverride,
     );
-    const generatedMatrix = mergeOrganizationMatrixTemplate(defaultMatrixConfig, template);
+    const generatedMatrix = mergeOrganizationMatrixTemplate(baseMatrix, template);
 
     const nextOrgData = {
       ...orgData,
@@ -1904,8 +1939,8 @@ export class QueueManager {
   /**
    * Worker pour la génération de liste de cas d'usage
    */
-  private async processUseCaseList(data: UseCaseListJobData, signal?: AbortSignal): Promise<void> {
-    const { folderId, input, organizationId, matrixMode, model, useCaseCount, initiatedByUserId, locale } = data;
+  private async processInitiativeList(data: InitiativeListJobData, signal?: AbortSignal): Promise<void> {
+    const { folderId, input, organizationId, matrixMode, model, initiativeCount, initiatedByUserId, locale } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
     const [folder] = await db
@@ -1981,28 +2016,29 @@ export class QueueManager {
     const streamId = `folder_${folderId}`;
     const listPromptOverride = await this.resolveGenerationPromptOverride(
       workspaceId,
-      workflow?.agentDefinitionId ?? workflow?.taskAssignments.usecaseListAgentId ?? null,
+      workflow?.agentDefinitionId ?? null,
       'use_case_list',
     );
-    const useCaseList = await generateUseCaseList(
+    const initiativeList = await generateInitiativeList(
       input,
       organizationInfo,
       selectedModel,
-      useCaseCount,
+      initiativeCount,
       userFolderName,
       documentsContexts,
       documentsContextJson,
       signal,
       streamId,
       listPromptOverride,
+      listPromptOverride.outputSchema,
     );
     
     // Mettre à jour le nom du dossier
     // - si l'utilisateur a fourni un nom: le préserver
     // - sinon: utiliser le nom généré par l'IA (et ne jamais conserver "Brouillon" comme titre final)
     const generatedFolderName =
-      typeof useCaseList.dossier === 'string' && useCaseList.dossier.trim() && useCaseList.dossier.trim() !== 'Brouillon'
-        ? useCaseList.dossier.trim()
+      typeof initiativeList.dossier === 'string' && initiativeList.dossier.trim() && initiativeList.dossier.trim() !== 'Brouillon'
+        ? initiativeList.dossier.trim()
         : '';
     const nextFolderName = userFolderName || generatedFolderName;
     const generatedFolderFields: string[] = [];
@@ -2031,12 +2067,12 @@ export class QueueManager {
     }
 
     // Créer les cas d'usage en mode generating
-    // Note: UseCaseListItem n'a que 'titre', pas 'title'
-    const draftUseCases = useCaseList.useCases.map((useCaseItem: UseCaseListItem) => {
-      const title = useCaseItem.titre || String(useCaseItem);
-      const useCaseData: UseCaseData = {
+    // Note: InitiativeListItem n'a que 'titre', pas 'title'
+    const draftInitiatives = initiativeList.initiatives.map((initiativeItem: InitiativeListItem) => {
+      const title = initiativeItem.titre || String(initiativeItem);
+      const initiativeData: InitiativeData = {
         name: title, // Stocker name dans data
-        description: useCaseItem.description || '', // Stocker description dans data
+        description: initiativeItem.description || '', // Stocker description dans data
         technologies: [],
         deadline: '',
         contact: '',
@@ -2054,7 +2090,7 @@ export class QueueManager {
         workspaceId,
         folderId: folderId,
         organizationId: organizationId || null,
-        data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name et description)
+        data: initiativeData as InitiativeDataJson, // Drizzle accepte JSONB directement (inclut name et description)
         model: selectedModel,
         status: 'generating',
         createdAt: new Date()
@@ -2062,18 +2098,18 @@ export class QueueManager {
     });
 
     // Insérer les cas d'usage
-    await db.insert(useCases).values(draftUseCases);
-    for (const uc of draftUseCases) {
-      await this.notifyUseCaseEvent(uc.id);
+    await db.insert(initiatives).values(draftInitiatives);
+    for (const uc of draftInitiatives) {
+      await this.notifyInitiativeEvent(uc.id);
       const data = uc.data as unknown as Record<string, unknown>;
-      const generatedUseCaseFields: string[] = [];
-      if (typeof data.name === 'string' && data.name.trim()) generatedUseCaseFields.push('data.name');
-      if (typeof data.description === 'string' && data.description.trim()) generatedUseCaseFields.push('data.description');
+      const generatedInitiativeFields: string[] = [];
+      if (typeof data.name === 'string' && data.name.trim()) generatedInitiativeFields.push('data.name');
+      if (typeof data.description === 'string' && data.description.trim()) generatedInitiativeFields.push('data.description');
       await this.createAutoGenerationFieldComments({
         workspaceId,
-        contextType: 'usecase',
+        contextType: 'initiative',
         contextId: uc.id,
-        sectionKeys: generatedUseCaseFields,
+        sectionKeys: generatedInitiativeFields,
         createdBy: initiatedByUserId,
         locale
       });
@@ -2086,20 +2122,22 @@ export class QueueManager {
     await this.notifyFolderEvent(folderId);
 
     if (!workflow) {
-      throw new Error('Workflow runtime metadata is required for usecase_list generation jobs');
+      throw new Error('Workflow runtime metadata is required for initiative_list generation jobs');
     }
 
     // Workflow runtime chain: detail fanout is triggered from workflow metadata only.
     if (this.cancelAllInProgress || this.paused) {
       console.warn('⏸️ Skipping workflow detail fanout due to pause/cancel');
     } else {
-      const detailWorkflow = cloneGenerationWorkflowRuntimeContextForTask(workflow, 'generation_usecase_detail');
-      for (const useCase of draftUseCases) {
+      // Resolve the detail task key from agentMap (may be 'generation_initiative_detail' or 'opportunity_detail')
+      const detailTaskKey = Object.keys(workflow.agentMap).find(k => k.includes('detail')) ?? 'generation_initiative_detail';
+      const detailWorkflow = cloneWorkflowContextForTask(workflow, detailTaskKey as GenerationWorkflowTaskKey);
+      for (const initiative of draftInitiatives) {
         try {
-          const useCaseName = (useCase.data as UseCaseData)?.name || 'Cas d\'usage sans nom';
-          await this.addJob('usecase_detail', {
-            useCaseId: useCase.id,
-            useCaseName,
+          const initiativeName = (initiative.data as InitiativeData)?.name || 'Cas d\'usage sans nom';
+          await this.addJob('initiative_detail', {
+            initiativeId: initiative.id,
+            initiativeName,
             folderId,
             matrixMode,
             model: selectedModel,
@@ -2108,12 +2146,12 @@ export class QueueManager {
             workflow: detailWorkflow,
           }, { workspaceId, maxRetries: 1 });
         } catch (e) {
-          console.warn('Skipped enqueue usecase_detail:', (e as Error).message);
+          console.warn('Skipped enqueue initiative_detail:', (e as Error).message);
         }
       }
     }
 
-    console.log(`📋 Generated ${draftUseCases.length} use cases and scheduled workflow detailing`);
+    console.log(`📋 Generated ${draftInitiatives.length} use cases and scheduled workflow detailing`);
   }
 
   private async getLatestMatrixJobState(folderId: string): Promise<{ status: string; error: string | null } | null> {
@@ -2157,8 +2195,8 @@ export class QueueManager {
   /**
    * Worker pour le détail d'un cas d'usage
    */
-  private async processUseCaseDetail(data: UseCaseDetailJobData, signal?: AbortSignal): Promise<void> {
-    const { useCaseId, useCaseName, folderId, matrixMode, model, initiatedByUserId, locale } = data;
+  private async processInitiativeDetail(data: InitiativeDetailJobData, signal?: AbortSignal): Promise<void> {
+    const { initiativeId, initiativeName, folderId, matrixMode, model, initiatedByUserId, locale } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
@@ -2222,14 +2260,14 @@ export class QueueManager {
     });
     
     // Générer le détail
-    const streamId = `usecase_${useCaseId}`;
+    const streamId = `initiative_${initiativeId}`;
     const detailPromptOverride = await this.resolveGenerationPromptOverride(
       folder.workspaceId,
-      workflow?.agentDefinitionId ?? workflow?.taskAssignments.usecaseDetailAgentId ?? null,
+      workflow?.agentDefinitionId ?? null,
       'use_case_detail',
     );
-    const useCaseDetail = await generateUseCaseDetail(
-      useCaseName,
+    const initiativeDetail = await generateInitiativeDetail(
+      initiativeName,
       context,
       matrixConfig,
       organizationInfo,
@@ -2239,81 +2277,83 @@ export class QueueManager {
       signal,
       streamId,
       detailPromptOverride,
+      undefined, // options
+      detailPromptOverride.outputSchema,
     );
     
     // Valider les scores générés
-    const validation = validateScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
+    const validation = validateScores(matrixConfig, initiativeDetail.valueScores, initiativeDetail.complexityScores);
     
     if (!validation.isValid) {
-      console.warn(`⚠️ Scores invalides pour ${useCaseName}:`, validation.errors);
+      console.warn(`⚠️ Scores invalides pour ${initiativeName}:`, validation.errors);
       console.log(`🔧 Correction automatique des scores...`);
       
       // Corriger les scores
-      const fixedScores = fixScores(matrixConfig, useCaseDetail.valueScores, useCaseDetail.complexityScores);
-      useCaseDetail.valueScores = fixedScores.valueScores;
-      useCaseDetail.complexityScores = fixedScores.complexityScores;
+      const fixedScores = fixScores(matrixConfig, initiativeDetail.valueScores, initiativeDetail.complexityScores);
+      initiativeDetail.valueScores = fixedScores.valueScores;
+      initiativeDetail.complexityScores = fixedScores.complexityScores;
       
       console.log(`✅ Scores corrigés:`, {
-        valueAxes: useCaseDetail.valueScores.length,
-        complexityAxes: useCaseDetail.complexityScores.length
+        valueAxes: initiativeDetail.valueScores.length,
+        complexityAxes: initiativeDetail.complexityScores.length
       });
     } else {
-      console.log(`✅ Scores valides pour ${useCaseName}`);
+      console.log(`✅ Scores valides pour ${initiativeName}`);
     }
     
     if (validation.warnings.length > 0) {
-      console.warn(`⚠️ Avertissements pour ${useCaseName}:`, validation.warnings);
+      console.warn(`⚠️ Avertissements pour ${initiativeName}:`, validation.warnings);
     }
     
     // Récupérer le cas d'usage existant pour préserver name et description s'ils existent déjà
-    const [existingUseCase] = await db
+    const [existingInitiative] = await db
       .select()
-      .from(useCases)
-      .where(and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, folder.workspaceId)));
-    let existingData: Partial<UseCaseData> = {};
-    if (existingUseCase?.data) {
+      .from(initiatives)
+      .where(and(eq(initiatives.id, initiativeId), eq(initiatives.workspaceId, folder.workspaceId)));
+    let existingData: Partial<InitiativeData> = {};
+    if (existingInitiative?.data) {
       try {
-        if (typeof existingUseCase.data === 'object') {
-          existingData = existingUseCase.data as UseCaseData;
-        } else if (typeof existingUseCase.data === 'string') {
-          existingData = JSON.parse(existingUseCase.data) as UseCaseData;
+        if (typeof existingInitiative.data === 'object') {
+          existingData = existingInitiative.data as InitiativeData;
+        } else if (typeof existingInitiative.data === 'string') {
+          existingData = JSON.parse(existingInitiative.data) as InitiativeData;
         }
       } catch (error) {
         // Ignorer les erreurs de parsing
       }
     }
     
-    const { useCaseData, generatedUseCaseFields } = buildGeneratedUseCasePayloadForPersistence(
+    const { initiativeData, generatedInitiativeFields } = buildGeneratedInitiativePayloadForPersistence(
       existingData,
-      useCaseDetail
+      initiativeDetail
     );
     
     // Mettre à jour le cas d'usage
     // Note: Toutes les colonnes métier (deadline, contact, benefits, etc.) sont maintenant dans data JSONB (migration 0008)
     // On met à jour uniquement data qui contient toutes les colonnes métier
-    await db.update(useCases)
+    await db.update(initiatives)
       .set({
-        data: useCaseData as UseCaseDataJson, // Drizzle accepte JSONB directement (inclut name, description, domain, technologies, deadline, contact, benefits, etc.)
+        data: initiativeData as InitiativeDataJson, // Drizzle accepte JSONB directement (inclut name, description, domain, technologies, deadline, contact, benefits, etc.)
         model: selectedModel,
         status: 'completed'
       })
-      .where(and(eq(useCases.id, useCaseId), eq(useCases.workspaceId, folder.workspaceId)));
-    await this.notifyUseCaseEvent(useCaseId);
+      .where(and(eq(initiatives.id, initiativeId), eq(initiatives.workspaceId, folder.workspaceId)));
+    await this.notifyInitiativeEvent(initiativeId);
     await this.createAutoGenerationFieldComments({
       workspaceId: folder.workspaceId,
-      contextType: 'usecase',
-      contextId: useCaseId,
-      sectionKeys: generatedUseCaseFields,
+      contextType: 'initiative',
+      contextId: initiativeId,
+      sectionKeys: generatedInitiativeFields,
       createdBy: initiatedByUserId,
       locale
     });
 
     // Vérifier si tous les use cases du dossier sont complétés
-    const allUseCases = await db
+    const allInitiatives = await db
       .select()
-      .from(useCases)
-      .where(and(eq(useCases.folderId, folderId), eq(useCases.workspaceId, folder.workspaceId)));
-    const allCompleted = allUseCases.length > 0 && allUseCases.every(uc => uc.status === 'completed');
+      .from(initiatives)
+      .where(and(eq(initiatives.folderId, folderId), eq(initiatives.workspaceId, folder.workspaceId)));
+    const allCompleted = allInitiatives.length > 0 && allInitiatives.every(uc => uc.status === 'completed');
 
     if (allCompleted) {
       // Vérifier si une synthèse exécutive existe déjà
@@ -2333,13 +2373,15 @@ export class QueueManager {
         await this.notifyFolderEvent(folderId);
 
         if (!workflow) {
-          console.log('ℹ️ Workflow metadata missing on usecase_detail; executive summary enqueue skipped');
+          console.log('ℹ️ Workflow metadata missing on initiative_detail; executive summary enqueue skipped');
           return;
         }
 
-        const executiveSummaryWorkflow = cloneGenerationWorkflowRuntimeContextForTask(
+        // Resolve executive summary task key from agentMap
+        const summaryTaskKey = Object.keys(workflow.agentMap).find(k => k.includes('executive_summary') || k.includes('summary')) ?? 'generation_executive_summary';
+        const executiveSummaryWorkflow = cloneWorkflowContextForTask(
           workflow,
-          'generation_executive_summary'
+          summaryTaskKey as GenerationWorkflowTaskKey
         );
         try {
           await this.addJob('executive_summary', {
@@ -2352,7 +2394,7 @@ export class QueueManager {
           console.log(`📝 Workflow executive_summary job added for folder ${folderId}`);
         } catch (error) {
           console.error(`❌ Failed to enqueue workflow executive_summary job:`, error);
-          // Keep usecase_detail completion even if summary enqueue fails.
+          // Keep initiative_detail completion even if summary enqueue fails.
         }
       } else {
         console.log(`ℹ️ Le dossier ${folderId} a déjà une synthèse exécutive, pas de régénération automatique`);
@@ -2378,7 +2420,7 @@ export class QueueManager {
     const workspaceIdForPrompt = folderBefore?.workspaceId ?? "";
     const executivePromptOverride = await this.resolveGenerationPromptOverride(
       workspaceIdForPrompt,
-      workflow?.agentDefinitionId ?? workflow?.taskAssignments.executiveSummaryAgentId ?? null,
+      workflow?.agentDefinitionId ?? null,
       'executive_summary',
     );
 

@@ -4,7 +4,7 @@ import { createHash } from 'crypto';
 import { app } from '../../src/app';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { comments, folders, organizations, useCases, workspaceMemberships, workspaces } from '../../src/db/schema';
+import { comments, folders, organizations, initiatives, workspaceMemberships, workspaces } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createTestId } from '../utils/test-helpers';
 
@@ -33,7 +33,7 @@ async function buildImportZip(opts: {
   workspaceId: string;
   orgId: string;
   folderId: string;
-  useCaseId: string;
+  initiativeId: string;
 }): Promise<Uint8Array> {
   const zip = new JSZip();
 
@@ -52,9 +52,9 @@ async function buildImportZip(opts: {
       created_at: new Date().toISOString(),
     },
   ];
-  const useCases = [
+  const initiatives = [
     {
-      id: opts.useCaseId,
+      id: opts.initiativeId,
       workspace_id: opts.workspaceId,
       folder_id: opts.folderId,
       organization_id: opts.orgId,
@@ -69,7 +69,7 @@ async function buildImportZip(opts: {
     { path: 'workspaces.json', bytes: new TextEncoder().encode(stableStringify(workspaces)) },
     { path: 'organizations.json', bytes: new TextEncoder().encode(stableStringify(organizations)) },
     { path: 'folders.json', bytes: new TextEncoder().encode(stableStringify(folders)) },
-    { path: 'use_cases.json', bytes: new TextEncoder().encode(stableStringify(useCases)) },
+    { path: 'initiatives.json', bytes: new TextEncoder().encode(stableStringify(initiatives)) },
   ];
 
   const manifestFiles = files.map((f) => ({
@@ -106,7 +106,7 @@ async function buildObjectExportZip(opts: {
   workspaceId: string;
   orgId: string;
   folderId: string;
-  useCaseId: string;
+  initiativeId: string;
 }): Promise<Uint8Array> {
   const zip = new JSZip();
   const workspaces = [{ id: opts.workspaceId, name: 'Imported workspace' }];
@@ -128,8 +128,8 @@ async function buildObjectExportZip(opts: {
     status: 'completed',
     created_at: new Date().toISOString(),
   };
-  const useCase = {
-    id: opts.useCaseId,
+  const initiative = {
+    id: opts.initiativeId,
     workspace_id: opts.workspaceId,
     folder_id: opts.folderId,
     organization_id: opts.orgId,
@@ -142,7 +142,7 @@ async function buildObjectExportZip(opts: {
     { path: 'workspaces.json', bytes: new TextEncoder().encode(stableStringify(workspaces)) },
     { path: `organization_${opts.orgId}.json`, bytes: new TextEncoder().encode(stableStringify(organization)) },
     { path: `folder_${opts.folderId}.json`, bytes: new TextEncoder().encode(stableStringify(folder)) },
-    { path: `usecase_${opts.useCaseId}.json`, bytes: new TextEncoder().encode(stableStringify(useCase)) },
+    { path: `initiative_${opts.initiativeId}.json`, bytes: new TextEncoder().encode(stableStringify(initiative)) },
   ];
   const manifestFiles = files.map((f) => ({
     path: f.path,
@@ -178,7 +178,7 @@ describe('Import/Export API', () => {
   const createdWorkspaceIds: string[] = [];
   const createdOrgIds: string[] = [];
   const createdFolderIds: string[] = [];
-  const createdUseCaseIds: string[] = [];
+  const createdInitiativeIds: string[] = [];
 
   beforeEach(async () => {
     admin = await createAuthenticatedUser('admin', `admin-${createTestId()}@example.com`);
@@ -196,10 +196,10 @@ describe('Import/Export API', () => {
 
     const orgId = `org_${createTestId()}`;
     const folderId = `folder_${createTestId()}`;
-    const useCaseId = `uc_${createTestId()}`;
+    const initiativeId = `uc_${createTestId()}`;
     createdOrgIds.push(orgId);
     createdFolderIds.push(folderId);
-    createdUseCaseIds.push(useCaseId);
+    createdInitiativeIds.push(initiativeId);
 
     await db.insert(organizations).values({
       id: orgId,
@@ -221,8 +221,8 @@ describe('Import/Export API', () => {
       status: 'completed',
       createdAt: new Date(),
     });
-    await db.insert(useCases).values({
-      id: useCaseId,
+    await db.insert(initiatives).values({
+      id: initiativeId,
       workspaceId: admin.workspaceId!,
       folderId,
       organizationId: orgId,
@@ -234,8 +234,8 @@ describe('Import/Export API', () => {
   });
 
   afterEach(async () => {
-    if (createdUseCaseIds.length > 0) {
-      await db.delete(useCases).where(eq(useCases.id, createdUseCaseIds.pop()!));
+    if (createdInitiativeIds.length > 0) {
+      await db.delete(initiatives).where(eq(initiatives.id, createdInitiativeIds.pop()!));
     }
     if (createdFolderIds.length > 0) {
       await db.delete(folders).where(eq(folders.id, createdFolderIds.pop()!));
@@ -245,7 +245,7 @@ describe('Import/Export API', () => {
     }
     for (const wsId of createdWorkspaceIds) {
       await db.delete(comments).where(eq(comments.workspaceId, wsId));
-      await db.delete(useCases).where(eq(useCases.workspaceId, wsId));
+      await db.delete(initiatives).where(eq(initiatives.workspaceId, wsId));
       await db.delete(folders).where(eq(folders.workspaceId, wsId));
       await db.delete(organizations).where(eq(organizations.workspaceId, wsId));
       await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, wsId));
@@ -273,13 +273,13 @@ describe('Import/Export API', () => {
   });
 
   it('exports tool_call_id on comments', async () => {
-    const useCaseId = createdUseCaseIds[0];
+    const initiativeId = createdInitiativeIds[0];
     const now = new Date();
     await db.insert(comments).values({
       id: `comment_${createTestId()}`,
       workspaceId: admin.workspaceId!,
-      contextType: 'usecase',
-      contextId: useCaseId,
+      contextType: 'initiative',
+      contextId: initiativeId,
       sectionKey: null,
       createdBy: admin.id,
       assignedTo: admin.id,
@@ -292,17 +292,17 @@ describe('Import/Export API', () => {
     });
 
     const res = await authenticatedRequest(app, 'POST', '/api/v1/exports', admin.sessionToken!, {
-      scope: 'usecase',
-      scope_id: useCaseId,
+      scope: 'initiative',
+      scope_id: initiativeId,
       include_comments: true,
       include_documents: false
     });
     expect(res.status).toBe(200);
     const bytes = new Uint8Array(await res.arrayBuffer());
     const zip = await JSZip.loadAsync(bytes);
-    const useCaseFile = zip.file(`usecase_${useCaseId}.json`);
-    expect(useCaseFile).toBeTruthy();
-    const payload = JSON.parse(await useCaseFile!.async('string'));
+    const initiativeFile = zip.file(`initiative_${initiativeId}.json`);
+    expect(initiativeFile).toBeTruthy();
+    const payload = JSON.parse(await initiativeFile!.async('string'));
     const exported = (payload.comments ?? []).find((item: any) => item.tool_call_id === 'tool_export_1');
     expect(exported).toBeTruthy();
   });
@@ -379,7 +379,7 @@ describe('Import/Export API', () => {
       workspaceId: `ws_${createTestId()}`,
       orgId: `org_${createTestId()}`,
       folderId: `folder_${createTestId()}`,
-      useCaseId: `uc_${createTestId()}`,
+      initiativeId: `uc_${createTestId()}`,
     });
     const form = new FormData();
     form.set('file', new File([zipBytes], 'import.zip', { type: 'application/zip' }));
@@ -401,7 +401,7 @@ describe('Import/Export API', () => {
       workspaceId: `ws_${createTestId()}`,
       orgId: `org_${createTestId()}`,
       folderId: `folder_${createTestId()}`,
-      useCaseId: `uc_${createTestId()}`,
+      initiativeId: `uc_${createTestId()}`,
     });
     const form = new FormData();
     form.set('file', new File([zipBytes], 'import.zip', { type: 'application/zip' }));
@@ -423,7 +423,7 @@ describe('Import/Export API', () => {
       workspaceId: `ws_${createTestId()}`,
       orgId: `org_${createTestId()}`,
       folderId: `folder_${createTestId()}`,
-      useCaseId: `uc_${createTestId()}`,
+      initiativeId: `uc_${createTestId()}`,
     });
     const form = new FormData();
     form.set('file', new File([zipBytes], 'preview.zip', { type: 'application/zip' }));
@@ -445,7 +445,7 @@ describe('Import/Export API', () => {
       workspaceId: `ws_${createTestId()}`,
       orgId: `org_${createTestId()}`,
       folderId: sourceFolderId,
-      useCaseId: `uc_${createTestId()}`,
+      initiativeId: `uc_${createTestId()}`,
     });
     const form = new FormData();
     form.set('file', new File([zipBytes], 'import.zip', { type: 'application/zip' }));
@@ -465,8 +465,8 @@ describe('Import/Export API', () => {
     expect(targetFolderId.length).toBeGreaterThan(0);
     createdWorkspaceIds.push(workspaceId);
 
-    const importedUseCases = await db.select().from(useCases).where(eq(useCases.workspaceId, workspaceId));
-    expect(importedUseCases.length).toBe(1);
-    expect(importedUseCases[0].folderId).toBe(targetFolderId);
+    const importedInitiatives = await db.select().from(initiatives).where(eq(initiatives.workspaceId, workspaceId));
+    expect(importedInitiatives.length).toBe(1);
+    expect(importedInitiatives[0].folderId).toBe(targetFolderId);
   });
 });

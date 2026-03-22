@@ -14,7 +14,7 @@ import { resolveLocaleFromHeaders } from '../../utils/locale';
 export const chatRouter = new Hono();
 
 const chatContextInput = z.object({
-  contextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']),
+  contextType: z.enum(['organization', 'folder', 'initiative', 'usecase', 'executive_summary']), // TODO Lot 10: remove 'usecase' after full data migration
   contextId: z.string().min(1)
 });
 
@@ -62,7 +62,7 @@ const createMessageInput = z.object({
   providerApiKey: z.string().min(1).optional(),
   model: z.string().optional(),
   workspace_id: z.string().optional(),
-  primaryContextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']).optional(),
+  primaryContextType: z.enum(['organization', 'folder', 'initiative', 'usecase', 'executive_summary']).optional(),
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional(),
   contexts: z.array(chatContextInput).optional(),
@@ -86,7 +86,7 @@ const retryMessageInput = z.object({
 });
 
 const createSessionInput = z.object({
-  primaryContextType: z.enum(['organization', 'folder', 'usecase', 'executive_summary']).optional(),
+  primaryContextType: z.enum(['organization', 'folder', 'initiative', 'usecase', 'executive_summary']).optional(),
   primaryContextId: z.string().optional(),
   sessionTitle: z.string().optional()
 });
@@ -348,11 +348,19 @@ chatRouter.get('/sessions/:id/history', async (c) => {
   const sessionId = c.req.param('id')!;
   const detailMode =
     c.req.query('runtimeDetails') === 'full' ? 'full' : 'summary';
-  const result = await chatService.getSessionHistory({
-    sessionId,
-    userId: user.userId,
-    detailMode,
-  });
+  let result;
+  try {
+    result = await chatService.getSessionHistory({
+      sessionId,
+      userId: user.userId,
+      detailMode,
+    });
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message === 'Session not found') {
+      return c.json({ message: 'Session not found' }, 404);
+    }
+    throw e;
+  }
 
   const encoder = new TextEncoder();
 

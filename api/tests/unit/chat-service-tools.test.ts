@@ -107,8 +107,8 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
       ]);
     });
 
-    const contexts: Array<{ primaryContextType: 'usecase' | 'organization' | 'folder' | 'executive_summary'; primaryContextId: string | null }> = [
-      { primaryContextType: 'usecase', primaryContextId: createId() },
+    const contexts: Array<{ primaryContextType: 'initiative' | 'organization' | 'folder' | 'executive_summary'; primaryContextId: string | null }> = [
+      { primaryContextType: 'initiative', primaryContextId: createId() },
       { primaryContextType: 'organization', primaryContextId: createId() },
       { primaryContextType: 'folder', primaryContextId: folderId },
       { primaryContextType: 'executive_summary', primaryContextId: folderId },
@@ -141,7 +141,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     if (folderTools) {
       expect(folderTools).toContain('folders_list');
       expect(folderTools).toContain('folder_get');
-      expect(folderTools).toContain('usecases_list');
+      expect(folderTools).toContain('initiatives_list');
       expect(folderTools).toContain('executive_summary_get');
       expect(folderTools).toContain('matrix_get');
       // updates enabled in non-readonly context

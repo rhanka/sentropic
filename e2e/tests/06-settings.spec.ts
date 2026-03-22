@@ -313,7 +313,7 @@ test.describe('Page Paramètres', () => {
     // Test skip: cannot fill text into input[type=number]
   });
 
-  test.describe.serial('Workspace table (User A admin)', () => {
+  test.describe('Workspace table (User A admin)', () => {
     test('UX table: icons only + row title + actions do not change selection', async ({ browser }) => {
       const { context, page } = await createScopedPage(browser, USER_A_STATE, workspaceAlphaId);
       try {

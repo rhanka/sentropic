@@ -3,14 +3,14 @@ import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db, pool } from '../../db/client';
-import { comments, folders, organizations, useCases, users, workspaceMemberships } from '../../db/schema';
+import { comments, folders, organizations, initiatives, users, workspaceMemberships } from '../../db/schema';
 import { requireWorkspaceAccessRole, requireWorkspaceCommenterRole } from '../../middleware/workspace-rbac';
 import { requireWorkspaceAdmin } from '../../services/workspace-access';
 import { createId } from '../../utils/id';
 
 export const commentsRouter = new Hono();
 
-const contextTypeSchema = z.enum(['organization', 'folder', 'usecase', 'matrix', 'executive_summary']);
+const contextTypeSchema = z.enum(['organization', 'folder', 'initiative', 'usecase', 'matrix', 'executive_summary']); // TODO Lot 10: remove 'usecase'
 const statusSchema = z.enum(['open', 'closed']);
 
 function escapeNotifyPayload(payload: Record<string, unknown>): string {
@@ -44,11 +44,11 @@ async function ensureContextExists(contextType: string, contextId: string, works
       .limit(1);
     return !!row;
   }
-  if (contextType === 'usecase') {
+  if (contextType === 'initiative') {
     const [row] = await db
-      .select({ id: useCases.id })
-      .from(useCases)
-      .where(and(eq(useCases.id, contextId), eq(useCases.workspaceId, workspaceId)))
+      .select({ id: initiatives.id })
+      .from(initiatives)
+      .where(and(eq(initiatives.id, contextId), eq(initiatives.workspaceId, workspaceId)))
       .limit(1);
     return !!row;
   }

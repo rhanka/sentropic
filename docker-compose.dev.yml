@@ -43,6 +43,7 @@ services:
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - minio_data:/data
+      - ./data/backup:/backups
 
   minio-init:
     image: minio/mc:latest

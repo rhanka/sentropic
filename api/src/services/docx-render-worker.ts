@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 type DocxWorkerInput = {
   templateId: 'usecase-onepage' | 'executive-synthesis-multipage';
-  entityType: 'usecase' | 'folder';
+  entityType: 'initiative' | 'folder';
   entityId: string;
   workspaceId: string;
   provided?: Record<string, unknown>;

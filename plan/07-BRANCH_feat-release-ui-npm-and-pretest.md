@@ -1,5 +1,8 @@
 # Feature: Release UI npm + Playwright Pretest
 
+## BR-14 dependency note
+Blocked: npm export of ChatWidget/ChatPanel requires BR-14 (chat modularization) to deliver clean modular interfaces. Publishing monolithic 59K/37K components as npm packages is not viable.
+
 ## Objective
 Deliver automated UI npm publishing and an integrated automated debug assistant for UI with systematic CI artifacts (screens/videos/logs) and packaged exploratory scenarios, plus a developer-usable debug path during branch development.
 

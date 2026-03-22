@@ -173,7 +173,7 @@ test.describe('Détail des organisations', () => {
     }
   });
 
-  test.describe.serial('Lock/presence', () => {
+  test.describe('Lock/presence', () => {
     test('lock/presence: User A verrouille, User B demande, User A accepte', async ({ browser }) => {
     const userAContext = await browser.newContext({
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),

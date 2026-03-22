@@ -1,5 +1,5 @@
 import { executeWithToolsStream } from './tools';
-import { defaultPrompts } from '../config/default-prompts';
+import { ORGANIZATION_PROMPTS } from '../config/default-chat-system';
 
 export interface OrganizationData {
   industry: string;
@@ -107,7 +107,7 @@ export const enrichOrganization = async (
     return enrichOrganizationStream(organizationName, streamId, model, signal, opts);
   }
 
-  const organizationInfoPrompt = defaultPrompts.find(p => p.id === 'organization_info')?.content || '';
+  const organizationInfoPrompt = ORGANIZATION_PROMPTS.organization_info || '';
   if (!organizationInfoPrompt) {
     throw new Error('Prompt organization_info non trouvé');
   }
@@ -166,7 +166,7 @@ export const enrichOrganizationStream = async (
     useDocuments?: boolean;
   }
 ): Promise<OrganizationData> => {
-  const organizationInfoPrompt = defaultPrompts.find(p => p.id === 'organization_info')?.content || '';
+  const organizationInfoPrompt = ORGANIZATION_PROMPTS.organization_info || '';
   if (!organizationInfoPrompt) {
     throw new Error('Prompt organization_info non trouvé');
   }

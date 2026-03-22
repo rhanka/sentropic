@@ -30,7 +30,7 @@
   import MenuPopover from '$lib/components/MenuPopover.svelte';
   import { currentFolderId, foldersStore } from '$lib/stores/folders';
   import { organizationsStore } from '$lib/stores/organizations';
-  import { useCasesStore } from '$lib/stores/useCases';
+  import { initiativesStore } from '$lib/stores/initiatives';
   import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import { deleteDocument, listDocuments, uploadDocument, type ContextDocumentItem } from '$lib/utils/documents';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
@@ -216,6 +216,7 @@
     messages: LocalMessage[];
     timelineItems: ProjectedTimelineItem[];
     initialEvents: Map<string, StreamEvent[]>;
+    runtimeSummaries: Map<string, RuntimeSegmentSummary>;
     checkpoints: ChatCheckpoint[];
     documents: ContextDocumentItem[];
     todoRuntime: Record<string, unknown> | null;
@@ -292,7 +293,7 @@
   };
   type IconComponent = typeof FileText;
   type ChatContextEntry = {
-    contextType: 'organization' | 'folder' | 'usecase' | 'executive_summary';
+    contextType: 'organization' | 'folder' | 'initiative' | 'executive_summary';
     contextId?: string;
     label: string;
     active: boolean;
@@ -336,7 +337,7 @@
   const getContextIcon = (type: ChatContextEntry['contextType']) => {
     if (type === 'organization') return Building2;
     if (type === 'folder') return Folder;
-    if (type === 'usecase') return Lightbulb;
+    if (type === 'initiative') return Lightbulb;
     if (type === 'executive_summary') return ScrollText;
     return FileText;
   };
@@ -357,8 +358,8 @@
       const folder = $foldersStore.find((f) => f.id === contextId);
       return folder?.name || '';
     }
-    if (type === 'usecase') {
-      const useCase = $useCasesStore.find((u) => u.id === contextId);
+    if (type === 'initiative') {
+      const useCase = $initiativesStore.find((u) => u.id === contextId);
       return useCase?.data?.name || useCase?.name || '';
     }
     if (type === 'executive_summary') {
@@ -398,11 +399,11 @@
               : folder.name,
           );
         }
-      } else if (type === 'usecase') {
+      } else if (type === 'initiative') {
         const useCase = await apiGet<{
           data?: { name?: string };
           name?: string;
-        }>(`/use-cases/${contextId}`);
+        }>(`/initiatives/${contextId}`);
         const name = useCase?.data?.name || useCase?.name;
         if (name) contextNameByKey.set(key, name);
       }
@@ -1373,12 +1374,15 @@
 
   // Historique batch (Option C): messageId -> events
   let initialEventsByMessageId = new Map<string, StreamEvent[]>();
+  let runtimeSummaryByMessageId = new Map<string, RuntimeSegmentSummary>();
   let projectedStreamEventsById = new Map<string, StreamEvent[]>();
   let projectedAssistantComputationByMessageId = new Map<
     string,
     ProjectedAssistantComputation
   >();
   let projectionEventsVersion = 0;
+  const loadedRuntimeDetailsMessageIds = new Set<string>();
+  const loadingRuntimeDetailsMessageIds = new Set<string>();
   let historyTimelineSessionId: string | null = null;
   let todoRuntimePanel: TodoRuntimePanelState | null = null;
   let todoRuntimeCollapsed = false;
@@ -1520,6 +1524,81 @@
     return [];
   };
 
+  const loadRuntimeDetailsForMessage = async (
+    targetSessionId: string,
+    messageId: string,
+  ): Promise<void> => {
+    if (loadedRuntimeDetailsMessageIds.has(messageId)) return;
+    if (loadingRuntimeDetailsMessageIds.has(messageId)) return;
+    loadingRuntimeDetailsMessageIds.add(messageId);
+    try {
+      const response = await apiFetch(
+        `/chat/sessions/${targetSessionId}/history?runtimeDetails=full`,
+        {
+          method: 'GET',
+          headers: { Accept: 'application/x-ndjson' },
+        },
+      );
+      if (!response.body) return;
+      const decoder = new TextDecoder();
+      const reader = response.body.getReader();
+      let buffer = '';
+      const collectedEvents: StreamEvent[] = [];
+      const processLine = (rawLine: string) => {
+        const line = rawLine.trim();
+        if (!line) return;
+        const payload = JSON.parse(line) as
+          | SessionHistoryMetaLine
+          | SessionHistoryTimelineLine;
+        if (payload.type !== 'timeline_item') return;
+        const item = payload.item;
+        if (String(item.message.id ?? '').trim() !== messageId) return;
+        if (item.kind !== 'runtime-segment' && item.kind !== 'assistant-segment') return;
+        if (item.segment.events && item.segment.events.length > 0) {
+          collectedEvents.push(
+            ...item.segment.events.map((e: StreamEvent) => ({
+              eventType: e.eventType,
+              data: e.data,
+              sequence: e.sequence,
+              createdAt: e.createdAt,
+            })),
+          );
+        }
+      };
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary = buffer.indexOf('\n');
+        while (boundary >= 0) {
+          processLine(buffer.slice(0, boundary));
+          buffer = buffer.slice(boundary + 1);
+          boundary = buffer.indexOf('\n');
+        }
+      }
+      buffer += decoder.decode();
+      if (buffer.trim().length > 0) processLine(buffer);
+      if (collectedEvents.length > 0) {
+        initialEventsByMessageId = new Map(initialEventsByMessageId);
+        initialEventsByMessageId.set(
+          messageId,
+          mergeProjectionHistoryEvents(
+            initialEventsByMessageId.get(messageId) ?? [],
+            collectedEvents,
+          ),
+        );
+        projectedAssistantComputationByMessageId = new Map(
+          projectedAssistantComputationByMessageId,
+        );
+        projectedAssistantComputationByMessageId.delete(messageId);
+        projectionEventsVersion += 1;
+      }
+      loadedRuntimeDetailsMessageIds.add(messageId);
+    } finally {
+      loadingRuntimeDetailsMessageIds.delete(messageId);
+    }
+  };
+
   const buildProjectedTimeline = (
     timeline: readonly LocalMessage[],
   ): ProjectedTimelineItem[] => {
@@ -1578,10 +1657,26 @@
       const streamId = message._streamId ?? message.id;
       const assistantProjection = getProjectedAssistantComputation(message);
       const projectedSegments = assistantProjection.segments;
-      const segments =
+      const baseSegments =
         projectedSegments.length > 0
           ? projectedSegments
           : buildFallbackProjectedSegments(message);
+      const hasRuntimeSegmentAlready = baseSegments.some((s) => s.kind === 'runtime');
+      const storedSummary = runtimeSummaryByMessageId.get(message.id);
+      const segments =
+        !hasRuntimeSegmentAlready && storedSummary
+          ? [
+              {
+                id: `runtime:history-summary:${message.id}`,
+                kind: 'runtime' as const,
+                events: [] as StreamEvent[],
+                content: '',
+                steerCountBefore: 0,
+                runtimeSummary: storedSummary,
+              },
+              ...baseSegments,
+            ]
+          : baseSegments;
       const linkedSteers = (steerIdsByAssistantId.get(message.id) ?? [])
         .map((steerId) => timeline.find((entry) => entry.id === steerId) ?? null)
         .filter((entry): entry is LocalMessage => entry !== null);
@@ -1704,13 +1799,13 @@
     const routeId = $contextStore.route.id;
     const params = $contextStore.params;
 
-    // /usecase/[id] → usecase
-    if (routeId === '/usecase/[id]' && params.id) {
-      return { primaryContextType: 'usecase', primaryContextId: params.id };
+    // /initiative/[id] → initiative
+    if (routeId === '/initiative/[id]' && params.id) {
+      return { primaryContextType: 'initiative', primaryContextId: params.id };
     }
 
-    // /usecase → use case list; when a folder is selected, treat chat context as folder
-    if (routeId === '/usecase' && $currentFolderId) {
+    // /initiative → initiative list; when a folder is selected, treat chat context as folder
+    if (routeId === '/initiative' && $currentFolderId) {
       return {
         primaryContextType: 'folder',
         primaryContextId: $currentFolderId,
@@ -1823,13 +1918,13 @@
     {
       id: 'usecase_read',
       label: $_('chat.tools.usecaseRead.label'),
-      toolIds: ['usecases_list', 'usecase_get', 'read_usecase'],
+      toolIds: ['initiatives_list', 'read_initiative', 'usecases_list', 'usecase_get', 'read_usecase'],
       icon: Lightbulb,
     },
     {
       id: 'usecase_update',
       label: $_('chat.tools.usecaseUpdate.label'),
-      toolIds: ['usecase_update', 'update_usecase_field'],
+      toolIds: ['update_initiative', 'usecase_update', 'update_usecase_field'],
       icon: Lightbulb,
     },
     {
@@ -1973,6 +2068,8 @@
           .filter((c) => !!c.contextType)
           .map((c) => ({
             ...c,
+            // Migrate stale "usecase" context type to "initiative"
+            contextType: c.contextType === ('usecase' as any) ? 'initiative' : c.contextType,
             used: typeof c.used === 'boolean' ? c.used : true,
           }));
       }
@@ -3483,6 +3580,7 @@
       messages: [],
       timelineItems: [],
       initialEvents: new Map(),
+      runtimeSummaries: new Map(),
       checkpoints: [],
       documents: [],
       todoRuntime: null,
@@ -3549,6 +3647,13 @@
             item.segment.events,
           ),
         );
+      }
+      if (
+        item.kind === 'runtime-segment' &&
+        item.segment.runtimeSummary &&
+        (item.segment.runtimeSummary.hasReasoning || item.segment.runtimeSummary.hasTools)
+      ) {
+        snapshot.runtimeSummaries.set(item.message.id, item.segment.runtimeSummary);
       }
       const existingTimelineIndex = snapshot.timelineItems.findIndex(
         (entry) => entry.key === item.key,
@@ -3655,6 +3760,14 @@
           ),
         );
       }
+      if (
+        item.kind === 'runtime-segment' &&
+        item.segment.runtimeSummary &&
+        (item.segment.runtimeSummary.hasReasoning || item.segment.runtimeSummary.hasTools)
+      ) {
+        runtimeSummaryByMessageId = new Map(runtimeSummaryByMessageId);
+        runtimeSummaryByMessageId.set(item.message.id, item.segment.runtimeSummary);
+      }
 
       const existingTimelineIndex = nextHistory.findIndex(
         (entry) => entry.key === item.key,
@@ -3731,6 +3844,11 @@
     try {
       const res = await apiGet<{ sessions: ChatSession[] }>('/chat/sessions');
       sessions = res.sessions ?? [];
+      // If the current sessionId is stale (e.g. from a different workspace), clear it
+      if (sessionId && !sessions.some((s) => s.id === sessionId) && messages.length === 0) {
+        sessionId = null;
+        messages = [];
+      }
       if (!sessionId && sessions.length > 0) {
         void selectSession(sessions[0].id);
       }
@@ -3765,6 +3883,9 @@
         projectedAssistantComputationByMessageId = new Map();
         projectionEventsVersion += 1;
         initialEventsByMessageId = new Map();
+        runtimeSummaryByMessageId = new Map();
+        loadedRuntimeDetailsMessageIds.clear();
+        loadingRuntimeDetailsMessageIds.clear();
         applySessionCheckpoints([]);
         sessionDocs = [];
         sessionDocsError = null;
@@ -3882,12 +4003,15 @@
     projectedStreamEventsById = new Map();
     projectedAssistantComputationByMessageId = new Map();
     projectionEventsVersion += 1;
+    loadedRuntimeDetailsMessageIds.clear();
+    loadingRuntimeDetailsMessageIds.clear();
     resetLocalToolInterceptionState();
     messages = snapshot.messages;
     historyTimelineItems = snapshot.timelineItems;
     stagedHistoryTimelineItems = [];
     historyTimelineSessionId = snapshot.sessionId;
     initialEventsByMessageId = snapshot.initialEvents;
+    runtimeSummaryByMessageId = snapshot.runtimeSummaries;
     applySessionCheckpoints(snapshot.checkpoints);
     sessionDocs = snapshot.documents;
     sessionDocsError = null;
@@ -3944,6 +4068,9 @@
     sessionDocs = [];
     sessionDocsError = null;
     initialEventsByMessageId = new Map();
+    runtimeSummaryByMessageId = new Map();
+    loadedRuntimeDetailsMessageIds.clear();
+    loadingRuntimeDetailsMessageIds.clear();
     projectedAssistantComputationByMessageId = new Map();
     optimisticSteerMessages = [];
     resetTodoRuntimePanel();
@@ -4287,7 +4414,9 @@
       updateComposerHeight();
       if (res.sessionId && res.sessionId !== sessionId) {
         sessionId = res.sessionId;
-        void loadSessions();
+        if (!sessions.some((s) => s.id === res.sessionId)) {
+          sessions = [{ id: res.sessionId, title: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as ChatSession, ...sessions];
+        }
       }
 
       const nowIso = new Date().toISOString();
@@ -4502,7 +4631,7 @@
 
   $: if (
     mode === 'ai' &&
-    ($organizationsStore || $foldersStore || $useCasesStore)
+    ($organizationsStore || $foldersStore || $initiativesStore)
   ) {
     refreshContextLabels();
   }
@@ -5077,6 +5206,7 @@
                     runtimeSummary={item.segment.runtimeSummary}
                     initiallyExpanded={false}
                     deferCollapsedDetails={!useUnifiedActiveRunPresentation(item.message)}
+                    requestDeferredDetails={sessionId ? (() => { const sid = sessionId; return sid ? loadRuntimeDetailsForMessage(sid, item.message.id) : Promise.resolve(); }) : undefined}
                     showRuntimeInlinePreview={item.isActiveRuntimeSegment}
                     acknowledgementText={item.acknowledgementText}
                     onTodoRuntime={handleTodoRuntimeToolResult}

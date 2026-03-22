@@ -22,7 +22,7 @@
     currentOrganizationId,
   } from '$lib/stores/organizations';
   import { foldersStore, currentFolderId } from '$lib/stores/folders';
-  import { useCasesStore } from '$lib/stores/useCases';
+  import { initiativesStore } from '$lib/stores/initiatives';
   import { queueStore } from '$lib/stores/queue';
   import { me } from '$lib/stores/me';
   import { streamHub } from '$lib/stores/streamHub';
@@ -55,10 +55,11 @@
     '/organizations',
     '/folders',
     '/folder',
-    '/usecase',
+    '/initiative',
     '/matrix',
     '/dashboard',
     '/dashboard-tmp',
+    '/neutral',
     '/settings',
     '/auth/devices',
   ];
@@ -76,7 +77,7 @@
       path.startsWith('/organizations/') ||
       path.startsWith('/folders/') ||
       path.startsWith('/folder/') ||
-      path.startsWith('/usecase/')
+      path.startsWith('/initiative/')
     ) {
       return true;
     }
@@ -198,7 +199,7 @@
       currentOrganizationId.set(null);
       foldersStore.set([]);
       currentFolderId.set(null);
-      useCasesStore.set([]);
+      initiativesStore.set([]);
       queueStore.set({ jobs: [], isLoading: false, lastUpdate: null });
       // `me` représente le profil de l'utilisateur courant (pas le scope admin).
       // On ne le vide que si l'utilisateur change.

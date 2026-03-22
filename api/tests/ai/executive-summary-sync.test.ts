@@ -3,7 +3,7 @@ import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import { db } from '../../src/db/client';
-import { folders, useCases, chatStreamEvents } from '../../src/db/schema';
+import { folders, initiatives, chatStreamEvents } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
 
@@ -21,8 +21,8 @@ describe('Executive Summary Generation - AI', () => {
     await cleanupAuthData();
   });
 
-  // Helper function to create a test folder with use cases
-  async function createTestFolderWithUseCases() {
+  // Helper function to create a test folder with initiatives
+  async function createTestFolderWithInitiatives() {
     const folderId = createTestId();
     
     // Create folder
@@ -34,16 +34,16 @@ describe('Executive Summary Generation - AI', () => {
       status: 'completed',
     });
 
-    // Create use cases with scores (scores calculés dynamiquement, pas stockés)
-    const useCasesData = [
+    // Create initiatives with scores (scores calculés dynamiquement, pas stockés)
+    const initiativesData = [
       { name: 'High Value Low Complexity', valueScores: [{ axisId: 'value1', rating: 80, description: 'High value' }], complexityScores: [{ axisId: 'complexity1', rating: 20, description: 'Low complexity' }] },
       { name: 'High Value High Complexity', valueScores: [{ axisId: 'value1', rating: 75, description: 'High value' }], complexityScores: [{ axisId: 'complexity1', rating: 70, description: 'High complexity' }] },
       { name: 'Low Value Low Complexity', valueScores: [{ axisId: 'value1', rating: 30, description: 'Low value' }], complexityScores: [{ axisId: 'complexity1', rating: 25, description: 'Low complexity' }] },
       { name: 'Low Value High Complexity', valueScores: [{ axisId: 'value1', rating: 25, description: 'Low value' }], complexityScores: [{ axisId: 'complexity1', rating: 75, description: 'High complexity' }] },
     ];
 
-    for (const uc of useCasesData) {
-      await db.insert(useCases).values({
+    for (const uc of initiativesData) {
+      await db.insert(initiatives).values({
         id: createTestId(),
         workspaceId,
         folderId,
@@ -62,7 +62,7 @@ describe('Executive Summary Generation - AI', () => {
 
   describe('POST /analytics/executive-summary', () => {
     it('should generate executive summary with default medians', async () => {
-      const folderId = await createTestFolderWithUseCases();
+      const folderId = await createTestFolderWithInitiatives();
 
       // L'endpoint retourne maintenant jobId (asynchrone)
       const response = await authenticatedRequest(
@@ -144,12 +144,12 @@ describe('Executive Summary Generation - AI', () => {
       // Cleanup
       await cleanupAuthData(); // Cleanup admin user
       await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, streamId));
-      await db.delete(useCases).where(eq(useCases.folderId, folderId));
+      await db.delete(initiatives).where(eq(initiatives.folderId, folderId));
       await db.delete(folders).where(eq(folders.id, folderId));
     }, 300000); // 5 minutes timeout for AI generation
 
     it('should generate executive summary with custom thresholds', async () => {
-      const folderId = await createTestFolderWithUseCases();
+      const folderId = await createTestFolderWithInitiatives();
 
       // L'endpoint retourne maintenant jobId (asynchrone)
       const response = await authenticatedRequest(
@@ -221,7 +221,7 @@ describe('Executive Summary Generation - AI', () => {
       // Cleanup
       await cleanupAuthData(); // Cleanup admin user
       await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, streamId));
-      await db.delete(useCases).where(eq(useCases.folderId, folderId));
+      await db.delete(initiatives).where(eq(initiatives.folderId, folderId));
       await db.delete(folders).where(eq(folders.id, folderId));
     }, 300000); // 5 minutes timeout for AI generation
   });

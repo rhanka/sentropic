@@ -26,7 +26,7 @@ import {
   folders,
   organizations,
   workspaceMemberships,
-  useCases
+  initiatives
 } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
@@ -51,8 +51,8 @@ describe('Chat tools API - comment_assistant', () => {
   let admin: any;
   let organizationId: string;
   let folderId: string;
-  let useCaseId: string;
-  let otherUseCaseId: string;
+  let initiativeId: string;
+  let otherInitiativeId: string;
   const assistantMessageIds: string[] = [];
   const sessionIds: string[] = [];
 
@@ -87,21 +87,21 @@ describe('Chat tools API - comment_assistant', () => {
     expect(folderResponse.status).toBe(201);
     folderId = (await folderResponse.json()).id;
 
-    const useCaseResponse = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, {
+    const initiativeResponse = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, {
       name: `Test UC ${createTestId()}`,
       description: 'Test use case for comment tools',
       folderId
     });
-    expect(useCaseResponse.status).toBe(201);
-    useCaseId = (await useCaseResponse.json()).id;
+    expect(initiativeResponse.status).toBe(201);
+    initiativeId = (await initiativeResponse.json()).id;
 
-    const otherUseCaseResponse = await authenticatedRequest(app, 'POST', '/api/v1/use-cases', user.sessionToken!, {
+    const otherInitiativeResponse = await authenticatedRequest(app, 'POST', '/api/v1/initiatives', user.sessionToken!, {
       name: `Other UC ${createTestId()}`,
       description: 'Another use case for scoping',
       folderId
     });
-    expect(otherUseCaseResponse.status).toBe(201);
-    otherUseCaseId = (await otherUseCaseResponse.json()).id;
+    expect(otherInitiativeResponse.status).toBe(201);
+    otherInitiativeId = (await otherInitiativeResponse.json()).id;
 
     llmStreamMock.mockImplementation(() =>
       createStream([
@@ -120,10 +120,10 @@ describe('Chat tools API - comment_assistant', () => {
       await db.delete(chatMessages).where(eq(chatMessages.sessionId, sessionId));
       await db.delete(chatSessions).where(eq(chatSessions.id, sessionId));
     }
-    await db.delete(comments).where(eq(comments.contextId, useCaseId));
-    await db.delete(comments).where(eq(comments.contextId, otherUseCaseId));
-    await db.delete(useCases).where(eq(useCases.id, useCaseId));
-    await db.delete(useCases).where(eq(useCases.id, otherUseCaseId));
+    await db.delete(comments).where(eq(comments.contextId, initiativeId));
+    await db.delete(comments).where(eq(comments.contextId, otherInitiativeId));
+    await db.delete(initiatives).where(eq(initiatives.id, initiativeId));
+    await db.delete(initiatives).where(eq(initiatives.id, otherInitiativeId));
     await db.delete(folders).where(eq(folders.id, folderId));
     await db.delete(organizations).where(eq(organizations.id, organizationId));
     if (user.workspaceId) {
@@ -181,8 +181,8 @@ describe('Chat tools API - comment_assistant', () => {
     await db.insert(comments).values({
       id: createId(),
       workspaceId: user.workspaceId!,
-      contextType: 'usecase',
-      contextId: useCaseId,
+      contextType: 'initiative',
+      contextId: initiativeId,
       sectionKey: null,
       createdBy: user.id,
       assignedTo: user.id,
@@ -209,8 +209,8 @@ describe('Chat tools API - comment_assistant', () => {
             name: 'comment_assistant',
             args: JSON.stringify({
               mode: 'suggest',
-              contextType: 'usecase',
-              contextId: useCaseId,
+              contextType: 'initiative',
+              contextId: initiativeId,
               status: 'open'
             })
           }
@@ -221,8 +221,8 @@ describe('Chat tools API - comment_assistant', () => {
 
     const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
       content: 'Analyse les commentaires',
-      primaryContextType: 'usecase',
-      primaryContextId: useCaseId,
+      primaryContextType: 'initiative',
+      primaryContextId: initiativeId,
       model: getTestModel()
     });
     expect(chatResponse.status).toBe(200);
@@ -249,8 +249,8 @@ describe('Chat tools API - comment_assistant', () => {
     await db.insert(comments).values({
       id: createId(),
       workspaceId: user.workspaceId!,
-      contextType: 'usecase',
-      contextId: useCaseId,
+      contextType: 'initiative',
+      contextId: initiativeId,
       sectionKey: null,
       createdBy: user.id,
       assignedTo: user.id,
@@ -270,8 +270,8 @@ describe('Chat tools API - comment_assistant', () => {
             name: 'comment_assistant',
             args: JSON.stringify({
               mode: 'resolve',
-              contextType: 'usecase',
-              contextId: useCaseId,
+              contextType: 'initiative',
+              contextId: initiativeId,
               confirmation: 'yes',
               actions: [{ thread_id: threadId, action: 'close' }]
             })
@@ -283,8 +283,8 @@ describe('Chat tools API - comment_assistant', () => {
 
     const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
       content: 'Confirmer',
-      primaryContextType: 'usecase',
-      primaryContextId: useCaseId,
+      primaryContextType: 'initiative',
+      primaryContextId: initiativeId,
       model: getTestModel()
     });
     expect(chatResponse.status).toBe(200);
@@ -313,8 +313,8 @@ describe('Chat tools API - comment_assistant', () => {
     await db.insert(comments).values({
       id: createId(),
       workspaceId: user.workspaceId!,
-      contextType: 'usecase',
-      contextId: useCaseId,
+      contextType: 'initiative',
+      contextId: initiativeId,
       sectionKey: null,
       createdBy: user.id,
       assignedTo: user.id,
@@ -334,8 +334,8 @@ describe('Chat tools API - comment_assistant', () => {
             name: 'comment_assistant',
             args: JSON.stringify({
               mode: 'resolve',
-              contextType: 'usecase',
-              contextId: useCaseId,
+              contextType: 'initiative',
+              contextId: initiativeId,
               confirmation: 'yes',
               actions: [{ thread_id: threadId, action: 'close' }]
             })
@@ -352,8 +352,8 @@ describe('Chat tools API - comment_assistant', () => {
       viewer.sessionToken!,
       {
       content: 'Confirmer',
-      primaryContextType: 'usecase',
-      primaryContextId: useCaseId,
+      primaryContextType: 'initiative',
+      primaryContextId: initiativeId,
       model: getTestModel()
       }
     );
@@ -386,8 +386,8 @@ describe('Chat tools API - comment_assistant', () => {
     await db.insert(comments).values({
       id: createId(),
       workspaceId: user.workspaceId!,
-      contextType: 'usecase',
-      contextId: useCaseId,
+      contextType: 'initiative',
+      contextId: initiativeId,
       sectionKey: null,
       createdBy: user.id,
       assignedTo: user.id,
@@ -407,8 +407,8 @@ describe('Chat tools API - comment_assistant', () => {
             name: 'comment_assistant',
             args: JSON.stringify({
               mode: 'resolve',
-              contextType: 'usecase',
-              contextId: useCaseId,
+              contextType: 'initiative',
+              contextId: initiativeId,
               confirmation: 'yes',
               actions: [{ thread_id: threadId, action: 'close' }]
             })
@@ -425,8 +425,8 @@ describe('Chat tools API - comment_assistant', () => {
       admin.sessionToken!,
       {
       content: 'Confirmer',
-      primaryContextType: 'usecase',
-      primaryContextId: useCaseId,
+      primaryContextType: 'initiative',
+      primaryContextId: initiativeId,
       model: getTestModel()
       }
     );
@@ -450,8 +450,8 @@ describe('Chat tools API - comment_assistant', () => {
     await db.insert(comments).values({
       id: createId(),
       workspaceId: user.workspaceId!,
-      contextType: 'usecase',
-      contextId: otherUseCaseId,
+      contextType: 'initiative',
+      contextId: otherInitiativeId,
       sectionKey: null,
       createdBy: user.id,
       assignedTo: user.id,
@@ -478,8 +478,8 @@ describe('Chat tools API - comment_assistant', () => {
             name: 'comment_assistant',
             args: JSON.stringify({
               mode: 'suggest',
-              contextType: 'usecase',
-              contextId: otherUseCaseId,
+              contextType: 'initiative',
+              contextId: otherInitiativeId,
               status: 'open'
             })
           }
@@ -521,7 +521,7 @@ describe('Chat tools API - comment_assistant', () => {
             name: 'comment_assistant',
             args: JSON.stringify({
               mode: 'suggest',
-              contextType: 'usecase',
+              contextType: 'initiative',
               contextId: 'uc_invalid',
               status: 'open'
             })
@@ -533,8 +533,8 @@ describe('Chat tools API - comment_assistant', () => {
 
     const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
       content: 'Analyse',
-      primaryContextType: 'usecase',
-      primaryContextId: useCaseId,
+      primaryContextType: 'initiative',
+      primaryContextId: initiativeId,
       model: getTestModel()
     });
     expect(chatResponse.status).toBe(200);
