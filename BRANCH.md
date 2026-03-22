@@ -604,13 +604,13 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] fix(ci): split AI test suite into 3 balanced shards (~60s each) for isolation
 - [x] feat(make): add `doc-backup`, `doc-backup-prod`, `doc-restore` targets (MinIO `mc mirror` via `docker compose exec`)
 - [x] fix(api): separate `chat` queue class from `ai` generation — chat not blocked by generation concurrency
-- [ ] **Doc consolidation**
-  - [ ] `SPEC_EVOL_WORKSPACE_TYPES.md` §1-§6, §14 → merge into `SPEC.md`
-  - [ ] `SPEC_EVOL_WORKSPACE_TYPES.md` §7 → merge into `SPEC.md` + remove §2.2 from `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`
-  - [ ] `SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md` → check if BR-04 delivered, merge or keep
-  - [ ] Update `SPEC.md` table of contents
-  - [ ] Keep `SPEC_EVOL_WORKSPACE_TYPES.md` §9-§10, §15 (BR-04B scope)
-  - [ ] Keep other `SPEC_EVOL_*` as-is (BR-05, BR-06, BR-08, BR-15)
+- [x] **Doc consolidation**
+  - [x] `SPEC_EVOL_WORKSPACE_TYPES.md` §1-§6, §14 → merge into `SPEC.md`
+  - [x] `SPEC_EVOL_WORKSPACE_TYPES.md` §7 → merge into `SPEC.md` + update §2.2 in `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`
+  - [x] `SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md` → checked: delivered by BR-08 (not BR-04), marked as delivered, kept for BR-08 consolidation
+  - [x] Update `SPEC.md` table of contents
+  - [x] Keep `SPEC_EVOL_WORKSPACE_TYPES.md` §9-§10, §15 (BR-04B scope)
+  - [x] Keep other `SPEC_EVOL_*` as-is (BR-05, BR-06, BR-08, BR-15)
 - [ ] **UAT smoke (surfaces impactées)**
   - [x] Import/export : exporter workspace → importer dans un autre → preview détecte les initiatives
   - [x] Import depuis page dossier (Actions → Importer) → dialog fonctionne
