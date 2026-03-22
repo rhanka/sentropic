@@ -594,6 +594,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] fix(test): `initiative-generation-async.test.ts` — clean zombie jobs + purge queue before auth cleanup
 - [x] fix(test): `chat-tools.test.ts` — deterministic `web_extract` prompt with explicit URLs
 - [x] fix(test): `seed-test-data.ts` — add BR-04 table cleanup (workspaceTypeWorkflows, workflowDefinitions, agentDefinitions)
+- [x] fix(e2e): `05-usecase-detail.spec.ts` — rename usecase→initiative labels and routes
 
 #### Lot rattrapage tests (deferred gates from lots 3-9quater)
 
