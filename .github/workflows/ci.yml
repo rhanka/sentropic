@@ -129,6 +129,11 @@ jobs:
           - suite: unit
           - suite: queue
           - suite: ai
+            ai_specs: "chat-sync,executive-summary-auto,comment-assistant"
+          - suite: ai
+            ai_specs: "initiative-generation-async,executive-summary-sync"
+          - suite: ai
+            ai_specs: "chat-tools,company-enrichment-sync,documents-tool,initiative-generation-sync"
           - suite: security
           - suite: limit
           - suite: endpoints
@@ -163,6 +168,9 @@ jobs:
         run: |
           if [ "${{ matrix.suite }}" = "endpoints" ]; then
             make exec-api CMD="TEST_CLEANUP_SCOPE=tracked VITEST_MAX_WORKERS=4 npm run test:endpoints -- --shard=${{ matrix.endpoints_shard }}/4"
+          elif [ "${{ matrix.suite }}" = "ai" ] && [ -n "${{ matrix.ai_specs }}" ]; then
+            SPECS=$(echo "${{ matrix.ai_specs }}" | tr ',' ' ' | xargs -I{} echo "tests/ai/{}.test.ts" | tr '\n' ' ')
+            make exec-api CMD="VITEST_MAX_WORKERS=1 npx vitest run $SPECS --reporter=verbose"
           else
             make test-api-${{ matrix.suite }}
           fi
@@ -227,9 +235,11 @@ jobs:
           - group: group-b
             e2e_groups: "01 04"
           - group: group-c
-            e2e_groups: "03 05 07"
+            e2e_groups: "03"
           - group: group-d
             e2e_groups: "08"
+          - group: group-e
+            e2e_groups: "05 07"
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
