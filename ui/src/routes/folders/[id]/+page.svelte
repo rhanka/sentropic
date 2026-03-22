@@ -677,7 +677,7 @@
           {/if}
 
           {#if isDetailing || isGenerating}
-            <StreamMessage streamId={`usecase_${useCase.id}`} status={useCase.status} maxHistory={6} />
+            <StreamMessage streamId={`initiative_${useCase.id}`} status={useCase.status} maxHistory={6} />
           {:else}
             <div class="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm text-slate-500">
               <div class="flex items-center gap-1 flex-wrap">
