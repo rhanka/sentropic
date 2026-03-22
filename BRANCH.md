@@ -591,6 +591,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 - [x] fix(ui): remove BR-03 scope boundary notice from settings panel
 - [x] fix(deps): npm audit fix + UI Dockerfile audit --omit=dev
 - [x] fix(test): `import-export.test.ts` — use `initiative_` prefix in test zip
+- [x] fix(test): `initiative-generation-async.test.ts` — clean zombie jobs + purge queue before auth cleanup
 
 #### Lot rattrapage tests (deferred gates from lots 3-9quater)
 

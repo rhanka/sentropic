@@ -4,7 +4,7 @@ import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
 import { chatStreamEvents } from '../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 describe('AI Workflow - Complete Integration Test', () => {
   let createdFolderId: string | null = null;
@@ -16,18 +16,8 @@ describe('AI Workflow - Complete Integration Test', () => {
   });
 
   beforeAll(async () => {
-    // Clear queue before starting tests
-    try {
-      const tempUser = await createAuthenticatedUser('editor');
-      await authenticatedRequest(
-        app,
-        'POST',
-        '/api/v1/queue/purge',
-        tempUser.sessionToken!,
-        { status: 'force' }
-      );
-      await cleanupAuthData();
-    } catch {}
+    // Clear ALL jobs from queue (including zombie processing jobs from prior runs)
+    await db.run(sql`DELETE FROM job_queue`);
   });
 
   afterEach(async () => {
@@ -44,13 +34,16 @@ describe('AI Workflow - Complete Integration Test', () => {
       } catch {}
       createdOrganizationId = null;
     }
+    // Purge queue before cleaning auth data to avoid FK violations
+    // (queue processor may still reference the user being deleted)
+    await db.run(sql`DELETE FROM job_queue`);
     await cleanupAuthData();
   });
 
   afterAll(async () => {
     // Final cleanup - purge all remaining jobs
     try {
-      const tempUser = await createAuthenticatedUser('editor');
+      const tempUser = await createAuthenticatedUser('admin_app');
       await authenticatedRequest(
         app,
         'POST',
