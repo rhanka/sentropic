@@ -1,6 +1,6 @@
 # SPEC EVOL - Model Providers Runtime (OpenAI/Gemini/...)
 
-Status: Active runtime evolution backlog (2026-03-05).
+Status: **Delivered** (via `feat/model-runtime-openai-gemini` merged to main). Architecture implemented in `api/src/services/llm-runtime/`, `api/src/services/providers/`, and `api/src/services/provider-registry.ts`. Not part of BR-04 scope. Canonical spec consolidation deferred to the branch that delivered it.
 
 ## 1) Objective
 Define a clean provider-runtime architecture with strict ownership boundaries across model providers, and remove mixed-provider implementation paths.
