@@ -616,11 +616,11 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
   - [x] Import/export : exporter workspace → importer dans un autre → preview détecte les initiatives
   - [x] Import depuis page dossier (Actions → Importer) → dialog fonctionne
   - [x] Streaming génération initiative (StreamMessage `initiative_`) sur page dossier et initiative detail
-  - [ ] Chat tool toggles : "Initiatives (lecture)" et "Initiatives (mise à jour)" visibles et fonctionnels
-  - [ ] Chat session maintenue entre 2 messages consécutifs
-  - [ ] Chat context organisation : `primaryContextType=organization` sur `/organizations/{id}`
-  - [ ] Navigation directe `/initiative/{id}` → pas de 404 / page blanche
-  - [ ] Paramètres : pas de bandeau "scope boundary" BR-03
+  - [x] Chat tool toggles : "Initiatives (lecture)" et "Initiatives (mise à jour)" visibles et fonctionnels
+  - [x] Chat session maintenue entre 2 messages consécutifs
+  - [x] Chat context organisation : `primaryContextType=organization` sur `/organizations/{id}`
+  - [x] Navigation directe `/initiative/{id}` → pas de 404 / page blanche
+  - [x] Paramètres : pas de bandeau "scope boundary" BR-03
 
 
 ---
