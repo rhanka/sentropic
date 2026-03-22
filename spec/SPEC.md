@@ -1,5 +1,29 @@
 # TECHNICAL SPECIFICATION - Top AI Ideas
 
+## Table of Contents
+
+- [0) Design Patterns & Component Lifecycle (directives)](#0-design-patterns--component-lifecycle-directives)
+- [1) Functional map and screens](#1-functional-map-and-screens)
+  - Workspace type system
+  - Neutral workspace
+  - Initiative model (universal business object)
+  - Extended business objects (solutions, products, bids)
+  - Screens (1-14)
+- [2) Data model (PostgreSQL 17 + Drizzle + workspaces)](#2-data-model-postgresql-17--drizzle--workspaces)
+  - 2.1) Score computation method
+  - 2.2) Gate system
+- [3) API backend (TypeScript) - Contracts](#3-api-backend-typescript--contracts)
+  - Workspaces, folders, initiatives, extended objects, gate review, workflow registry, cross-workspace, analytics, settings, queue
+- [4) LLM generation and multi-workflow runtime](#4-llm-generation-and-multi-workflow-runtime)
+  - 4.1) Multi-workflow registry
+  - 4.2) Agent/prompt architecture
+  - 4.3) Prompt and endpoint mapping
+  - 4.4) Workspace-type-aware chat tool scoping
+- [5) SvelteKit UI (static build, i18n FR/EN)](#5-sveltekit-ui-static-build-i18n-fren)
+- [6) DevOps & Tooling (Docker, Make, CI/CD)](#6-devops--tooling-docker-make-cicd)
+
+---
+
 ## 0) Design Patterns & Component Lifecycle (directives)
 
 ### Core Patterns (API)
@@ -27,7 +51,7 @@
 ### Upcoming Patterns (TODO-driven)
 - **Print templates (docx)**: treat print/export as a template pipeline (data -> template -> render) with strict separation between data mapping and template layout.
 - **Bilingual content**: design objects with a master language plus optional translations; avoid cross-language field drift.
-- **Use case ideation constraints**: extend use case data with structured constraints; keep rendering and print layouts aligned.
+- **Initiative ideation constraints**: extend initiative data with structured constraints; keep rendering and print layouts aligned.
 - **Matrix generation per organization**: matrix templates are organization-owned with optional per-folder overrides.
 
 ## 1) Functional map and screens
