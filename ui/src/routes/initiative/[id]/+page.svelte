@@ -390,8 +390,14 @@
   }
 
   const loadUseCase = async () => {
+    if (!get(workspaceScopeHydrated)) {
+      await new Promise<void>((resolve) => {
+        const unsub = workspaceScopeHydrated.subscribe((ready) => {
+          if (ready) { unsub(); resolve(); }
+        });
+      });
+    }
     try {
-      // Charger depuis l'API pour avoir les données les plus récentes
       useCase = await apiGet(`/initiatives/${useCaseId}`);
       
       // Mettre à jour le store avec les données fraîches
@@ -552,7 +558,7 @@
 
   {#if useCase}
   {#if useCase.status === 'generating' || useCase.status === 'detailing'}
-    <StreamMessage streamId={`usecase_${useCase.id}`} status={useCase.status} maxHistory={10} />
+    <StreamMessage streamId={`initiative_${useCase.id}`} status={useCase.status} maxHistory={10} />
   {/if}
     <InitiativeDetail
       {useCase}
@@ -634,7 +640,7 @@
     bind:open={$initiativeExportState.open}
     mode="export"
     title={$_('usecase.export.title')}
-    scope="usecase"
+    scope="initiative"
     scopeId={$initiativeExportState.initiativeId ?? useCase.id}
     allowScopeSelect={false}
     allowScopeIdEdit={false}
