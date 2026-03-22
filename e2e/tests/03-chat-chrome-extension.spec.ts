@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe.serial('Chat extension evolutions', () => {
+test.describe('Chat extension evolutions', () => {
   const UI_BASE_URL = process.env.UI_BASE_URL || 'http://localhost:5173';
   const EXTENSION_API_BASE_URL = new URL('/api/v1', UI_BASE_URL).toString().replace(/\/$/, '');
   const EXTENSION_SESSION_TOKEN =
@@ -186,6 +186,15 @@ test.describe.serial('Chat extension evolutions', () => {
     const composer = page.locator(composerSelector);
     await expect(composer).toBeVisible({ timeout: 10_000 });
 
+    // Ensure we are on a fresh new session (sessionId = null) so that
+    // isExtensionRestrictedToolsetMode() returns true.  If loadSessions()
+    // auto-selected an existing session from a prior E2E run, the restricted
+    // toolset is disabled and the local-tool toggles (Onglet lecture/actions)
+    // would not render.
+    const newSessionButton = page.locator('button[aria-label="Nouvelle session"]');
+    await expect(newSessionButton).toBeVisible({ timeout: 10_000 });
+    await newSessionButton.click();
+
     const commentsTab = page.locator('button, [role="tab"]').filter({ hasText: /^Commentaires$/i });
     await expect(commentsTab).toHaveCount(0);
 
@@ -193,7 +202,7 @@ test.describe.serial('Chat extension evolutions', () => {
     await expect(menuButton).toBeVisible({ timeout: 10_000 });
     await menuButton.click();
 
-    const menu = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
+    const menu = page.locator('div.fixed.shadow-lg, div.absolute.shadow-lg').filter({ hasText: 'Contexte(s)' }).first();
     await expect(menu).toBeVisible({ timeout: 10_000 });
     await expect(menu).toContainText('Onglet actif:');
     await expect(menu.locator('button', { hasText: 'Web search' })).toBeVisible({ timeout: 10_000 });
@@ -236,8 +245,12 @@ test.describe.serial('Chat extension evolutions', () => {
       .sort();
     expect(firstNames).toEqual(['tab_action', 'tab_read']);
 
+    // Create a new session so isExtensionRestrictedToolsetMode() returns true
+    // (sessionId must be null for local tool toggles to be visible)
+    await newSessionButton.click();
+
     await menuButton.click();
-    const menu = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
+    const menu = page.locator('div.fixed.shadow-lg, div.absolute.shadow-lg').filter({ hasText: 'Contexte(s)' }).first();
     const tabActionToggle = menu.locator('button', { hasText: 'Onglet (actions)' }).first();
     await expect(tabActionToggle).toBeVisible({ timeout: 10_000 });
     await tabActionToggle.click();
