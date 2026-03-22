@@ -584,6 +584,7 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 #### Lot CI/Test stabilization (post-UAT C)
 
 - [x] fix(api): import handler — use `initiative_` file prefix instead of `usecase_` in preview and import
+- [x] fix(api): rename `usecase_` streamId prefix to `initiative_` in queue-manager
 
 #### Lot rattrapage tests (deferred gates from lots 3-9quater)
 
