@@ -32,6 +32,7 @@ import { vscodeExtensionRouter } from './vscode-extension';
 import { solutionsRouter } from './solutions';
 import { productsRouter } from './products';
 import { bidsRouter } from './bids';
+import { viewTemplatesRouter } from './view-templates';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
 
@@ -63,6 +64,10 @@ apiRouter.route('/products', productsRouter);
 
 apiRouter.use('/bids/*', requireAuth);
 apiRouter.route('/bids', bidsRouter);
+
+// View templates (authenticated; workspace role checks per endpoint)
+apiRouter.use('/view-templates/*', requireAuth);
+apiRouter.route('/view-templates', viewTemplatesRouter);
 
 // DOCX export routes
 apiRouter.use('/docx/*', requireAuth);

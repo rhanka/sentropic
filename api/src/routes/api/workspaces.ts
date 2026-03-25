@@ -127,6 +127,15 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
     // Non-fatal: workspace is created, seeding can be retried
   }
 
+  // Seed default view templates for this workspace type (§12.6)
+  try {
+    const { viewTemplateService } = await import('../../services/view-template-service');
+    await viewTemplateService.seedForWorkspace(id, type);
+  } catch (seedErr) {
+    console.error('Failed to seed view templates for workspace type', type, seedErr);
+    // Non-fatal: workspace is created, seeding can be retried
+  }
+
   await notifyWorkspaceEvent(id, { action: 'created' });
   await notifyWorkspaceMembershipEvent(id, user.userId, { action: 'added', role: 'admin' });
 
