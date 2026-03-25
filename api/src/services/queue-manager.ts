@@ -2067,7 +2067,8 @@ export class QueueManager {
     }
 
     // Créer les cas d'usage en mode generating
-    // Note: InitiativeListItem n'a que 'titre', pas 'title'
+    // BUG-D1 fix: use per-initiative organizationIds from LLM output when available,
+    // falling back to folder-level organizationId.
     const draftInitiatives = initiativeList.initiatives.map((initiativeItem: InitiativeListItem) => {
       const title = initiativeItem.titre || String(initiativeItem);
       const initiativeData: InitiativeData = {
@@ -2085,11 +2086,16 @@ export class QueueManager {
         valueScores: [],
         complexityScores: []
       };
+      // BUG-D1: per-initiative org from LLM response takes precedence over folder-level org
+      const perInitiativeOrgId =
+        Array.isArray(initiativeItem.organizationIds) && initiativeItem.organizationIds.length > 0
+          ? initiativeItem.organizationIds[0]
+          : null;
       return {
         id: createId(),
         workspaceId,
         folderId: folderId,
-        organizationId: organizationId || null,
+        organizationId: perInitiativeOrgId || organizationId || null,
         data: initiativeData as InitiativeDataJson, // Drizzle accepte JSONB directement (inclut name et description)
         model: selectedModel,
         status: 'generating',

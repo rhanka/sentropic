@@ -46,6 +46,7 @@
     reduceDashboardDocxState,
     type DashboardDocxEvent,
   } from '$lib/utils/dashboard-docx-state';
+  import FieldCard from '$lib/components/FieldCard.svelte';
   import { FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
@@ -1342,39 +1343,36 @@
         </div>
       </div>
     {:else if executiveSummary}
-      <div data-comment-section="synthese_executive" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-6 print-hidden">
-        <div class="border-b border-slate-200 pb-4">
-          <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
-            {$_('dashboard.execSummary')}
-            <CommentBadge
-              count={commentCounts?.synthese_executive ?? 0}
-              title={`${$_('chat.tabs.comments')} - ${$_('dashboard.execSummary')}`}
-              on:click={() => openExecutiveSummaryComments('synthese_executive')}
+      <div class="print-hidden">
+        <FieldCard
+          variant="bordered"
+          label={$_('dashboard.execSummary')}
+          commentSection="synthese_executive"
+          commentCount={commentCounts?.synthese_executive ?? 0}
+          onOpenComments={() => openExecutiveSummaryComments('synthese_executive')}
+        >
+          {#if executiveSummaryData.synthese_executive}
+            <EditableInput
+              label=""
+              value={executiveSummaryData.synthese_executive}
+              markdown={true}
+              locked={isDashboardReadOnly}
+              apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
+              fullData={getExecutiveSummaryPayload('synthese_executive')}
+              fullDataGetter={() => getExecutiveSummaryPayload('synthese_executive')}
+              changeId={selectedFolderId ? `exec-synthese-${selectedFolderId}` : ''}
+              originalValue={getExecutiveSummaryOriginal('synthese_executive')}
+              references={executiveSummary?.references || []}
+              on:change={(e) => handleExecutiveSummaryFieldChange('synthese_executive', e.detail.value)}
+              on:saved={(e) =>
+                handleExecutiveSummarySaved(
+                  'synthese_executive',
+                  (e as CustomEvent<{ value?: string }>).detail?.value ??
+                    executiveSummaryData.synthese_executive
+                )}
             />
-          </h2>
-        </div>
-        
-        {#if executiveSummaryData.synthese_executive}
-          <EditableInput
-            label=""
-            value={executiveSummaryData.synthese_executive}
-            markdown={true}
-            locked={isDashboardReadOnly}
-            apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-            fullData={getExecutiveSummaryPayload('synthese_executive')}
-            fullDataGetter={() => getExecutiveSummaryPayload('synthese_executive')}
-            changeId={selectedFolderId ? `exec-synthese-${selectedFolderId}` : ''}
-            originalValue={getExecutiveSummaryOriginal('synthese_executive')}
-            references={executiveSummary?.references || []}
-            on:change={(e) => handleExecutiveSummaryFieldChange('synthese_executive', e.detail.value)}
-            on:saved={(e) =>
-              handleExecutiveSummarySaved(
-                'synthese_executive',
-                (e as CustomEvent<{ value?: string }>).detail?.value ??
-                  executiveSummaryData.synthese_executive
-              )}
-          />
-        {/if}
+          {/if}
+        </FieldCard>
       </div>
     {:else if currentFolder}
       <div class="rounded-lg border border-slate-200 bg-slate-50 p-6">
@@ -1569,40 +1567,38 @@
 
         <!-- Introduction -->
         {#if executiveSummaryData.introduction}
-          <div id="section-introduction" data-comment-section="introduction" class="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
-            <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
-                {$_('dashboard.introduction')}
-                <CommentBadge
-                  count={commentCounts?.introduction ?? 0}
-                  title={`${$_('chat.tabs.comments')} - ${$_('dashboard.introduction')}`}
-                  on:click={() => openExecutiveSummaryComments('introduction')}
-                />
-              </h2>
-            </div>
-            <div class="prose prose-slate max-w-none">
-              <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-                <EditableInput
-                  label=""
-                  value={executiveSummaryData.introduction}
-                  markdown={true}
-                  locked={isDashboardReadOnly}
-                  apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                  fullData={getExecutiveSummaryPayload('introduction')}
-                  fullDataGetter={() => getExecutiveSummaryPayload('introduction')}
-                  changeId={selectedFolderId ? `exec-intro-${selectedFolderId}` : ''}
-                  originalValue={getExecutiveSummaryOriginal('introduction')}
-                  references={executiveSummary?.references || []}
-                  on:change={(e) => handleExecutiveSummaryFieldChange('introduction', e.detail.value)}
-                  on:saved={(e) =>
-                    handleExecutiveSummarySaved(
-                      'introduction',
-                      (e as CustomEvent<{ value?: string }>).detail?.value ??
-                        executiveSummaryData.introduction
-                    )}
-                />
+          <div id="section-introduction" class="mt-6 report-analyse report-analyse-with-break">
+            <FieldCard
+              variant="bordered"
+              label={$_('dashboard.introduction')}
+              commentSection="introduction"
+              commentCount={commentCounts?.introduction ?? 0}
+              onOpenComments={() => openExecutiveSummaryComments('introduction')}
+            >
+              <div class="prose prose-slate max-w-none">
+                <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+                  <EditableInput
+                    label=""
+                    value={executiveSummaryData.introduction}
+                    markdown={true}
+                    locked={isDashboardReadOnly}
+                    apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
+                    fullData={getExecutiveSummaryPayload('introduction')}
+                    fullDataGetter={() => getExecutiveSummaryPayload('introduction')}
+                    changeId={selectedFolderId ? `exec-intro-${selectedFolderId}` : ''}
+                    originalValue={getExecutiveSummaryOriginal('introduction')}
+                    references={executiveSummary?.references || []}
+                    on:change={(e) => handleExecutiveSummaryFieldChange('introduction', e.detail.value)}
+                    on:saved={(e) =>
+                      handleExecutiveSummarySaved(
+                        'introduction',
+                        (e as CustomEvent<{ value?: string }>).detail?.value ??
+                          executiveSummaryData.introduction
+                      )}
+                  />
+                </div>
               </div>
-            </div>
+            </FieldCard>
           </div>
         {/if}
       </div>
@@ -1660,78 +1656,74 @@
       <div class="space-y-6">
 
         {#if executiveSummaryData.analyse}
-          <div id="section-analyse" data-comment-section="analyse" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
-            <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
-                {$_('dashboard.analysis')}
-                <CommentBadge
-                  count={commentCounts?.analyse ?? 0}
-                  title={`${$_('chat.tabs.comments')} - ${$_('dashboard.analysis')}`}
-                  on:click={() => openExecutiveSummaryComments('analyse')}
-                />
-              </h2>
-            </div>
-            <div class="prose prose-slate max-w-none">
-              <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-                <EditableInput
-                  label=""
-                  value={executiveSummaryData.analyse}
-                  markdown={true}
-                  locked={isDashboardReadOnly}
-                  apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                  fullData={getExecutiveSummaryPayload('analyse')}
-                  fullDataGetter={() => getExecutiveSummaryPayload('analyse')}
-                  changeId={selectedFolderId ? `exec-analyse-${selectedFolderId}` : ''}
-                  originalValue={getExecutiveSummaryOriginal('analyse')}
-                  references={executiveSummary?.references || []}
-                  on:change={(e) => handleExecutiveSummaryFieldChange('analyse', e.detail.value)}
-                  on:saved={(e) =>
-                    handleExecutiveSummarySaved(
-                      'analyse',
-                      (e as CustomEvent<{ value?: string }>).detail?.value ??
-                        executiveSummaryData.analyse
-                    )}
-                />
+          <div id="section-analyse" class="report-analyse report-analyse-with-break">
+            <FieldCard
+              variant="bordered"
+              label={$_('dashboard.analysis')}
+              commentSection="analyse"
+              commentCount={commentCounts?.analyse ?? 0}
+              onOpenComments={() => openExecutiveSummaryComments('analyse')}
+            >
+              <div class="prose prose-slate max-w-none">
+                <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+                  <EditableInput
+                    label=""
+                    value={executiveSummaryData.analyse}
+                    markdown={true}
+                    locked={isDashboardReadOnly}
+                    apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
+                    fullData={getExecutiveSummaryPayload('analyse')}
+                    fullDataGetter={() => getExecutiveSummaryPayload('analyse')}
+                    changeId={selectedFolderId ? `exec-analyse-${selectedFolderId}` : ''}
+                    originalValue={getExecutiveSummaryOriginal('analyse')}
+                    references={executiveSummary?.references || []}
+                    on:change={(e) => handleExecutiveSummaryFieldChange('analyse', e.detail.value)}
+                    on:saved={(e) =>
+                      handleExecutiveSummarySaved(
+                        'analyse',
+                        (e as CustomEvent<{ value?: string }>).detail?.value ??
+                          executiveSummaryData.analyse
+                      )}
+                  />
+                </div>
               </div>
-            </div>
+            </FieldCard>
           </div>
         {/if}
 
         {#if executiveSummaryData.recommandation}
-          <div id="section-recommandations" data-comment-section="recommandation" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse report-analyse-with-break">
-            <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
-                {$_('dashboard.recommendations')}
-                <CommentBadge
-                  count={commentCounts?.recommandation ?? 0}
-                  title={`${$_('chat.tabs.comments')} - ${$_('dashboard.recommendations')}`}
-                  on:click={() => openExecutiveSummaryComments('recommandation')}
-                />
-              </h2>
-            </div>
-            <div class="prose prose-slate max-w-none">
-              <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-                <EditableInput
-                  label=""
-                  value={executiveSummaryData.recommandation}
-                  markdown={true}
-                  locked={isDashboardReadOnly}
-                  apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                  fullData={getExecutiveSummaryPayload('recommandation')}
-                  fullDataGetter={() => getExecutiveSummaryPayload('recommandation')}
-                  changeId={selectedFolderId ? `exec-recommandation-${selectedFolderId}` : ''}
-                  originalValue={getExecutiveSummaryOriginal('recommandation')}
-                  references={executiveSummary?.references || []}
-                  on:change={(e) => handleExecutiveSummaryFieldChange('recommandation', e.detail.value)}
-                  on:saved={(e) =>
-                    handleExecutiveSummarySaved(
-                      'recommandation',
-                      (e as CustomEvent<{ value?: string }>).detail?.value ??
-                        executiveSummaryData.recommandation
-                    )}
-                />
+          <div id="section-recommandations" class="report-analyse report-analyse-with-break">
+            <FieldCard
+              variant="bordered"
+              label={$_('dashboard.recommendations')}
+              commentSection="recommandation"
+              commentCount={commentCounts?.recommandation ?? 0}
+              onOpenComments={() => openExecutiveSummaryComments('recommandation')}
+            >
+              <div class="prose prose-slate max-w-none">
+                <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+                  <EditableInput
+                    label=""
+                    value={executiveSummaryData.recommandation}
+                    markdown={true}
+                    locked={isDashboardReadOnly}
+                    apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
+                    fullData={getExecutiveSummaryPayload('recommandation')}
+                    fullDataGetter={() => getExecutiveSummaryPayload('recommandation')}
+                    changeId={selectedFolderId ? `exec-recommandation-${selectedFolderId}` : ''}
+                    originalValue={getExecutiveSummaryOriginal('recommandation')}
+                    references={executiveSummary?.references || []}
+                    on:change={(e) => handleExecutiveSummaryFieldChange('recommandation', e.detail.value)}
+                    on:saved={(e) =>
+                      handleExecutiveSummarySaved(
+                        'recommandation',
+                        (e as CustomEvent<{ value?: string }>).detail?.value ??
+                          executiveSummaryData.recommandation
+                      )}
+                  />
+                </div>
               </div>
-            </div>
+            </FieldCard>
           </div>
         {/if}
 

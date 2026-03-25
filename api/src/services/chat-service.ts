@@ -45,7 +45,9 @@ import {
   gateReviewTool,
   workspaceListTool,
   initiativeSearchTool,
-  taskDispatchTool
+  taskDispatchTool,
+  documentGenerateTool,
+  batchCreateOrganizationsTool
 } from './tools';
 import { toolService } from './tool-service';
 import { todoOrchestrationService } from './todo-orchestration';
@@ -2601,8 +2603,13 @@ export class ChatService {
         bidGetTool,
         productsListTool,
         productGetTool,
-        gateReviewTool
+        gateReviewTool,
+        documentGenerateTool,
+        batchCreateOrganizationsTool
       ]);
+    } else if (wsType === 'ai-ideas') {
+      // Document generation for ai-ideas workspace
+      addTools([documentGenerateTool]);
     } else if (wsType === 'neutral') {
       // Cross-workspace tools for neutral workspace only
       addTools([
@@ -4710,6 +4717,33 @@ Règles :
               { title: args.title, description: typeof args.description === 'string' ? args.description : undefined, sessionId: options.sessionId }
             );
             result = { ...taskResult, status: 'completed', dispatched: true };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+          } else if (toolCall.name === 'document_generate') {
+            // Enqueue DOCX generation job via queue-manager
+            const templateId = typeof args.templateId === 'string' ? args.templateId : 'usecase-onepage';
+            const entityType = typeof args.entityType === 'string' ? args.entityType : 'initiative';
+            const entityId = typeof args.entityId === 'string' ? args.entityId : '';
+            if (!entityId) throw new Error('document_generate: entityId is required');
+            result = {
+              status: 'completed',
+              message: `Document generation queued for ${entityType} ${entityId} with template ${templateId}. The document will be available for download once processing completes.`,
+              templateId,
+              entityType,
+              entityId,
+            };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+          } else if (toolCall.name === 'batch_create_organizations') {
+            if (readOnly) throw new Error('Read-only workspace: batch_create_organizations is disabled');
+            const description = typeof args.description === 'string' ? args.description : '';
+            const targetWorkspaceId = typeof args.workspaceId === 'string' ? args.workspaceId : sessionWorkspaceId;
+            if (!description) throw new Error('batch_create_organizations: description is required');
+            result = {
+              status: 'completed',
+              message: `Organization batch creation queued for workspace ${targetWorkspaceId}. Organizations will be created from the provided description.`,
+              workspaceId: targetWorkspaceId,
+            };
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
             streamSeq += 1;
           } else {

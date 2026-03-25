@@ -110,6 +110,11 @@ Format JSON attendu:
                 titre: { type: 'string' },
                 description: { type: 'string' },
                 ref: { type: 'string' },
+                organizationIds: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Organization IDs this initiative relates to',
+                },
               },
               required: ['titre', 'description', 'ref'],
             },
