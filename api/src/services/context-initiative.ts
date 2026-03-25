@@ -41,6 +41,8 @@ export interface InitiativeListItem {
   problem?: string; // 40-80 caractères (nouveau champ)
   solution?: string; // 40-80 caractères (nouveau champ)
   ref: string;
+  organizationIds?: string[]; // BUG-D1: per-initiative org IDs from LLM output
+  organizationName?: string; // BUG-D1: per-initiative org name from LLM output
 }
 
 export interface InitiativeList {
@@ -230,6 +232,8 @@ const USE_CASE_LIST_STRUCTURED_SCHEMA: Record<string, unknown> = {
           titre: { type: 'string' },
           description: { type: 'string' },
           ref: { type: 'string' },
+          organizationIds: { type: 'array', items: { type: 'string' } },
+          organizationName: { type: 'string' },
         },
         required: ['titre', 'description', 'ref'],
       },
