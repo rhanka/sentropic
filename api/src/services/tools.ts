@@ -841,6 +841,69 @@ export const taskDispatchTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   }
 };
 
+/**
+ * Tool for generating a DOCX document from the current context.
+ * Enqueues a document generation job via queue-manager.
+ */
+export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'document_generate',
+    description:
+      'Generate a DOCX document from the current context (initiative, folder/dashboard, etc.). ' +
+      'The generated document will be available for download once processing completes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        templateId: {
+          type: 'string',
+          description:
+            'Document template identifier. Examples: "usecase-onepage" for initiative one-pager, ' +
+            '"dashboard-report" for folder executive summary report.',
+        },
+        entityType: {
+          type: 'string',
+          enum: ['initiative', 'folder'],
+          description: 'Type of entity to generate the document for.',
+        },
+        entityId: {
+          type: 'string',
+          description: 'ID of the entity (initiative ID or folder ID).',
+        },
+      },
+      required: ['templateId', 'entityType', 'entityId'],
+    },
+  },
+};
+
+/**
+ * Tool for batch-creating organizations from a prompt description.
+ */
+export const batchCreateOrganizationsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'batch_create_organizations',
+    description:
+      'Create multiple organizations at once from a text description. ' +
+      'The AI will parse the description and create structured organization entries in the workspace.',
+    parameters: {
+      type: 'object',
+      properties: {
+        description: {
+          type: 'string',
+          description:
+            'Text description of organizations to create. Can include names, industries, sizes, and other details.',
+        },
+        workspaceId: {
+          type: 'string',
+          description: 'Workspace ID where organizations will be created.',
+        },
+      },
+      required: ['description', 'workspaceId'],
+    },
+  },
+};
+
 export interface SearchResult {
   title: string;
   url: string;
