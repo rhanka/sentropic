@@ -96,6 +96,15 @@
   };
 
   // Build template data from organization
+  $: orgRefs = (organization?.data?.references || organization?.references || []) as Array<{title?: string; url?: string; excerpt?: string} | string>;
+  $: refsAsStrings = orgRefs.map((ref: any) => {
+    if (typeof ref === 'string') return ref;
+    const title = ref.title || ref.url || '';
+    const url = ref.url || '';
+    const excerpt = ref.excerpt ? ` — ${ref.excerpt}` : '';
+    return url ? `[${title}](${url})${excerpt}` : `${title}${excerpt}`;
+  });
+
   $: templateData = {
     size: fieldValues.size,
     technologies: fieldValues.technologies,
@@ -104,6 +113,7 @@
     kpis: fieldValues.kpis,
     challenges: fieldValues.challenges,
     objectives: fieldValues.objectives,
+    references: refsAsStrings,
   };
 
   const handleTemplateFieldSaved = () => {
@@ -184,7 +194,7 @@
         {apiEndpoint}
         commentCounts={commentCounts ?? {}}
         onOpenComments={onOpenComments ? (section) => { if (onOpenComments) onOpenComments(section); } : null}
-        references={[]}
+        references={orgRefs as any[]}
         matrix={null}
         calculatedScores={null}
         entityId={organization?.id ?? ''}
