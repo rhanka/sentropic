@@ -6,7 +6,7 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { Star, X, Minus, CheckCircle2, AlertTriangle } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
-  import { normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, arrayToMarkdown, markdownToArray, renderMarkdownWithRefs } from '$lib/utils/markdown';
+  import { normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, arrayToMarkdown, arrayToNumberedMarkdown, markdownToArray, renderMarkdownWithRefs } from '$lib/utils/markdown';
 
   // ---------------------------------------------------------------------------
   // Props
@@ -178,7 +178,7 @@
       {#each activeTab.rows ?? [] as row}
         {#if row.main && row.sidebar}
           <!-- Main + Sidebar row -->
-          <div class="grid gap-6 {gridColsClass[row.columns] || 'lg:grid-cols-3'}">
+          <div class="grid gap-6 items-stretch {gridColsClass[row.columns] || 'lg:grid-cols-3'}">
             <!-- Main zone -->
             <div class="{colSpanClass[row.main?.span] || 'md:col-span-2'}">
               <!-- Span fields (full width within main) -->
@@ -199,7 +199,14 @@
                   {:else if field.type === 'list'}
                     <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                       <div class="text-sm text-slate-600">
-                        {#if isPrinting}
+                        {#if field.key === 'references'}
+                          <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
+                            {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
+                              {@const linkMatch = typeof item === 'string' ? item.match(/\[([^\]]*)\]\(([^)]*)\)(.*)/) : null}
+                              <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3]}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
+                            {/each}
+                          </ol>
+                        {:else if isPrinting}
                           <ul class="space-y-2">
                             {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item}
                               <li class="flex items-start gap-2"><span class="mt-1">&#8226;</span><span>{@html renderMarkdownWithRefs(item, references, { addListStyles: true, listPadding: 1.5 })}</span></li>
@@ -217,7 +224,7 @@
               {#if (row.main.fields ?? []).filter(isNotSpanField).length > 0}
                 <div class="grid gap-6 {gridColsClass[row.main.columns] || 'md:grid-cols-2'}">
                   {#each (row.main.fields ?? []).filter(isNotSpanField) as field (field.key)}
-                    <div>
+                    <div class="h-full">
                       {#if field.type === 'text'}
                         <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                           <div class="prose prose-slate max-w-none">
@@ -233,7 +240,14 @@
                       {:else if field.type === 'list'}
                         <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                           <div class="text-sm text-slate-600">
-                            {#if isPrinting}
+                            {#if field.key === 'references'}
+                              <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
+                                {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
+                                  {@const linkMatch = typeof item === 'string' ? item.match(/\[([^\]]*)\]\(([^)]*)\)(.*)/) : null}
+                                  <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3]}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
+                                {/each}
+                              </ol>
+                            {:else if isPrinting}
                               <ul class="space-y-2">
                                 {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item}
                                   <li class="flex items-start gap-2"><span class="mt-1">&#8226;</span><span>{@html renderMarkdownWithRefs(item, references, { addListStyles: true, listPadding: 1.5 })}</span></li>
@@ -251,8 +265,8 @@
               {/if}
             </div>
             <!-- Sidebar zone -->
-            <div class="{colSpanClass[row.sidebar?.span] || ''}">
-              <div class="space-y-6">
+            <div class="{colSpanClass[row.sidebar?.span] || ''} h-full">
+              <div class="space-y-6 h-full flex flex-col">
                 {#each row.sidebar.fields ?? [] as field (field.key)}
                   {#if field.type === 'text'}
                     <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
@@ -267,7 +281,14 @@
                   {:else if field.type === 'list'}
                     <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                       <div class="text-sm text-slate-600">
-                        {#if isPrinting}
+                        {#if field.key === 'references'}
+                          <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
+                            {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
+                              {@const linkMatch = typeof item === 'string' ? item.match(/\[([^\]]*)\]\(([^)]*)\)(.*)/) : null}
+                              <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3]}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
+                            {/each}
+                          </ol>
+                        {:else if isPrinting}
                           <ul class="space-y-2">
                             {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item}
                               <li class="flex items-start gap-2"><span class="mt-1">&#8226;</span><span>{@html renderMarkdownWithRefs(item, references, { addListStyles: true, listPadding: 1.5 })}</span></li>
@@ -328,7 +349,7 @@
                   </div>
                 {/if}
               {:else if field.type === 'text'}
-                <div class={field.span > 1 ? (colSpanClass[field.span] || '') : ''}>
+                <div class="{field.span > 1 ? (colSpanClass[field.span] || '') : ''} h-full">
                   <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                     <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
                       {#if isPrinting}
@@ -340,10 +361,17 @@
                   </FieldCard>
                 </div>
               {:else if field.type === 'list'}
-                <div class={field.span > 1 ? (colSpanClass[field.span] || '') : ''}>
+                <div class="{field.span > 1 ? (colSpanClass[field.span] || '') : ''} h-full">
                   <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                     <div class="text-sm text-slate-600">
-                      {#if isPrinting}
+                      {#if field.key === 'references'}
+                        <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
+                          {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
+                            {@const linkMatch = typeof item === 'string' ? item.match(/\[([^\]]*)\]\(([^)]*)\)(.*)/) : null}
+                            <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3]}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
+                          {/each}
+                        </ol>
+                      {:else if isPrinting}
                         <ul class="space-y-2">
                           {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item}
                             <li class="flex items-start gap-2"><span class="mt-1">&#8226;</span><span>{@html renderMarkdownWithRefs(item, references, { addListStyles: true, listPadding: 1.5 })}</span></li>
