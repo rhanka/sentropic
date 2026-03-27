@@ -49,17 +49,164 @@
     return false;
   };
 
-  // Field data access
-  const getFieldValue = (key: string): any => data?.[key] ?? '';
+  // ---------------------------------------------------------------------------
+  // Collaborative editing buffers (text, list, score)
+  // Pattern: buffers hold the local editing state, originals hold the last
+  // known server value. On SSE updates (data changes), we merge: if the server
+  // value changed and the local user hasn't edited the field (buffer === original),
+  // we update both buffer and original. If the user has local edits, we only
+  // update the original so the unsaved indicator works.
+  // ---------------------------------------------------------------------------
+  let textBuffers: Record<string, string> = {};
+  let textOriginals: Record<string, string> = {};
+  let listBuffers: Record<string, string[]> = {};
+  let listOriginals: Record<string, string[]> = {};
+  let scoreBuffers: Record<string, string> = {};
+  let scoreOriginals: Record<string, string> = {};
+  let lastEntityId: string | null = null;
 
+  // Collect all field descriptors from template (flattened)
+  const collectFields = (tmpl: any): any[] => {
+    if (!tmpl?.tabs) return [];
+    const fields: any[] = [];
+    for (const tab of tmpl.tabs) {
+      for (const row of (tab.rows ?? [])) {
+        if (row.main) {
+          for (const f of (row.main.fields ?? [])) fields.push(f);
+        }
+        if (row.sidebar) {
+          for (const f of (row.sidebar.fields ?? [])) fields.push(f);
+        }
+        for (const f of (row.fields ?? [])) fields.push(f);
+      }
+    }
+    return fields;
+  };
+
+  // Reactive sync block — runs when data or entityId changes (SSE updates)
+  $: if (data && entityId) {
+    const allFields = collectFields(template);
+
+    // Compute incoming normalized values
+    const incomingText: Record<string, string> = {};
+    const incomingList: Record<string, string[]> = {};
+    for (const f of allFields) {
+      if (f.type === 'text') {
+        incomingText[f.key] = normalizeUseCaseMarkdown(data?.[f.key] || '');
+      } else if (f.type === 'list') {
+        incomingList[f.key] = Array.isArray(data?.[f.key]) ? [...data[f.key]] : [];
+      }
+    }
+
+    // Incoming score values
+    const incomingScores: Record<string, string> = {};
+    for (const score of (data?.valueScores ?? [])) {
+      incomingScores[`value-${score.axisId}`] = normalizeUseCaseMarkdown(score.description || '');
+    }
+    for (const score of (data?.complexityScores ?? [])) {
+      incomingScores[`complexity-${score.axisId}`] = normalizeUseCaseMarkdown(score.description || '');
+    }
+
+    if (entityId !== lastEntityId) {
+      // New entity — full init
+      lastEntityId = entityId;
+      textBuffers = { ...incomingText };
+      textOriginals = { ...incomingText };
+      listBuffers = { ...incomingList };
+      listOriginals = { ...incomingList };
+      scoreBuffers = { ...incomingScores };
+      scoreOriginals = { ...incomingScores };
+    } else {
+      // Same entity — merge SSE updates
+      let changed = false;
+      const updatedTextBuffers = { ...textBuffers };
+      const updatedTextOriginals = { ...textOriginals };
+      const updatedListBuffers = { ...listBuffers };
+      const updatedListOriginals = { ...listOriginals };
+      const updatedScoreBuffers = { ...scoreBuffers };
+      const updatedScoreOriginals = { ...scoreOriginals };
+
+      // Text fields
+      for (const key of Object.keys(incomingText)) {
+        if (incomingText[key] !== textOriginals[key]) {
+          // Server value changed — update original; update buffer only if not locally edited
+          if (textBuffers[key] === textOriginals[key]) {
+            updatedTextBuffers[key] = incomingText[key];
+          }
+          updatedTextOriginals[key] = incomingText[key];
+          changed = true;
+        }
+      }
+
+      // List fields
+      for (const key of Object.keys(incomingList)) {
+        if (JSON.stringify(incomingList[key]) !== JSON.stringify(listOriginals[key])) {
+          if (JSON.stringify(listBuffers[key]) === JSON.stringify(listOriginals[key])) {
+            updatedListBuffers[key] = [...incomingList[key]];
+          }
+          updatedListOriginals[key] = [...incomingList[key]];
+          changed = true;
+        }
+      }
+
+      // Score fields
+      for (const key of Object.keys(incomingScores)) {
+        if (incomingScores[key] !== scoreOriginals[key]) {
+          if (scoreBuffers[key] === scoreOriginals[key]) {
+            updatedScoreBuffers[key] = incomingScores[key];
+          }
+          updatedScoreOriginals[key] = incomingScores[key];
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        textBuffers = updatedTextBuffers;
+        textOriginals = updatedTextOriginals;
+        listBuffers = updatedListBuffers;
+        listOriginals = updatedListOriginals;
+        scoreBuffers = updatedScoreBuffers;
+        scoreOriginals = updatedScoreOriginals;
+      }
+    }
+  }
+
+  // Reactive list markdowns derived from list buffers
+  $: listMarkdowns = Object.keys(listBuffers).reduce<Record<string, string>>((acc, key) => {
+    acc[key] = arrayToMarkdown(listBuffers[key] ?? []);
+    return acc;
+  }, {});
+
+  // Reactive field value getter — reads from buffers (not raw data)
+  $: getFieldValue = (key: string): any => {
+    // For list fields, return the buffer array
+    if (key in listBuffers) return listBuffers[key];
+    // For text fields, return the buffer string
+    if (key in textBuffers) return textBuffers[key];
+    // Fallback to raw data for non-buffered fields (scores-summary, etc.)
+    return data?.[key] ?? '';
+  };
+
+  // Handlers for buffer updates from EditableInput on:change
+  const handleTextChange = (key: string, value: string) => {
+    textBuffers = { ...textBuffers, [key]: value };
+  };
+  const handleListChange = (key: string, value: string[]) => {
+    listBuffers = { ...listBuffers, [key]: value };
+  };
+  const handleScoreChange = (key: string, value: string) => {
+    scoreBuffers = { ...scoreBuffers, [key]: value };
+  };
+
+  // Full-data getters for EditableInput save payloads
   const getTextFullData = (key: string): Record<string, unknown> | null => {
-    const value = normalizeUseCaseMarkdown(getFieldValue(key) || '');
+    const value = normalizeUseCaseMarkdown(textBuffers[key] || '');
     const cleaned = stripTrailingEmptyParagraph(value);
     return { [key]: cleaned };
   };
 
   const getListFullData = (key: string): Record<string, unknown> | null => {
-    const arr = Array.isArray(getFieldValue(key)) ? getFieldValue(key) : [];
+    const arr = listBuffers[key] ?? [];
     const markdown = arrayToMarkdown(arr);
     const cleaned = stripTrailingEmptyParagraph(markdown);
     return { [key]: markdownToArray(cleaned) };
@@ -79,34 +226,6 @@
       return score;
     });
     return { [scoresKey]: updated };
-  };
-
-  // Score buffers
-  let scoreBuffers: Record<string, string> = {};
-  let scoreOriginals: Record<string, string> = {};
-  let lastEntityId: string | null = null;
-
-  $: if (entityId && entityId !== lastEntityId) {
-    lastEntityId = entityId;
-    scoreBuffers = {};
-    scoreOriginals = {};
-    initScoreBuffers();
-  }
-
-  const initScoreBuffers = () => {
-    const vals: Record<string, string> = {};
-    for (const score of (data?.valueScores ?? [])) {
-      vals[`value-${score.axisId}`] = normalizeUseCaseMarkdown(score.description || '');
-    }
-    for (const score of (data?.complexityScores ?? [])) {
-      vals[`complexity-${score.axisId}`] = normalizeUseCaseMarkdown(score.description || '');
-    }
-    scoreBuffers = { ...vals };
-    scoreOriginals = { ...vals };
-  };
-
-  const handleScoreChange = (key: string, value: string) => {
-    scoreBuffers = { ...scoreBuffers, [key]: value };
   };
 
   // Score summary
@@ -191,7 +310,7 @@
                           {#if isPrinting}
                             {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
                           {:else}
-                            <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} {references} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
+                            <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={textOriginals[field.key] || ''} {references} on:change={(e) => handleTextChange(field.key, e.detail.value)} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
                           {/if}
                         </div>
                       </div>
@@ -213,7 +332,7 @@
                             {/each}
                           </ul>
                         {:else}
-                          <EditableInput {locked} label="" value={arrayToMarkdown(Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : [])} markdown={true} forceList={true} {apiEndpoint} fullData={getListFullData(field.key)} fullDataGetter={() => getListFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={arrayToMarkdown(Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : [])} {references} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
+                          <EditableInput {locked} label="" value={listMarkdowns[field.key] || ''} markdown={true} forceList={true} {apiEndpoint} fullData={getListFullData(field.key)} fullDataGetter={() => getListFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={arrayToMarkdown(listOriginals[field.key] ?? [])} {references} on:change={(e) => handleListChange(field.key, markdownToArray(e.detail.value))} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
                         {/if}
                       </div>
                     </FieldCard>
@@ -232,7 +351,7 @@
                               {#if isPrinting}
                                 {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
                               {:else}
-                                <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} {references} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
+                                <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={textOriginals[field.key] || ''} {references} on:change={(e) => handleTextChange(field.key, e.detail.value)} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
                               {/if}
                             </div>
                           </div>
@@ -254,7 +373,7 @@
                                 {/each}
                               </ul>
                             {:else}
-                              <EditableInput {locked} label="" value={arrayToMarkdown(Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : [])} markdown={true} forceList={true} {apiEndpoint} fullData={getListFullData(field.key)} fullDataGetter={() => getListFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={arrayToMarkdown(Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : [])} {references} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
+                              <EditableInput {locked} label="" value={listMarkdowns[field.key] || ''} markdown={true} forceList={true} {apiEndpoint} fullData={getListFullData(field.key)} fullDataGetter={() => getListFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={arrayToMarkdown(listOriginals[field.key] ?? [])} {references} on:change={(e) => handleListChange(field.key, markdownToArray(e.detail.value))} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
                             {/if}
                           </div>
                         </FieldCard>
@@ -274,7 +393,7 @@
                         {#if isPrinting}
                           {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
                         {:else}
-                          <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} {references} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
+                          <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={textOriginals[field.key] || ''} {references} on:change={(e) => handleTextChange(field.key, e.detail.value)} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
                         {/if}
                       </div>
                     </FieldCard>
@@ -295,7 +414,7 @@
                             {/each}
                           </ul>
                         {:else}
-                          <EditableInput {locked} label="" value={arrayToMarkdown(Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : [])} markdown={true} forceList={true} {apiEndpoint} fullData={getListFullData(field.key)} fullDataGetter={() => getListFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={arrayToMarkdown(Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : [])} {references} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
+                          <EditableInput {locked} label="" value={listMarkdowns[field.key] || ''} markdown={true} forceList={true} {apiEndpoint} fullData={getListFullData(field.key)} fullDataGetter={() => getListFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={arrayToMarkdown(listOriginals[field.key] ?? [])} {references} on:change={(e) => handleListChange(field.key, markdownToArray(e.detail.value))} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
                         {/if}
                       </div>
                     </FieldCard>
@@ -355,7 +474,7 @@
                       {#if isPrinting}
                         {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
                       {:else}
-                        <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} {references} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
+                        <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={textOriginals[field.key] || ''} {references} on:change={(e) => handleTextChange(field.key, e.detail.value)} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
                       {/if}
                     </div>
                   </FieldCard>
@@ -378,7 +497,7 @@
                           {/each}
                         </ul>
                       {:else}
-                        <EditableInput {locked} label="" value={arrayToMarkdown(Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : [])} markdown={true} forceList={true} {apiEndpoint} fullData={getListFullData(field.key)} fullDataGetter={() => getListFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={arrayToMarkdown(Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : [])} {references} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
+                        <EditableInput {locked} label="" value={listMarkdowns[field.key] || ''} markdown={true} forceList={true} {apiEndpoint} fullData={getListFullData(field.key)} fullDataGetter={() => getListFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={arrayToMarkdown(listOriginals[field.key] ?? [])} {references} on:change={(e) => handleListChange(field.key, markdownToArray(e.detail.value))} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
                       {/if}
                     </div>
                   </FieldCard>
