@@ -4,7 +4,7 @@
   import FieldCard from '$lib/components/FieldCard.svelte';
   import ScoreTable from '$lib/components/ScoreTable.svelte';
   import EditableInput from '$lib/components/EditableInput.svelte';
-  import { Star, X, Minus, CheckCircle2, AlertTriangle } from '@lucide/svelte';
+  import { Star, X, Minus } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
   import { normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, arrayToMarkdown, arrayToNumberedMarkdown, markdownToArray, renderMarkdownWithRefs } from '$lib/utils/markdown';
 
@@ -235,6 +235,9 @@
   $: valueStars = calculatedScores?.valueStars ?? (totalValueScore != null ? Math.round(totalValueScore / 20) : 0);
   $: complexityStars = calculatedScores?.complexityStars ?? (totalComplexityScore != null ? Math.round(totalComplexityScore / 20) : 0);
 
+  // Long content detection for description-compact-print
+  $: isTextContentLong = ((textBuffers.description || '').length || 0) + Math.max(((textBuffers.problem || '').length || 0), ((textBuffers.solution || '').length || 0)) * 2 > 2000;
+
   // Grid class lookups
   const gridColsClass: Record<number, string> = { 1: 'grid-cols-1', 2: 'md:grid-cols-2', 3: 'lg:grid-cols-3' };
   const colSpanClass: Record<number, string> = { 1: '', 2: 'md:col-span-2', 3: 'lg:col-span-3' };
@@ -297,15 +300,15 @@
       {#each activeTab.rows ?? [] as row}
         {#if row.main && row.sidebar}
           <!-- Main + Sidebar row -->
-          <div class="grid gap-6 items-stretch {gridColsClass[row.columns] || 'lg:grid-cols-3'}">
+          <div class="grid gap-6 items-stretch {gridColsClass[row.columns] || 'lg:grid-cols-3'} {row.printClass || ''}">
             <!-- Main zone -->
-            <div class="{colSpanClass[row.main?.span] || 'md:col-span-2'}">
+            <div class="{colSpanClass[row.main?.span] || 'md:col-span-2'} {row.main?.printClass || ''}">
               <!-- Span fields (full width within main) -->
               {#each (row.main.fields ?? []).filter(isSpanField) as field (field.key)}
-                <div class="mb-6">
+                <div>
                   {#if field.type === 'text'}
                     <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
-                      <div class="prose prose-slate max-w-none">
+                      <div class="prose prose-slate max-w-none" class:description-compact-print={isTextContentLong}>
                         <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                           {#if isPrinting}
                             {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
@@ -341,12 +344,12 @@
               {/each}
               <!-- Grid fields (non-span, in sub-grid) -->
               {#if (row.main.fields ?? []).filter(isNotSpanField).length > 0}
-                <div class="grid gap-6 {gridColsClass[row.main.columns] || 'md:grid-cols-2'}">
+                <div class="grid gap-6 {gridColsClass[row.main.columns] || 'md:grid-cols-2'} {row.main?.printGridClass || ''}">
                   {#each (row.main.fields ?? []).filter(isNotSpanField) as field (field.key)}
                     <div class="h-full">
                       {#if field.type === 'text'}
                         <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
-                          <div class="prose prose-slate max-w-none">
+                          <div class="prose prose-slate max-w-none" class:description-compact-print={isTextContentLong}>
                             <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                               {#if isPrinting}
                                 {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
@@ -384,7 +387,7 @@
               {/if}
             </div>
             <!-- Sidebar zone -->
-            <div class="{colSpanClass[row.sidebar?.span] || ''} h-full">
+            <div class="{colSpanClass[row.sidebar?.span] || ''} h-full {row.sidebar?.printClass || ''}">
               <div class="space-y-6 h-full flex flex-col">
                 {#each row.sidebar.fields ?? [] as field (field.key)}
                   {#if field.type === 'text'}
@@ -425,52 +428,38 @@
           </div>
         {:else}
           <!-- Simple row with flat fields -->
-          <div class="grid gap-6 {gridColsClass[row.columns] || 'grid-cols-1'}">
+          <div class="grid gap-6 {gridColsClass[row.columns] || 'grid-cols-1'} {row.printClass || ''}">
             {#each row.fields ?? [] as field (field.key)}
               {#if field.type === 'scores-summary'}
-                {#if field.key === 'totalValue' && totalValueScore != null}
-                  <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                    <div class="bg-green-100 text-green-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-                      <h3 class="font-semibold flex items-center gap-2">
-                        <CheckCircle2 class="w-5 h-5" />
-                        {fieldLabel('totalValue')}
-                      </h3>
-                    </div>
+                <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                  {#if field.key === 'totalValue' && totalValueScore != null}
                     <div class="flex items-center gap-3">
                       <div class="flex items-center gap-1">
                         {#each range(5) as i (i)}
-                          <Star class="w-6 h-6 {i < valueStars ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}" />
+                          <Star class="w-5 h-5 {i < valueStars ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}" />
                         {/each}
                       </div>
-                      <span class="font-bold text-green-600">({totalValueScore.toFixed(0)} {$_('common.pointsAbbr')})</span>
+                      <span class="text-sm font-bold text-green-600">({totalValueScore.toFixed(0)} {$_('common.pointsAbbr')})</span>
                     </div>
-                  </div>
-                {:else if field.key === 'totalComplexity' && totalComplexityScore != null}
-                  <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                    <div class="bg-red-100 text-red-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-                      <h3 class="font-semibold flex items-center gap-2">
-                        <AlertTriangle class="w-5 h-5" />
-                        {fieldLabel('totalComplexity')}
-                      </h3>
-                    </div>
+                  {:else if field.key === 'totalComplexity' && totalComplexityScore != null}
                     <div class="flex items-center gap-3">
                       <div class="flex items-center gap-1">
                         {#each range(5) as i (i)}
                           {#if i < complexityStars}
-                            <X class="w-6 h-6 text-red-500" />
+                            <X class="w-5 h-5 text-red-500" />
                           {:else}
-                            <Minus class="w-6 h-6 text-gray-300" />
+                            <Minus class="w-5 h-5 text-gray-300" />
                           {/if}
                         {/each}
                       </div>
-                      <span class="font-bold text-red-600">({totalComplexityScore.toFixed(0)} {$_('common.pointsAbbr')})</span>
+                      <span class="text-sm font-bold text-red-600">({totalComplexityScore.toFixed(0)} {$_('common.pointsAbbr')})</span>
                     </div>
-                  </div>
-                {/if}
+                  {/if}
+                </FieldCard>
               {:else if field.type === 'text'}
                 <div class="{field.span > 1 ? (colSpanClass[field.span] || '') : ''} h-full">
                   <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
-                    <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none">
+                    <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none" class:description-compact-print={isTextContentLong}>
                       {#if isPrinting}
                         {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
                       {:else}
@@ -533,3 +522,10 @@
     Template not found.
   </div>
 {/if}
+
+<style>
+  @media print {
+    :global(.usecase-print .column-b) > :global(div) { display: contents !important; }
+    :global(.usecase-print .column-a) > :global(div:not(.layout-quad):not(.rounded-lg)) { display: contents !important; }
+  }
+</style>
