@@ -337,13 +337,13 @@ function getAiIdeasTemplates(): ViewTemplateSeed[] {
         tabs: [{
           key: 'detail', label: 'Detail', always: true,
           rows: [
-            { columns: 3, fields: [
+            { columns: 3, printClass: 'layout-head', fields: [
               { key: 'totalValue', type: 'scores-summary', color: 'green' },
               { key: 'totalComplexity', type: 'scores-summary', color: 'red' },
               { key: 'deadline', type: 'text' },
             ]},
-            { columns: 3,
-              main: { span: 2, columns: 2, fields: [
+            { columns: 3, printClass: 'layout-main',
+              main: { span: 2, columns: 2, printClass: 'column-a colspan-2-print', printGridClass: 'layout-quad', fields: [
                 { key: 'description', type: 'text', span: 2 },
                 { key: 'problem', type: 'text', color: 'orange' },
                 { key: 'solution', type: 'text', color: 'blue' },
@@ -352,7 +352,7 @@ function getAiIdeasTemplates(): ViewTemplateSeed[] {
                 { key: 'metrics', type: 'list', color: 'blue' },
                 { key: 'risks', type: 'list', color: 'red' },
               ]},
-              sidebar: { span: 1, fields: [
+              sidebar: { span: 1, printClass: 'column-b', fields: [
                 { key: 'contact', type: 'text' },
                 { key: 'domain', type: 'text' },
                 { key: 'technologies', type: 'list' },
@@ -360,7 +360,7 @@ function getAiIdeasTemplates(): ViewTemplateSeed[] {
                 { key: 'dataObjects', type: 'list' },
               ]},
             },
-            { columns: 2, fields: [
+            { columns: 2, printClass: 'layout-bottom', fields: [
               { key: 'nextSteps', type: 'list', color: 'purple' },
               { key: 'references', type: 'list' },
             ]},
@@ -432,13 +432,13 @@ function getOpportunityTemplates(): ViewTemplateSeed[] {
           {
             key: 'detail', label: 'Detail', always: true,
             rows: [
-              { columns: 3, fields: [
+              { columns: 3, printClass: 'layout-head', fields: [
                 { key: 'totalValue', type: 'scores-summary', color: 'green' },
                 { key: 'totalComplexity', type: 'scores-summary', color: 'red' },
                 { key: 'deadline', type: 'text' },
               ]},
-              { columns: 3,
-                main: { span: 2, columns: 2, fields: [
+              { columns: 3, printClass: 'layout-main',
+                main: { span: 2, columns: 2, printClass: 'column-a colspan-2-print', printGridClass: 'layout-quad', fields: [
                   { key: 'description', type: 'text', span: 2 },
                   { key: 'problem', type: 'text', color: 'orange' },
                   { key: 'solution', type: 'text', color: 'blue' },
@@ -447,13 +447,13 @@ function getOpportunityTemplates(): ViewTemplateSeed[] {
                   { key: 'metrics', type: 'list', color: 'blue' },
                   { key: 'risks', type: 'list', color: 'red' },
                 ]},
-                sidebar: { span: 1, fields: [
+                sidebar: { span: 1, printClass: 'column-b', fields: [
                   { key: 'contact', type: 'text' },
                   { key: 'domain', type: 'text' },
                   { key: 'technologies', type: 'list' },
                 ]},
               },
-              { columns: 2, fields: [
+              { columns: 2, printClass: 'layout-bottom', fields: [
                 { key: 'nextSteps', type: 'list', color: 'purple' },
                 { key: 'references', type: 'list' },
               ]},
