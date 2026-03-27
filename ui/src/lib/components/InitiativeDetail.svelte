@@ -3,7 +3,6 @@
   // All {@html} usage in this file is routed through renderMarkdownWithRefs() or parseReferencesInText(),
   // which sanitizes HTML via DOMPurify to protect against XSS.
 
-  import References from '$lib/components/References.svelte';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import CommentBadge from '$lib/components/CommentBadge.svelte';
   import TemplateRenderer from '$lib/components/TemplateRenderer.svelte';
@@ -83,7 +82,6 @@
   // References (reactive)
   let references: Array<{ title: string; url: string; excerpt?: string }> = [];
   $: references = useCase?.data?.references || useCase?.references || [];
-  $: showReferences = !isEditing && references.length > 0;
 
   // Score totals for header display
   $: totalValueScore = useCase?.data?.totalValueScore !== undefined
@@ -168,7 +166,13 @@
       dataSources: d.dataSources || uc.dataSources || [],
       dataObjects: d.dataObjects || uc.dataObjects || [],
       deadline: d.deadline || uc.deadline || '',
-      references: d.references || uc.references || [],
+      references: ((d.references || uc.references || []) as Array<{title?: string; url?: string; excerpt?: string} | string>).map((ref: any) => {
+        if (typeof ref === 'string') return ref;
+        const title = ref.title || ref.url || '';
+        const url = ref.url || '';
+        const excerpt = ref.excerpt ? ` — ${ref.excerpt}` : '';
+        return url ? `[${title}](${url})${excerpt}` : `${title}${excerpt}`;
+      }),
       valueScores: d.valueScores || uc.valueScores || [],
       complexityScores: d.complexityScores || uc.complexityScores || [],
       totalValueScore: totalValueScore,
@@ -176,10 +180,6 @@
     };
   };
 
-  // Print scaling factors
-  $: referencesScaleFactor = (references.length > 8 && isPrinting)
-    ? 10 / references.length
-    : 1;
 </script>
 
 {#if useCase}
@@ -299,12 +299,6 @@
       <div class="text-sm text-slate-400 italic py-4">{$_('common.loading')}...</div>
     {/if}
 
-    <!-- References section -->
-    {#if showReferences}
-      <div class="mt-6" style={isPrinting ? `font-size: ${referencesScaleFactor}em` : ''}>
-        <References {references} />
-      </div>
-    {/if}
   </div>
 {/if}
 
