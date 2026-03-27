@@ -162,6 +162,20 @@ body {
   margin-bottom: 0 !important;
 }
 
+/* Blue clickable links in rendered markdown content */
+.prose a,
+.markdown-wrapper a,
+.text-slate-600 a {
+  color: #2563eb; /* text-blue-600 */
+  text-decoration: underline;
+}
+
+.prose a:hover,
+.markdown-wrapper a:hover,
+.text-slate-600 a:hover {
+  color: #1e40af; /* text-blue-800 */
+}
+
 /* Scrollbar discret (WebKit + Firefox) — à réutiliser partout */
 .slim-scroll {
   scrollbar-width: thin;
