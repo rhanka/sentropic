@@ -8,7 +8,7 @@ export const viewTemplatesRouter = new Hono();
  * GET /view-templates/resolve?workspaceId=&workspaceType=&objectType=&maturityStage=
  * Resolve the best-matching view template for a resolution key.
  */
-viewTemplatesRouter.get('/resolve', requireWorkspaceAccessRole, async (c) => {
+viewTemplatesRouter.get('/resolve', requireWorkspaceAccessRole(), async (c) => {
   const workspaceId = c.req.query('workspaceId');
   const workspaceType = c.req.query('workspaceType');
   const objectType = c.req.query('objectType');
@@ -30,7 +30,7 @@ viewTemplatesRouter.get('/resolve', requireWorkspaceAccessRole, async (c) => {
  * GET /view-templates?workspaceId=&workspaceType=
  * List view templates for a workspace.
  */
-viewTemplatesRouter.get('/', requireWorkspaceAccessRole, async (c) => {
+viewTemplatesRouter.get('/', requireWorkspaceAccessRole(), async (c) => {
   const workspaceId = c.req.query('workspaceId');
   const workspaceType = c.req.query('workspaceType') || undefined;
 
@@ -46,7 +46,7 @@ viewTemplatesRouter.get('/', requireWorkspaceAccessRole, async (c) => {
  * GET /view-templates/:id
  * Get a single view template by ID.
  */
-viewTemplatesRouter.get('/:id', requireWorkspaceAccessRole, async (c) => {
+viewTemplatesRouter.get('/:id', requireWorkspaceAccessRole(), async (c) => {
   const id = c.req.param('id');
   const template = await viewTemplateService.getById(id);
   if (!template) {

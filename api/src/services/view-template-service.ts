@@ -108,8 +108,24 @@ export const viewTemplateService = {
     objectType: string,
     maturityStage?: string | null,
   ): Promise<ViewTemplateRow | null> {
+    // Helper: a descriptor is valid only if it uses the §12.3 format (tabs → rows → fields).
+    // Rows seeded with placeholder descriptors like {"layout":"default"} or legacy
+    // formats (left/right, sections) that TemplateRenderer can't render are skipped.
+    const hasValidDescriptor = (row: ViewTemplateRow | undefined): row is ViewTemplateRow => {
+      if (!row) return false;
+      const desc = row.descriptor as Record<string, unknown> | null;
+      if (!Array.isArray(desc?.tabs) || (desc!.tabs as unknown[]).length === 0) return false;
+      // At least one tab must have a `rows` array (the §12.3 format).
+      // Legacy formats use `left`/`right`/`sections` instead.
+      const tabs = desc!.tabs as Array<Record<string, unknown>>;
+      return tabs.some((tab) => Array.isArray(tab.rows) && (tab.rows as unknown[]).length > 0);
+    };
+
+    // 1. Check for user-customized templates in DB (sourceLevel='user' only).
+    //    Templates with sourceLevel='code' in DB are redundant with the code-level
+    //    defaults and may be stale — always prefer the code-level defaults.
     if (maturityStage) {
-      const [exact] = await db
+      const [userExact] = await db
         .select()
         .from(viewTemplates)
         .where(
@@ -118,13 +134,14 @@ export const viewTemplateService = {
             eq(viewTemplates.workspaceType, workspaceType),
             eq(viewTemplates.objectType, objectType),
             eq(viewTemplates.maturityStage, maturityStage),
+            eq(viewTemplates.sourceLevel, 'user'),
           ),
         )
         .limit(1);
-      if (exact) return exact;
+      if (hasValidDescriptor(userExact)) return userExact;
     }
 
-    const [wsGeneric] = await db
+    const [userGeneric] = await db
       .select()
       .from(viewTemplates)
       .where(
@@ -133,40 +150,35 @@ export const viewTemplateService = {
           eq(viewTemplates.workspaceType, workspaceType),
           eq(viewTemplates.objectType, objectType),
           isNull(viewTemplates.maturityStage),
+          eq(viewTemplates.sourceLevel, 'user'),
         ),
       )
       .limit(1);
-    if (wsGeneric) return wsGeneric;
+    if (hasValidDescriptor(userGeneric)) return userGeneric;
 
-    if (maturityStage) {
-      const [sysExact] = await db
-        .select()
-        .from(viewTemplates)
-        .where(
-          and(
-            isNull(viewTemplates.workspaceId),
-            eq(viewTemplates.workspaceType, workspaceType),
-            eq(viewTemplates.objectType, objectType),
-            eq(viewTemplates.maturityStage, maturityStage),
-          ),
-        )
-        .limit(1);
-      if (sysExact) return sysExact;
+    // 2. Always use code-level defaults — they are the source of truth.
+    const codeFallback = getDefaultViewTemplates(workspaceType)
+      .find((s) => s.objectType === objectType && (!maturityStage || !s.maturityStage))
+      ?? getDefaultViewTemplates('ai-ideas')
+        .find((s) => s.objectType === objectType && (!maturityStage || !s.maturityStage));
+    if (codeFallback) {
+      return {
+        id: `code-default:${workspaceType}:${objectType}`,
+        workspaceId: null,
+        workspaceType: codeFallback.workspaceType,
+        objectType: codeFallback.objectType,
+        maturityStage: null,
+        descriptor: codeFallback.descriptor,
+        version: 0,
+        sourceLevel: 'code',
+        parentId: null,
+        isDetached: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as ViewTemplateRow;
     }
 
-    const [sysGeneric] = await db
-      .select()
-      .from(viewTemplates)
-      .where(
-        and(
-          isNull(viewTemplates.workspaceId),
-          eq(viewTemplates.workspaceType, workspaceType),
-          eq(viewTemplates.objectType, objectType),
-          isNull(viewTemplates.maturityStage),
-        ),
-      )
-      .limit(1);
-    return sysGeneric ?? null;
+    return null;
   },
 
   async create(input: CreateViewTemplateInput): Promise<ViewTemplateRow> {
@@ -378,6 +390,9 @@ function getAiIdeasTemplates(): ViewTemplateSeed[] {
               { key: 'challenges', type: 'text' },
               { key: 'objectives', type: 'text' },
             ]},
+            { columns: 1, fields: [
+              { key: 'references', type: 'list' },
+            ]},
           ],
         }],
       },
@@ -476,6 +491,9 @@ function getOpportunityTemplates(): ViewTemplateSeed[] {
               { key: 'kpis', type: 'text' },
               { key: 'challenges', type: 'text' },
               { key: 'objectives', type: 'text' },
+            ]},
+            { columns: 1, fields: [
+              { key: 'references', type: 'list' },
             ]},
           ],
         }],
