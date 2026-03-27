@@ -127,6 +127,15 @@ export function arrayToMarkdown(items?: string[]): string {
     .join('\n');
 }
 
+export function arrayToNumberedMarkdown(items?: string[]): string {
+  if (!items || items.length === 0) return '';
+  return items
+    .map((item) => item?.trim?.())
+    .filter((item): item is string => Boolean(item && item.length > 0))
+    .map((item, i) => `${i + 1}. ${item}`)
+    .join('\n');
+}
+
 export function markdownToArray(markdown?: string): string[] {
   if (!markdown) return [];
   return markdown
