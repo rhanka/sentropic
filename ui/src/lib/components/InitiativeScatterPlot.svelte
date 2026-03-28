@@ -2005,7 +2005,7 @@
   }
 
   function updateChart() {
-    if (chartInstance) {
+    if (chartInstance && chartInstance.canvas) {
       // Mettre à jour le devicePixelRatio pour l'impression si nécessaire
       const isPrint = window.matchMedia('print').matches || (window as any).isPrinting;
       const dpr = window.devicePixelRatio || 1;
