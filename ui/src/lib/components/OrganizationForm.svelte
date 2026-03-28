@@ -12,6 +12,7 @@
   } from '$lib/components/organization-form.types';
   import { _ } from 'svelte-i18n';
   import { apiGet } from '$lib/utils/api';
+  import { resolveViewTemplate } from '$lib/stores/viewTemplateCache';
   import { workspaceScope } from '$lib/stores/workspaceScope';
 
   export let organization: Record<string, any> | null = null;
@@ -81,19 +82,11 @@
     const fetchKey = `${wsId}:${workspaceType}:organization`;
     if (fetchKey !== lastTemplateFetchKey && wsId) {
       lastTemplateFetchKey = fetchKey;
-      void fetchViewTemplate(wsId, workspaceType);
+      void resolveViewTemplate(wsId, workspaceType, 'organization').then((desc) => {
+        viewTemplate = desc;
+      });
     }
   }
-
-  const fetchViewTemplate = async (workspaceId: string, wsType: string) => {
-    try {
-      const result = await apiGet(`/view-templates/resolve?workspaceId=${workspaceId}&workspaceType=${wsType}&objectType=organization`);
-      viewTemplate = result?.descriptor ?? null;
-    } catch (e) {
-      console.warn('Failed to fetch organization view template, using fallback:', e);
-      viewTemplate = null;
-    }
-  };
 
   // Build template data from organization
   $: orgRefs = (organization?.data?.references || organization?.references || []) as Array<{title?: string; url?: string; excerpt?: string} | string>;

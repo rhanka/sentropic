@@ -310,7 +310,7 @@
                     <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                       <div class="prose prose-slate max-w-none" class:description-compact-print={isTextContentLong}>
                         <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-                          {#if isPrinting}
+                          {#if isPrinting || locked}
                             {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
                           {:else}
                             <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={textOriginals[field.key] || ''} {references} on:change={(e) => handleTextChange(field.key, e.detail.value)} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
@@ -324,11 +324,11 @@
                         {#if field.key === 'references'}
                           <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
                             {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
-                              {@const linkMatch = typeof item === 'string' ? item.match(/\[([^\]]*)\]\(([^)]*)\)(.*)/) : null}
-                              <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3]}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
+                              {@const linkMatch = typeof item === 'string' ? item.match(/\[(.*?)\]\(([^)]*)\)(.*)/) : null}
+                              <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
                             {/each}
                           </ol>
-                        {:else if isPrinting}
+                        {:else if isPrinting || locked}
                           <ul class="space-y-2">
                             {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item}
                               <li class="flex items-start gap-2"><span class="mt-1">&#8226;</span><span>{@html renderMarkdownWithRefs(item, references, { addListStyles: true, listPadding: 1.5 })}</span></li>
@@ -351,7 +351,7 @@
                         <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                           <div class="prose prose-slate max-w-none" class:description-compact-print={isTextContentLong}>
                             <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-                              {#if isPrinting}
+                              {#if isPrinting || locked}
                                 {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
                               {:else}
                                 <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={textOriginals[field.key] || ''} {references} on:change={(e) => handleTextChange(field.key, e.detail.value)} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
@@ -365,11 +365,11 @@
                             {#if field.key === 'references'}
                               <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
                                 {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
-                                  {@const linkMatch = typeof item === 'string' ? item.match(/\[([^\]]*)\]\(([^)]*)\)(.*)/) : null}
-                                  <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3]}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
+                                  {@const linkMatch = typeof item === 'string' ? item.match(/\[(.*?)\]\(([^)]*)\)(.*)/) : null}
+                                  <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
                                 {/each}
                               </ol>
-                            {:else if isPrinting}
+                            {:else if isPrinting || locked}
                               <ul class="space-y-2">
                                 {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item}
                                   <li class="flex items-start gap-2"><span class="mt-1">&#8226;</span><span>{@html renderMarkdownWithRefs(item, references, { addListStyles: true, listPadding: 1.5 })}</span></li>
@@ -393,7 +393,7 @@
                   {#if field.type === 'text'}
                     <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                       <div class="text-slate-600 text-sm">
-                        {#if isPrinting}
+                        {#if isPrinting || locked}
                           {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
                         {:else}
                           <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={textOriginals[field.key] || ''} {references} on:change={(e) => handleTextChange(field.key, e.detail.value)} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
@@ -406,11 +406,11 @@
                         {#if field.key === 'references'}
                           <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
                             {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
-                              {@const linkMatch = typeof item === 'string' ? item.match(/\[([^\]]*)\]\(([^)]*)\)(.*)/) : null}
-                              <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3]}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
+                              {@const linkMatch = typeof item === 'string' ? item.match(/\[(.*?)\]\(([^)]*)\)(.*)/) : null}
+                              <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
                             {/each}
                           </ol>
-                        {:else if isPrinting}
+                        {:else if isPrinting || locked}
                           <ul class="space-y-2">
                             {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item}
                               <li class="flex items-start gap-2"><span class="mt-1">&#8226;</span><span>{@html renderMarkdownWithRefs(item, references, { addListStyles: true, listPadding: 1.5 })}</span></li>
@@ -460,7 +460,7 @@
                 <div class="{field.span > 1 ? (colSpanClass[field.span] || '') : ''} h-full">
                   <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                     <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none" class:description-compact-print={isTextContentLong}>
-                      {#if isPrinting}
+                      {#if isPrinting || locked}
                         {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
                       {:else}
                         <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={textOriginals[field.key] || ''} {references} on:change={(e) => handleTextChange(field.key, e.detail.value)} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
@@ -475,11 +475,11 @@
                       {#if field.key === 'references'}
                         <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
                           {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
-                            {@const linkMatch = typeof item === 'string' ? item.match(/\[([^\]]*)\]\(([^)]*)\)(.*)/) : null}
-                            <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3]}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
+                            {@const linkMatch = typeof item === 'string' ? item.match(/\[(.*?)\]\(([^)]*)\)(.*)/) : null}
+                            <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
                           {/each}
                         </ol>
-                      {:else if isPrinting}
+                      {:else if isPrinting || locked}
                         <ul class="space-y-2">
                           {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item}
                             <li class="flex items-start gap-2"><span class="mt-1">&#8226;</span><span>{@html renderMarkdownWithRefs(item, references, { addListStyles: true, listPadding: 1.5 })}</span></li>
