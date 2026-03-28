@@ -38,7 +38,7 @@
 <div class="{cardClasses} h-full" data-comment-section={commentSection}>
   {#if variant === 'colored' && color}
     <div class="{headerClasses} px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-      <h3 class="flex items-center justify-between text-sm font-semibold">
+      <h3 class="flex items-center justify-between text-sm font-semibold group">
         {label}
         <CommentBadge
           count={commentCount}
@@ -49,7 +49,7 @@
     </div>
   {:else if variant === 'colored' && !color}
     <div class="bg-slate-100 text-slate-700 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4">
-      <h3 class="flex items-center justify-between text-sm font-semibold">
+      <h3 class="flex items-center justify-between text-sm font-semibold group">
         {label}
         <CommentBadge
           count={commentCount}
@@ -79,7 +79,7 @@
       />
     </h3>
   {:else}
-    <h3 class="flex items-center justify-between text-sm font-semibold text-slate-700 mb-2">
+    <h3 class="flex items-center justify-between text-sm font-semibold text-slate-700 mb-2 group">
       {label}
       <CommentBadge
         count={commentCount}
