@@ -11,6 +11,7 @@
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { apiGet } from '$lib/utils/api';
+  import { resolveViewTemplate } from '$lib/stores/viewTemplateCache';
   import { initiativesStore } from '$lib/stores/initiatives';
   import { goto } from '$app/navigation';
   import { normalizeUseCaseMarkdown, renderMarkdownWithRefs } from '$lib/utils/markdown';
@@ -131,19 +132,11 @@
     const fetchKey = `${wsId}:${workspaceType}:initiative`;
     if (fetchKey !== lastTemplateFetchKey && wsId) {
       lastTemplateFetchKey = fetchKey;
-      void fetchViewTemplate(wsId, workspaceType);
+      void resolveViewTemplate(wsId, workspaceType, 'initiative').then((desc) => {
+        viewTemplate = desc;
+      });
     }
   }
-
-  const fetchViewTemplate = async (workspaceId: string, wsType: string) => {
-    try {
-      const result = await apiGet(`/view-templates/resolve?workspaceId=${workspaceId}&workspaceType=${wsType}&objectType=initiative`);
-      viewTemplate = result?.descriptor ?? null;
-    } catch (e) {
-      console.warn('Failed to fetch view template, using fallback:', e);
-      viewTemplate = null;
-    }
-  };
 
   // Build flat data object for TemplateRenderer from useCase
   $: templateData = buildTemplateData(useCase);

@@ -1352,25 +1352,29 @@
           onOpenComments={() => openExecutiveSummaryComments('synthese_executive')}
         >
           {#if executiveSummaryData.synthese_executive}
-            <EditableInput
-              label=""
-              value={executiveSummaryData.synthese_executive}
-              markdown={true}
-              locked={isDashboardReadOnly}
-              apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-              fullData={getExecutiveSummaryPayload('synthese_executive')}
-              fullDataGetter={() => getExecutiveSummaryPayload('synthese_executive')}
-              changeId={selectedFolderId ? `exec-synthese-${selectedFolderId}` : ''}
-              originalValue={getExecutiveSummaryOriginal('synthese_executive')}
-              references={executiveSummary?.references || []}
-              on:change={(e) => handleExecutiveSummaryFieldChange('synthese_executive', e.detail.value)}
-              on:saved={(e) =>
-                handleExecutiveSummarySaved(
-                  'synthese_executive',
-                  (e as CustomEvent<{ value?: string }>).detail?.value ??
-                    executiveSummaryData.synthese_executive
-                )}
-            />
+            <div class="prose prose-slate max-w-none">
+              <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+                <EditableInput
+                  label=""
+                  value={executiveSummaryData.synthese_executive}
+                  markdown={true}
+                  locked={isDashboardReadOnly}
+                  apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
+                  fullData={getExecutiveSummaryPayload('synthese_executive')}
+                  fullDataGetter={() => getExecutiveSummaryPayload('synthese_executive')}
+                  changeId={selectedFolderId ? `exec-synthese-${selectedFolderId}` : ''}
+                  originalValue={getExecutiveSummaryOriginal('synthese_executive')}
+                  references={executiveSummary?.references || []}
+                  on:change={(e) => handleExecutiveSummaryFieldChange('synthese_executive', e.detail.value)}
+                  on:saved={(e) =>
+                    handleExecutiveSummarySaved(
+                      'synthese_executive',
+                      (e as CustomEvent<{ value?: string }>).detail?.value ??
+                        executiveSummaryData.synthese_executive
+                    )}
+                />
+              </div>
+            </div>
           {/if}
         </FieldCard>
       </div>
@@ -1771,7 +1775,7 @@
               matrix={matrix}
               calculatedScores={useCaseScoresMap.get(useCase.id) || null}
               isEditing={false}
-              locked={isDashboardReadOnly}
+              locked={true}
             />
         </section>
         {/each}

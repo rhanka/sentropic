@@ -494,7 +494,8 @@
   }
 
   /* Styles pour l'analyse et recommandation - retirer le cadre mais garder le trait */
-  .report-main-content .report-analyse {
+  .report-main-content .report-analyse,
+  .report-main-content .report-analyse > [data-comment-section] {
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
