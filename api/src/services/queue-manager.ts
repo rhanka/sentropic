@@ -302,6 +302,8 @@ export interface InitiativeListJobData {
   initiatedByUserId?: string;
   locale?: string;
   workflow?: GenerationWorkflowRuntimeContext;
+  /** Selected organization IDs for multi-org initiative generation (Lot 12) */
+  orgIds?: string[];
 }
 
 export interface InitiativeDetailJobData {
@@ -1940,7 +1942,7 @@ export class QueueManager {
    * Worker pour la génération de liste de cas d'usage
    */
   private async processInitiativeList(data: InitiativeListJobData, signal?: AbortSignal): Promise<void> {
-    const { folderId, input, organizationId, matrixMode, model, initiativeCount, initiatedByUserId, locale } = data;
+    const { folderId, input, organizationId, matrixMode, model, initiativeCount, initiatedByUserId, locale, orgIds } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
     const [folder] = await db
@@ -1959,11 +1961,11 @@ export class QueueManager {
     }
     const workspaceId = folder.workspaceId;
     const resolvedOrganizationId = organizationId ?? folder.organizationId ?? undefined;
-    
+
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
     const selectedModel = model || aiSettings.defaultModel;
-    
+
     // Récupérer les informations de l'organisation si nécessaire
     let organizationInfo = '';
     if (resolvedOrganizationId) {
@@ -1993,6 +1995,36 @@ export class QueueManager {
       }
     } else {
       console.log('ℹ️ Aucune entreprise sélectionnée pour cette génération');
+    }
+
+    // Build multi-org organizations context (Lot 12)
+    let organizationsContext = '';
+    const resolvedOrgIds = orgIds && orgIds.length > 0 ? orgIds : [];
+    if (resolvedOrgIds.length > 0) {
+      try {
+        const orgRows = await db
+          .select({ id: organizations.id, name: organizations.name, data: organizations.data })
+          .from(organizations)
+          .where(and(
+            eq(organizations.workspaceId, workspaceId),
+            sql`${organizations.id} = ANY(ARRAY[${sql.join(resolvedOrgIds.map(id => sql`${id}`), sql`, `)}]::text[])`,
+          ));
+        const orgDetails = orgRows.map((org) => {
+          const orgData = parseOrgData(org.data);
+          return {
+            id: org.id,
+            name: org.name,
+            industry: orgData.industry,
+            products: orgData.products,
+            challenges: orgData.challenges,
+            objectives: orgData.objectives,
+          };
+        });
+        organizationsContext = JSON.stringify(orgDetails, null, 2);
+        console.log(`📊 Multi-org context loaded for ${orgRows.length} organizations`);
+      } catch (error) {
+        console.warn('Error fetching multi-org context:', error);
+      }
     }
 
     const documentsContexts = await this.getDocumentsContextsForGeneration({
@@ -2031,6 +2063,7 @@ export class QueueManager {
       streamId,
       listPromptOverride,
       listPromptOverride.outputSchema,
+      organizationsContext || undefined,
     );
     
     // Mettre à jour le nom du dossier
