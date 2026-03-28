@@ -67,6 +67,8 @@
   let useOrganizationMatrix = true;
   let generateOrganizationMatrix = true;
   let lastMatrixOptionsOrgId: string | null = null;
+  let selectedOrgIds: string[] = [];
+  let createNewOrgs = false;
   let modelCatalog: ModelCatalogPayload = {
     providers: [],
     models: [],
@@ -329,6 +331,8 @@
         organization_id: $currentOrganizationId || undefined,
         matrix_mode: matrixMode,
         model: selectedGenerationModelId || undefined,
+        ...(selectedOrgIds.length > 0 ? { org_ids: selectedOrgIds } : {}),
+        ...(createNewOrgs ? { create_new_orgs: true } : {}),
       });
 
       addToast({ type: 'info', message: get(_)('folders.new.toast.generationStarted') });
@@ -495,6 +499,40 @@
 	        {/if}
 	      {/if}
 	    </div>
+
+	    {#if $organizationsStore.length > 0}
+	      <div class="space-y-2">
+	        <div class="text-sm font-medium text-slate-700">{$_('folders.new.multiOrg.title')}</div>
+	        <div class="max-h-40 overflow-y-auto rounded border border-slate-200 bg-slate-50 p-2 space-y-1">
+	          {#each $organizationsStore as organization (organization.id)}
+	            <label class="flex items-center gap-2 text-sm text-slate-700 py-0.5 px-1 rounded hover:bg-slate-100 cursor-pointer">
+	              <input
+	                type="checkbox"
+	                class="rounded"
+	                checked={selectedOrgIds.includes(organization.id)}
+	                on:change={() => {
+	                  if (selectedOrgIds.includes(organization.id)) {
+	                    selectedOrgIds = selectedOrgIds.filter((id) => id !== organization.id);
+	                  } else {
+	                    selectedOrgIds = [...selectedOrgIds, organization.id];
+	                  }
+	                }}
+	              />
+	              <span>{organization.name}</span>
+	            </label>
+	          {/each}
+	        </div>
+	        <p class="text-xs text-slate-500">{$_('folders.new.multiOrg.hint')}</p>
+	      </div>
+
+	      <div class="space-y-2">
+	        <label class="flex items-start gap-2 text-sm text-slate-700">
+	          <input type="checkbox" class="mt-0.5 rounded" bind:checked={createNewOrgs} />
+	          <span>{$_('folders.new.multiOrg.createNewOrgs')}</span>
+	        </label>
+	        <p class="text-xs text-slate-500">{$_('folders.new.multiOrg.createNewOrgsHint')}</p>
+	      </div>
+	    {/if}
 
       {#if $currentOrganizationId}
         <div class="space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
