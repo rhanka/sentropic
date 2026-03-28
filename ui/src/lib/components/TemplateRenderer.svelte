@@ -7,6 +7,7 @@
   import { Star, X, Minus } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
   import { normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, arrayToMarkdown, arrayToNumberedMarkdown, markdownToArray, renderMarkdownWithRefs } from '$lib/utils/markdown';
+  import { resolveViewTemplate } from '$lib/stores/viewTemplateCache';
 
   // ---------------------------------------------------------------------------
   // Props
@@ -23,6 +24,23 @@
   export let entityId: string = '';
   export let onFieldSaved: (() => void) | null = null;
   export let isPrinting: boolean = false;
+  export let variant: 'colored' | 'plain' | 'bordered' = 'colored';
+  export let collections: Record<string, any[]> = {};
+  export let workspaceId: string = '';
+  export let workspaceType: string = '';
+
+  // ---------------------------------------------------------------------------
+  // Path-based nested value access
+  // ---------------------------------------------------------------------------
+  function getNestedValue(obj: any, path: string): any {
+    return path.split('.').reduce((acc, part) => acc?.[part], obj);
+  }
+
+  /** Return the short key (last segment) for i18n lookups / comment sections */
+  function shortKey(key: string): string {
+    const idx = key.lastIndexOf('.');
+    return idx >= 0 ? key.slice(idx + 1) : key;
+  }
 
   // Active tab tracking
   let activeTabKey: string | null = null;
@@ -91,10 +109,11 @@
     const incomingText: Record<string, string> = {};
     const incomingList: Record<string, string[]> = {};
     for (const f of allFields) {
+      const rawVal = f.key.includes('.') ? getNestedValue(data, f.key) : data?.[f.key];
       if (f.type === 'text') {
-        incomingText[f.key] = normalizeUseCaseMarkdown(data?.[f.key] || '');
+        incomingText[f.key] = normalizeUseCaseMarkdown(rawVal || '');
       } else if (f.type === 'list') {
-        incomingList[f.key] = Array.isArray(data?.[f.key]) ? [...data[f.key]] : [];
+        incomingList[f.key] = Array.isArray(rawVal) ? [...rawVal] : [];
       }
     }
 
@@ -183,7 +202,8 @@
     if (key in listBuffers) return listBuffers[key];
     // For text fields, return the buffer string
     if (key in textBuffers) return textBuffers[key];
-    // Fallback to raw data for non-buffered fields (scores-summary, etc.)
+    // Fallback to raw data — support dot-path traversal for nested fields
+    if (key.includes('.')) return getNestedValue(data, key) ?? '';
     return data?.[key] ?? '';
   };
 
@@ -198,10 +218,48 @@
     scoreBuffers = { ...scoreBuffers, [key]: value };
   };
 
+  /**
+   * For dot-path keys, gather ALL sibling buffer values under the same parent
+   * so the save payload includes the complete sub-object (not just the changed field).
+   */
+  const buildSiblingPayload = (changedKey: string, changedValue: unknown): Record<string, unknown> => {
+    const parts = changedKey.split('.');
+    if (parts.length <= 1) return { [changedKey]: changedValue };
+    const parentPrefix = parts.slice(0, -1).join('.') + '.';
+    const parentPath = parts.slice(0, -1);
+    const rawParent = getNestedValue(data, parentPath.join('.'));
+    const merged: Record<string, unknown> = (rawParent && typeof rawParent === 'object') ? { ...rawParent } : {};
+    for (const bufKey of Object.keys(textBuffers)) {
+      if (bufKey.startsWith(parentPrefix)) {
+        const leafKey = bufKey.slice(parentPrefix.length);
+        merged[leafKey] = stripTrailingEmptyParagraph(normalizeUseCaseMarkdown(textBuffers[bufKey] || ''));
+      }
+    }
+    for (const bufKey of Object.keys(listBuffers)) {
+      if (bufKey.startsWith(parentPrefix)) {
+        const leafKey = bufKey.slice(parentPrefix.length);
+        const arr = listBuffers[bufKey] ?? [];
+        merged[leafKey] = markdownToArray(stripTrailingEmptyParagraph(arrayToMarkdown(arr)));
+      }
+    }
+    const leafKey = parts[parts.length - 1];
+    merged[leafKey] = changedValue;
+    let obj: Record<string, unknown> = {};
+    const root = obj;
+    for (let i = 0; i < parentPath.length - 1; i++) {
+      const next: Record<string, unknown> = {};
+      obj[parentPath[i]] = next;
+      obj = next;
+    }
+    obj[parentPath[parentPath.length - 1]] = merged;
+    return root;
+  };
+
   // Full-data getters for EditableInput save payloads
   const getTextFullData = (key: string): Record<string, unknown> | null => {
     const value = normalizeUseCaseMarkdown(textBuffers[key] || '');
     const cleaned = stripTrailingEmptyParagraph(value);
+    if (key.includes('.')) return buildSiblingPayload(key, cleaned);
     return { [key]: cleaned };
   };
 
@@ -209,7 +267,9 @@
     const arr = listBuffers[key] ?? [];
     const markdown = arrayToMarkdown(arr);
     const cleaned = stripTrailingEmptyParagraph(markdown);
-    return { [key]: markdownToArray(cleaned) };
+    const listValue = markdownToArray(cleaned);
+    if (key.includes('.')) return buildSiblingPayload(key, listValue);
+    return { [key]: listValue };
   };
 
   const getScoreFullDataFn = (type: 'value' | 'complexity') => (axisId: string): Record<string, unknown> | null => {
@@ -262,13 +322,36 @@
   };
 
   const fieldLabel = (key: string): string => {
-    const i18nKey = i18nMap[key];
+    const sk = shortKey(key);
+    const i18nKey = i18nMap[sk] || i18nMap[key];
     if (i18nKey) {
       const translated = $_({ id: i18nKey });
       if (translated && translated !== i18nKey) return translated;
     }
-    return key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+    return sk.charAt(0).toUpperCase() + sk.slice(1).replace(/([A-Z])/g, ' $1');
   };
+
+  // ---------------------------------------------------------------------------
+  // Entity-loop: resolve sub-templates for templateRef fields
+  // ---------------------------------------------------------------------------
+  let entityLoopTemplates: Record<string, any> = {};
+
+  $: {
+    const allFields = collectFields(template);
+    const loopFields = allFields.filter((f: any) => f.type === 'entity-loop' && f.templateRef);
+    const templateRefs = [...new Set(loopFields.map((f: any) => f.templateRef as string))];
+    if (workspaceId && workspaceType && templateRefs.length > 0) {
+      for (const ref of templateRefs) {
+        if (!entityLoopTemplates[ref]) {
+          resolveViewTemplate(workspaceId, workspaceType, ref).then((tmpl) => {
+            if (tmpl) {
+              entityLoopTemplates = { ...entityLoopTemplates, [ref]: tmpl };
+            }
+          });
+        }
+      }
+    }
+  }
 
   // Helpers for splitting fields
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -307,7 +390,7 @@
               {#each (row.main.fields ?? []).filter(isSpanField) as field (field.key)}
                 <div>
                   {#if field.type === 'text'}
-                    <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                    <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                       <div class="prose prose-slate max-w-none" class:description-compact-print={isTextContentLong}>
                         <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                           {#if isPrinting || locked}
@@ -319,7 +402,7 @@
                       </div>
                     </FieldCard>
                   {:else if field.type === 'list'}
-                    <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                    <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                       <div class="text-sm text-slate-600">
                         {#if field.key === 'references'}
                           <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
@@ -348,7 +431,7 @@
                   {#each (row.main.fields ?? []).filter(isNotSpanField) as field (field.key)}
                     <div class="h-full">
                       {#if field.type === 'text'}
-                        <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                        <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                           <div class="prose prose-slate max-w-none" class:description-compact-print={isTextContentLong}>
                             <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
                               {#if isPrinting || locked}
@@ -360,7 +443,7 @@
                           </div>
                         </FieldCard>
                       {:else if field.type === 'list'}
-                        <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                        <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                           <div class="text-sm text-slate-600">
                             {#if field.key === 'references'}
                               <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
@@ -391,7 +474,7 @@
               <div class="space-y-6 h-full flex flex-col">
                 {#each row.sidebar.fields ?? [] as field (field.key)}
                   {#if field.type === 'text'}
-                    <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                    <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                       <div class="text-slate-600 text-sm">
                         {#if isPrinting || locked}
                           {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
@@ -401,7 +484,7 @@
                       </div>
                     </FieldCard>
                   {:else if field.type === 'list'}
-                    <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                    <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                       <div class="text-sm text-slate-600">
                         {#if field.key === 'references'}
                           <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
@@ -430,8 +513,9 @@
           <!-- Simple row with flat fields -->
           <div class="grid gap-6 {gridColsClass[row.columns] || 'grid-cols-1'} {row.printClass || ''}">
             {#each row.fields ?? [] as field (field.key)}
+              {#if !field.printOnly || isPrinting}
               {#if field.type === 'scores-summary'}
-                <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                   {#if field.key === 'totalValue' && totalValueScore != null}
                     <div class="flex items-center gap-3">
                       <div class="flex items-center gap-1">
@@ -458,7 +542,7 @@
                 </FieldCard>
               {:else if field.type === 'text'}
                 <div class="{field.span > 1 ? (colSpanClass[field.span] || '') : ''} h-full">
-                  <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                  <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={shortKey(field.key)} commentCount={commentCounts[shortKey(field.key)] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(shortKey(field.key)) : null}>
                     <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none" class:description-compact-print={isTextContentLong}>
                       {#if isPrinting || locked}
                         {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
@@ -470,9 +554,9 @@
                 </div>
               {:else if field.type === 'list'}
                 <div class="{field.span > 1 ? (colSpanClass[field.span] || '') : ''} h-full">
-                  <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                  <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={shortKey(field.key)} commentCount={commentCounts[shortKey(field.key)] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(shortKey(field.key)) : null}>
                     <div class="text-sm text-slate-600">
-                      {#if field.key === 'references'}
+                      {#if shortKey(field.key) === 'references'}
                         <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
                           {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
                             {@const linkMatch = typeof item === 'string' ? item.match(/\[(.*?)\]\(([^)]*)\)(.*)/) : null}
@@ -494,22 +578,41 @@
               {:else if field.type === 'scores' && matrix}
                 <div class={field.span > 1 ? (colSpanClass[field.span] || '') : ''}>
                   {#if field.key === 'valueScores'}
-                    <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                    <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                       <ScoreTable axes={matrix.valueAxes ?? []} scores={data?.valueScores ?? []} displayMode="stars" {locked} {apiEndpoint} scorePrefix="value" {entityId} {scoreBuffers} {scoreOriginals} {references} onScoreChange={handleScoreChange} onScoreSaved={onFieldSaved} {isPrinting} getScoreFullData={getScoreFullDataFn('value')} />
                     </FieldCard>
                   {:else if field.key === 'complexityScores'}
-                    <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                    <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                       <ScoreTable axes={matrix.complexityAxes ?? []} scores={data?.complexityScores ?? []} displayMode="xminus" {locked} {apiEndpoint} scorePrefix="complexity" {entityId} {scoreBuffers} {scoreOriginals} {references} onScoreChange={handleScoreChange} onScoreSaved={onFieldSaved} {isPrinting} getScoreFullData={getScoreFullDataFn('complexity')} />
                     </FieldCard>
                   {/if}
                 </div>
               {:else if field.type === 'child-list'}
-                <FieldCard label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
+                <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                   <p class="text-sm text-slate-400 italic">Child list: {field.key}</p>
                 </FieldCard>
               {:else if field.type === 'chart'}
                 <!-- Chart fields are rendered by the parent page via slot -->
                 <slot name="chart" chartKey={field.key} />
+              {:else if field.type === 'component'}
+                <!-- Component fields are rendered by the parent page via slot -->
+                <slot name="component" fieldKey={field.key} />
+              {:else if field.type === 'entity-loop'}
+                {#if field.collection && collections[field.collection] && field.templateRef && entityLoopTemplates[field.templateRef]}
+                  {#each collections[field.collection] as entity (entity.id)}
+                    <svelte:self
+                      template={entityLoopTemplates[field.templateRef]}
+                      data={entity?.data ? { ...entity, ...entity.data } : entity}
+                      locked={true}
+                      isPrinting={true}
+                      {variant}
+                      {matrix}
+                      entityId={entity.id ?? ''}
+                      references={[]}
+                    />
+                  {/each}
+                {/if}
+              {/if}
               {/if}
             {/each}
           </div>
