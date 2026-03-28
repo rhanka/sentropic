@@ -137,6 +137,43 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] **UI tests**
       - [ ] Sub-lot gate: `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
 
+- [ ] **Lot 13 — Dashboard via TemplateRenderer (component, entity-loop, printOnly, path-based keys)**
+  - [ ] **TemplateRenderer extensions**
+    - [ ] Support `type: "component"` — renders a named Svelte slot, parent provides content via `<svelte:fragment slot="component" let:fieldKey>`
+    - [ ] Support `type: "entity-loop"` — reads `collections[field.collection]`, resolves template via `field.templateRef` (objectType), renders each entity with its own TemplateRenderer instance
+    - [ ] Support `printOnly: true` on any field — wraps in `{#if isPrinting}`, no DOM mount in normal view
+    - [ ] Support dot-notation path-based field keys — `getFieldValue("data.executive_summary.synthese_executive")` traverses nested objects
+    - [ ] Accept `collections` prop (Record<string, any[]>) for entity-loop data
+  - [ ] **Dashboard template seed**
+    - [ ] Update dashboard view template in `api/src/services/view-template-service.ts` to use the new format:
+      - `cover_page`: component, printOnly
+      - `sommaire`: component, printOnly
+      - `synthese_executive`: text (path: `data.executive_summary.synthese_executive`)
+      - `scatter_plot`: component
+      - `introduction`: text (path: `data.executive_summary.introduction`)
+      - `analyse`: text (path: `data.executive_summary.analyse`)
+      - `recommandation`: text (path: `data.executive_summary.recommandation`)
+      - `references`: list (path: `data.executive_summary.references`)
+      - `annex_cover`: component, printOnly
+      - `initiatives`: entity-loop, collection: "initiatives", templateRef: "initiative", printOnly
+  - [ ] **Dashboard page refactor**
+    - [ ] Replace FieldCard+EditableInput manual sections with `<TemplateRenderer template={dashboardTemplate} data={folder} collections={{ initiatives: filteredUseCases }} ...>`
+    - [ ] Provide component slots for: cover_page, sommaire, scatter_plot, annex_cover
+    - [ ] Keep existing scatter plot, cover page, sommaire, annex cover components — just render them via the slot
+    - [ ] Remove manual FieldCard wiring for exec summary sections
+    - [ ] Ensure print mode works: printOnly fields mount only on Ctrl+P, entity-loop renders each initiative via its own TemplateRenderer
+  - [ ] **Spec update**
+    - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [ ] **API tests**
+      - [ ] Sub-lot gate: `make test-api-smoke test-api-endpoints API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [ ] **UI tests**
+      - [ ] Update `ui/tests/upstream/injected-script.test.ts` if TemplateRenderer API changed
+      - [ ] Add tests for path-based getFieldValue, entity-loop rendering, printOnly gating
+      - [ ] Sub-lot gate: `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
+
 - [ ] **Lot N-2 — UAT**
   - [ ] Web app — initiative pages
     - [ ] Initiative ai-ideas page: rendu via TemplateRenderer identique visuellement (cartes colorées, layout 2/3+1/3, scores stars/X, sidebar dataSources/dataObjects)
@@ -148,11 +185,12 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] Organisation page: rendu via TemplateRenderer identique visuellement (variant plain, sans couleur)
     - [ ] Organisation edit + save fonctionnel
   - [ ] Web app — dashboard
-    - [ ] Dashboard chargement rapide (pas de freeze au montage des annexes print)
-    - [ ] Dashboard exec summary dans FieldCard variant="bordered" avec prose styling
-    - [ ] Dashboard introduction/analyse/recommandation: FieldCard + print sans bordures
-    - [ ] Dashboard Ctrl+P: annexes initiatives rendues correctement, références avec liens (pas d'excerpts), scores-summary avec stars/X
-    - [ ] Dashboard scatter plot fonctionnel
+    - [ ] Dashboard rendu via TemplateRenderer (plus de FieldCard+EditableInput manuels pour exec summary)
+    - [ ] Dashboard chargement rapide (printOnly fields non montés au chargement)
+    - [ ] Dashboard synthèse/introduction/analyse/recommandation: champs text via TemplateRenderer
+    - [ ] Dashboard scatter plot: rendu via component slot
+    - [ ] Dashboard Ctrl+P: cover page, sommaire, annexes initiatives via entity-loop (chaque initiative rendue avec son template), références, scores
+    - [ ] Dashboard print: pas de bordures parasites, prose styling correct
   - [ ] Web app — config UX
     - [ ] Settings templates: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
     - [ ] Settings agents: Copier/Modifier/Réinitialiser/Supprimer fonctionnels

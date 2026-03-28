@@ -858,7 +858,35 @@ The view template renderer supports these widget types:
 | `object_picker` | Picker for an existing object (organization, etc.) | workflow launch context |
 | `number` | Numeric input | count, budget, score |
 
+| `component` | Slot rendered by parent page | scatter plot, cover page, sommaire |
+| `entity-loop` | Iterates over a collection, renders each entity with a referenced template | initiative annexes in dashboard |
+| `scores-summary` | Star/X rating summary | totalValue, totalComplexity |
+
 New widget types can be added as components without changing the template engine.
+
+#### Field modifiers
+
+| Modifier | Type | Description |
+|---|---|---|
+| `printOnly` | boolean | Field rendered only in print mode (`isPrinting`). DOM not mounted in normal view. |
+| `collection` | string | For `entity-loop`: key in the `collections` prop passed to TemplateRenderer. |
+| `templateRef` | string | For `entity-loop`: objectType to resolve the template for each entity. |
+
+#### Path-based field keys
+
+Field `key` supports dot-notation paths to access nested data: `data.executive_summary.synthese_executive` traverses `data.executive_summary.synthese_executive` from the root data object. This avoids hardcoded flat mappings between template keys and data structure.
+
+#### Collections prop
+
+For `entity-loop` fields, the parent passes a `collections` prop to TemplateRenderer:
+```svelte
+<TemplateRenderer
+  template={dashboardTemplate}
+  data={folder}
+  collections={{ initiatives: filteredUseCases }}
+/>
+```
+The `entity-loop` field references `collection: "initiatives"` which maps to `collections.initiatives`.
 
 ### 12.5 View templates per workspace type
 
