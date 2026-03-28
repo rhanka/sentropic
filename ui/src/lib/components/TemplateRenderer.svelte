@@ -515,7 +515,7 @@
           <!-- Simple row with flat fields -->
           <div class="grid gap-6 {gridColsClass[row.columns] || 'grid-cols-1'} {row.printClass || ''}">
             {#each row.fields ?? [] as field (field.key)}
-              {#if !field.printOnly || isPrinting}
+              <div class:hidden={field.printOnly && !isPrinting} class:print-block={field.printOnly}>
               {#if field.type === 'scores-summary'}
                 <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                   {#if field.key === 'totalValue' && totalValueScore != null}
@@ -616,7 +616,7 @@
                   {/each}
                 {/if}
               {/if}
-              {/if}
+              </div>
             {/each}
           </div>
         {/if}
@@ -633,5 +633,6 @@
   @media print {
     :global(.usecase-print .column-b) > :global(div) { display: contents !important; }
     :global(.usecase-print .column-a) > :global(div:not(.layout-quad):not(.rounded-lg)) { display: contents !important; }
+    .print-block { display: block !important; }
   }
 </style>
