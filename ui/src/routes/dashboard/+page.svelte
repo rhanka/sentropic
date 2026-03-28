@@ -10,10 +10,10 @@
   import { apiGet, apiPost } from '$lib/utils/api';
   import { streamHub } from '$lib/stores/streamHub';
   import InitiativeScatterPlot from '$lib/components/InitiativeScatterPlot.svelte';
-  import InitiativeDetail from '$lib/components/InitiativeDetail.svelte';
+  import TemplateRenderer from '$lib/components/TemplateRenderer.svelte';
+  import { resolveViewTemplate } from '$lib/stores/viewTemplateCache';
   import CommentBadge from '$lib/components/CommentBadge.svelte';
   import type { MatrixConfig } from '$lib/types/matrix';
-  import References from '$lib/components/References.svelte';
   import { calculateUseCaseScores } from '$lib/utils/scoring';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import FileMenu from '$lib/components/FileMenu.svelte';
@@ -21,7 +21,7 @@
   import { buildOpenCommentCounts } from '$lib/utils/comment-counts';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
   import { normalizeMarkdownLineEndings, renderMarkdownWithRefs } from '$lib/utils/markdown';
-  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope, selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope, selectedWorkspaceRole, selectedWorkspaceType } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import {
     acceptUnlock,
@@ -46,12 +46,12 @@
     reduceDashboardDocxState,
     type DashboardDocxEvent,
   } from '$lib/utils/dashboard-docx-state';
-  import FieldCard from '$lib/components/FieldCard.svelte';
   import { FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
 
   let isLoading = false;
+  let isPrinting = false;
   let summaryBox: HTMLElement | null = null;
   let summaryContent: HTMLElement | null = null;
   let matrix: MatrixConfig | null = null;
@@ -525,6 +525,15 @@
   });
 
   onMount(() => {
+    // Print mode detection
+    const checkPrintMode = () => { isPrinting = window.matchMedia('print').matches; };
+    const handleBeforePrint = () => { isPrinting = true; };
+    const handleAfterPrint = () => { isPrinting = false; };
+    checkPrintMode();
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+    window.matchMedia('print').addEventListener('change', checkPrintMode);
+
     loadConfig();
     void (async () => {
     await loadData();
@@ -594,6 +603,8 @@
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('pagehide', handleLeave);
       window.removeEventListener('beforeunload', handleLeave);
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
     };
   });
 
@@ -783,6 +794,12 @@
     if (field) {
       applyDashboardDocxEvent({ type: 'content_changed' });
     }
+  };
+
+  // Called by TemplateRenderer after any exec summary field is saved via PUT
+  const handleDashboardFieldSaved = () => {
+    clearDashboardDocxReadyToast();
+    applyDashboardDocxEvent({ type: 'content_changed' });
   };
 
   // Variable pour le titre du dossier édité
@@ -1038,6 +1055,21 @@
   $: workspaceId = $workspaceScope.selectedId ?? null;
   $: commentUserId = $session.user?.id ?? null;
 
+  // Dashboard view template (resolved once per workspace)
+  let dashboardTemplate: any = null;
+  let lastTemplateWsKey: string | null = null;
+  $: {
+    const wsId = workspaceId;
+    const wsType = $selectedWorkspaceType;
+    const key = wsId && wsType ? `${wsId}:${wsType}` : null;
+    if (key && key !== lastTemplateWsKey) {
+      lastTemplateWsKey = key;
+      resolveViewTemplate(wsId!, wsType!, 'dashboard').then((tmpl) => {
+        dashboardTemplate = tmpl;
+      });
+    }
+  }
+
   // Scatter plot: n'afficher que les cas finalisés
   $: completedUseCases = filteredUseCases.filter((uc) => uc.status === 'completed');
 
@@ -1217,31 +1249,6 @@
   }
 </script>
 
-<!-- Page de garde (visible uniquement en impression) -->
-{#if selectedFolderId && executiveSummary}
-  <div class="report-cover-page">
-    <div class="report-cover-header">
-      <h1 class="report-cover-title">{$_('dashboard.reportTitle')}</h1>
-      <h2 class="report-cover-subtitle">{selectedFolderName || 'Dashboard'}</h2>
-    </div>
-    
-    {#if executiveSummaryData.synthese_executive}
-      <div class="report-cover-summary" bind:this={summaryBox}>
-        <h3>{$_('dashboard.execSummary')}</h3>
-        <div class="prose prose-slate max-w-none" bind:this={summaryContent}>
-          <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-            {@html renderMarkdownWithRefs(executiveSummaryData.synthese_executive, executiveSummary?.references || [], {
-              addListStyles: true,
-              addHeadingStyles: true,
-              listPadding: 1.5
-            })}
-          </div>
-        </div>
-      </div>
-    {/if}
-  </div>
-{/if}
-
 <section class="space-y-6 px-4 md:px-8 lg:px-16 xl:px-24 2xl:px-32 report-main-content">
   <div class="w-full print-hidden">
     <div class="grid grid-cols-12 items-start gap-4">
@@ -1330,7 +1337,7 @@
     </div>
   </div>
 
-  <!-- Synthèse exécutive (FIRST) - Masquée en impression (déjà sur la page de garde) -->
+  <!-- Generating / empty states (outside TemplateRenderer) -->
   {#if selectedFolderId}
     {#if isSummaryGenerating || isGeneratingSummary}
       <div class="rounded-lg border border-blue-200 bg-blue-50 p-6">
@@ -1342,43 +1349,7 @@
           </div>
         </div>
       </div>
-    {:else if executiveSummary}
-      <div class="print-hidden">
-        <FieldCard
-          variant="bordered"
-          label={$_('dashboard.execSummary')}
-          commentSection="synthese_executive"
-          commentCount={commentCounts?.synthese_executive ?? 0}
-          onOpenComments={() => openExecutiveSummaryComments('synthese_executive')}
-        >
-          {#if executiveSummaryData.synthese_executive}
-            <div class="prose prose-slate max-w-none">
-              <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-                <EditableInput
-                  label=""
-                  value={executiveSummaryData.synthese_executive}
-                  markdown={true}
-                  locked={isDashboardReadOnly}
-                  apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                  fullData={getExecutiveSummaryPayload('synthese_executive')}
-                  fullDataGetter={() => getExecutiveSummaryPayload('synthese_executive')}
-                  changeId={selectedFolderId ? `exec-synthese-${selectedFolderId}` : ''}
-                  originalValue={getExecutiveSummaryOriginal('synthese_executive')}
-                  references={executiveSummary?.references || []}
-                  on:change={(e) => handleExecutiveSummaryFieldChange('synthese_executive', e.detail.value)}
-                  on:saved={(e) =>
-                    handleExecutiveSummarySaved(
-                      'synthese_executive',
-                      (e as CustomEvent<{ value?: string }>).detail?.value ??
-                        executiveSummaryData.synthese_executive
-                    )}
-                />
-              </div>
-            </div>
-          {/if}
-        </FieldCard>
-      </div>
-    {:else if currentFolder}
+    {:else if !executiveSummary && currentFolder}
       <div class="rounded-lg border border-slate-200 bg-slate-50 p-6">
         <div class="flex items-center justify-between">
           <div>
@@ -1404,384 +1375,140 @@
         <p class="text-sm text-blue-700 font-medium">{$_('dashboard.loadingData')}</p>
       </div>
     </div>
-  {:else}
-    <!-- Contenu fusionné : statistiques, graphique, introduction -->
-    <!-- NOTE: le scatter plot doit être visible dès qu'un premier cas est disponible (même si le dossier / la synthèse sont en cours de génération). -->
-    {#if selectedFolderId}
-      <div class="report-introduction">
-        <!-- Statistiques -->
-        <div class="grid gap-4 md:grid-cols-2">
-          <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200">
-            <div class="flex items-center">
-              <div class="flex-shrink-0">
-                <FileText class="w-8 h-8 text-blue-500" />
+  {:else if selectedFolderId && dashboardTemplate}
+    <!-- Dashboard content via TemplateRenderer -->
+    <TemplateRenderer
+      template={dashboardTemplate}
+      data={currentFolder || {}}
+      locked={isDashboardReadOnly}
+      apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
+      {commentCounts}
+      onOpenComments={(section) => openExecutiveSummaryComments(section as any)}
+      references={executiveSummary?.references || []}
+      {matrix}
+      entityId={selectedFolderId || ''}
+      onFieldSaved={handleDashboardFieldSaved}
+      {isPrinting}
+      variant="bordered"
+      collections={{ initiatives: filteredUseCases }}
+      workspaceId={workspaceId || ''}
+      workspaceType={$selectedWorkspaceType || ''}
+    >
+      <svelte:fragment slot="component" let:fieldKey>
+        {#if fieldKey === 'cover_page'}
+          {#if executiveSummary}
+            <div class="report-cover-page">
+              <div class="report-cover-header">
+                <h1 class="report-cover-title">{$_('dashboard.reportTitle')}</h1>
+                <h2 class="report-cover-subtitle">{selectedFolderName || 'Dashboard'}</h2>
               </div>
-              <div class="ml-4">
-                <p class="text-sm font-medium text-slate-500">{$_('dashboard.useCaseCount')}</p>
-                <p class="text-2xl font-semibold text-slate-900">{stats.total}</p>
-                {#if roiStats.count > 0}
-                  <p class="text-xs text-green-600 mt-1">
-                    {$_('dashboard.roiStats.medianValue')}: {roiStats.avgValue.toFixed(1)} {$_('common.pointsAbbr')} | {$_('dashboard.roiStats.medianComplexity')}: {roiStats.avgComplexity.toFixed(1)} {$_('common.pointsAbbr')}
-                  </p>
-                {/if}
-              </div>
-            </div>
-          </div>
-
-          {#if showROIQuadrant}
-            <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200 border-green-300 bg-green-50">
-              <div class="flex items-center">
-                <div class="flex-shrink-0">
-                  <TrendingUp class="w-8 h-8 text-green-600" />
-                </div>
-                <div class="ml-4 flex-1">
-                  <p class="text-sm font-medium text-green-700">{$_('dashboard.quickWins')}</p>
-                  <p class="text-2xl font-semibold text-green-600">{roiStats.count} cas</p>
-                </div>
-              </div>
-            </div>
-          {/if}
-        </div>
-
-        <!-- Graphique scatter plot -->
-        <div class="rounded-lg bg-white p-6 shadow-sm border border-slate-200 relative report-scatter-plot-container my-6">
-          <!-- Accordéon de configuration en haut à droite -->
-          <div class="absolute top-4 right-4 z-10">
-            <div class="rounded-lg bg-white border border-slate-200 shadow-sm">
-              <button
-                on:click={() => configOpen = !configOpen}
-                class="flex items-center justify-center p-2 hover:bg-slate-50 transition-colors rounded"
-                title={$_('dashboard.roiConfig.buttonTitle')}
-              >
-                <Settings class="w-5 h-5 text-slate-500" />
-                {#if valueThreshold !== null || complexityThreshold !== null}
-                  <span class="ml-1 w-2 h-2 bg-primary rounded-full"></span>
-                {/if}
-              </button>
-              
-              {#if configOpen}
-                <div class="absolute z-50 mt-2 right-0 w-96 rounded-lg bg-white border border-slate-200 shadow-lg p-4 space-y-4">
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm font-medium text-slate-700">{$_('dashboard.roiQuadrantConfig')}</span>
-                    <button
-                      on:click={() => configOpen = false}
-                      class="text-slate-400 hover:text-slate-600"
-                      aria-label={$_('dashboard.roiConfig.close')}
-                    >
-                      <X class="w-5 h-5" />
-                    </button>
-                  </div>
-                  <div class="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label for="value-threshold" class="block text-sm font-medium text-slate-700 mb-2">
-                        {$_('dashboard.roiConfig.valueThreshold')}
-                      </label>
-                      <div class="flex items-center gap-2">
-                        <input
-                          id="value-threshold"
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.1"
-                          value={valueThreshold ?? ''}
-                          on:input={(e) => {
-                            const val = (e.target as HTMLInputElement)?.value || '';
-                            valueThreshold = val === '' ? null : parseFloat(val);
-                          }}
-                          placeholder={medianValue.toFixed(1)}
-                          class="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <button
-                          on:click={() => valueThreshold = null}
-                          class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
-                          title={$_('common.useMedian')}
-                        >
-                          {$_('common.median')} ({medianValue.toFixed(1)})
-                        </button>
-                      </div>
-                      <p class="text-xs text-slate-500 mt-1">
-                        {valueThreshold !== null
-                          ? `${$_('dashboard.roiConfig.customThreshold')}: ${valueThreshold.toFixed(1)}`
-                          : `${$_('dashboard.roiConfig.currentMedian')}: ${medianValue.toFixed(1)}`}
-                      </p>
+              {#if currentFolder?.executiveSummary?.synthese_executive}
+                <div class="report-cover-summary" bind:this={summaryBox}>
+                  <h3>{$_('dashboard.execSummary')}</h3>
+                  <div class="prose prose-slate max-w-none" bind:this={summaryContent}>
+                    <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+                      {@html renderMarkdownWithRefs(currentFolder.executiveSummary.synthese_executive, executiveSummary?.references || [], { addListStyles: true, addHeadingStyles: true, listPadding: 1.5 })}
                     </div>
-                    
-                    <div>
-                      <label for="complexity-threshold" class="block text-sm font-medium text-slate-700 mb-2">
-                        {$_('dashboard.roiConfig.complexityThreshold')}
-                      </label>
-                      <div class="flex items-center gap-2">
-                        <input
-                          id="complexity-threshold"
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.1"
-                          value={complexityThreshold ?? ''}
-                          on:input={(e) => {
-                            const val = (e.target as HTMLInputElement)?.value || '';
-                            complexityThreshold = val === '' ? null : parseFloat(val);
-                          }}
-                          placeholder={medianComplexity.toFixed(1)}
-                          class="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <button
-                          on:click={() => complexityThreshold = null}
-                          class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1"
-                          title={$_('common.useMedian')}
-                        >
-                          {$_('common.median')} ({medianComplexity.toFixed(1)})
-                        </button>
-                      </div>
-                      <p class="text-xs text-slate-500 mt-1">
-                        {complexityThreshold !== null
-                          ? `${$_('dashboard.roiConfig.customThreshold')}: ${complexityThreshold.toFixed(1)}`
-                          : `${$_('dashboard.roiConfig.currentMedian')}: ${medianComplexity.toFixed(1)}`}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div class="flex justify-end">
-                    <button
-                      on:click={resetToMedians}
-                      class="text-sm text-slate-600 hover:text-slate-800 px-3 py-1 rounded hover:bg-slate-100 transition-colors"
-                    >
-                      {$_('dashboard.roiConfig.resetToMedians')}
-                    </button>
                   </div>
                 </div>
               {/if}
             </div>
-          </div>
-          
-          <div class="flex justify-center">
-            <InitiativeScatterPlot 
-              bind:this={scatterPlotRef}
-              useCases={completedUseCases} 
-              {matrix} 
-              bind:roiStats 
-              bind:showROIQuadrant
-              bind:medianValue
-              bind:medianComplexity
-              {valueThreshold}
-              {complexityThreshold}
-            />
-          </div>
-        </div>
-
-        <!-- Introduction -->
-        {#if executiveSummaryData.introduction}
-          <div id="section-introduction" class="mt-6 report-analyse report-analyse-with-break">
-            <FieldCard
-              variant="bordered"
-              label={$_('dashboard.introduction')}
-              commentSection="introduction"
-              commentCount={commentCounts?.introduction ?? 0}
-              onOpenComments={() => openExecutiveSummaryComments('introduction')}
-            >
-              <div class="prose prose-slate max-w-none">
-                <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-                  <EditableInput
-                    label=""
-                    value={executiveSummaryData.introduction}
-                    markdown={true}
-                    locked={isDashboardReadOnly}
-                    apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                    fullData={getExecutiveSummaryPayload('introduction')}
-                    fullDataGetter={() => getExecutiveSummaryPayload('introduction')}
-                    changeId={selectedFolderId ? `exec-intro-${selectedFolderId}` : ''}
-                    originalValue={getExecutiveSummaryOriginal('introduction')}
-                    references={executiveSummary?.references || []}
-                    on:change={(e) => handleExecutiveSummaryFieldChange('introduction', e.detail.value)}
-                    on:saved={(e) =>
-                      handleExecutiveSummarySaved(
-                        'introduction',
-                        (e as CustomEvent<{ value?: string }>).detail?.value ??
-                          executiveSummaryData.introduction
-                      )}
-                  />
+          {/if}
+        {:else if fieldKey === 'scatter_plot'}
+          <div class="report-introduction">
+            <div class="grid gap-4 md:grid-cols-2">
+              <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200">
+                <div class="flex items-center">
+                  <div class="flex-shrink-0"><FileText class="w-8 h-8 text-blue-500" /></div>
+                  <div class="ml-4">
+                    <p class="text-sm font-medium text-slate-500">{$_('dashboard.useCaseCount')}</p>
+                    <p class="text-2xl font-semibold text-slate-900">{stats.total}</p>
+                    {#if roiStats.count > 0}
+                      <p class="text-xs text-green-600 mt-1">{$_('dashboard.roiStats.medianValue')}: {roiStats.avgValue.toFixed(1)} {$_('common.pointsAbbr')} | {$_('dashboard.roiStats.medianComplexity')}: {roiStats.avgComplexity.toFixed(1)} {$_('common.pointsAbbr')}</p>
+                    {/if}
+                  </div>
                 </div>
               </div>
-            </FieldCard>
-          </div>
-        {/if}
-      </div>
-    {/if}
-
-    <!-- Sommaire (page 3) -->
-    {#if executiveSummary && selectedFolderId && !isSummaryGenerating}
-      <div class="report-table-of-contents">
-        <h2 class="text-2xl font-semibold text-slate-900 mb-6">{$_('dashboard.toc')}</h2>
-        <ul class="space-y-2 text-slate-700">
-          <li class="toc-item">
-            <a href="#section-introduction" class="toc-title toc-link">{$_('dashboard.introduction')}</a>
-            <span class="toc-dots"></span>
-            <span class="toc-page">{pageNumbers.introduction || '-'}</span>
-          </li>
-          <li class="toc-item">
-            <a href="#section-analyse" class="toc-title toc-link">{$_('dashboard.analysis')}</a>
-            <span class="toc-dots"></span>
-            <span class="toc-page">{pageNumbers.analyse || '-'}</span>
-          </li>
-          {#if executiveSummary.recommandation}
-            <li class="toc-item">
-              <a href="#section-recommandations" class="toc-title toc-link">{$_('dashboard.recommendations')}</a>
-              <span class="toc-dots"></span>
-              <span class="toc-page">{pageNumbers.recommandations || '-'}</span>
-            </li>
-          {/if}
-          {#if executiveSummary.references && executiveSummary.references.length > 0}
-            <li class="toc-item">
-              <a href="#section-references" class="toc-title toc-link">{$_('dashboard.references')}</a>
-              <span class="toc-dots"></span>
-              <span class="toc-page">{pageNumbers.references || '-'}</span>
-            </li>
-          {/if}
-          {#if filteredUseCases.length > 0}
-            <li class="toc-item">
-              <span class="toc-title">{$_('dashboard.annex')}</span>
-              <span class="toc-dots"></span>
-              <span class="toc-page">{pageNumbers.annexes || '-'}</span>
-            </li>
-            {#each useCasePages as useCasePage}
-              <li class="toc-item toc-item-nested">
-                <a href="#usecase-{useCasePage.id || ''}" class="toc-title toc-link">{useCasePage.name}</a>
-                <span class="toc-dots"></span>
-                <span class="toc-page">{useCasePage.page}</span>
-              </li>
-            {/each}
-          {/if}
-        </ul>
-      </div>
-    {/if}
-
-    <!-- Analyse, Recommandations, Références (après l'introduction) -->
-    {#if executiveSummary && selectedFolderId && !isSummaryGenerating}
-      <div class="space-y-6">
-
-        {#if executiveSummaryData.analyse}
-          <div id="section-analyse" class="report-analyse report-analyse-with-break">
-            <FieldCard
-              variant="bordered"
-              label={$_('dashboard.analysis')}
-              commentSection="analyse"
-              commentCount={commentCounts?.analyse ?? 0}
-              onOpenComments={() => openExecutiveSummaryComments('analyse')}
-            >
-              <div class="prose prose-slate max-w-none">
-                <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-                  <EditableInput
-                    label=""
-                    value={executiveSummaryData.analyse}
-                    markdown={true}
-                    locked={isDashboardReadOnly}
-                    apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                    fullData={getExecutiveSummaryPayload('analyse')}
-                    fullDataGetter={() => getExecutiveSummaryPayload('analyse')}
-                    changeId={selectedFolderId ? `exec-analyse-${selectedFolderId}` : ''}
-                    originalValue={getExecutiveSummaryOriginal('analyse')}
-                    references={executiveSummary?.references || []}
-                    on:change={(e) => handleExecutiveSummaryFieldChange('analyse', e.detail.value)}
-                    on:saved={(e) =>
-                      handleExecutiveSummarySaved(
-                        'analyse',
-                        (e as CustomEvent<{ value?: string }>).detail?.value ??
-                          executiveSummaryData.analyse
-                      )}
-                  />
+              {#if showROIQuadrant}
+                <div class="rounded-lg bg-white p-4 shadow-sm border border-slate-200 border-green-300 bg-green-50">
+                  <div class="flex items-center">
+                    <div class="flex-shrink-0"><TrendingUp class="w-8 h-8 text-green-600" /></div>
+                    <div class="ml-4 flex-1">
+                      <p class="text-sm font-medium text-green-700">{$_('dashboard.quickWins')}</p>
+                      <p class="text-2xl font-semibold text-green-600">{roiStats.count} cas</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </FieldCard>
-          </div>
-        {/if}
-
-        {#if executiveSummaryData.recommandation}
-          <div id="section-recommandations" class="report-analyse report-analyse-with-break">
-            <FieldCard
-              variant="bordered"
-              label={$_('dashboard.recommendations')}
-              commentSection="recommandation"
-              commentCount={commentCounts?.recommandation ?? 0}
-              onOpenComments={() => openExecutiveSummaryComments('recommandation')}
-            >
-              <div class="prose prose-slate max-w-none">
-                <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-                  <EditableInput
-                    label=""
-                    value={executiveSummaryData.recommandation}
-                    markdown={true}
-                    locked={isDashboardReadOnly}
-                    apiEndpoint={selectedFolderId ? `/folders/${selectedFolderId}` : ''}
-                    fullData={getExecutiveSummaryPayload('recommandation')}
-                    fullDataGetter={() => getExecutiveSummaryPayload('recommandation')}
-                    changeId={selectedFolderId ? `exec-recommandation-${selectedFolderId}` : ''}
-                    originalValue={getExecutiveSummaryOriginal('recommandation')}
-                    references={executiveSummary?.references || []}
-                    on:change={(e) => handleExecutiveSummaryFieldChange('recommandation', e.detail.value)}
-                    on:saved={(e) =>
-                      handleExecutiveSummarySaved(
-                        'recommandation',
-                        (e as CustomEvent<{ value?: string }>).detail?.value ??
-                          executiveSummaryData.recommandation
-                      )}
-                  />
-                </div>
-              </div>
-            </FieldCard>
-          </div>
-        {/if}
-
-        {#if executiveSummary.references && executiveSummary.references.length > 0}
-          <div id="section-references" data-comment-section="references" class="rounded-lg border border-slate-200 bg-white p-6 shadow-sm report-analyse">
-            <div class="border-b border-slate-200 pb-4 mb-4">
-              <h2 class="text-2xl font-semibold text-slate-900 flex items-center gap-2 group">
-                {$_('dashboard.references')}
-                <CommentBadge
-                  count={commentCounts?.references ?? 0}
-                  title={`${$_('chat.tabs.comments')} - ${$_('dashboard.references')}`}
-                  on:click={() => openExecutiveSummaryComments('references')}
-                />
-              </h2>
+              {/if}
             </div>
-            <References references={executiveSummary.references} />
+            <div class="rounded-lg bg-white p-6 shadow-sm border border-slate-200 relative report-scatter-plot-container my-6">
+              <div class="absolute top-4 right-4 z-10">
+                <div class="rounded-lg bg-white border border-slate-200 shadow-sm">
+                  <button on:click={() => configOpen = !configOpen} class="flex items-center justify-center p-2 hover:bg-slate-50 transition-colors rounded" title={$_('dashboard.roiConfig.buttonTitle')}><Settings class="w-5 h-5 text-slate-500" />{#if valueThreshold !== null || complexityThreshold !== null}<span class="ml-1 w-2 h-2 bg-primary rounded-full"></span>{/if}</button>
+                  {#if configOpen}
+                    <div class="absolute z-50 mt-2 right-0 w-96 rounded-lg bg-white border border-slate-200 shadow-lg p-4 space-y-4">
+                      <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium text-slate-700">{$_('dashboard.roiQuadrantConfig')}</span>
+                        <button on:click={() => configOpen = false} class="text-slate-400 hover:text-slate-600" aria-label={$_('dashboard.roiConfig.close')}><X class="w-5 h-5" /></button>
+                      </div>
+                      <div class="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <label for="value-threshold" class="block text-sm font-medium text-slate-700 mb-2">{$_('dashboard.roiConfig.valueThreshold')}</label>
+                          <div class="flex items-center gap-2">
+                            <input id="value-threshold" type="number" min="0" max="100" step="0.1" value={valueThreshold ?? ''} on:input={(e) => { const val = (e.target as HTMLInputElement)?.value || ''; valueThreshold = val === '' ? null : parseFloat(val); }} placeholder={medianValue.toFixed(1)} class="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            <button on:click={() => valueThreshold = null} class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1" title={$_('common.useMedian')}>{$_('common.median')} ({medianValue.toFixed(1)})</button>
+                          </div>
+                          <p class="text-xs text-slate-500 mt-1">{valueThreshold !== null ? `${$_('dashboard.roiConfig.customThreshold')}: ${valueThreshold.toFixed(1)}` : `${$_('dashboard.roiConfig.currentMedian')}: ${medianValue.toFixed(1)}`}</p>
+                        </div>
+                        <div>
+                          <label for="complexity-threshold" class="block text-sm font-medium text-slate-700 mb-2">{$_('dashboard.roiConfig.complexityThreshold')}</label>
+                          <div class="flex items-center gap-2">
+                            <input id="complexity-threshold" type="number" min="0" max="100" step="0.1" value={complexityThreshold ?? ''} on:input={(e) => { const val = (e.target as HTMLInputElement)?.value || ''; complexityThreshold = val === '' ? null : parseFloat(val); }} placeholder={medianComplexity.toFixed(1)} class="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            <button on:click={() => complexityThreshold = null} class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1" title={$_('common.useMedian')}>{$_('common.median')} ({medianComplexity.toFixed(1)})</button>
+                          </div>
+                          <p class="text-xs text-slate-500 mt-1">{complexityThreshold !== null ? `${$_('dashboard.roiConfig.customThreshold')}: ${complexityThreshold.toFixed(1)}` : `${$_('dashboard.roiConfig.currentMedian')}: ${medianComplexity.toFixed(1)}`}</p>
+                        </div>
+                      </div>
+                      <div class="flex justify-end"><button on:click={resetToMedians} class="text-sm text-slate-600 hover:text-slate-800 px-3 py-1 rounded hover:bg-slate-100 transition-colors">{$_('dashboard.roiConfig.resetToMedians')}</button></div>
+                    </div>
+                  {/if}
+                </div>
+              </div>
+              <div class="flex justify-center">
+                <InitiativeScatterPlot bind:this={scatterPlotRef} useCases={completedUseCases} {matrix} bind:roiStats bind:showROIQuadrant bind:medianValue bind:medianComplexity {valueThreshold} {complexityThreshold} />
+              </div>
+            </div>
           </div>
+        {:else if fieldKey === 'sommaire'}
+          {#if executiveSummary && !isSummaryGenerating}
+            <div class="report-table-of-contents">
+              <h2 class="text-2xl font-semibold text-slate-900 mb-6">{$_('dashboard.toc')}</h2>
+              <ul class="space-y-2 text-slate-700">
+                <li class="toc-item"><a href="#section-introduction" class="toc-title toc-link">{$_('dashboard.introduction')}</a><span class="toc-dots"></span><span class="toc-page">{pageNumbers.introduction || '-'}</span></li>
+                <li class="toc-item"><a href="#section-analyse" class="toc-title toc-link">{$_('dashboard.analysis')}</a><span class="toc-dots"></span><span class="toc-page">{pageNumbers.analyse || '-'}</span></li>
+                {#if executiveSummary.recommandation}<li class="toc-item"><a href="#section-recommandations" class="toc-title toc-link">{$_('dashboard.recommendations')}</a><span class="toc-dots"></span><span class="toc-page">{pageNumbers.recommandations || '-'}</span></li>{/if}
+                {#if executiveSummary.references && executiveSummary.references.length > 0}<li class="toc-item"><a href="#section-references" class="toc-title toc-link">{$_('dashboard.references')}</a><span class="toc-dots"></span><span class="toc-page">{pageNumbers.references || '-'}</span></li>{/if}
+                {#if filteredUseCases.length > 0}
+                  <li class="toc-item"><span class="toc-title">{$_('dashboard.annex')}</span><span class="toc-dots"></span><span class="toc-page">{pageNumbers.annexes || '-'}</span></li>
+                  {#each useCasePages as useCasePage}<li class="toc-item toc-item-nested"><a href="#usecase-{useCasePage.id || ''}" class="toc-title toc-link">{useCasePage.name}</a><span class="toc-dots"></span><span class="toc-page">{useCasePage.page}</span></li>{/each}
+                {/if}
+              </ul>
+            </div>
+          {/if}
+        {:else if fieldKey === 'annex_cover'}
+          {#if filteredUseCases.length > 0}
+            <div class="report-cover-page">
+              <div class="report-cover-header">
+                <h1 class="report-cover-title">{$_('dashboard.annex')}</h1>
+                <h2 class="report-cover-subtitle">{$_('dashboard.annexUseCases')}</h2>
+              </div>
+            </div>
+          {/if}
         {/if}
-      </div>
-    {/if}
+      </svelte:fragment>
+    </TemplateRenderer>
   {/if}
 </section>
-
-<!-- Page de séparation pour les annexes (visible uniquement en impression) -->
-{#if selectedFolderId && filteredUseCases.length > 0}
-  <div class="report-cover-page">
-    <div class="report-cover-header">
-      <h1 class="report-cover-title">{$_('dashboard.annex')}</h1>
-      <h2 class="report-cover-subtitle">{$_('dashboard.annexUseCases')}</h2>
-    </div>
-  </div>
-{/if}
-
-<!-- Section Annexes (tous les usecases du dossier) -->
-<section class="hidden print:block">
-  {#if selectedFolderId && filteredUseCases.length > 0}
-        {#each filteredUseCases as useCase, index (useCase.id)}
-        <section 
-          id="usecase-{useCase.id}" 
-          class="space-y-6 usecase-annex-section {index === 23 ? 'force-page-break-before' : ''}" 
-          data-usecase-id={useCase.id} 
-          data-usecase-title={useCase?.data?.name || useCase?.name || $_('usecase.useCase')}>
-            <InitiativeDetail
-              useCase={useCase}
-              matrix={matrix}
-              calculatedScores={useCaseScoresMap.get(useCase.id) || null}
-              isEditing={false}
-              locked={true}
-            />
-        </section>
-        {/each}
-    {/if}
-</section>
-
 
 <!-- Back cover -->
 <div class="report-cover-page">
@@ -1793,15 +1520,9 @@
     <h3>{$_('dashboard.about')}</h3>
     <div class="prose prose-slate max-w-none">
       <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
-        <p>
-          {$_('dashboard.backCover.p1')}
-        </p>
-        <p>
-          {$_('dashboard.backCover.p2')}
-        </p>
-        <p>
-          {$_('dashboard.backCover.p3')}
-        </p>
+        <p>{$_('dashboard.backCover.p1')}</p>
+        <p>{$_('dashboard.backCover.p2')}</p>
+        <p>{$_('dashboard.backCover.p3')}</p>
       </div>
     </div>
   </div>
