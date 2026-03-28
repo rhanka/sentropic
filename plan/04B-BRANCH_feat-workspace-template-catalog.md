@@ -66,8 +66,9 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] DOCX template stubs (solution-summary, proposal-summary, product-datasheet).
   - [x] Gate transition auto-todo hook.
 
-- [x] **Lot 8 — BUG-D1 partial fix**
-  - [x] Added organizationIds/organizationName to InitiativeListItem interface + output schema.
+- [x] **Lot 8 — BUG-D1 partial fix** *(reverted — deferred to BR-20)*
+  - [x] ~~Added organizationIds/organizationName to InitiativeListItem interface + output schema.~~
+  - [x] Reverted: removed organizationIds from outputSchema (breaks OpenAI strict mode). Proper fix deferred to BR-20 with `initiative_list_with_orgs` workflow branching approach.
 
 - [ ] **Lot 11 — Wire pages + chat tools + finish bug fixes**
   - [x] Wire `/initiative/[id]/+page.svelte` to use TemplateRenderer.
@@ -76,7 +77,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] FieldCard 3 variants (colored/plain/bordered).
   - [x] `document_generate` chat tool wired.
   - [x] `batch_create_organizations` chat tool wired.
-  - [x] BUG-D1 complete fix: per-initiative organizationId from LLM output.
+  - [x] ~~BUG-D1 complete fix: per-initiative organizationId from LLM output.~~ *(reverted — deferred to BR-20)*
   - [x] TemplateRenderer collaborative editing buffers (SSE live updates).
   - [x] Print layout: display:contents for CSS selectors, uniform margins, scores-summary via FieldCard.
   - [x] Dashboard print perf: viewTemplateCache store (dedup N→1 API calls), skip EditableInput when locked, CSS print fix for FieldCard in report-analyse.
@@ -139,7 +140,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] Chat (org context): `batch_create_organizations` visible dans les outils disponibles
     - [ ] Chat: `document_generate` exécution → DOCX généré et téléchargeable
   - [ ] Web app — multi-org
-    - [ ] Créer folder opportunity avec 3 orgs → vérifier que chaque initiative a un organizationId distinct (BUG-D1)
+    - [ ] ~~Créer folder opportunity avec 3 orgs → vérifier que chaque initiative a un organizationId distinct (BUG-D1)~~ *(deferred to BR-20)*
     - [ ] bid → proposal: vérifier que le terme "proposal" apparaît partout (UI, API responses)
   - [ ] Web app — non-regression
     - [ ] Génération ai-ideas: créer un nouveau folder → générer des initiatives → vérifier rendu
