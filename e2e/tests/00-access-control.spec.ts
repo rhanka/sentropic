@@ -195,7 +195,7 @@ test.describe('Access control — roles workspace', () => {
     const userAApi = await request.newContext({ baseURL: API_BASE_URL, storageState: USER_A_STATE });
     const commentRes = await userAApi.post('/api/v1/comments', {
       data: {
-        context_type: 'usecase',
+        context_type: 'initiative',
         context_id: useCaseId,
         section_key: 'description',
         content: 'Commentaire racine',
