@@ -48,6 +48,9 @@ viewTemplatesRouter.get('/', requireWorkspaceAccessRole(), async (c) => {
  */
 viewTemplatesRouter.get('/:id', requireWorkspaceAccessRole(), async (c) => {
   const id = c.req.param('id');
+  if (!id) {
+    return c.json({ error: 'Missing required parameter: id' }, 400);
+  }
   const template = await viewTemplateService.getById(id);
   if (!template) {
     return c.json({ error: 'View template not found' }, 404);
