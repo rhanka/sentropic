@@ -174,23 +174,77 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [ ] Add tests for path-based getFieldValue, entity-loop rendering, printOnly gating
       - [ ] Sub-lot gate: `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
 
+- [ ] **Lot 14 — EntityPage wrapper + /entity/[type]/[id] route + report entity + stateless TemplateRenderer**
+  - [ ] **EntityPage component** (`ui/src/lib/components/EntityPage.svelte`)
+    - [ ] Props: `objectType: string`, `entityId: string`
+    - [ ] Template resolution via `resolveViewTemplate(workspaceType, objectType)`
+    - [ ] Data loading via API (type-specific endpoint: `/initiatives/{id}`, `/organizations/{id}`, `/folders/{id}`)
+    - [ ] SSE stream subscription for entity updates
+    - [ ] Collaborative editing: `dirtyFields: Set<string>` — SSE updates skip fields being edited locally
+    - [ ] Lock/presence: acquire on mount, release on leave, pass `locked` prop
+    - [ ] Comment counts: fetch + pass `commentCounts` + `onOpenComments`
+    - [ ] Header: template-driven (field `type: "header"` in template — title editable, badges, org link)
+    - [ ] FileMenu: import/export/delete — generic by objectType
+    - [ ] Save handlers: `apiEndpoint` derived from objectType+entityId
+    - [ ] Print mode: `beforeprint`/`afterprint` listeners, pass `isPrinting`
+    - [ ] Passes `data` (read-only) + `collections` to TemplateRenderer
+  - [ ] **Stateless TemplateRenderer refactor**
+    - [ ] Remove internal `textBuffers`, `listBuffers`, `scoreBuffers`, `textOriginals`, `listOriginals`, `scoreOriginals`
+    - [ ] Remove reactive SSE sync block (100+ lines)
+    - [ ] TemplateRenderer receives `data` as read-only prop, renders fields directly from `data`
+    - [ ] EditableInput signals `dirty`/`clean` events to EntityPage (not TemplateRenderer)
+    - [ ] Backward compat: if no EntityPage parent, TemplateRenderer falls back to internal buffers (for transition period)
+  - [ ] **Dynamic route `/entity/[type]/[id]`**
+    - [ ] Create `ui/src/routes/entity/[type]/[id]/+page.svelte` — contains only `<EntityPage objectType={type} entityId={id} />`
+    - [ ] Redirect `/initiative/[id]` → `/entity/initiative/[id]`
+    - [ ] Redirect `/organizations/[id]` → `/entity/organization/[id]`
+    - [ ] Dashboard becomes `/entity/report/[id]` (after report entity migration)
+  - [ ] **Report entity (dashboard migration)**
+    - [ ] API: create `report` as a new entity type in the DB (or reuse existing structure with objectType discriminator)
+    - [ ] API: `POST /folders/{id}/reports` — create a report entity attached to a folder
+    - [ ] API: `GET /reports/{id}` — fetch report with its data (executive_summary fields)
+    - [ ] API: auto-create report entity when folder is created (migration from current folder.data.executive_summary)
+    - [ ] Migrate existing dashboard data: `folder.data.executive_summary` → `report.data`
+    - [ ] Template seed: report template with cover_page, sommaire, synthèse, scatter_plot, introduction, analyse, recommandation, references, annexes (entity-loop)
+    - [ ] Folder view: show report entity alongside initiatives
+  - [ ] **Header template field type**
+    - [ ] Add `type: "header"` to TemplateRenderer — renders editable title, badges (model, org, status), action buttons
+    - [ ] Template descriptors for initiative/organization/report include a header field
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [ ] **API tests**
+      - [ ] New: test report CRUD (create, get, update, delete)
+      - [ ] New: test folder report auto-creation
+      - [ ] Non-reg: initiatives, organizations, folders
+      - [ ] Sub-lot gate: `make test-api-smoke test-api-endpoints API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [ ] **UI tests**
+      - [ ] New: EntityPage rendering with mock template
+      - [ ] New: dirtyFields SSE protection
+      - [ ] Non-reg: TemplateRenderer existing tests
+      - [ ] Sub-lot gate: `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
+    - [ ] **E2E tests**
+      - [ ] `/entity/initiative/{id}` renders correctly
+      - [ ] `/entity/organization/{id}` renders correctly
+      - [ ] `/entity/report/{id}` renders correctly (dashboard)
+      - [ ] Collaborative editing via EntityPage
+      - [ ] Print mode via EntityPage
+
 - [ ] **Lot N-2 — UAT**
-  - [ ] Web app — initiative pages
-    - [ ] Initiative ai-ideas page: rendu via TemplateRenderer identique visuellement (cartes colorées, layout 2/3+1/3, scores stars/X, sidebar dataSources/dataObjects)
-    - [ ] Initiative opportunity page: même layout sans dataSources/dataObjects, tabs Solutions/Proposals visibles quand contenu existe
-    - [ ] Initiative locked mode: champs affichés en @html (pas d'EditableInput), pas d'édition possible
-    - [ ] Initiative edit mode: champs éditables via EditableInput+TipTap, sauvegarde auto, indicateur unsaved
-    - [ ] Édition collaborative: ouvrir 2 onglets sur la même initiative, modifier un champ dans l'onglet 1, vérifier la mise à jour SSE dans l'onglet 2
-  - [ ] Web app — organisation pages
-    - [ ] Organisation page: rendu via TemplateRenderer identique visuellement (variant plain, sans couleur)
-    - [ ] Organisation edit + save fonctionnel
-  - [ ] Web app — dashboard
-    - [ ] Dashboard rendu via TemplateRenderer (plus de FieldCard+EditableInput manuels pour exec summary)
-    - [ ] Dashboard chargement rapide (printOnly fields non montés au chargement)
-    - [ ] Dashboard synthèse/introduction/analyse/recommandation: champs text via TemplateRenderer
-    - [ ] Dashboard scatter plot: rendu via component slot
-    - [ ] Dashboard Ctrl+P: cover page, sommaire, annexes initiatives via entity-loop (chaque initiative rendue avec son template), références, scores
-    - [ ] Dashboard print: pas de bordures parasites, prose styling correct
+  - [ ] Web app — entity views (via /entity/[type]/[id])
+    - [ ] `/entity/initiative/{id}` : rendu identique visuellement (cartes colorées, layout 2/3+1/3, scores, sidebar)
+    - [ ] `/entity/organization/{id}` : rendu identique (variant plain)
+    - [ ] `/entity/report/{id}` : dashboard rendu via TemplateRenderer (synthèse, scatter plot via slot, print annexes via entity-loop)
+    - [ ] Ancien URL `/initiative/{id}` redirige vers `/entity/initiative/{id}`
+    - [ ] Ancien URL `/organizations/{id}` redirige vers `/entity/organization/{id}`
+    - [ ] Edit mode : champs éditables, sauvegarde auto, indicateur unsaved
+    - [ ] Locked mode : champs en @html, pas d'édition
+    - [ ] Édition collaborative : 2 onglets même entité, modifier un champ → SSE met à jour l'autre (dirtyFields protège)
+    - [ ] Print : Ctrl+P fonctionne sur report (cover, sommaire, annexes, scores)
+  - [ ] Web app — report entity
+    - [ ] Report créé automatiquement dans le folder
+    - [ ] Report visible dans la vue folder
+    - [ ] Scatter plot fonctionne via component slot
   - [ ] Web app — config UX
     - [ ] Settings templates: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
     - [ ] Settings agents: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
