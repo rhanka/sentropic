@@ -21,6 +21,7 @@ import {
   executionEvents,
   entityLinks,
   guardrails,
+  viewTemplates,
 } from '../../db/schema';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { requireEditor } from '../../middleware/rbac';
@@ -298,6 +299,9 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
     }
     await tx.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, workspaceId));
     await tx.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, workspaceId));
+
+    // BR-04B: view templates
+    await tx.delete(viewTemplates).where(eq(viewTemplates.workspaceId, workspaceId));
 
     // Core business tables
     await tx.delete(initiatives).where(eq(initiatives.workspaceId, workspaceId));
