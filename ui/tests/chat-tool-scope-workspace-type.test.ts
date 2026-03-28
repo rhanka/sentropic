@@ -19,8 +19,10 @@ const TOGGLES: ChatToolScopeToggle[] = [
 ];
 
 describe('getWorkspaceTypeToolIds', () => {
-  it('returns empty set for ai-ideas', () => {
-    expect(getWorkspaceTypeToolIds('ai-ideas').size).toBe(0);
+  it('returns document_generate for ai-ideas', () => {
+    const tools = getWorkspaceTypeToolIds('ai-ideas');
+    expect(tools.size).toBe(1);
+    expect(tools.has('document_generate')).toBe(true);
   });
 
   it('returns extended object tools for opportunity', () => {
