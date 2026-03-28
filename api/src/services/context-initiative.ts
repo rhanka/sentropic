@@ -415,8 +415,8 @@ const parseStructuredJsonWithSingleRepair = async <T>(params: {
  * Générer une liste de cas d'usage
  */
 export const generateInitiativeList = async (
-  input: string, 
-  organizationInfo?: string, 
+  input: string,
+  organizationInfo?: string,
   model?: string,
   initiativeCount?: number,
   folderName?: string,
@@ -429,13 +429,14 @@ export const generateInitiativeList = async (
     promptId?: string;
   },
   outputSchema?: Record<string, unknown>,
+  organizationsContext?: string,
 ): Promise<InitiativeList> => {
   const initiativeListPrompt =
     (typeof runtimePrompt?.promptTemplate === 'string' &&
     runtimePrompt.promptTemplate.trim().length > 0
       ? runtimePrompt.promptTemplate
       : getAgentPromptTemplate('use_case_list')) || '';
-  
+
   if (!initiativeListPrompt) {
     throw new Error('Prompt use_case_list non trouvé');
   }
@@ -444,7 +445,9 @@ export const generateInitiativeList = async (
     .replace('{{user_input}}', input)
     .replace('{{folder_name}}', folderName || '')
     .replace('{{organization_info}}', organizationInfo || 'Aucune information d\'organisation disponible')
-    .replace('{{use_case_count}}', String(initiativeCount ?? defaultInitiativeCount));
+    .replace('{{use_case_count}}', String(initiativeCount ?? defaultInitiativeCount))
+    .replace('{{organizations_context}}', organizationsContext || 'Aucun contexte multi-organisations fourni')
+    .replace('{{organizations_list}}', organizationsContext || 'Aucune organisation sélectionnée');
 
   const docsDirective =
     documentsContexts && documentsContexts.length > 0

@@ -224,6 +224,80 @@ Réponds UNIQUEMENT avec un JSON valide:
     },
   },
   {
+    key: "opportunity_list_with_orgs_agent",
+    name: "Opportunity list with orgs agent",
+    description:
+      "Generates a structured list of candidate opportunities oriented around selected organizations.",
+    sourceLevel: "code",
+    config: {
+      role: "initiative_list_with_orgs",
+      promptId: "use_case_list_with_orgs",
+      outputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          dossier: { type: 'string' },
+          initiatives: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                titre: { type: 'string' },
+                description: { type: 'string' },
+                ref: { type: 'string' },
+              },
+              required: ['titre', 'description', 'ref'],
+            },
+          },
+        },
+        required: ['dossier', 'initiatives'],
+      },
+      promptTemplate: `Génère une liste d'opportunités business orientées autour des organisations sélectionnées.
+
+Contexte:
+- Demande utilisateur: {{user_input}}
+- Nom de dossier (si non vide): {{folder_name}}
+- Informations de l'organisation principale: {{organization_info}}
+- Nombre d'opportunités à générer: {{use_case_count}}
+
+Organisations sélectionnées (contexte détaillé):
+{{organizations_context}}
+
+Pour chaque opportunité, propose un titre court et explicite orienté autour des organisations ci-dessus.
+Format: JSON
+
+IMPORTANT:
+- Génère exactement {{use_case_count}} opportunités (ni plus, ni moins)
+- Si {{folder_name}} est non vide, réutiliser ce nom tel quel dans le champ JSON "dossier" (ne pas inventer un autre nom)
+- Si {{folder_name}} est vide, générer un nom de dossier pertinent (ne jamais utiliser "Brouillon")
+- Fais une recherche avec le tool web_search pour trouver des informations récentes sur les tendances du marché et les opportunités business pour ces organisations. Utilise web_extract pour obtenir le contenu détaillé des URLs qui semblent pertinentes (et uniquement si tu as des URLs valides à extraire).
+- Base-toi sur des exemples concrets, des analyses de marché et des tendances actuelles
+- Oriente chaque opportunité vers une ou plusieurs des organisations sélectionnées
+- Génère le titre et la description pour chaque opportunité
+- La description doit être en markdown, avec mise en exergue en gras, et le cas échéant en liste bullet point pour être percutante
+- Pour chaque opportunité, numérote les références (1, 2, 3...) et utilise [1], [2], [3] dans la description pour référencer ces numéros
+
+Réponds UNIQUEMENT avec un JSON valide:
+{
+  "dossier": "titre court du dossier",
+  "initiatives": [
+    {
+      "titre": "titre court 1",
+      "description": "Description courte (60-100 mots) de l'opportunité business orientée organisation",
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
+    },
+    {
+      "titre": "titre court 2",
+      "description": "Description courte (60-100 mots) de l'opportunité business orientée organisation",
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
+    },
+    ...
+  ]
+}`,
+    },
+  },
+  {
     key: "todo_projection_agent",
     name: "TODO projection agent",
     description:
