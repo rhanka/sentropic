@@ -114,6 +114,29 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [ ] Sub-lot gate group 06+: `make clean test-e2e API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b E2E_GROUP="06"`
       - [ ] AI flaky tests (non-blocking): `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b` and `03-chat.spec.ts`, document signatures
 
+- [ ] **Lot 12 — Multi-org folder creation: workflow input variables + UI multi-select**
+  - [ ] **API: workflow input variables**
+    - [ ] Add `orgIds: string[]` and `createNewOrgs: boolean` to folder creation payload (in `api/src/routes/api/folders.ts` or wherever folder creation is handled)
+    - [ ] Store these as workflow input variables on the folder/job (pass to queue-manager)
+    - [ ] In `queue-manager.ts` dispatch logic: if `orgIds.length > 0 || createNewOrgs` → use `initiative_list_with_orgs` step, else → use `initiative_list` step
+    - [ ] Create `initiative_list_with_orgs` agent config in `default-agents-opportunity.ts` (and optionally `default-agents-ai-ideas.ts`): same as `initiative_list` but prompt includes `{{organizations_context}}` with selected org details, and asks LLM to orient initiatives by org
+    - [ ] If `createNewOrgs` is true, the workflow runs `create_organizations` step after `initiative_list_with_orgs` and before `initiative_detail`
+    - [ ] If `createNewOrgs` is false, skip `create_organizations` step
+  - [ ] **UI: multi-select orgs in folder creation**
+    - [ ] In the folder creation form (likely `ui/src/routes/home/+page.svelte` or a component), replace single-select org with multi-select
+    - [ ] Add checkbox "Créer de nouvelles organisations automatiquement" below the org selector
+    - [ ] Pass `{ orgIds, createNewOrgs }` in the folder creation API call
+    - [ ] If no orgs selected and createNewOrgs unchecked → classic workflow (no change)
+  - [ ] Lot gate:
+    - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [ ] **API tests**
+      - [ ] Update or add test for folder creation with orgIds/createNewOrgs
+      - [ ] Add test for queue-manager routing to initiative_list_with_orgs
+      - [ ] Sub-lot gate: `make test-api-smoke test-api-endpoints API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [ ] **UI tests**
+      - [ ] Sub-lot gate: `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
+
 - [ ] **Lot N-2 — UAT**
   - [ ] Web app — initiative pages
     - [ ] Initiative ai-ideas page: rendu via TemplateRenderer identique visuellement (cartes colorées, layout 2/3+1/3, scores stars/X, sidebar dataSources/dataObjects)
@@ -140,7 +163,10 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] Chat (org context): `batch_create_organizations` visible dans les outils disponibles
     - [ ] Chat: `document_generate` exécution → DOCX généré et téléchargeable
   - [ ] Web app — multi-org
-    - [ ] ~~Créer folder opportunity avec 3 orgs → vérifier que chaque initiative a un organizationId distinct (BUG-D1)~~ *(deferred to BR-20)*
+    - [ ] Folder creation: multi-select orgs visible dans le formulaire
+    - [ ] Folder creation avec orgs sélectionnées → workflow `initiative_list_with_orgs` utilisé
+    - [ ] Folder creation avec "Créer de nouvelles orgs auto" coché → step `create_organizations` exécuté
+    - [ ] Folder creation sans orgs → workflow classique `initiative_list` (non-reg)
     - [ ] bid → proposal: vérifier que le terme "proposal" apparaît partout (UI, API responses)
   - [ ] Web app — non-regression
     - [ ] Génération ai-ideas: créer un nouveau folder → générer des initiatives → vérifier rendu
