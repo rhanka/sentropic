@@ -404,11 +404,12 @@
                   {:else if field.type === 'list'}
                     <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                       <div class="text-sm text-slate-600">
-                        {#if field.key === 'references'}
+                        {#if shortKey(field.key) === 'references'}
                           <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
                             {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
+                              {@const isObj = item && typeof item === 'object' && item.url}
                               {@const linkMatch = typeof item === 'string' ? item.match(/\[(.*?)\]\(([^)]*)\)(.*)/) : null}
-                              <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
+                              <li class="leading-relaxed">{#if isObj}<a href={item.url} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{item.title || item.url}</a>{#if item.excerpt && !isPrinting && !locked}<span class="text-slate-500"> — {item.excerpt}</span>{/if}{:else if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{typeof item === 'string' ? item : JSON.stringify(item)}{/if}</li>
                             {/each}
                           </ol>
                         {:else if isPrinting || locked}
@@ -486,11 +487,12 @@
                   {:else if field.type === 'list'}
                     <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                       <div class="text-sm text-slate-600">
-                        {#if field.key === 'references'}
+                        {#if shortKey(field.key) === 'references'}
                           <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
                             {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
+                              {@const isObj = item && typeof item === 'object' && item.url}
                               {@const linkMatch = typeof item === 'string' ? item.match(/\[(.*?)\]\(([^)]*)\)(.*)/) : null}
-                              <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
+                              <li class="leading-relaxed">{#if isObj}<a href={item.url} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{item.title || item.url}</a>{#if item.excerpt && !isPrinting && !locked}<span class="text-slate-500"> — {item.excerpt}</span>{/if}{:else if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{typeof item === 'string' ? item : JSON.stringify(item)}{/if}</li>
                             {/each}
                           </ol>
                         {:else if isPrinting || locked}
@@ -559,8 +561,9 @@
                       {#if shortKey(field.key) === 'references'}
                         <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
                           {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
+                            {@const isObj = item && typeof item === 'object' && item.url}
                             {@const linkMatch = typeof item === 'string' ? item.match(/\[(.*?)\]\(([^)]*)\)(.*)/) : null}
-                            <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
+                            <li class="leading-relaxed">{#if isObj}<a href={item.url} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{item.title || item.url}</a>{#if item.excerpt && !isPrinting && !locked}<span class="text-slate-500"> — {item.excerpt}</span>{/if}{:else if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{typeof item === 'string' ? item : JSON.stringify(item)}{/if}</li>
                           {/each}
                         </ol>
                       {:else if isPrinting || locked}
