@@ -495,11 +495,12 @@
 
   /* Styles pour l'analyse et recommandation - retirer le cadre mais garder le trait */
   .report-main-content .report-analyse,
-  .report-main-content .report-analyse > [data-comment-section] {
+  .report-main-content .report-analyse [data-comment-section] {
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
     padding: 0 !important;
+    border-radius: 0 !important;
   }
 
   /* Saut de page uniquement après l'analyse */
