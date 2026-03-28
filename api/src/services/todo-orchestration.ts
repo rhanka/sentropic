@@ -214,6 +214,8 @@ export interface StartInitiativeGenerationWorkflowInput {
    * When provided, overrides the legacy matrixMode logic.
    */
   matrixSource?: MatrixSource;
+  /** Selected organization IDs for multi-org initiative generation (Lot 12) */
+  orgIds?: string[];
 }
 
 /**
@@ -2143,6 +2145,7 @@ export class TodoOrchestrationService {
         input: input.input,
         autoCreateOrganizations: input.autoCreateOrganizations ?? false,
         matrixSource: input.matrixSource ?? null,
+        orgIds: input.orgIds ?? null,
       }),
       createdAt: now,
       updatedAt: now,
@@ -2258,6 +2261,7 @@ export class TodoOrchestrationService {
               initiativeCount: input.initiativeCount,
               initiatedByUserId: actor.userId,
               locale: input.locale,
+              orgIds: input.orgIds,
               workflow: {
                 workflowRunId: workflowRuntime.workflowRunId,
                 workflowDefinitionId: workflowRuntime.workflowDefinitionId,
@@ -2292,6 +2296,7 @@ export class TodoOrchestrationService {
           initiativeCount: input.initiativeCount,
           initiatedByUserId: actor.userId,
           locale: input.locale,
+          orgIds: input.orgIds,
           workflow: {
             workflowRunId: workflowRuntime.workflowRunId,
             workflowDefinitionId: workflowRuntime.workflowDefinitionId,

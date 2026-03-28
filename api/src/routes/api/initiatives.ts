@@ -629,7 +629,9 @@ const generateInput = z.object({
   initiative_count: z.coerce.number().int().min(1).max(25).optional(),
   organization_id: z.string().optional(),
   matrix_mode: z.enum(['organization', 'generate', 'default']).optional(),
-  model: z.string().optional()
+  model: z.string().optional(),
+  org_ids: z.array(z.string()).optional(),
+  create_new_orgs: z.boolean().optional(),
 });
 
 initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zValidator('json', generateInput), async (c) => {
@@ -644,7 +646,7 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
       appLocaleHeader: c.req.header('x-app-locale'),
       acceptLanguageHeader: c.req.header('accept-language')
     });
-    const { input, folder_id, initiative_count, organization_id, matrix_mode, model } = c.req.valid('json');
+    const { input, folder_id, initiative_count, organization_id, matrix_mode, model, org_ids, create_new_orgs } = c.req.valid('json');
     const organizationId = organization_id;
     const isExplicitDefaultMatrixMode = matrix_mode === 'default';
     
@@ -750,7 +752,9 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
         input,
         model: selectedModel,
         initiativeCount: initiative_count,
-        locale: requestLocale
+        locale: requestLocale,
+        autoCreateOrganizations: create_new_orgs,
+        orgIds: org_ids,
       }
     );
 
