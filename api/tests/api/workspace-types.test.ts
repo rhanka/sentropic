@@ -8,6 +8,7 @@ import {
   workflowDefinitionTasks,
   workflowDefinitions,
   agentDefinitions,
+  viewTemplates,
 } from '../../src/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { ensureNeutralWorkspace } from '../../src/services/workspace-service';
@@ -42,6 +43,7 @@ describe('Workspace type system', () => {
       }
       await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, id));
       await db.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, id));
+      await db.delete(viewTemplates).where(eq(viewTemplates.workspaceId, id));
       await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, id));
       await db.delete(workspaces).where(eq(workspaces.id, id));
     }
