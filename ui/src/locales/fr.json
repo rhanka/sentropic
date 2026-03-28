@@ -340,6 +340,12 @@
       "loadingModelCatalog": "Chargement des modèles…",
       "loadingOrganizations": "Chargement des organisations…",
       "noOrganizations": "Aucune organisation disponible.",
+      "multiOrg": {
+        "title": "Organisations ciblées (multi-sélection)",
+        "hint": "Sélectionnez les organisations pour orienter la génération d'initiatives autour de leur contexte.",
+        "createNewOrgs": "Créer de nouvelles organisations automatiquement",
+        "createNewOrgsHint": "L'IA proposera et créera de nouvelles organisations en lien avec le contexte du dossier."
+      },
       "documentsTitle": "Documents",
       "documentsHelp": "Ajouter des documents au contexte. Un résumé est généré automatiquement.",
       "addDocument": "Ajouter un document",
