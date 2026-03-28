@@ -57,7 +57,40 @@ Chat sessions are scoped to the **folder**, adapting to the content mix:
 - Workflow registry must support multiple workflows per workspace (already partially done with generic dispatch)
 - Gate system adapts per-object-type, not per-workspace-type
 
-### UI
+### UI — Purely template-driven entity views
+
+All entity views (initiative detail, organisation detail, dashboard, folder view) must be **purely template-driven**. A page is `TemplateRenderer(objectType, entityId)` — nothing else.
+
+Current state (BR-04B): each page has its own layout logic (SSE buffer management, lock handling, FileMenu, header badges, etc.) with TemplateRenderer handling only the field content area. This couples page code to the data model.
+
+Target state (BR-20): an `EntityPage` wrapper component that handles all cross-cutting concerns (SSE, locks, presence, FileMenu, comments) generically. The page Svelte file becomes:
+
+```svelte
+<EntityPage objectType="initiative" entityId={id}>
+  <TemplateRenderer slot="content" />
+</EntityPage>
+```
+
+No per-entity-type page logic. The template descriptor defines:
+- Field layout (rows, columns, tabs)
+- Field types (text, list, scores, component, entity-loop)
+- Component slots for custom visualizations (scatter plot, etc.)
+- Print layout (printOnly fields, entity-loop for annexes)
+- Field data bindings via path-based keys (e.g. `data.executive_summary.synthese_executive`)
+
+The `EntityPage` wrapper handles:
+- Template resolution (`resolveViewTemplate(workspaceType, objectType)`)
+- Data loading (fetch entity by id)
+- SSE stream subscription + collaborative editing buffers
+- Lock/presence management
+- Comment counts + onOpenComments callback
+- FileMenu (import/export/delete)
+- Header (title, badges, org link)
+- Save handlers (apiEndpoint, onFieldSaved)
+
+This eliminates: `initiative/[id]/+page.svelte` (635 lines), `organizations/[id]/+page.svelte` (669 lines), manual FieldCard wiring in `dashboard/+page.svelte`.
+
+### UI — Other
 - Folder view needs multi-type object listing with type filters
 - Workspace creation simplified (no mandatory type selection upfront)
 - Settings: workflow configuration per workspace becomes "available workflows" (multi-select)
