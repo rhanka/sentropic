@@ -162,6 +162,10 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] Keep existing scatter plot, cover page, sommaire, annex cover components — just render them via the slot
     - [ ] Remove manual FieldCard wiring for exec summary sections
     - [ ] Ensure print mode works: printOnly fields mount only on Ctrl+P, entity-loop renders each initiative via its own TemplateRenderer
+  - [ ] **Bugs identifiés en UAT Lot 13**
+    - [ ] BUG-L13-1: Print style cassé — marges d'impression annexes et style encadré des paragraphes pétés. Les `printClass` (`report-analyse`, `report-analyse-with-break`) sont sur les divs row du TemplateRenderer mais le CSS print cible `.report-main-content .report-analyse` — le nesting DOM a changé avec le refactor.
+    - [ ] BUG-L13-2: Références vides / [object Object] — le champ `executiveSummary.references` est un array d'objets `{title, url, excerpt}`. Le TemplateRenderer le rend comme type `list` qui fait `{@html renderMarkdownWithRefs(item)}` sur chaque item. Si l'item est un objet (pas un string), ça donne `[object Object]`.
+    - [ ] BUG-L13-3: Annexes initiatives absentes en print — l'entity-loop avec `printOnly: true` ne rend rien. Le `entityLoopTemplates[field.templateRef]` n'est pas résolu au moment où `isPrinting` passe à `true` (resolve async pas terminé), ou `collections.initiatives` est vide dans le contexte print.
   - [ ] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [ ] Lot gate:
