@@ -607,6 +607,7 @@
                 {#if field.collection && collections[field.collection] && field.templateRef && entityLoopTemplates[field.templateRef]}
                   {#each collections[field.collection] as entity, idx (entity.id)}
                     <section id={entity.id ? `usecase-${entity.id}` : null} class="usecase-annex-section" style="page-break-before: always; {field.pageContext ? 'page: ' + field.pageContext : ''}" data-usecase-id={entity.id || ''} data-usecase-title={entity?.data?.name || entity?.name || ''}>
+                      <h1 class="text-3xl font-semibold mb-4">{entity?.data?.name || entity?.name || ''}</h1>
                       <svelte:self
                         template={entityLoopTemplates[field.templateRef]}
                         data={entity?.data ? { ...entity, ...entity.data } : entity}
