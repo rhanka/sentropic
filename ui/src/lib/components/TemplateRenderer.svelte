@@ -362,7 +362,6 @@
 </script>
 
 {#if template}
-<div class="template-{objectType || 'unknown'}">
   <!-- Tab bar -->
   {#if !singleFlatTab && visibleTabs.length > 1}
     <div class="border-b border-slate-200 mb-6">
@@ -381,7 +380,7 @@
   {/if}
 
   {#if activeTab}
-    <div class="space-y-6">
+    <div class="{objectType ? 'template-' + objectType : ''} space-y-6">
       {#each activeTab.rows ?? [] as row}
         {#if row.main && row.sidebar}
           <!-- Main + Sidebar row -->
@@ -630,7 +629,6 @@
       {/each}
     </div>
   {/if}
-</div>
 {:else}
   <div class="rounded border border-red-200 bg-red-50 p-4 text-red-700">
     Template not found.

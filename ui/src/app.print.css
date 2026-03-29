@@ -621,9 +621,9 @@
   /* Image footer.jpg en bas de page, collée bord à bord (marges de page à 0) */
   /* Utiliser position absolute pour que l'image n'apparaisse que sur les pages avec usecase-print */
   /* Sortir des marges du conteneur parent (padding 0.6cm) pour aller au bord de la page */
-  .template-initiative::before {
+  .template-initiative:not(.template-initiative .template-initiative)::before {
     content: '';
-    position: absolute; /* Position absolute pour être relatif au conteneur usecase-print */
+    position: absolute;
     bottom: -0.6cm; /* Sortir de la marge basse du conteneur parent */
     left: -0.6cm; /* Sortir de la marge gauche du conteneur parent */
     right: -0.6cm; /* Sortir de la marge droite du conteneur parent */
