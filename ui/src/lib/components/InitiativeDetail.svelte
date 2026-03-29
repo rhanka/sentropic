@@ -176,7 +176,7 @@
 </script>
 
 {#if useCase}
-  <div class="usecase-print space-y-6" data-print-mode="true">
+  <div class="template-initiative space-y-6" data-print-mode="true">
     <!-- Status Banner -->
     {#if useCase.status === 'generating' || useCase.status === 'detailing' || useCase.status === 'pending'}
       <div class="rounded border border-blue-200 bg-blue-50 p-4">
@@ -302,7 +302,7 @@
       display: none !important;
     }
 
-    .usecase-print {
+    .template-initiative {
       font-size: 10pt;
       line-height: 1.4;
     }
