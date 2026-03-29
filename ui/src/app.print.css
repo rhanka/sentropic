@@ -411,8 +411,8 @@
     background: transparent !important;
     margin-top: 0 !important;
     margin-bottom: 0 !important;
-    page-break-after: always !important; /* Saut de page après cette section */
-    page-break-inside: avoid !important; /* Évite de couper la section en deux */
+    page-break-inside: avoid !important;
+    page-break-after: always !important;
   }
 
   /* Les cartes de statistiques */
@@ -526,9 +526,14 @@
     border-radius: 0 !important;
   }
 
-  /* Saut de page uniquement après l'analyse */
+  /* Saut de page avant et après (analyse, recommandation) */
   .report-main-content .report-analyse-with-break {
     page-break-before: always !important;
+    page-break-after: always !important;
+  }
+
+  /* Saut de page après seulement (introduction — collée au scatter/dashboard) */
+  .report-main-content .report-break-after {
     page-break-after: always !important;
   }
 

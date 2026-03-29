@@ -406,10 +406,12 @@ function getAiIdeasTemplates(): ViewTemplateSeed[] {
           rows: [
             { columns: 1, fields: [{ key: 'cover_page', type: 'component', printOnly: true }] },
             { columns: 1, fields: [{ key: 'executiveSummary.synthese_executive', type: 'text', color: 'white', screenOnly: true }] },
-            { columns: 1, fields: [{ key: 'scatter_plot', type: 'component' }] },
+            { columns: 1, printClass: 'report-introduction report-break-after', fields: [
+              { key: 'scatter_plot', type: 'component' },
+              { key: 'executiveSummary.introduction', type: 'text', color: 'white', id: 'section-introduction' },
+            ] },
             { columns: 1, fields: [{ key: 'sommaire', type: 'component', printOnly: true }] },
             { columns: 1, printClass: 'report-analyse report-analyse-with-break', fields: [
-              { key: 'executiveSummary.introduction', type: 'text', color: 'white', id: 'section-introduction' },
               { key: 'executiveSummary.analyse', type: 'text', color: 'white', id: 'section-analyse' },
             ] },
             { columns: 1, printClass: 'report-analyse report-analyse-with-break', fields: [{ key: 'executiveSummary.recommandation', type: 'text', color: 'white', id: 'section-recommandations' }] },
@@ -513,10 +515,12 @@ function getOpportunityTemplates(): ViewTemplateSeed[] {
           rows: [
             { columns: 1, fields: [{ key: 'cover_page', type: 'component', printOnly: true }] },
             { columns: 1, fields: [{ key: 'executiveSummary.synthese_executive', type: 'text', color: 'white', screenOnly: true }] },
-            { columns: 1, fields: [{ key: 'scatter_plot', type: 'component' }] },
+            { columns: 1, printClass: 'report-introduction report-break-after', fields: [
+              { key: 'scatter_plot', type: 'component' },
+              { key: 'executiveSummary.introduction', type: 'text', color: 'white', id: 'section-introduction' },
+            ] },
             { columns: 1, fields: [{ key: 'sommaire', type: 'component', printOnly: true }] },
             { columns: 1, printClass: 'report-analyse report-analyse-with-break', fields: [
-              { key: 'executiveSummary.introduction', type: 'text', color: 'white', id: 'section-introduction' },
               { key: 'executiveSummary.analyse', type: 'text', color: 'white', id: 'section-analyse' },
             ] },
             { columns: 1, printClass: 'report-analyse report-analyse-with-break', fields: [{ key: 'executiveSummary.recommandation', type: 'text', color: 'white', id: 'section-recommandations' }] },
