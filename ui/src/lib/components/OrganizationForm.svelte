@@ -193,6 +193,7 @@
         entityId={organization?.id ?? ''}
         onFieldSaved={handleTemplateFieldSaved}
         isPrinting={false}
+        objectType="organization"
       />
     {:else}
       <!-- Fallback: loading -->
