@@ -868,9 +868,21 @@ New widget types can be added as components without changing the template engine
 
 | Modifier | Type | Description |
 |---|---|---|
-| `printOnly` | boolean | Field rendered only in print mode (`isPrinting`). DOM not mounted in normal view. |
+| `printOnly` | boolean | Field visible only in print (CSS `hidden`/`print:block`, always mounted in DOM). |
+| `screenOnly` | boolean | Field visible only on screen (CSS `print:hidden`). |
 | `collection` | string | For `entity-loop`: key in the `collections` prop passed to TemplateRenderer. |
 | `templateRef` | string | For `entity-loop`: objectType to resolve the template for each entity. |
+| `id` | string | HTML `id` attribute on the field wrapper (for TOC anchor links). |
+
+#### TemplateRenderer wrapper class
+
+Each TemplateRenderer instance adds a CSS class `template-{objectType}` on its root `<div>`. This scopes print CSS rules to a specific template type (e.g. `.template-initiative .column-a { display: contents }`) without requiring hardcoded wrapper classes.
+
+The `objectType` is derived from the template descriptor or the `templateRef` in entity-loop context.
+
+#### Entity-loop print layout
+
+Each entity-loop item is wrapped in a `<section>` with `page-break-before: always`. This ensures each entity starts on a new page in print. No configuration needed — it's the default behavior of entity-loop.
 
 #### Path-based field keys
 
