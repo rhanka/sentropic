@@ -39,6 +39,24 @@
     margin: 2cm 2cm 2cm 2cm; /* Marges normales pour le rapport principal */
   }
 
+  /* TemplateRenderer: supprimer gaps/spacing en print pour éviter pages vierges */
+  .template-dashboard .space-y-6 > * + * {
+    margin-top: 0 !important;
+  }
+  .template-dashboard .grid.gap-6 {
+    gap: 0 !important;
+  }
+  .template-dashboard {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Entity-loop: pas de page-break sur le premier item (évite page vierge après cover annexe) */
+  .usecase-annex-section:first-child {
+    page-break-before: avoid !important;
+    break-before: avoid !important;
+  }
+
   /* Marges à 0 pour les annexes (usecases) - les marges sont reportées sur les conteneurs */
   @page annex {
     size: A4;
@@ -301,10 +319,12 @@
   /* Contenu principal du rapport */
   .report-main-content {
     page: auto;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
   
   /* Annuler le padding horizontal de la section parente pour les annexes */
-  .report-main-content > .usecase-annex-section {
+  .report-main-content .usecase-annex-section {
     margin-left: 0 !important;
     margin-right: 0 !important;
     padding-left: 0 !important;
@@ -505,6 +525,7 @@
 
   /* Saut de page uniquement après l'analyse */
   .report-main-content .report-analyse-with-break {
+    page-break-before: always !important;
     page-break-after: always !important;
   }
 

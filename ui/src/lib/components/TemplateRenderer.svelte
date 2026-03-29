@@ -547,7 +547,7 @@
               {:else if field.type === 'text'}
                 <div class="{field.span > 1 ? (colSpanClass[field.span] || '') : ''} h-full">
                   <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={shortKey(field.key)} commentCount={commentCounts[shortKey(field.key)] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(shortKey(field.key)) : null}>
-                    <div class="text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none" class:description-compact-print={isTextContentLong}>
+                    <div class="{variant === 'bordered' ? 'prose prose-slate max-w-none' : 'text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none'}" class:description-compact-print={isTextContentLong}>
                       {#if isPrinting || locked}
                         {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
                       {:else}
