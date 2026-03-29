@@ -163,9 +163,18 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] Remove manual FieldCard wiring for exec summary sections
     - [ ] Ensure print mode works: printOnly fields mount only on Ctrl+P, entity-loop renders each initiative via its own TemplateRenderer
   - [ ] **Bugs identifiés en UAT Lot 13**
-    - [ ] BUG-L13-1: Print style cassé — marges d'impression annexes et style encadré des paragraphes pétés. Les `printClass` (`report-analyse`, `report-analyse-with-break`) sont sur les divs row du TemplateRenderer mais le CSS print cible `.report-main-content .report-analyse` — le nesting DOM a changé avec le refactor.
-    - [ ] BUG-L13-2: Références vides / [object Object] — le champ `executiveSummary.references` est un array d'objets `{title, url, excerpt}`. Le TemplateRenderer le rend comme type `list` qui fait `{@html renderMarkdownWithRefs(item)}` sur chaque item. Si l'item est un objet (pas un string), ça donne `[object Object]`.
-    - [ ] BUG-L13-3: Annexes initiatives absentes en print — l'entity-loop avec `printOnly: true` ne rend rien. Le `entityLoopTemplates[field.templateRef]` n'est pas résolu au moment où `isPrinting` passe à `true` (resolve async pas terminé), ou `collections.initiatives` est vide dans le contexte print.
+    - [x] BUG-L13-2: Références vides / [object Object] — handle object items `{title,url}` + shortKey for path-based keys.
+    - [x] BUG-L13-3: Annexes absentes — scatter plot canvas null guard + printOnly via CSS `hidden`/`print-block` instead of Svelte conditional mount.
+    - [ ] BUG-L13-1: Print style — FieldCard borders, page-breaks, IDs manquants, initiative print layout. Root cause: TemplateRenderer ne génère pas les wrappers/classes/IDs que le CSS print attend.
+  - [ ] **Print layout fix (template-driven)**
+    - [ ] TemplateRenderer: add `template-{objectType}` class on root div (scope print CSS rules per template type)
+    - [ ] TemplateRenderer: entity-loop wraps each item in `<section>` with `page-break-before: always`
+    - [ ] TemplateRenderer: support `screenOnly` field modifier (CSS `print:hidden`)
+    - [ ] TemplateRenderer: support `id` field modifier (for TOC anchor links)
+    - [ ] Dashboard template seed: add `id` on intro/analyse/recommandation/references fields
+    - [ ] Dashboard template seed: add `screenOnly` on synthèse exec field
+    - [ ] CSS print: replace `.usecase-print` selectors with `.template-initiative` selectors
+    - [ ] CSS print: descendant selectors instead of child-direct for FieldCard in `.report-analyse`
   - [ ] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [ ] Lot gate:
