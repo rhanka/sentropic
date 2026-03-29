@@ -1392,6 +1392,7 @@
       variant="bordered"
       collections={{ initiatives: filteredUseCases }}
       workspaceId={workspaceId || ''}
+      objectType="dashboard"
       workspaceType={$selectedWorkspaceType || ''}
     >
       <svelte:fragment slot="component" let:fieldKey>

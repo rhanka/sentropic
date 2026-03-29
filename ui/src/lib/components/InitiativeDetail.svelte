@@ -286,6 +286,7 @@
         entityId={useCase?.id ?? ''}
         onFieldSaved={handleFieldSaved}
         {isPrinting}
+        objectType="initiative"
       />
     {:else}
       <!-- Loading template placeholder -->

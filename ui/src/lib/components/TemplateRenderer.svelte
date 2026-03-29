@@ -28,6 +28,7 @@
   export let collections: Record<string, any[]> = {};
   export let workspaceId: string = '';
   export let workspaceType: string = '';
+  export let objectType: string = '';
 
   // ---------------------------------------------------------------------------
   // Path-based nested value access
@@ -361,6 +362,7 @@
 </script>
 
 {#if template}
+<div class="template-{objectType || 'unknown'}">
   <!-- Tab bar -->
   {#if !singleFlatTab && visibleTabs.length > 1}
     <div class="border-b border-slate-200 mb-6">
@@ -515,7 +517,7 @@
           <!-- Simple row with flat fields -->
           <div class="grid gap-6 {gridColsClass[row.columns] || 'grid-cols-1'} {row.printClass || ''}">
             {#each row.fields ?? [] as field (field.key)}
-              <div class:hidden={field.printOnly && !isPrinting} class:print-block={field.printOnly}>
+              <div id={field.id || null} class:hidden={field.printOnly && !isPrinting} class:print-block={field.printOnly} class:print-hidden={field.screenOnly}>
               {#if field.type === 'scores-summary'}
                 <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                   {#if field.key === 'totalValue' && totalValueScore != null}
@@ -602,17 +604,20 @@
                 <slot name="component" fieldKey={field.key} />
               {:else if field.type === 'entity-loop'}
                 {#if field.collection && collections[field.collection] && field.templateRef && entityLoopTemplates[field.templateRef]}
-                  {#each collections[field.collection] as entity (entity.id)}
-                    <svelte:self
-                      template={entityLoopTemplates[field.templateRef]}
-                      data={entity?.data ? { ...entity, ...entity.data } : entity}
-                      locked={true}
-                      isPrinting={true}
-                      {variant}
-                      {matrix}
-                      entityId={entity.id ?? ''}
-                      references={[]}
-                    />
+                  {#each collections[field.collection] as entity, idx (entity.id)}
+                    <section id={entity.id ? `usecase-${entity.id}` : null} class="usecase-annex-section" style="page-break-before: always;" data-usecase-id={entity.id || ''} data-usecase-title={entity?.data?.name || entity?.name || ''}>
+                      <svelte:self
+                        template={entityLoopTemplates[field.templateRef]}
+                        data={entity?.data ? { ...entity, ...entity.data } : entity}
+                        locked={true}
+                        isPrinting={true}
+                        {variant}
+                        {matrix}
+                        entityId={entity.id ?? ''}
+                        references={[]}
+                        objectType={field.templateRef}
+                      />
+                    </section>
                   {/each}
                 {/if}
               {/if}
@@ -623,6 +628,7 @@
       {/each}
     </div>
   {/if}
+</div>
 {:else}
   <div class="rounded border border-red-200 bg-red-50 p-4 text-red-700">
     Template not found.
@@ -631,8 +637,8 @@
 
 <style>
   @media print {
-    :global(.usecase-print .column-b) > :global(div) { display: contents !important; }
-    :global(.usecase-print .column-a) > :global(div:not(.layout-quad):not(.rounded-lg)) { display: contents !important; }
+    :global(.template-initiative .column-b) > :global(div) { display: contents !important; }
+    :global(.template-initiative .column-a) > :global(div:not(.layout-quad):not(.rounded-lg)) { display: contents !important; }
     .print-block { display: block !important; }
   }
 </style>
