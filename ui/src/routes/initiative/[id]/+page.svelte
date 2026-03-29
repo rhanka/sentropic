@@ -88,7 +88,7 @@
       document.body.classList.add('printing');
       
       // Force all sections to be visible (Svelte conditionals might hide them)
-      const useCasePrint = document.querySelector('.usecase-print');
+      const useCasePrint = document.querySelector('.template-initiative');
       if (useCasePrint) {
         // Force display of all child divs
         useCasePrint.querySelectorAll('div').forEach(el => {
@@ -99,7 +99,7 @@
         });
       }
 
-      // Force margin-top to 0 for section and usecase-print containers
+      // Force margin-top to 0 for section and template-initiative containers
       const section = document.querySelector('section.space-y-6');
       if (section) {
         const htmlEl = section as HTMLElement;
