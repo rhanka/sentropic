@@ -548,11 +548,13 @@
                 <div class="{field.span > 1 ? (colSpanClass[field.span] || '') : ''} h-full">
                   <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={shortKey(field.key)} commentCount={commentCounts[shortKey(field.key)] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(shortKey(field.key)) : null}>
                     <div class="{variant === 'bordered' ? 'prose prose-slate max-w-none' : 'text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none'}" class:description-compact-print={isTextContentLong}>
-                      {#if isPrinting || locked}
-                        {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
-                      {:else}
-                        <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={textOriginals[field.key] || ''} {references} on:change={(e) => handleTextChange(field.key, e.detail.value)} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
-                      {/if}
+                      <div class="text-slate-700 leading-relaxed [&_p]:mb-4 [&_p:last-child]:mb-0">
+                        {#if isPrinting || locked}
+                          {@html renderMarkdownWithRefs(getFieldValue(field.key) || '', references, { addListStyles: true, listPadding: 1.5 })}
+                        {:else}
+                          <EditableInput {locked} label="" value={normalizeUseCaseMarkdown(getFieldValue(field.key) || '')} markdown={true} {apiEndpoint} fullData={getTextFullData(field.key)} fullDataGetter={() => getTextFullData(field.key)} changeId={entityId ? `${entityId}-${field.key}` : ''} originalValue={textOriginals[field.key] || ''} {references} on:change={(e) => handleTextChange(field.key, e.detail.value)} on:saved={() => { if (onFieldSaved) onFieldSaved(); }} />
+                        {/if}
+                      </div>
                     </div>
                   </FieldCard>
                 </div>
@@ -611,7 +613,7 @@
                         data={entity?.data ? { ...entity, ...entity.data } : entity}
                         locked={true}
                         isPrinting={true}
-                        {variant}
+                        variant="colored"
                         {matrix}
                         entityId={entity.id ?? ''}
                         references={[]}
@@ -640,5 +642,7 @@
     :global(.template-initiative .column-b) > :global(div) { display: contents !important; }
     :global(.template-initiative .column-a) > :global(div:not(.layout-quad):not(.rounded-lg)) { display: contents !important; }
     .print-block { display: block !important; }
+    .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 0 !important; }
+    .space-y-6 { gap: 0 !important; margin: 0 !important; padding: 0 !important; }
   }
 </style>

@@ -40,6 +40,9 @@
   }
 
   /* TemplateRenderer: supprimer gaps/spacing en print pour éviter pages vierges */
+  .template-dashboard .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0 !important;
+  }
   .template-dashboard .space-y-6 > * + * {
     margin-top: 0 !important;
   }
