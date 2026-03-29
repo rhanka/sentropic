@@ -516,7 +516,7 @@
           <!-- Simple row with flat fields -->
           <div class="grid gap-6 {gridColsClass[row.columns] || 'grid-cols-1'} {row.printClass || ''}">
             {#each row.fields ?? [] as field (field.key)}
-              <div id={field.id || null} class:hidden={field.printOnly && !isPrinting} class:print-block={field.printOnly} class:print-hidden={field.screenOnly}>
+              <div id={field.id || null} class:hidden={field.printOnly && !isPrinting} class:print-block={field.printOnly} class:print-hidden={field.screenOnly} style:page={field.pageContext || null}>
               {#if field.type === 'scores-summary'}
                 <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                   {#if field.key === 'totalValue' && totalValueScore != null}
@@ -606,7 +606,7 @@
               {:else if field.type === 'entity-loop'}
                 {#if field.collection && collections[field.collection] && field.templateRef && entityLoopTemplates[field.templateRef]}
                   {#each collections[field.collection] as entity, idx (entity.id)}
-                    <section id={entity.id ? `usecase-${entity.id}` : null} class="usecase-annex-section" style="page-break-before: always;" data-usecase-id={entity.id || ''} data-usecase-title={entity?.data?.name || entity?.name || ''}>
+                    <section id={entity.id ? `usecase-${entity.id}` : null} class="usecase-annex-section" style="page-break-before: always; {field.pageContext ? 'page: ' + field.pageContext : ''}" data-usecase-id={entity.id || ''} data-usecase-title={entity?.data?.name || entity?.name || ''}>
                       <svelte:self
                         template={entityLoopTemplates[field.templateRef]}
                         data={entity?.data ? { ...entity, ...entity.data } : entity}

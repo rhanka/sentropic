@@ -404,7 +404,7 @@ function getAiIdeasTemplates(): ViewTemplateSeed[] {
         tabs: [{
           key: 'main', always: true,
           rows: [
-            { columns: 1, fields: [{ key: 'cover_page', type: 'component', printOnly: true }] },
+            { columns: 1, fields: [{ key: 'cover_page', type: 'component', printOnly: true, pageContext: 'cover' }] },
             { columns: 1, fields: [{ key: 'executiveSummary.synthese_executive', type: 'text', color: 'white', screenOnly: true }] },
             { columns: 1, printClass: 'report-introduction report-break-after', fields: [
               { key: 'scatter_plot', type: 'component' },
@@ -416,8 +416,8 @@ function getAiIdeasTemplates(): ViewTemplateSeed[] {
             ] },
             { columns: 1, printClass: 'report-analyse report-analyse-with-break', fields: [{ key: 'executiveSummary.recommandation', type: 'text', color: 'white', id: 'section-recommandations' }] },
             { columns: 1, printClass: 'report-analyse', fields: [{ key: 'executiveSummary.references', type: 'list', id: 'section-references' }] },
-            { columns: 1, fields: [{ key: 'annex_cover', type: 'component', printOnly: true }] },
-            { columns: 1, fields: [{ key: 'initiatives', type: 'entity-loop', collection: 'initiatives', templateRef: 'initiative', printOnly: true }] },
+            { columns: 1, fields: [{ key: 'annex_cover', type: 'component', printOnly: true, pageContext: 'cover' }] },
+            { columns: 1, fields: [{ key: 'initiatives', type: 'entity-loop', collection: 'initiatives', templateRef: 'initiative', printOnly: true, pageContext: 'annex' }] },
           ],
         }],
       },
@@ -513,7 +513,7 @@ function getOpportunityTemplates(): ViewTemplateSeed[] {
         tabs: [{
           key: 'main', always: true,
           rows: [
-            { columns: 1, fields: [{ key: 'cover_page', type: 'component', printOnly: true }] },
+            { columns: 1, fields: [{ key: 'cover_page', type: 'component', printOnly: true, pageContext: 'cover' }] },
             { columns: 1, fields: [{ key: 'executiveSummary.synthese_executive', type: 'text', color: 'white', screenOnly: true }] },
             { columns: 1, printClass: 'report-introduction report-break-after', fields: [
               { key: 'scatter_plot', type: 'component' },
@@ -525,8 +525,8 @@ function getOpportunityTemplates(): ViewTemplateSeed[] {
             ] },
             { columns: 1, printClass: 'report-analyse report-analyse-with-break', fields: [{ key: 'executiveSummary.recommandation', type: 'text', color: 'white', id: 'section-recommandations' }] },
             { columns: 1, printClass: 'report-analyse', fields: [{ key: 'executiveSummary.references', type: 'list', id: 'section-references' }] },
-            { columns: 1, fields: [{ key: 'annex_cover', type: 'component', printOnly: true }] },
-            { columns: 1, fields: [{ key: 'initiatives', type: 'entity-loop', collection: 'initiatives', templateRef: 'initiative', printOnly: true }] },
+            { columns: 1, fields: [{ key: 'annex_cover', type: 'component', printOnly: true, pageContext: 'cover' }] },
+            { columns: 1, fields: [{ key: 'initiatives', type: 'entity-loop', collection: 'initiatives', templateRef: 'initiative', printOnly: true, pageContext: 'annex' }] },
           ],
         }],
       },
