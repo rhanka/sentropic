@@ -165,16 +165,10 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [ ] **Bugs identifiés en UAT Lot 13**
     - [x] BUG-L13-2: Références vides / [object Object] — handle object items `{title,url}` + shortKey for path-based keys.
     - [x] BUG-L13-3: Annexes absentes — scatter plot canvas null guard + printOnly via CSS `hidden`/`print-block` instead of Svelte conditional mount.
-    - [ ] BUG-L13-1: Print style — FieldCard borders, page-breaks, IDs manquants, initiative print layout. Root cause: TemplateRenderer ne génère pas les wrappers/classes/IDs que le CSS print attend.
-  - [ ] **Print layout fix (template-driven)**
-    - [ ] TemplateRenderer: add `template-{objectType}` class on root div (scope print CSS rules per template type)
-    - [ ] TemplateRenderer: entity-loop wraps each item in `<section>` with `page-break-before: always`
-    - [ ] TemplateRenderer: support `screenOnly` field modifier (CSS `print:hidden`)
-    - [ ] TemplateRenderer: support `id` field modifier (for TOC anchor links)
-    - [ ] Dashboard template seed: add `id` on intro/analyse/recommandation/references fields
-    - [ ] Dashboard template seed: add `screenOnly` on synthèse exec field
-    - [ ] CSS print: replace `.usecase-print` selectors with `.template-initiative` selectors
-    - [ ] CSS print: descendant selectors instead of child-direct for FieldCard in `.report-analyse`
+    - [ ] BUG-L13-1: Print style — marges, page-breaks, polices, background. 3 correctifs :
+      - [ ] Correctif 1: renommer `usecase-print` → `template-initiative` dans `InitiativeDetail.svelte` + `initiative/[id]/+page.svelte` (couvre A8 marges, A9 bg image, A10 polices)
+      - [ ] Correctif 2: CSS print gap/spacing 0 sur TemplateRenderer + `:first-child` sans page-break entity-loop (couvre A2/A4/A6 extra marges, A3/A7 pages vierges)
+      - [ ] Correctif 3: `@page { margin: 0 }` (couvre B date/titre navigateur)
   - [ ] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [ ] Lot gate:
