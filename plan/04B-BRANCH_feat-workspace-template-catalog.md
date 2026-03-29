@@ -165,10 +165,11 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [ ] **Bugs identifiés en UAT Lot 13**
     - [x] BUG-L13-2: Références vides / [object Object] — handle object items `{title,url}` + shortKey for path-based keys.
     - [x] BUG-L13-3: Annexes absentes — scatter plot canvas null guard + printOnly via CSS `hidden`/`print-block` instead of Svelte conditional mount.
-    - [ ] BUG-L13-1: Print style — marges, page-breaks, polices, background. 3 correctifs :
+    - [ ] BUG-L13-1: Print style — marges, page-breaks, polices, background. Correctifs :
       - [ ] Correctif 1: renommer `usecase-print` → `template-initiative` dans `InitiativeDetail.svelte` + `initiative/[id]/+page.svelte` (couvre A8 marges, A9 bg image, A10 polices)
       - [ ] Correctif 2: CSS print gap/spacing 0 sur TemplateRenderer + `:first-child` sans page-break entity-loop (couvre A2/A4/A6 extra marges, A3/A7 pages vierges)
-      - [ ] Correctif 3: `@page { margin: 0 }` (couvre B date/titre navigateur)
+      - [x] Correctif 3: bug B — initiative standalone bg overflow (double wrapper fix)
+      - [ ] Correctif 4: `pageContext` field modifier — cover/annex page context switching (couvre A2 marges cover, A3 page vierge, A6 marges annex cover)
   - [ ] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [ ] Lot gate:

@@ -873,6 +873,7 @@ New widget types can be added as components without changing the template engine
 | `collection` | string | For `entity-loop`: key in the `collections` prop passed to TemplateRenderer. |
 | `templateRef` | string | For `entity-loop`: objectType to resolve the template for each entity. |
 | `id` | string | HTML `id` attribute on the field wrapper (for TOC anchor links). |
+| `pageContext` | string | CSS named page context (`cover`, `annex`). Sets `page: <value>` on the field wrapper for `@page` rule switching in print. |
 
 #### TemplateRenderer wrapper class
 

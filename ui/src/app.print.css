@@ -320,10 +320,12 @@
   }
 
   /* Contenu principal du rapport */
-  .report-main-content {
+  section.report-main-content.space-y-6 {
     page: auto;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
   }
   
   /* Annuler le padding horizontal de la section parente pour les annexes */
