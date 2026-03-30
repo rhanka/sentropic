@@ -546,6 +546,21 @@ The executable contract of a task is defined by:
 - `metadata.timeoutPolicy` — execution timeout / wait timeout.
 - `metadata.idempotencyKeyTemplate` — deterministic key for replay-safe side effects.
 
+Completion rule for BR-04:
+- the runtime MAY keep a technical executor registry (`jobType` / `executorKey` → worker implementation);
+- the runtime MUST NOT keep workflow-sequencing logic in code for existing workflows.
+
+Forbidden after Lot 12 completion:
+- `switch` / `if` logic that decides the next workflow task from `task.agentRole`;
+- task discovery based on task-key string heuristics such as `includes("detail")`, `includes("summary")`, `includes("opportunity_list")`, etc.;
+- workflow-specific barrier helpers such as waiting for matrix completion via bespoke polling outside the generic scheduler;
+- business-table scans used as implicit join logic for workflow progression when the same rule should be expressed as a transition/join in workflow metadata.
+
+Allowed after Lot 12 completion:
+- executor dispatch by technical key (`metadata.executor`, `metadata.jobType`, `metadata.subworkflowKey`);
+- worker-internal business logic for the side effect of one node;
+- generic scheduler code that evaluates declarative transitions, bindings, retry policy, and join/fanout rules.
+
 #### 7.4.4 Transitions, fanout, join
 
 `orderIndex` remains useful as a default display/ordering hint, but execution semantics must come from explicit transitions.
@@ -602,20 +617,26 @@ Subgraphs/child workflows are modeled as task nodes with:
 
 #### 7.4.7 Delivery staging
 
-**BR-04B scope (MVP)**:
-- executable runtime contract on generation workflows
-- shared `workflow_run_state`
-- persisted `workflow_task_results`
-- conditional routing for list-task selection
-- `organization_batch_create` worker execution with state binding
-- simple fanout (`initiative_detail`) and join (`executive_summary`)
+**BR-04B completion target (mandatory)**:
+- reusable `workflow_task_transitions` engine for **all existing workflow families**;
+- generic scheduler for ready tasks, conditional transitions, replay-safe execution, and state/result persistence;
+- shared `workflow_run_state`;
+- persisted `workflow_task_results`;
+- declarative `inputBindings` / `outputBindings` for all existing seeded workflows;
+- generic conditional routing for list-task selection;
+- `organization_batch_create` worker execution with state binding;
+- generic fanout/join support sufficient for the existing generation workflows (`initiative_detail` / `executive_summary`);
+- removal of workflow-specific sequencing hardcoding from `todo-orchestration.ts` and `queue-manager.ts` for the currently existing workflows:
+  - `ai_usecase_generation`
+  - `opportunity_identification`
+  - `opportunity_qualification`
+  - `code_analysis`
 
-**Deferred to BR-23**:
-- reusable `workflow_task_transitions` engine across all workflow families
-- generic message/interrupt API
-- generic child/sub-workflow runtime
-- advanced reducers and reusable join strategies
-- compensation/saga patterns and broader replay/version migration concerns
+**Outside BR-04 scope (future extensions, not required to declare Lot 12 complete)**:
+- generic runtime message / interrupt / resume API exposed to product/UI surfaces;
+- generic child/sub-workflow runtime across arbitrary workflow families;
+- advanced reducers / reusable join strategies beyond the needs of current workflows;
+- compensation/saga patterns and broader workflow-version migration concerns.
 
 ### 7.5 Workflow versioning
 
