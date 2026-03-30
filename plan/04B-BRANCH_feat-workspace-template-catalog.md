@@ -84,34 +84,70 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] References: fix nested brackets regex, hide excerpts in print/locked mode.
   - [x] Validation checklists moved to Lot 13 (API/UI/E2E consolidation for BR-04B).
 
-- [ ] **Lot 12 — Multi-org execution graph MVP** *(reframed: payload/context/UI landed; BR-04B now targets an executable workflow-runtime MVP for the multi-org path, while the fuller generic engine is deferred to BR-23)*
-  - [x] **Spec alignment**
+- [ ] **Lot 12 — Generic executable workflow runtime**
+  - [x] **12.1 Spec + scope lock**
+    - [x] Reabsorb the former BR-23 generic-runtime scope into BR-04B Lot 12.
     - [x] BR-04 spec §7.4 clarified toward a library-neutral executable workflow graph, conceptually compatible with LangGraph/Temporal without adding either dependency.
-    - [x] BR-04 spec now distinguishes BR-04B MVP scope vs BR-23 generic-runtime follow-up.
-  - [ ] **Runtime MVP: multi-org vertical slice**
+    - [x] BR-04 spec now states that no workflow-specific sequencing hardcoding may remain for existing workflows.
+    - [x] Specify `workflow_task_transitions` storage contract in the spec: `fromTaskKey`, `toTaskKey`, `transitionType`, `condition`, `metadata`.
+    - [x] Specify binding contract in the spec: `inputBindings`, `outputBindings`, `fanout`, `join`, retry/timeout, idempotency.
+    - [x] Specify the allowed hardcoding boundary in the spec: executor registry only, never workflow sequencing.
+    - [x] Specify the migration target set in the spec for all existing seeded workflows:
+      - [x] `ai_usecase_generation`
+      - [x] `opportunity_identification`
+      - [x] `opportunity_qualification`
+      - [x] `code_analysis`
+  - [ ] **12.2 Runtime engine core**
     - [x] Add `orgIds: string[]` and `createNewOrgs: boolean` to folder creation payload.
     - [x] Store these values as workflow inputs on the generation run/job.
-    - [x] Create `initiative_list_with_orgs` agent config in `default-agents-opportunity.ts` (and optionally `default-agents-ai-ideas.ts`): same as `initiative_list` but prompt includes `{{organizations_context}}` with selected org details and asks the LLM to orient initiatives by org.
-    - [x] UI: replace single-select org with multi-select in folder creation.
-    - [x] UI: add checkbox "Créer de nouvelles organisations automatiquement".
-    - [x] UI: pass `{ orgIds, createNewOrgs }` in the folder creation API call.
     - [x] Preserve classic path when no orgs are selected and `createNewOrgs` is false.
     - [x] Persist `workflow_run_state` for the generation run and bind multi-org inputs into that state.
-    - [x] Persist `workflow_task_results` (or equivalent task output persistence) for the multi-org generation chain.
-    - [x] Route list generation from workflow runtime state: if selected/new org context is present, run `initiative_list_with_orgs`; otherwise keep the classic list task.
-    - [x] Implement `organization_batch_create` worker execution and bind created organization IDs/details back into workflow state.
-    - [ ] Replace the current ad hoc multi-org branch with declarative runtime bindings instead of a role-specific business switch.
-    - [ ] Support simple fanout for `initiative_detail` and simple join-all for `executive_summary` on this generation workflow.
-  - [ ] **Tests**
-    - [ ] Update or add API tests for folder creation with `orgIds` / `createNewOrgs`.
-    - [x] Add API tests for runtime routing to `initiative_list_with_orgs`.
-    - [x] Add API tests for `organization_batch_create` output binding into run state.
-    - [ ] Add API tests for detail fanout and executive-summary join on the multi-org path.
-    - [ ] Add UI coverage for the multi-select org flow if not already covered by existing screen tests.
-  - [ ] Lot gate:
+    - [x] Persist `workflow_task_results` (or equivalent task output persistence) for the generation chain.
+    - [ ] Add `workflow_task_transitions` persistence and seed support.
+    - [ ] Replace the current `switch (task.agentRole)` startup routing with a generic “ready entry nodes” dispatch.
+    - [ ] Replace task-key string heuristics (`includes("detail")`, `includes("summary")`, etc.) with transition-driven next-node resolution.
+    - [ ] Replace workflow-specific matrix waiting / unlock logic with transition + binding driven scheduling.
+    - [ ] Keep only a generic executor registry (`executor` / `jobType` / `subworkflowKey` → implementation) in runtime services.
+  - [ ] **12.3 Workflow migration on the generic engine**
+    - [ ] `ai_usecase_generation`
+      - [x] Create `initiative_list_with_orgs` agent config in `default-agents-opportunity.ts` (and optionally `default-agents-ai-ideas.ts`): same as `initiative_list` but prompt includes `{{organizations_context}}` with selected org details and asks the LLM to orient initiatives by org.
+      - [x] Route list generation from workflow runtime state: if selected/new org context is present, run `initiative_list_with_orgs`; otherwise keep the classic list task.
+      - [x] Implement `organization_batch_create` worker execution and bind created organization IDs/details back into workflow state.
+      - [ ] Declare matrix dependency as a transition/binding instead of ad hoc waiting logic.
+      - [ ] Declare `initiative_detail` fanout in transitions instead of runtime heuristics.
+      - [ ] Declare `executive_summary` join in transitions instead of business-table completion scanning.
+    - [ ] `opportunity_identification`
+      - [ ] Move list/detail/summary sequencing to transitions + bindings only.
+      - [ ] Remove any opportunity-specific sequencing fallback from orchestration/runtime code.
+    - [ ] `opportunity_qualification`
+      - [ ] Express qualification sequencing entirely through task transitions.
+      - [ ] Validate that no orchestration code path still depends on workflow-specific ordering logic.
+    - [ ] `code_analysis`
+      - [ ] Express analysis sequencing entirely through task transitions.
+      - [ ] Validate that no orchestration code path still depends on workflow-specific ordering logic.
+  - [ ] **12.4 Tests**
+    - [ ] **API**
+      - [ ] Update or add API tests for folder creation with `orgIds` / `createNewOrgs`.
+      - [x] Add API tests for runtime routing to `initiative_list_with_orgs`.
+      - [x] Add API tests for `organization_batch_create` output binding into run state.
+      - [ ] Add API tests for transition-driven detail fanout and executive-summary join on the multi-org path.
+      - [ ] Add API tests that existing non-multi-org workflows now run through the same generic transition scheduler.
+    - [ ] **Queue / unit**
+      - [x] Add queue test for `organization_batch_create` runtime worker, state patching, and relaunch of the list task.
+      - [ ] Add queue/unit tests for generic conditional transition resolution.
+      - [ ] Add queue/unit tests for generic fanout scheduling.
+      - [ ] Add queue/unit tests for generic join completion.
+      - [ ] Add queue/unit tests for generic state/result replay safety.
+    - [ ] **UI**
+      - [x] UI: replace single-select org with multi-select in folder creation.
+      - [x] UI: add checkbox "Créer de nouvelles organisations automatiquement".
+      - [x] UI: pass `{ orgIds, createNewOrgs }` in the folder creation API call.
+      - [ ] Add UI coverage for the multi-select org flow if not already covered by existing screen tests.
+  - [ ] **12.5 Lot gate**
     - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make test-api-smoke test-api-endpoints API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [ ] `make test-api-queue SCOPE=tests/queue/organization-batch-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
 
 - [x] **Lot 13 — Dashboard via TemplateRenderer (component, entity-loop, printOnly, path-based keys)**
@@ -241,12 +277,9 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
 
 - Rich markdown list editor stabilization for initiative `constraints`: freeze reproduced on `cc884370-765c-40f3-a754-ceaf9a05da04`, likely around `TemplateRenderer` / `EditableInput` / `TipTap` list forcing and markdown roundtrip on rich list items.
 
-## Deferred to BR-23
+## Future runtime extensions (out of BR-04 scope once Lot 12 is complete)
 
-- Generic executable workflow runtime beyond the BR-04B multi-org MVP:
-  - explicit `workflow_task_transitions` graph across workflow families
-  - reusable scheduler for ready tasks / conditional transitions / replay-safe execution
-  - generic runtime message / interrupt / resume API
-  - generic child/sub-workflow execution
-  - advanced reducers / joins / reusable fanout patterns
-  - compensation and broader workflow-version migration concerns
+- [ ] Generic runtime message / interrupt / resume API exposed to product/UI surfaces.
+- [ ] Generic child/sub-workflow execution across arbitrary workflow families.
+- [ ] Advanced reducers / reusable join strategies beyond the needs of current workflows.
+- [ ] Compensation / saga patterns and broader workflow-version migration concerns.
