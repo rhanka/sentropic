@@ -96,16 +96,16 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] UI: add checkbox "Créer de nouvelles organisations automatiquement".
     - [x] UI: pass `{ orgIds, createNewOrgs }` in the folder creation API call.
     - [x] Preserve classic path when no orgs are selected and `createNewOrgs` is false.
-    - [ ] Persist `workflow_run_state` for the generation run and bind multi-org inputs into that state.
-    - [ ] Persist `workflow_task_results` (or equivalent task output persistence) for the multi-org generation chain.
-    - [ ] Route list generation from workflow runtime state: if selected/new org context is present, run `initiative_list_with_orgs`; otherwise keep the classic list task.
-    - [ ] Implement `organization_batch_create` worker execution and bind created organization IDs/details back into workflow state.
+    - [x] Persist `workflow_run_state` for the generation run and bind multi-org inputs into that state.
+    - [x] Persist `workflow_task_results` (or equivalent task output persistence) for the multi-org generation chain.
+    - [x] Route list generation from workflow runtime state: if selected/new org context is present, run `initiative_list_with_orgs`; otherwise keep the classic list task.
+    - [x] Implement `organization_batch_create` worker execution and bind created organization IDs/details back into workflow state.
     - [ ] Replace the current ad hoc multi-org branch with declarative runtime bindings instead of a role-specific business switch.
     - [ ] Support simple fanout for `initiative_detail` and simple join-all for `executive_summary` on this generation workflow.
   - [ ] **Tests**
     - [ ] Update or add API tests for folder creation with `orgIds` / `createNewOrgs`.
-    - [ ] Add API tests for runtime routing to `initiative_list_with_orgs`.
-    - [ ] Add API tests for `organization_batch_create` output binding into run state.
+    - [x] Add API tests for runtime routing to `initiative_list_with_orgs`.
+    - [x] Add API tests for `organization_batch_create` output binding into run state.
     - [ ] Add API tests for detail fanout and executive-summary join on the multi-org path.
     - [ ] Add UI coverage for the multi-select org flow if not already covered by existing screen tests.
   - [ ] Lot gate:
