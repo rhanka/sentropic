@@ -7,6 +7,9 @@ import {
   executionRuns,
   workflowDefinitionTasks,
   workflowDefinitions,
+  workflowRunState,
+  workflowTaskResults,
+  workflowTaskTransitions,
   workspaceMemberships,
   workspaceTypeWorkflows,
 } from "../../src/db/schema";
@@ -69,6 +72,17 @@ describe("Generic dispatch and backward compat", () => {
           ),
         );
       expect(wfTasks.length).toBe(7); // 7 tasks in ai-ideas workflow (incl. generation_create_organizations)
+
+      const transitions = await db
+        .select()
+        .from(workflowTaskTransitions)
+        .where(
+          and(
+            eq(workflowTaskTransitions.workspaceId, actor.workspaceId),
+            eq(workflowTaskTransitions.workflowDefinitionId, wfDef.id),
+          ),
+        );
+      expect(transitions.length).toBeGreaterThan(0);
 
       // Check agents seeded
       const agents = await db
@@ -209,6 +223,13 @@ describe("Generic dispatch and backward compat", () => {
       expect(run).toBeTruthy();
       expect(run.status).toBe("in_progress");
 
+      const [runState] = await db
+        .select()
+        .from(workflowRunState)
+        .where(eq(workflowRunState.runId, result.workflowRunId))
+        .limit(1);
+      expect(runState).toBeTruthy();
+
       // Verify event was logged
       const [event] = await db
         .select()
@@ -223,6 +244,40 @@ describe("Generic dispatch and backward compat", () => {
       await expect(
         todoOrchestrationService.startWorkflow(actor, "nonexistent_workflow"),
       ).rejects.toThrow("Workflow not found");
+    });
+
+    it("runs noop-only workflows through the same generic transition scheduler", async () => {
+      await todoOrchestrationService.seedWorkflowsForType(actor, "opportunity");
+
+      const result = await todoOrchestrationService.startWorkflow(
+        actor,
+        "opportunity_qualification",
+        {},
+      );
+
+      const [run] = await db
+        .select()
+        .from(executionRuns)
+        .where(eq(executionRuns.id, result.workflowRunId))
+        .limit(1);
+      expect(run?.status).toBe("completed");
+
+      const [runState] = await db
+        .select()
+        .from(workflowRunState)
+        .where(eq(workflowRunState.runId, result.workflowRunId))
+        .limit(1);
+      expect(runState?.status).toBe("completed");
+
+      const taskResults = await db
+        .select({
+          taskKey: workflowTaskResults.taskKey,
+          status: workflowTaskResults.status,
+        })
+        .from(workflowTaskResults)
+        .where(eq(workflowTaskResults.runId, result.workflowRunId));
+      expect(taskResults).toHaveLength(5);
+      expect(taskResults.every((row) => row.status === "completed")).toBe(true);
     });
   });
 

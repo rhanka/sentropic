@@ -6,8 +6,10 @@ import {
   folders,
   jobQueue,
   organizations,
+  workflowDefinitionTasks,
   workflowDefinitions,
   workflowRunState,
+  workflowTaskTransitions,
   workflowTaskResults,
 } from '../../src/db/schema';
 import { createId } from '../../src/utils/id';
@@ -99,6 +101,65 @@ describe('Queue - organization_batch_create runtime', () => {
       sourceLevel: 'code',
       isDetached: false,
       createdByUserId: user.userId,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(workflowDefinitionTasks).values([
+      {
+        id: createId(),
+        workspaceId: user.workspaceId,
+        workflowDefinitionId,
+        taskKey: 'generation_create_organizations',
+        title: 'Create organizations',
+        description: 'Create organizations before list generation',
+        orderIndex: 1,
+        agentDefinitionId: null,
+        metadata: {
+          executor: 'job',
+          jobType: 'organization_batch_create',
+        },
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: createId(),
+        workspaceId: user.workspaceId,
+        workflowDefinitionId,
+        taskKey: 'generation_usecase_list',
+        title: 'Use-case list generation',
+        description: 'Generate initiatives from the resolved organization context',
+        orderIndex: 2,
+        agentDefinitionId: null,
+        metadata: {
+          executor: 'job',
+          jobType: 'initiative_list',
+          inputBindings: {
+            folderId: '$state.inputs.folderId',
+            input: '$state.inputs.input',
+            organizationId: '$state.inputs.organizationId',
+            matrixMode: '$state.inputs.matrixMode',
+            model: '$state.inputs.model',
+            initiativeCount: '$state.inputs.initiativeCount',
+            initiatedByUserId: '$run.startedByUserId',
+            locale: '$state.inputs.locale',
+            orgIds: '$state.orgContext.effectiveOrgIds',
+          },
+        },
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    await db.insert(workflowTaskTransitions).values({
+      id: createId(),
+      workspaceId: user.workspaceId,
+      workflowDefinitionId,
+      fromTaskKey: 'generation_create_organizations',
+      toTaskKey: 'generation_usecase_list',
+      transitionType: 'normal',
+      condition: {},
+      metadata: {},
       createdAt: now,
       updatedAt: now,
     });
@@ -261,7 +322,9 @@ describe('Queue - organization_batch_create runtime', () => {
       )
       .limit(1);
     expect(taskResult?.status).toBe('completed');
-    expect((taskResult?.output as Record<string, unknown>).listJobId).toBe(enqueuedListJobId);
+    expect((taskResult?.output as Record<string, unknown>).effectiveOrgIds).toEqual(
+      expect.arrayContaining([existingOrganizationId, createdOrg!.id]),
+    );
 
     const [jobAfter] = await db
       .select({ status: jobQueue.status })
