@@ -118,7 +118,7 @@ export async function generateOrganizationMatrixTemplate(
       ? runtimePrompt.promptTemplate
       : AI_IDEAS_AGENTS.find(a => a.config.promptId === 'organization_matrix_template')?.config.promptTemplate as string) || '';
   if (!promptTemplate) {
-    throw new Error('Prompt organization_matrix_template non trouvé');
+    throw new Error('Prompt de génération de matrice non trouvé');
   }
 
   const prompt = promptTemplate
@@ -207,7 +207,7 @@ export async function generateOrganizationMatrixTemplate(
   });
 
   if (!content) {
-    throw new Error('Aucune réponse reçue pour la génération de matrice organisation');
+    throw new Error('Aucune réponse reçue pour la génération de matrice');
   }
 
   const parsed = parseJsonLenient<OrganizationMatrixTemplate>(content);

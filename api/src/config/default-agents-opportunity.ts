@@ -21,7 +21,7 @@ export const OPPORTUNITY_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition>
     key: "matrix_generation_agent",
     name: "Matrix generation agent",
     description:
-      "Generates organization-specific matrix descriptions for opportunity scoring. Supports custom axes when customAxes flag is enabled (D).",
+      "Generates context-specific matrix descriptions for opportunity scoring. Supports custom axes when customAxes flag is enabled (D).",
     sourceLevel: "code",
     config: {
       role: "matrix_generation",
@@ -34,16 +34,16 @@ export const OPPORTUNITY_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition>
        * When false (default), standard behavior: adapt descriptions only, keep axis IDs.
        */
       customAxes: false,
-      promptTemplate: `Tu dois adapter les descriptions de niveaux d'une matrice de priorisation d'opportunités pour l'organisation suivante:
-- Nom: {{organization_name}}
-- Contexte organisation: {{organization_info}}
+      promptTemplate: `Tu dois adapter les descriptions de niveaux d'une matrice de priorisation d'opportunités pour le contexte principal suivant:
+- Nom du contexte: {{organization_name}}
+- Contexte métier: {{organization_info}}
 
 Matrice de base (axes, poids, seuils - NE PAS MODIFIER):
 {{base_matrix}}
 
 Objectif:
 - Conserver STRICTEMENT la structure de la matrice de base (ids d'axes, poids, seuils).
-- Adapter UNIQUEMENT les textes des levelDescriptions pour refléter le contexte métier de l'organisation.
+- Adapter UNIQUEMENT les textes des levelDescriptions pour refléter le contexte métier du dossier et, si disponibles, des organisations ciblées.
 
 Contraintes obligatoires:
 - Ne jamais changer les axisId.

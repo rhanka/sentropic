@@ -82,11 +82,6 @@ const conditionEq = (path: string, value: unknown): Record<string, unknown> => (
   value,
 });
 
-const conditionTruthy = (path: string): Record<string, unknown> => ({
-  path,
-  operator: "truthy",
-});
-
 const conditionNotEmpty = (path: string): Record<string, unknown> => ({
   path,
   operator: "not_empty",
@@ -109,7 +104,6 @@ const matrixPreparationRequiredCondition = anyOf(
   allOf(
     conditionEq("inputs.matrixSource", null),
     conditionEq("inputs.matrixMode", "generate"),
-    conditionTruthy("inputs.organizationId"),
   ),
 );
 
@@ -169,7 +163,10 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       metadata: jobTaskMetadata("matrix_generate", {
         inputBindings: {
           folderId: "$state.inputs.folderId",
+          input: "$state.inputs.input",
           organizationId: "$state.inputs.organizationId",
+          orgIds: "$state.orgContext.effectiveOrgIds",
+          matrixSource: "$state.inputs.matrixSource",
           model: "$state.inputs.model",
           initiatedByUserId: "$run.startedByUserId",
           locale: "$state.inputs.locale",
@@ -380,7 +377,10 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
       metadata: jobTaskMetadata("matrix_generate", {
         inputBindings: {
           folderId: "$state.inputs.folderId",
+          input: "$state.inputs.input",
           organizationId: "$state.inputs.organizationId",
+          orgIds: "$state.orgContext.effectiveOrgIds",
+          matrixSource: "$state.inputs.matrixSource",
           model: "$state.inputs.model",
           initiatedByUserId: "$run.startedByUserId",
           locale: "$state.inputs.locale",
