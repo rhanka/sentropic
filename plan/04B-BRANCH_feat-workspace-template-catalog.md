@@ -84,28 +84,35 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] References: fix nested brackets regex, hide excerpts in print/locked mode.
   - [x] Validation checklists moved to Lot 13 (API/UI/E2E consolidation for BR-04B).
 
-- [ ] **Lot 12 — Multi-org folder creation: workflow input variables + UI multi-select** *(partial: payload/context/UI landed, explicit list-task switch still open)*
-  - [ ] **API: workflow input variables**
-    - [x] Add `orgIds: string[]` and `createNewOrgs: boolean` to folder creation payload (in `api/src/routes/api/folders.ts` or wherever folder creation is handled)
-    - [x] Store these as workflow input variables on the folder/job (pass to queue-manager)
-    - [ ] In `queue-manager.ts` dispatch logic: if `orgIds.length > 0 || createNewOrgs` → use `initiative_list_with_orgs` step, else → use `initiative_list` step
-    - [x] Create `initiative_list_with_orgs` agent config in `default-agents-opportunity.ts` (and optionally `default-agents-ai-ideas.ts`): same as `initiative_list` but prompt includes `{{organizations_context}}` with selected org details, and asks LLM to orient initiatives by org
-    - [x] If `createNewOrgs` is true, the workflow runs `create_organizations` step after `initiative_list_with_orgs` and before `initiative_detail`
-    - [x] If `createNewOrgs` is false, skip `create_organizations` step
-  - [x] **UI: multi-select orgs in folder creation**
-    - [x] In the folder creation form (likely `ui/src/routes/home/+page.svelte` or a component), replace single-select org with multi-select
-    - [x] Add checkbox "Créer de nouvelles organisations automatiquement" below the org selector
-    - [x] Pass `{ orgIds, createNewOrgs }` in the folder creation API call
-    - [x] If no orgs selected and createNewOrgs unchecked → classic workflow (no change)
+- [ ] **Lot 12 — Multi-org execution graph MVP** *(reframed: payload/context/UI landed; BR-04B now targets an executable workflow-runtime MVP for the multi-org path, while the fuller generic engine is deferred to BR-23)*
+  - [x] **Spec alignment**
+    - [x] BR-04 spec §7.4 clarified toward a library-neutral executable workflow graph, conceptually compatible with LangGraph/Temporal without adding either dependency.
+    - [x] BR-04 spec now distinguishes BR-04B MVP scope vs BR-23 generic-runtime follow-up.
+  - [ ] **Runtime MVP: multi-org vertical slice**
+    - [x] Add `orgIds: string[]` and `createNewOrgs: boolean` to folder creation payload.
+    - [x] Store these values as workflow inputs on the generation run/job.
+    - [x] Create `initiative_list_with_orgs` agent config in `default-agents-opportunity.ts` (and optionally `default-agents-ai-ideas.ts`): same as `initiative_list` but prompt includes `{{organizations_context}}` with selected org details and asks the LLM to orient initiatives by org.
+    - [x] UI: replace single-select org with multi-select in folder creation.
+    - [x] UI: add checkbox "Créer de nouvelles organisations automatiquement".
+    - [x] UI: pass `{ orgIds, createNewOrgs }` in the folder creation API call.
+    - [x] Preserve classic path when no orgs are selected and `createNewOrgs` is false.
+    - [ ] Persist `workflow_run_state` for the generation run and bind multi-org inputs into that state.
+    - [ ] Persist `workflow_task_results` (or equivalent task output persistence) for the multi-org generation chain.
+    - [ ] Route list generation from workflow runtime state: if selected/new org context is present, run `initiative_list_with_orgs`; otherwise keep the classic list task.
+    - [ ] Implement `organization_batch_create` worker execution and bind created organization IDs/details back into workflow state.
+    - [ ] Replace the current ad hoc multi-org branch with declarative runtime bindings instead of a role-specific business switch.
+    - [ ] Support simple fanout for `initiative_detail` and simple join-all for `executive_summary` on this generation workflow.
+  - [ ] **Tests**
+    - [ ] Update or add API tests for folder creation with `orgIds` / `createNewOrgs`.
+    - [ ] Add API tests for runtime routing to `initiative_list_with_orgs`.
+    - [ ] Add API tests for `organization_batch_create` output binding into run state.
+    - [ ] Add API tests for detail fanout and executive-summary join on the multi-org path.
+    - [ ] Add UI coverage for the multi-select org flow if not already covered by existing screen tests.
   - [ ] Lot gate:
     - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-    - [ ] **API tests**
-      - [ ] Update or add test for folder creation with orgIds/createNewOrgs
-      - [ ] Add test for queue-manager routing to initiative_list_with_orgs
-      - [ ] Sub-lot gate: `make test-api-smoke test-api-endpoints API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-    - [ ] **UI tests**
-      - [ ] Sub-lot gate: `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
+    - [ ] `make test-api-smoke test-api-endpoints API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [ ] `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
 
 - [x] **Lot 13 — Dashboard via TemplateRenderer (component, entity-loop, printOnly, path-based keys)**
   - [x] **TemplateRenderer extensions**
@@ -233,3 +240,13 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
 ## Deferred to BR-22
 
 - Rich markdown list editor stabilization for initiative `constraints`: freeze reproduced on `cc884370-765c-40f3-a754-ceaf9a05da04`, likely around `TemplateRenderer` / `EditableInput` / `TipTap` list forcing and markdown roundtrip on rich list items.
+
+## Deferred to BR-23
+
+- Generic executable workflow runtime beyond the BR-04B multi-org MVP:
+  - explicit `workflow_task_transitions` graph across workflow families
+  - reusable scheduler for ready tasks / conditional transitions / replay-safe execution
+  - generic runtime message / interrupt / resume API
+  - generic child/sub-workflow execution
+  - advanced reducers / joins / reusable fanout patterns
+  - compensation and broader workflow-version migration concerns
