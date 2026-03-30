@@ -576,7 +576,9 @@ Add `workflow_task_transitions` with at least:
 Transition metadata supports:
 - `fanout.sourcePath` — array in run state to iterate over
 - `fanout.itemKey` — per-item binding name
+- `fanout.instanceKeyPath` — optional path used to derive a stable per-item task instance key
 - `join.mode` — `all | any | quorum`
+- `join.requiredTaskKeys` — explicit barrier on one or more upstream main-task completions
 - `join.reducerKey` — reducer used to merge parallel results
 
 This allows flows like:
