@@ -1,4 +1,4 @@
-import { boolean, foreignKey, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 // Workspace constants (keep stable IDs for migrations/backfills)
@@ -834,6 +834,60 @@ export const executionEvents = pgTable('execution_events', {
   eventTypeIdx: index('execution_events_event_type_idx').on(table.eventType),
 }));
 
+export const workflowRunState = pgTable('workflow_run_state', {
+  runId: text('run_id')
+    .notNull()
+    .references(() => executionRuns.id, { onDelete: 'cascade' }),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  workflowDefinitionId: text('workflow_definition_id').references(() => workflowDefinitions.id, { onDelete: 'set null' }),
+  status: text('status').notNull().default('pending'),
+  state: jsonb('state').notNull().default(sql`'{}'::jsonb`),
+  version: integer('version').notNull().default(1),
+  currentTaskKey: text('current_task_key'),
+  currentTaskInstanceKey: text('current_task_instance_key'),
+  checkpointedAt: timestamp('checkpointed_at', { withTimezone: false }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  runIdPk: primaryKey({ columns: [table.runId], name: 'workflow_run_state_run_id_pk' }),
+  workspaceIdIdx: index('workflow_run_state_workspace_id_idx').on(table.workspaceId),
+  statusIdx: index('workflow_run_state_status_idx').on(table.status),
+  workflowDefinitionIdIdx: index('workflow_run_state_workflow_definition_id_idx').on(table.workflowDefinitionId),
+}));
+
+export const workflowTaskResults = pgTable('workflow_task_results', {
+  runId: text('run_id')
+    .notNull()
+    .references(() => executionRuns.id, { onDelete: 'cascade' }),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  workflowDefinitionId: text('workflow_definition_id').references(() => workflowDefinitions.id, { onDelete: 'set null' }),
+  taskKey: text('task_key').notNull(),
+  taskInstanceKey: text('task_instance_key').notNull().default('main'),
+  status: text('status').notNull().default('pending'),
+  inputPayload: jsonb('input_payload').notNull().default(sql`'{}'::jsonb`),
+  output: jsonb('output').notNull().default(sql`'{}'::jsonb`),
+  statePatch: jsonb('state_patch').notNull().default(sql`'{}'::jsonb`),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: jsonb('last_error'),
+  startedAt: timestamp('started_at', { withTimezone: false }),
+  completedAt: timestamp('completed_at', { withTimezone: false }),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  taskResultPk: primaryKey({
+    columns: [table.runId, table.taskKey, table.taskInstanceKey],
+    name: 'workflow_task_results_pk',
+  }),
+  workspaceIdIdx: index('workflow_task_results_workspace_id_idx').on(table.workspaceId),
+  workflowDefinitionIdIdx: index('workflow_task_results_workflow_definition_id_idx').on(table.workflowDefinitionId),
+  statusIdx: index('workflow_task_results_status_idx').on(table.status),
+  taskKeyIdx: index('workflow_task_results_task_key_idx').on(table.taskKey),
+}));
+
 // BR-04: Extended business objects
 
 export const solutions = pgTable('solutions', {
@@ -976,3 +1030,5 @@ export type AgentDefinitionRow = typeof agentDefinitions.$inferSelect;
 export type EntityLinkRow = typeof entityLinks.$inferSelect;
 export type ExecutionRunRow = typeof executionRuns.$inferSelect;
 export type ExecutionEventRow = typeof executionEvents.$inferSelect;
+export type WorkflowRunStateRow = typeof workflowRunState.$inferSelect;
+export type WorkflowTaskResultRow = typeof workflowTaskResults.$inferSelect;
