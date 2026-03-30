@@ -382,7 +382,10 @@ export interface OrganizationBatchCreateJobData {
 
 export interface MatrixGenerateJobData {
   folderId: string;
-  organizationId: string;
+  input?: string;
+  organizationId?: string;
+  orgIds?: string[];
+  matrixSource?: 'organization' | 'prompt' | 'default';
   model?: string;
   initiatedByUserId?: string;
   locale?: string;
@@ -2486,7 +2489,11 @@ export class QueueManager {
       workflow.agentDefinitionId ?? null,
       'organization_batch_create',
     );
-    const promptTemplate = promptOverride.promptTemplate ?? DEFAULT_ORGANIZATION_BATCH_PROMPT_TEMPLATE;
+    const promptTemplate =
+      typeof promptOverride.promptTemplate === 'string' &&
+      promptOverride.promptTemplate.trim().length > 0
+        ? promptOverride.promptTemplate
+        : DEFAULT_ORGANIZATION_BATCH_PROMPT_TEMPLATE;
     const prompt = promptTemplate
       .replace('{{user_input}}', input)
       .replace('{{existing_organizations}}', existingOrganizationsForPrompt || '[]');
@@ -2615,29 +2622,84 @@ export class QueueManager {
   }
 
   private async processMatrixGenerate(data: MatrixGenerateJobData, signal?: AbortSignal): Promise<WorkflowTaskCompletion | void> {
-    const { folderId, organizationId, model, initiatedByUserId, locale } = data;
+    const { folderId, input, organizationId, orgIds, model, initiatedByUserId, locale } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
     const [folder] = await db
-      .select()
+      .select({
+        id: folders.id,
+        workspaceId: folders.workspaceId,
+        name: folders.name,
+        description: folders.description,
+        organizationId: folders.organizationId,
+      })
       .from(folders)
       .where(eq(folders.id, folderId))
       .limit(1);
     if (!folder) throw new Error('Folder not found for matrix generation');
+    const runtimeState = workflow ? await this.getWorkflowRunStateSnapshot(workflow.workflowRunId) : null;
+    const currentState = runtimeState?.state ?? {};
+    const orgContextState = isRecord(currentState.orgContext) ? currentState.orgContext : {};
+    const inputsState = isRecord(currentState.inputs) ? currentState.inputs : {};
+    const effectiveOrgIdsFromState = readStringArray(orgContextState.effectiveOrgIds);
+    const selectedOrgIdsFromState = readStringArray(orgContextState.selectedOrgIds);
+    const createdOrgIdsFromState = readStringArray(orgContextState.createdOrgIds);
+    const requestedInputFromState =
+      typeof inputsState.input === 'string' && inputsState.input.trim().length > 0
+        ? inputsState.input.trim()
+        : '';
+    const resolvedOrgIds =
+      orgIds && orgIds.length > 0
+        ? orgIds
+        : effectiveOrgIdsFromState.length > 0
+          ? effectiveOrgIdsFromState
+          : Array.from(new Set([...selectedOrgIdsFromState, ...createdOrgIdsFromState]));
+    const resolvedOrganizationId =
+      organizationId ??
+      folder.organizationId ??
+      (resolvedOrgIds.length === 1 ? resolvedOrgIds[0] : undefined);
 
-    const [organization] = await db
-      .select()
-      .from(organizations)
-      .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, folder.workspaceId)))
-      .limit(1);
-    if (!organization) throw new Error('Organization not found for matrix generation');
+    const organizationRows =
+      resolvedOrgIds.length > 0
+        ? await db
+            .select({ id: organizations.id, name: organizations.name, data: organizations.data })
+            .from(organizations)
+            .where(and(
+              eq(organizations.workspaceId, folder.workspaceId),
+              sql`${organizations.id} = ANY(ARRAY[${sql.join(resolvedOrgIds.map((id) => sql`${id}`), sql`, `)}]::text[])`,
+            ))
+        : [];
+    let selectedOrganization =
+      organizationRows.find((organization) => organization.id === resolvedOrganizationId) ?? null;
+    if (!selectedOrganization && resolvedOrganizationId) {
+      const [organization] = await db
+        .select({ id: organizations.id, name: organizations.name, data: organizations.data })
+        .from(organizations)
+        .where(and(eq(organizations.id, resolvedOrganizationId), eq(organizations.workspaceId, folder.workspaceId)))
+        .limit(1);
+      selectedOrganization = organization ?? null;
+    }
 
     const aiSettings = await settingsService.getAISettings();
     const selectedModel = model || aiSettings.defaultModel;
-
-    const orgData = parseOrgData(organization.data);
-    const organizationInfo = JSON.stringify(
-      {
+    const folderName =
+      typeof folder.name === 'string' &&
+      folder.name.trim() &&
+      folder.name.trim() !== 'Brouillon' &&
+      !folder.name.startsWith('Génération -')
+        ? folder.name.trim()
+        : '';
+    const contextName = folderName || selectedOrganization?.name || 'Dossier';
+    const organizationContextRows =
+      organizationRows.length > 0
+        ? organizationRows
+        : selectedOrganization
+          ? [selectedOrganization]
+          : [];
+    const organizationContext = organizationContextRows.map((organization) => {
+      const orgData = parseOrgData(organization.data);
+      return {
+        id: organization.id,
         name: organization.name,
         industry: orgData.industry,
         size: orgData.size,
@@ -2647,9 +2709,20 @@ export class QueueManager {
         challenges: orgData.challenges,
         objectives: orgData.objectives,
         technologies: orgData.technologies,
+      };
+    });
+    const contextInfo = JSON.stringify(
+      {
+        folder: {
+          id: folder.id,
+          name: folderName || null,
+          description: folder.description || null,
+        },
+        requestedInput: input || requestedInputFromState || folder.description || folderName || null,
+        selectedOrganizations: organizationContext,
       },
       null,
-      2
+      2,
     );
 
     const streamId = `matrix_${folderId}`;
@@ -2661,8 +2734,8 @@ export class QueueManager {
     );
     const baseMatrix = await this.resolveBaseMatrixFromAgent(folder.workspaceId, matrixAgentId);
     const template = await generateOrganizationMatrixTemplate(
-      organization.name,
-      organizationInfo,
+      contextName,
+      contextInfo,
       baseMatrix,
       selectedModel,
       signal,
@@ -2671,28 +2744,14 @@ export class QueueManager {
     );
     const generatedMatrix = mergeOrganizationMatrixTemplate(baseMatrix, template);
 
-    const nextOrgData = {
-      ...orgData,
-      matrixTemplate: generatedMatrix,
-      matrixTemplateMeta: {
-        generatedAt: new Date().toISOString(),
-        model: selectedModel,
-        promptId: matrixPromptOverride.promptId,
-        version: 1,
-      },
-    };
-
-    await db
-      .update(organizations)
-      .set({ data: nextOrgData, updatedAt: new Date() })
-      .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, folder.workspaceId)));
-
     await db
       .update(folders)
-      .set({ matrixConfig: JSON.stringify(generatedMatrix), organizationId })
+      .set({
+        matrixConfig: JSON.stringify(generatedMatrix),
+        organizationId: resolvedOrgIds.length === 1 ? (resolvedOrganizationId ?? null) : null,
+      })
       .where(and(eq(folders.id, folderId), eq(folders.workspaceId, folder.workspaceId)));
 
-    await this.notifyOrganizationEvent(organizationId);
     await this.notifyFolderEvent(folderId);
     await this.createAutoGenerationFieldComments({
       workspaceId: folder.workspaceId,
@@ -2702,20 +2761,18 @@ export class QueueManager {
       createdBy: initiatedByUserId,
       locale
     });
-    await this.createAutoGenerationFieldComments({
-      workspaceId: folder.workspaceId,
-      contextType: 'organization',
-      contextId: organizationId,
-      sectionKeys: ['matrixTemplate'],
-      createdBy: initiatedByUserId,
-      locale
-    });
 
     return {
       output: {
         folderId,
-        organizationId,
+        organizationId: resolvedOrganizationId ?? null,
+        effectiveOrgIds: resolvedOrgIds,
         generated: true,
+      },
+      statePatch: {
+        orgContext: {
+          effectiveOrgIds: resolvedOrgIds,
+        },
       },
     };
   }
