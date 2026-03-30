@@ -2078,6 +2078,7 @@ export class QueueManager {
 
     const isRetryableInitiativeError = (err: unknown): boolean => {
       const msg = err instanceof Error ? err.message : String(err);
+      const lowerMsg = msg.toLowerCase();
       // JSON/format issues (LLM returned non-JSON or concatenated junk)
       if (msg.includes('Erreur lors du parsing') || msg.includes('Invalid JSON') || msg.includes('Unexpected non-whitespace character') || msg.includes('No JSON object boundaries')) {
         return true;
@@ -2087,10 +2088,36 @@ export class QueueManager {
         return true;
       }
       // Transient network/OpenAI-ish issues (best-effort)
-      if (msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.includes('ECONNRESET') || msg.includes('ETIMEDOUT') || msg.includes('ENOTFOUND')) {
+      if (
+        msg.includes('429') ||
+        lowerMsg.includes('rate limit') ||
+        msg.includes('ECONNRESET') ||
+        msg.includes('ETIMEDOUT') ||
+        msg.includes('ENOTFOUND')
+      ) {
         return true;
       }
       return false;
+    };
+
+    const isRetryableWorkflowError = (err: unknown): boolean => {
+      if (isRetryableInitiativeError(err)) {
+        return true;
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      const lowerMsg = msg.toLowerCase();
+      return (
+        lowerMsg.includes('terminated') ||
+        lowerMsg.includes('stream aborted') ||
+        lowerMsg.includes('timed out') ||
+        lowerMsg.includes('timeout') ||
+        lowerMsg.includes('temporarily unavailable') ||
+        lowerMsg.includes('upstream') ||
+        lowerMsg.includes('overloaded') ||
+        lowerMsg.includes('econnreset') ||
+        lowerMsg.includes('etimedout') ||
+        lowerMsg.includes('enotfound')
+      );
     };
 
     try {
@@ -2187,15 +2214,31 @@ export class QueueManager {
     } catch (error) {
       console.error(`❌ Job ${jobId} failed:`, error);
 
-      // Retry logic (bounded) for use case generation jobs only.
+      // Retry logic (bounded) for workflow jobs on transient/provider failures.
       // IMPORTANT: never retry on AbortError (user/admin cancel).
-      if ((jobType === 'initiative_list' || jobType === 'initiative_detail') && retryMax > 0 && retryAttempt < retryMax && !isAbort(error) && isRetryableInitiativeError(error)) {
+      if (workflow && retryMax > 0 && retryAttempt < retryMax && !isAbort(error) && isRetryableWorkflowError(error)) {
         const nextAttempt = retryAttempt + 1;
         const nextData =
           jobData && typeof jobData === 'object'
             ? { ...(jobData as Record<string, unknown>), _retry: { attempt: nextAttempt, maxRetries: retryMax } }
             : { _retry: { attempt: nextAttempt, maxRetries: retryMax } };
         const msg = error instanceof Error ? error.message : 'Unknown error';
+        await this.upsertWorkflowTaskResult({
+          workflow,
+          workspaceId,
+          taskInstanceKey: workflowTaskInstanceKey,
+          status: 'pending',
+          inputPayload: nextData,
+          output: {},
+          statePatch: {},
+          attempts: retryAttempt + 1,
+          lastError: {
+            name: error instanceof Error ? error.name : 'Error',
+            message: msg,
+          },
+          startedAt: null,
+          completedAt: null,
+        });
         await db.run(sql`
           UPDATE job_queue
           SET status = 'pending',
@@ -2510,7 +2553,7 @@ export class QueueManager {
       promptId: promptOverride.promptId,
       streamId: `folder_${folderId}`,
       signal,
-      ...getReasoningParamsForModel(selectedModel, 'high', 'detailed'),
+      ...getReasoningParamsForModel(selectedModel, 'medium', 'concise'),
     });
 
     const parsed = parseJsonLenient<OrganizationBatchResult>(content);
