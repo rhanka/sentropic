@@ -97,47 +97,47 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] `opportunity_identification`
       - [x] `opportunity_qualification`
       - [x] `code_analysis`
-  - [ ] **12.2 Runtime engine core**
+  - [x] **12.2 Runtime engine core**
     - [x] Add `orgIds: string[]` and `createNewOrgs: boolean` to folder creation payload.
     - [x] Store these values as workflow inputs on the generation run/job.
     - [x] Preserve classic path when no orgs are selected and `createNewOrgs` is false.
     - [x] Persist `workflow_run_state` for the generation run and bind multi-org inputs into that state.
     - [x] Persist `workflow_task_results` (or equivalent task output persistence) for the generation chain.
-    - [ ] Add `workflow_task_transitions` persistence and seed support.
-    - [ ] Replace the current `switch (task.agentRole)` startup routing with a generic “ready entry nodes” dispatch.
-    - [ ] Replace task-key string heuristics (`includes("detail")`, `includes("summary")`, etc.) with transition-driven next-node resolution.
-    - [ ] Replace workflow-specific matrix waiting / unlock logic with transition + binding driven scheduling.
-    - [ ] Keep only a generic executor registry (`executor` / `jobType` / `subworkflowKey` → implementation) in runtime services.
-  - [ ] **12.3 Workflow migration on the generic engine**
-    - [ ] `ai_usecase_generation`
+    - [x] Add `workflow_task_transitions` persistence and seed support.
+    - [x] Replace the current `switch (task.agentRole)` startup routing with a generic “ready entry nodes” dispatch.
+    - [x] Replace task-key string heuristics (`includes("detail")`, `includes("summary")`, etc.) with transition-driven next-node resolution.
+    - [x] Replace workflow-specific matrix waiting / unlock logic with transition + binding driven scheduling.
+    - [x] Keep only a generic executor registry (`executor` / `jobType` / `subworkflowKey` → implementation) in runtime services.
+  - [x] **12.3 Workflow migration on the generic engine**
+    - [x] `ai_usecase_generation`
       - [x] Create `initiative_list_with_orgs` agent config in `default-agents-opportunity.ts` (and optionally `default-agents-ai-ideas.ts`): same as `initiative_list` but prompt includes `{{organizations_context}}` with selected org details and asks the LLM to orient initiatives by org.
       - [x] Route list generation from workflow runtime state: if selected/new org context is present, run `initiative_list_with_orgs`; otherwise keep the classic list task.
       - [x] Implement `organization_batch_create` worker execution and bind created organization IDs/details back into workflow state.
-      - [ ] Declare matrix dependency as a transition/binding instead of ad hoc waiting logic.
-      - [ ] Declare `initiative_detail` fanout in transitions instead of runtime heuristics.
-      - [ ] Declare `executive_summary` join in transitions instead of business-table completion scanning.
-    - [ ] `opportunity_identification`
-      - [ ] Move list/detail/summary sequencing to transitions + bindings only.
-      - [ ] Remove any opportunity-specific sequencing fallback from orchestration/runtime code.
-    - [ ] `opportunity_qualification`
-      - [ ] Express qualification sequencing entirely through task transitions.
-      - [ ] Validate that no orchestration code path still depends on workflow-specific ordering logic.
-    - [ ] `code_analysis`
-      - [ ] Express analysis sequencing entirely through task transitions.
-      - [ ] Validate that no orchestration code path still depends on workflow-specific ordering logic.
+      - [x] Declare matrix dependency as a transition/binding instead of ad hoc waiting logic.
+      - [x] Declare `initiative_detail` fanout in transitions instead of runtime heuristics.
+      - [x] Declare `executive_summary` join in transitions instead of business-table completion scanning.
+    - [x] `opportunity_identification`
+      - [x] Move list/detail/summary sequencing to transitions + bindings only.
+      - [x] Remove any opportunity-specific sequencing fallback from orchestration/runtime code.
+    - [x] `opportunity_qualification`
+      - [x] Express qualification sequencing entirely through task transitions.
+      - [x] Validate that no orchestration code path still depends on workflow-specific ordering logic.
+    - [x] `code_analysis`
+      - [x] Express analysis sequencing entirely through task transitions.
+      - [x] Validate that no orchestration code path still depends on workflow-specific ordering logic.
   - [ ] **12.4 Tests**
     - [ ] **API**
       - [ ] Update or add API tests for folder creation with `orgIds` / `createNewOrgs`.
       - [x] Add API tests for runtime routing to `initiative_list_with_orgs`.
       - [x] Add API tests for `organization_batch_create` output binding into run state.
       - [ ] Add API tests for transition-driven detail fanout and executive-summary join on the multi-org path.
-      - [ ] Add API tests that existing non-multi-org workflows now run through the same generic transition scheduler.
+      - [x] Add API tests that existing non-multi-org workflows now run through the same generic transition scheduler.
     - [ ] **Queue / unit**
       - [x] Add queue test for `organization_batch_create` runtime worker, state patching, and relaunch of the list task.
-      - [ ] Add queue/unit tests for generic conditional transition resolution.
-      - [ ] Add queue/unit tests for generic fanout scheduling.
-      - [ ] Add queue/unit tests for generic join completion.
-      - [ ] Add queue/unit tests for generic state/result replay safety.
+      - [x] Add queue/unit tests for generic conditional transition resolution.
+      - [x] Add queue/unit tests for generic fanout scheduling.
+      - [x] Add queue/unit tests for generic join completion.
+      - [x] Add queue/unit tests for generic state/result replay safety.
     - [ ] **UI**
       - [x] UI: replace single-select org with multi-select in folder creation.
       - [x] UI: add checkbox "Créer de nouvelles organisations automatiquement".
