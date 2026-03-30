@@ -173,6 +173,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [x] Dev live-debug harness stabilized on root `ENV=dev` for Lot 13/UAT repros (`make exec-playwright-dev`, `make record-dev-playwright-auth`, helper endpoints, Maildev fallback)
+  - [x] Follow-up deferred to BR-22: data-specific freeze on initiative `cc884370-765c-40f3-a754-ceaf9a05da04` when rendering/editing `constraints`; investigate post-merge in isolated mini-branch (suspected rich markdown list / TipTap `forceList` loop)
   - [ ] Lot gate:
     - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
@@ -236,3 +237,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
 
 - Opportunity qualification workflow, dynamic folder menu, templated folder creation, multi-workflow folders.
 - Gate advance UI (BUG-D3), navigation to proposals (BUG-D5).
+
+## Deferred to BR-22
+
+- Rich markdown list editor stabilization for initiative `constraints`: freeze reproduced on `cc884370-765c-40f3-a754-ceaf9a05da04`, likely around `TemplateRenderer` / `EditableInput` / `TipTap` list forcing and markdown roundtrip on rich list items.

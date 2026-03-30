@@ -1,6 +1,6 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-03-12 — BR-04 structural branch in progress
+Status: Updated 2026-03-29 — BR-04 structural branch in progress
 Previous window (2026-02-23 → 2026-03-08) closed. New timeline driven by BR-04 scope.
 
 ## 1) Current state
@@ -18,7 +18,7 @@ Previous window (2026-02-23 → 2026-03-08) closed. New timeline driven by BR-04
 
 **Pending branches (blocked or dependent on BR-04):**
 - BR-06 through BR-12 — not started, pending BR-04 completion or independent scheduling.
-- BR-14, BR-16, BR-17 — new branches identified during BR-04 Lot 0 cross-cutting analysis (2026-03-12).
+- BR-14, BR-16, BR-17, BR-20, BR-21, BR-22 — identified during BR-04 scope expansion and follow-up UAT/debug tracks.
 
 ## 2) BR-04 as structural branch
 
@@ -57,6 +57,9 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-17 | `feat/rag-documents` | plan | BR-16 (optional), BR-08 (Cohere embeddings) | none |
 | BR-18 | `feat/sortable-list-views` | Sortable columns for all list views (folders, initiatives, workspaces) | plan | none | none |
 | BR-19 | `feat/agent-sandbox-skills` | V8 sandbox for tool execution + skill catalog replacing hardcoded tool dispatch | plan | BR-04 | **high** (replaces tool dispatch in chat-service, queue-manager, ChatPanel tool toggles) |
+| BR-20 | `refacto/entity-page-neutral-config` | plan | BR-04 | **high** (follow-up: neutral entity route + config-driven view templates) |
+| BR-21 | `feat/cv-transpose-profiles` | plan | BR-04 | medium (depends on TemplateRenderer/proposals from BR-04B) |
+| BR-22 | `fix/rich-markdown-list-stabilization` | plan | BR-04 | medium (post-merge stabilization of TemplateRenderer/TipTap rich list editing) |
 
 ## 4) Dependency graph
 
@@ -82,6 +85,9 @@ graph TD
   BR17[BR-17 RAG documents]
   BR18[BR-18 sortable list views]
   BR19[BR-19 agent sandbox + skills]
+  BR20[BR-20 entity/config refactor]
+  BR21[BR-21 cv transpose + profiles]
+  BR22[BR-22 rich markdown list stabilization]
 
   BR00 --> BR01
   BR00 --> BR02
@@ -113,13 +119,17 @@ graph TD
   BR04 -.->|high| BR19
   BR19 --> BR15
   BR19 -.->|skills replace tools| BR10
+  BR04 --> BR20
+  BR04 --> BR21
+  BR04 --> BR22
 ```
 
 ## 5) Scheduling post-BR-04
 
 **Wave A** (parallel to BR-04): BR-06 (Chrome upstream) + BR-08 (Claude/Mistral/Cohere) + BR-09 (SSO Google) + BR-14 (chat modularization) + BR-16 (document connectors)
+**Wave A2** (right after BR-04 merge): BR-20 (entity/config refactor follow-up) + BR-22 (rich markdown list stabilization hotfix)
 **Wave B** (after BR-04 + partial Wave A): BR-07 (UI npm, after BR-14) + BR-11 (Chrome multitab, after BR-06+BR-08) + BR-17 (RAG, after BR-08, optional BR-16)
-**Wave C** (after BR-04 + BR-08): BR-10 (VSCode v2)
+**Wave C** (after BR-04 + BR-08): BR-10 (VSCode v2) + BR-21 (CV transpose & profiles, if prioritized after BR-04B merge)
 **Wave D** (after Wave B/C): BR-12 (CI publish, after BR-05+BR-06+BR-07+BR-13)
 **Wave E** (after BR-04): BR-19 (Agent sandbox + skill catalog — structural, replaces tool dispatch layer). Then BR-15 (spectral site tools — registers generated tools as skills in BR-19 catalog)
 
