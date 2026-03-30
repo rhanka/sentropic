@@ -419,7 +419,7 @@ describe('Use Cases Generate - Matrix Mode', () => {
     expect(typeof agentMap?.generation_executive_summary).toBe('string');
   });
 
-  it('falls back to matrix_mode=default when explicit generate is sent without organization', async () => {
+  it('accepts explicit matrix_mode=generate without organization and enqueues an ad hoc matrix job', async () => {
     const response = await authenticatedRequest(
       app,
       'POST',
@@ -433,8 +433,27 @@ describe('Use Cases Generate - Matrix Mode', () => {
 
     expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.matrix_mode).toBe('default');
-    expect(data.matrixJobId).toBeUndefined();
+    expect(data.matrix_mode).toBe('generate');
+    expect(data.matrixJobId).toBeDefined();
+    expect(data.jobId).toBeDefined();
+
+    const jobs = await db
+      .select()
+      .from(jobQueue)
+      .where(eq(jobQueue.workspaceId, user.workspaceId));
+    const initiativeListJob = jobs.find((job) => job.id === data.jobId);
+    const matrixJob = jobs.find((job) => job.id === data.matrixJobId);
+    expect(initiativeListJob?.type).toBe('initiative_list');
+    expect(matrixJob?.type).toBe('matrix_generate');
+
+    const [folder] = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, data.folder_id), eq(folders.workspaceId, user.workspaceId)))
+      .limit(1);
+    expect(folder).toBeDefined();
+    expect(folder?.organizationId).toBeNull();
+    expect(folder?.matrixConfig).toBeNull();
   });
 
   it('blocks usecase detail when matrix_generate failed for the folder (strict policy)', async () => {

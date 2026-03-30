@@ -13,7 +13,7 @@ import { defaultMatrixConfig } from '../../config/default-matrix';
 // default-prompts removed (BR-04); prompts now in split agent files + default-chat-system
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
-import { todoOrchestrationService } from '../../services/todo-orchestration';
+import { todoOrchestrationService, type MatrixSource } from '../../services/todo-orchestration';
 import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
@@ -647,8 +647,27 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
       acceptLanguageHeader: c.req.header('accept-language')
     });
     const { input, folder_id, initiative_count, organization_id, matrix_mode, model, org_ids, create_new_orgs } = c.req.valid('json');
-    const organizationId = organization_id;
+    const resolvedOrgIds = Array.from(
+      new Set(
+        (org_ids ?? []).filter(
+          (orgId): orgId is string => typeof orgId === 'string' && orgId.trim().length > 0,
+        ),
+      ),
+    );
+    const organizationId =
+      organization_id ?? (resolvedOrgIds.length === 1 ? resolvedOrgIds[0] : undefined);
     const isExplicitDefaultMatrixMode = matrix_mode === 'default';
+
+    if (resolvedOrgIds.length > 0) {
+      const existingOrganizations = await db
+        .select({ id: organizations.id })
+        .from(organizations)
+        .where(eq(organizations.workspaceId, workspaceId));
+      const existingOrganizationIds = new Set(existingOrganizations.map((organization) => organization.id));
+      if (!resolvedOrgIds.every((orgId) => existingOrganizationIds.has(orgId))) {
+        return c.json({ message: 'Not found' }, 404);
+      }
+    }
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings({ userId });
@@ -666,19 +685,22 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
     }
 
     const resolvedMatrixMode: MatrixMode = (() => {
-      if (!organizationId) return 'default';
       if (matrix_mode) return matrix_mode;
+      if (!organizationId) return 'default';
       return organizationMatrixTemplate ? 'organization' : 'generate';
     })();
+    const resolvedMatrixSource: MatrixSource =
+      resolvedMatrixMode === 'organization'
+        ? 'organization'
+        : resolvedMatrixMode === 'generate'
+          ? 'prompt'
+          : 'default';
 
     if (resolvedMatrixMode === 'organization' && !organizationId) {
       return c.json({ message: 'matrix_mode=organization requires organization_id' }, 400);
     }
     if (resolvedMatrixMode === 'organization' && !organizationMatrixTemplate) {
       return c.json({ message: 'Organization matrix template not found' }, 400);
-    }
-    if (resolvedMatrixMode === 'generate' && !organizationId) {
-      return c.json({ message: 'matrix_mode=generate requires organization_id' }, 400);
     }
     
     let folderId: string | undefined;
@@ -693,6 +715,9 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
         .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)))
         .limit(1);
       if (!folder) return c.json({ message: 'Not found' }, 404);
+      const hasExplicitOrgSelection = organization_id !== undefined || org_ids !== undefined;
+      const requestedFolderOrganizationId =
+        organizationId ?? (resolvedOrgIds.length === 1 ? resolvedOrgIds[0] : null);
 
       if (organizationId) {
         // Already validated above; keep defensive check for maintainability.
@@ -706,7 +731,7 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
           status: 'generating',
           // Garder la description synchronisée avec l'input (source de vérité côté UI pour /dossier/new)
           description: input,
-          organizationId: organizationId ?? folder.organizationId,
+          organizationId: hasExplicitOrgSelection ? requestedFolderOrganizationId : folder.organizationId,
           matrixConfig:
             resolvedMatrixMode === 'organization'
               ? JSON.stringify(organizationMatrixTemplate)
@@ -722,6 +747,8 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
       // Sinon, créer un nouveau dossier (comportement par défaut de /use-cases/generate)
       const folderName = `Génération - ${new Date().toLocaleDateString('fr-FR')}`;
       const folderDescription = `Dossier généré automatiquement pour: ${input}`;
+      const requestedFolderOrganizationId =
+        organizationId ?? (resolvedOrgIds.length === 1 ? resolvedOrgIds[0] : null);
       
       folderId = createId();
 
@@ -730,7 +757,7 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
         workspaceId,
         name: folderName,
         description: folderDescription,
-        organizationId: organizationId || null,
+        organizationId: requestedFolderOrganizationId,
         matrixConfig:
           resolvedMatrixMode === 'organization'
             ? JSON.stringify(organizationMatrixTemplate)
@@ -754,7 +781,8 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
         initiativeCount: initiative_count,
         locale: requestLocale,
         autoCreateOrganizations: create_new_orgs,
-        orgIds: org_ids,
+        matrixSource: resolvedMatrixSource,
+        orgIds: resolvedOrgIds,
       }
     );
 
