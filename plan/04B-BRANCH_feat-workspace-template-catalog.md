@@ -70,7 +70,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] ~~Added organizationIds/organizationName to InitiativeListItem interface + output schema.~~
   - [x] Reverted: removed organizationIds from outputSchema (breaks OpenAI strict mode). Proper fix deferred to BR-20 with `initiative_list_with_orgs` workflow branching approach.
 
-- [ ] **Lot 11 — Wire pages + chat tools + finish bug fixes**
+- [x] **Lot 11 — Wire pages + chat tools + finish bug fixes** *(implementation landed; validation consolidated in Lot 13)*
   - [x] Wire `/initiative/[id]/+page.svelte` to use TemplateRenderer.
   - [x] Wire `/organizations/[id]/+page.svelte` to use TemplateRenderer.
   - [x] Wire dashboard exec summary fields to use FieldCard (variant="bordered").
@@ -82,51 +82,21 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] Print layout: display:contents for CSS selectors, uniform margins, scores-summary via FieldCard.
   - [x] Dashboard print perf: viewTemplateCache store (dedup N→1 API calls), skip EditableInput when locked, CSS print fix for FieldCard in report-analyse.
   - [x] References: fix nested brackets regex, hide excerpts in print/locked mode.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-    - [ ] `make typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-    - [ ] `make lint-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-    - [ ] `make lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-    - [ ] **API tests**
-      - [ ] Existing (non-reg): `api/tests/api/initiatives.test.ts` — verify initiative CRUD still passes with schema changes (organizationIds, proposal rename)
-      - [ ] Existing (non-reg): `api/tests/api/initiatives-generate-matrix.test.ts` — verify matrix generation
-      - [ ] Existing (non-reg): `api/tests/api/chat-tools.test.ts` — verify existing chat tools, proposal rename
-      - [ ] Existing (non-reg): `api/tests/unit/context-initiative-detail-contract.test.ts` — verify context contract
-      - [ ] New: `api/tests/api/view-templates.test.ts` — CRUD, resolution by workspaceId+workspaceType+objectType, seed on workspace creation, copy/reset/delete
-      - [ ] New: `api/tests/unit/chat-service-document-generate.test.ts` — document_generate tool definition + handler
-      - [ ] New: `api/tests/unit/chat-service-batch-create-orgs.test.ts` — batch_create_organizations tool definition + handler
-      - [ ] Sub-lot gate: `make test-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-      - [ ] AI flaky tests (non-blocking): `make test-api-ai API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] Existing (non-reg): `ui/tests/stores/initiatives.test.ts` — verify store still works with new fields
-      - [ ] Existing (non-reg): `ui/tests/stores/organizations.test.ts` — verify store
-      - [ ] New: `ui/tests/stores/viewTemplateCache.test.ts` — resolveViewTemplate dedup, cache hit, clearViewTemplateCache
-      - [ ] Sub-lot gate: `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
-    - [ ] **E2E tests**
-      - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b`
-      - [ ] Existing (non-reg): `e2e/tests/05-usecase-detail.spec.ts` — initiative detail page renders via TemplateRenderer
-      - [ ] Existing (non-reg): `e2e/tests/01-organizations-detail.spec.ts` — org detail page renders via TemplateRenderer
-      - [ ] Existing (non-reg): `e2e/tests/02-organizations.spec.ts` — org list
-      - [ ] Existing (non-reg): `e2e/tests/03-dashboard.spec.ts` — dashboard with FieldCard exec summary, print annexes
-      - [ ] Existing (non-reg): `e2e/tests/06-settings.spec.ts` — config UX (copy/reset/delete) on templates/agents/workflows
-      - [ ] Sub-lot gate group 00-01-02: `make clean test-e2e API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b E2E_GROUP="00 01 02"`
-      - [ ] Sub-lot gate group 03-04-05: `make clean test-e2e API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b E2E_GROUP="03 04 05"`
-      - [ ] Sub-lot gate group 06+: `make clean test-e2e API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b E2E_GROUP="06"`
-      - [ ] AI flaky tests (non-blocking): `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b` and `03-chat.spec.ts`, document signatures
+  - [x] Validation checklists moved to Lot 13 (API/UI/E2E consolidation for BR-04B).
 
-- [ ] **Lot 12 — Multi-org folder creation: workflow input variables + UI multi-select**
+- [ ] **Lot 12 — Multi-org folder creation: workflow input variables + UI multi-select** *(partial: payload/context/UI landed, explicit list-task switch still open)*
   - [ ] **API: workflow input variables**
-    - [ ] Add `orgIds: string[]` and `createNewOrgs: boolean` to folder creation payload (in `api/src/routes/api/folders.ts` or wherever folder creation is handled)
-    - [ ] Store these as workflow input variables on the folder/job (pass to queue-manager)
+    - [x] Add `orgIds: string[]` and `createNewOrgs: boolean` to folder creation payload (in `api/src/routes/api/folders.ts` or wherever folder creation is handled)
+    - [x] Store these as workflow input variables on the folder/job (pass to queue-manager)
     - [ ] In `queue-manager.ts` dispatch logic: if `orgIds.length > 0 || createNewOrgs` → use `initiative_list_with_orgs` step, else → use `initiative_list` step
-    - [ ] Create `initiative_list_with_orgs` agent config in `default-agents-opportunity.ts` (and optionally `default-agents-ai-ideas.ts`): same as `initiative_list` but prompt includes `{{organizations_context}}` with selected org details, and asks LLM to orient initiatives by org
-    - [ ] If `createNewOrgs` is true, the workflow runs `create_organizations` step after `initiative_list_with_orgs` and before `initiative_detail`
-    - [ ] If `createNewOrgs` is false, skip `create_organizations` step
-  - [ ] **UI: multi-select orgs in folder creation**
-    - [ ] In the folder creation form (likely `ui/src/routes/home/+page.svelte` or a component), replace single-select org with multi-select
-    - [ ] Add checkbox "Créer de nouvelles organisations automatiquement" below the org selector
-    - [ ] Pass `{ orgIds, createNewOrgs }` in the folder creation API call
-    - [ ] If no orgs selected and createNewOrgs unchecked → classic workflow (no change)
+    - [x] Create `initiative_list_with_orgs` agent config in `default-agents-opportunity.ts` (and optionally `default-agents-ai-ideas.ts`): same as `initiative_list` but prompt includes `{{organizations_context}}` with selected org details, and asks LLM to orient initiatives by org
+    - [x] If `createNewOrgs` is true, the workflow runs `create_organizations` step after `initiative_list_with_orgs` and before `initiative_detail`
+    - [x] If `createNewOrgs` is false, skip `create_organizations` step
+  - [x] **UI: multi-select orgs in folder creation**
+    - [x] In the folder creation form (likely `ui/src/routes/home/+page.svelte` or a component), replace single-select org with multi-select
+    - [x] Add checkbox "Créer de nouvelles organisations automatiquement" below the org selector
+    - [x] Pass `{ orgIds, createNewOrgs }` in the folder creation API call
+    - [x] If no orgs selected and createNewOrgs unchecked → classic workflow (no change)
   - [ ] Lot gate:
     - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
@@ -174,15 +144,37 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [x] Dev live-debug harness stabilized on root `ENV=dev` for Lot 13/UAT repros (`make exec-playwright-dev`, `make record-dev-playwright-auth`, helper endpoints, Maildev fallback)
   - [x] Follow-up deferred to BR-22: data-specific freeze on initiative `cc884370-765c-40f3-a754-ceaf9a05da04` when rendering/editing `constraints`; investigate post-merge in isolated mini-branch (suspected rich markdown list / TipTap `forceList` loop)
-  - [ ] Lot gate:
+  - [ ] Lot gate *(consolidated BR-04B validation, including test checklists moved from Lot 11)*
     - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] **API tests**
-      - [ ] Sub-lot gate: `make test-api-smoke test-api-endpoints API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+      - [ ] Existing (non-reg): `api/tests/api/initiatives.test.ts` — verify initiative CRUD still passes with schema changes (organizationIds, proposal rename)
+      - [ ] Existing (non-reg): `api/tests/api/initiatives-generate-matrix.test.ts` — verify matrix generation
+      - [ ] Existing (non-reg): `api/tests/api/chat-tools.test.ts` — verify existing chat tools, proposal rename
+      - [ ] Existing (non-reg): `api/tests/unit/context-initiative-detail-contract.test.ts` — verify context contract
+      - [x] Existing branch work: `api/tests/api/view-templates.test.ts` — CRUD, resolution by workspaceId+workspaceType+objectType, seed on workspace creation, copy/reset/delete
+      - [x] Existing branch work: `api/tests/unit/chat-service-document-generate.test.ts` — document_generate tool definition + handler
+      - [x] Existing branch work: `api/tests/unit/chat-service-batch-create-orgs.test.ts` — batch_create_organizations tool definition + handler
+      - [ ] Sub-lot gate: `make test-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+      - [ ] AI flaky tests (non-blocking): `make test-api-ai API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] **UI tests**
+      - [ ] Existing (non-reg): `ui/tests/stores/initiatives.test.ts` — verify store still works with new fields
+      - [ ] Existing (non-reg): `ui/tests/stores/organizations.test.ts` — verify store
+      - [x] Existing branch work: `ui/tests/stores/viewTemplateCache.test.ts` — resolveViewTemplate dedup, cache hit, clearViewTemplateCache
       - [ ] Update `ui/tests/upstream/injected-script.test.ts` if TemplateRenderer API changed
       - [ ] Add tests for path-based getFieldValue, entity-loop rendering, printOnly gating
       - [ ] Sub-lot gate: `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
+    - [ ] **E2E tests**
+      - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b`
+      - [x] Existing (non-reg): `e2e/tests/05-usecase-detail.spec.ts` — initiative detail page renders via TemplateRenderer
+      - [ ] Existing (non-reg): `e2e/tests/01-organizations-detail.spec.ts` — org detail page renders via TemplateRenderer
+      - [ ] Existing (non-reg): `e2e/tests/02-organizations.spec.ts` — org list
+      - [x] Existing branch work: `e2e/tests/03-dashboard.spec.ts` — dashboard with FieldCard exec summary, print annexes
+      - [ ] Existing (non-reg): `e2e/tests/06-settings.spec.ts` — config UX (copy/reset/delete) on templates/agents/workflows
+      - [ ] Sub-lot gate group 00-01-02: `make clean test-e2e API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b E2E_GROUP="00 01 02"`
+      - [ ] Sub-lot gate group 03-04-05: `make clean test-e2e API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b E2E_GROUP="03 04 05"`
+      - [ ] Sub-lot gate group 06+: `make clean test-e2e API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b E2E_GROUP="06"`
+      - [ ] AI flaky tests (non-blocking): `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b` and `03-chat.spec.ts`, document signatures
 
 - [ ] **Lot N-2 — UAT**
   - [ ] Web app — current template-driven surfaces
