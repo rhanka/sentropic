@@ -11,6 +11,7 @@ import {
   todos,
   workflowDefinitionTasks,
   workflowDefinitions,
+  workflowRunState,
   workspaceMemberships,
   workspaces,
   workspaceTypeWorkflows,
@@ -229,6 +230,35 @@ interface ResolvedWorkflowTask {
   agentRole: string | null;
   agentPromptTemplate: string | null;
 }
+
+const MULTI_ORG_LIST_AGENT_ROLE = "initiative_list_with_orgs";
+
+const buildInitialGenerationWorkflowState = (
+  workflowKey: string,
+  input: StartInitiativeGenerationWorkflowInput,
+): Record<string, unknown> => ({
+  workflowKey,
+  inputs: {
+    folderId: input.folderId,
+    organizationId: input.organizationId ?? null,
+    matrixMode: input.matrixMode,
+    matrixSource: input.matrixSource ?? null,
+    input: input.input,
+    model: input.model,
+    initiativeCount: input.initiativeCount ?? null,
+    locale: input.locale,
+    autoCreateOrganizations: input.autoCreateOrganizations ?? false,
+    orgIds: input.orgIds ?? [],
+  },
+  orgContext: {
+    selectedOrgIds: input.orgIds ?? [],
+    createdOrgIds: [],
+    createdOrganizations: [],
+  },
+  generation: {
+    initiativeIds: [],
+  },
+});
 
 
 interface TaskBundle {
@@ -2073,6 +2103,25 @@ export class TodoOrchestrationService {
     return map;
   }
 
+  private async resolveAgentDefinitionIdByRole(
+    workspaceId: string,
+    role: string,
+  ): Promise<string | null> {
+    const rows = await db
+      .select({ id: agentDefinitions.id, config: agentDefinitions.config })
+      .from(agentDefinitions)
+      .where(eq(agentDefinitions.workspaceId, workspaceId));
+
+    for (const row of rows) {
+      const config = row.config as Record<string, unknown> | null;
+      if ((config?.role as string | undefined) === role) {
+        return row.id;
+      }
+    }
+
+    return null;
+  }
+
   /**
    * Resolve the correct workflow definition for the workspace type and ensure it exists.
    */
@@ -2173,6 +2222,20 @@ export class TodoOrchestrationService {
       createdAt: now,
     });
 
+    await db.insert(workflowRunState).values({
+      runId: workflowRunId,
+      workspaceId: actor.workspaceId,
+      workflowDefinitionId,
+      status: "in_progress",
+      state: buildInitialGenerationWorkflowState(workflowKey, input),
+      version: 1,
+      currentTaskKey: firstAgent?.taskKey ?? null,
+      currentTaskInstanceKey: "main",
+      checkpointedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
     return {
       workflowRunId,
       workflowDefinitionId,
@@ -2187,9 +2250,32 @@ export class TodoOrchestrationService {
   ): Promise<StartInitiativeGenerationWorkflowDispatchResult> {
     const workflowRuntime = await this.startInitiativeGenerationWorkflow(actor, input);
     const { resolvedTasks } = workflowRuntime;
+    const shouldUseMultiOrgListAgent =
+      (input.orgIds?.length ?? 0) > 0 || Boolean(input.autoCreateOrganizations);
+    let effectiveAgentMap = { ...workflowRuntime.agentMap };
+    const multiOrgListAgentId = shouldUseMultiOrgListAgent
+      ? await this.resolveAgentDefinitionIdByRole(actor.workspaceId, MULTI_ORG_LIST_AGENT_ROLE)
+      : null;
+
+    if (shouldUseMultiOrgListAgent && !multiOrgListAgentId) {
+      throw new TodoOrchestrationError(500, "Multi-org initiative list agent not found");
+    }
+
+    const listTask = resolvedTasks.find(
+      (task) =>
+        task.agentRole === "usecase_list_generation" ||
+        task.agentRole === "opportunity_list_generation",
+    );
+    if (multiOrgListAgentId && listTask) {
+      effectiveAgentMap = {
+        ...effectiveAgentMap,
+        [listTask.taskKey]: multiOrgListAgentId,
+      };
+    }
 
     // §7.4: dispatch queue jobs by iterating resolved tasks and matching agent config.role
     let matrixJobId: string | undefined;
+    let organizationBatchJobId: string | undefined;
     let jobId: string | undefined;
 
     for (const task of resolvedTasks) {
@@ -2197,7 +2283,7 @@ export class TodoOrchestrationService {
         case "organization_batch": {
           // Organization batch creation is only dispatched when autoCreateOrganizations is true (B)
           if (input.autoCreateOrganizations) {
-            await queueManager.addJob(
+            organizationBatchJobId = await queueManager.addJob(
               "organization_batch_create",
               {
                 folderId: input.folderId,
@@ -2210,7 +2296,7 @@ export class TodoOrchestrationService {
                   workflowDefinitionId: workflowRuntime.workflowDefinitionId,
                   taskKey: task.taskKey as GenerationWorkflowTaskKey,
                   agentDefinitionId: task.agentDefinitionId,
-                  agentMap: workflowRuntime.agentMap,
+                  agentMap: effectiveAgentMap,
                 },
               },
               { workspaceId: actor.workspaceId, maxRetries: 1 },
@@ -2249,7 +2335,12 @@ export class TodoOrchestrationService {
 
         case "usecase_list_generation":
         case "opportunity_list_generation": {
+          if (input.autoCreateOrganizations) {
+            break;
+          }
           // Initiative/opportunity list generation — the main entry point for the generation chain
+          const listTaskKey = task.taskKey as GenerationWorkflowTaskKey;
+          const listAgentDefinitionId = effectiveAgentMap[listTaskKey] ?? task.agentDefinitionId;
           jobId = await queueManager.addJob(
             "initiative_list",
             {
@@ -2265,9 +2356,9 @@ export class TodoOrchestrationService {
               workflow: {
                 workflowRunId: workflowRuntime.workflowRunId,
                 workflowDefinitionId: workflowRuntime.workflowDefinitionId,
-                taskKey: task.taskKey as GenerationWorkflowTaskKey,
-                agentDefinitionId: task.agentDefinitionId,
-                agentMap: workflowRuntime.agentMap,
+                taskKey: listTaskKey,
+                agentDefinitionId: listAgentDefinitionId,
+                agentMap: effectiveAgentMap,
               },
             },
             { workspaceId: actor.workspaceId, maxRetries: 1 },
@@ -2284,7 +2375,21 @@ export class TodoOrchestrationService {
 
     // Fallback: if no list generation task was found (should not happen with valid workflow),
     // enqueue with legacy task key to maintain backward compat
-    if (!jobId) {
+    if (!jobId && !input.autoCreateOrganizations) {
+      const fallbackTaskKey = (Object.keys(effectiveAgentMap).find(
+        (key) => key.includes("usecase_list") || key.includes("opportunity_list"),
+      ) ?? "generation_initiative_list") as GenerationWorkflowTaskKey;
+      const fallbackAgentDefinitionId =
+        multiOrgListAgentId ??
+        effectiveAgentMap[fallbackTaskKey] ??
+        workflowRuntime.agentMap["generation_initiative_list"] ??
+        null;
+      if (multiOrgListAgentId) {
+        effectiveAgentMap = {
+          ...effectiveAgentMap,
+          [fallbackTaskKey]: multiOrgListAgentId,
+        };
+      }
       jobId = await queueManager.addJob(
         "initiative_list",
         {
@@ -2300,20 +2405,25 @@ export class TodoOrchestrationService {
           workflow: {
             workflowRunId: workflowRuntime.workflowRunId,
             workflowDefinitionId: workflowRuntime.workflowDefinitionId,
-            taskKey: "generation_initiative_list",
-            agentDefinitionId: workflowRuntime.agentMap["generation_initiative_list"] ?? null,
-            agentMap: workflowRuntime.agentMap,
+            taskKey: fallbackTaskKey,
+            agentDefinitionId: fallbackAgentDefinitionId,
+            agentMap: effectiveAgentMap,
           },
         },
         { workspaceId: actor.workspaceId, maxRetries: 1 },
       );
     }
 
+    const resolvedJobId = jobId ?? organizationBatchJobId;
+    if (!resolvedJobId) {
+      throw new TodoOrchestrationError(500, "No generation job could be dispatched");
+    }
+
     return {
       workflowRunId: workflowRuntime.workflowRunId,
       workflowDefinitionId: workflowRuntime.workflowDefinitionId,
-      agentMap: workflowRuntime.agentMap,
-      jobId,
+      agentMap: effectiveAgentMap,
+      jobId: resolvedJobId,
       matrixJobId,
     };
   }
