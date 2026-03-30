@@ -747,6 +747,28 @@ export const workflowDefinitionTasks = pgTable('workflow_definition_tasks', {
   workspaceIdIdx: index('workflow_definition_tasks_workspace_id_idx').on(table.workspaceId),
 }));
 
+export const workflowTaskTransitions = pgTable('workflow_task_transitions', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  workflowDefinitionId: text('workflow_definition_id')
+    .notNull()
+    .references(() => workflowDefinitions.id, { onDelete: 'cascade' }),
+  fromTaskKey: text('from_task_key'),
+  toTaskKey: text('to_task_key'),
+  transitionType: text('transition_type').notNull().default('normal'),
+  condition: jsonb('condition').notNull().default(sql`'{}'::jsonb`),
+  metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  workflowIdIdx: index('workflow_task_transitions_workflow_definition_id_idx').on(table.workflowDefinitionId),
+  workspaceIdIdx: index('workflow_task_transitions_workspace_id_idx').on(table.workspaceId),
+  fromTaskKeyIdx: index('workflow_task_transitions_from_task_key_idx').on(table.workflowDefinitionId, table.fromTaskKey),
+  toTaskKeyIdx: index('workflow_task_transitions_to_task_key_idx').on(table.workflowDefinitionId, table.toTaskKey),
+}));
+
 export const guardrails = pgTable('guardrails', {
   id: text('id').primaryKey(),
   workspaceId: text('workspace_id')
@@ -1026,6 +1048,7 @@ export type TaskIoContractRow = typeof taskIoContracts.$inferSelect;
 export type GuardrailRow = typeof guardrails.$inferSelect;
 export type WorkflowDefinitionRow = typeof workflowDefinitions.$inferSelect;
 export type WorkflowDefinitionTaskRow = typeof workflowDefinitionTasks.$inferSelect;
+export type WorkflowTaskTransitionRow = typeof workflowTaskTransitions.$inferSelect;
 export type AgentDefinitionRow = typeof agentDefinitions.$inferSelect;
 export type EntityLinkRow = typeof entityLinks.$inferSelect;
 export type ExecutionRunRow = typeof executionRuns.$inferSelect;
