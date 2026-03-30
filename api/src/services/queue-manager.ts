@@ -1,6 +1,7 @@
 import { db, pool } from '../db/client';
 import { and, sql, eq, desc } from 'drizzle-orm';
 import { createId } from '../utils/id';
+import { SHARED_AGENTS } from '../config/default-agents-shared';
 import { enrichOrganization, type OrganizationData } from './context-organization';
 import {
   generateInitiativeList,
@@ -26,9 +27,13 @@ import {
   type JobQueueRow,
   contextDocuments,
   contextModificationHistory,
+  executionRuns,
   users,
+  workflowRunState,
+  workflowTaskResults,
   workspaceMemberships,
 } from '../db/schema';
+import { getReasoningParamsForModel } from './model-catalog';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
@@ -47,6 +52,7 @@ import { getNextSequence, writeStreamEvent } from './stream-service';
 import type { DocxEntityType, DocxTemplateId } from './docx-service';
 import { runDocxGenerationInWorker } from './docx-render-worker';
 import type { CommentContextType } from './context-comments';
+import { executeWithToolsStream } from './tools';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
 import type { ProviderId } from './provider-runtime';
 
@@ -74,6 +80,104 @@ function parseJsonField<T = unknown>(value: unknown): T | null {
     return null;
   }
 }
+
+function parseJsonLenient<T>(raw: string): T {
+  const cleaned = raw
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1)) as T;
+    }
+    throw new Error('Invalid JSON response');
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+}
+
+function deepMergeState(base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...base };
+  for (const [key, patchValue] of Object.entries(patch)) {
+    const currentValue = next[key];
+    if (isRecord(currentValue) && isRecord(patchValue)) {
+      next[key] = deepMergeState(currentValue, patchValue);
+      continue;
+    }
+    next[key] = patchValue;
+  }
+  return next;
+}
+
+type WorkflowTaskRuntimeStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+
+type WorkflowTaskCompletion = {
+  output?: Record<string, unknown>;
+  statePatch?: Record<string, unknown>;
+  currentTaskKey?: string | null;
+  currentTaskInstanceKey?: string | null;
+  runStatus?: WorkflowTaskRuntimeStatus;
+};
+
+type OrganizationBatchGeneratedOrganization = {
+  name: string;
+  sector: string;
+  description: string;
+  location: string;
+};
+
+type OrganizationBatchResult = {
+  organizations: OrganizationBatchGeneratedOrganization[];
+};
+
+const DEFAULT_ORGANIZATION_BATCH_PROMPT_TEMPLATE =
+  SHARED_AGENTS.find((agent) => agent.key === 'organization_batch_agent')?.config.promptTemplate ??
+  `Based on the user's request, generate a structured list of organisations to create in the workspace.
+
+User request: {{user_input}}
+
+Existing organisations in the workspace (DO NOT create duplicates):
+{{existing_organizations}}
+
+Return valid JSON only.`;
+
+const ORGANIZATION_BATCH_STRUCTURED_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    organizations: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string' },
+          sector: { type: 'string' },
+          description: { type: 'string' },
+          location: { type: 'string' },
+        },
+        required: ['name', 'sector', 'description', 'location'],
+      },
+    },
+  },
+  required: ['organizations'],
+};
 
 const GENERATION_WORKFLOW_TASK_KEYS = new Set<string>([
   'generation_create_organizations',
@@ -283,6 +387,15 @@ export interface OrganizationEnrichJobData {
   locale?: string;
 }
 
+export interface OrganizationBatchCreateJobData {
+  folderId: string;
+  input: string;
+  model?: string;
+  initiatedByUserId?: string;
+  locale?: string;
+  workflow?: GenerationWorkflowRuntimeContext;
+}
+
 export interface MatrixGenerateJobData {
   folderId: string;
   organizationId: string;
@@ -369,6 +482,7 @@ export interface DocxGenerateJobData {
 
 export type JobData =
   | OrganizationEnrichJobData
+  | OrganizationBatchCreateJobData
   | MatrixGenerateJobData
   | InitiativeListJobData
   | InitiativeDetailJobData
@@ -498,6 +612,259 @@ export class QueueManager {
     } finally {
       client.release();
     }
+  }
+
+  private getGenerationWorkflowContextForJobData(jobData: JobData): GenerationWorkflowRuntimeContext | null {
+    if (!jobData || typeof jobData !== 'object') return null;
+    return parseGenerationWorkflowRuntimeContext((jobData as { workflow?: unknown }).workflow);
+  }
+
+  private getWorkflowTaskInstanceKey(jobType: JobType, jobData: JobData): string {
+    if (jobType === 'initiative_detail') {
+      const initiativeId = (jobData as InitiativeDetailJobData | undefined)?.initiativeId;
+      if (typeof initiativeId === 'string' && initiativeId.trim()) {
+        return initiativeId;
+      }
+    }
+    return 'main';
+  }
+
+  private getJobAttempt(jobData: JobData): number {
+    const retry = isRecord((jobData as Record<string, unknown> | null)?._retry)
+      ? ((jobData as Record<string, unknown>)._retry as Record<string, unknown>)
+      : null;
+    const attempt = retry && typeof retry.attempt === 'number' ? retry.attempt : 0;
+    return Math.max(1, attempt + 1);
+  }
+
+  private async getWorkflowRunStateSnapshot(runId: string): Promise<{
+    status: string;
+    state: Record<string, unknown>;
+    version: number;
+    currentTaskKey: string | null;
+    currentTaskInstanceKey: string | null;
+  } | null> {
+    const [row] = await db
+      .select({
+        status: workflowRunState.status,
+        state: workflowRunState.state,
+        version: workflowRunState.version,
+        currentTaskKey: workflowRunState.currentTaskKey,
+        currentTaskInstanceKey: workflowRunState.currentTaskInstanceKey,
+      })
+      .from(workflowRunState)
+      .where(eq(workflowRunState.runId, runId))
+      .limit(1);
+
+    if (!row) return null;
+    return {
+      status: row.status,
+      state: isRecord(row.state) ? row.state : {},
+      version: row.version ?? 1,
+      currentTaskKey: row.currentTaskKey ?? null,
+      currentTaskInstanceKey: row.currentTaskInstanceKey ?? null,
+    };
+  }
+
+  private async markExecutionRunStatus(
+    runId: string,
+    status: 'in_progress' | 'completed' | 'failed',
+  ): Promise<void> {
+    const now = new Date();
+    await db
+      .update(executionRuns)
+      .set({
+        status,
+        completedAt: status === 'completed' || status === 'failed' ? now : null,
+        updatedAt: now,
+      })
+      .where(eq(executionRuns.id, runId));
+  }
+
+  private async mergeWorkflowRunState(params: {
+    runId: string;
+    status?: WorkflowTaskRuntimeStatus;
+    statePatch?: Record<string, unknown>;
+    currentTaskKey?: string | null;
+    currentTaskInstanceKey?: string | null;
+  }): Promise<void> {
+    const current = await this.getWorkflowRunStateSnapshot(params.runId);
+    if (!current) return;
+
+    const nextState = params.statePatch ? deepMergeState(current.state, params.statePatch) : current.state;
+    const now = new Date();
+
+    await db
+      .update(workflowRunState)
+      .set({
+        status: params.status ?? current.status,
+        state: nextState,
+        version: current.version + (params.statePatch ? 1 : 0),
+        currentTaskKey:
+          Object.prototype.hasOwnProperty.call(params, 'currentTaskKey')
+            ? (params.currentTaskKey ?? null)
+            : current.currentTaskKey,
+        currentTaskInstanceKey:
+          Object.prototype.hasOwnProperty.call(params, 'currentTaskInstanceKey')
+            ? (params.currentTaskInstanceKey ?? null)
+            : current.currentTaskInstanceKey,
+        checkpointedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(workflowRunState.runId, params.runId));
+  }
+
+  private async upsertWorkflowTaskResult(params: {
+    workflow: GenerationWorkflowRuntimeContext;
+    workspaceId: string;
+    taskInstanceKey: string;
+    status: WorkflowTaskRuntimeStatus;
+    inputPayload?: Record<string, unknown>;
+    output?: Record<string, unknown>;
+    statePatch?: Record<string, unknown>;
+    attempts?: number;
+    lastError?: Record<string, unknown> | null;
+    startedAt?: Date | null;
+    completedAt?: Date | null;
+  }): Promise<void> {
+    const now = new Date();
+    const insertValues = {
+      runId: params.workflow.workflowRunId,
+      workspaceId: params.workspaceId,
+      workflowDefinitionId: params.workflow.workflowDefinitionId,
+      taskKey: params.workflow.taskKey,
+      taskInstanceKey: params.taskInstanceKey,
+      status: params.status,
+      inputPayload: params.inputPayload ?? {},
+      output: params.output ?? {},
+      statePatch: params.statePatch ?? {},
+      attempts: params.attempts ?? 1,
+      lastError: params.lastError ?? null,
+      startedAt: params.startedAt ?? now,
+      completedAt: params.completedAt ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const updateSet = {
+      status: params.status,
+      inputPayload: params.inputPayload ?? {},
+      output: params.output ?? {},
+      statePatch: params.statePatch ?? {},
+      attempts: params.attempts ?? 1,
+      lastError: params.lastError ?? null,
+      ...(params.startedAt !== undefined ? { startedAt: params.startedAt } : {}),
+      ...(params.completedAt !== undefined ? { completedAt: params.completedAt } : {}),
+      updatedAt: now,
+    };
+    await db
+      .insert(workflowTaskResults)
+      .values(insertValues)
+      .onConflictDoUpdate({
+        target: [
+          workflowTaskResults.runId,
+          workflowTaskResults.taskKey,
+          workflowTaskResults.taskInstanceKey,
+        ],
+        set: updateSet,
+      });
+  }
+
+  private async markWorkflowTaskStarted(params: {
+    workflow: GenerationWorkflowRuntimeContext;
+    workspaceId: string;
+    taskInstanceKey: string;
+    jobData: JobData;
+  }): Promise<void> {
+    const startedAt = new Date();
+    await this.upsertWorkflowTaskResult({
+      workflow: params.workflow,
+      workspaceId: params.workspaceId,
+      taskInstanceKey: params.taskInstanceKey,
+      status: 'in_progress',
+      inputPayload: params.jobData as Record<string, unknown>,
+      output: {},
+      statePatch: {},
+      attempts: this.getJobAttempt(params.jobData),
+      lastError: null,
+      startedAt,
+      completedAt: null,
+    });
+    await this.mergeWorkflowRunState({
+      runId: params.workflow.workflowRunId,
+      status: 'in_progress',
+      currentTaskKey: params.workflow.taskKey,
+      currentTaskInstanceKey: params.taskInstanceKey,
+    });
+    await this.markExecutionRunStatus(params.workflow.workflowRunId, 'in_progress');
+  }
+
+  private async completeWorkflowTask(params: {
+    workflow: GenerationWorkflowRuntimeContext;
+    workspaceId: string;
+    taskInstanceKey: string;
+    jobData: JobData;
+    completion?: WorkflowTaskCompletion;
+  }): Promise<void> {
+    const completedAt = new Date();
+    const output = params.completion?.output ?? {};
+    const statePatch = params.completion?.statePatch ?? {};
+    await this.upsertWorkflowTaskResult({
+      workflow: params.workflow,
+      workspaceId: params.workspaceId,
+      taskInstanceKey: params.taskInstanceKey,
+      status: 'completed',
+      inputPayload: params.jobData as Record<string, unknown>,
+      output,
+      statePatch,
+      attempts: this.getJobAttempt(params.jobData),
+      lastError: null,
+      startedAt: undefined,
+      completedAt,
+    });
+    await this.mergeWorkflowRunState({
+      runId: params.workflow.workflowRunId,
+      status: params.completion?.runStatus ?? 'in_progress',
+      statePatch,
+      currentTaskKey: params.completion?.currentTaskKey,
+      currentTaskInstanceKey: params.completion?.currentTaskInstanceKey,
+    });
+    if (params.completion?.runStatus === 'completed') {
+      await this.markExecutionRunStatus(params.workflow.workflowRunId, 'completed');
+    }
+  }
+
+  private async failWorkflowTask(params: {
+    workflow: GenerationWorkflowRuntimeContext;
+    workspaceId: string;
+    taskInstanceKey: string;
+    jobData: JobData;
+    error: unknown;
+  }): Promise<void> {
+    const completedAt = new Date();
+    const errorPayload = {
+      name: params.error instanceof Error ? params.error.name : 'Error',
+      message: params.error instanceof Error ? params.error.message : String(params.error),
+    };
+    await this.upsertWorkflowTaskResult({
+      workflow: params.workflow,
+      workspaceId: params.workspaceId,
+      taskInstanceKey: params.taskInstanceKey,
+      status: 'failed',
+      inputPayload: params.jobData as Record<string, unknown>,
+      output: {},
+      statePatch: {},
+      attempts: this.getJobAttempt(params.jobData),
+      lastError: errorPayload,
+      startedAt: undefined,
+      completedAt,
+    });
+    await this.mergeWorkflowRunState({
+      runId: params.workflow.workflowRunId,
+      status: 'failed',
+      currentTaskKey: params.workflow.taskKey,
+      currentTaskInstanceKey: params.taskInstanceKey,
+    });
+    await this.markExecutionRunStatus(params.workflow.workflowRunId, 'failed');
   }
 
   private async resolveGenerationPromptOverride(
@@ -1114,7 +1481,10 @@ export class QueueManager {
   private async processJob(job: JobQueueRow): Promise<void> {
     const jobId = job.id;
     const jobType = job.type as JobType;
-    const jobData = JSON.parse(job.data) as unknown;
+    const jobData = JSON.parse(job.data) as JobData;
+    const workflow = this.getGenerationWorkflowContextForJobData(jobData);
+    const workflowTaskInstanceKey = this.getWorkflowTaskInstanceKey(jobType, jobData);
+    const workspaceId = job.workspaceId ?? ADMIN_WORKSPACE_ID;
 
     const getRetryMeta = (value: unknown): { attempt: number; maxRetries: number } => {
       if (!value || typeof value !== 'object') return { attempt: 0, maxRetries: 0 };
@@ -1175,42 +1545,68 @@ export class QueueManager {
       const controller = new AbortController();
       this.jobControllers.set(jobId, controller);
 
+      if (workflow) {
+        await this.markWorkflowTaskStarted({
+          workflow,
+          workspaceId,
+          taskInstanceKey: workflowTaskInstanceKey,
+          jobData,
+        });
+      }
+
       // Traiter selon le type
+      let workflowCompletion: WorkflowTaskCompletion | undefined;
       switch (jobType) {
         case 'organization_enrich':
-          await this.processOrganizationEnrich(jobData as unknown as OrganizationEnrichJobData, jobId, controller.signal);
+          await this.processOrganizationEnrich(jobData as OrganizationEnrichJobData, jobId, controller.signal);
+          break;
+        case 'organization_batch_create':
+          workflowCompletion = await this.processOrganizationBatchCreate(
+            jobData as OrganizationBatchCreateJobData,
+            controller.signal,
+          );
           break;
         case 'matrix_generate':
-          await this.processMatrixGenerate(jobData as unknown as MatrixGenerateJobData, controller.signal);
+          workflowCompletion = await this.processMatrixGenerate(jobData as MatrixGenerateJobData, controller.signal);
           break;
         case 'initiative_list':
-          await this.processInitiativeList(jobData as unknown as InitiativeListJobData, controller.signal);
+          workflowCompletion = await this.processInitiativeList(jobData as InitiativeListJobData, controller.signal);
           break;
         case 'initiative_detail':
-          await this.processInitiativeDetail(jobData as unknown as InitiativeDetailJobData, controller.signal);
+          workflowCompletion = await this.processInitiativeDetail(jobData as InitiativeDetailJobData, controller.signal);
           break;
         case 'executive_summary':
-          await this.processExecutiveSummary(jobData as unknown as ExecutiveSummaryJobData, controller.signal);
+          workflowCompletion = await this.processExecutiveSummary(jobData as ExecutiveSummaryJobData, controller.signal);
           break;
         case 'chat_message':
-          await this.processChatMessage(jobData as unknown as ChatMessageJobData, controller.signal);
+          await this.processChatMessage(jobData as ChatMessageJobData, controller.signal);
           break;
         case 'document_summary':
           await this.processDocumentSummary(
-            jobData as unknown as DocumentSummaryJobData,
+            jobData as DocumentSummaryJobData,
             jobId,
             controller.signal
           );
           break;
         case 'docx_generate':
           await this.processDocxGenerate(
-            jobData as unknown as DocxGenerateJobData,
+            jobData as DocxGenerateJobData,
             jobId,
             controller.signal
           );
           break;
         default:
           throw new Error(`Unknown job type: ${jobType}`);
+      }
+
+      if (workflow) {
+        await this.completeWorkflowTask({
+          workflow,
+          workspaceId,
+          taskInstanceKey: workflowTaskInstanceKey,
+          jobData,
+          completion: workflowCompletion,
+        });
       }
 
       // Marquer comme terminé
@@ -1246,6 +1642,16 @@ export class QueueManager {
         await this.notifyJobEvent(jobId);
         console.warn(`🔁 Retrying job ${jobId} (${jobType}) attempt ${nextAttempt}/${retryMax}`);
         return;
+      }
+
+      if (workflow) {
+        await this.failWorkflowTask({
+          workflow,
+          workspaceId,
+          taskInstanceKey: workflowTaskInstanceKey,
+          jobData,
+          error,
+        });
       }
 
       // Annulation utilisateur: pour le chat, on finalise avec le contenu partiel.
@@ -1460,7 +1866,239 @@ export class QueueManager {
     });
   }
 
-  private async processMatrixGenerate(data: MatrixGenerateJobData, signal?: AbortSignal): Promise<void> {
+  private async processOrganizationBatchCreate(
+    data: OrganizationBatchCreateJobData,
+    signal?: AbortSignal,
+  ): Promise<WorkflowTaskCompletion> {
+    const { folderId, input, model, initiatedByUserId, locale } = data;
+    const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
+    if (!workflow) {
+      throw new Error('Workflow runtime metadata is required for organization_batch_create jobs');
+    }
+
+    const [folder] = await db
+      .select({ id: folders.id, workspaceId: folders.workspaceId })
+      .from(folders)
+      .where(eq(folders.id, folderId))
+      .limit(1);
+    if (!folder) {
+      throw new Error('Folder not found for organization batch creation');
+    }
+
+    const runtimeState = await this.getWorkflowRunStateSnapshot(workflow.workflowRunId);
+    const currentState = runtimeState?.state ?? {};
+    const inputState = isRecord(currentState.inputs) ? currentState.inputs : {};
+    const orgContextState = isRecord(currentState.orgContext) ? currentState.orgContext : {};
+
+    const aiSettings = await settingsService.getAISettings();
+    const selectedModel =
+      (typeof model === 'string' && model.trim()) ? model : (
+        typeof inputState.model === 'string' && inputState.model.trim()
+          ? inputState.model
+          : aiSettings.defaultModel
+      );
+
+    const existingOrgRows = await db
+      .select({ id: organizations.id, name: organizations.name, data: organizations.data })
+      .from(organizations)
+      .where(eq(organizations.workspaceId, folder.workspaceId));
+
+    const existingOrganizationsForPrompt = JSON.stringify(
+      existingOrgRows.map((org) => {
+        const orgData = parseOrgData(org.data);
+        return {
+          id: org.id,
+          name: org.name,
+          industry: orgData.industry,
+          objectives: orgData.objectives,
+          location: typeof orgData.location === 'string' ? orgData.location : '',
+        };
+      }),
+      null,
+      2,
+    );
+
+    const promptOverride = await this.resolveGenerationPromptOverride(
+      folder.workspaceId,
+      workflow.agentDefinitionId ?? null,
+      'organization_batch_create',
+    );
+    const promptTemplate = promptOverride.promptTemplate ?? DEFAULT_ORGANIZATION_BATCH_PROMPT_TEMPLATE;
+    const prompt = promptTemplate
+      .replace('{{user_input}}', input)
+      .replace('{{existing_organizations}}', existingOrganizationsForPrompt || '[]');
+
+    const { content } = await executeWithToolsStream(prompt, {
+      model: selectedModel,
+      useWebSearch: true,
+      responseFormat: 'json_object',
+      structuredOutput: {
+        name: 'organization_batch_create',
+        strict: true,
+        schema: ORGANIZATION_BATCH_STRUCTURED_SCHEMA,
+      },
+      promptId: promptOverride.promptId,
+      streamId: `folder_${folderId}`,
+      signal,
+      ...getReasoningParamsForModel(selectedModel, 'high', 'detailed'),
+    });
+
+    const parsed = parseJsonLenient<OrganizationBatchResult>(content);
+    const generatedOrganizations = Array.isArray(parsed.organizations)
+      ? parsed.organizations
+          .filter((item): item is OrganizationBatchGeneratedOrganization => isRecord(item))
+          .map((item) => ({
+            name: String(item.name ?? '').trim(),
+            sector: String(item.sector ?? '').trim(),
+            description: String(item.description ?? '').trim(),
+            location: String(item.location ?? '').trim(),
+          }))
+          .filter((item) => item.name && item.sector && item.description && item.location)
+      : [];
+
+    const existingByName = new Map(
+      existingOrgRows.map((org) => [org.name.trim().toLocaleLowerCase('en-US'), org.id]),
+    );
+    const createdOrganizationsPayload: Array<{
+      id: string;
+      name: string;
+      sector: string;
+      description: string;
+      location: string;
+    }> = [];
+    const organizationRowsToInsert: Array<typeof organizations.$inferInsert> = [];
+    const matchedExistingIds: string[] = [];
+    const createdOrgIds: string[] = [];
+    const seenNames = new Set<string>();
+
+    for (const organization of generatedOrganizations) {
+      const normalizedName = organization.name.toLocaleLowerCase('en-US');
+      if (!normalizedName || seenNames.has(normalizedName)) continue;
+      seenNames.add(normalizedName);
+
+      const existingId = existingByName.get(normalizedName);
+      if (existingId) {
+        matchedExistingIds.push(existingId);
+        continue;
+      }
+
+      const organizationId = createId();
+      createdOrgIds.push(organizationId);
+      createdOrganizationsPayload.push({
+        id: organizationId,
+        name: organization.name,
+        sector: organization.sector,
+        description: organization.description,
+        location: organization.location,
+      });
+      organizationRowsToInsert.push({
+        id: organizationId,
+        workspaceId: folder.workspaceId,
+        name: organization.name,
+        status: 'completed',
+        data: {
+          industry: organization.sector,
+          size: '',
+          products: '',
+          processes: '',
+          kpis: '',
+          challenges: '',
+          objectives: organization.description,
+          technologies: '',
+          references: [],
+          location: organization.location,
+        } as OrganizationData & { location: string },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      existingByName.set(normalizedName, organizationId);
+    }
+
+    if (organizationRowsToInsert.length > 0) {
+      await db.insert(organizations).values(organizationRowsToInsert);
+      for (const row of organizationRowsToInsert) {
+        await this.notifyOrganizationEvent(row.id);
+        await this.createAutoGenerationFieldComments({
+          workspaceId: folder.workspaceId,
+          contextType: 'organization',
+          contextId: row.id,
+          sectionKeys: ['industry', 'objectives'],
+          createdBy: initiatedByUserId,
+          locale,
+        });
+      }
+    }
+
+    const selectedOrgIds = readStringArray(orgContextState.selectedOrgIds);
+    const effectiveOrgIds = Array.from(new Set([...selectedOrgIds, ...matchedExistingIds, ...createdOrgIds]));
+    if (effectiveOrgIds.length === 0) {
+      throw new Error('Organization batch generation produced no organizations');
+    }
+
+    const listTaskKey = Object.keys(workflow.agentMap).find(
+      (key) =>
+        key.includes('usecase_list') ||
+        key.includes('initiative_list') ||
+        key.includes('opportunity_list'),
+    );
+    if (!listTaskKey) {
+      throw new Error('Workflow list task is missing from organization batch runtime context');
+    }
+
+    const listWorkflow = cloneWorkflowContextForTask(workflow, listTaskKey as GenerationWorkflowTaskKey);
+    const listJobId = await this.addJob(
+      'initiative_list',
+      {
+        folderId,
+        input,
+        organizationId:
+          typeof inputState.organizationId === 'string' && inputState.organizationId.trim()
+            ? inputState.organizationId
+            : undefined,
+        matrixMode:
+          inputState.matrixMode === 'organization' ||
+          inputState.matrixMode === 'generate' ||
+          inputState.matrixMode === 'default'
+            ? inputState.matrixMode
+            : undefined,
+        model: selectedModel,
+        initiativeCount:
+          typeof inputState.initiativeCount === 'number' && Number.isFinite(inputState.initiativeCount)
+            ? inputState.initiativeCount
+            : undefined,
+        initiatedByUserId,
+        locale:
+          typeof locale === 'string' && locale.trim()
+            ? locale
+            : typeof inputState.locale === 'string' && inputState.locale.trim()
+              ? inputState.locale
+              : undefined,
+        orgIds: effectiveOrgIds,
+        workflow: listWorkflow,
+      },
+      { workspaceId: folder.workspaceId, maxRetries: 1 },
+    );
+
+    return {
+      output: {
+        createdOrgIds,
+        matchedExistingIds,
+        effectiveOrgIds,
+        listJobId,
+      },
+      statePatch: {
+        orgContext: {
+          createdOrgIds,
+          createdOrganizations: createdOrganizationsPayload,
+          effectiveOrgIds,
+        },
+      },
+      currentTaskKey: listTaskKey,
+      currentTaskInstanceKey: 'main',
+    };
+  }
+
+  private async processMatrixGenerate(data: MatrixGenerateJobData, signal?: AbortSignal): Promise<WorkflowTaskCompletion | void> {
     const { folderId, organizationId, model, initiatedByUserId, locale } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
@@ -1556,6 +2194,14 @@ export class QueueManager {
       createdBy: initiatedByUserId,
       locale
     });
+
+    return {
+      output: {
+        folderId,
+        organizationId,
+        generated: true,
+      },
+    };
   }
 
   private sanitizePgText(input: string): string {
@@ -1941,7 +2587,10 @@ export class QueueManager {
   /**
    * Worker pour la génération de liste de cas d'usage
    */
-  private async processInitiativeList(data: InitiativeListJobData, signal?: AbortSignal): Promise<void> {
+  private async processInitiativeList(
+    data: InitiativeListJobData,
+    signal?: AbortSignal,
+  ): Promise<WorkflowTaskCompletion | void> {
     const { folderId, input, organizationId, matrixMode, model, initiativeCount, initiatedByUserId, locale, orgIds } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
@@ -1960,7 +2609,22 @@ export class QueueManager {
       throw new Error('Folder not found');
     }
     const workspaceId = folder.workspaceId;
-    const resolvedOrganizationId = organizationId ?? folder.organizationId ?? undefined;
+    const runtimeState = workflow ? await this.getWorkflowRunStateSnapshot(workflow.workflowRunId) : null;
+    const currentState = runtimeState?.state ?? {};
+    const orgContextState = isRecord(currentState.orgContext) ? currentState.orgContext : {};
+    const effectiveOrgIdsFromState = readStringArray(orgContextState.effectiveOrgIds);
+    const selectedOrgIdsFromState = readStringArray(orgContextState.selectedOrgIds);
+    const createdOrgIdsFromState = readStringArray(orgContextState.createdOrgIds);
+    const resolvedOrgIds =
+      orgIds && orgIds.length > 0
+        ? orgIds
+        : effectiveOrgIdsFromState.length > 0
+          ? effectiveOrgIdsFromState
+          : Array.from(new Set([...selectedOrgIdsFromState, ...createdOrgIdsFromState]));
+    const resolvedOrganizationId =
+      organizationId ??
+      folder.organizationId ??
+      (resolvedOrgIds.length === 1 ? resolvedOrgIds[0] : undefined);
 
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
@@ -1999,7 +2663,6 @@ export class QueueManager {
 
     // Build multi-org organizations context (Lot 12)
     let organizationsContext = '';
-    const resolvedOrgIds = orgIds && orgIds.length > 0 ? orgIds : [];
     if (resolvedOrgIds.length > 0) {
       try {
         const orgRows = await db
@@ -2122,7 +2785,7 @@ export class QueueManager {
         id: createId(),
         workspaceId,
         folderId: folderId,
-        organizationId: organizationId || null,
+        organizationId: resolvedOrgIds.length === 1 ? (resolvedOrganizationId ?? null) : null,
         data: initiativeData as InitiativeDataJson, // Drizzle accepte JSONB directement (inclut name et description)
         model: selectedModel,
         status: 'generating',
@@ -2185,6 +2848,25 @@ export class QueueManager {
     }
 
     console.log(`📋 Generated ${draftInitiatives.length} use cases and scheduled workflow detailing`);
+
+    return {
+      output: {
+        folderId,
+        initiativeIds: draftInitiatives.map((initiative) => initiative.id),
+        effectiveOrgIds: resolvedOrgIds,
+        initiativeCount: draftInitiatives.length,
+      },
+      statePatch: {
+        orgContext: {
+          effectiveOrgIds: resolvedOrgIds,
+        },
+        generation: {
+          initiativeIds: draftInitiatives.map((initiative) => initiative.id),
+        },
+      },
+      currentTaskKey: Object.keys(workflow?.agentMap ?? {}).find((key) => key.includes('detail')) ?? null,
+      currentTaskInstanceKey: 'main',
+    };
   }
 
   private async getLatestMatrixJobState(folderId: string): Promise<{ status: string; error: string | null } | null> {
@@ -2228,7 +2910,10 @@ export class QueueManager {
   /**
    * Worker pour le détail d'un cas d'usage
    */
-  private async processInitiativeDetail(data: InitiativeDetailJobData, signal?: AbortSignal): Promise<void> {
+  private async processInitiativeDetail(
+    data: InitiativeDetailJobData,
+    signal?: AbortSignal,
+  ): Promise<WorkflowTaskCompletion | void> {
     const { initiativeId, initiativeName, folderId, matrixMode, model, initiatedByUserId, locale } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
     
@@ -2433,12 +3118,30 @@ export class QueueManager {
         console.log(`ℹ️ Le dossier ${folderId} a déjà une synthèse exécutive, pas de régénération automatique`);
       }
     }
+
+    const nextSummaryTaskKey =
+      allCompleted && workflow
+        ? Object.keys(workflow.agentMap).find((key) => key.includes('executive_summary') || key.includes('summary')) ?? null
+        : null;
+
+    return {
+      output: {
+        initiativeId,
+        folderId,
+        allCompleted,
+      },
+      currentTaskKey: nextSummaryTaskKey,
+      currentTaskInstanceKey: 'main',
+    };
   }
 
   /**
    * Worker pour la génération de synthèse exécutive
    */
-  private async processExecutiveSummary(data: ExecutiveSummaryJobData, signal?: AbortSignal): Promise<void> {
+  private async processExecutiveSummary(
+    data: ExecutiveSummaryJobData,
+    signal?: AbortSignal,
+  ): Promise<WorkflowTaskCompletion | void> {
     const { folderId, valueThreshold, complexityThreshold, model, initiatedByUserId, locale } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
@@ -2509,6 +3212,16 @@ export class QueueManager {
     }
 
     console.log(`✅ Synthèse exécutive générée et stockée pour le dossier ${folderId}`);
+
+    return {
+      output: {
+        folderId,
+        generated: true,
+      },
+      runStatus: workflow ? 'completed' : undefined,
+      currentTaskKey: null,
+      currentTaskInstanceKey: null,
+    };
   }
 
   /**
