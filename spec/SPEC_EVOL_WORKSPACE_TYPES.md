@@ -501,13 +501,121 @@ Replace generation-specific dispatch in `todo-orchestration.ts`:
 
 **Current**: `startUseCaseGenerationWorkflow()` hardcodes the workflow key and task sequence.
 
-**Target**: `startWorkflow(workspaceId, workflowKey)` resolves the workflow from `workspace_type_workflows` → `workflow_definitions` → ordered `workflow_definition_tasks`, then dispatches generically. The generation-specific logic moves into the agents themselves (via `config.promptTemplate`), not the orchestration layer.
+**Target**: `startWorkflow(workspaceId, workflowKey)` resolves the workflow from `workspace_type_workflows` → `workflow_definitions` → ordered `workflow_definition_tasks`, then dispatches generically. The generation-specific logic moves into the agents themselves (via `config.promptTemplate`) and into declarative runtime metadata, not into the orchestration layer.
 
 The generic dispatch spans TWO services:
 - `todo-orchestration.ts`: resolves workflow tasks from DB, builds an `agentMap: Record<string, string>` (task key → agent definition ID), dispatches jobs with the agentMap.
 - `queue-manager.ts`: receives jobs with the agentMap, resolves agent prompt from DB via agent definition ID. NO hardcoded task assignment fields, NO legacy named fields (`usecaseDetailAgentId`, etc.), NO switch on task keys. The `GenerationWorkflowRuntimeContext` carries `agentMap` instead of named `taskAssignments`.
 
 **Zero legacy**: after §7.4 is complete, there must be NO reference to `usecaseListAgentId`, `usecaseDetailAgentId`, `ROLE_TO_LEGACY_FIELD`, `ROLE_TO_LEGACY_ALIAS`, or any hardcoded task-key-to-agent mapping. Agent resolution is ALWAYS by task key lookup in the agentMap or by querying the DB.
+
+#### 7.4.1 Executable workflow graph target
+
+The BR-04 target is a **library-neutral executable workflow graph**. The internal model must remain conceptually compatible with:
+- **LangGraph-style concepts**: stateful graph, nodes, edges, conditional routing, fanout/join, interrupts/checkpoints.
+- **Temporal-style concepts**: durable workflow execution, activities, child workflows, retry/timeout policy, signals/updates/queries.
+
+This compatibility is conceptual only. **BR-04 does not adopt LangGraph or Temporal as dependencies.** The product keeps its own DB schema and runtime, but the model must remain reversible toward these ecosystems.
+
+#### 7.4.2 Internal concept mapping
+
+| Internal concept | Purpose | External analogue |
+|---|---|---|
+| `workflow_definitions` | Graph or subgraph definition | LangGraph graph / Temporal workflow |
+| `workflow_definition_tasks` | Executable nodes | LangGraph node / Temporal activity or child workflow |
+| `workflow_task_transitions` | Explicit transitions between nodes | LangGraph edges / Temporal control flow |
+| `workflow_run_state` | Shared persisted state for one run | LangGraph state + checkpointer |
+| `workflow_task_results` | Persisted node outputs / state patches | Activity result / state update |
+| `workflow_run_messages` or `workflow_run_waits` | Human/runtime messages, approvals, resumes | LangGraph interrupt / Temporal signal-update |
+| `execution_events` | Audit log and timeline | Execution history / trace |
+
+#### 7.4.3 Node runtime contract
+
+Each workflow task remains a row in `workflow_definition_tasks`, but its runtime behavior is no longer implied only by `orderIndex`.
+
+The executable contract of a task is defined by:
+- `taskKey` — stable node identifier.
+- `agentDefinitionId` — default agent or executor binding.
+- `inputSchema` / `outputSchema` — typed contract at the node boundary.
+- `metadata.executor` — `agent | activity | tool | subworkflow | noop`.
+- `metadata.jobType` — queue/runtime executor key when the node maps to a background worker.
+- `metadata.inputBindings` — how run state and prior node results are mapped into the task input payload.
+- `metadata.outputBindings` — how task outputs update run state.
+- `metadata.condition` — optional run condition for the node or transition.
+- `metadata.retryPolicy` — max attempts, backoff, retryable error classes.
+- `metadata.timeoutPolicy` — execution timeout / wait timeout.
+- `metadata.idempotencyKeyTemplate` — deterministic key for replay-safe side effects.
+
+#### 7.4.4 Transitions, fanout, join
+
+`orderIndex` remains useful as a default display/ordering hint, but execution semantics must come from explicit transitions.
+
+Add `workflow_task_transitions` with at least:
+- `workflowDefinitionId`
+- `fromTaskKey`
+- `toTaskKey`
+- `transitionType`: `normal | conditional | fanout | join | end`
+- `condition`
+- `metadata`
+
+Transition metadata supports:
+- `fanout.sourcePath` — array in run state to iterate over
+- `fanout.itemKey` — per-item binding name
+- `join.mode` — `all | any | quorum`
+- `join.reducerKey` — reducer used to merge parallel results
+
+This allows flows like:
+- create organizations
+- bind created organization IDs/details into state
+- route to `initiative_list_with_orgs`
+- fan out one `initiative_detail` execution per generated initiative
+- join when all details are completed, then enqueue `executive_summary`
+
+#### 7.4.5 Run state, results, durable execution
+
+Execution must not rely only on side effects in business tables or on `execution_events`.
+
+Add:
+- `workflow_run_state` — current materialized state for a run, versioned/checkpointed.
+- `workflow_task_results` — one row per task execution (or task instance for fanout), storing normalized output, status, timing, and retry counters.
+
+Rules:
+- `execution_events` remains the audit stream, not the only runtime source of truth.
+- Side effects and non-deterministic operations happen inside executors/workers, not in the scheduler.
+- Replay/resume must be safe: already persisted task results are reused instead of rerunning side effects.
+
+#### 7.4.6 Messages, interrupts, and child workflows
+
+The runtime must support controlled pauses and external input without bespoke business code:
+- pause waiting for approval or user clarification
+- resume with payload
+- cancel a run
+- inspect current run state
+
+This is modeled via workflow-run messages/waits, conceptually equivalent to:
+- LangGraph interrupts + resume
+- Temporal signals / updates / queries
+
+Subgraphs/child workflows are modeled as task nodes with:
+- `metadata.executor = "subworkflow"`
+- `metadata.subworkflowKey`
+
+#### 7.4.7 Delivery staging
+
+**BR-04B scope (MVP)**:
+- executable runtime contract on generation workflows
+- shared `workflow_run_state`
+- persisted `workflow_task_results`
+- conditional routing for list-task selection
+- `organization_batch_create` worker execution with state binding
+- simple fanout (`initiative_detail`) and join (`executive_summary`)
+
+**Deferred to BR-23**:
+- reusable `workflow_task_transitions` engine across all workflow families
+- generic message/interrupt API
+- generic child/sub-workflow runtime
+- advanced reducers and reusable join strategies
+- compensation/saga patterns and broader replay/version migration concerns
 
 ### 7.5 Workflow versioning
 
@@ -748,7 +856,17 @@ Implementation priority: DOCX first, PPTX as stretch goal within BR-04 budget.
 - `POST /api/v1/workspace-types/:type/workflows` — register a workflow for a type.
 - `DELETE /api/v1/workspace-types/:type/workflows/:id` — unregister.
 
-### 11.6 Cross-workspace endpoints (neutral)
+### 11.6 Workflow run endpoints
+
+- `GET /api/v1/workflow-runs/:id` — read workflow run metadata and current status.
+- `GET /api/v1/workflow-runs/:id/state` — read current materialized run state.
+- `GET /api/v1/workflow-runs/:id/results` — list persisted task results for the run.
+- `POST /api/v1/workflow-runs/:id/messages` — send a runtime message / approval / resume payload to a waiting run.
+- `POST /api/v1/workflow-runs/:id/cancel` — cancel a run.
+
+These endpoints are library-neutral equivalents of LangGraph resume/interrupt inspection and Temporal signal/update/query patterns.
+
+### 11.7 Cross-workspace endpoints (neutral)
 
 - `GET /api/v1/neutral/dashboard` — aggregated dashboard data across workspaces.
 - `POST /api/v1/neutral/dispatch-todo` — create todo in target workspace.
