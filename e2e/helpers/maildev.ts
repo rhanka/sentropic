@@ -8,7 +8,9 @@
  * - DELETE /email/all - Delete all emails
  */
 
-const MAILDEV_API_URL = process.env.MAILDEV_API_URL || 'http://localhost:1080';
+// Playwright tests run in the e2e container on the compose network, so the stable
+// fallback is the Maildev service name rather than localhost.
+const MAILDEV_API_URL = process.env.MAILDEV_API_URL || 'http://maildev:1080';
 
 interface MaildevEmail {
   id: string;
@@ -193,4 +195,3 @@ export async function deleteAllEmails(): Promise<void> {
     throw new Error(`Error deleting emails from Maildev: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
-
