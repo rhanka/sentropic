@@ -341,10 +341,12 @@
       "loadingOrganizations": "Chargement des organisations…",
       "noOrganizations": "Aucune organisation disponible.",
       "multiOrg": {
-        "title": "Organisations ciblées (multi-sélection)",
-        "hint": "Sélectionnez les organisations pour orienter la génération d'initiatives autour de leur contexte.",
+        "title": "Organisations ciblées (optionnel)",
+        "hint": "Sélectionnez jusqu'à plusieurs organisations pour orienter la génération. Laisser vide permet aussi une génération générique.",
+        "noneSelected": "Aucune organisation",
+        "selectedCount": "{count} organisations sélectionnées",
         "createNewOrgs": "Créer de nouvelles organisations automatiquement",
-        "createNewOrgsHint": "L'IA proposera et créera de nouvelles organisations en lien avec le contexte du dossier."
+        "createNewOrgsHint": "L'IA pourra proposer et créer de nouvelles organisations à partir du titre, du contexte et des documents du dossier."
       },
       "documentsTitle": "Documents",
       "documentsHelp": "Ajouter des documents au contexte. Un résumé est généré automatiquement.",
@@ -352,14 +354,15 @@
       "noDocumentsYet": "Aucun document pour le moment.",
       "defaultInput": {
         "documentsContext": "Utiliser les documents du dossier comme contexte principal.",
-        "organizationContext": "Utiliser les informations de l'organisation sélectionnée comme contexte principal."
+        "organizationContext": "Utiliser les informations de l'organisation sélectionnée comme contexte principal.",
+        "organizationsContext": "Utiliser les informations des organisations sélectionnées comme contexte principal."
       },
       "matrix": {
-        "title": "Matrice d'évaluation",
-        "useOrganization": "Utiliser la matrice de l'organisation",
-        "useOrganizationHint": "Option cochée par défaut quand l'organisation possède déjà une matrice sauvegardée.",
-        "generateOrganization": "Générer une matrice pour l'organisation",
-        "generateOrganizationHint": "Option cochée par défaut car aucune matrice n'est encore associée à cette organisation."
+        "title": "Matrice d'évaluation du dossier",
+        "useOrganization": "Réutiliser la matrice de {name}",
+        "useOrganizationHint": "Si une matrice est déjà disponible pour l'organisation sélectionnée, vous pouvez la réutiliser ou générer une matrice ad hoc pour ce dossier.",
+        "generateAdHoc": "Générer une matrice ad hoc pour ce dossier",
+        "generateAdHocHint": "La matrice sera générée à partir du titre, du contexte, des documents et des organisations ciblées du dossier."
       },
       "errors": {
         "draftCreateFailed": "Impossible de créer un brouillon de dossier",

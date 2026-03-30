@@ -75,7 +75,7 @@ const folderInput = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   // Preferred naming
-  organizationId: z.string().optional(),
+  organizationId: z.string().nullable().optional(),
   matrixConfig: matrixSchema.optional(),
   executiveSummary: executiveSummaryDataSchema.optional(),
   // Status is intentionally optional; default remains 'completed'.
@@ -294,7 +294,7 @@ foldersRouter.post(
     z.object({
       name: z.string().min(1),
       description: z.string().optional(),
-      organizationId: z.string().optional(),
+      organizationId: z.string().nullable().optional(),
     })
   ),
   async (c) => {
@@ -417,7 +417,7 @@ foldersRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidato
 
   const updatePayload = {
     ...payload,
-    organizationId,
+    organizationId: payload.organizationId === undefined ? undefined : organizationId ?? null,
     matrixConfig: payload.matrixConfig ? JSON.stringify(payload.matrixConfig) : undefined,
     executiveSummary: payload.executiveSummary ? JSON.stringify(payload.executiveSummary) : undefined
   };

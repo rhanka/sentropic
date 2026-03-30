@@ -340,20 +340,29 @@
       "loadingModelCatalog": "Loading models…",
       "loadingOrganizations": "Loading organizations…",
       "noOrganizations": "No organizations available.",
+      "multiOrg": {
+        "title": "Target organizations (optional)",
+        "hint": "Select one or several organizations to steer generation. Leaving it empty still allows generic generation.",
+        "noneSelected": "No organization",
+        "selectedCount": "{count} organizations selected",
+        "createNewOrgs": "Create new organizations automatically",
+        "createNewOrgsHint": "The AI can suggest and create new organizations from the folder title, context, and documents."
+      },
       "documentsTitle": "Documents",
       "documentsHelp": "Add documents to the context. A summary is generated automatically.",
       "addDocument": "Add a document",
       "noDocumentsYet": "No documents yet.",
       "defaultInput": {
         "documentsContext": "Use folder documents as the main context.",
-        "organizationContext": "Use the selected organization information as the main context."
+        "organizationContext": "Use the selected organization information as the main context.",
+        "organizationsContext": "Use the selected organizations information as the main context."
       },
       "matrix": {
-        "title": "Evaluation matrix",
-        "useOrganization": "Use the organization matrix",
-        "useOrganizationHint": "Checked by default when the selected organization already has a saved matrix.",
-        "generateOrganization": "Generate a matrix for this organization",
-        "generateOrganizationHint": "Checked by default because no matrix is currently associated with this organization."
+        "title": "Folder evaluation matrix",
+        "useOrganization": "Reuse {name}'s matrix",
+        "useOrganizationHint": "If the selected organization already has a saved matrix, you can reuse it or generate an ad hoc matrix for this folder.",
+        "generateAdHoc": "Generate an ad hoc matrix for this folder",
+        "generateAdHocHint": "The matrix will be generated from the folder title, context, documents, and selected organizations."
       },
       "errors": {
         "draftCreateFailed": "Unable to create a draft folder",
