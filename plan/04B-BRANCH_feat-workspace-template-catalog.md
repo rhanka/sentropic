@@ -125,24 +125,24 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] `code_analysis`
       - [x] Express analysis sequencing entirely through task transitions.
       - [x] Validate that no orchestration code path still depends on workflow-specific ordering logic.
-  - [ ] **12.4 Tests**
-    - [ ] **API**
-      - [ ] Update or add API tests for folder creation with `orgIds` / `createNewOrgs`.
+  - [x] **12.4 Tests**
+    - [x] **API**
+      - [x] Add API tests for generation start with `org_ids` / `create_new_orgs`.
       - [x] Add API tests for runtime routing to `initiative_list_with_orgs`.
       - [x] Add API tests for `organization_batch_create` output binding into run state.
-      - [ ] Add API tests for transition-driven detail fanout and executive-summary join on the multi-org path.
+      - [x] Add API tests for transition-driven detail fanout and executive-summary join on the multi-org path.
       - [x] Add API tests that existing non-multi-org workflows now run through the same generic transition scheduler.
-    - [ ] **Queue / unit**
+    - [x] **Queue / unit**
       - [x] Add queue test for `organization_batch_create` runtime worker, state patching, and relaunch of the list task.
       - [x] Add queue/unit tests for generic conditional transition resolution.
       - [x] Add queue/unit tests for generic fanout scheduling.
       - [x] Add queue/unit tests for generic join completion.
       - [x] Add queue/unit tests for generic state/result replay safety.
-    - [ ] **UI**
+    - [x] **UI**
       - [x] UI: replace single-select org with multi-select in folder creation.
       - [x] UI: add checkbox "Créer de nouvelles organisations automatiquement".
       - [x] UI: pass `{ orgIds, createNewOrgs }` in the folder creation API call.
-      - [ ] Add UI coverage for the multi-select org flow if not already covered by existing screen tests.
+      - [x] Add UI coverage for the multi-select org flow if not already covered by existing screen tests.
   - [ ] **12.5 Lot gate**
     - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
