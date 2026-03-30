@@ -333,4 +333,185 @@ describe('Queue - organization_batch_create runtime', () => {
       .limit(1);
     expect(jobAfter?.status).toBe('completed');
   });
+
+  it('requeues organization_batch_create when the provider stream terminates transiently', async () => {
+    const folderId = createId();
+    const workflowDefinitionId = createId();
+    const workflowRunId = createId();
+    const jobId = createId();
+    const now = new Date();
+
+    await db.insert(folders).values({
+      id: folderId,
+      workspaceId: user.workspaceId,
+      name: 'Folder',
+      description: 'Need organizations',
+      organizationId: null,
+      matrixConfig: null,
+      status: 'generating',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(workflowDefinitions).values({
+      id: workflowDefinitionId,
+      workspaceId: user.workspaceId,
+      key: 'opportunity_identification',
+      name: 'Workflow',
+      description: 'Test workflow',
+      config: {},
+      sourceLevel: 'code',
+      isDetached: false,
+      createdByUserId: user.userId,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(workflowDefinitionTasks).values({
+      id: createId(),
+      workspaceId: user.workspaceId,
+      workflowDefinitionId,
+      taskKey: 'create_organizations',
+      title: 'Create organizations',
+      description: 'Create organizations before opportunity identification',
+      orderIndex: 1,
+      agentDefinitionId: null,
+      metadata: {
+        executor: 'job',
+        jobType: 'organization_batch_create',
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(executionRuns).values({
+      id: workflowRunId,
+      workspaceId: user.workspaceId,
+      planId: null,
+      todoId: null,
+      taskId: null,
+      workflowDefinitionId,
+      agentDefinitionId: null,
+      mode: 'full_auto',
+      status: 'in_progress',
+      startedByUserId: user.userId,
+      startedAt: now,
+      completedAt: null,
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(workflowRunState).values({
+      runId: workflowRunId,
+      workspaceId: user.workspaceId,
+      workflowDefinitionId,
+      status: 'in_progress',
+      state: {
+        inputs: {
+          folderId,
+          input: 'Opportunités pour Airudi à Montréal',
+          matrixMode: 'generate',
+          matrixSource: 'prompt',
+          initiativeCount: 10,
+          locale: 'fr',
+          organizationId: null,
+          model: 'gpt-5.4',
+          autoCreateOrganizations: true,
+        },
+        orgContext: {
+          selectedOrgIds: [],
+          createdOrgIds: [],
+          createdOrganizations: [],
+        },
+        generation: {
+          initiativeIds: [],
+        },
+      },
+      version: 1,
+      currentTaskKey: 'create_organizations',
+      currentTaskInstanceKey: 'main',
+      checkpointedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(jobQueue).values({
+      id: jobId,
+      type: 'organization_batch_create',
+      status: 'processing',
+      workspaceId: user.workspaceId,
+      data: JSON.stringify({
+        folderId,
+        input: 'Opportunités pour Airudi à Montréal',
+        model: 'gpt-5.4',
+        locale: 'fr',
+        initiatedByUserId: user.userId,
+        workflow: {
+          workflowRunId,
+          workflowDefinitionId,
+          taskKey: 'create_organizations',
+          agentDefinitionId: null,
+          agentMap: {
+            create_organizations: 'agent_batch',
+          },
+        },
+        _retry: {
+          attempt: 0,
+          maxRetries: 1,
+        },
+      }),
+      createdAt: now,
+      startedAt: now,
+    });
+
+    mockExecuteWithToolsStream.mockRejectedValueOnce(new Error('terminated'));
+
+    const [job] = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, jobId), eq(jobQueue.workspaceId, user.workspaceId)))
+      .limit(1);
+    expect(job).toBeDefined();
+
+    await (queueManager as unknown as { processJob: (queuedJob: unknown) => Promise<void> }).processJob(job!);
+
+    const [jobAfter] = await db
+      .select({ status: jobQueue.status, error: jobQueue.error, data: jobQueue.data, startedAt: jobQueue.startedAt })
+      .from(jobQueue)
+      .where(eq(jobQueue.id, jobId))
+      .limit(1);
+    const jobAfterData =
+      typeof jobAfter?.data === 'string'
+        ? JSON.parse(jobAfter.data)
+        : (jobAfter?.data as Record<string, unknown> | undefined);
+    expect(jobAfter?.status).toBe('pending');
+    expect(jobAfter?.error).toContain('retry 1/1: terminated');
+    expect(jobAfter?.startedAt).toBeNull();
+    expect((jobAfterData as Record<string, any>)._retry).toEqual({ attempt: 1, maxRetries: 1 });
+
+    const [taskResult] = await db
+      .select()
+      .from(workflowTaskResults)
+      .where(
+        and(
+          eq(workflowTaskResults.runId, workflowRunId),
+          eq(workflowTaskResults.taskKey, 'create_organizations'),
+          eq(workflowTaskResults.taskInstanceKey, 'main'),
+        ),
+      )
+      .limit(1);
+    expect(taskResult?.status).toBe('pending');
+    expect(taskResult?.attempts).toBe(1);
+    expect(taskResult?.completedAt).toBeNull();
+    expect((taskResult?.lastError as Record<string, unknown>)?.message).toBe('terminated');
+
+    const [runState] = await db
+      .select()
+      .from(workflowRunState)
+      .where(eq(workflowRunState.runId, workflowRunId))
+      .limit(1);
+    expect(runState?.status).toBe('in_progress');
+    expect(runState?.currentTaskKey).toBe('create_organizations');
+  });
 });
