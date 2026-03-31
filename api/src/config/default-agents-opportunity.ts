@@ -174,6 +174,11 @@ Format JSON attendu:
                 titre: { type: 'string' },
                 description: { type: 'string' },
                 ref: { type: 'string' },
+                organizationIds: {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+                organizationName: { type: 'string' },
               },
               required: ['titre', 'description', 'ref'],
             },
@@ -277,6 +282,9 @@ IMPORTANT:
 - Génère le titre et la description pour chaque opportunité
 - La description doit être en markdown, avec mise en exergue en gras, et le cas échéant en liste bullet point pour être percutante
 - Pour chaque opportunité, numérote les références (1, 2, 3...) et utilise [1], [2], [3] dans la description pour référencer ces numéros
+- Si les organisations sélectionnées sont identifiées par des IDs dans le contexte, renseigne "organizationIds" avec un ou plusieurs IDs pertinents.
+- Si aucun ID d'organisation réutilisable n'est disponible mais qu'une organisation doit être créée pour porter cette opportunité, renseigne "organizationName" avec le nom canonique de l'organisation cible.
+- Chaque opportunité doit renseigner au moins un de ces deux champs sur le chemin orienté organisations: "organizationIds" ou "organizationName".
 
 Réponds UNIQUEMENT avec un JSON valide:
 {
@@ -285,12 +293,15 @@ Réponds UNIQUEMENT avec un JSON valide:
     {
       "titre": "titre court 1",
       "description": "Description courte (60-100 mots) de l'opportunité business orientée organisation",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "organizationIds": ["org_id_1"],
+      "organizationName": "Organisation cible si aucun ID n'est disponible"
     },
     {
       "titre": "titre court 2",
       "description": "Description courte (60-100 mots) de l'opportunité business orientée organisation",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "organizationIds": ["org_id_2"]
     },
     ...
   ]
