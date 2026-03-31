@@ -22,9 +22,11 @@ import { queueManager } from "../../src/services/queue-manager";
 describe("Generic dispatch and backward compat", () => {
   let editor: any;
   let actor: TodoActor;
+  let processJobsSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
     editor = await createAuthenticatedUser("editor");
+    processJobsSpy = vi.spyOn(queueManager, "processJobs").mockResolvedValue();
     actor = {
       userId: editor.id,
       role: editor.role,
@@ -33,6 +35,7 @@ describe("Generic dispatch and backward compat", () => {
   });
 
   afterEach(async () => {
+    processJobsSpy.mockRestore();
     if (editor?.workspaceId) {
       await db.delete(executionEvents).where(eq(executionEvents.workspaceId, editor.workspaceId));
       await db.delete(workflowTaskResults).where(eq(workflowTaskResults.workspaceId, editor.workspaceId));
@@ -333,12 +336,12 @@ describe("Generic dispatch and backward compat", () => {
       );
     });
 
-    it("dispatches create_organizations first for opportunity_identification auto-create flows", async () => {
+    it("dispatches the org-aware list first for opportunity_identification auto-create flows", async () => {
       await todoOrchestrationService.seedWorkflowsForType(actor, "opportunity");
 
       const addJobSpy = vi
         .spyOn(queueManager, "addJob")
-        .mockResolvedValueOnce("job-opportunity-create-organizations");
+        .mockResolvedValueOnce("job-opportunity-list-with-orgs");
 
       const result = await todoOrchestrationService.startWorkflow(actor, "opportunity_identification", {
         folderId: "folder-opportunity-auto-create",
@@ -352,13 +355,13 @@ describe("Generic dispatch and backward compat", () => {
       });
 
       expect(addJobSpy).toHaveBeenCalledWith(
-        "organization_batch_create",
+        "initiative_list",
         expect.objectContaining({
           folderId: "folder-opportunity-auto-create",
           input: "Find organizations and opportunities in aerospace MRO",
           workflow: expect.objectContaining({
             workflowRunId: result.workflowRunId,
-            taskKey: "create_organizations",
+            taskKey: "opportunity_list",
           }),
         }),
         expect.objectContaining({ workspaceId: actor.workspaceId, maxRetries: 1 }),
