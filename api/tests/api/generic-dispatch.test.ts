@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../src/db/client";
 import {
   agentDefinitions,
   executionEvents,
   executionRuns,
+  jobQueue,
   workflowDefinitionTasks,
   workflowDefinitions,
   workflowRunState,
@@ -16,6 +17,7 @@ import {
 import { createAuthenticatedUser, cleanupAuthData } from "../utils/auth-helper";
 import { todoOrchestrationService, type TodoActor } from "../../src/services/todo-orchestration";
 import { USE_CASE_GENERATION_WORKFLOW_KEY } from "../../src/config/default-workflows";
+import { queueManager } from "../../src/services/queue-manager";
 
 describe("Generic dispatch and backward compat", () => {
   let editor: any;
@@ -33,7 +35,10 @@ describe("Generic dispatch and backward compat", () => {
   afterEach(async () => {
     if (editor?.workspaceId) {
       await db.delete(executionEvents).where(eq(executionEvents.workspaceId, editor.workspaceId));
+      await db.delete(workflowTaskResults).where(eq(workflowTaskResults.workspaceId, editor.workspaceId));
+      await db.delete(workflowRunState).where(eq(workflowRunState.workspaceId, editor.workspaceId));
       await db.delete(executionRuns).where(eq(executionRuns.workspaceId, editor.workspaceId));
+      await db.delete(jobQueue).where(eq(jobQueue.workspaceId, editor.workspaceId));
       await db.delete(workspaceTypeWorkflows);
       await db.delete(workflowDefinitionTasks).where(eq(workflowDefinitionTasks.workspaceId, editor.workspaceId));
       await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, editor.workspaceId));
@@ -41,6 +46,7 @@ describe("Generic dispatch and backward compat", () => {
       await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, editor.workspaceId));
     }
     await cleanupAuthData();
+    vi.restoreAllMocks();
   });
 
   describe("seedWorkflowsForType", () => {
@@ -278,6 +284,85 @@ describe("Generic dispatch and backward compat", () => {
         .where(eq(workflowTaskResults.runId, result.workflowRunId));
       expect(taskResults).toHaveLength(5);
       expect(taskResults.every((row) => row.status === "completed")).toBe(true);
+    });
+
+    it("dispatches opportunity_identification through generic matrix/list transitions", async () => {
+      await todoOrchestrationService.seedWorkflowsForType(actor, "opportunity");
+
+      const addJobSpy = vi
+        .spyOn(queueManager, "addJob")
+        .mockResolvedValueOnce("job-opportunity-matrix")
+        .mockResolvedValueOnce("job-opportunity-list");
+
+      const result = await todoOrchestrationService.startWorkflow(actor, "opportunity_identification", {
+        folderId: "folder-opportunity",
+        input: "Qualify digital twin opportunities",
+        matrixMode: "generate",
+        matrixSource: "prompt",
+        model: "gpt-4.1-nano",
+        initiativeCount: 5,
+        locale: "fr",
+        autoCreateOrganizations: false,
+      });
+
+      expect(addJobSpy).toHaveBeenNthCalledWith(
+        1,
+        "matrix_generate",
+        expect.objectContaining({
+          folderId: "folder-opportunity",
+          matrixSource: "prompt",
+          workflow: expect.objectContaining({
+            workflowRunId: result.workflowRunId,
+            taskKey: "matrix_prepare",
+          }),
+        }),
+        expect.objectContaining({ workspaceId: actor.workspaceId, maxRetries: 1 }),
+      );
+      expect(addJobSpy).toHaveBeenNthCalledWith(
+        2,
+        "initiative_list",
+        expect.objectContaining({
+          folderId: "folder-opportunity",
+          matrixMode: "generate",
+          workflow: expect.objectContaining({
+            workflowRunId: result.workflowRunId,
+            taskKey: "opportunity_list",
+          }),
+        }),
+        expect.objectContaining({ workspaceId: actor.workspaceId, maxRetries: 1 }),
+      );
+    });
+
+    it("dispatches create_organizations first for opportunity_identification auto-create flows", async () => {
+      await todoOrchestrationService.seedWorkflowsForType(actor, "opportunity");
+
+      const addJobSpy = vi
+        .spyOn(queueManager, "addJob")
+        .mockResolvedValueOnce("job-opportunity-create-organizations");
+
+      const result = await todoOrchestrationService.startWorkflow(actor, "opportunity_identification", {
+        folderId: "folder-opportunity-auto-create",
+        input: "Find organizations and opportunities in aerospace MRO",
+        matrixMode: "generate",
+        matrixSource: "prompt",
+        model: "gpt-4.1-nano",
+        initiativeCount: 5,
+        locale: "fr",
+        autoCreateOrganizations: true,
+      });
+
+      expect(addJobSpy).toHaveBeenCalledWith(
+        "organization_batch_create",
+        expect.objectContaining({
+          folderId: "folder-opportunity-auto-create",
+          input: "Find organizations and opportunities in aerospace MRO",
+          workflow: expect.objectContaining({
+            workflowRunId: result.workflowRunId,
+            taskKey: "create_organizations",
+          }),
+        }),
+        expect.objectContaining({ workspaceId: actor.workspaceId, maxRetries: 1 }),
+      );
     });
   });
 
