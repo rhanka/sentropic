@@ -16,6 +16,7 @@ import { queueManager } from '../../src/services/queue-manager';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { createTestId } from '../utils/test-helpers';
 import * as contextInitiative from '../../src/services/context-initiative';
+import * as contextOrganization from '../../src/services/context-organization';
 import * as contextMatrix from '../../src/services/context-matrix';
 import * as executiveSummaryService from '../../src/services/executive-summary';
 
@@ -329,5 +330,145 @@ describe('Use Cases Generate - Workflow runtime end-to-end', () => {
 
     const parsedMatrix = JSON.parse(folder!.matrixConfig!);
     expect(parsedMatrix.valueAxes[0]?.levelDescriptions?.[0]?.description).toContain('dossier');
+  });
+
+  it('runs the historical auto-create path list first, then organizations, then details', async () => {
+    vi.spyOn(contextInitiative, 'generateInitiativeList').mockResolvedValue({
+      dossier: 'Auto-create workflow folder',
+      initiatives: [
+        {
+          titre: 'Initiative Alpha',
+          description: 'Initiative Alpha short description',
+          organizationName: 'Org Alpha',
+          ref: '1. [Reference](https://example.com/alpha)',
+        } as any,
+        {
+          titre: 'Initiative Beta',
+          description: 'Initiative Beta short description',
+          organizationName: 'Org Beta',
+          ref: '1. [Reference](https://example.com/beta)',
+        } as any,
+      ],
+    });
+
+    vi.spyOn(contextOrganization, 'enrichOrganization').mockImplementation(async (organizationName) => ({
+      industry: `Industry ${organizationName}`,
+      size: '100-500',
+      products: `${organizationName} products`,
+      processes: `${organizationName} processes`,
+      kpis: `${organizationName} KPIs`,
+      challenges: `${organizationName} challenges`,
+      objectives: `${organizationName} objectives`,
+      technologies: `${organizationName} technologies`,
+      references: [],
+    }));
+
+    vi.spyOn(contextMatrix, 'generateOrganizationMatrixTemplate').mockResolvedValue(
+      buildMatrixTemplate(),
+    );
+
+    vi.spyOn(contextInitiative, 'generateInitiativeDetail').mockImplementation(async (initiativeName) =>
+      buildDetailPayload(String(initiativeName)),
+    );
+
+    vi.spyOn(executiveSummaryService, 'generateExecutiveSummary').mockImplementation(async ({ folderId }) => {
+      await db
+        .update(folders)
+        .set({
+          executiveSummary: JSON.stringify({
+            introduction: 'Synthetic introduction',
+            analyse: 'Synthetic analysis',
+            recommandation: 'Synthetic recommendation',
+            synthese_executive: 'Synthetic executive summary',
+            references: [],
+          }),
+        })
+        .where(eq(folders.id, folderId));
+    });
+
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/initiatives/generate',
+      user.sessionToken!,
+      {
+        input: `Auto-create org flow ${createTestId()}`,
+        matrix_mode: 'generate',
+        initiative_count: 2,
+        create_new_orgs: true,
+        model: 'gpt-4.1-nano',
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.matrix_mode).toBe('generate');
+    expect(typeof data.workflow_run_id).toBe('string');
+
+    await drainWorkspaceQueue(user.workspaceId!);
+
+    const [run] = await db
+      .select()
+      .from(executionRuns)
+      .where(eq(executionRuns.id, data.workflow_run_id))
+      .limit(1);
+    expect(run?.status).toBe('completed');
+
+    const organizationRows = await db
+      .select({ id: organizations.id, name: organizations.name, status: organizations.status })
+      .from(organizations)
+      .where(eq(organizations.workspaceId, user.workspaceId))
+      .orderBy(asc(organizations.name));
+    expect(organizationRows.map((row) => row.name)).toEqual(['Org Alpha', 'Org Beta']);
+    expect(organizationRows.every((row) => row.status === 'completed')).toBe(true);
+
+    const jobRows = await db
+      .select({
+        type: jobQueue.type,
+        status: jobQueue.status,
+      })
+      .from(jobQueue)
+      .where(eq(jobQueue.workspaceId, user.workspaceId))
+      .orderBy(asc(jobQueue.createdAt));
+
+    const jobTypesInOrder = jobRows.map((row) => row.type);
+    expect(jobTypesInOrder[0]).toBe('initiative_list');
+    expect(jobTypesInOrder).toContain('organization_batch_create');
+    expect(jobTypesInOrder.filter((type) => type === 'organization_enrich')).toHaveLength(2);
+    expect(jobTypesInOrder).toContain('organization_targets_join');
+    expect(jobTypesInOrder).toContain('matrix_generate');
+    expect(jobTypesInOrder.filter((type) => type === 'initiative_detail')).toHaveLength(2);
+    expect(jobTypesInOrder).toContain('executive_summary');
+    expect(jobTypesInOrder.indexOf('initiative_list')).toBeLessThan(jobTypesInOrder.indexOf('organization_batch_create'));
+    expect(jobTypesInOrder.indexOf('organization_batch_create')).toBeLessThan(jobTypesInOrder.indexOf('organization_targets_join'));
+    expect(jobTypesInOrder.indexOf('organization_targets_join')).toBeLessThan(jobTypesInOrder.indexOf('matrix_generate'));
+    expect(jobTypesInOrder.indexOf('matrix_generate')).toBeLessThan(jobTypesInOrder.indexOf('initiative_detail'));
+
+    const [runState] = await db
+      .select()
+      .from(workflowRunState)
+      .where(eq(workflowRunState.runId, data.workflow_run_id))
+      .limit(1);
+    expect(runState?.status).toBe('completed');
+
+    const runtimeState = (runState?.state ?? {}) as Record<string, any>;
+    expect(runtimeState.orgContext?.effectiveOrgIds).toHaveLength(2);
+    expect(runtimeState.generation?.initiatives).toHaveLength(2);
+    expect(runtimeState.generation?.initiatives.every((initiative: any) => Array.isArray(initiative.organizationIds) && initiative.organizationIds.length === 1)).toBe(true);
+
+    const detailTaskResults = await db
+      .select({
+        taskInstanceKey: workflowTaskResults.taskInstanceKey,
+        status: workflowTaskResults.status,
+      })
+      .from(workflowTaskResults)
+      .where(
+        and(
+          eq(workflowTaskResults.runId, data.workflow_run_id),
+          eq(workflowTaskResults.taskKey, 'generation_usecase_detail'),
+        ),
+      );
+    expect(detailTaskResults).toHaveLength(2);
+    expect(detailTaskResults.every((row) => row.status === 'completed')).toBe(true);
   });
 });

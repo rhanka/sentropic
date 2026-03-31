@@ -270,11 +270,11 @@ describe('Use Cases Generate - Matrix Mode', () => {
       .select()
       .from(jobQueue)
       .where(eq(jobQueue.workspaceId, user.workspaceId));
-    const organizationBatchJob = jobs.find((job) => job.type === 'organization_batch_create');
-    expect(organizationBatchJob).toBeDefined();
-    expect(organizationBatchJob?.id).toBe(data.jobId);
+    const initiativeListJob = jobs.find((job) => job.id === data.jobId);
+    expect(initiativeListJob?.type).toBe('initiative_list');
+    expect(jobs.some((job) => job.type === 'organization_batch_create')).toBe(false);
 
-    const payload = JSON.parse(String(organizationBatchJob!.data)) as {
+    const payload = JSON.parse(String(initiativeListJob!.data)) as {
       workflow?: {
         workflowRunId?: string;
         workflowDefinitionId?: string;
@@ -282,7 +282,7 @@ describe('Use Cases Generate - Matrix Mode', () => {
         agentMap?: Record<string, string>;
       };
     };
-    expect(payload.workflow?.taskKey).toBe('generation_create_organizations');
+    expect(payload.workflow?.taskKey).toBe('generation_usecase_list');
     expect(typeof payload.workflow?.workflowRunId).toBe('string');
     expect(typeof payload.workflow?.workflowDefinitionId).toBe('string');
     expect(typeof payload.workflow?.agentMap?.generation_usecase_list).toBe('string');
