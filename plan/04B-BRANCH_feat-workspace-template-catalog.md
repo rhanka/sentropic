@@ -89,60 +89,70 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Reabsorb the former BR-23 generic-runtime scope into BR-04B Lot 12.
     - [x] BR-04 spec §7.4 clarified toward a library-neutral executable workflow graph, conceptually compatible with LangGraph/Temporal without adding either dependency.
     - [x] BR-04 spec now states that no workflow-specific sequencing hardcoding may remain for existing workflows.
+    - [x] BR-04 spec now states the legacy parity contract: for pre-existing non-multi-org cases, BR-04B must preserve `main` entry/output semantics and queue-visible work topology.
     - [x] Specify `workflow_task_transitions` storage contract in the spec: `fromTaskKey`, `toTaskKey`, `transitionType`, `condition`, `metadata`.
     - [x] Specify binding contract in the spec: `inputBindings`, `outputBindings`, `fanout`, `join`, retry/timeout, idempotency.
     - [x] Specify the allowed hardcoding boundary in the spec: executor registry only, never workflow sequencing.
+    - [x] Specify dossier-scoped matrix semantics in the spec: `matrix_mode=generate` is a folder-level ad hoc matrix and must work for `0`, `1`, or `N` selected orgs.
+    - [x] Replace the monolithic `organization_batch_create` target in the spec with an explicit subgraph target: prepare/list -> create/enrich fanout -> join.
     - [x] Specify the migration target set in the spec for all existing seeded workflows:
       - [x] `ai_usecase_generation`
       - [x] `opportunity_identification`
       - [x] `opportunity_qualification`
       - [x] `code_analysis`
-  - [x] **12.2 Runtime engine core**
+  - [ ] **12.2 Runtime engine core**
     - [x] Add `orgIds: string[]` and `createNewOrgs: boolean` to folder creation payload.
     - [x] Store these values as workflow inputs on the generation run/job.
-    - [x] Preserve classic path when no orgs are selected and `createNewOrgs` is false.
+    - [ ] Preserve exact `main` entry/output parity for pre-existing non-multi-org paths.
+    - [ ] Preserve queue-visible work topology and concurrency regulation for pre-existing work units.
     - [x] Persist `workflow_run_state` for the generation run and bind multi-org inputs into that state.
     - [x] Persist `workflow_task_results` (or equivalent task output persistence) for the generation chain.
     - [x] Add `workflow_task_transitions` persistence and seed support.
     - [x] Replace the current `switch (task.agentRole)` startup routing with a generic “ready entry nodes” dispatch.
     - [x] Replace task-key string heuristics (`includes("detail")`, `includes("summary")`, etc.) with transition-driven next-node resolution.
-    - [x] Replace workflow-specific matrix waiting / unlock logic with transition + binding driven scheduling.
+    - [ ] Replace workflow-specific matrix waiting / unlock logic with transition + binding driven scheduling, while preserving the legacy matrix/list ordering on non-multi-org paths.
     - [x] Keep only a generic executor registry (`executor` / `jobType` / `subworkflowKey` → implementation) in runtime services.
-  - [x] **12.3 Workflow migration on the generic engine**
-    - [x] `ai_usecase_generation`
+  - [ ] **12.3 Workflow migration on the generic engine**
+    - [ ] `ai_usecase_generation`
       - [x] Create `initiative_list_with_orgs` agent config in `default-agents-opportunity.ts` (and optionally `default-agents-ai-ideas.ts`): same as `initiative_list` but prompt includes `{{organizations_context}}` with selected org details and asks the LLM to orient initiatives by org.
       - [x] Route list generation from workflow runtime state: if selected/new org context is present, run `initiative_list_with_orgs`; otherwise keep the classic list task.
-      - [x] Implement `organization_batch_create` worker execution and bind created organization IDs/details back into workflow state.
-      - [x] Declare matrix dependency as a transition/binding instead of ad hoc waiting logic.
+      - [ ] Replace monolithic `organization_batch_create` with an explicit org subgraph: targets prepare/list -> per-org create/enrich fanout -> join.
+      - [ ] Keep `matrix_prepare` on the canonical legacy path before list generation whenever a folder ad hoc matrix is required.
+      - [ ] Validate exact parity with `main` for pre-existing single-org / no-org cases.
       - [x] Declare `initiative_detail` fanout in transitions instead of runtime heuristics.
       - [x] Declare `executive_summary` join in transitions instead of business-table completion scanning.
-    - [x] `opportunity_identification`
-      - [x] Move list/detail/summary sequencing to transitions + bindings only.
-      - [x] Remove any opportunity-specific sequencing fallback from orchestration/runtime code.
+    - [ ] `opportunity_identification`
+      - [ ] Move list/detail/summary sequencing to transitions + bindings only, without changing legacy observable behavior outside multi-org.
+      - [ ] Remove any opportunity-specific sequencing fallback from orchestration/runtime code.
+      - [ ] Keep dossier-scoped matrix generation semantics on zero-org, single-org, and multi-org paths.
     - [x] `opportunity_qualification`
       - [x] Express qualification sequencing entirely through task transitions.
       - [x] Validate that no orchestration code path still depends on workflow-specific ordering logic.
     - [x] `code_analysis`
       - [x] Express analysis sequencing entirely through task transitions.
       - [x] Validate that no orchestration code path still depends on workflow-specific ordering logic.
-  - [x] **12.4 Tests**
-    - [x] **API**
+  - [ ] **12.4 Tests**
+    - [ ] **API**
       - [x] Add API tests for generation start with `org_ids` / `create_new_orgs`.
       - [x] Add API tests for runtime routing to `initiative_list_with_orgs`.
-      - [x] Add API tests for `organization_batch_create` output binding into run state.
+      - [ ] Replace `organization_batch_create` tests with org subgraph tests (prepare/list, fanout, join, state binding).
       - [x] Add API tests for transition-driven detail fanout and executive-summary join on the multi-org path.
-      - [x] Add API tests that existing non-multi-org workflows now run through the same generic transition scheduler.
-    - [x] **Queue / unit**
-      - [x] Add queue test for `organization_batch_create` runtime worker, state patching, and relaunch of the list task.
+      - [ ] Add parity API tests against `main` semantics for pre-existing non-multi-org flows:
+        - [ ] `0` org + title/context only
+        - [ ] `1` org + reuse existing matrix
+        - [ ] `1` org + generated matrix
+    - [ ] **Queue / unit**
+      - [ ] Add queue tests proving queue-visible per-org jobs and no opaque multi-call batch worker for auto-create orgs.
       - [x] Add queue/unit tests for generic conditional transition resolution.
       - [x] Add queue/unit tests for generic fanout scheduling.
       - [x] Add queue/unit tests for generic join completion.
       - [x] Add queue/unit tests for generic state/result replay safety.
-    - [x] **UI**
+    - [ ] **UI**
       - [x] UI: replace single-select org with multi-select in folder creation.
       - [x] UI: add checkbox "Créer de nouvelles organisations automatiquement".
       - [x] UI: pass `{ orgIds, createNewOrgs }` in the folder creation API call.
-      - [x] Add UI coverage for the multi-select org flow if not already covered by existing screen tests.
+      - [ ] UI: align matrix choice and labels with dossier-matrix semantics (`reuse existing org matrix` vs `generate folder ad hoc matrix`).
+      - [ ] Add UI coverage for the non-multi-org parity path and the multi-org folder-matrix flow.
   - [ ] **12.5 Lot gate**
     - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`

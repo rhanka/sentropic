@@ -561,6 +561,31 @@ Allowed after Lot 12 completion:
 - worker-internal business logic for the side effect of one node;
 - generic scheduler code that evaluates declarative transitions, bindings, retry policy, and join/fanout rules.
 
+#### 7.4.3a Legacy parity contract
+
+For workflow families and generation entrypoints that already existed on `main` before BR-04B, the runtime refactor MUST preserve observable behavior unless the spec explicitly and deliberately changes the product contract.
+
+This parity contract applies to:
+- request validation and accepted input combinations;
+- default resolution (`matrix_mode`, `organization_id`, folder matrix initialization, title/context fallback behavior);
+- persisted business side effects (folder state, initiatives created, summary creation, matrix materialization);
+- queue-visible execution topology for pre-existing work units.
+
+Concrete rule:
+- for an existing non-multi-org scenario, the BR-04B runtime MUST remain entry/output compatible with `main`;
+- the generic runtime MAY change internal plumbing, but MUST NOT silently change product semantics.
+
+Queue visibility rule:
+- the queue-manager remains the source of truth for job tracking and concurrency regulation;
+- a workflow MUST NOT hide multiple independently meaningful LLM/tool work units behind one opaque job if doing so removes queue visibility or per-unit retry/concurrency control.
+
+Implication for organization auto-create:
+- `create_organizations` is NOT specified as one monolithic “batch LLM job”;
+- it is specified as a subgraph composed of:
+  - a target-discovery/preparation step;
+  - one visible create/enrich execution per organization candidate (fanout);
+  - an explicit join before downstream list generation.
+
 #### 7.4.4 Transitions, fanout, join
 
 `orderIndex` remains useful as a default display/ordering hint, but execution semantics must come from explicit transitions.
@@ -582,11 +607,19 @@ Transition metadata supports:
 - `join.reducerKey` — reducer used to merge parallel results
 
 This allows flows like:
-- create organizations
-- bind created organization IDs/details into state
+- prepare organization targets from prompt/folder context
+- fan out one create/enrich execution per organization target
+- join the created or matched organization set back into run state
+- generate or reuse the folder-level matrix as required by the resolved matrix mode
 - route to `initiative_list_with_orgs`
 - fan out one `initiative_detail` execution per generated initiative
 - join when all details are completed, then enqueue `executive_summary`
+
+Matrix semantics:
+- the generated matrix is attached to the folder/run context first;
+- `matrix_mode=organization` means “reuse one existing organization matrix” and therefore requires a unique reusable source organization;
+- `matrix_mode=generate` means “generate a dossier/folder ad hoc matrix” and MUST work for `0`, `1`, or `N` selected organizations;
+- selected or auto-created organizations may influence the generated matrix context, but do not make the matrix an organization-owned artifact by default.
 
 #### 7.4.5 Run state, results, durable execution
 
@@ -626,7 +659,9 @@ Subgraphs/child workflows are modeled as task nodes with:
 - persisted `workflow_task_results`;
 - declarative `inputBindings` / `outputBindings` for all existing seeded workflows;
 - generic conditional routing for list-task selection;
-- `organization_batch_create` worker execution with state binding;
+- preservation of legacy entry/output parity for pre-existing non-multi-org generation flows;
+- preservation of queue-visible job topology for pre-existing work units, with no opaque multi-call “batch” workers that bypass queue-level regulation;
+- organization auto-create modeled as a visible subgraph (target discovery -> per-organization create/enrich fanout -> join) with state binding;
 - generic fanout/join support sufficient for the existing generation workflows (`initiative_detail` / `executive_summary`);
 - removal of workflow-specific sequencing hardcoding from `todo-orchestration.ts` and `queue-manager.ts` for the currently existing workflows:
   - `ai_usecase_generation`
@@ -657,6 +692,8 @@ Workflow keys are logical identifiers (e.g. `ai_usecase_generation`, not `ai_use
 | `code` | `code_analysis` | context_prepare, codebase_scan, issue_triage, implementation_plan |
 
 Seed data created on workspace creation (same pattern as BR-03 `ensureDefaultGenerationAgents`).
+
+For `ai_usecase_generation` and `opportunity_identification`, the sequence above is the canonical legacy path. Optional organization auto-create, when enabled, inserts an additive subgraph before `matrix_prepare` / list generation; it does not redefine the canonical non-multi-org path.
 
 ### 7.7 Dependency on BR-15
 
