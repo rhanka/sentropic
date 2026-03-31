@@ -3,9 +3,13 @@ import { writable } from 'svelte/store';
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export type JobType =
   | 'organization_enrich'
+  | 'organization_batch_create'
+  | 'organization_targets_join'
   | 'matrix_generate'
   | 'usecase_list'
+  | 'initiative_list'
   | 'usecase_detail'
+  | 'initiative_detail'
   | 'executive_summary'
   | 'document_summary'
   | 'chat_message'

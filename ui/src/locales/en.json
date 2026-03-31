@@ -1349,7 +1349,9 @@
       "failed": "failed"
     },
     "type": {
+      "organizationBatchCreate": "Organization preparation",
       "organizationEnrich": "Organization enrichment",
+      "organizationTargetsJoin": "Organization consolidation",
       "matrixGenerate": "Matrix generation",
       "usecaseList": "Initiative generation",
       "usecaseDetail": "Initiative detail generation",
