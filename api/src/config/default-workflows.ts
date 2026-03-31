@@ -145,11 +145,43 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       }),
     },
     {
+      taskKey: "generation_organization_enrich",
+      title: "Organization create or enrich",
+      description:
+        "Resolve one organization candidate into a visible queue job and enrich it when needed.",
+      orderIndex: 1,
+      agentKey: "organization_batch_agent",
+      metadata: jobTaskMetadata("organization_enrich", {
+        inputBindings: {
+          organizationId: "$item.organizationId",
+          organizationName: "$item.organizationName",
+          model: "$state.inputs.model",
+          initiatedByUserId: "$run.startedByUserId",
+          locale: "$state.inputs.locale",
+          skipIfCompleted: "$item.skipIfCompleted",
+          wasCreated: "$item.wasCreated",
+        },
+      }),
+    },
+    {
+      taskKey: "generation_organization_join",
+      title: "Organization resolution join",
+      description:
+        "Join resolved organizations back into workflow state before downstream generation.",
+      orderIndex: 2,
+      agentKey: "organization_batch_agent",
+      metadata: jobTaskMetadata("organization_targets_join", {
+        inputBindings: {
+          sourceTaskKey: "generation_organization_enrich",
+        },
+      }),
+    },
+    {
       taskKey: "generation_context_prepare",
       title: "Generation context preparation",
       description:
         "Normalize request payload and folder context before generation runtime starts.",
-      orderIndex: 1,
+      orderIndex: 3,
       agentKey: "generation_orchestrator",
       metadata: noopTaskMetadata(),
     },
@@ -158,7 +190,7 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       title: "Matrix preparation",
       description:
         "Generate matrix configuration when matrix mode requires dynamic generation.",
-      orderIndex: 2,
+      orderIndex: 4,
       agentKey: "matrix_generation_agent",
       metadata: jobTaskMetadata("matrix_generate", {
         inputBindings: {
@@ -177,7 +209,7 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       taskKey: "generation_usecase_list",
       title: "Use-case list generation",
       description: "Generate draft use-case list from normalized context.",
-      orderIndex: 3,
+      orderIndex: 5,
       agentKey: "usecase_list_agent",
       metadata: jobTaskMetadata("initiative_list", {
         inputBindings: {
@@ -210,7 +242,7 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       title: "TODO synchronization",
       description:
         "Synchronize generated items with chat session TODO runtime projection.",
-      orderIndex: 4,
+      orderIndex: 6,
       agentKey: "todo_projection_agent",
       metadata: noopTaskMetadata(),
     },
@@ -218,7 +250,7 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       taskKey: "generation_usecase_detail",
       title: "Use-case detail generation",
       description: "Generate detail payload for each draft use case.",
-      orderIndex: 5,
+      orderIndex: 7,
       agentKey: "usecase_detail_agent",
       metadata: jobTaskMetadata("initiative_detail", {
         inputBindings: {
@@ -237,7 +269,7 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       title: "Executive synthesis generation",
       description:
         "Generate executive summary once all use cases are completed.",
-      orderIndex: 6,
+      orderIndex: 8,
       agentKey: "executive_synthesis_agent",
       metadata: jobTaskMetadata("executive_summary", {
         inputBindings: {
@@ -275,6 +307,36 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
     },
     {
       fromTaskKey: "generation_create_organizations",
+      toTaskKey: "generation_organization_enrich",
+      transitionType: "fanout",
+      metadata: {
+        fanout: {
+          sourcePath: "orgContext.organizationTargets",
+          itemKey: "organizationTarget",
+          instanceKeyPath: "organizationId",
+        },
+      },
+    },
+    {
+      fromTaskKey: "generation_organization_enrich",
+      toTaskKey: "generation_organization_join",
+      transitionType: "join",
+      metadata: {
+        join: {
+          taskKey: "generation_organization_enrich",
+          mode: "all",
+          expectedSourcePath: "orgContext.organizationTargets",
+        },
+      },
+    },
+    {
+      fromTaskKey: "generation_organization_join",
+      toTaskKey: "generation_matrix_prepare",
+      transitionType: "conditional",
+      condition: matrixPreparationRequiredCondition,
+    },
+    {
+      fromTaskKey: "generation_organization_join",
       toTaskKey: "generation_usecase_list",
       transitionType: "normal",
     },
@@ -282,23 +344,20 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       fromTaskKey: "generation_usecase_list",
       toTaskKey: "generation_todo_sync",
       transitionType: "conditional",
-      condition: anyOf(
-        conditionEq("inputs.autoCreateOrganizations", true),
-        notOf(matrixPreparationRequiredCondition),
-      ),
+      condition: notOf(matrixPreparationRequiredCondition),
     },
     {
       fromTaskKey: "generation_usecase_list",
       toTaskKey: "generation_todo_sync",
       transitionType: "join",
-      condition: allOf(conditionEq("inputs.autoCreateOrganizations", false), matrixPreparationRequiredCondition),
+      condition: matrixPreparationRequiredCondition,
       metadata: matrixBarrierJoinMetadata(["generation_usecase_list", "generation_matrix_prepare"]),
     },
     {
       fromTaskKey: "generation_matrix_prepare",
       toTaskKey: "generation_todo_sync",
       transitionType: "join",
-      condition: allOf(conditionEq("inputs.autoCreateOrganizations", false), matrixPreparationRequiredCondition),
+      condition: matrixPreparationRequiredCondition,
       metadata: matrixBarrierJoinMetadata(["generation_usecase_list", "generation_matrix_prepare"]),
     },
     {
@@ -361,10 +420,40 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
       }),
     },
     {
+      taskKey: "organization_enrich",
+      title: "Organization create or enrich",
+      description: "Resolve one organization candidate into a visible queue job and enrich it when needed.",
+      orderIndex: 1,
+      agentKey: "organization_batch_agent",
+      metadata: jobTaskMetadata("organization_enrich", {
+        inputBindings: {
+          organizationId: "$item.organizationId",
+          organizationName: "$item.organizationName",
+          model: "$state.inputs.model",
+          initiatedByUserId: "$run.startedByUserId",
+          locale: "$state.inputs.locale",
+          skipIfCompleted: "$item.skipIfCompleted",
+          wasCreated: "$item.wasCreated",
+        },
+      }),
+    },
+    {
+      taskKey: "organization_targets_join",
+      title: "Organization resolution join",
+      description: "Join resolved organizations back into workflow state before downstream generation.",
+      orderIndex: 2,
+      agentKey: "organization_batch_agent",
+      metadata: jobTaskMetadata("organization_targets_join", {
+        inputBindings: {
+          sourceTaskKey: "organization_enrich",
+        },
+      }),
+    },
+    {
       taskKey: "context_prepare",
       title: "Context preparation",
       description: "Normalize request payload and organization context before opportunity identification.",
-      orderIndex: 1,
+      orderIndex: 3,
       agentKey: "opportunity_orchestrator",
       metadata: noopTaskMetadata(),
     },
@@ -372,7 +461,7 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
       taskKey: "matrix_prepare",
       title: "Matrix preparation",
       description: "Generate matrix configuration when matrix mode requires dynamic generation.",
-      orderIndex: 2,
+      orderIndex: 4,
       agentKey: "matrix_generation_agent",
       metadata: jobTaskMetadata("matrix_generate", {
         inputBindings: {
@@ -391,7 +480,7 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
       taskKey: "opportunity_list",
       title: "Opportunity list generation",
       description: "Generate draft opportunity list from normalized context.",
-      orderIndex: 3,
+      orderIndex: 5,
       agentKey: "opportunity_list_agent",
       metadata: jobTaskMetadata("initiative_list", {
         inputBindings: {
@@ -423,7 +512,7 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
       taskKey: "todo_sync",
       title: "TODO synchronization",
       description: "Synchronize generated items with chat session TODO runtime projection.",
-      orderIndex: 4,
+      orderIndex: 6,
       agentKey: "todo_projection_agent",
       metadata: noopTaskMetadata(),
     },
@@ -431,7 +520,7 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
       taskKey: "opportunity_detail",
       title: "Opportunity detail generation",
       description: "Generate detail payload for each draft opportunity.",
-      orderIndex: 5,
+      orderIndex: 7,
       agentKey: "opportunity_detail_agent",
       metadata: jobTaskMetadata("initiative_detail", {
         inputBindings: {
@@ -449,7 +538,7 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
       taskKey: "executive_summary",
       title: "Executive synthesis generation",
       description: "Generate executive summary once all opportunities are completed.",
-      orderIndex: 6,
+      orderIndex: 8,
       agentKey: "executive_synthesis_agent",
       metadata: jobTaskMetadata("executive_summary", {
         inputBindings: {
@@ -487,6 +576,36 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
     },
     {
       fromTaskKey: "create_organizations",
+      toTaskKey: "organization_enrich",
+      transitionType: "fanout",
+      metadata: {
+        fanout: {
+          sourcePath: "orgContext.organizationTargets",
+          itemKey: "organizationTarget",
+          instanceKeyPath: "organizationId",
+        },
+      },
+    },
+    {
+      fromTaskKey: "organization_enrich",
+      toTaskKey: "organization_targets_join",
+      transitionType: "join",
+      metadata: {
+        join: {
+          taskKey: "organization_enrich",
+          mode: "all",
+          expectedSourcePath: "orgContext.organizationTargets",
+        },
+      },
+    },
+    {
+      fromTaskKey: "organization_targets_join",
+      toTaskKey: "matrix_prepare",
+      transitionType: "conditional",
+      condition: matrixPreparationRequiredCondition,
+    },
+    {
+      fromTaskKey: "organization_targets_join",
       toTaskKey: "opportunity_list",
       transitionType: "normal",
     },
@@ -494,23 +613,20 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
       fromTaskKey: "opportunity_list",
       toTaskKey: "todo_sync",
       transitionType: "conditional",
-      condition: anyOf(
-        conditionEq("inputs.autoCreateOrganizations", true),
-        notOf(matrixPreparationRequiredCondition),
-      ),
+      condition: notOf(matrixPreparationRequiredCondition),
     },
     {
       fromTaskKey: "opportunity_list",
       toTaskKey: "todo_sync",
       transitionType: "join",
-      condition: allOf(conditionEq("inputs.autoCreateOrganizations", false), matrixPreparationRequiredCondition),
+      condition: matrixPreparationRequiredCondition,
       metadata: matrixBarrierJoinMetadata(["opportunity_list", "matrix_prepare"]),
     },
     {
       fromTaskKey: "matrix_prepare",
       toTaskKey: "todo_sync",
       transitionType: "join",
-      condition: allOf(conditionEq("inputs.autoCreateOrganizations", false), matrixPreparationRequiredCondition),
+      condition: matrixPreparationRequiredCondition,
       metadata: matrixBarrierJoinMetadata(["opportunity_list", "matrix_prepare"]),
     },
     {
