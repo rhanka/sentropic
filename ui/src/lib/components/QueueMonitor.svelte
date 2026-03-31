@@ -57,10 +57,14 @@
 
   const getTypeLabel = (type: JobType): string => {
     switch (type) {
+      case 'organization_batch_create': return $_('queueMonitor.type.organizationBatchCreate');
       case 'organization_enrich': return $_('queueMonitor.type.organizationEnrich');
+      case 'organization_targets_join': return $_('queueMonitor.type.organizationTargetsJoin');
       case 'matrix_generate': return $_('queueMonitor.type.matrixGenerate');
       case 'usecase_list': return $_('queueMonitor.type.usecaseList');
+      case 'initiative_list': return $_('queueMonitor.type.usecaseList');
       case 'usecase_detail': return $_('queueMonitor.type.usecaseDetail');
+      case 'initiative_detail': return $_('queueMonitor.type.usecaseDetail');
       case 'executive_summary': return $_('queueMonitor.type.executiveSummary');
       case 'document_summary': return $_('queueMonitor.type.documentSummary');
       case 'chat_message': return $_('queueMonitor.type.chatMessage');
