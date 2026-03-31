@@ -131,7 +131,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] `code_analysis`
       - [x] Express analysis sequencing entirely through task transitions.
       - [x] Validate that no orchestration code path still depends on workflow-specific ordering logic.
-  - [ ] **12.4 Tests**
+  - [x] **12.4 Tests**
     - [ ] **API**
       - [x] Add API tests for generation start with `org_ids` / `create_new_orgs`.
       - [x] Add API tests for runtime routing to `initiative_list_with_orgs`.
@@ -151,8 +151,8 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] UI: replace single-select org with multi-select in folder creation.
       - [x] UI: add checkbox "Créer de nouvelles organisations automatiquement".
       - [x] UI: pass `{ orgIds, createNewOrgs }` in the folder creation API call.
-      - [ ] UI: align matrix choice and labels with dossier-matrix semantics (`reuse existing org matrix` vs `generate folder ad hoc matrix`).
-      - [ ] Add UI coverage for the non-multi-org parity path and the multi-org folder-matrix flow.
+      - [x] UI: align matrix choice and labels with dossier-matrix semantics (`reuse existing org matrix` vs `generate folder ad hoc matrix`).
+      - [x] Add UI coverage for the non-multi-org parity path and the multi-org folder-matrix flow.
   - [ ] **12.5 Lot gate**
     - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
