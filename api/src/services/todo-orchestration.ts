@@ -253,6 +253,7 @@ const buildInitialGenerationWorkflowState = (
     selectedOrgIds: input.orgIds ?? [],
     createdOrgIds: [],
     createdOrganizations: [],
+    organizationTargets: [],
   },
   generation: {
     initiativeIds: [],

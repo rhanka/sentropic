@@ -114,6 +114,37 @@ function readStringArray(value: unknown): string[] {
     .filter(Boolean);
 }
 
+type WorkflowOrganizationTarget = {
+  organizationId: string;
+  organizationName: string;
+  skipIfCompleted?: boolean;
+  wasCreated?: boolean;
+};
+
+function readOrganizationTargets(value: unknown): WorkflowOrganizationTarget[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!isRecord(item)) return null;
+      const organizationId =
+        typeof item.organizationId === 'string' && item.organizationId.trim()
+          ? item.organizationId.trim()
+          : '';
+      const organizationName =
+        typeof item.organizationName === 'string' && item.organizationName.trim()
+          ? item.organizationName.trim()
+          : '';
+      if (!organizationId || !organizationName) return null;
+      return {
+        organizationId,
+        organizationName,
+        skipIfCompleted: item.skipIfCompleted === true,
+        wasCreated: item.wasCreated === true,
+      } satisfies WorkflowOrganizationTarget;
+    })
+    .filter((item): item is WorkflowOrganizationTarget => Boolean(item));
+}
+
 function deepMergeState(base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
   const next: Record<string, unknown> = { ...base };
   for (const [key, patchValue] of Object.entries(patch)) {
@@ -313,6 +344,7 @@ export function buildGeneratedInitiativePayloadForPersistence(
 export type JobType =
   | 'organization_enrich'
   | 'organization_batch_create'
+  | 'organization_targets_join'
   | 'matrix_generate'
   | 'initiative_list'
   | 'initiative_detail'
@@ -369,12 +401,22 @@ export interface OrganizationEnrichJobData {
   model?: string;
   initiatedByUserId?: string;
   locale?: string;
+  workflow?: GenerationWorkflowRuntimeContext;
+  skipIfCompleted?: boolean;
+  wasCreated?: boolean;
 }
 
 export interface OrganizationBatchCreateJobData {
   folderId: string;
   input: string;
   model?: string;
+  initiatedByUserId?: string;
+  locale?: string;
+  workflow?: GenerationWorkflowRuntimeContext;
+}
+
+export interface OrganizationTargetsJoinJobData {
+  sourceTaskKey: string;
   initiatedByUserId?: string;
   locale?: string;
   workflow?: GenerationWorkflowRuntimeContext;
@@ -470,6 +512,7 @@ export interface DocxGenerateJobData {
 export type JobData =
   | OrganizationEnrichJobData
   | OrganizationBatchCreateJobData
+  | OrganizationTargetsJoinJobData
   | MatrixGenerateJobData
   | InitiativeListJobData
   | InitiativeDetailJobData
@@ -611,6 +654,12 @@ export class QueueManager {
       const initiativeId = (jobData as InitiativeDetailJobData | undefined)?.initiativeId;
       if (typeof initiativeId === 'string' && initiativeId.trim()) {
         return initiativeId;
+      }
+    }
+    if (jobType === 'organization_enrich') {
+      const organizationId = (jobData as OrganizationEnrichJobData | undefined)?.organizationId;
+      if (typeof organizationId === 'string' && organizationId.trim()) {
+        return organizationId;
       }
     }
     return 'main';
@@ -2151,11 +2200,21 @@ export class QueueManager {
       let workflowCompletion: WorkflowTaskCompletion | undefined;
       switch (jobType) {
         case 'organization_enrich':
-          await this.processOrganizationEnrich(jobData as OrganizationEnrichJobData, jobId, controller.signal);
+          workflowCompletion = await this.processOrganizationEnrich(
+            jobData as OrganizationEnrichJobData,
+            jobId,
+            controller.signal,
+          );
           break;
         case 'organization_batch_create':
           workflowCompletion = await this.processOrganizationBatchCreate(
             jobData as OrganizationBatchCreateJobData,
+            controller.signal,
+          );
+          break;
+        case 'organization_targets_join':
+          workflowCompletion = await this.processOrganizationTargetsJoin(
+            jobData as OrganizationTargetsJoinJobData,
             controller.signal,
           );
           break;
@@ -2334,8 +2393,12 @@ export class QueueManager {
   /**
    * Worker pour l'enrichissement d'organisation
    */
-  private async processOrganizationEnrich(data: OrganizationEnrichJobData, jobId: string, signal?: AbortSignal): Promise<void> {
-    const { organizationId, organizationName, model, initiatedByUserId, locale } = data;
+  private async processOrganizationEnrich(
+    data: OrganizationEnrichJobData,
+    jobId: string,
+    signal?: AbortSignal,
+  ): Promise<WorkflowTaskCompletion | void> {
+    const { organizationId, organizationName, model, initiatedByUserId, locale, skipIfCompleted, wasCreated } = data;
     
     // Générer un streamId pour le streaming
     // IMPORTANT:
@@ -2348,6 +2411,17 @@ export class QueueManager {
     const workspaceId = typeof existingOrg?.workspaceId === 'string' ? existingOrg.workspaceId : '';
     const existingData = parseOrgData(existingOrg?.data);
     const effectiveName = (existingOrg?.name || organizationName || '').trim() || organizationName;
+
+    if (skipIfCompleted && existingOrg?.status === 'completed') {
+      return {
+        output: {
+          organizationId,
+          organizationName: effectiveName,
+          wasCreated: wasCreated === true,
+          skipped: true,
+        },
+      };
+    }
 
     // Only expose documents tool if this organization has attached documents.
     const hasOrgDocs = await (async () => {
@@ -2473,13 +2547,22 @@ export class QueueManager {
       createdBy: initiatedByUserId,
       locale
     });
+
+    return {
+      output: {
+        organizationId,
+        organizationName: effectiveName,
+        wasCreated: wasCreated === true,
+        skipped: false,
+      },
+    };
   }
 
   private async processOrganizationBatchCreate(
     data: OrganizationBatchCreateJobData,
     signal?: AbortSignal,
   ): Promise<WorkflowTaskCompletion> {
-    const { folderId, input, model, initiatedByUserId, locale } = data;
+    const { folderId, input, model } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
     if (!workflow) {
       throw new Error('Workflow runtime metadata is required for organization_batch_create jobs');
@@ -2497,7 +2580,6 @@ export class QueueManager {
     const runtimeState = await this.getWorkflowRunStateSnapshot(workflow.workflowRunId);
     const currentState = runtimeState?.state ?? {};
     const inputState = isRecord(currentState.inputs) ? currentState.inputs : {};
-    const orgContextState = isRecord(currentState.orgContext) ? currentState.orgContext : {};
 
     const aiSettings = await settingsService.getAISettings();
     const selectedModel =
@@ -2579,6 +2661,7 @@ export class QueueManager {
       description: string;
       location: string;
     }> = [];
+    const organizationTargets: WorkflowOrganizationTarget[] = [];
     const organizationRowsToInsert: Array<typeof organizations.$inferInsert> = [];
     const matchedExistingIds: string[] = [];
     const createdOrgIds: string[] = [];
@@ -2592,6 +2675,12 @@ export class QueueManager {
       const existingId = existingByName.get(normalizedName);
       if (existingId) {
         matchedExistingIds.push(existingId);
+        organizationTargets.push({
+          organizationId: existingId,
+          organizationName: organization.name,
+          skipIfCompleted: true,
+          wasCreated: false,
+        });
         continue;
       }
 
@@ -2608,7 +2697,7 @@ export class QueueManager {
         id: organizationId,
         workspaceId: folder.workspaceId,
         name: organization.name,
-        status: 'completed',
+        status: 'generating',
         data: {
           industry: organization.sector,
           size: '',
@@ -2624,6 +2713,12 @@ export class QueueManager {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+      organizationTargets.push({
+        organizationId,
+        organizationName: organization.name,
+        skipIfCompleted: false,
+        wasCreated: true,
+      });
       existingByName.set(normalizedName, organizationId);
     }
 
@@ -2631,34 +2726,119 @@ export class QueueManager {
       await db.insert(organizations).values(organizationRowsToInsert);
       for (const row of organizationRowsToInsert) {
         await this.notifyOrganizationEvent(row.id);
-        await this.createAutoGenerationFieldComments({
-          workspaceId: folder.workspaceId,
-          contextType: 'organization',
-          contextId: row.id,
-          sectionKeys: ['industry', 'objectives'],
-          createdBy: initiatedByUserId,
-          locale,
-        });
       }
     }
 
-    const selectedOrgIds = readStringArray(orgContextState.selectedOrgIds);
-    const effectiveOrgIds = Array.from(new Set([...selectedOrgIds, ...matchedExistingIds, ...createdOrgIds]));
-    if (effectiveOrgIds.length === 0) {
+    if (organizationTargets.length === 0) {
       throw new Error('Organization batch generation produced no organizations');
     }
 
     return {
       output: {
+        organizationTargets,
         createdOrgIds,
         matchedExistingIds,
-        effectiveOrgIds,
       },
       statePatch: {
         orgContext: {
+          organizationTargets,
           createdOrgIds,
           createdOrganizations: createdOrganizationsPayload,
+        },
+      },
+    };
+  }
+
+  private async processOrganizationTargetsJoin(
+    data: OrganizationTargetsJoinJobData,
+    signal?: AbortSignal,
+  ): Promise<WorkflowTaskCompletion> {
+    if (signal?.aborted) {
+      throw new Error('Organization targets join aborted');
+    }
+
+    const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
+    if (!workflow) {
+      throw new Error('Workflow runtime metadata is required for organization_targets_join jobs');
+    }
+
+    const runtimeState = await this.getWorkflowRunStateSnapshot(workflow.workflowRunId);
+    const currentState = runtimeState?.state ?? {};
+    const orgContextState = isRecord(currentState.orgContext) ? currentState.orgContext : {};
+    const selectedOrgIds = readStringArray(orgContextState.selectedOrgIds);
+    const organizationTargets = readOrganizationTargets(orgContextState.organizationTargets);
+    if (organizationTargets.length === 0) {
+      throw new Error('Organization targets join received no targets');
+    }
+
+    const completedRows = await db
+      .select({
+        taskInstanceKey: workflowTaskResults.taskInstanceKey,
+        output: workflowTaskResults.output,
+      })
+      .from(workflowTaskResults)
+      .where(
+        and(
+          eq(workflowTaskResults.runId, workflow.workflowRunId),
+          eq(workflowTaskResults.taskKey, data.sourceTaskKey),
+          eq(workflowTaskResults.status, 'completed'),
+        ),
+      );
+
+    const completedByOrgId = new Map<string, Record<string, unknown>>();
+    for (const row of completedRows) {
+      if (!isRecord(row.output)) continue;
+      const organizationId =
+        typeof row.output.organizationId === 'string' && row.output.organizationId.trim()
+          ? row.output.organizationId.trim()
+          : (typeof row.taskInstanceKey === 'string' && row.taskInstanceKey.trim()
+              ? row.taskInstanceKey.trim()
+              : '');
+      if (!organizationId) continue;
+      completedByOrgId.set(organizationId, row.output);
+    }
+
+    const resolvedTargets = organizationTargets.filter((target) => completedByOrgId.has(target.organizationId));
+    const effectiveOrgIds = Array.from(
+      new Set([...selectedOrgIds, ...resolvedTargets.map((target) => target.organizationId)]),
+    );
+    if (effectiveOrgIds.length === 0) {
+      throw new Error('Organization targets join resolved no organizations');
+    }
+
+    const createdOrgIds = resolvedTargets
+      .filter((target) => completedByOrgId.get(target.organizationId)?.wasCreated === true)
+      .map((target) => target.organizationId);
+
+    const createdOrgRows =
+      createdOrgIds.length > 0
+        ? await db
+            .select({ id: organizations.id, name: organizations.name, data: organizations.data })
+            .from(organizations)
+            .where(inArray(organizations.id, createdOrgIds))
+        : [];
+
+    const createdOrganizations = createdOrgRows.map((org) => {
+      const orgData = parseOrgData(org.data);
+      return {
+        id: org.id,
+        name: org.name,
+        sector: typeof orgData.industry === 'string' ? orgData.industry : '',
+        description: typeof orgData.objectives === 'string' ? orgData.objectives : '',
+        location: typeof orgData.location === 'string' ? orgData.location : '',
+      };
+    });
+
+    return {
+      output: {
+        effectiveOrgIds,
+        createdOrgIds,
+      },
+      statePatch: {
+        orgContext: {
           effectiveOrgIds,
+          createdOrgIds,
+          createdOrganizations,
         },
       },
     };
