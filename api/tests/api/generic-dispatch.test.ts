@@ -71,7 +71,7 @@ describe("Generic dispatch and backward compat", () => {
             eq(workflowDefinitionTasks.workflowDefinitionId, wfDef.id),
           ),
         );
-      expect(wfTasks.length).toBe(7); // 7 tasks in ai-ideas workflow (incl. generation_create_organizations)
+      expect(wfTasks.length).toBe(9); // 9 tasks in ai-ideas workflow including org fanout/join runtime tasks
 
       const transitions = await db
         .select()
@@ -130,7 +130,7 @@ describe("Generic dispatch and backward compat", () => {
             eq(workflowDefinitionTasks.workflowDefinitionId, wfDef.id),
           ),
         );
-      expect(wfTasks.length).toBe(5); // 5 tasks in opportunity workflow
+      expect(wfTasks.length).toBe(5); // opportunity_qualification remains a noop-only workflow
 
       // Check opportunity-specific agents
       const agents = await db

@@ -50,13 +50,14 @@ describe('Queue - organization_batch_create runtime', () => {
     vi.restoreAllMocks();
   });
 
-  it('creates organizations, updates workflow runtime state, and enqueues initiative_list', async () => {
+  it('creates organization targets and enqueues visible organization_enrich jobs', async () => {
     const folderId = createId();
     const workflowDefinitionId = createId();
     const workflowRunId = createId();
     const jobId = createId();
     const existingOrganizationId = createId();
-    const enqueuedListJobId = createId();
+    const enqueuedExistingEnrichJobId = createId();
+    const enqueuedCreatedEnrichJobId = createId();
     const now = new Date();
 
     await db.insert(organizations).values({
@@ -126,10 +127,54 @@ describe('Queue - organization_batch_create runtime', () => {
         id: createId(),
         workspaceId: user.workspaceId,
         workflowDefinitionId,
+        taskKey: 'generation_organization_enrich',
+        title: 'Organization create or enrich',
+        description: 'Create or enrich one visible organization target',
+        orderIndex: 2,
+        agentDefinitionId: null,
+        metadata: {
+          executor: 'job',
+          jobType: 'organization_enrich',
+          inputBindings: {
+            organizationId: '$item.organizationId',
+            organizationName: '$item.organizationName',
+            model: '$state.inputs.model',
+            initiatedByUserId: '$run.startedByUserId',
+            locale: '$state.inputs.locale',
+            skipIfCompleted: '$item.skipIfCompleted',
+            wasCreated: '$item.wasCreated',
+          },
+        },
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: createId(),
+        workspaceId: user.workspaceId,
+        workflowDefinitionId,
+        taskKey: 'generation_organization_join',
+        title: 'Organization targets join',
+        description: 'Join organization fanout before list generation',
+        orderIndex: 3,
+        agentDefinitionId: null,
+        metadata: {
+          executor: 'job',
+          jobType: 'organization_targets_join',
+          inputBindings: {
+            sourceTaskKey: 'generation_organization_enrich',
+          },
+        },
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: createId(),
+        workspaceId: user.workspaceId,
+        workflowDefinitionId,
         taskKey: 'generation_usecase_list',
         title: 'Use-case list generation',
         description: 'Generate initiatives from the resolved organization context',
-        orderIndex: 2,
+        orderIndex: 4,
         agentDefinitionId: null,
         metadata: {
           executor: 'job',
@@ -156,6 +201,42 @@ describe('Queue - organization_batch_create runtime', () => {
       workspaceId: user.workspaceId,
       workflowDefinitionId,
       fromTaskKey: 'generation_create_organizations',
+      toTaskKey: 'generation_organization_enrich',
+      transitionType: 'fanout',
+      condition: {},
+      metadata: {
+        fanout: {
+          sourcePath: 'orgContext.organizationTargets',
+          itemKey: 'organizationTarget',
+          instanceKeyPath: 'organizationId',
+        },
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(workflowTaskTransitions).values({
+      id: createId(),
+      workspaceId: user.workspaceId,
+      workflowDefinitionId,
+      fromTaskKey: 'generation_organization_enrich',
+      toTaskKey: 'generation_organization_join',
+      transitionType: 'join',
+      condition: {},
+      metadata: {
+        join: {
+          taskKey: 'generation_organization_enrich',
+          mode: 'all',
+          expectedSourcePath: 'orgContext.organizationTargets',
+        },
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(workflowTaskTransitions).values({
+      id: createId(),
+      workspaceId: user.workspaceId,
+      workflowDefinitionId,
+      fromTaskKey: 'generation_organization_join',
       toTaskKey: 'generation_usecase_list',
       transitionType: 'normal',
       condition: {},
@@ -201,6 +282,7 @@ describe('Queue - organization_batch_create runtime', () => {
           selectedOrgIds: [],
           createdOrgIds: [],
           createdOrganizations: [],
+          organizationTargets: [],
         },
         generation: {
           initiativeIds: [],
@@ -230,6 +312,8 @@ describe('Queue - organization_batch_create runtime', () => {
           taskKey: 'generation_create_organizations',
           agentDefinitionId: null,
           agentMap: {
+            generation_organization_enrich: 'agent_enrich',
+            generation_organization_join: 'agent_join',
             generation_usecase_list: 'agent_list_with_orgs',
             generation_create_organizations: 'agent_batch',
           },
@@ -263,7 +347,10 @@ describe('Queue - organization_batch_create runtime', () => {
       }),
     });
 
-    const addJobSpy = vi.spyOn(queueManager, 'addJob').mockResolvedValue(enqueuedListJobId);
+    const addJobSpy = vi
+      .spyOn(queueManager, 'addJob')
+      .mockResolvedValueOnce(enqueuedExistingEnrichJobId)
+      .mockResolvedValueOnce(enqueuedCreatedEnrichJobId);
 
     const [job] = await db
       .select()
@@ -282,20 +369,40 @@ describe('Queue - organization_batch_create runtime', () => {
     const createdOrg = orgRows.find((org) => org.name === 'New Retail Org');
     expect(createdOrg).toBeDefined();
 
-    expect(addJobSpy).toHaveBeenCalledTimes(1);
-    expect(addJobSpy).toHaveBeenCalledWith(
-      'initiative_list',
+    expect(addJobSpy).toHaveBeenCalledTimes(2);
+    expect(addJobSpy).toHaveBeenNthCalledWith(
+      1,
+      'organization_enrich',
       expect.objectContaining({
-        folderId,
-        orgIds: expect.arrayContaining([existingOrganizationId, createdOrg!.id]),
+        organizationId: existingOrganizationId,
+        organizationName: 'Existing Org',
+        skipIfCompleted: true,
+        wasCreated: false,
         workflow: expect.objectContaining({
-          taskKey: 'generation_usecase_list',
+          taskKey: 'generation_organization_enrich',
           workflowRunId,
           workflowDefinitionId,
         }),
       }),
       expect.objectContaining({ workspaceId: user.workspaceId, maxRetries: 1 }),
     );
+    expect(addJobSpy).toHaveBeenNthCalledWith(
+      2,
+      'organization_enrich',
+      expect.objectContaining({
+        organizationId: createdOrg!.id,
+        organizationName: 'New Retail Org',
+        skipIfCompleted: false,
+        wasCreated: true,
+        workflow: expect.objectContaining({
+          taskKey: 'generation_organization_enrich',
+          workflowRunId,
+          workflowDefinitionId,
+        }),
+      }),
+      expect.objectContaining({ workspaceId: user.workspaceId, maxRetries: 1 }),
+    );
+    expect(addJobSpy.mock.calls.some(([jobType]) => jobType === 'initiative_list')).toBe(false);
 
     const [runState] = await db
       .select()
@@ -303,10 +410,23 @@ describe('Queue - organization_batch_create runtime', () => {
       .where(eq(workflowRunState.runId, workflowRunId))
       .limit(1);
     const state = (runState?.state ?? {}) as Record<string, any>;
-    expect(runState?.currentTaskKey).toBe('generation_usecase_list');
     expect(runState?.status).toBe('in_progress');
-    expect(state.orgContext.effectiveOrgIds).toEqual(
-      expect.arrayContaining([existingOrganizationId, createdOrg!.id]),
+    expect(runState?.currentTaskKey).toBe('generation_organization_enrich');
+    expect(state.orgContext.organizationTargets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          organizationId: existingOrganizationId,
+          organizationName: 'Existing Org',
+          skipIfCompleted: true,
+          wasCreated: false,
+        }),
+        expect.objectContaining({
+          organizationId: createdOrg!.id,
+          organizationName: 'New Retail Org',
+          skipIfCompleted: false,
+          wasCreated: true,
+        }),
+      ]),
     );
     expect(state.orgContext.createdOrgIds).toEqual([createdOrg!.id]);
 
@@ -322,8 +442,30 @@ describe('Queue - organization_batch_create runtime', () => {
       )
       .limit(1);
     expect(taskResult?.status).toBe('completed');
-    expect((taskResult?.output as Record<string, unknown>).effectiveOrgIds).toEqual(
-      expect.arrayContaining([existingOrganizationId, createdOrg!.id]),
+    expect((taskResult?.output as Record<string, unknown>).organizationTargets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ organizationId: existingOrganizationId }),
+        expect.objectContaining({ organizationId: createdOrg!.id }),
+      ]),
+    );
+
+    const enrichTaskResults = await db
+      .select({
+        taskInstanceKey: workflowTaskResults.taskInstanceKey,
+        status: workflowTaskResults.status,
+      })
+      .from(workflowTaskResults)
+      .where(
+        and(
+          eq(workflowTaskResults.runId, workflowRunId),
+          eq(workflowTaskResults.taskKey, 'generation_organization_enrich'),
+        ),
+      );
+    expect(enrichTaskResults).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ taskInstanceKey: existingOrganizationId, status: 'pending' }),
+        expect.objectContaining({ taskInstanceKey: createdOrg!.id, status: 'pending' }),
+      ]),
     );
 
     const [jobAfter] = await db
@@ -332,6 +474,342 @@ describe('Queue - organization_batch_create runtime', () => {
       .where(eq(jobQueue.id, jobId))
       .limit(1);
     expect(jobAfter?.status).toBe('completed');
+  });
+
+  it('joins resolved organization targets and enqueues initiative_list with effective org ids', async () => {
+    const folderId = createId();
+    const workflowDefinitionId = createId();
+    const workflowRunId = createId();
+    const joinJobId = createId();
+    const existingOrganizationId = createId();
+    const createdOrganizationId = createId();
+    const enqueuedListJobId = createId();
+    const now = new Date();
+
+    await db.insert(organizations).values([
+      {
+        id: existingOrganizationId,
+        workspaceId: user.workspaceId,
+        name: 'Existing Org',
+        status: 'completed',
+        data: {
+          industry: 'Tech',
+          size: '',
+          products: '',
+          processes: '',
+          kpis: '',
+          challenges: '',
+          objectives: 'Existing profile',
+          technologies: '',
+          references: [],
+        },
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: createdOrganizationId,
+        workspaceId: user.workspaceId,
+        name: 'New Retail Org',
+        status: 'completed',
+        data: {
+          industry: 'Retail',
+          size: '',
+          products: '',
+          processes: '',
+          kpis: '',
+          challenges: '',
+          objectives: 'Retail organization to include in the initiative generation scope.',
+          technologies: '',
+          references: [],
+          location: 'Paris, France',
+        },
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    await db.insert(folders).values({
+      id: folderId,
+      workspaceId: user.workspaceId,
+      name: 'Folder',
+      description: 'Need organizations',
+      organizationId: null,
+      matrixConfig: null,
+      status: 'generating',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(workflowDefinitions).values({
+      id: workflowDefinitionId,
+      workspaceId: user.workspaceId,
+      key: 'ai_usecase_generation_v1',
+      name: 'Workflow',
+      description: 'Test workflow',
+      config: {},
+      sourceLevel: 'code',
+      isDetached: false,
+      createdByUserId: user.userId,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(workflowDefinitionTasks).values([
+      {
+        id: createId(),
+        workspaceId: user.workspaceId,
+        workflowDefinitionId,
+        taskKey: 'generation_organization_join',
+        title: 'Organization targets join',
+        description: 'Join organization fanout before list generation',
+        orderIndex: 1,
+        agentDefinitionId: null,
+        metadata: {
+          executor: 'job',
+          jobType: 'organization_targets_join',
+          inputBindings: {
+            sourceTaskKey: 'generation_organization_enrich',
+          },
+        },
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: createId(),
+        workspaceId: user.workspaceId,
+        workflowDefinitionId,
+        taskKey: 'generation_usecase_list',
+        title: 'Use-case list generation',
+        description: 'Generate initiatives from the resolved organization context',
+        orderIndex: 2,
+        agentDefinitionId: null,
+        metadata: {
+          executor: 'job',
+          jobType: 'initiative_list',
+          inputBindings: {
+            folderId: '$state.inputs.folderId',
+            input: '$state.inputs.input',
+            organizationId: '$state.inputs.organizationId',
+            matrixMode: '$state.inputs.matrixMode',
+            model: '$state.inputs.model',
+            initiativeCount: '$state.inputs.initiativeCount',
+            initiatedByUserId: '$run.startedByUserId',
+            locale: '$state.inputs.locale',
+            orgIds: '$state.orgContext.effectiveOrgIds',
+          },
+        },
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    await db.insert(workflowTaskTransitions).values({
+      id: createId(),
+      workspaceId: user.workspaceId,
+      workflowDefinitionId,
+      fromTaskKey: 'generation_organization_join',
+      toTaskKey: 'generation_usecase_list',
+      transitionType: 'normal',
+      condition: {},
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(executionRuns).values({
+      id: workflowRunId,
+      workspaceId: user.workspaceId,
+      planId: null,
+      todoId: null,
+      taskId: null,
+      workflowDefinitionId,
+      agentDefinitionId: null,
+      mode: 'full_auto',
+      status: 'in_progress',
+      startedByUserId: user.userId,
+      startedAt: now,
+      completedAt: null,
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(workflowRunState).values({
+      runId: workflowRunId,
+      workspaceId: user.workspaceId,
+      workflowDefinitionId,
+      status: 'in_progress',
+      state: {
+        inputs: {
+          folderId,
+          input: 'Generate initiatives for retail and existing players',
+          matrixMode: 'default',
+          initiativeCount: 2,
+          locale: 'fr',
+          organizationId: null,
+          model: 'gpt-4.1-nano',
+        },
+        orgContext: {
+          selectedOrgIds: [],
+          createdOrgIds: [createdOrganizationId],
+          createdOrganizations: [],
+          organizationTargets: [
+            {
+              organizationId: existingOrganizationId,
+              organizationName: 'Existing Org',
+              skipIfCompleted: true,
+              wasCreated: false,
+            },
+            {
+              organizationId: createdOrganizationId,
+              organizationName: 'New Retail Org',
+              skipIfCompleted: false,
+              wasCreated: true,
+            },
+          ],
+        },
+        generation: {
+          initiativeIds: [],
+        },
+      },
+      version: 1,
+      currentTaskKey: 'generation_organization_join',
+      currentTaskInstanceKey: 'main',
+      checkpointedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(workflowTaskResults).values([
+      {
+        id: createId(),
+        workspaceId: user.workspaceId,
+        runId: workflowRunId,
+        taskKey: 'generation_organization_enrich',
+        taskInstanceKey: existingOrganizationId,
+        status: 'completed',
+        inputPayload: {},
+        output: {
+          organizationId: existingOrganizationId,
+          organizationName: 'Existing Org',
+          wasCreated: false,
+          skipped: true,
+        },
+        statePatch: {},
+        attempts: 1,
+        lastError: null,
+        startedAt: now,
+        completedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: createId(),
+        workspaceId: user.workspaceId,
+        runId: workflowRunId,
+        taskKey: 'generation_organization_enrich',
+        taskInstanceKey: createdOrganizationId,
+        status: 'completed',
+        inputPayload: {},
+        output: {
+          organizationId: createdOrganizationId,
+          organizationName: 'New Retail Org',
+          wasCreated: true,
+          skipped: false,
+        },
+        statePatch: {},
+        attempts: 1,
+        lastError: null,
+        startedAt: now,
+        completedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    await db.insert(jobQueue).values({
+      id: joinJobId,
+      type: 'organization_targets_join',
+      status: 'processing',
+      workspaceId: user.workspaceId,
+      data: JSON.stringify({
+        sourceTaskKey: 'generation_organization_enrich',
+        workflow: {
+          workflowRunId,
+          workflowDefinitionId,
+          taskKey: 'generation_organization_join',
+          agentDefinitionId: null,
+          agentMap: {
+            generation_organization_join: 'agent_join',
+            generation_usecase_list: 'agent_list_with_orgs',
+          },
+        },
+      }),
+      createdAt: now,
+      startedAt: now,
+    });
+
+    const addJobSpy = vi.spyOn(queueManager, 'addJob').mockResolvedValue(enqueuedListJobId);
+
+    const [job] = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, joinJobId), eq(jobQueue.workspaceId, user.workspaceId)))
+      .limit(1);
+    expect(job).toBeDefined();
+
+    await (queueManager as unknown as { processJob: (queuedJob: unknown) => Promise<void> }).processJob(job!);
+
+    expect(addJobSpy).toHaveBeenCalledTimes(1);
+    expect(addJobSpy).toHaveBeenCalledWith(
+      'initiative_list',
+      expect.objectContaining({
+        folderId,
+        orgIds: expect.arrayContaining([existingOrganizationId, createdOrganizationId]),
+        workflow: expect.objectContaining({
+          taskKey: 'generation_usecase_list',
+          workflowRunId,
+          workflowDefinitionId,
+        }),
+      }),
+      expect.objectContaining({ workspaceId: user.workspaceId, maxRetries: 1 }),
+    );
+
+    const [runState] = await db
+      .select()
+      .from(workflowRunState)
+      .where(eq(workflowRunState.runId, workflowRunId))
+      .limit(1);
+    const state = (runState?.state ?? {}) as Record<string, any>;
+    expect(runState?.status).toBe('in_progress');
+    expect(state.orgContext.effectiveOrgIds).toEqual(
+      expect.arrayContaining([existingOrganizationId, createdOrganizationId]),
+    );
+    expect(state.orgContext.createdOrgIds).toEqual([createdOrganizationId]);
+    expect(state.orgContext.createdOrganizations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: createdOrganizationId,
+          name: 'New Retail Org',
+        }),
+      ]),
+    );
+
+    const [taskResult] = await db
+      .select()
+      .from(workflowTaskResults)
+      .where(
+        and(
+          eq(workflowTaskResults.runId, workflowRunId),
+          eq(workflowTaskResults.taskKey, 'generation_organization_join'),
+          eq(workflowTaskResults.taskInstanceKey, 'main'),
+        ),
+      )
+      .limit(1);
+    expect(taskResult?.status).toBe('completed');
+    expect((taskResult?.output as Record<string, unknown>).effectiveOrgIds).toEqual(
+      expect.arrayContaining([existingOrganizationId, createdOrganizationId]),
+    );
   });
 
   it('requeues organization_batch_create when the provider stream terminates transiently', async () => {

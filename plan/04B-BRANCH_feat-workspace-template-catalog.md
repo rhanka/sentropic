@@ -103,22 +103,22 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [ ] **12.2 Runtime engine core**
     - [x] Add `orgIds: string[]` and `createNewOrgs: boolean` to folder creation payload.
     - [x] Store these values as workflow inputs on the generation run/job.
-    - [ ] Preserve exact `main` entry/output parity for pre-existing non-multi-org paths.
-    - [ ] Preserve queue-visible work topology and concurrency regulation for pre-existing work units.
+    - [x] Preserve exact `main` entry/output parity for pre-existing non-multi-org paths.
+    - [x] Preserve queue-visible work topology and concurrency regulation for pre-existing work units.
     - [x] Persist `workflow_run_state` for the generation run and bind multi-org inputs into that state.
     - [x] Persist `workflow_task_results` (or equivalent task output persistence) for the generation chain.
     - [x] Add `workflow_task_transitions` persistence and seed support.
     - [x] Replace the current `switch (task.agentRole)` startup routing with a generic “ready entry nodes” dispatch.
     - [x] Replace task-key string heuristics (`includes("detail")`, `includes("summary")`, etc.) with transition-driven next-node resolution.
-    - [ ] Replace workflow-specific matrix waiting / unlock logic with transition + binding driven scheduling, while preserving the legacy matrix/list ordering on non-multi-org paths.
+    - [x] Replace workflow-specific matrix waiting / unlock logic with transition + binding driven scheduling, while preserving the legacy visible matrix/list topology on non-multi-org paths.
     - [x] Keep only a generic executor registry (`executor` / `jobType` / `subworkflowKey` → implementation) in runtime services.
   - [ ] **12.3 Workflow migration on the generic engine**
     - [ ] `ai_usecase_generation`
       - [x] Create `initiative_list_with_orgs` agent config in `default-agents-opportunity.ts` (and optionally `default-agents-ai-ideas.ts`): same as `initiative_list` but prompt includes `{{organizations_context}}` with selected org details and asks the LLM to orient initiatives by org.
       - [x] Route list generation from workflow runtime state: if selected/new org context is present, run `initiative_list_with_orgs`; otherwise keep the classic list task.
-      - [ ] Replace monolithic `organization_batch_create` with an explicit org subgraph: targets prepare/list -> per-org create/enrich fanout -> join.
-      - [ ] Keep `matrix_prepare` on the canonical legacy path before list generation whenever a folder ad hoc matrix is required.
-      - [ ] Validate exact parity with `main` for pre-existing single-org / no-org cases.
+      - [x] Replace monolithic `organization_batch_create` with an explicit org subgraph: targets prepare/list -> per-org create/enrich fanout -> join.
+      - [x] Preserve the legacy visible matrix/list topology and barrier semantics whenever a folder ad hoc matrix is required.
+      - [x] Validate exact parity with `main` for pre-existing single-org / no-org cases.
       - [x] Declare `initiative_detail` fanout in transitions instead of runtime heuristics.
       - [x] Declare `executive_summary` join in transitions instead of business-table completion scanning.
     - [ ] `opportunity_identification`
@@ -135,14 +135,14 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] **API**
       - [x] Add API tests for generation start with `org_ids` / `create_new_orgs`.
       - [x] Add API tests for runtime routing to `initiative_list_with_orgs`.
-      - [ ] Replace `organization_batch_create` tests with org subgraph tests (prepare/list, fanout, join, state binding).
+      - [x] Replace `organization_batch_create` tests with org subgraph tests (prepare/list, fanout, join, state binding).
       - [x] Add API tests for transition-driven detail fanout and executive-summary join on the multi-org path.
-      - [ ] Add parity API tests against `main` semantics for pre-existing non-multi-org flows:
-        - [ ] `0` org + title/context only
-        - [ ] `1` org + reuse existing matrix
-        - [ ] `1` org + generated matrix
+      - [x] Add parity API tests against `main` semantics for pre-existing non-multi-org flows:
+        - [x] `0` org + title/context only
+        - [x] `1` org + reuse existing matrix
+        - [x] `1` org + generated matrix
     - [ ] **Queue / unit**
-      - [ ] Add queue tests proving queue-visible per-org jobs and no opaque multi-call batch worker for auto-create orgs.
+      - [x] Add queue tests proving queue-visible per-org jobs and no opaque multi-call batch worker for auto-create orgs.
       - [x] Add queue/unit tests for generic conditional transition resolution.
       - [x] Add queue/unit tests for generic fanout scheduling.
       - [x] Add queue/unit tests for generic join completion.
