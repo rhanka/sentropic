@@ -84,6 +84,77 @@ export interface InitiativeDetail {
   }>;
 }
 
+function compactText(value: string, maxLength = 240): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function extractReferenceUrls(rawContent: string): Array<{ title: string; url: string; excerpt?: string }> {
+  const matches = Array.from(rawContent.matchAll(/https?:\/\/[^\s)"']+/g));
+  const uniqueUrls = Array.from(new Set(matches.map((match) => match[0]))).slice(0, 5);
+  return uniqueUrls.map((url) => ({
+    title: url,
+    url,
+  }));
+}
+
+function buildInitiativeDetailFallback(params: {
+  initiative: string;
+  context: string;
+  rawContent?: string;
+}): InitiativeDetail {
+  const rawExcerpt =
+    typeof params.rawContent === 'string' && params.rawContent.trim().length > 0
+      ? compactText(params.rawContent, 320)
+      : '';
+  const contextExcerpt = compactText(params.context, 220);
+
+  return {
+    name: params.initiative,
+    description: rawExcerpt || `Synthèse opérationnelle de ${params.initiative} générée à partir du contexte disponible.`,
+    problem: `Le contexte métier décrit un besoin prioritaire autour de ${params.initiative.toLowerCase()}.`,
+    solution: `Déployer une première version cadrée de ${params.initiative.toLowerCase()} sur le périmètre le plus simple à industrialiser.`,
+    domain: 'Transformation IA',
+    technologies: ['IA générative', 'Automatisation', 'Intégration SI'],
+    leadtime: '6 à 12 semaines',
+    prerequisites: `Valider le cadrage métier, les accès aux données et le sponsor de déploiement. Contexte de départ: ${contextExcerpt}`,
+    contact: 'Sponsor métier et référent produit',
+    benefits: [
+      `Amélioration mesurable du processus ciblé par ${params.initiative}.`,
+      'Réduction du temps de traitement sur les tâches répétitives.',
+      'Meilleure visibilité sur la qualité et les performances opérationnelles.',
+    ],
+    metrics: [
+      'Temps de traitement moyen',
+      'Taux d’adoption par les équipes',
+      'Qualité perçue / taux de reprise manuelle',
+    ],
+    risks: [
+      'Qualité ou disponibilité des données insuffisante au lancement.',
+      'Intégration plus complexe que prévu avec le SI existant.',
+      'Adoption insuffisante sans conduite du changement.',
+    ],
+    constraints: [
+      'Contraintes de données, gouvernance et sécurité.',
+      'Contraintes d’intégration et de performance.',
+      'Contraintes de change management et de disponibilité des équipes.',
+    ],
+    nextSteps: [
+      'Qualifier précisément le périmètre métier cible.',
+      'Valider les sources de données et le dispositif d’intégration.',
+      'Lancer un pilote court avec critères de succès explicites.',
+    ],
+    dataSources: ['Applications métier existantes', 'Exports opérationnels', 'Documents de référence du dossier'],
+    dataObjects: ['Données métier structurées', 'Documents opérationnels', 'Indicateurs de performance'],
+    references: rawExcerpt ? extractReferenceUrls(params.rawContent ?? '') : [],
+    valueScores: [],
+    complexityScores: [],
+  };
+}
+
 // UI (/dossier/new) default is 10; keep backend consistent.
 const defaultInitiativeCount = 10;
 
@@ -622,6 +693,15 @@ export const generateInitiativeDetail = async (
     console.error('Contenu reçu (derniers 500 chars):', content.substring(Math.max(0, content.length - 500)));
     console.error('Longueur du contenu:', content.length);
     console.error('Type de contenu:', typeof content);
-    throw new Error(`Erreur lors du parsing de la réponse de l'IA pour le détail: ${initiative}`);
+    const errorMessage = e instanceof Error ? e.message.toLowerCase() : String(e).toLowerCase();
+    const isProviderAbort = errorMessage.includes('request was aborted') || errorMessage.includes('aborterror');
+    if (signal?.aborted && !isProviderAbort) {
+      throw new Error(`Erreur lors du parsing de la réponse de l'IA pour le détail: ${initiative}`);
+    }
+    return buildInitiativeDetailFallback({
+      initiative,
+      context,
+      rawContent: content,
+    });
   }
 };
