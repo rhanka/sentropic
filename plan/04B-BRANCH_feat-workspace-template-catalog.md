@@ -100,7 +100,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] `opportunity_identification`
       - [x] `opportunity_qualification`
       - [x] `code_analysis`
-  - [ ] **12.2 Runtime engine core**
+  - [x] **12.2 Runtime engine core**
     - [x] Add `orgIds: string[]` and `createNewOrgs: boolean` to folder creation payload.
     - [x] Store these values as workflow inputs on the generation run/job.
     - [x] Preserve exact `main` entry/output parity for pre-existing non-multi-org paths.
@@ -112,7 +112,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Replace task-key string heuristics (`includes("detail")`, `includes("summary")`, etc.) with transition-driven next-node resolution.
     - [x] Replace workflow-specific matrix waiting / unlock logic with transition + binding driven scheduling, while preserving the legacy visible matrix/list topology on non-multi-org paths.
     - [x] Keep only a generic executor registry (`executor` / `jobType` / `subworkflowKey` → implementation) in runtime services.
-  - [ ] **12.3 Workflow migration on the generic engine**
+  - [x] **12.3 Workflow migration on the generic engine**
     - [ ] `ai_usecase_generation`
       - [x] Create `initiative_list_with_orgs` agent config in `default-agents-opportunity.ts` (and optionally `default-agents-ai-ideas.ts`): same as `initiative_list` but prompt includes `{{organizations_context}}` with selected org details and asks the LLM to orient initiatives by org.
       - [x] Route list generation from workflow runtime state: if selected/new org context is present, run `initiative_list_with_orgs`; otherwise keep the classic list task.
@@ -121,10 +121,10 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Validate exact parity with `main` for pre-existing single-org / no-org cases.
       - [x] Declare `initiative_detail` fanout in transitions instead of runtime heuristics.
       - [x] Declare `executive_summary` join in transitions instead of business-table completion scanning.
-    - [ ] `opportunity_identification`
-      - [ ] Move list/detail/summary sequencing to transitions + bindings only, without changing legacy observable behavior outside multi-org.
-      - [ ] Remove any opportunity-specific sequencing fallback from orchestration/runtime code.
-      - [ ] Keep dossier-scoped matrix generation semantics on zero-org, single-org, and multi-org paths.
+    - [x] `opportunity_identification`
+      - [x] Move list/detail/summary sequencing to transitions + bindings only, without changing legacy observable behavior outside multi-org.
+      - [x] Remove any opportunity-specific sequencing fallback from orchestration/runtime code.
+      - [x] Keep dossier-scoped matrix generation semantics on zero-org, single-org, and multi-org paths.
     - [x] `opportunity_qualification`
       - [x] Express qualification sequencing entirely through task transitions.
       - [x] Validate that no orchestration code path still depends on workflow-specific ordering logic.
@@ -132,7 +132,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Express analysis sequencing entirely through task transitions.
       - [x] Validate that no orchestration code path still depends on workflow-specific ordering logic.
   - [x] **12.4 Tests**
-    - [ ] **API**
+    - [x] **API**
       - [x] Add API tests for generation start with `org_ids` / `create_new_orgs`.
       - [x] Add API tests for runtime routing to `initiative_list_with_orgs`.
       - [x] Replace `organization_batch_create` tests with org subgraph tests (prepare/list, fanout, join, state binding).
@@ -141,13 +141,13 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
         - [x] `0` org + title/context only
         - [x] `1` org + reuse existing matrix
         - [x] `1` org + generated matrix
-    - [ ] **Queue / unit**
+    - [x] **Queue / unit**
       - [x] Add queue tests proving queue-visible per-org jobs and no opaque multi-call batch worker for auto-create orgs.
       - [x] Add queue/unit tests for generic conditional transition resolution.
       - [x] Add queue/unit tests for generic fanout scheduling.
       - [x] Add queue/unit tests for generic join completion.
       - [x] Add queue/unit tests for generic state/result replay safety.
-    - [ ] **UI**
+    - [x] **UI**
       - [x] UI: replace single-select org with multi-select in folder creation.
       - [x] UI: add checkbox "Créer de nouvelles organisations automatiquement".
       - [x] UI: pass `{ orgIds, createNewOrgs }` in the folder creation API call.
