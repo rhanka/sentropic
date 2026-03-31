@@ -259,8 +259,7 @@ describe('Queue - generic workflow transition runtime', () => {
 
     const addJobSpy = vi
       .spyOn(queueManager, 'addJob')
-      .mockResolvedValueOnce(createId())
-      .mockResolvedValueOnce(createId());
+      .mockImplementation(async () => createId());
 
     await (queueManager as {
       completeWorkflowTask: (params: Record<string, unknown>) => Promise<void>;
@@ -425,6 +424,351 @@ describe('Queue - generic workflow transition runtime', () => {
       }),
       expect.objectContaining({ workspaceId: user.workspaceId, maxRetries: 1 }),
     );
+  });
+
+  it('dispatches todo_sync after matrix/list all_main join and fans out details', async () => {
+    const { workflowDefinitionId, workflowRunId } = await seedWorkflowRuntime({
+      workflowKey: 'matrix_barrier_runtime_test',
+      state: {
+        inputs: {
+          autoCreateOrganizations: false,
+          matrixMode: 'generate',
+          matrixSource: 'prompt',
+          folderId: 'folder-matrix-join',
+          model: 'gpt-4.1-nano',
+          locale: 'fr',
+        },
+      },
+      tasks: [
+        {
+          taskKey: 'generation_todo_sync',
+          orderIndex: 3,
+          metadata: { executor: 'noop' },
+        },
+        {
+          taskKey: 'generation_usecase_detail',
+          orderIndex: 4,
+          metadata: {
+            executor: 'job',
+            jobType: 'initiative_detail',
+            inputBindings: {
+              initiativeId: '$item.id',
+              initiativeName: '$item.name',
+              folderId: '$state.inputs.folderId',
+              matrixMode: '$state.inputs.matrixMode',
+              model: '$state.inputs.model',
+              initiatedByUserId: '$run.startedByUserId',
+              locale: '$state.inputs.locale',
+            },
+          },
+        },
+      ],
+      transitions: [
+        {
+          fromTaskKey: 'generation_usecase_list',
+          toTaskKey: 'generation_todo_sync',
+          transitionType: 'join',
+          condition: {
+            all: [
+              { path: 'inputs.autoCreateOrganizations', operator: 'eq', value: false },
+              { path: 'inputs.matrixSource', operator: 'eq', value: 'prompt' },
+            ],
+          },
+          metadata: {
+            join: {
+              mode: 'all_main',
+              requiredTaskKeys: ['generation_usecase_list', 'generation_matrix_prepare'],
+            },
+          },
+        },
+        {
+          fromTaskKey: 'generation_matrix_prepare',
+          toTaskKey: 'generation_todo_sync',
+          transitionType: 'join',
+          condition: {
+            all: [
+              { path: 'inputs.autoCreateOrganizations', operator: 'eq', value: false },
+              { path: 'inputs.matrixSource', operator: 'eq', value: 'prompt' },
+            ],
+          },
+          metadata: {
+            join: {
+              mode: 'all_main',
+              requiredTaskKeys: ['generation_usecase_list', 'generation_matrix_prepare'],
+            },
+          },
+        },
+        {
+          fromTaskKey: 'generation_todo_sync',
+          toTaskKey: 'generation_usecase_detail',
+          transitionType: 'fanout',
+          metadata: {
+            fanout: {
+              sourcePath: 'generation.initiatives',
+            },
+          },
+        },
+      ],
+    });
+
+    const addJobSpy = vi
+      .spyOn(queueManager, 'addJob')
+      .mockResolvedValueOnce(createId())
+      .mockResolvedValueOnce(createId());
+
+    await (queueManager as {
+      completeWorkflowTask: (params: Record<string, unknown>) => Promise<void>;
+    }).completeWorkflowTask({
+      workflow: {
+        workflowRunId,
+        workflowDefinitionId,
+        taskKey: 'generation_usecase_list',
+        agentDefinitionId: null,
+        agentMap: {},
+      },
+      workspaceId: user.workspaceId,
+      taskInstanceKey: 'main',
+      jobData: {},
+      completion: {
+        output: {
+          initiativeCount: 2,
+        },
+        statePatch: {
+          generation: {
+            initiatives: [
+              { id: 'initiative-1', name: 'Initiative 1' },
+              { id: 'initiative-2', name: 'Initiative 2' },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(addJobSpy).not.toHaveBeenCalled();
+
+    await (queueManager as {
+      completeWorkflowTask: (params: Record<string, unknown>) => Promise<void>;
+    }).completeWorkflowTask({
+      workflow: {
+        workflowRunId,
+        workflowDefinitionId,
+        taskKey: 'generation_matrix_prepare',
+        agentDefinitionId: null,
+        agentMap: {},
+      },
+      workspaceId: user.workspaceId,
+      taskInstanceKey: 'main',
+      jobData: {},
+      completion: {
+        output: {
+          generated: true,
+        },
+      },
+    });
+
+    expect(addJobSpy).toHaveBeenCalledTimes(2);
+    expect(addJobSpy).toHaveBeenNthCalledWith(
+      1,
+      'initiative_detail',
+      expect.objectContaining({
+        initiativeId: 'initiative-1',
+        initiativeName: 'Initiative 1',
+        folderId: 'folder-matrix-join',
+        workflow: expect.objectContaining({
+          taskKey: 'generation_usecase_detail',
+        }),
+      }),
+      expect.objectContaining({ workspaceId: user.workspaceId, maxRetries: 1 }),
+    );
+    expect(addJobSpy).toHaveBeenNthCalledWith(
+      2,
+      'initiative_detail',
+      expect.objectContaining({
+        initiativeId: 'initiative-2',
+        initiativeName: 'Initiative 2',
+        folderId: 'folder-matrix-join',
+      }),
+      expect.objectContaining({ workspaceId: user.workspaceId, maxRetries: 1 }),
+    );
+
+    const [todoSyncResult] = await db
+      .select({
+        status: workflowTaskResults.status,
+      })
+      .from(workflowTaskResults)
+      .where(
+        and(
+          eq(workflowTaskResults.runId, workflowRunId),
+          eq(workflowTaskResults.taskKey, 'generation_todo_sync'),
+          eq(workflowTaskResults.taskInstanceKey, 'main'),
+        ),
+      )
+      .limit(1);
+
+    expect(todoSyncResult).toMatchObject({ status: 'completed' });
+  });
+
+  it('recovers all_main joins when prerequisite tasks complete concurrently', async () => {
+    const { workflowDefinitionId, workflowRunId } = await seedWorkflowRuntime({
+      workflowKey: 'matrix_barrier_race_runtime_test',
+      state: {
+        inputs: {
+          autoCreateOrganizations: false,
+          matrixMode: 'generate',
+          matrixSource: 'prompt',
+          folderId: 'folder-matrix-race',
+          model: 'gpt-4.1-nano',
+          locale: 'fr',
+        },
+      },
+      tasks: [
+        {
+          taskKey: 'generation_todo_sync',
+          orderIndex: 3,
+          metadata: { executor: 'noop' },
+        },
+        {
+          taskKey: 'generation_usecase_detail',
+          orderIndex: 4,
+          metadata: {
+            executor: 'job',
+            jobType: 'initiative_detail',
+            inputBindings: {
+              initiativeId: '$item.id',
+              initiativeName: '$item.name',
+              folderId: '$state.inputs.folderId',
+              matrixMode: '$state.inputs.matrixMode',
+              model: '$state.inputs.model',
+              initiatedByUserId: '$run.startedByUserId',
+              locale: '$state.inputs.locale',
+            },
+          },
+        },
+      ],
+      transitions: [
+        {
+          fromTaskKey: 'generation_usecase_list',
+          toTaskKey: 'generation_todo_sync',
+          transitionType: 'join',
+          condition: {
+            all: [
+              { path: 'inputs.autoCreateOrganizations', operator: 'eq', value: false },
+              { path: 'inputs.matrixSource', operator: 'eq', value: 'prompt' },
+            ],
+          },
+          metadata: {
+            join: {
+              mode: 'all_main',
+              requiredTaskKeys: ['generation_usecase_list', 'generation_matrix_prepare'],
+            },
+          },
+        },
+        {
+          fromTaskKey: 'generation_matrix_prepare',
+          toTaskKey: 'generation_todo_sync',
+          transitionType: 'join',
+          condition: {
+            all: [
+              { path: 'inputs.autoCreateOrganizations', operator: 'eq', value: false },
+              { path: 'inputs.matrixSource', operator: 'eq', value: 'prompt' },
+            ],
+          },
+          metadata: {
+            join: {
+              mode: 'all_main',
+              requiredTaskKeys: ['generation_usecase_list', 'generation_matrix_prepare'],
+            },
+          },
+        },
+        {
+          fromTaskKey: 'generation_todo_sync',
+          toTaskKey: 'generation_usecase_detail',
+          transitionType: 'fanout',
+          metadata: {
+            fanout: {
+              sourcePath: 'generation.initiatives',
+            },
+          },
+        },
+      ],
+    });
+
+    const addJobSpy = vi
+      .spyOn(queueManager, 'addJob')
+      .mockResolvedValueOnce(createId())
+      .mockResolvedValueOnce(createId());
+
+    const completeList = (completion: Record<string, unknown>) =>
+      (queueManager as {
+        completeWorkflowTask: (params: Record<string, unknown>) => Promise<void>;
+      }).completeWorkflowTask({
+        workflow: {
+          workflowRunId,
+          workflowDefinitionId,
+          taskKey: 'generation_usecase_list',
+          agentDefinitionId: null,
+          agentMap: {},
+        },
+        workspaceId: user.workspaceId,
+        taskInstanceKey: 'main',
+        jobData: {},
+        completion,
+      });
+
+    const completeMatrix = (completion: Record<string, unknown>) =>
+      (queueManager as {
+        completeWorkflowTask: (params: Record<string, unknown>) => Promise<void>;
+      }).completeWorkflowTask({
+        workflow: {
+          workflowRunId,
+          workflowDefinitionId,
+          taskKey: 'generation_matrix_prepare',
+          agentDefinitionId: null,
+          agentMap: {},
+        },
+        workspaceId: user.workspaceId,
+        taskInstanceKey: 'main',
+        jobData: {},
+        completion,
+      });
+
+    await Promise.all([
+      completeList({
+        output: {
+          initiativeCount: 2,
+        },
+        statePatch: {
+          generation: {
+            initiatives: [
+              { id: 'initiative-1', name: 'Initiative 1' },
+              { id: 'initiative-2', name: 'Initiative 2' },
+            ],
+          },
+        },
+      }),
+      completeMatrix({
+        output: {
+          generated: true,
+        },
+      }),
+    ]);
+
+    expect(addJobSpy).toHaveBeenCalledTimes(2);
+    const [todoSyncResult] = await db
+      .select({
+        status: workflowTaskResults.status,
+      })
+      .from(workflowTaskResults)
+      .where(
+        and(
+          eq(workflowTaskResults.runId, workflowRunId),
+          eq(workflowTaskResults.taskKey, 'generation_todo_sync'),
+          eq(workflowTaskResults.taskInstanceKey, 'main'),
+        ),
+      )
+      .limit(1);
+
+    expect(todoSyncResult).toMatchObject({ status: 'completed' });
   });
 
   it('does not duplicate join dispatch when a completed fanout task is replayed', async () => {

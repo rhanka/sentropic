@@ -698,30 +698,45 @@ export class QueueManager {
     currentTaskKey?: string | null;
     currentTaskInstanceKey?: string | null;
   }): Promise<void> {
-    const current = await this.getWorkflowRunStateSnapshot(params.runId);
-    if (!current) return;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const current = await this.getWorkflowRunStateSnapshot(params.runId);
+      if (!current) return;
 
-    const nextState = params.statePatch ? deepMergeState(current.state, params.statePatch) : current.state;
-    const now = new Date();
+      const nextState = params.statePatch ? deepMergeState(current.state, params.statePatch) : current.state;
+      const now = new Date();
+      const nextVersion = current.version + (params.statePatch ? 1 : 0);
 
-    await db
-      .update(workflowRunState)
-      .set({
-        status: params.status ?? current.status,
-        state: nextState,
-        version: current.version + (params.statePatch ? 1 : 0),
-        currentTaskKey:
-          Object.prototype.hasOwnProperty.call(params, 'currentTaskKey')
-            ? (params.currentTaskKey ?? null)
-            : current.currentTaskKey,
-        currentTaskInstanceKey:
-          Object.prototype.hasOwnProperty.call(params, 'currentTaskInstanceKey')
-            ? (params.currentTaskInstanceKey ?? null)
-            : current.currentTaskInstanceKey,
-        checkpointedAt: now,
-        updatedAt: now,
-      })
-      .where(eq(workflowRunState.runId, params.runId));
+      const updatedRows = await db
+        .update(workflowRunState)
+        .set({
+          status: params.status ?? current.status,
+          state: nextState,
+          version: nextVersion,
+          currentTaskKey:
+            Object.prototype.hasOwnProperty.call(params, 'currentTaskKey')
+              ? (params.currentTaskKey ?? null)
+              : current.currentTaskKey,
+          currentTaskInstanceKey:
+            Object.prototype.hasOwnProperty.call(params, 'currentTaskInstanceKey')
+              ? (params.currentTaskInstanceKey ?? null)
+              : current.currentTaskInstanceKey,
+          checkpointedAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(workflowRunState.runId, params.runId),
+            eq(workflowRunState.version, current.version),
+          ),
+        )
+        .returning({ runId: workflowRunState.runId });
+
+      if (updatedRows.length > 0) {
+        return;
+      }
+    }
+
+    throw new Error(`Failed to merge workflow run state for ${params.runId} after concurrent updates`);
   }
 
   private async upsertWorkflowTaskResult(params: {
@@ -852,7 +867,6 @@ export class QueueManager {
       params.workflow.workflowDefinitionId,
     );
     const runContext = await this.getWorkflowRunContext(params.workflow.workflowRunId);
-
     await this.dispatchWorkflowTransitions({
       workspaceId: params.workspaceId,
       workflowRunId: params.workflow.workflowRunId,
@@ -861,6 +875,14 @@ export class QueueManager {
       runContext,
       state: runtimeState.state,
       fromTaskKey: params.workflow.taskKey,
+    });
+    await this.dispatchReadyWorkflowJoins({
+      workspaceId: params.workspaceId,
+      workflowRunId: params.workflow.workflowRunId,
+      workflowDefinitionId: params.workflow.workflowDefinitionId,
+      runtimeDefinition,
+      runContext,
+      state: runtimeState.state,
     });
   }
 
@@ -1075,6 +1097,46 @@ export class QueueManager {
     return (row?.status as WorkflowTaskRuntimeStatus | undefined) ?? null;
   }
 
+  private async reserveWorkflowTaskDispatch(params: {
+    workflowRunId: string;
+    workflowDefinitionId: string;
+    workspaceId: string;
+    taskKey: string;
+    taskInstanceKey: string;
+    inputPayload: Record<string, unknown>;
+  }): Promise<boolean> {
+    const now = new Date();
+    const inserted = await db
+      .insert(workflowTaskResults)
+      .values({
+        runId: params.workflowRunId,
+        workspaceId: params.workspaceId,
+        workflowDefinitionId: params.workflowDefinitionId,
+        taskKey: params.taskKey,
+        taskInstanceKey: params.taskInstanceKey,
+        status: 'pending',
+        inputPayload: params.inputPayload,
+        output: {},
+        statePatch: {},
+        attempts: 0,
+        lastError: null,
+        startedAt: null,
+        completedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({
+        target: [
+          workflowTaskResults.runId,
+          workflowTaskResults.taskKey,
+          workflowTaskResults.taskInstanceKey,
+        ],
+      })
+      .returning({ runId: workflowTaskResults.runId });
+
+    return inserted.length > 0;
+  }
+
   private buildWorkflowTaskInstanceKey(
     item: unknown,
     index: number,
@@ -1210,15 +1272,6 @@ export class QueueManager {
     const task = params.runtimeDefinition.tasks.get(params.taskKey);
     if (!task) return [];
 
-    const existingStatus = await this.getWorkflowTaskResultStatus(
-      params.workflowRunId,
-      params.taskKey,
-      params.taskInstanceKey,
-    );
-    if (existingStatus && existingStatus !== 'failed') {
-      return [];
-    }
-
     const metadata = isRecord(task.metadata) ? task.metadata : {};
     const executor = typeof metadata.executor === 'string' ? metadata.executor : 'noop';
     const inputBindings = isRecord(metadata.inputBindings) ? metadata.inputBindings : {};
@@ -1243,6 +1296,28 @@ export class QueueManager {
         ...(agentDefinitionId ? { [params.taskKey]: agentDefinitionId } : {}),
       },
     };
+
+    const existingStatus = await this.getWorkflowTaskResultStatus(
+      params.workflowRunId,
+      params.taskKey,
+      params.taskInstanceKey,
+    );
+    if (existingStatus && existingStatus !== 'failed') {
+      return [];
+    }
+    if (!existingStatus) {
+      const reserved = await this.reserveWorkflowTaskDispatch({
+        workflowRunId: params.workflowRunId,
+        workflowDefinitionId: params.workflowDefinitionId,
+        workspaceId: params.workspaceId,
+        taskKey: params.taskKey,
+        taskInstanceKey: params.taskInstanceKey,
+        inputPayload,
+      });
+      if (!reserved) {
+        return [];
+      }
+    }
 
     if (executor === 'noop') {
       const now = new Date();
@@ -1355,7 +1430,8 @@ export class QueueManager {
     );
     const dispatched: WorkflowDispatchDescriptor[] = [];
     for (const transition of matchingTransitions) {
-      if (!this.evaluateWorkflowCondition(transition.condition, params.state)) {
+      const conditionMatches = this.evaluateWorkflowCondition(transition.condition, params.state);
+      if (!conditionMatches) {
         continue;
       }
       if (transition.transitionType === 'end' || !transition.toTaskKey) {
@@ -1422,6 +1498,47 @@ export class QueueManager {
             taskInstanceKey: 'main',
           })),
         );
+        continue;
+      }
+      dispatched.push(
+        ...(await this.dispatchWorkflowTask({
+          workspaceId: params.workspaceId,
+          workflowRunId: params.workflowRunId,
+          workflowDefinitionId: params.workflowDefinitionId,
+          runtimeDefinition: params.runtimeDefinition,
+          runContext: params.runContext,
+          state: params.state,
+          taskKey: transition.toTaskKey,
+          taskInstanceKey: 'main',
+        })),
+      );
+    }
+    return dispatched;
+  }
+
+  private async dispatchReadyWorkflowJoins(params: {
+    workspaceId: string;
+    workflowRunId: string;
+    workflowDefinitionId: string;
+    runtimeDefinition: WorkflowRuntimeDefinition;
+    runContext: Record<string, unknown>;
+    state: Record<string, unknown>;
+  }): Promise<WorkflowDispatchDescriptor[]> {
+    const dispatched: WorkflowDispatchDescriptor[] = [];
+    for (const transition of params.runtimeDefinition.transitions) {
+      if (transition.transitionType !== 'join' || !transition.toTaskKey) {
+        continue;
+      }
+      if (!this.evaluateWorkflowCondition(transition.condition, params.state)) {
+        continue;
+      }
+      const isReady = await this.isWorkflowJoinTransitionReady({
+        workflowRunId: params.workflowRunId,
+        runtimeDefinition: params.runtimeDefinition,
+        transition,
+        state: params.state,
+      });
+      if (!isReady) {
         continue;
       }
       dispatched.push(
@@ -2028,7 +2145,17 @@ export class QueueManager {
           SET status = 'processing', started_at = ${now}
           FROM picked
           WHERE q.id = picked.id
-          RETURNING q.*
+          RETURNING
+            q.id AS "id",
+            q.type AS "type",
+            q.status AS "status",
+            q.workspace_id AS "workspaceId",
+            q.data AS "data",
+            q.result AS "result",
+            q.error AS "error",
+            q.created_at AS "createdAt",
+            q.started_at AS "startedAt",
+            q.completed_at AS "completedAt"
         `)) as JobQueueRow[];
         return rows ?? [];
       };
@@ -2139,8 +2266,10 @@ export class QueueManager {
       const msg = err instanceof Error ? err.message : String(err);
       const lowerMsg = msg.toLowerCase();
       return (
+        lowerMsg.includes('aborterror') ||
         lowerMsg.includes('terminated') ||
         lowerMsg.includes('stream aborted') ||
+        lowerMsg.includes('aborted') ||
         lowerMsg.includes('timed out') ||
         lowerMsg.includes('timeout') ||
         lowerMsg.includes('temporarily unavailable') ||
@@ -2151,6 +2280,8 @@ export class QueueManager {
         lowerMsg.includes('enotfound')
       );
     };
+
+    let controller: AbortController | null = null;
 
     try {
       console.log(`🔄 Processing job ${jobId} (${jobType})`);
@@ -2167,7 +2298,7 @@ export class QueueManager {
         return;
       }
 
-      const controller = new AbortController();
+      controller = new AbortController();
       this.jobControllers.set(jobId, controller);
 
       if (workflow) {
@@ -2257,8 +2388,9 @@ export class QueueManager {
       console.error(`❌ Job ${jobId} failed:`, error);
 
       // Retry logic (bounded) for workflow jobs on transient/provider failures.
-      // IMPORTANT: never retry on AbortError (user/admin cancel).
-      if (workflow && retryMax > 0 && retryAttempt < retryMax && !isAbort(error) && isRetryableWorkflowError(error)) {
+      // IMPORTANT: only suppress retries for explicit local cancellations.
+      const wasCancelledLocally = controller?.signal.aborted === true;
+      if (workflow && retryMax > 0 && retryAttempt < retryMax && !wasCancelledLocally && isRetryableWorkflowError(error)) {
         const nextAttempt = retryAttempt + 1;
         const jobDataRecord = jobDataToRecord(jobData);
         const nextData =
@@ -2931,15 +3063,21 @@ export class QueueManager {
       organizationId ??
       folder.organizationId ??
       (resolvedOrgIds.length === 1 ? resolvedOrgIds[0] : undefined);
+    const effectiveResolvedOrgIds =
+      resolvedOrgIds.length > 0
+        ? resolvedOrgIds
+        : resolvedOrganizationId
+          ? [resolvedOrganizationId]
+          : [];
 
     const organizationRows =
-      resolvedOrgIds.length > 0
+      effectiveResolvedOrgIds.length > 0
         ? await db
             .select({ id: organizations.id, name: organizations.name, data: organizations.data })
             .from(organizations)
             .where(and(
               eq(organizations.workspaceId, folder.workspaceId),
-              sql`${organizations.id} = ANY(ARRAY[${sql.join(resolvedOrgIds.map((id) => sql`${id}`), sql`, `)}]::text[])`,
+              sql`${organizations.id} = ANY(ARRAY[${sql.join(effectiveResolvedOrgIds.map((id) => sql`${id}`), sql`, `)}]::text[])`,
             ))
         : [];
     let selectedOrganization =
@@ -3021,7 +3159,7 @@ export class QueueManager {
       .update(folders)
       .set({
         matrixConfig: JSON.stringify(generatedMatrix),
-        organizationId: resolvedOrgIds.length === 1 ? (resolvedOrganizationId ?? null) : null,
+        organizationId: effectiveResolvedOrgIds.length === 1 ? effectiveResolvedOrgIds[0] : null,
       })
       .where(and(eq(folders.id, folderId), eq(folders.workspaceId, folder.workspaceId)));
 
@@ -3039,12 +3177,12 @@ export class QueueManager {
       output: {
         folderId,
         organizationId: resolvedOrganizationId ?? null,
-        effectiveOrgIds: resolvedOrgIds,
+        effectiveOrgIds: effectiveResolvedOrgIds,
         generated: true,
       },
       statePatch: {
         orgContext: {
-          effectiveOrgIds: resolvedOrgIds,
+          effectiveOrgIds: effectiveResolvedOrgIds,
         },
       },
     };
@@ -3483,6 +3621,12 @@ export class QueueManager {
       organizationId ??
       folder.organizationId ??
       (resolvedOrgIds.length === 1 ? resolvedOrgIds[0] : undefined);
+    const effectiveResolvedOrgIds =
+      resolvedOrgIds.length > 0
+        ? resolvedOrgIds
+        : resolvedOrganizationId
+          ? [resolvedOrganizationId]
+          : [];
 
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
@@ -3521,14 +3665,14 @@ export class QueueManager {
 
     // Build multi-org organizations context (Lot 12)
     let organizationsContext = '';
-    if (resolvedOrgIds.length > 0) {
+    if (effectiveResolvedOrgIds.length > 0) {
       try {
         const orgRows = await db
           .select({ id: organizations.id, name: organizations.name, data: organizations.data })
           .from(organizations)
           .where(and(
             eq(organizations.workspaceId, workspaceId),
-            sql`${organizations.id} = ANY(ARRAY[${sql.join(resolvedOrgIds.map(id => sql`${id}`), sql`, `)}]::text[])`,
+            sql`${organizations.id} = ANY(ARRAY[${sql.join(effectiveResolvedOrgIds.map(id => sql`${id}`), sql`, `)}]::text[])`,
           ));
         const orgDetails = orgRows.map((org) => {
           const orgData = parseOrgData(org.data);
@@ -3621,7 +3765,7 @@ export class QueueManager {
     }
 
     const allowedOrgIds = new Set(
-      Array.from(new Set([...resolvedOrgIds, ...selectedOrgIdsFromState, ...effectiveOrgIdsFromState])),
+      Array.from(new Set([...effectiveResolvedOrgIds, ...selectedOrgIdsFromState, ...effectiveOrgIdsFromState])),
     );
     const normalizedListItems = initiativeList.initiatives.map((initiativeItem: InitiativeListItem) => {
       const title = initiativeItem.titre || String(initiativeItem);
@@ -3671,8 +3815,8 @@ export class QueueManager {
         organizationId:
           initiativeItem.organizationIds.length === 1
             ? initiativeItem.organizationIds[0]
-            : resolvedOrgIds.length === 1
-              ? (resolvedOrganizationId ?? null)
+            : effectiveResolvedOrgIds.length === 1
+              ? effectiveResolvedOrgIds[0]
               : null,
         data: initiativeData as InitiativeDataJson, // Drizzle accepte JSONB directement (inclut name et description)
         model: selectedModel,
@@ -3708,12 +3852,13 @@ export class QueueManager {
       output: {
         folderId,
         initiativeIds: draftInitiatives.map((initiative) => initiative.id),
-        effectiveOrgIds: resolvedOrgIds,
+        effectiveOrgIds: effectiveResolvedOrgIds,
+        organizationId: resolvedOrganizationId ?? null,
         initiativeCount: draftInitiatives.length,
       },
       statePatch: {
         orgContext: {
-          effectiveOrgIds: resolvedOrgIds,
+          effectiveOrgIds: effectiveResolvedOrgIds,
         },
         generation: {
           initiativeIds: draftInitiatives.map((initiative) => initiative.id),
@@ -3908,6 +4053,7 @@ export class QueueManager {
     // On met à jour uniquement data qui contient toutes les colonnes métier
     await db.update(initiatives)
       .set({
+        organizationId: primaryOrganizationId,
         data: initiativeData as InitiativeDataJson, // Drizzle accepte JSONB directement (inclut name, description, domain, technologies, deadline, contact, benefits, etc.)
         model: selectedModel,
         status: 'completed'
