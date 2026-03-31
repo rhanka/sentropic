@@ -50,7 +50,7 @@ describe('Queue - organization_batch_create runtime', () => {
     vi.restoreAllMocks();
   });
 
-  it('creates organization targets and enqueues visible organization_enrich jobs', async () => {
+  it('prepares organization targets from org-aware list outputs and enqueues visible organization_enrich jobs', async () => {
     const folderId = createId();
     const workflowDefinitionId = createId();
     const workflowRunId = createId();
@@ -285,7 +285,19 @@ describe('Queue - organization_batch_create runtime', () => {
           organizationTargets: [],
         },
         generation: {
-          initiativeIds: [],
+          initiativeIds: ['initiative-existing', 'initiative-new'],
+          initiatives: [
+            {
+              id: 'initiative-existing',
+              name: 'Dynamic pricing for Existing Org',
+              organizationIds: [existingOrganizationId],
+            },
+            {
+              id: 'initiative-new',
+              name: 'Retail forecasting platform',
+              organizationName: 'New Retail Org',
+            },
+          ],
         },
       },
       version: 1,
@@ -325,26 +337,6 @@ describe('Queue - organization_batch_create runtime', () => {
       }),
       createdAt: now,
       startedAt: now,
-    });
-
-    mockExecuteWithToolsStream.mockResolvedValue({
-      streamId: `folder_${folderId}`,
-      content: JSON.stringify({
-        organizations: [
-          {
-            name: 'Existing Org',
-            sector: 'Technology',
-            description: 'Already in workspace',
-            location: 'Montreal, Canada',
-          },
-          {
-            name: 'New Retail Org',
-            sector: 'Retail',
-            description: 'Retail organization to include in the initiative generation scope.',
-            location: 'Paris, France',
-          },
-        ],
-      }),
     });
 
     const addJobSpy = vi
@@ -403,6 +395,7 @@ describe('Queue - organization_batch_create runtime', () => {
       expect.objectContaining({ workspaceId: user.workspaceId, maxRetries: 1 }),
     );
     expect(addJobSpy.mock.calls.some(([jobType]) => jobType === 'initiative_list')).toBe(false);
+    expect(mockExecuteWithToolsStream).not.toHaveBeenCalled();
 
     const [runState] = await db
       .select()
@@ -429,6 +422,19 @@ describe('Queue - organization_batch_create runtime', () => {
       ]),
     );
     expect(state.orgContext.createdOrgIds).toEqual([createdOrg!.id]);
+    expect(state.generation.initiatives).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'initiative-existing',
+          organizationIds: [existingOrganizationId],
+        }),
+        expect.objectContaining({
+          id: 'initiative-new',
+          organizationIds: [createdOrg!.id],
+          organizationName: 'New Retail Org',
+        }),
+      ]),
+    );
 
     const [taskResult] = await db
       .select()
@@ -812,7 +818,7 @@ describe('Queue - organization_batch_create runtime', () => {
     );
   });
 
-  it('requeues organization_batch_create when the provider stream terminates transiently', async () => {
+  it('fails fast when organization target preparation runs before the org-aware list step', async () => {
     const folderId = createId();
     const workflowDefinitionId = createId();
     const workflowRunId = createId();
@@ -904,6 +910,7 @@ describe('Queue - organization_batch_create runtime', () => {
         },
         generation: {
           initiativeIds: [],
+          initiatives: [],
         },
       },
       version: 1,
@@ -943,8 +950,6 @@ describe('Queue - organization_batch_create runtime', () => {
       startedAt: now,
     });
 
-    mockExecuteWithToolsStream.mockRejectedValueOnce(new Error('terminated'));
-
     const [job] = await db
       .select()
       .from(jobQueue)
@@ -963,10 +968,9 @@ describe('Queue - organization_batch_create runtime', () => {
       typeof jobAfter?.data === 'string'
         ? JSON.parse(jobAfter.data)
         : (jobAfter?.data as Record<string, unknown> | undefined);
-    expect(jobAfter?.status).toBe('pending');
-    expect(jobAfter?.error).toContain('retry 1/1: terminated');
-    expect(jobAfter?.startedAt).toBeNull();
-    expect((jobAfterData as Record<string, any>)._retry).toEqual({ attempt: 1, maxRetries: 1 });
+    expect(jobAfter?.status).toBe('failed');
+    expect(jobAfter?.error).toContain('Organization target preparation requires org-aware list outputs');
+    expect((jobAfterData as Record<string, any>)._retry).toEqual({ attempt: 0, maxRetries: 1 });
 
     const [taskResult] = await db
       .select()
@@ -979,17 +983,19 @@ describe('Queue - organization_batch_create runtime', () => {
         ),
       )
       .limit(1);
-    expect(taskResult?.status).toBe('pending');
+    expect(taskResult?.status).toBe('failed');
     expect(taskResult?.attempts).toBe(1);
-    expect(taskResult?.completedAt).toBeNull();
-    expect((taskResult?.lastError as Record<string, unknown>)?.message).toBe('terminated');
+    expect(taskResult?.completedAt).not.toBeNull();
+    expect((taskResult?.lastError as Record<string, unknown>)?.message).toBe(
+      'Organization target preparation requires org-aware list outputs',
+    );
 
     const [runState] = await db
       .select()
       .from(workflowRunState)
       .where(eq(workflowRunState.runId, workflowRunId))
       .limit(1);
-    expect(runState?.status).toBe('in_progress');
+    expect(runState?.status).toBe('failed');
     expect(runState?.currentTaskKey).toBe('create_organizations');
   });
 });
