@@ -228,6 +228,7 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
           rules: [
             {
               condition: anyOf(
+                conditionEq("inputs.autoCreateOrganizations", true),
                 conditionNotEmpty("orgContext.effectiveOrgIds"),
                 conditionNotEmpty("orgContext.selectedOrgIds"),
               ),
@@ -289,12 +290,6 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
     },
     {
       fromTaskKey: "generation_context_prepare",
-      toTaskKey: "generation_create_organizations",
-      transitionType: "conditional",
-      condition: conditionEq("inputs.autoCreateOrganizations", true),
-    },
-    {
-      fromTaskKey: "generation_context_prepare",
       toTaskKey: "generation_matrix_prepare",
       transitionType: "conditional",
       condition: allOf(conditionEq("inputs.autoCreateOrganizations", false), matrixPreparationRequiredCondition),
@@ -302,8 +297,13 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
     {
       fromTaskKey: "generation_context_prepare",
       toTaskKey: "generation_usecase_list",
+      transitionType: "normal",
+    },
+    {
+      fromTaskKey: "generation_usecase_list",
+      toTaskKey: "generation_create_organizations",
       transitionType: "conditional",
-      condition: conditionEq("inputs.autoCreateOrganizations", false),
+      condition: conditionEq("inputs.autoCreateOrganizations", true),
     },
     {
       fromTaskKey: "generation_create_organizations",
@@ -330,6 +330,25 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       },
     },
     {
+      fromTaskKey: "generation_usecase_list",
+      toTaskKey: "generation_todo_sync",
+      transitionType: "conditional",
+      condition: allOf(
+        conditionEq("inputs.autoCreateOrganizations", false),
+        notOf(matrixPreparationRequiredCondition),
+      ),
+    },
+    {
+      fromTaskKey: "generation_usecase_list",
+      toTaskKey: "generation_todo_sync",
+      transitionType: "join",
+      condition: allOf(
+        conditionEq("inputs.autoCreateOrganizations", false),
+        matrixPreparationRequiredCondition,
+      ),
+      metadata: matrixBarrierJoinMetadata(["generation_usecase_list", "generation_matrix_prepare"]),
+    },
+    {
       fromTaskKey: "generation_organization_join",
       toTaskKey: "generation_matrix_prepare",
       transitionType: "conditional",
@@ -337,27 +356,24 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
     },
     {
       fromTaskKey: "generation_organization_join",
-      toTaskKey: "generation_usecase_list",
-      transitionType: "normal",
-    },
-    {
-      fromTaskKey: "generation_usecase_list",
       toTaskKey: "generation_todo_sync",
       transitionType: "conditional",
       condition: notOf(matrixPreparationRequiredCondition),
     },
     {
-      fromTaskKey: "generation_usecase_list",
+      fromTaskKey: "generation_matrix_prepare",
       toTaskKey: "generation_todo_sync",
-      transitionType: "join",
-      condition: matrixPreparationRequiredCondition,
-      metadata: matrixBarrierJoinMetadata(["generation_usecase_list", "generation_matrix_prepare"]),
+      transitionType: "conditional",
+      condition: conditionEq("inputs.autoCreateOrganizations", true),
     },
     {
       fromTaskKey: "generation_matrix_prepare",
       toTaskKey: "generation_todo_sync",
       transitionType: "join",
-      condition: matrixPreparationRequiredCondition,
+      condition: allOf(
+        conditionEq("inputs.autoCreateOrganizations", false),
+        matrixPreparationRequiredCondition,
+      ),
       metadata: matrixBarrierJoinMetadata(["generation_usecase_list", "generation_matrix_prepare"]),
     },
     {
@@ -499,6 +515,7 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
           rules: [
             {
               condition: anyOf(
+                conditionEq("inputs.autoCreateOrganizations", true),
                 conditionNotEmpty("orgContext.effectiveOrgIds"),
                 conditionNotEmpty("orgContext.selectedOrgIds"),
               ),
@@ -558,12 +575,6 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
     },
     {
       fromTaskKey: "context_prepare",
-      toTaskKey: "create_organizations",
-      transitionType: "conditional",
-      condition: conditionEq("inputs.autoCreateOrganizations", true),
-    },
-    {
-      fromTaskKey: "context_prepare",
       toTaskKey: "matrix_prepare",
       transitionType: "conditional",
       condition: allOf(conditionEq("inputs.autoCreateOrganizations", false), matrixPreparationRequiredCondition),
@@ -571,8 +582,13 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
     {
       fromTaskKey: "context_prepare",
       toTaskKey: "opportunity_list",
+      transitionType: "normal",
+    },
+    {
+      fromTaskKey: "opportunity_list",
+      toTaskKey: "create_organizations",
       transitionType: "conditional",
-      condition: conditionEq("inputs.autoCreateOrganizations", false),
+      condition: conditionEq("inputs.autoCreateOrganizations", true),
     },
     {
       fromTaskKey: "create_organizations",
@@ -599,6 +615,25 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
       },
     },
     {
+      fromTaskKey: "opportunity_list",
+      toTaskKey: "todo_sync",
+      transitionType: "conditional",
+      condition: allOf(
+        conditionEq("inputs.autoCreateOrganizations", false),
+        notOf(matrixPreparationRequiredCondition),
+      ),
+    },
+    {
+      fromTaskKey: "opportunity_list",
+      toTaskKey: "todo_sync",
+      transitionType: "join",
+      condition: allOf(
+        conditionEq("inputs.autoCreateOrganizations", false),
+        matrixPreparationRequiredCondition,
+      ),
+      metadata: matrixBarrierJoinMetadata(["opportunity_list", "matrix_prepare"]),
+    },
+    {
       fromTaskKey: "organization_targets_join",
       toTaskKey: "matrix_prepare",
       transitionType: "conditional",
@@ -606,27 +641,24 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
     },
     {
       fromTaskKey: "organization_targets_join",
-      toTaskKey: "opportunity_list",
-      transitionType: "normal",
-    },
-    {
-      fromTaskKey: "opportunity_list",
       toTaskKey: "todo_sync",
       transitionType: "conditional",
       condition: notOf(matrixPreparationRequiredCondition),
     },
     {
-      fromTaskKey: "opportunity_list",
+      fromTaskKey: "matrix_prepare",
       toTaskKey: "todo_sync",
-      transitionType: "join",
-      condition: matrixPreparationRequiredCondition,
-      metadata: matrixBarrierJoinMetadata(["opportunity_list", "matrix_prepare"]),
+      transitionType: "conditional",
+      condition: conditionEq("inputs.autoCreateOrganizations", true),
     },
     {
       fromTaskKey: "matrix_prepare",
       toTaskKey: "todo_sync",
       transitionType: "join",
-      condition: matrixPreparationRequiredCondition,
+      condition: allOf(
+        conditionEq("inputs.autoCreateOrganizations", false),
+        matrixPreparationRequiredCondition,
+      ),
       metadata: matrixBarrierJoinMetadata(["opportunity_list", "matrix_prepare"]),
     },
     {

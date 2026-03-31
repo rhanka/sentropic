@@ -1,7 +1,6 @@
 import { db, pool } from '../db/client';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { createId } from '../utils/id';
-import { SHARED_AGENTS } from '../config/default-agents-shared';
 import { enrichOrganization, type OrganizationData } from './context-organization';
 import {
   generateInitiativeList,
@@ -35,7 +34,6 @@ import {
   workflowTaskResults,
   workspaceMemberships,
 } from '../db/schema';
-import { getReasoningParamsForModel } from './model-catalog';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
@@ -54,7 +52,6 @@ import { getNextSequence, writeStreamEvent } from './stream-service';
 import type { DocxEntityType, DocxTemplateId } from './docx-service';
 import { runDocxGenerationInWorker } from './docx-render-worker';
 import type { CommentContextType } from './context-comments';
-import { executeWithToolsStream } from './tools';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
 import type { ProviderId } from './provider-runtime';
 
@@ -80,26 +77,6 @@ function parseJsonField<T = unknown>(value: unknown): T | null {
     return JSON.parse(value) as T;
   } catch {
     return null;
-  }
-}
-
-function parseJsonLenient<T>(raw: string): T {
-  const cleaned = raw
-    .trim()
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/```\s*$/i, '')
-    .trim();
-
-  try {
-    return JSON.parse(cleaned) as T;
-  } catch {
-    const firstBrace = cleaned.indexOf('{');
-    const lastBrace = cleaned.lastIndexOf('}');
-    if (firstBrace >= 0 && lastBrace > firstBrace) {
-      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1)) as T;
-    }
-    throw new Error('Invalid JSON response');
   }
 }
 
@@ -140,9 +117,49 @@ function readOrganizationTargets(value: unknown): WorkflowOrganizationTarget[] {
         organizationName,
         skipIfCompleted: item.skipIfCompleted === true,
         wasCreated: item.wasCreated === true,
-      } satisfies WorkflowOrganizationTarget;
+      } as WorkflowOrganizationTarget;
     })
-    .filter((item): item is WorkflowOrganizationTarget => Boolean(item));
+    .filter((item): item is WorkflowOrganizationTarget => item !== null);
+}
+
+type WorkflowGeneratedInitiative = {
+  id: string;
+  name: string;
+  description?: string;
+  organizationIds?: string[];
+  organizationName?: string;
+};
+
+function normalizeOrganizationName(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function readGeneratedInitiatives(value: unknown): WorkflowGeneratedInitiative[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!isRecord(item)) return null;
+      const id = typeof item.id === 'string' ? item.id.trim() : '';
+      const name = typeof item.name === 'string' ? item.name.trim() : '';
+      if (!id || !name) return null;
+      const organizationIds = readStringArray(item.organizationIds);
+      const organizationName = normalizeOrganizationName(item.organizationName);
+      const description = typeof item.description === 'string' && item.description.trim()
+        ? item.description.trim()
+        : undefined;
+      return {
+        id,
+        name,
+        description,
+        organizationIds,
+        organizationName: organizationName || undefined,
+      } as WorkflowGeneratedInitiative;
+    })
+    .filter((item): item is WorkflowGeneratedInitiative => item !== null);
+}
+
+function jobDataToRecord(jobData: JobData): Record<string, unknown> {
+  return isRecord(jobData) ? jobData : {};
 }
 
 function deepMergeState(base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
@@ -166,50 +183,6 @@ type WorkflowTaskCompletion = {
   currentTaskKey?: string | null;
   currentTaskInstanceKey?: string | null;
   runStatus?: WorkflowTaskRuntimeStatus;
-};
-
-type OrganizationBatchGeneratedOrganization = {
-  name: string;
-  sector: string;
-  description: string;
-  location: string;
-};
-
-type OrganizationBatchResult = {
-  organizations: OrganizationBatchGeneratedOrganization[];
-};
-
-const DEFAULT_ORGANIZATION_BATCH_PROMPT_TEMPLATE =
-  SHARED_AGENTS.find((agent) => agent.key === 'organization_batch_agent')?.config.promptTemplate ??
-  `Based on the user's request, generate a structured list of organisations to create in the workspace.
-
-User request: {{user_input}}
-
-Existing organisations in the workspace (DO NOT create duplicates):
-{{existing_organizations}}
-
-Return valid JSON only.`;
-
-const ORGANIZATION_BATCH_STRUCTURED_SCHEMA: Record<string, unknown> = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    organizations: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          name: { type: 'string' },
-          sector: { type: 'string' },
-          description: { type: 'string' },
-          location: { type: 'string' },
-        },
-        required: ['name', 'sector', 'description', 'location'],
-      },
-    },
-  },
-  required: ['organizations'],
 };
 
 function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkflowRuntimeContext | null {
@@ -666,8 +639,9 @@ export class QueueManager {
   }
 
   private getJobAttempt(jobData: JobData): number {
-    const retry = isRecord((jobData as Record<string, unknown> | null)?._retry)
-      ? ((jobData as Record<string, unknown>)._retry as Record<string, unknown>)
+    const jobDataRecord = jobDataToRecord(jobData);
+    const retry = isRecord(jobDataRecord._retry)
+      ? (jobDataRecord._retry as Record<string, unknown>)
       : null;
     const attempt = retry && typeof retry.attempt === 'number' ? retry.attempt : 0;
     return Math.max(1, attempt + 1);
@@ -817,7 +791,7 @@ export class QueueManager {
       workspaceId: params.workspaceId,
       taskInstanceKey: params.taskInstanceKey,
       status: 'in_progress',
-      inputPayload: params.jobData as Record<string, unknown>,
+      inputPayload: jobDataToRecord(params.jobData),
       output: {},
       statePatch: {},
       attempts: this.getJobAttempt(params.jobData),
@@ -849,7 +823,7 @@ export class QueueManager {
       workspaceId: params.workspaceId,
       taskInstanceKey: params.taskInstanceKey,
       status: 'completed',
-      inputPayload: params.jobData as Record<string, unknown>,
+      inputPayload: jobDataToRecord(params.jobData),
       output,
       statePatch,
       attempts: this.getJobAttempt(params.jobData),
@@ -907,7 +881,7 @@ export class QueueManager {
       workspaceId: params.workspaceId,
       taskInstanceKey: params.taskInstanceKey,
       status: 'failed',
-      inputPayload: params.jobData as Record<string, unknown>,
+      inputPayload: jobDataToRecord(params.jobData),
       output: {},
       statePatch: {},
       attempts: this.getJobAttempt(params.jobData),
@@ -1126,6 +1100,7 @@ export class QueueManager {
 
   private async isWorkflowJoinTransitionReady(params: {
     workflowRunId: string;
+    runtimeDefinition: WorkflowRuntimeDefinition;
     transition: WorkflowTransitionDefinition;
     state: Record<string, unknown>;
   }): Promise<boolean> {
@@ -1178,9 +1153,16 @@ export class QueueManager {
       if (!Array.isArray(expectedItems) || expectedItems.length === 0) {
         return false;
       }
+      const upstreamFanoutTransition = params.runtimeDefinition.transitions.find(
+        (transition) =>
+          transition.transitionType === 'fanout' &&
+          transition.toTaskKey === joinedTaskKey &&
+          this.getPathValue(transition.metadata, 'fanout.sourcePath') === expectedSourcePath,
+      );
+      const instanceKeyMetadata = upstreamFanoutTransition?.metadata ?? params.transition.metadata;
       return expectedItems.every((item, index) =>
         completedInstanceKeys.has(
-          this.buildWorkflowTaskInstanceKey(item, index, params.transition.metadata, joinedTaskKey),
+          this.buildWorkflowTaskInstanceKey(item, index, instanceKeyMetadata, joinedTaskKey),
         ),
       );
     }
@@ -1421,6 +1403,7 @@ export class QueueManager {
       if (transition.transitionType === 'join') {
         const isReady = await this.isWorkflowJoinTransitionReady({
           workflowRunId: params.workflowRunId,
+          runtimeDefinition: params.runtimeDefinition,
           transition,
           state: params.state,
         });
@@ -2200,35 +2183,35 @@ export class QueueManager {
       let workflowCompletion: WorkflowTaskCompletion | undefined;
       switch (jobType) {
         case 'organization_enrich':
-          workflowCompletion = await this.processOrganizationEnrich(
+          workflowCompletion = (await this.processOrganizationEnrich(
             jobData as OrganizationEnrichJobData,
             jobId,
             controller.signal,
-          );
+          )) ?? undefined;
           break;
         case 'organization_batch_create':
-          workflowCompletion = await this.processOrganizationBatchCreate(
+          workflowCompletion = (await this.processOrganizationBatchCreate(
             jobData as OrganizationBatchCreateJobData,
             controller.signal,
-          );
+          )) ?? undefined;
           break;
         case 'organization_targets_join':
-          workflowCompletion = await this.processOrganizationTargetsJoin(
+          workflowCompletion = (await this.processOrganizationTargetsJoin(
             jobData as OrganizationTargetsJoinJobData,
             controller.signal,
-          );
+          )) ?? undefined;
           break;
         case 'matrix_generate':
-          workflowCompletion = await this.processMatrixGenerate(jobData as MatrixGenerateJobData, controller.signal);
+          workflowCompletion = (await this.processMatrixGenerate(jobData as MatrixGenerateJobData, controller.signal)) ?? undefined;
           break;
         case 'initiative_list':
-          workflowCompletion = await this.processInitiativeList(jobData as InitiativeListJobData, controller.signal);
+          workflowCompletion = (await this.processInitiativeList(jobData as InitiativeListJobData, controller.signal)) ?? undefined;
           break;
         case 'initiative_detail':
-          workflowCompletion = await this.processInitiativeDetail(jobData as InitiativeDetailJobData, controller.signal);
+          workflowCompletion = (await this.processInitiativeDetail(jobData as InitiativeDetailJobData, controller.signal)) ?? undefined;
           break;
         case 'executive_summary':
-          workflowCompletion = await this.processExecutiveSummary(jobData as ExecutiveSummaryJobData, controller.signal);
+          workflowCompletion = (await this.processExecutiveSummary(jobData as ExecutiveSummaryJobData, controller.signal)) ?? undefined;
           break;
         case 'chat_message':
           await this.processChatMessage(jobData as ChatMessageJobData, controller.signal);
@@ -2277,9 +2260,10 @@ export class QueueManager {
       // IMPORTANT: never retry on AbortError (user/admin cancel).
       if (workflow && retryMax > 0 && retryAttempt < retryMax && !isAbort(error) && isRetryableWorkflowError(error)) {
         const nextAttempt = retryAttempt + 1;
+        const jobDataRecord = jobDataToRecord(jobData);
         const nextData =
           jobData && typeof jobData === 'object'
-            ? { ...(jobData as Record<string, unknown>), _retry: { attempt: nextAttempt, maxRetries: retryMax } }
+            ? { ...jobDataRecord, _retry: { attempt: nextAttempt, maxRetries: retryMax } }
             : { _retry: { attempt: nextAttempt, maxRetries: retryMax } };
         const msg = error instanceof Error ? error.message : 'Unknown error';
         await this.upsertWorkflowTaskResult({
@@ -2562,7 +2546,7 @@ export class QueueManager {
     data: OrganizationBatchCreateJobData,
     signal?: AbortSignal,
   ): Promise<WorkflowTaskCompletion> {
-    const { folderId, input, model } = data;
+    const { folderId, input } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
     if (!workflow) {
       throw new Error('Workflow runtime metadata is required for organization_batch_create jobs');
@@ -2579,81 +2563,28 @@ export class QueueManager {
 
     const runtimeState = await this.getWorkflowRunStateSnapshot(workflow.workflowRunId);
     const currentState = runtimeState?.state ?? {};
-    const inputState = isRecord(currentState.inputs) ? currentState.inputs : {};
-
-    const aiSettings = await settingsService.getAISettings();
-    const selectedModel =
-      (typeof model === 'string' && model.trim()) ? model : (
-        typeof inputState.model === 'string' && inputState.model.trim()
-          ? inputState.model
-          : aiSettings.defaultModel
-      );
+    const orgContextState = isRecord(currentState.orgContext) ? currentState.orgContext : {};
+    const generationState = isRecord(currentState.generation) ? currentState.generation : {};
+    const selectedOrgIds = readStringArray(orgContextState.selectedOrgIds);
+    const generatedInitiatives = readGeneratedInitiatives(generationState.initiatives);
+    if (generatedInitiatives.length === 0) {
+      throw new Error('Organization target preparation requires org-aware list outputs');
+    }
 
     const existingOrgRows = await db
-      .select({ id: organizations.id, name: organizations.name, data: organizations.data })
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        status: organizations.status,
+        data: organizations.data,
+      })
       .from(organizations)
       .where(eq(organizations.workspaceId, folder.workspaceId));
-
-    const existingOrganizationsForPrompt = JSON.stringify(
-      existingOrgRows.map((org) => {
-        const orgData = parseOrgData(org.data);
-        return {
-          id: org.id,
-          name: org.name,
-          industry: orgData.industry,
-          objectives: orgData.objectives,
-          location: typeof orgData.location === 'string' ? orgData.location : '',
-        };
-      }),
-      null,
-      2,
-    );
-
-    const promptOverride = await this.resolveGenerationPromptOverride(
-      folder.workspaceId,
-      workflow.agentDefinitionId ?? null,
-      'organization_batch_create',
-    );
-    const promptTemplate =
-      typeof promptOverride.promptTemplate === 'string' &&
-      promptOverride.promptTemplate.trim().length > 0
-        ? promptOverride.promptTemplate
-        : DEFAULT_ORGANIZATION_BATCH_PROMPT_TEMPLATE;
-    const prompt = promptTemplate
-      .replace('{{user_input}}', input)
-      .replace('{{existing_organizations}}', existingOrganizationsForPrompt || '[]');
-
-    const { content } = await executeWithToolsStream(prompt, {
-      model: selectedModel,
-      useWebSearch: true,
-      responseFormat: 'json_object',
-      structuredOutput: {
-        name: 'organization_batch_create',
-        strict: true,
-        schema: ORGANIZATION_BATCH_STRUCTURED_SCHEMA,
-      },
-      promptId: promptOverride.promptId,
-      streamId: `folder_${folderId}`,
-      signal,
-      ...getReasoningParamsForModel(selectedModel, 'medium', 'concise'),
-    });
-
-    const parsed = parseJsonLenient<OrganizationBatchResult>(content);
-    const generatedOrganizations = Array.isArray(parsed.organizations)
-      ? parsed.organizations
-          .filter((item): item is OrganizationBatchGeneratedOrganization => isRecord(item))
-          .map((item) => ({
-            name: String(item.name ?? '').trim(),
-            sector: String(item.sector ?? '').trim(),
-            description: String(item.description ?? '').trim(),
-            location: String(item.location ?? '').trim(),
-          }))
-          .filter((item) => item.name && item.sector && item.description && item.location)
-      : [];
-
+    const existingById = new Map(existingOrgRows.map((org) => [org.id, org]));
     const existingByName = new Map(
-      existingOrgRows.map((org) => [org.name.trim().toLocaleLowerCase('en-US'), org.id]),
+      existingOrgRows.map((org) => [org.name.trim().toLocaleLowerCase('en-US'), org]),
     );
+    const relatedInitiativesByOrgName = new Map<string, string[]>();
     const createdOrganizationsPayload: Array<{
       id: string;
       name: string;
@@ -2661,66 +2592,170 @@ export class QueueManager {
       description: string;
       location: string;
     }> = [];
-    const organizationTargets: WorkflowOrganizationTarget[] = [];
     const organizationRowsToInsert: Array<typeof organizations.$inferInsert> = [];
-    const matchedExistingIds: string[] = [];
+    const organizationTargets = new Map<string, WorkflowOrganizationTarget>();
+    const matchedExistingIds = new Set<string>();
     const createdOrgIds: string[] = [];
-    const seenNames = new Set<string>();
+    const createdByName = new Map<string, { id: string; name: string }>();
 
-    for (const organization of generatedOrganizations) {
-      const normalizedName = organization.name.toLocaleLowerCase('en-US');
-      if (!normalizedName || seenNames.has(normalizedName)) continue;
-      seenNames.add(normalizedName);
+    const registerTarget = (
+      organizationId: string,
+      organizationName: string,
+      options: { skipIfCompleted: boolean; wasCreated: boolean },
+    ) => {
+      const existingTarget = organizationTargets.get(organizationId);
+      if (existingTarget) {
+        organizationTargets.set(organizationId, {
+          organizationId,
+          organizationName: existingTarget.organizationName || organizationName,
+          skipIfCompleted: existingTarget.skipIfCompleted !== false && options.skipIfCompleted,
+          wasCreated: existingTarget.wasCreated === true || options.wasCreated,
+        });
+        return;
+      }
+      organizationTargets.set(organizationId, {
+        organizationId,
+        organizationName,
+        skipIfCompleted: options.skipIfCompleted,
+        wasCreated: options.wasCreated,
+      });
+    };
 
-      const existingId = existingByName.get(normalizedName);
-      if (existingId) {
-        matchedExistingIds.push(existingId);
-        organizationTargets.push({
-          organizationId: existingId,
-          organizationName: organization.name,
-          skipIfCompleted: true,
+    const ensureTargetForExistingId = (organizationId: string) => {
+      const existingOrg = existingById.get(organizationId);
+      if (!existingOrg) return null;
+      matchedExistingIds.add(organizationId);
+      registerTarget(existingOrg.id, existingOrg.name, {
+        skipIfCompleted: existingOrg.status === 'completed',
+        wasCreated: false,
+      });
+      return existingOrg.id;
+    };
+
+    const ensureTargetForOrganizationName = (organizationName: string) => {
+      const normalizedName = organizationName.toLocaleLowerCase('en-US');
+      if (!normalizedName) return null;
+
+      const existingOrg = existingByName.get(normalizedName);
+      if (existingOrg) {
+        matchedExistingIds.add(existingOrg.id);
+        registerTarget(existingOrg.id, existingOrg.name, {
+          skipIfCompleted: existingOrg.status === 'completed',
           wasCreated: false,
         });
-        continue;
+        return {
+          organizationId: existingOrg.id,
+          organizationName: existingOrg.name,
+          wasCreated: false,
+        };
+      }
+
+      const existingCreated = createdByName.get(normalizedName);
+      if (existingCreated) {
+        registerTarget(existingCreated.id, existingCreated.name, {
+          skipIfCompleted: false,
+          wasCreated: true,
+        });
+        return {
+          organizationId: existingCreated.id,
+          organizationName: existingCreated.name,
+          wasCreated: true,
+        };
       }
 
       const organizationId = createId();
+      const relatedInitiatives = relatedInitiativesByOrgName.get(normalizedName) ?? [];
+      const objectives = relatedInitiatives.length > 0
+        ? `Initiatives candidates: ${relatedInitiatives.join('; ')}`
+        : input;
+
       createdOrgIds.push(organizationId);
+      createdByName.set(normalizedName, { id: organizationId, name: organizationName });
       createdOrganizationsPayload.push({
         id: organizationId,
-        name: organization.name,
-        sector: organization.sector,
-        description: organization.description,
-        location: organization.location,
+        name: organizationName,
+        sector: '',
+        description: objectives,
+        location: '',
       });
       organizationRowsToInsert.push({
         id: organizationId,
         workspaceId: folder.workspaceId,
-        name: organization.name,
+        name: organizationName,
         status: 'generating',
         data: {
-          industry: organization.sector,
+          industry: '',
           size: '',
           products: '',
           processes: '',
           kpis: '',
           challenges: '',
-          objectives: organization.description,
+          objectives,
           technologies: '',
           references: [],
-          location: organization.location,
+          location: '',
         } as OrganizationData & { location: string },
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      organizationTargets.push({
-        organizationId,
-        organizationName: organization.name,
+      registerTarget(organizationId, organizationName, {
         skipIfCompleted: false,
         wasCreated: true,
       });
-      existingByName.set(normalizedName, organizationId);
+      return {
+        organizationId,
+        organizationName,
+        wasCreated: true,
+      };
+    };
+
+    for (const initiative of generatedInitiatives) {
+      const organizationName = normalizeOrganizationName(initiative.organizationName);
+      if (!organizationName) continue;
+      const normalizedName = organizationName.toLocaleLowerCase('en-US');
+      relatedInitiativesByOrgName.set(normalizedName, [
+        ...(relatedInitiativesByOrgName.get(normalizedName) ?? []),
+        initiative.name,
+      ]);
     }
+
+    for (const selectedOrgId of selectedOrgIds) {
+      ensureTargetForExistingId(selectedOrgId);
+    }
+
+    const resolvedInitiatives = generatedInitiatives.map((initiative) => {
+      const resolvedIds = new Set<string>();
+      for (const organizationId of initiative.organizationIds ?? []) {
+        const existingId = ensureTargetForExistingId(organizationId);
+        if (existingId) {
+          resolvedIds.add(existingId);
+        }
+      }
+
+      const organizationName = normalizeOrganizationName(initiative.organizationName);
+      if (organizationName) {
+        const resolvedByName = ensureTargetForOrganizationName(organizationName);
+        if (resolvedByName?.organizationId) {
+          resolvedIds.add(resolvedByName.organizationId);
+        }
+      }
+
+      if (resolvedIds.size === 0 && selectedOrgIds.length === 1) {
+        const selectedId = ensureTargetForExistingId(selectedOrgIds[0]);
+        if (selectedId) {
+          resolvedIds.add(selectedId);
+        }
+      }
+
+      const normalizedIds = Array.from(resolvedIds);
+      return {
+        id: initiative.id,
+        name: initiative.name,
+        ...(initiative.description ? { description: initiative.description } : {}),
+        ...(normalizedIds.length > 0 ? { organizationIds: normalizedIds } : {}),
+        ...(organizationName ? { organizationName } : {}),
+      };
+    });
 
     if (organizationRowsToInsert.length > 0) {
       await db.insert(organizations).values(organizationRowsToInsert);
@@ -2729,21 +2764,36 @@ export class QueueManager {
       }
     }
 
-    if (organizationTargets.length === 0) {
-      throw new Error('Organization batch generation produced no organizations');
+    if (organizationTargets.size === 0) {
+      throw new Error('Organization target preparation resolved no organizations');
+    }
+
+    for (const initiative of resolvedInitiatives) {
+      if (!Array.isArray(initiative.organizationIds) || initiative.organizationIds.length !== 1) {
+        continue;
+      }
+      await db
+        .update(initiatives)
+        .set({
+          organizationId: initiative.organizationIds[0],
+        })
+        .where(and(eq(initiatives.id, initiative.id), eq(initiatives.workspaceId, folder.workspaceId)));
     }
 
     return {
       output: {
-        organizationTargets,
+        organizationTargets: Array.from(organizationTargets.values()),
         createdOrgIds,
-        matchedExistingIds,
+        matchedExistingIds: Array.from(matchedExistingIds),
       },
       statePatch: {
         orgContext: {
-          organizationTargets,
+          organizationTargets: Array.from(organizationTargets.values()),
           createdOrgIds,
           createdOrganizations: createdOrganizationsPayload,
+        },
+        generation: {
+          initiatives: resolvedInitiatives,
         },
       },
     };
@@ -3570,10 +3620,35 @@ export class QueueManager {
       });
     }
 
-    // Créer les cas d'usage en mode generating
-    // Note: InitiativeListItem n'a que 'titre', pas 'title'
-    const draftInitiatives = initiativeList.initiatives.map((initiativeItem: InitiativeListItem) => {
+    const allowedOrgIds = new Set(
+      Array.from(new Set([...resolvedOrgIds, ...selectedOrgIdsFromState, ...effectiveOrgIdsFromState])),
+    );
+    const normalizedListItems = initiativeList.initiatives.map((initiativeItem: InitiativeListItem) => {
       const title = initiativeItem.titre || String(initiativeItem);
+      const mappedOrganizationIds = Array.from(
+        new Set(
+          readStringArray(initiativeItem.organizationIds).filter((organizationId) =>
+            allowedOrgIds.size > 0 ? allowedOrgIds.has(organizationId) : false,
+          ),
+        ),
+      );
+      const fallbackOrganizationIds =
+        mappedOrganizationIds.length > 0
+          ? mappedOrganizationIds
+          : allowedOrgIds.size === 1
+            ? [Array.from(allowedOrgIds)[0]]
+            : [];
+      return {
+        title,
+        description: initiativeItem.description || '',
+        organizationIds: fallbackOrganizationIds,
+        organizationName: normalizeOrganizationName(initiativeItem.organizationName) || undefined,
+      };
+    });
+
+    // Créer les cas d'usage en mode generating
+    const draftInitiatives = normalizedListItems.map((initiativeItem) => {
+      const title = initiativeItem.title;
       const initiativeData: InitiativeData = {
         name: title, // Stocker name dans data
         description: initiativeItem.description || '', // Stocker description dans data
@@ -3593,7 +3668,12 @@ export class QueueManager {
         id: createId(),
         workspaceId,
         folderId: folderId,
-        organizationId: resolvedOrgIds.length === 1 ? (resolvedOrganizationId ?? null) : null,
+        organizationId:
+          initiativeItem.organizationIds.length === 1
+            ? initiativeItem.organizationIds[0]
+            : resolvedOrgIds.length === 1
+              ? (resolvedOrganizationId ?? null)
+              : null,
         data: initiativeData as InitiativeDataJson, // Drizzle accepte JSONB directement (inclut name et description)
         model: selectedModel,
         status: 'generating',
@@ -3637,9 +3717,16 @@ export class QueueManager {
         },
         generation: {
           initiativeIds: draftInitiatives.map((initiative) => initiative.id),
-          initiatives: draftInitiatives.map((initiative) => ({
+          initiatives: draftInitiatives.map((initiative, index) => ({
             id: initiative.id,
             name: (initiative.data as InitiativeData)?.name || 'Cas d\'usage sans nom',
+            description: (initiative.data as InitiativeData)?.description || '',
+            ...(normalizedListItems[index]?.organizationIds.length
+              ? { organizationIds: normalizedListItems[index].organizationIds }
+              : {}),
+            ...(normalizedListItems[index]?.organizationName
+              ? { organizationName: normalizedListItems[index].organizationName }
+              : {}),
           })),
         },
       },
@@ -3665,6 +3752,25 @@ export class QueueManager {
     if (!folder) {
       throw new Error('Dossier non trouvé');
     }
+    const [initiativeRow] = await db
+      .select({ organizationId: initiatives.organizationId })
+      .from(initiatives)
+      .where(and(eq(initiatives.id, initiativeId), eq(initiatives.workspaceId, folder.workspaceId)))
+      .limit(1);
+    const runtimeState = workflow ? await this.getWorkflowRunStateSnapshot(workflow.workflowRunId) : null;
+    const runtimeRunState = runtimeState?.state ?? {};
+    const generationState = isRecord(runtimeRunState.generation) ? runtimeRunState.generation : {};
+    const generatedInitiatives = readGeneratedInitiatives(generationState.initiatives);
+    const generatedInitiative = generatedInitiatives.find((initiative) => initiative.id === initiativeId);
+    const scopedOrganizationIds =
+      generatedInitiative?.organizationIds && generatedInitiative.organizationIds.length > 0
+        ? generatedInitiative.organizationIds
+        : initiativeRow?.organizationId
+          ? [initiativeRow.organizationId]
+          : folder.organizationId
+            ? [folder.organizationId]
+            : [];
+    const primaryOrganizationId = scopedOrganizationIds[0] ?? null;
     
     const matrixConfig = parseMatrixConfig(folder.matrixConfig ?? null);
     if (!matrixConfig) {
@@ -3679,13 +3785,17 @@ export class QueueManager {
     
     // Organization info (prompt uses organization_info)
     let organizationInfo = '';
-    if (folder.organizationId) {
+    if (scopedOrganizationIds.length > 0) {
       try {
-        const [org] = await db.select().from(organizations).where(eq(organizations.id, folder.organizationId));
-        if (org) {
-          const orgData = parseOrgData(org.data);
-          organizationInfo = JSON.stringify(
-            {
+        const orgRows = await db
+          .select()
+          .from(organizations)
+          .where(inArray(organizations.id, scopedOrganizationIds));
+        if (orgRows.length > 0) {
+          const orgPayload = orgRows.map((org) => {
+            const orgData = parseOrgData(org.data);
+            return {
+              id: org.id,
               name: org.name,
               industry: orgData.industry,
               size: orgData.size,
@@ -3693,14 +3803,17 @@ export class QueueManager {
               processes: orgData.processes,
               challenges: orgData.challenges,
               objectives: orgData.objectives,
-              technologies: orgData.technologies
-            },
+              technologies: orgData.technologies,
+            };
+          });
+          organizationInfo = JSON.stringify(
+            orgPayload.length === 1 ? orgPayload[0] : { organizations: orgPayload },
             null,
-            2
+            2,
           );
-          console.log(`📊 Organization info loaded for ${org.name}:`, organizationInfo);
+          console.log(`📊 Organization info loaded for ${orgRows.length} organization(s):`, organizationInfo);
         } else {
-          console.warn(`⚠️ Organization not found with id: ${folder.organizationId}`);
+          console.warn(`⚠️ Organization not found with ids: ${scopedOrganizationIds.join(', ')}`);
         }
       } catch (error) {
         console.error('Error fetching organization:', error);
@@ -3712,7 +3825,7 @@ export class QueueManager {
     const documentsContexts = await this.getDocumentsContextsForGeneration({
       workspaceId: folder.workspaceId,
       folderId,
-      organizationId: folder.organizationId,
+      organizationId: primaryOrganizationId,
     });
     const documentsContextJson = await this.buildDocumentsContextJsonForGeneration({
       workspaceId: folder.workspaceId,
