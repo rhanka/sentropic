@@ -581,10 +581,12 @@ Queue visibility rule:
 
 Implication for organization auto-create:
 - `create_organizations` is NOT specified as one monolithic “batch LLM job”;
-- it is specified as a subgraph composed of:
-  - a target-discovery/preparation step;
+- on the org-aware generation path, `initiative_list_with_orgs` (or the workspace-type-specific equivalent) runs first and produces the initiative x organization-oriented pairing;
+- if `createNewOrgs` is enabled, `create_organizations` runs after `initiative_list_with_orgs` and before `initiative_detail`;
+- `create_organizations` is specified as a visible subgraph composed of:
+  - a target-discovery/preparation step derived from the org-aware list output and selected context;
   - one visible create/enrich execution per organization candidate (fanout);
-  - an explicit join before downstream list generation.
+  - an explicit join before downstream detail generation and any consumer that needs resolved organization ids.
 
 #### 7.4.4 Transitions, fanout, join
 
@@ -607,11 +609,12 @@ Transition metadata supports:
 - `join.reducerKey` — reducer used to merge parallel results
 
 This allows flows like:
-- prepare organization targets from prompt/folder context
+- generate or reuse the folder-level matrix as required by the resolved matrix mode while preserving the canonical non-multi-org path
+- route to `initiative_list` or `initiative_list_with_orgs`
+- when the org-aware path is selected, execute `initiative_list_with_orgs` before any `create_organizations` work
+- derive organization targets from the org-aware list output and selected context
 - fan out one create/enrich execution per organization target
-- join the created or matched organization set back into run state
-- generate or reuse the folder-level matrix as required by the resolved matrix mode
-- route to `initiative_list_with_orgs`
+- join the created or matched organization set back into run state before `initiative_detail`
 - fan out one `initiative_detail` execution per generated initiative
 - join when all details are completed, then enqueue `executive_summary`
 
@@ -661,7 +664,7 @@ Subgraphs/child workflows are modeled as task nodes with:
 - generic conditional routing for list-task selection;
 - preservation of legacy entry/output parity for pre-existing non-multi-org generation flows;
 - preservation of queue-visible job topology for pre-existing work units, with no opaque multi-call “batch” workers that bypass queue-level regulation;
-- organization auto-create modeled as a visible subgraph (target discovery -> per-organization create/enrich fanout -> join) with state binding;
+- organization auto-create modeled as a visible subgraph (target discovery -> per-organization create/enrich fanout -> join) with state binding, executed after `initiative_list_with_orgs` and before `initiative_detail` on the org-aware path;
 - generic fanout/join support sufficient for the existing generation workflows (`initiative_detail` / `executive_summary`);
 - removal of workflow-specific sequencing hardcoding from `todo-orchestration.ts` and `queue-manager.ts` for the currently existing workflows:
   - `ai_usecase_generation`
@@ -693,7 +696,7 @@ Workflow keys are logical identifiers (e.g. `ai_usecase_generation`, not `ai_use
 
 Seed data created on workspace creation (same pattern as BR-03 `ensureDefaultGenerationAgents`).
 
-For `ai_usecase_generation` and `opportunity_identification`, the sequence above is the canonical legacy path. Optional organization auto-create, when enabled, inserts an additive subgraph before `matrix_prepare` / list generation; it does not redefine the canonical non-multi-org path.
+For `ai_usecase_generation` and `opportunity_identification`, the sequence above is the canonical legacy path. Optional organization auto-create, when enabled on the org-aware path, inserts an additive subgraph after `initiative_list_with_orgs` and before `initiative_detail`; it does not redefine the canonical non-multi-org path and it must not run before the org-aware list step.
 
 ### 7.7 Dependency on BR-15
 
