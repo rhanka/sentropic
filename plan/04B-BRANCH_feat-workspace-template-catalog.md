@@ -113,18 +113,25 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] Replace workflow-specific matrix waiting / unlock logic with transition + binding driven scheduling, while preserving the legacy visible matrix/list topology on non-multi-org paths.
     - [x] Keep only a generic executor registry (`executor` / `jobType` / `subworkflowKey` → implementation) in runtime services.
   - [ ] **12.3 Workflow migration on the generic engine**
+    - [ ] **12.3.a Clarify workflow objects and naming**
+      - [ ] Document explicitly in spec/BRANCH which nodes are workflow-only structure vs real agents.
+      - [ ] Remove the misleading `organization_batch_agent` target model from the plan; the batch belongs to workflow fanout/join, not to an agent.
+      - [ ] State explicitly that `generate_organization` is a **shared unitary agent** reused by both workflows.
+      - [ ] State explicitly that `initiative_list_with_orgs` and `opportunity_list_with_orgs` are **domain-specific list agents**, not shared.
+      - [ ] State explicitly that `initiative_detail` and `opportunity_detail` are **domain-specific detail agents**, not shared.
+      - [ ] State explicitly that `initiative_matrix_prepare` and `opportunity_matrix_prepare` share the same workflow role but are **not considered shared agents** until prompt/config/base-matrix are actually unified.
+      - [ ] Normalize the target naming in docs so the AI-ideas and opportunity flows use the same suffixes for the same workflow role.
     - [ ] `ai_usecase_generation`
-      - [x] Create `initiative_list_with_orgs` agent config in `default-agents-opportunity.ts` (and optionally `default-agents-ai-ideas.ts`): same as `initiative_list` but prompt includes `{{organizations_context}}` with selected org details and asks the LLM to orient initiatives by org.
-      - [ ] Route list generation from workflow runtime state: if selected/new org context is present, run `initiative_list_with_orgs` as the first org-aware generation step; otherwise keep the classic list task.
-      - [ ] Run `create_organizations` only after `initiative_list_with_orgs` and before `initiative_detail`, never before the list step.
-      - [ ] Replace monolithic `organization_batch_create` with an explicit org subgraph driven from org-aware list outputs: targets prepare/list -> per-org create/enrich fanout -> join.
+      - [ ] Keep `initiative_list_with_orgs` as the first org-aware generation step; otherwise keep the classic non-org list task.
+      - [ ] Run organization creation only after `initiative_list_with_orgs` and before `initiative_detail`, never before the list step.
+      - [ ] Replace monolithic `organization_batch_create` with an explicit org subgraph driven from org-aware list outputs: workflow fanout -> shared `generate_organization` agent -> workflow join.
       - [ ] Preserve the legacy visible matrix/list topology and barrier semantics whenever a folder ad hoc matrix is required.
       - [ ] Validate exact parity with `main` for pre-existing single-org / no-org cases.
       - [ ] Declare `initiative_detail` fanout in transitions instead of runtime heuristics.
       - [ ] Declare `executive_summary` join in transitions instead of business-table completion scanning.
     - [ ] `opportunity_identification`
       - [ ] Move list/detail/summary sequencing to transitions + bindings only, without changing legacy observable behavior outside multi-org.
-      - [ ] On the org-aware path, keep the historical order `initiative_list_with_orgs` -> `create_organizations` -> `initiative_detail`.
+      - [ ] On the org-aware path, keep the historical order `opportunity_list_with_orgs` -> organization fanout/join -> `opportunity_detail`.
       - [ ] Remove any opportunity-specific sequencing fallback from orchestration/runtime code.
       - [ ] Keep dossier-scoped matrix generation semantics on zero-org, single-org, and multi-org paths.
     - [x] `opportunity_qualification`
@@ -150,6 +157,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [ ] Add queue/unit tests for generic fanout scheduling.
       - [ ] Add queue/unit tests for generic join completion.
       - [ ] Add queue/unit tests for generic state/result replay safety.
+      - [ ] Add queue/unit tests proving the shared `generate_organization` agent is invoked once per org target from both workflows.
     - [x] **UI**
       - [x] UI: replace single-select org with multi-select in folder creation.
       - [x] UI: add checkbox "Créer de nouvelles organisations automatiquement".
@@ -160,6 +168,32 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] Executive summary references are requested by prompt but dropped by runtime normalization/persistence; restore `executiveSummary.references` end-to-end (prompt example, repair schema, normalization, DB storage, UI payload).
     - [ ] Org-aware generation prompt currently over-forces `organizationName` on vague requests, producing non-company targets; rework the shared org-aware list prompt contract so the agent returns only real companies with high confidence, otherwise no org target.
     - [ ] Initiative references rendering still falls back to basic link parsing on some initiative/detail surfaces; restore full markdown rendering for generated refs instead of regex-only rendering.
+
+### Lot 12 clarification — shared vs specific objects
+
+- **Shared workflow-only structure**
+  - `*_context_prepare`
+  - `*_organizations_fanout`
+  - `*_organizations_join`
+  - `*_todo_sync`
+  - fanout/join/end routing semantics
+
+- **Shared agent**
+  - `generate_organization`
+    - one call = one organization
+    - reused by both `ai_usecase_generation` and `opportunity_identification`
+
+- **Domain-specific agents**
+  - `initiative_list_with_orgs`
+  - `opportunity_list_with_orgs`
+  - `initiative_detail`
+  - `opportunity_detail`
+
+- **Same workflow role, still domain-specific today**
+  - `initiative_matrix_prepare`
+  - `opportunity_matrix_prepare`
+    - same place in the workflow
+    - not treated as shared until prompt/config/base-matrix are actually unified
   - [ ] **12.5 Lot gate**
     - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
