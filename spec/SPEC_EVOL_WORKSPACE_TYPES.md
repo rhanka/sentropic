@@ -588,6 +588,43 @@ Implication for organization auto-create:
   - one visible create/enrich execution per organization candidate (fanout);
   - an explicit join before downstream detail generation and any consumer that needs resolved organization ids.
 
+#### 7.4.3b Workflow objects: structural nodes vs agents
+
+The runtime model must distinguish clearly between:
+
+- **workflow structural nodes**: start, conditional routing, fanout, join, end, noop/context-preparation;
+- **agent nodes**: one concrete AI/business worker invoked by the workflow with explicit inputs and outputs.
+
+Rules:
+- batch/parallelism is a workflow concern, never an agent concern;
+- a `fanout` node does not imply a dedicated “batch agent”;
+- a `join` node is workflow structure only and must not be modeled as an agent with a prompt;
+- if a prompt exists, it must correspond to a real agent node used for business work.
+
+Implication for organization generation:
+- the misleading concept `organization_batch_agent` is not part of the target model;
+- the org-aware generation path must use:
+  - a domain list agent (`initiative_list_with_orgs_agent` or `opportunity_list_with_orgs_agent`);
+  - a workflow fanout over organization targets;
+  - one **shared unitary** organization agent (`generate_organization_agent`, or `create_or_enrich_organization_agent` if existing rows may also be enriched);
+  - a workflow join over organization results.
+
+Shared vs domain-specific responsibility:
+- **shared workflow structure**:
+  - `*_organizations_fanout`
+  - `*_organizations_join`
+- **shared agent**:
+  - `generate_organization_agent` / `create_or_enrich_organization_agent`
+- **domain-specific agents**:
+  - `initiative_list_with_orgs_agent`
+  - `opportunity_list_with_orgs_agent`
+  - `initiative_detail_agent`
+  - `opportunity_detail_agent`
+- **matrix generation**:
+  - same workflow role in both domains
+  - not truly shared unless the prompt/config/base-matrix are actually unified
+  - if prompts remain distinct, they must be treated as domain-specific matrix agents even if the workflow position is the same.
+
 #### 7.4.4 Transitions, fanout, join
 
 `orderIndex` remains useful as a default display/ordering hint, but execution semantics must come from explicit transitions.
@@ -696,7 +733,23 @@ Workflow keys are logical identifiers (e.g. `ai_usecase_generation`, not `ai_use
 
 Seed data created on workspace creation (same pattern as BR-03 `ensureDefaultGenerationAgents`).
 
-For `ai_usecase_generation` and `opportunity_identification`, the sequence above is the canonical legacy path. Optional organization auto-create, when enabled on the org-aware path, inserts an additive subgraph after `initiative_list_with_orgs` and before `initiative_detail`; it does not redefine the canonical non-multi-org path and it must not run before the org-aware list step.
+For `ai_usecase_generation` and `opportunity_identification`, the sequence above is the canonical legacy path. Optional organization auto-create, when enabled on the org-aware path, inserts an additive subgraph after the domain-specific org-aware list step and before the domain-specific detail step; it does not redefine the canonical non-multi-org path and it must not run before the org-aware list step.
+
+Normalized target naming for clarity:
+- `initiative_context_prepare` / `opportunity_context_prepare`
+- `initiative_list_with_orgs` / `opportunity_list_with_orgs`
+- `initiative_organizations_fanout` / `opportunity_organizations_fanout`
+- `initiative_generate_organization` / `opportunity_generate_organization`
+- `initiative_organizations_join` / `opportunity_organizations_join`
+- `initiative_matrix_prepare` / `opportunity_matrix_prepare`
+- `initiative_todo_sync` / `opportunity_todo_sync`
+- `initiative_detail` / `opportunity_detail`
+- `initiative_executive_summary` / `opportunity_executive_summary`
+
+This normalized naming does **not** require that every node be backed by a distinct agent:
+- fanout/join/context nodes remain workflow-only;
+- `generate_organization` is the shared unitary agent role reused by both workflows;
+- list/detail/matrix agents remain domain-specific unless explicitly unified.
 
 ### 7.7 Dependency on BR-15
 
@@ -742,10 +795,10 @@ These are chat tools (§3.3), not workflow agents.
 | Target file | Content |
 |---|---|
 | `default-chat-system.ts` | Chat system prompt per workspace type (cadrage AI / opportunity / code) + chat-level prompts common to all types (reasoning eval, session title, conversation auto) |
-| `default-agents-ai-ideas.ts` | AI-specific agents with prompts: `generation_orchestrator`, `matrix_generation_agent` (AI matrix prompt), `usecase_list_agent` (AI list prompt), `todo_projection_agent`, `usecase_detail_agent` (AI detail prompt), `executive_synthesis_agent` (AI synthesis prompt) |
-| `default-agents-opportunity.ts` | Opportunity-specific agents with neutral prompts: `opportunity_orchestrator`, `matrix_generation_agent` (neutral matrix prompt), `opportunity_list_agent` (neutral list prompt), `todo_projection_agent`, `opportunity_detail_agent` (neutral detail prompt), `executive_synthesis_agent` (neutral synthesis prompt) |
+| `default-agents-ai-ideas.ts` | AI-specific agents with prompts: `generation_orchestrator`, AI-domain matrix agent, `usecase_list_agent`, `initiative_list_with_orgs_agent`, `todo_projection_agent`, `usecase_detail_agent`, `executive_synthesis_agent` |
+| `default-agents-opportunity.ts` | Opportunity-specific agents with prompts: `opportunity_orchestrator`, opportunity-domain matrix agent, `opportunity_list_agent`, `opportunity_list_with_orgs_agent`, `todo_projection_agent`, `opportunity_detail_agent`, `executive_synthesis_agent` |
 | `default-agents-code.ts` | Code-specific agents with prompts: `codebase_analyst`, `issue_triager`, `implementation_planner` |
-| `default-agents-shared.ts` | Agents available on ALL workspace types: `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` — each with its prompt |
+| `default-agents-shared.ts` | Agents available on ALL workspace types: shared organization generation agent, `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` — each with its prompt |
 
 `structured_json_repair` prompt moves to a local constant in `context-initiative.ts` (utility, not an agent).
 
@@ -757,8 +810,8 @@ Each agent definition carries its prompt in `config.promptTemplate` (string). No
 
 | Workspace type | Specific agents | Shared agents (all types) |
 |---|---|---|
-| ai-ideas | `generation_orchestrator`, `matrix_generation_agent`, `usecase_list_agent`, `todo_projection_agent`, `usecase_detail_agent`, `executive_synthesis_agent` | `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` |
-| opportunity | `opportunity_orchestrator`, `matrix_generation_agent` (neutral prompt), `opportunity_list_agent`, `todo_projection_agent`, `opportunity_detail_agent`, `executive_synthesis_agent` (neutral prompt) | same shared agents |
+| ai-ideas | `generation_orchestrator`, AI-domain matrix agent, `usecase_list_agent`, `initiative_list_with_orgs_agent`, `todo_projection_agent`, `usecase_detail_agent`, `executive_synthesis_agent` | shared organization generation agent, `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` |
+| opportunity | `opportunity_orchestrator`, opportunity-domain matrix agent, `opportunity_list_agent`, `opportunity_list_with_orgs_agent`, `todo_projection_agent`, `opportunity_detail_agent`, `executive_synthesis_agent` | same shared agents |
 | code | `codebase_analyst`, `issue_triager`, `implementation_planner` | same shared agents |
 
 #### Chat system prompt per workspace type
@@ -776,7 +829,13 @@ Chat-level prompts (reasoning eval, session title, conversation auto) remain com
 
 ### 8.4 Opportunity identification workflow — neutral prompts (E, F)
 
-The `opportunity_identification` workflow is a clone of `ai_usecase_generation` with neutral prompts. It uses the same task sequence (context_prepare → matrix_prepare → opportunity_list → todo_sync → opportunity_detail → executive_summary) but all agents carry neutral prompts.
+The `opportunity_identification` workflow is a clone of `ai_usecase_generation` with neutral prompts. It uses the same workflow structure as the AI-ideas flow, but domain-specific list/detail/matrix agents and labels.
+
+Clarification:
+- same workflow role does not mean same agent implementation;
+- `initiative_matrix_prepare` and `opportunity_matrix_prepare` occupy the same place in the graph, but are considered domain-specific as long as their prompt/config differ;
+- `initiative_detail` and `opportunity_detail` are also domain-specific;
+- `generate_organization` is the shared agent role reused by both workflows.
 
 #### Neutral prompt guidelines
 
