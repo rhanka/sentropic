@@ -480,6 +480,9 @@ Informations de l'organisation (si disponibles): {{organization_info}}
 Cas d'usage prioritaires (top cas):
 {{top_cas}}
 
+Références disponibles issues des cas d'usage:
+{{references_context}}
+
 Liste complète des cas d'usage analysés:
 {{use_cases}}
 
@@ -495,6 +498,8 @@ Pour chaque cas d'usage, les informations suivantes sont disponibles:
 IMPORTANT:
 - La liste des cas d'usage prioritaires (top cas) sont fournis ci-dessus - utilise-les comme référence principale pour les recommandations
 - Utilise web_extract (mais pas web_search) uniquement en cas de besoin, avec des URLs valides uniquement. Si les cas d'usage n'ont pas de références ou si tu n'as pas d'URLs valides à extraire, n'utilise pas cet outil.
+- Utilise en priorité les références structurées ci-dessus pour remplir la section "references"
+- La section "references" doit contenir les références effectivement utilisées ou citées dans le rapport
 - Fais une analyse stratégique globale de l'ensemble des cas d'usage
 - Identifie les tendances, opportunités et défis communs
 - Mets l'accent sur les cas d'usage prioritaires dans l'analyse et les recommandations
@@ -507,7 +512,7 @@ OBLIGATOIRE: Réponds UNIQUEMENT avec un JSON valide contenant:
   "introduction": "...",
   "analyse": "...",
   "recommandation": "...",
-  "synthese_executive": "..."
+  "synthese_executive": "...",
   "references": [ { "title": "description du lien 1", "url": "url du lien 1" }, { "title": "description du lien 2", "url": "url du lien 2" }, ...]
 }
 
