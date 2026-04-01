@@ -156,6 +156,10 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] UI: pass `{ orgIds, createNewOrgs }` in the folder creation API call.
       - [x] UI: align matrix choice and labels with dossier-matrix semantics (`reuse existing org matrix` vs `generate folder ad hoc matrix`).
       - [x] Add UI coverage for the non-multi-org parity path and the multi-org folder-matrix flow.
+  - [ ] **12.4 UAT bugs reopened**
+    - [ ] Executive summary references are requested by prompt but dropped by runtime normalization/persistence; restore `executiveSummary.references` end-to-end (prompt example, repair schema, normalization, DB storage, UI payload).
+    - [ ] Org-aware generation prompt currently over-forces `organizationName` on vague requests, producing non-company targets; rework the shared org-aware list prompt contract so the agent returns only real companies with high confidence, otherwise no org target.
+    - [ ] Initiative references rendering still falls back to basic link parsing on some initiative/detail surfaces; restore full markdown rendering for generated refs instead of regex-only rendering.
   - [ ] **12.5 Lot gate**
     - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
