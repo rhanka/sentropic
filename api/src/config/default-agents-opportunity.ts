@@ -528,6 +528,9 @@ Informations de l'organisation (si disponibles): {{organization_info}}
 Opportunités prioritaires (top opportunités):
 {{top_cas}}
 
+Références disponibles issues des opportunités:
+{{references_context}}
+
 Liste complète des opportunités analysées:
 {{use_cases}}
 
@@ -542,6 +545,8 @@ Pour chaque opportunité, les informations suivantes sont disponibles:
 IMPORTANT:
 - La liste des opportunités prioritaires (top opportunités) sont fournies ci-dessus - utilise-les comme référence principale pour les recommandations
 - Utilise web_extract (mais pas web_search) uniquement en cas de besoin, avec des URLs valides uniquement. Si les opportunités n'ont pas de références ou si tu n'as pas d'URLs valides à extraire, n'utilise pas cet outil.
+- Utilise en priorité les références structurées ci-dessus pour remplir la section "references"
+- La section "references" doit contenir les références effectivement utilisées ou citées dans le rapport
 - Fais une analyse stratégique globale de l'ensemble des opportunités
 - Identifie les tendances de marché, les synergies et les défis communs
 - Mets l'accent sur les opportunités prioritaires dans l'analyse et les recommandations
@@ -555,7 +560,7 @@ OBLIGATOIRE: Réponds UNIQUEMENT avec un JSON valide contenant:
   "introduction": "...",
   "analyse": "...",
   "recommandation": "...",
-  "synthese_executive": "..."
+  "synthese_executive": "...",
   "references": [ { "title": "description du lien 1", "url": "url du lien 1" }, { "title": "description du lien 2", "url": "url du lien 2" }, ...]
 }
 
