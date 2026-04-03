@@ -25,6 +25,7 @@ export type Initiative = {
   id: string;
   folderId: string;
   organizationId?: string | null;
+  organizationName?: string | null;
   status?: 'draft' | 'generating' | 'detailing' | 'completed';
   model?: string; // Model used for generation (e.g., 'gpt-5', 'gpt-4.1-nano')
   createdAt: string;

@@ -167,6 +167,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [ ] **12.4 UAT bugs reopened**
     - [ ] Executive summary references are requested by prompt but dropped by runtime normalization/persistence; restore `executiveSummary.references` end-to-end (prompt example, repair schema, normalization, DB storage, UI payload).
     - [ ] Org-aware generation prompt now uses a shared list contract and a generic no-op auto-create path, but it still over-forces `organizationName` on vague requests; tighten it so the agent returns only real companies with high confidence, otherwise no org target.
+    - [x] Multi-org initiative surfaces now display the per-initiative organization assignment instead of falling back to `folder.organization_id`.
     - [x] Initiative references rendering no longer falls back to basic link parsing on initiative/detail surfaces; keep generated refs readable while preserving direct external links.
 
 ### Lot 12 clarification — shared vs specific objects
