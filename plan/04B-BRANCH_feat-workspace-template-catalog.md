@@ -165,7 +165,8 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] UI: align matrix choice and labels with dossier-matrix semantics (`reuse existing org matrix` vs `generate folder ad hoc matrix`).
       - [x] Add UI coverage for the non-multi-org parity path and the multi-org folder-matrix flow.
   - [ ] **12.4 UAT bugs reopened**
-    - [ ] Executive summary references are requested by prompt but dropped by runtime normalization/persistence; restore `executiveSummary.references` end-to-end (prompt example, repair schema, normalization, DB storage, UI payload).
+    - [x] Executive summary references are produced by the model but then wiped by dashboard-side `PUT /folders/:id` writes; folder executive-summary updates now merge-preserve `executiveSummary.references` through partial field saves / autosave.
+    - [ ] Remove the dead dashboard executive-summary save helpers (`getExecutiveSummaryPayload`, `handleExecutiveSummarySaved`, related stale buffer glue) once the `TemplateRenderer` path is the only write path.
     - [ ] Org-aware generation prompt now uses a shared list contract and a generic no-op auto-create path, but it still over-forces `organizationName` on vague requests; tighten it so the agent returns only real companies with high confidence, otherwise no org target.
     - [x] Multi-org initiative surfaces now display the per-initiative organization assignment instead of falling back to `folder.organization_id`.
     - [x] Initiative references rendering no longer falls back to basic link parsing on initiative/detail surfaces; keep generated refs readable while preserving direct external links.
