@@ -110,7 +110,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Add `workflow_task_transitions` persistence and seed support.
     - [x] Replace the current `switch (task.agentRole)` startup routing with a generic “ready entry nodes” dispatch.
     - [x] Replace task-key string heuristics (`includes("detail")`, `includes("summary")`, etc.) with transition-driven next-node resolution.
-    - [ ] Replace workflow-specific matrix waiting / unlock logic with transition + binding driven scheduling, while preserving the legacy visible matrix/list topology on non-multi-org paths.
+    - [x] Replace workflow-specific matrix waiting / unlock logic with transition + binding driven scheduling, while preserving the legacy visible matrix/list topology on non-multi-org paths.
     - [x] Keep only a generic executor registry (`executor` / `jobType` / `subworkflowKey` → implementation) in runtime services.
   - [ ] **12.3 Workflow migration on the generic engine**
     - [ ] **12.3.a Clarify workflow objects and naming**
@@ -125,14 +125,14 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Keep `initiative_list_with_orgs` as the first org-aware generation step; otherwise keep the classic non-org list task.
       - [x] Run organization creation only after `initiative_list_with_orgs` and before `initiative_detail`, never before the list step.
       - [x] Replace monolithic `organization_batch_create` with an explicit org subgraph driven from org-aware list outputs: workflow fanout -> shared `generate_organization` agent -> workflow join.
-      - [ ] Preserve the legacy visible matrix/list topology and barrier semantics whenever a folder ad hoc matrix is required.
+      - [x] Preserve the legacy visible matrix/list topology and barrier semantics whenever a folder ad hoc matrix is required.
       - [ ] Validate exact parity with `main` for pre-existing single-org / no-org cases.
-      - [ ] Declare `initiative_detail` fanout in transitions instead of runtime heuristics.
-      - [ ] Declare `executive_summary` join in transitions instead of business-table completion scanning.
+      - [x] Declare `initiative_detail` fanout in transitions instead of runtime heuristics.
+      - [x] Declare `executive_summary` join in transitions instead of business-table completion scanning.
     - [ ] `opportunity_identification`
       - [ ] Move list/detail/summary sequencing to transitions + bindings only, without changing legacy observable behavior outside multi-org.
       - [x] On the org-aware path, keep the historical order `opportunity_list_with_orgs` -> organization fanout/join -> `opportunity_detail`.
-      - [ ] Remove any opportunity-specific sequencing fallback from orchestration/runtime code.
+      - [x] Remove any opportunity-specific sequencing fallback from orchestration/runtime code.
       - [ ] Keep dossier-scoped matrix generation semantics on zero-org, single-org, and multi-org paths.
     - [x] `opportunity_qualification`
       - [x] Express qualification sequencing entirely through task transitions.
@@ -143,20 +143,20 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [ ] **12.4 Tests**
     - [ ] **API**
       - [x] Add API tests for generation start with `org_ids` / `create_new_orgs`.
-      - [ ] Add API tests for runtime routing to `initiative_list_with_orgs`.
+      - [x] Add API tests for runtime routing to `initiative_list_with_orgs`.
       - [x] Add API tests proving the historical multi-org order: `initiative_list_with_orgs` -> `create_organizations` -> `initiative_detail`.
-      - [ ] Replace `organization_batch_create` tests with org subgraph tests (prepare/list, fanout, join, state binding).
-      - [ ] Add API tests for transition-driven detail fanout and executive-summary join on the multi-org path.
+      - [x] Replace `organization_batch_create` tests with org subgraph tests (prepare/list, fanout, join, state binding).
+      - [x] Add API tests for transition-driven detail fanout and executive-summary join on the multi-org path.
       - [ ] Add parity API tests against `main` semantics for pre-existing non-multi-org flows:
-        - [ ] `0` org + title/context only
-        - [ ] `1` org + reuse existing matrix
-        - [ ] `1` org + generated matrix
+        - [x] `0` org + title/context only
+        - [x] `1` org + reuse existing matrix
+        - [x] `1` org + generated matrix
     - [ ] **Queue / unit**
       - [x] Add queue tests proving queue-visible per-org jobs and no opaque multi-call batch worker for auto-create orgs.
-      - [ ] Add queue/unit tests for generic conditional transition resolution.
-      - [ ] Add queue/unit tests for generic fanout scheduling.
-      - [ ] Add queue/unit tests for generic join completion.
-      - [ ] Add queue/unit tests for generic state/result replay safety.
+      - [x] Add queue/unit tests for generic conditional transition resolution.
+      - [x] Add queue/unit tests for generic fanout scheduling.
+      - [x] Add queue/unit tests for generic join completion.
+      - [x] Add queue/unit tests for generic state/result replay safety.
       - [ ] Add queue/unit tests proving the shared `generate_organization` agent is invoked once per org target from both workflows.
     - [x] **UI**
       - [x] UI: replace single-select org with multi-select in folder creation.
