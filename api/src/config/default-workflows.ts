@@ -29,7 +29,7 @@ export type DefaultWorkflowTaskDefinition = {
   title: string;
   description: string;
   orderIndex: number;
-  agentKey: string;
+  agentKey?: string | null;
   schemaFormat?: string;
   inputSchema?: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
@@ -129,11 +129,11 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
   tasks: [
     {
       taskKey: "generation_create_organizations",
-      title: "Organization batch creation",
+      title: "Organization target preparation",
       description:
-        "Auto-create organizations from user prompt before use-case generation. Skipped when autoCreateOrganizations is false.",
+        "Prepare organization creation targets from org-aware list outputs. Skipped when autoCreateOrganizations is false.",
       orderIndex: 0,
-      agentKey: "organization_batch_agent",
+      agentKey: null,
       metadata: jobTaskMetadata("organization_batch_create", {
         inputBindings: {
           folderId: "$state.inputs.folderId",
@@ -150,7 +150,7 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       description:
         "Resolve one organization candidate into a visible queue job and enrich it when needed.",
       orderIndex: 1,
-      agentKey: "organization_batch_agent",
+      agentKey: "generate_organization_agent",
       metadata: jobTaskMetadata("organization_enrich", {
         inputBindings: {
           organizationId: "$item.organizationId",
@@ -169,7 +169,7 @@ export const DEFAULT_USE_CASE_GENERATION_WORKFLOW: DefaultWorkflowDefinition = {
       description:
         "Join resolved organizations back into workflow state before downstream generation.",
       orderIndex: 2,
-      agentKey: "organization_batch_agent",
+      agentKey: null,
       metadata: jobTaskMetadata("organization_targets_join", {
         inputBindings: {
           sourceTaskKey: "generation_organization_enrich",
@@ -422,10 +422,10 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
   tasks: [
     {
       taskKey: "create_organizations",
-      title: "Organization batch creation",
-      description: "Auto-create organizations from user prompt before opportunity identification. Skipped when autoCreateOrganizations is false.",
+      title: "Organization target preparation",
+      description: "Prepare organization creation targets from org-aware list outputs. Skipped when autoCreateOrganizations is false.",
       orderIndex: 0,
-      agentKey: "organization_batch_agent",
+      agentKey: null,
       metadata: jobTaskMetadata("organization_batch_create", {
         inputBindings: {
           folderId: "$state.inputs.folderId",
@@ -441,7 +441,7 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
       title: "Organization create or enrich",
       description: "Resolve one organization candidate into a visible queue job and enrich it when needed.",
       orderIndex: 1,
-      agentKey: "organization_batch_agent",
+      agentKey: "generate_organization_agent",
       metadata: jobTaskMetadata("organization_enrich", {
         inputBindings: {
           organizationId: "$item.organizationId",
@@ -459,7 +459,7 @@ export const OPPORTUNITY_IDENTIFICATION_WORKFLOW: DefaultWorkflowDefinition = {
       title: "Organization resolution join",
       description: "Join resolved organizations back into workflow state before downstream generation.",
       orderIndex: 2,
-      agentKey: "organization_batch_agent",
+      agentKey: null,
       metadata: jobTaskMetadata("organization_targets_join", {
         inputBindings: {
           sourceTaskKey: "organization_enrich",
