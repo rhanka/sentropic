@@ -2,6 +2,10 @@
  * AI-Ideas workspace agents (existing 6 agents with embedded prompts).
  */
 import type { DefaultGenerationAgentDefinition } from './default-agents-types';
+import {
+  buildOrgAwareListPrompt,
+  ORG_AWARE_LIST_OUTPUT_SCHEMA,
+} from './default-org-aware-prompts';
 
 export const AI_IDEAS_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = [
   {
@@ -164,82 +168,14 @@ Réponds UNIQUEMENT avec un JSON valide:
     config: {
       role: "initiative_list_with_orgs",
       promptId: "use_case_list_with_orgs",
-      outputSchema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          dossier: { type: 'string' },
-          initiatives: {
-            type: 'array',
-            items: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                titre: { type: 'string' },
-                description: { type: 'string' },
-                ref: { type: 'string' },
-                organizationIds: {
-                  type: ['array', 'null'],
-                  items: { type: 'string' },
-                },
-                organizationName: { type: ['string', 'null'] },
-              },
-              required: ['titre', 'description', 'ref', 'organizationIds', 'organizationName'],
-            },
-          },
-        },
-        required: ['dossier', 'initiatives'],
-      },
-      promptTemplate: `Génère une liste de cas d'usage d'IA innovants orientés autour des organisations sélectionnées.
-
-Contexte:
-- Demande utilisateur: {{user_input}}
-- Nom de dossier (si non vide): {{folder_name}}
-- Informations de l'organisation principale: {{organization_info}}
-- Nombre de cas d'usage à générer: {{use_case_count}}
-
-Organisations sélectionnées (contexte détaillé):
-{{organizations_context}}
-
-Pour chaque cas d'usage, propose un titre court et explicite orienté autour des organisations ci-dessus.
-Format: JSON
-
-IMPORTANT:
-- Génère exactement {{use_case_count}} cas d'usages (ni plus, ni moins)
-- Si {{folder_name}} est non vide, réutiliser ce nom tel quel dans le champ JSON "dossier" (ne pas inventer un autre nom)
-- Si {{folder_name}} est vide, générer un nom de dossier pertinent (ne jamais utiliser "Brouillon")
-- Fais une recherche avec le tool web_search pour trouver des informations récentes sur les tendances IA pour ces organisations. Utilise web_extract pour obtenir le contenu détaillé des URLs qui semblent pertinentes (et uniquement si tu as des URLs valides à extraire).
-- Base-toi sur des exemples concrets et des technologies actuelles
-- Oriente chaque cas d'usage vers une ou plusieurs des organisations sélectionnées
-- Génère le titre et la description pour chaque cas d'usage
-- La description doit être en markdown, avec mise en exergue en gras, et le cas échéant en liste bullet point pour être percutante
-- Pour chaque cas d'usage, numérote les références (1, 2, 3...) et utilise [1], [2], [3] dans la description pour référencer ces numéros
-- Renseigne toujours les deux clés "organizationIds" et "organizationName".
-- Si les organisations sélectionnées sont identifiées par des IDs dans le contexte, renseigne "organizationIds" avec un ou plusieurs IDs pertinents et mets "organizationName" à null.
-- Si aucun ID d'organisation réutilisable n'est disponible mais qu'une organisation doit être créée pour porter ce cas d'usage, renseigne "organizationIds" à [] et "organizationName" avec le nom canonique de l'organisation cible.
-- N'omets jamais ces deux clés sur ce chemin orienté organisations.
-
-Réponds UNIQUEMENT avec un JSON valide:
-{
-  "dossier": "titre court du dossier",
-  "initiatives": [
-    {
-      "titre": "titre court 1",
-      "description": "Description courte (60-100 mots) du cas d'usage orienté organisation",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
-      "organizationIds": ["org_id_1"],
-      "organizationName": null
-    },
-    {
-      "titre": "titre court 2",
-      "description": "Description courte (60-100 mots) du cas d'usage orienté organisation",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
-      "organizationIds": [],
-      "organizationName": "Organisation cible si aucun ID n'est disponible"
-    },
-    ...
-  ]
-}`,
+      outputSchema: ORG_AWARE_LIST_OUTPUT_SCHEMA,
+      promptTemplate: buildOrgAwareListPrompt({
+        listHeadline: "Genere une liste de cas d'usage d'IA innovants orientes autour des organisations selectionnees.",
+        countLabel: "Nombre de cas d'usage a generer",
+        researchFocus: "trouver des informations recentes sur les tendances IA et les entreprises reelles les plus pertinentes pour cette demande",
+        itemLabelSingular: "cas d'usage",
+        itemDescriptionLabel: "cas d'usage",
+      }),
     },
   },
   {
