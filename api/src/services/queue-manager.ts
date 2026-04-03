@@ -1212,8 +1212,12 @@ export class QueueManager {
     const expectedSourcePath = typeof join.expectedSourcePath === 'string' ? join.expectedSourcePath : null;
     if (expectedSourcePath) {
       const expectedItems = this.getPathValue(params.state, expectedSourcePath);
-      if (!Array.isArray(expectedItems) || expectedItems.length === 0) {
+      const allowEmpty = join.allowEmpty === true;
+      if (!Array.isArray(expectedItems)) {
         return false;
+      }
+      if (expectedItems.length === 0) {
+        return allowEmpty;
       }
       const upstreamFanoutTransition = params.runtimeDefinition.transitions.find(
         (transition) =>
@@ -2896,10 +2900,6 @@ export class QueueManager {
       }
     }
 
-    if (organizationTargets.size === 0) {
-      throw new Error('Organization target preparation resolved no organizations');
-    }
-
     for (const initiative of resolvedInitiatives) {
       if (!Array.isArray(initiative.organizationIds) || initiative.organizationIds.length !== 1) {
         continue;
@@ -2917,6 +2917,7 @@ export class QueueManager {
         organizationTargets: Array.from(organizationTargets.values()),
         createdOrgIds,
         matchedExistingIds: Array.from(matchedExistingIds),
+        resolvedTargetCount: organizationTargets.size,
       },
       statePatch: {
         orgContext: {
@@ -2950,7 +2951,18 @@ export class QueueManager {
     const selectedOrgIds = readStringArray(orgContextState.selectedOrgIds);
     const organizationTargets = readOrganizationTargets(orgContextState.organizationTargets);
     if (organizationTargets.length === 0) {
-      throw new Error('Organization targets join received no targets');
+      return {
+        output: {
+          effectiveOrgIds: selectedOrgIds,
+          resolvedTargetCount: 0,
+          createdOrgIds: readStringArray(orgContextState.createdOrgIds),
+        },
+        statePatch: {
+          orgContext: {
+            effectiveOrgIds: selectedOrgIds,
+          },
+        },
+      };
     }
 
     const completedRows = await db

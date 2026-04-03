@@ -123,7 +123,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [ ] Normalize the target naming in docs so the AI-ideas and opportunity flows use the same suffixes for the same workflow role.
     - [ ] `ai_usecase_generation`
       - [ ] Keep `initiative_list_with_orgs` as the first org-aware generation step; otherwise keep the classic non-org list task.
-      - [ ] Run organization creation only after `initiative_list_with_orgs` and before `initiative_detail`, never before the list step.
+      - [x] Run organization creation only after `initiative_list_with_orgs` and before `initiative_detail`, never before the list step.
       - [ ] Replace monolithic `organization_batch_create` with an explicit org subgraph driven from org-aware list outputs: workflow fanout -> shared `generate_organization` agent -> workflow join.
       - [ ] Preserve the legacy visible matrix/list topology and barrier semantics whenever a folder ad hoc matrix is required.
       - [ ] Validate exact parity with `main` for pre-existing single-org / no-org cases.
@@ -166,7 +166,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Add UI coverage for the non-multi-org parity path and the multi-org folder-matrix flow.
   - [ ] **12.4 UAT bugs reopened**
     - [ ] Executive summary references are requested by prompt but dropped by runtime normalization/persistence; restore `executiveSummary.references` end-to-end (prompt example, repair schema, normalization, DB storage, UI payload).
-    - [ ] Org-aware generation prompt now uses a shared list contract, but it still over-forces `organizationName` on vague requests; tighten it so the agent returns only real companies with high confidence, otherwise no org target.
+    - [ ] Org-aware generation prompt now uses a shared list contract and a generic no-op auto-create path, but it still over-forces `organizationName` on vague requests; tighten it so the agent returns only real companies with high confidence, otherwise no org target.
     - [x] Initiative references rendering no longer falls back to basic link parsing on initiative/detail surfaces; keep generated refs readable while preserving direct external links.
 
 ### Lot 12 clarification — shared vs specific objects
