@@ -301,8 +301,14 @@
     if (parts.length <= 1) return { [changedKey]: changedValue };
     const parentPrefix = parts.slice(0, -1).join('.') + '.';
     const parentPath = parts.slice(0, -1);
+    const parentKey = parentPath.join('.');
+    const changedLeafKey = parts[parts.length - 1];
+    const omitExecutiveSummaryReferences = parentKey === 'executiveSummary' && changedLeafKey !== 'references';
     const rawParent = getNestedValue(data, parentPath.join('.'));
     const merged: Record<string, unknown> = (rawParent && typeof rawParent === 'object') ? { ...rawParent } : {};
+    if (omitExecutiveSummaryReferences) {
+      delete merged.references;
+    }
     for (const bufKey of Object.keys(textBuffers)) {
       if (bufKey.startsWith(parentPrefix)) {
         const leafKey = bufKey.slice(parentPrefix.length);
@@ -312,12 +318,12 @@
     for (const bufKey of Object.keys(listBuffers)) {
       if (bufKey.startsWith(parentPrefix)) {
         const leafKey = bufKey.slice(parentPrefix.length);
+        if (omitExecutiveSummaryReferences && leafKey === 'references') continue;
         const arr = listBuffers[bufKey] ?? [];
         merged[leafKey] = markdownToArray(stripTrailingEmptyParagraph(arrayToMarkdown(arr)));
       }
     }
-    const leafKey = parts[parts.length - 1];
-    merged[leafKey] = changedValue;
+    merged[changedLeafKey] = changedValue;
     let obj: Record<string, unknown> = {};
     const root = obj;
     for (let i = 0; i < parentPath.length - 1; i++) {
