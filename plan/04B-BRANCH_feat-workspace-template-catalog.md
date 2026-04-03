@@ -122,7 +122,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] State explicitly that `initiative_matrix_prepare` and `opportunity_matrix_prepare` share the same workflow role but are **not considered shared agents** until prompt/config/base-matrix are actually unified.
       - [ ] Normalize the target naming in docs so the AI-ideas and opportunity flows use the same suffixes for the same workflow role.
     - [ ] `ai_usecase_generation`
-      - [ ] Keep `initiative_list_with_orgs` as the first org-aware generation step; otherwise keep the classic non-org list task.
+      - [x] Keep `initiative_list_with_orgs` as the first org-aware generation step; otherwise keep the classic non-org list task.
       - [x] Run organization creation only after `initiative_list_with_orgs` and before `initiative_detail`, never before the list step.
       - [x] Replace monolithic `organization_batch_create` with an explicit org subgraph driven from org-aware list outputs: workflow fanout -> shared `generate_organization` agent -> workflow join.
       - [ ] Preserve the legacy visible matrix/list topology and barrier semantics whenever a folder ad hoc matrix is required.
@@ -131,7 +131,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [ ] Declare `executive_summary` join in transitions instead of business-table completion scanning.
     - [ ] `opportunity_identification`
       - [ ] Move list/detail/summary sequencing to transitions + bindings only, without changing legacy observable behavior outside multi-org.
-      - [ ] On the org-aware path, keep the historical order `opportunity_list_with_orgs` -> organization fanout/join -> `opportunity_detail`.
+      - [x] On the org-aware path, keep the historical order `opportunity_list_with_orgs` -> organization fanout/join -> `opportunity_detail`.
       - [ ] Remove any opportunity-specific sequencing fallback from orchestration/runtime code.
       - [ ] Keep dossier-scoped matrix generation semantics on zero-org, single-org, and multi-org paths.
     - [x] `opportunity_qualification`
