@@ -144,7 +144,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] **API**
       - [x] Add API tests for generation start with `org_ids` / `create_new_orgs`.
       - [ ] Add API tests for runtime routing to `initiative_list_with_orgs`.
-      - [ ] Add API tests proving the historical multi-org order: `initiative_list_with_orgs` -> `create_organizations` -> `initiative_detail`.
+      - [x] Add API tests proving the historical multi-org order: `initiative_list_with_orgs` -> `create_organizations` -> `initiative_detail`.
       - [ ] Replace `organization_batch_create` tests with org subgraph tests (prepare/list, fanout, join, state binding).
       - [ ] Add API tests for transition-driven detail fanout and executive-summary join on the multi-org path.
       - [ ] Add parity API tests against `main` semantics for pre-existing non-multi-org flows:

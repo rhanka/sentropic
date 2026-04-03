@@ -471,4 +471,92 @@ describe('Use Cases Generate - Workflow runtime end-to-end', () => {
     expect(detailTaskResults).toHaveLength(2);
     expect(detailTaskResults.every((row) => row.status === 'completed')).toBe(true);
   });
+
+  it('keeps auto-create flows generic when no real organization target is identified', async () => {
+    vi.spyOn(contextInitiative, 'generateInitiativeList').mockResolvedValue({
+      dossier: 'Generic workflow folder',
+      initiatives: [
+        {
+          titre: 'Digital twin manufacturier',
+          description: 'Description generique',
+          ref: '1. [Reference](https://example.com/generic-a)',
+        },
+        {
+          titre: 'Maintenance predictive produit',
+          description: 'Description generique',
+          ref: '1. [Reference](https://example.com/generic-b)',
+        },
+      ],
+    });
+
+    const enrichSpy = vi.spyOn(contextOrganization, 'enrichOrganization');
+
+    vi.spyOn(contextInitiative, 'generateInitiativeDetail').mockImplementation(async (initiativeName) =>
+      buildDetailPayload(String(initiativeName)),
+    );
+
+    vi.spyOn(executiveSummaryService, 'generateExecutiveSummary').mockImplementation(async ({ folderId }) => {
+      await db
+        .update(folders)
+        .set({
+          executiveSummary: JSON.stringify({
+            introduction: 'Synthetic introduction',
+            analyse: 'Synthetic analysis',
+            recommandation: 'Synthetic recommendation',
+            synthese_executive: 'Synthetic executive summary',
+            references: [],
+          }),
+        })
+        .where(eq(folders.id, folderId));
+    });
+
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/initiatives/generate',
+      user.sessionToken!,
+      {
+        input: `Digital twin manufacturier ${createTestId()}`,
+        matrix_mode: 'default',
+        initiative_count: 2,
+        create_new_orgs: true,
+        model: 'gpt-4.1-nano',
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+
+    await drainWorkspaceQueue(user.workspaceId!);
+
+    const [run] = await db
+      .select()
+      .from(executionRuns)
+      .where(eq(executionRuns.id, data.workflow_run_id))
+      .limit(1);
+    expect(run?.status).toBe('completed');
+
+    const organizationRows = await db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.workspaceId, user.workspaceId));
+    expect(organizationRows).toHaveLength(0);
+    expect(enrichSpy).not.toHaveBeenCalled();
+
+    const initiativeRows = await db
+      .select()
+      .from(initiatives)
+      .where(and(eq(initiatives.folderId, data.folder_id), eq(initiatives.workspaceId, user.workspaceId)));
+    expect(initiativeRows).toHaveLength(2);
+    expect(initiativeRows.every((row) => row.status === 'completed')).toBe(true);
+
+    const [runState] = await db
+      .select()
+      .from(workflowRunState)
+      .where(eq(workflowRunState.runId, data.workflow_run_id))
+      .limit(1);
+    const runtimeState = (runState?.state ?? {}) as Record<string, any>;
+    expect(runtimeState.orgContext?.organizationTargets).toEqual([]);
+    expect(runtimeState.orgContext?.effectiveOrgIds ?? []).toEqual([]);
+  });
 });
