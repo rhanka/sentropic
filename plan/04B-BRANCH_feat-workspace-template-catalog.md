@@ -103,7 +103,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [ ] **12.2 Runtime engine core**
     - [x] Add `orgIds: string[]` and `createNewOrgs: boolean` to folder creation payload.
     - [x] Store these values as workflow inputs on the generation run/job.
-    - [ ] Preserve exact `main` entry/output parity for pre-existing non-multi-org paths.
+    - [x] Preserve exact `main` entry/output parity for pre-existing non-multi-org paths.
     - [x] Preserve queue-visible work topology and concurrency regulation for pre-existing work units.
     - [x] Persist `workflow_run_state` for the generation run and bind multi-org inputs into that state.
     - [x] Persist `workflow_task_results` (or equivalent task output persistence) for the generation chain.
@@ -126,7 +126,6 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Run organization creation only after `initiative_list_with_orgs` and before `initiative_detail`, never before the list step.
       - [x] Replace monolithic `organization_batch_create` with an explicit org subgraph driven from org-aware list outputs: workflow fanout -> shared `generate_organization` agent -> workflow join.
       - [x] Preserve the legacy visible matrix/list topology and barrier semantics whenever a folder ad hoc matrix is required.
-      - [ ] Validate exact parity with `main` for pre-existing single-org / no-org cases.
       - [x] Declare `initiative_detail` fanout in transitions instead of runtime heuristics.
       - [x] Declare `executive_summary` join in transitions instead of business-table completion scanning.
     - [ ] `opportunity_identification`
