@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db, pool } from '../../db/client';
 import { organizations, folders, initiatives } from '../../db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { parseMatrixConfig } from '../../utils/matrix';
 import { calculateInitiativeScores, type ScoreEntry } from '../../utils/scoring';
@@ -223,6 +223,14 @@ export const hydrateInitiative = async (row: SerializedInitiative): Promise<Init
     data.name = 'Cas d\'usage sans nom';
   }
   
+  const [organization] = row.organizationId
+    ? await db
+        .select({ name: organizations.name })
+        .from(organizations)
+        .where(and(eq(organizations.id, row.organizationId), eq(organizations.workspaceId, row.workspaceId)))
+        .limit(1)
+    : [];
+
   // Calculer les scores dynamiquement
   const computedScores = calculateInitiativeScores(matrix, data as InitiativeData);
   
@@ -230,6 +238,7 @@ export const hydrateInitiative = async (row: SerializedInitiative): Promise<Init
     id: row.id,
     folderId: row.folderId,
     organizationId: row.organizationId,
+    organizationName: organization?.name ?? null,
     status: row.status ?? 'completed',
     model: row.model,
     createdAt: row.createdAt,
@@ -254,6 +263,22 @@ export const hydrateInitiatives = async (rows: SerializedInitiative[]): Promise<
       : await db.select().from(folders).where(eq(folders.id, folderId));
     if (folder) {
       foldersMap.set(folderId, folder);
+    }
+  }
+
+  const organizationIds = [...new Set(
+    rows
+      .map((row) => row.organizationId)
+      .filter((organizationId): organizationId is string => typeof organizationId === 'string' && organizationId.length > 0)
+  )];
+  const organizationNames = new Map<string, string>();
+  if (workspaceId && organizationIds.length > 0) {
+    const organizationRows = await db
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(and(eq(organizations.workspaceId, workspaceId), inArray(organizations.id, organizationIds)));
+    for (const organization of organizationRows) {
+      organizationNames.set(organization.id, organization.name);
     }
   }
   
@@ -312,6 +337,7 @@ export const hydrateInitiatives = async (rows: SerializedInitiative[]): Promise<
       id: row.id,
       folderId: row.folderId,
       organizationId: row.organizationId,
+      organizationName: row.organizationId ? (organizationNames.get(row.organizationId) ?? null) : null,
       status: row.status ?? 'completed',
       model: row.model,
       createdAt: row.createdAt,
@@ -368,7 +394,7 @@ initiativesRouter.get('/', async (c) => {
   const rows = folderId
     ? await db.select().from(initiatives).where(and(eq(initiatives.workspaceId, targetWorkspaceId), eq(initiatives.folderId, folderId)))
     : await db.select().from(initiatives).where(eq(initiatives.workspaceId, targetWorkspaceId));
-  const hydrated = await Promise.all(rows.map(row => hydrateInitiative(row)));
+  const hydrated = await hydrateInitiatives(rows);
   return c.json({ items: hydrated });
 });
 
