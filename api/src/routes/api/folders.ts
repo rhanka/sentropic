@@ -126,15 +126,15 @@ async function resolveWorkspaceType(workspaceId: string): Promise<string> {
   return ws?.type ?? 'ai-ideas';
 }
 
-// parseExecutiveSummary function (currently unused)
-// const parseExecutiveSummary = (value: string | null) => {
-//   if (!value) return null;
-//   try {
-//     return JSON.parse(value);
-//   } catch (error) {
-//     return null;
-//   }
-// };
+const parseExecutiveSummary = (value: string | null) => {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch (error) {
+    return null;
+  }
+};
 
 foldersRouter.get('/', async (c) => {
   const user = c.get('user') as { role?: string; workspaceId: string };
@@ -390,6 +390,14 @@ foldersRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidato
   const id = c.req.param('id')!;
   const payload = c.req.valid('json');
   const organizationId = payload.organizationId;
+  const [existingFolder] = await db
+    .select({ executiveSummary: folders.executiveSummary })
+    .from(folders)
+    .where(and(eq(folders.id, id), eq(folders.workspaceId, workspaceId)))
+    .limit(1);
+  if (!existingFolder) {
+    return c.json({ message: 'Not found' }, 404);
+  }
 
   try {
     await requireLockOwnershipForMutation({
@@ -415,11 +423,23 @@ foldersRouter.put('/:id', requireEditor, requireWorkspaceEditorRole(), zValidato
     }
   }
 
+  const existingExecutiveSummary = parseExecutiveSummary(existingFolder.executiveSummary ?? null);
+  const mergedExecutiveSummary =
+    payload.executiveSummary === undefined
+      ? undefined
+      : {
+          ...(existingExecutiveSummary ?? {}),
+          ...payload.executiveSummary,
+          ...(payload.executiveSummary.references !== undefined
+            ? { references: payload.executiveSummary.references }
+            : {}),
+        };
+
   const updatePayload = {
     ...payload,
     organizationId: payload.organizationId === undefined ? undefined : organizationId ?? null,
     matrixConfig: payload.matrixConfig ? JSON.stringify(payload.matrixConfig) : undefined,
-    executiveSummary: payload.executiveSummary ? JSON.stringify(payload.executiveSummary) : undefined
+    executiveSummary: mergedExecutiveSummary ? JSON.stringify(mergedExecutiveSummary) : undefined
   };
   const updated = await db
     .update(folders)
