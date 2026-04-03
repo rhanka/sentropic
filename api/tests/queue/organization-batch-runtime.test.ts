@@ -998,4 +998,181 @@ describe('Queue - organization_batch_create runtime', () => {
     expect(runState?.status).toBe('failed');
     expect(runState?.currentTaskKey).toBe('create_organizations');
   });
+
+  it('completes organization target preparation with no-op targets when the org-aware list stays generic', async () => {
+    const folderId = createId();
+    const workflowDefinitionId = createId();
+    const workflowRunId = createId();
+    const jobId = createId();
+    const now = new Date();
+
+    await db.insert(folders).values({
+      id: folderId,
+      workspaceId: user.workspaceId,
+      name: 'Folder',
+      description: 'Generic demand',
+      organizationId: null,
+      matrixConfig: null,
+      status: 'generating',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(workflowDefinitions).values({
+      id: workflowDefinitionId,
+      workspaceId: user.workspaceId,
+      key: 'ai_usecase_generation_v1',
+      name: 'Workflow',
+      description: 'Test workflow',
+      config: {},
+      sourceLevel: 'code',
+      isDetached: false,
+      createdByUserId: user.userId,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(workflowDefinitionTasks).values({
+      id: createId(),
+      workspaceId: user.workspaceId,
+      workflowDefinitionId,
+      taskKey: 'generation_create_organizations',
+      title: 'Create organizations',
+      description: 'Prepare organization targets after the org-aware list',
+      orderIndex: 1,
+      agentDefinitionId: null,
+      metadata: {
+        executor: 'job',
+        jobType: 'organization_batch_create',
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(executionRuns).values({
+      id: workflowRunId,
+      workspaceId: user.workspaceId,
+      planId: null,
+      todoId: null,
+      taskId: null,
+      workflowDefinitionId,
+      agentDefinitionId: null,
+      mode: 'full_auto',
+      status: 'in_progress',
+      startedByUserId: user.userId,
+      startedAt: now,
+      completedAt: null,
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(workflowRunState).values({
+      runId: workflowRunId,
+      workspaceId: user.workspaceId,
+      workflowDefinitionId,
+      status: 'in_progress',
+      state: {
+        inputs: {
+          folderId,
+          input: 'Digital twin manufacturier',
+          matrixMode: 'default',
+          initiativeCount: 2,
+          locale: 'fr',
+          organizationId: null,
+          model: 'gpt-5.4',
+          autoCreateOrganizations: true,
+        },
+        orgContext: {
+          selectedOrgIds: [],
+          createdOrgIds: [],
+          createdOrganizations: [],
+          organizationTargets: [],
+        },
+        generation: {
+          initiativeIds: ['initiative-a', 'initiative-b'],
+          initiatives: [
+            { id: 'initiative-a', name: 'Digital twin usine', description: 'Description A' },
+            { id: 'initiative-b', name: 'Maintenance predictive', description: 'Description B' },
+          ],
+        },
+      },
+      version: 1,
+      currentTaskKey: 'generation_create_organizations',
+      currentTaskInstanceKey: 'main',
+      checkpointedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(jobQueue).values({
+      id: jobId,
+      type: 'organization_batch_create',
+      status: 'processing',
+      workspaceId: user.workspaceId,
+      data: JSON.stringify({
+        folderId,
+        input: 'Digital twin manufacturier',
+        model: 'gpt-5.4',
+        locale: 'fr',
+        initiatedByUserId: user.userId,
+        workflow: {
+          workflowRunId,
+          workflowDefinitionId,
+          taskKey: 'generation_create_organizations',
+          agentDefinitionId: null,
+          agentMap: {},
+        },
+        _retry: {
+          attempt: 0,
+          maxRetries: 1,
+        },
+      }),
+      createdAt: now,
+      startedAt: now,
+    });
+
+    const [job] = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, jobId), eq(jobQueue.workspaceId, user.workspaceId)))
+      .limit(1);
+    expect(job).toBeDefined();
+
+    await (queueManager as unknown as { processJob: (queuedJob: unknown) => Promise<void> }).processJob(job!);
+
+    const [jobAfter] = await db
+      .select({ status: jobQueue.status })
+      .from(jobQueue)
+      .where(eq(jobQueue.id, jobId))
+      .limit(1);
+    expect(jobAfter?.status).toBe('completed');
+
+    const [taskResult] = await db
+      .select()
+      .from(workflowTaskResults)
+      .where(
+        and(
+          eq(workflowTaskResults.runId, workflowRunId),
+          eq(workflowTaskResults.taskKey, 'generation_create_organizations'),
+          eq(workflowTaskResults.taskInstanceKey, 'main'),
+        ),
+      )
+      .limit(1);
+    expect(taskResult?.status).toBe('completed');
+    expect((taskResult?.output as Record<string, unknown>).resolvedTargetCount).toBe(0);
+    expect((taskResult?.output as Record<string, unknown>).organizationTargets).toEqual([]);
+
+    const [runState] = await db
+      .select()
+      .from(workflowRunState)
+      .where(eq(workflowRunState.runId, workflowRunId))
+      .limit(1);
+    const state = (runState?.state ?? {}) as Record<string, any>;
+    expect(state.orgContext.organizationTargets).toEqual([]);
+    expect(state.generation.initiatives).toEqual([
+      expect.objectContaining({ id: 'initiative-a', name: 'Digital twin usine' }),
+      expect.objectContaining({ id: 'initiative-b', name: 'Maintenance predictive' }),
+    ]);
+  });
 });
