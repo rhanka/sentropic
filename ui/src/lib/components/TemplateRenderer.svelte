@@ -43,6 +43,79 @@
     return idx >= 0 ? key.slice(idx + 1) : key;
   }
 
+  function escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function normalizeReferenceTitle(value: string): string {
+    let normalized = value.trim();
+    while (/^\*\*[\s\S]*\*\*$/.test(normalized)) {
+      normalized = normalized.replace(/^\*\*([\s\S]*)\*\*$/, '$1').trim();
+    }
+    normalized = normalized.replace(/^\[\d+\]\s*/, '').trim();
+    return normalized;
+  }
+
+  function stripSingleParagraphWrapper(html: string): string {
+    const trimmed = html.trim();
+    const match = trimmed.match(/^<p>([\s\S]*)<\/p>$/i);
+    return match ? match[1] : trimmed;
+  }
+
+  function renderReferenceExcerpt(excerpt: string): string {
+    const rendered = stripSingleParagraphWrapper(renderMarkdownWithRefs(excerpt, references));
+    return rendered.trim().length > 0
+      ? `<span class="text-slate-500"> — ${rendered}</span>`
+      : '';
+  }
+
+  function renderReferenceLink(title: string, url: string): string {
+    return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">${escapeHtml(normalizeReferenceTitle(title))}</a>`;
+  }
+
+  function renderReferenceListItem(item: unknown): string {
+    if (item && typeof item === 'object') {
+      const source = item as Record<string, unknown>;
+      const title = typeof source.title === 'string' ? source.title.trim() : '';
+      const url = typeof source.url === 'string' ? source.url.trim() : '';
+      const excerpt =
+        typeof source.excerpt === 'string' && source.excerpt.trim().length > 0
+          ? source.excerpt.trim()
+          : '';
+
+      if (title && url) {
+        return `${renderReferenceLink(title, url)}${excerpt ? renderReferenceExcerpt(excerpt) : ''}`;
+      }
+      if (url) {
+        return renderReferenceLink(url, url);
+      }
+      if (title) {
+        return escapeHtml(title);
+      }
+    }
+
+    if (typeof item === 'string') {
+      const linkMatch = item.match(/^\[(.*?)\]\(([^)]*)\)([\s\S]*)$/);
+      if (linkMatch) {
+        const [, title, url, trailing] = linkMatch;
+        const excerpt = trailing.trim();
+        return `${renderReferenceLink(title, url)}${excerpt ? renderReferenceExcerpt(excerpt) : ''}`;
+      }
+      return stripSingleParagraphWrapper(renderMarkdownWithRefs(item, references));
+    }
+
+    try {
+      return escapeHtml(JSON.stringify(item));
+    } catch {
+      return escapeHtml(String(item ?? ''));
+    }
+  }
+
   // Active tab tracking
   let activeTabKey: string | null = null;
 
@@ -407,10 +480,8 @@
                       <div class="text-sm text-slate-600">
                         {#if shortKey(field.key) === 'references'}
                           <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
-                            {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
-                              {@const isObj = item && typeof item === 'object' && item.url}
-                              {@const linkMatch = typeof item === 'string' ? item.match(/\[(.*?)\]\(([^)]*)\)(.*)/) : null}
-                              <li class="leading-relaxed">{#if isObj}<a href={item.url} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{item.title || item.url}</a>{#if item.excerpt && !isPrinting && !locked}<span class="text-slate-500"> — {item.excerpt}</span>{/if}{:else if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{typeof item === 'string' ? item : JSON.stringify(item)}{/if}</li>
+                            {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item}
+                              <li class="leading-relaxed">{@html renderReferenceListItem(item)}</li>
                             {/each}
                           </ol>
                         {:else if isPrinting || locked}
@@ -447,11 +518,10 @@
                       {:else if field.type === 'list'}
                         <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={field.key} commentCount={commentCounts[field.key] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(field.key) : null}>
                           <div class="text-sm text-slate-600">
-                            {#if field.key === 'references'}
+                            {#if shortKey(field.key) === 'references'}
                               <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
-                                {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
-                                  {@const linkMatch = typeof item === 'string' ? item.match(/\[(.*?)\]\(([^)]*)\)(.*)/) : null}
-                                  <li class="leading-relaxed">{#if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{item}{/if}</li>
+                                {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item}
+                                  <li class="leading-relaxed">{@html renderReferenceListItem(item)}</li>
                                 {/each}
                               </ol>
                             {:else if isPrinting || locked}
@@ -490,10 +560,8 @@
                       <div class="text-sm text-slate-600">
                         {#if shortKey(field.key) === 'references'}
                           <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
-                            {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
-                              {@const isObj = item && typeof item === 'object' && item.url}
-                              {@const linkMatch = typeof item === 'string' ? item.match(/\[(.*?)\]\(([^)]*)\)(.*)/) : null}
-                              <li class="leading-relaxed">{#if isObj}<a href={item.url} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{item.title || item.url}</a>{#if item.excerpt && !isPrinting && !locked}<span class="text-slate-500"> — {item.excerpt}</span>{/if}{:else if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{typeof item === 'string' ? item : JSON.stringify(item)}{/if}</li>
+                            {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item}
+                              <li class="leading-relaxed">{@html renderReferenceListItem(item)}</li>
                             {/each}
                           </ol>
                         {:else if isPrinting || locked}
@@ -563,10 +631,8 @@
                     <div class="text-sm text-slate-600">
                       {#if shortKey(field.key) === 'references'}
                         <ol class="space-y-2 list-decimal list-outside pl-6 text-sm">
-                          {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item, idx}
-                            {@const isObj = item && typeof item === 'object' && item.url}
-                            {@const linkMatch = typeof item === 'string' ? item.match(/\[(.*?)\]\(([^)]*)\)(.*)/) : null}
-                            <li class="leading-relaxed">{#if isObj}<a href={item.url} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{item.title || item.url}</a>{#if item.excerpt && !isPrinting && !locked}<span class="text-slate-500"> — {item.excerpt}</span>{/if}{:else if linkMatch}<a href={linkMatch[2]} target="_blank" rel="noopener" class="text-blue-600 hover:text-blue-800 underline">{linkMatch[1]}</a>{#if linkMatch[3] && !isPrinting && !locked}<span class="text-slate-500">{linkMatch[3]}</span>{/if}{:else}{typeof item === 'string' ? item : JSON.stringify(item)}{/if}</li>
+                          {#each (Array.isArray(getFieldValue(field.key)) ? getFieldValue(field.key) : []) as item}
+                            <li class="leading-relaxed">{@html renderReferenceListItem(item)}</li>
                           {/each}
                         </ol>
                       {:else if isPrinting || locked}
