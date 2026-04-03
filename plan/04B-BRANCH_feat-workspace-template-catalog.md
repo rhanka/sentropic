@@ -141,13 +141,13 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Express analysis sequencing entirely through task transitions.
       - [x] Validate that no orchestration code path still depends on workflow-specific ordering logic.
   - [ ] **12.4 Tests**
-    - [ ] **API**
+    - [x] **API**
       - [x] Add API tests for generation start with `org_ids` / `create_new_orgs`.
       - [x] Add API tests for runtime routing to `initiative_list_with_orgs`.
       - [x] Add API tests proving the historical multi-org order: `initiative_list_with_orgs` -> `create_organizations` -> `initiative_detail`.
       - [x] Replace `organization_batch_create` tests with org subgraph tests (prepare/list, fanout, join, state binding).
       - [x] Add API tests for transition-driven detail fanout and executive-summary join on the multi-org path.
-      - [ ] Add parity API tests against `main` semantics for pre-existing non-multi-org flows:
+      - [x] Add parity API tests against `main` semantics for pre-existing non-multi-org flows:
         - [x] `0` org + title/context only
         - [x] `1` org + reuse existing matrix
         - [x] `1` org + generated matrix
