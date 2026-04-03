@@ -114,12 +114,12 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Keep only a generic executor registry (`executor` / `jobType` / `subworkflowKey` → implementation) in runtime services.
   - [ ] **12.3 Workflow migration on the generic engine**
     - [ ] **12.3.a Clarify workflow objects and naming**
-      - [ ] Document explicitly in spec/BRANCH which nodes are workflow-only structure vs real agents.
-      - [ ] Remove the misleading `organization_batch_agent` target model from the plan; the batch belongs to workflow fanout/join, not to an agent.
-      - [ ] State explicitly that `generate_organization` is a **shared unitary agent** reused by both workflows.
-      - [ ] State explicitly that `initiative_list_with_orgs` and `opportunity_list_with_orgs` are **domain-specific list agents**, not shared.
-      - [ ] State explicitly that `initiative_detail` and `opportunity_detail` are **domain-specific detail agents**, not shared.
-      - [ ] State explicitly that `initiative_matrix_prepare` and `opportunity_matrix_prepare` share the same workflow role but are **not considered shared agents** until prompt/config/base-matrix are actually unified.
+      - [x] Document explicitly in spec/BRANCH which nodes are workflow-only structure vs real agents.
+      - [x] Remove the misleading `organization_batch_agent` target model from the plan; the batch belongs to workflow fanout/join, not to an agent.
+      - [x] State explicitly that `generate_organization` is a **shared unitary agent** reused by both workflows.
+      - [x] State explicitly that `initiative_list_with_orgs` and `opportunity_list_with_orgs` are **domain-specific list agents**, not shared.
+      - [x] State explicitly that `initiative_detail` and `opportunity_detail` are **domain-specific detail agents**, not shared.
+      - [x] State explicitly that `initiative_matrix_prepare` and `opportunity_matrix_prepare` share the same workflow role but are **not considered shared agents** until prompt/config/base-matrix are actually unified.
       - [ ] Normalize the target naming in docs so the AI-ideas and opportunity flows use the same suffixes for the same workflow role.
     - [ ] `ai_usecase_generation`
       - [ ] Keep `initiative_list_with_orgs` as the first org-aware generation step; otherwise keep the classic non-org list task.
@@ -170,32 +170,6 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] Org-aware generation prompt now uses a shared list contract and a generic no-op auto-create path, but it still over-forces `organizationName` on vague requests; tighten it so the agent returns only real companies with high confidence, otherwise no org target.
     - [x] Multi-org initiative surfaces now display the per-initiative organization assignment instead of falling back to `folder.organization_id`.
     - [x] Initiative references rendering no longer falls back to basic link parsing on initiative/detail surfaces; keep generated refs readable while preserving direct external links.
-
-### Lot 12 clarification — shared vs specific objects
-
-- **Shared workflow-only structure**
-  - `*_context_prepare`
-  - `*_organizations_fanout`
-  - `*_organizations_join`
-  - `*_todo_sync`
-  - fanout/join/end routing semantics
-
-- **Shared agent**
-  - `generate_organization`
-    - one call = one organization
-    - reused by both `ai_usecase_generation` and `opportunity_identification`
-
-- **Domain-specific agents**
-  - `initiative_list_with_orgs`
-  - `opportunity_list_with_orgs`
-  - `initiative_detail`
-  - `opportunity_detail`
-
-- **Same workflow role, still domain-specific today**
-  - `initiative_matrix_prepare`
-  - `opportunity_matrix_prepare`
-    - same place in the workflow
-    - not treated as shared until prompt/config/base-matrix are actually unified
   - [ ] **12.5 Lot gate**
     - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
