@@ -152,7 +152,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
         - [ ] `1` org + reuse existing matrix
         - [ ] `1` org + generated matrix
     - [ ] **Queue / unit**
-      - [ ] Add queue tests proving queue-visible per-org jobs and no opaque multi-call batch worker for auto-create orgs.
+      - [x] Add queue tests proving queue-visible per-org jobs and no opaque multi-call batch worker for auto-create orgs.
       - [ ] Add queue/unit tests for generic conditional transition resolution.
       - [ ] Add queue/unit tests for generic fanout scheduling.
       - [ ] Add queue/unit tests for generic join completion.
