@@ -1934,7 +1934,7 @@ export class TodoOrchestrationService {
           title: taskDef.title,
               description: taskDef.description,
               orderIndex: taskDef.orderIndex,
-              agentDefinitionId: agentIdsByKey[taskDef.agentKey] ?? null,
+              agentDefinitionId: taskDef.agentKey ? (agentIdsByKey[taskDef.agentKey] ?? null) : null,
               schemaFormat: taskDef.schemaFormat ?? "json_schema",
               inputSchema: normalizeMetadata(taskDef.inputSchema),
               outputSchema: normalizeMetadata(taskDef.outputSchema),
@@ -1950,7 +1950,7 @@ export class TodoOrchestrationService {
     for (const row of existingTasks) {
       const seedTask = seed.tasks.find((t) => t.taskKey === row.taskKey);
       if (!seedTask) continue;
-      const agentId = agentIdsByKey[seedTask.agentKey] ?? null;
+      const agentId = seedTask.agentKey ? (agentIdsByKey[seedTask.agentKey] ?? null) : null;
       const nextInputSchema = normalizeMetadata(seedTask.inputSchema);
       const nextOutputSchema = normalizeMetadata(seedTask.outputSchema);
       const nextMetadata = normalizeMetadata(seedTask.metadata);

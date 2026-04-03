@@ -124,7 +124,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] `ai_usecase_generation`
       - [ ] Keep `initiative_list_with_orgs` as the first org-aware generation step; otherwise keep the classic non-org list task.
       - [x] Run organization creation only after `initiative_list_with_orgs` and before `initiative_detail`, never before the list step.
-      - [ ] Replace monolithic `organization_batch_create` with an explicit org subgraph driven from org-aware list outputs: workflow fanout -> shared `generate_organization` agent -> workflow join.
+      - [x] Replace monolithic `organization_batch_create` with an explicit org subgraph driven from org-aware list outputs: workflow fanout -> shared `generate_organization` agent -> workflow join.
       - [ ] Preserve the legacy visible matrix/list topology and barrier semantics whenever a folder ad hoc matrix is required.
       - [ ] Validate exact parity with `main` for pre-existing single-org / no-org cases.
       - [ ] Declare `initiative_detail` fanout in transitions instead of runtime heuristics.
