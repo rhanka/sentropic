@@ -115,6 +115,28 @@ const matrixBarrierJoinMetadata = (taskKeys: readonly string[]): Record<string, 
 });
 
 // ---------------------------------------------------------------------------
+// Task-key naming convention across workflows
+//
+// Both ai_usecase_generation and opportunity_identification use the same
+// structural roles with domain-specific prefixes / names:
+//
+//   Role                  | ai_usecase_generation           | opportunity_identification
+//   ----------------------|---------------------------------|---------------------------
+//   context_prepare       | generation_context_prepare      | context_prepare
+//   matrix_prepare        | generation_matrix_prepare       | matrix_prepare
+//   create_organizations  | generation_create_organizations | create_organizations
+//   organization_enrich   | generation_organization_enrich  | organization_enrich
+//   organization_join     | generation_organization_join    | organization_targets_join
+//   list                  | generation_usecase_list         | opportunity_list
+//   todo_sync             | generation_todo_sync            | todo_sync
+//   detail                | generation_usecase_detail       | opportunity_detail
+//   executive_summary     | generation_executive_summary    | executive_summary
+//
+// The shared agent (organization_enrich) uses the same jobType across both.
+// Task keys are not renamed to avoid breaking existing DB workflow_run_state rows.
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
 // ai-ideas workflows (existing, unchanged)
 // ---------------------------------------------------------------------------
 

@@ -100,7 +100,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] `opportunity_identification`
       - [x] `opportunity_qualification`
       - [x] `code_analysis`
-  - [ ] **12.2 Runtime engine core**
+  - [x] **12.2 Runtime engine core**
     - [x] Add `orgIds: string[]` and `createNewOrgs: boolean` to folder creation payload.
     - [x] Store these values as workflow inputs on the generation run/job.
     - [x] Preserve exact `main` entry/output parity for pre-existing non-multi-org paths.
@@ -112,16 +112,16 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Replace task-key string heuristics (`includes("detail")`, `includes("summary")`, etc.) with transition-driven next-node resolution.
     - [x] Replace workflow-specific matrix waiting / unlock logic with transition + binding driven scheduling, while preserving the legacy visible matrix/list topology on non-multi-org paths.
     - [x] Keep only a generic executor registry (`executor` / `jobType` / `subworkflowKey` → implementation) in runtime services.
-  - [ ] **12.3 Workflow migration on the generic engine**
-    - [ ] **12.3.a Clarify workflow objects and naming**
+  - [x] **12.3 Workflow migration on the generic engine**
+    - [x] **12.3.a Clarify workflow objects and naming**
       - [x] Document explicitly in spec/BRANCH which nodes are workflow-only structure vs real agents.
       - [x] Remove the misleading `organization_batch_agent` target model from the plan; the batch belongs to workflow fanout/join, not to an agent.
       - [x] State explicitly that `generate_organization` is a **shared unitary agent** reused by both workflows.
       - [x] State explicitly that `initiative_list_with_orgs` and `opportunity_list_with_orgs` are **domain-specific list agents**, not shared.
       - [x] State explicitly that `initiative_detail` and `opportunity_detail` are **domain-specific detail agents**, not shared.
       - [x] State explicitly that `initiative_matrix_prepare` and `opportunity_matrix_prepare` share the same workflow role but are **not considered shared agents** until prompt/config/base-matrix are actually unified.
-      - [ ] Normalize the target naming in docs so the AI-ideas and opportunity flows use the same suffixes for the same workflow role.
-    - [ ] `ai_usecase_generation`
+      - [x] Normalize the target naming in docs so the AI-ideas and opportunity flows use the same suffixes for the same workflow role.
+    - [x] `ai_usecase_generation`
       - [x] Keep `initiative_list_with_orgs` as the first org-aware generation step; otherwise keep the classic non-org list task.
       - [x] Run organization creation only after `initiative_list_with_orgs` and before `initiative_detail`, never before the list step.
       - [x] Replace monolithic `organization_batch_create` with an explicit org subgraph driven from org-aware list outputs: workflow fanout -> shared `generate_organization` agent -> workflow join.
@@ -139,7 +139,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] `code_analysis`
       - [x] Express analysis sequencing entirely through task transitions.
       - [x] Validate that no orchestration code path still depends on workflow-specific ordering logic.
-  - [ ] **12.4 Tests**
+  - [x] **12.4 Tests**
     - [x] **API**
       - [x] Add API tests for generation start with `org_ids` / `create_new_orgs`.
       - [x] Add API tests for runtime routing to `initiative_list_with_orgs`.
@@ -150,7 +150,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
         - [x] `0` org + title/context only
         - [x] `1` org + reuse existing matrix
         - [x] `1` org + generated matrix
-    - [ ] **Queue / unit**
+    - [x] **Queue / unit**
       - [x] Add queue tests proving queue-visible per-org jobs and no opaque multi-call batch worker for auto-create orgs.
       - [x] Add queue/unit tests for generic conditional transition resolution.
       - [x] Add queue/unit tests for generic fanout scheduling.
@@ -163,7 +163,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] UI: pass `{ orgIds, createNewOrgs }` in the folder creation API call.
       - [x] UI: align matrix choice and labels with dossier-matrix semantics (`reuse existing org matrix` vs `generate folder ad hoc matrix`).
       - [x] Add UI coverage for the non-multi-org parity path and the multi-org folder-matrix flow.
-  - [ ] **12.4 UAT bugs reopened**
+  - [x] **12.4 UAT bugs reopened**
     - [x] Executive summary references are produced by the model but then wiped by dashboard-side `PUT /folders/:id` writes; folder executive-summary updates now merge-preserve `executiveSummary.references` through partial field saves / autosave.
     - [x] Remove the dead dashboard executive-summary save helpers (`getExecutiveSummaryPayload`, `handleExecutiveSummarySaved`, related stale buffer glue) once the `TemplateRenderer` path is the only write path.
     - [x] Org-aware generation prompt now uses a shared list contract and a generic no-op auto-create path, and now instructs the agent to return only real companies with high confidence, otherwise no org target.
