@@ -165,7 +165,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Add UI coverage for the non-multi-org parity path and the multi-org folder-matrix flow.
   - [ ] **12.4 UAT bugs reopened**
     - [x] Executive summary references are produced by the model but then wiped by dashboard-side `PUT /folders/:id` writes; folder executive-summary updates now merge-preserve `executiveSummary.references` through partial field saves / autosave.
-    - [ ] Remove the dead dashboard executive-summary save helpers (`getExecutiveSummaryPayload`, `handleExecutiveSummarySaved`, related stale buffer glue) once the `TemplateRenderer` path is the only write path.
+    - [x] Remove the dead dashboard executive-summary save helpers (`getExecutiveSummaryPayload`, `handleExecutiveSummarySaved`, related stale buffer glue) once the `TemplateRenderer` path is the only write path.
     - [x] Org-aware generation prompt now uses a shared list contract and a generic no-op auto-create path, and now instructs the agent to return only real companies with high confidence, otherwise no org target.
     - [x] Multi-org initiative surfaces now display the per-initiative organization assignment instead of falling back to `folder.organization_id`.
     - [x] Initiative references rendering no longer falls back to basic link parsing on initiative/detail surfaces; keep generated refs readable while preserving direct external links.

@@ -20,7 +20,7 @@
   import { listComments } from '$lib/utils/comments';
   import { buildOpenCommentCounts } from '$lib/utils/comment-counts';
   import LockPresenceBadge from '$lib/components/LockPresenceBadge.svelte';
-  import { normalizeMarkdownLineEndings, renderMarkdownWithRefs } from '$lib/utils/markdown';
+  import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { workspaceReadOnlyScope, workspaceScopeHydrated, workspaceScope, selectedWorkspaceRole, selectedWorkspaceType } from '$lib/stores/workspaceScope';
   import { session } from '$lib/stores/session';
   import {
@@ -154,7 +154,6 @@
       if (incomingExecutiveSummary === null) {
         normalizedFolder.executiveSummary = null;
         executiveSummary = null;
-        applyExecutiveSummarySnapshot(folderId, null);
       } else if (incomingExecutiveSummary && typeof incomingExecutiveSummary === 'object') {
         const previousSummary =
           executiveSummary && typeof executiveSummary === 'object' ? executiveSummary : {};
@@ -168,7 +167,6 @@
         };
         normalizedFolder.executiveSummary = mergedExecutiveSummary;
         executiveSummary = mergedExecutiveSummary;
-        applyExecutiveSummarySnapshot(folderId, mergedExecutiveSummary);
       } else {
         // Ignore malformed partial payloads instead of wiping local executive summary state.
         delete (normalizedFolder as any).executiveSummary;
@@ -372,23 +370,6 @@
   }
   
   type ExecutiveSummaryField = 'introduction' | 'analyse' | 'recommandation' | 'synthese_executive';
-  const EXECUTIVE_SUMMARY_FIELDS: ExecutiveSummaryField[] = [
-    'introduction',
-    'analyse',
-    'recommandation',
-    'synthese_executive',
-  ];
-  const emptyExecutiveSummaryRecord = (): Record<ExecutiveSummaryField, string> => ({
-    introduction: '',
-    analyse: '',
-    recommandation: '',
-    synthese_executive: '',
-  });
-
-  let executiveSummaryData: Record<ExecutiveSummaryField, string> = emptyExecutiveSummaryRecord();
-  let executiveSummaryBuffers: Record<ExecutiveSummaryField, string> = emptyExecutiveSummaryRecord();
-  let executiveSummaryOriginals: Record<ExecutiveSummaryField, string> = emptyExecutiveSummaryRecord();
-  let lastExecutiveSummaryFolderId: string | null = null;
 
   const openExecutiveSummaryComments = (sectionKey: ExecutiveSummaryField | 'references') => {
     if (!selectedFolderId) return;
@@ -443,49 +424,6 @@
     }, 150);
   };
 
-  const normalizeExecutiveSummaryFields = (
-    summary: Record<string, any> | null | undefined
-  ): Record<ExecutiveSummaryField, string> => {
-    const normalized = emptyExecutiveSummaryRecord();
-    if (!summary) return normalized;
-    for (const field of EXECUTIVE_SUMMARY_FIELDS) {
-      normalized[field] = normalizeMarkdownLineEndings(summary[field]);
-    }
-    return normalized;
-  };
-
-  const applyExecutiveSummarySnapshot = (
-    folderId: string | null | undefined,
-    summary: Record<string, any> | null | undefined
-  ) => {
-    const incoming = normalizeExecutiveSummaryFields(summary);
-    if (!folderId || folderId !== lastExecutiveSummaryFolderId) {
-      lastExecutiveSummaryFolderId = folderId ?? null;
-      executiveSummaryBuffers = { ...incoming };
-      executiveSummaryOriginals = { ...incoming };
-      executiveSummaryData = { ...incoming };
-      return;
-    }
-
-    const nextBuffers = { ...executiveSummaryBuffers };
-    const nextOriginals = { ...executiveSummaryOriginals };
-    let changed = false;
-
-    for (const field of EXECUTIVE_SUMMARY_FIELDS) {
-      if (incoming[field] !== executiveSummaryOriginals[field]) {
-        nextBuffers[field] = incoming[field];
-        nextOriginals[field] = incoming[field];
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      executiveSummaryBuffers = nextBuffers;
-      executiveSummaryOriginals = nextOriginals;
-    }
-    executiveSummaryData = { ...(changed ? nextBuffers : executiveSummaryBuffers) };
-  };
-  
   // Numéros de page statiques pour le sommaire
   const basePageNumbers = {
     introduction: 2,
@@ -681,7 +619,6 @@
       currentFolder = normalizedFolder;
       matrix = normalizedFolder.matrixConfig;
       executiveSummary = normalizedFolder.executiveSummary || null;
-      applyExecutiveSummarySnapshot(folderId, executiveSummary as Record<string, any> | null);
       
       // Mettre à jour le folder dans le store pour refléter les changements de statut
       foldersStore.update(folders =>
@@ -740,59 +677,6 @@
       });
     } finally {
       isGeneratingSummary = false;
-    }
-  };
-
-  const handleExecutiveSummaryFieldChange = (field: ExecutiveSummaryField, value: string) => {
-    const normalizedValue = normalizeMarkdownLineEndings(value);
-    executiveSummaryBuffers = { ...executiveSummaryBuffers, [field]: normalizedValue };
-    executiveSummaryData = { ...executiveSummaryBuffers };
-  };
-
-  const getExecutiveSummaryPayload = (field: ExecutiveSummaryField) => {
-    if (!executiveSummary || !selectedFolderId) return undefined;
-    const value = executiveSummaryBuffers[field] ?? executiveSummaryData[field] ?? '';
-    const fields = { ...executiveSummaryBuffers, [field]: normalizeMarkdownLineEndings(value) };
-    return {
-      executiveSummary: {
-        ...fields,
-        references: executiveSummary.references || []
-      }
-    };
-  };
-
-  const getExecutiveSummaryOriginal = (field: ExecutiveSummaryField): string => {
-    return executiveSummaryOriginals[field] || '';
-  };
-
-  // Keep local state in sync after PUT success; SSE will reconcile without forced GET.
-  const handleExecutiveSummarySaved = (field: ExecutiveSummaryField, value: string) => {
-    if (!selectedFolderId) return;
-    const normalizedValue = normalizeMarkdownLineEndings(value);
-    const nextBuffers = { ...executiveSummaryBuffers, [field]: normalizedValue };
-    executiveSummaryBuffers = nextBuffers;
-    executiveSummaryOriginals = { ...executiveSummaryOriginals, [field]: normalizedValue };
-    executiveSummaryData = { ...nextBuffers };
-
-    const nextExecutiveSummary = {
-      ...(executiveSummary || {}),
-      ...nextBuffers,
-      references: executiveSummary?.references || []
-    };
-
-    executiveSummary = nextExecutiveSummary;
-    if (currentFolder) {
-      currentFolder = { ...currentFolder, executiveSummary: nextExecutiveSummary };
-    }
-    foldersStore.update((folders) =>
-      folders.map((f) =>
-        f.id === selectedFolderId ? { ...f, executiveSummary: nextExecutiveSummary } : f
-      )
-    );
-
-    clearDashboardDocxReadyToast();
-    if (field) {
-      applyDashboardDocxEvent({ type: 'content_changed' });
     }
   };
 
