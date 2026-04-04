@@ -44,7 +44,7 @@ tags: [master]
 - Selective staging: `git add <specific-files>` — NEVER `git add .` or `git add -A`
 - Commit command: `make commit MSG="type: concise description"` (single line only)
 - Never use `git commit` directly (avoids co-authoring trailer)
-- Update `BRANCH.md` checkboxes after each commit
+- Update `BRANCH.md` checkboxes WITHIN each commit (`git add BRANCH.md` alongside work files)
 
 ## WARNING — Top 5 Most-Violated Rules
 - VERIFY BRANCH before any work: `git -C <worktree> branch --show-current` — BR-04B lost 10+ commits on wrong branch
