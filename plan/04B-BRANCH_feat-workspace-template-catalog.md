@@ -156,7 +156,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Add queue/unit tests for generic fanout scheduling.
       - [x] Add queue/unit tests for generic join completion.
       - [x] Add queue/unit tests for generic state/result replay safety.
-      - [ ] Add queue/unit tests proving the shared `generate_organization` agent is invoked once per org target from both workflows.
+      - [x] Add queue/unit tests proving the shared `generate_organization` agent is invoked once per org target from both workflows.
     - [x] **UI**
       - [x] UI: replace single-select org with multi-select in folder creation.
       - [x] UI: add checkbox "Créer de nouvelles organisations automatiquement".

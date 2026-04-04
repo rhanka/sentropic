@@ -1175,4 +1175,239 @@ describe('Queue - organization_batch_create runtime', () => {
       expect.objectContaining({ id: 'initiative-b', name: 'Maintenance predictive' }),
     ]);
   });
+
+  it('shared generate_organization (organization_enrich) runs once per org target from both ai_usecase_generation and opportunity_identification', async () => {
+    const now = new Date();
+    const orgId = createId();
+
+    await db.insert(organizations).values({
+      id: orgId,
+      workspaceId: user.workspaceId,
+      name: 'Shared Org',
+      status: 'completed',
+      data: {
+        industry: 'Tech',
+        size: '',
+        products: '',
+        processes: '',
+        kpis: '',
+        challenges: '',
+        objectives: 'Profile',
+        technologies: '',
+        references: [],
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const workflows = [
+      { key: 'ai_usecase_generation_v1', taskPrefix: 'generation_' },
+      { key: 'opportunity_identification', taskPrefix: '' },
+    ] as const;
+
+    for (const wf of workflows) {
+      const folderId = createId();
+      const workflowDefinitionId = createId();
+      const workflowRunId = createId();
+      const jobId = createId();
+
+      await db.insert(folders).values({
+        id: folderId,
+        workspaceId: user.workspaceId,
+        name: `Folder for ${wf.key}`,
+        description: 'Test',
+        organizationId: null,
+        matrixConfig: null,
+        status: 'generating',
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await db.insert(workflowDefinitions).values({
+        id: workflowDefinitionId,
+        workspaceId: user.workspaceId,
+        key: wf.key,
+        name: `Workflow ${wf.key}`,
+        description: 'Test',
+        config: {},
+        sourceLevel: 'code',
+        isDetached: false,
+        createdByUserId: user.userId,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const batchTaskKey = `${wf.taskPrefix}create_organizations`;
+      const enrichTaskKey = `${wf.taskPrefix}organization_enrich`;
+
+      await db.insert(workflowDefinitionTasks).values([
+        {
+          id: createId(),
+          workspaceId: user.workspaceId,
+          workflowDefinitionId,
+          taskKey: batchTaskKey,
+          title: 'Create organizations',
+          description: 'Batch create',
+          orderIndex: 1,
+          agentDefinitionId: null,
+          metadata: { executor: 'job', jobType: 'organization_batch_create' },
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: createId(),
+          workspaceId: user.workspaceId,
+          workflowDefinitionId,
+          taskKey: enrichTaskKey,
+          title: 'Enrich organization',
+          description: 'Shared generate_organization agent',
+          orderIndex: 2,
+          agentDefinitionId: null,
+          metadata: {
+            executor: 'job',
+            jobType: 'organization_enrich',
+            inputBindings: {
+              organizationId: '$item.organizationId',
+              organizationName: '$item.organizationName',
+              model: '$state.inputs.model',
+              initiatedByUserId: '$run.startedByUserId',
+              locale: '$state.inputs.locale',
+              skipIfCompleted: '$item.skipIfCompleted',
+              wasCreated: '$item.wasCreated',
+            },
+          },
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]);
+
+      await db.insert(workflowTaskTransitions).values({
+        id: createId(),
+        workspaceId: user.workspaceId,
+        workflowDefinitionId,
+        fromTaskKey: batchTaskKey,
+        toTaskKey: enrichTaskKey,
+        transitionType: 'fanout',
+        condition: {},
+        metadata: {
+          fanout: {
+            sourcePath: 'orgContext.organizationTargets',
+            itemKey: 'organizationTarget',
+            instanceKeyPath: 'organizationId',
+          },
+        },
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await db.insert(executionRuns).values({
+        id: workflowRunId,
+        workspaceId: user.workspaceId,
+        planId: null,
+        todoId: null,
+        taskId: null,
+        workflowDefinitionId,
+        agentDefinitionId: null,
+        mode: 'full_auto',
+        status: 'in_progress',
+        startedByUserId: user.userId,
+        startedAt: now,
+        completedAt: null,
+        metadata: {},
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await db.insert(workflowRunState).values({
+        runId: workflowRunId,
+        workspaceId: user.workspaceId,
+        workflowDefinitionId,
+        status: 'in_progress',
+        state: {
+          inputs: {
+            folderId,
+            input: 'Test',
+            matrixMode: 'default',
+            initiativeCount: 2,
+            locale: 'fr',
+            organizationId: null,
+            model: 'gpt-4.1-nano',
+            autoCreateOrganizations: true,
+          },
+          orgContext: {
+            selectedOrgIds: [],
+            createdOrgIds: [],
+            createdOrganizations: [],
+            organizationTargets: [],
+          },
+          generation: {
+            initiativeIds: ['item-1'],
+            initiatives: [
+              { id: 'item-1', name: 'Test item', organizationIds: [orgId] },
+            ],
+          },
+        },
+        version: 1,
+        currentTaskKey: batchTaskKey,
+        currentTaskInstanceKey: 'main',
+        checkpointedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await db.insert(jobQueue).values({
+        id: jobId,
+        type: 'organization_batch_create',
+        status: 'processing',
+        workspaceId: user.workspaceId,
+        data: JSON.stringify({
+          folderId,
+          input: 'Test',
+          model: 'gpt-4.1-nano',
+          locale: 'fr',
+          workflow: {
+            workflowRunId,
+            workflowDefinitionId,
+            taskKey: batchTaskKey,
+            agentDefinitionId: null,
+            agentMap: { [enrichTaskKey]: 'agent_enrich' },
+          },
+          _retry: { attempt: 0, maxRetries: 1 },
+        }),
+        createdAt: now,
+        startedAt: now,
+      });
+
+      const addJobSpy = vi.spyOn(queueManager, 'addJob').mockResolvedValue(createId());
+
+      const [job] = await db
+        .select()
+        .from(jobQueue)
+        .where(and(eq(jobQueue.id, jobId), eq(jobQueue.workspaceId, user.workspaceId)))
+        .limit(1);
+      expect(job).toBeDefined();
+
+      await (queueManager as unknown as { processJob: (queuedJob: unknown) => Promise<void> }).processJob(job!);
+
+      // The shared organization_enrich job type is used regardless of which workflow triggered it
+      expect(addJobSpy).toHaveBeenCalledTimes(1);
+      expect(addJobSpy).toHaveBeenCalledWith(
+        'organization_enrich',
+        expect.objectContaining({
+          organizationId: orgId,
+          organizationName: 'Shared Org',
+          skipIfCompleted: true,
+          wasCreated: false,
+          workflow: expect.objectContaining({
+            taskKey: enrichTaskKey,
+            workflowRunId,
+            workflowDefinitionId,
+          }),
+        }),
+        expect.objectContaining({ workspaceId: user.workspaceId }),
+      );
+
+      addJobSpy.mockRestore();
+    }
+  });
 });
