@@ -128,11 +128,11 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Preserve the legacy visible matrix/list topology and barrier semantics whenever a folder ad hoc matrix is required.
       - [x] Declare `initiative_detail` fanout in transitions instead of runtime heuristics.
       - [x] Declare `executive_summary` join in transitions instead of business-table completion scanning.
-    - [ ] `opportunity_identification`
-      - [ ] Move list/detail/summary sequencing to transitions + bindings only, without changing legacy observable behavior outside multi-org.
+    - [x] `opportunity_identification`
+      - [x] Move list/detail/summary sequencing to transitions + bindings only, without changing legacy observable behavior outside multi-org.
       - [x] On the org-aware path, keep the historical order `opportunity_list_with_orgs` -> organization fanout/join -> `opportunity_detail`.
       - [x] Remove any opportunity-specific sequencing fallback from orchestration/runtime code.
-      - [ ] Keep dossier-scoped matrix generation semantics on zero-org, single-org, and multi-org paths.
+      - [x] Keep dossier-scoped matrix generation semantics on zero-org, single-org, and multi-org paths.
     - [x] `opportunity_qualification`
       - [x] Express qualification sequencing entirely through task transitions.
       - [x] Validate that no orchestration code path still depends on workflow-specific ordering logic.
