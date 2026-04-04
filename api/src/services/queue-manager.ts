@@ -2680,7 +2680,7 @@ export class QueueManager {
 
   private async processOrganizationBatchCreate(
     data: OrganizationBatchCreateJobData,
-    signal?: AbortSignal,
+    _signal?: AbortSignal,
   ): Promise<WorkflowTaskCompletion> {
     const { folderId, input } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
@@ -3599,7 +3599,7 @@ export class QueueManager {
     data: InitiativeListJobData,
     signal?: AbortSignal,
   ): Promise<WorkflowTaskCompletion | void> {
-    const { folderId, input, organizationId, matrixMode, model, initiativeCount, initiatedByUserId, locale, orgIds } = data;
+    const { folderId, input, organizationId, matrixMode: _matrixMode, model, initiativeCount, initiatedByUserId, locale, orgIds } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
     const [folder] = await db
