@@ -849,7 +849,7 @@ db-status: ## Check database status and tables
 db-inspect: up ## Inspect database directly via postgres container (query database state)
 	@echo "📊 Database Inspection:"
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
-		SELECT 'use_cases' as table_name, COUNT(*) as count FROM use_cases \
+		SELECT 'initiatives' as table_name, COUNT(*) as count FROM initiatives \
 		UNION ALL \
 		SELECT 'folders', COUNT(*) FROM folders \
 		UNION ALL \
@@ -871,24 +871,24 @@ db-query: up ## Execute a custom SQL query (usage: make db-query QUERY="SELECT *
 	@echo ""
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "$(QUERY)"
 
-.PHONY: db-inspect-usecases
-db-inspect-usecases: up ## Inspect use cases and folders relationship
-	@echo "📊 Use Cases Details:"
+.PHONY: db-inspect-initiatives
+db-inspect-initiatives: up ## Inspect initiatives and folders relationship
+	@echo "📊 Initiatives Details:"
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
-		SELECT uc.id, uc.name, uc.folder_id, f.name as folder_name, uc.organization_id, o.name as organization_name \
-		FROM use_cases uc \
-		LEFT JOIN folders f ON uc.folder_id = f.id \
-		LEFT JOIN organizations o ON uc.organization_id = o.id \
-		ORDER BY uc.created_at DESC \
+		SELECT i.id, i.name, i.folder_id, f.name as folder_name, i.organization_id, o.name as organization_name \
+		FROM initiatives i \
+		LEFT JOIN folders f ON i.folder_id = f.id \
+		LEFT JOIN organizations o ON i.organization_id = o.id \
+		ORDER BY i.created_at DESC \
 		LIMIT 20;"
 
 .PHONY: db-inspect-folders
-db-inspect-folders: up ## Inspect folders and their use cases count
+db-inspect-folders: up ## Inspect folders and their initiatives count
 	@echo "📊 Folders Details:"
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
-		SELECT f.id, f.name, f.description, COUNT(uc.id) as use_cases_count \
+		SELECT f.id, f.name, f.description, COUNT(i.id) as initiatives_count \
 		FROM folders f \
-		LEFT JOIN use_cases uc ON f.id = uc.folder_id \
+		LEFT JOIN initiatives i ON f.id = i.folder_id \
 		GROUP BY f.id, f.name, f.description \
 		ORDER BY f.created_at DESC;"
 
@@ -972,7 +972,7 @@ db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump
 		pg_restore -d postgres://app:app@localhost:5432/app --clean --if-exists --no-owner --no-privileges -v /tmp/restore.dump && rm /tmp/restore.dump"
 	@echo "📊 Inspecting database after restore (before migrations)..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
-		SELECT 'use_cases' as table_name, COUNT(*) as count FROM use_cases \
+		SELECT 'initiatives' as table_name, COUNT(*) as count FROM initiatives \
 		UNION ALL \
 		SELECT 'folders', COUNT(*) FROM folders \
 		UNION ALL \
@@ -1083,11 +1083,11 @@ db-seed-test: ## Seed database with test data for E2E tests
 	$(DOCKER_COMPOSE) exec api sh -lc "node dist/tests/utils/seed-test-data.js"
 
 .PHONY: db-migrate-data
-db-migrate-data: ## Migrate use_cases data to JSONB data field
+db-migrate-data: ## Migrate initiatives data to JSONB data field
 	$(COMPOSE_RUN_API) npm run db:migrate-data
 
 .PHONY: db-create-indexes
-db-create-indexes: ## Create recommended indexes for use_cases table
+db-create-indexes: ## Create recommended indexes for initiatives table
 	$(COMPOSE_RUN_API) npm run db:create-indexes
 
 .PHONY: db-lint

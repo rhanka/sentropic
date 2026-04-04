@@ -4,7 +4,8 @@
   "type": "module",
   "overrides": {
     "glob": "^11.1.0",
-    "fast-xml-parser": "^5.3.6"
+    "fast-xml-parser": "^5.3.6",
+    "@xmldom/xmldom": ">=0.8.12"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -54,10 +55,9 @@
     "hono-rate-limiter": "^0.5.3",
     "jose": "^6.1.0",
     "jszip": "^3.10.1",
-    "knex": "^3.1.0",
     "marked": "^17.0.1",
     "node-fetch": "^3.3.2",
-    "nodemailer": "^8.0.1",
+    "nodemailer": "^8.0.4",
     "officeparser": "^6.0.1",
     "openai": "^6.1.0",
     "pg": "^8.12.0",
