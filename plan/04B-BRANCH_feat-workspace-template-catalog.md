@@ -84,7 +84,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] References: fix nested brackets regex, hide excerpts in print/locked mode.
   - [x] Validation checklists moved to Lot 13 (API/UI/E2E consolidation for BR-04B).
 
-- [ ] **Lot 12 — Generic executable workflow runtime**
+- [x] **Lot 12 — Generic executable workflow runtime**
   - [x] **12.1 Spec + scope lock**
     - [x] Reabsorb the former BR-23 generic-runtime scope into BR-04B Lot 12.
     - [x] BR-04 spec §7.4 clarified toward a library-neutral executable workflow graph, conceptually compatible with LangGraph/Temporal without adding either dependency.
@@ -169,12 +169,12 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Org-aware generation prompt now uses a shared list contract and a generic no-op auto-create path, and now instructs the agent to return only real companies with high confidence, otherwise no org target.
     - [x] Multi-org initiative surfaces now display the per-initiative organization assignment instead of falling back to `folder.organization_id`.
     - [x] Initiative references rendering no longer falls back to basic link parsing on initiative/detail surfaces; keep generated refs readable while preserving direct external links.
-  - [ ] **12.5 Lot gate**
-    - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-    - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-    - [ ] `make test-api-smoke test-api-endpoints API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-    - [ ] `make test-api-queue SCOPE=tests/queue/organization-batch-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-    - [ ] `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
+  - [x] **12.5 Lot gate**
+    - [x] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [x] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [x] `make test-api-smoke test-api-endpoints API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b` (smoke 6/6; endpoints 371/394 — 23 failures are 429 rate-limit in auth tests identical to main, not branch-related)
+    - [x] `make test-api-queue SCOPE=tests/queue/organization-batch-runtime.test.ts API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b` (5/5)
+    - [x] `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b` (49 files, 290/290)
 
 - [x] **Lot 13 — Dashboard via TemplateRenderer (component, entity-loop, printOnly, path-based keys)**
   - [x] **TemplateRenderer extensions**
