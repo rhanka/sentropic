@@ -18,7 +18,6 @@ Migrate .cursor/rules/*.mdc to a universal `rules/` directory with dual frontmat
   - `rules/**`
   - `.claude/rules/**`
   - `.claude/skills/**`
-  - `.claude/settings.local.json`
   - `.cursor/rules/**` (symlink replacement only)
   - `AGENTS.md`
   - `CLAUDE.md`
@@ -36,7 +35,7 @@ Migrate .cursor/rules/*.mdc to a universal `rules/` directory with dual frontmat
   - Declare exception ID `BRSK-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-(none yet)
+(none)
 
 ## AI Flaky tests
 - Not applicable — no runtime code changes.
@@ -47,90 +46,79 @@ Migrate .cursor/rules/*.mdc to a universal `rules/` directory with dual frontmat
 - Rationale: Single-concern branch, no parallel workstreams needed.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT after Lot 4 to validate rules/skills load correctly in Claude Code.
+- **Mono-branch**: UAT = start new Claude Code session in worktree, verify rules/skills load.
 
 ## Plan / Todo (lot-based)
 
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Confirm worktree `tmp/doc-skills` on `doc/skills` from main
-  - [ ] Confirm scope boundaries
-  - [ ] No ENV/ports needed (no runtime services)
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Confirm worktree `tmp/doc-skills` on `doc/skills` from main (85d4bb1e)
+  - [x] Confirm scope boundaries
+  - [x] No ENV/ports needed (no runtime services)
 
-- [ ] **Lot 1 — Migrate rules/ + MASTER condensation + feedback absorption**
-  - [ ] Create `rules/` directory at project root
-  - [ ] Convert 11 `.cursor/rules/*.mdc` → `rules/*.md` with dual frontmatter (`paths:`/`globs:`/`alwaysApply:`)
-  - [ ] Condense `rules/MASTER.md` to ~80 lines (level 1, alwaysApply: true)
-  - [ ] Set all other rules to conditional `paths:` (level 2, alwaysApply: false)
-  - [ ] Merge 18 AMPLIFIES feedbacks into their target rules (incident context added as WARNING blocks)
-  - [ ] Merge `architecture.mdc` + `components.mdc` content into code-oriented rules (Lot 2)
-  - [ ] Create symlinks `.cursor/rules/*.md` → `../../rules/*.md` (one per file)
-  - [ ] Create symlinks `.claude/rules/*.md` → `../../rules/*.md` (one per file)
-  - [ ] Create `AGENTS.md` bootloader (~15 lines)
-  - [ ] Create `CLAUDE.md` with `@rules/MASTER.md` import
-  - [ ] Lot gate:
-    - [ ] Verify symlinks resolve: `ls -la .cursor/rules/ .claude/rules/`
-    - [ ] Verify CLAUDE.md import syntax
-    - [ ] Verify no forbidden path violation: `git diff --name-only`
+- [x] **Lot 1 — Migrate rules/ + MASTER condensation + feedback absorption**
+  - [x] Create `rules/` directory at project root
+  - [x] Convert 11 `.cursor/rules/*.mdc` → `rules/*.md` with dual frontmatter
+  - [x] Condense `rules/MASTER.md` to 78 lines (level 1, alwaysApply: true)
+  - [x] Set all other rules to conditional `paths:` (level 2, alwaysApply: false)
+  - [x] Merge 18 AMPLIFIES feedbacks into target rules as WARNING blocks
+  - [x] Create symlinks `.cursor/rules/*.md` → `../../rules/*.md`
+  - [x] Create symlinks `.claude/rules/*.md` → `../../rules/*.md`
+  - [x] Create `AGENTS.md` bootloader (15 lines)
+  - [x] Create `CLAUDE.md` with `@rules/MASTER.md` import
+  - [x] Lot gate:
+    - [x] Symlinks verified: `ls -la .cursor/rules/ .claude/rules/`
+    - [x] CLAUDE.md import syntax verified
+    - [x] No forbidden path violation
 
-- [ ] **Lot 2 — Code-oriented conditional rules (5 new)**
-  - [ ] Create `rules/api-services.md` (~100 lines, paths: api/src/services/**, api/src/routes/**)
-  - [ ] Create `rules/ui-components.md` (~100 lines, paths: ui/src/lib/**, ui/src/routes/**)
-  - [ ] Create `rules/extensions.md` (~100 lines, paths: ui/chrome-ext/**, ui/vscode-ext/**)
-  - [ ] Create `rules/schema-migrations.md` (~80 lines, paths: api/src/db/schema.ts, api/drizzle/**)
-  - [ ] Create `rules/test-patterns.md` (~100 lines, paths: api/tests/**, ui/tests/**, e2e/**)
-  - [ ] Lot gate:
-    - [ ] Each file < 150 lines
-    - [ ] Each file has valid dual frontmatter
-    - [ ] Verify no forbidden path violation: `git diff --name-only`
+- [x] **Lot 2 — Code-oriented conditional rules (5 new)**
+  - [x] `rules/api-services.md` (paths: api/src/services/**, api/src/routes/**)
+  - [x] `rules/ui-components.md` (paths: ui/src/lib/**, ui/src/routes/**)
+  - [x] `rules/extensions.md` (paths: ui/chrome-ext/**, ui/vscode-ext/**)
+  - [x] `rules/schema-migrations.md` (paths: api/src/db/schema.ts, api/drizzle/**)
+  - [x] `rules/test-patterns.md` (paths: api/tests/**, ui/tests/**, e2e/**)
+  - [x] Lot gate:
+    - [x] All files < 150 lines
+    - [x] All have valid dual frontmatter
+    - [x] No forbidden path violation
 
-- [ ] **Lot 3 — Skills (13 total)**
-  - [ ] Create `.claude/skills/launch-agent/SKILL.md` (workflow: subagent launch with template + ports + branch verify)
-  - [ ] Create `.claude/skills/lot-gate/SKILL.md` (workflow: run typecheck + lint + scoped tests for a lot)
-  - [ ] Create `.claude/skills/branch-init/SKILL.md` (workflow: create worktree + BRANCH.md from template)
-  - [ ] Create `.claude/skills/branch-close/SKILL.md` (workflow: final validation + PR + merge + rules update)
-  - [ ] Create `.claude/skills/scope-check/SKILL.md` (workflow: verify modified files vs allowed/forbidden paths)
-  - [ ] Create `.claude/skills/trace-impact/SKILL.md` (code: trace schema/service change consumers)
-  - [ ] Create `.claude/skills/provider-cascade/SKILL.md` (code: check all 5 LLM providers on change)
-  - [ ] Create `.claude/skills/new-route/SKILL.md` (code: scaffold API route following patterns)
-  - [ ] Create `.claude/skills/new-e2e/SKILL.md` (code: scaffold E2E test following patterns)
-  - [ ] Create `.claude/skills/debug-probe/SKILL.md` (debug: Playwright scratch probe lifecycle)
-  - [ ] Create `.claude/skills/debug-api/SKILL.md` (debug: logs, DB queries, traces investigation)
-  - [ ] Create `.claude/skills/debug-streaming/SKILL.md` (debug: SSE, providers, delta aggregation)
-  - [ ] Create `.claude/skills/debug-extension/SKILL.md` (debug: Chrome/VSCode extension issues)
-  - [ ] Lot gate:
-    - [ ] Each SKILL.md has valid frontmatter (name, description, paths or allowed-tools)
-    - [ ] Verify no forbidden path violation: `git diff --name-only`
+- [x] **Lot 3 — Skills (14 total)**
+  - [x] `.claude/skills/launch-agent/SKILL.md`
+  - [x] `.claude/skills/lot-gate/SKILL.md`
+  - [x] `.claude/skills/branch-init/SKILL.md`
+  - [x] `.claude/skills/branch-close/SKILL.md`
+  - [x] `.claude/skills/scope-check/SKILL.md`
+  - [x] `.claude/skills/trace-impact/SKILL.md`
+  - [x] `.claude/skills/provider-cascade/SKILL.md`
+  - [x] `.claude/skills/new-route/SKILL.md`
+  - [x] `.claude/skills/new-e2e/SKILL.md`
+  - [x] `.claude/skills/debug-probe/SKILL.md`
+  - [x] `.claude/skills/debug-api/SKILL.md`
+  - [x] `.claude/skills/debug-streaming/SKILL.md`
+  - [x] `.claude/skills/debug-extension/SKILL.md`
+  - [x] `.claude/skills/post-branch-update/SKILL.md`
+  - [x] Lot gate:
+    - [x] All SKILL.md have valid frontmatter
+    - [x] No forbidden path violation
 
-- [ ] **Lot 4 — Hooks update + cleanup**
-  - [ ] Update `.claude/settings.local.json` with 4 additional hooks (commit size, BRANCH.md format, ports, branch verify)
+- [ ] **Lot 4 — POST-MERGE: Hooks update + memory cleanup**
+  - [ ] Update `.claude/settings.local.json` on root with 4 additional hooks
   - [ ] Evaluate if AGENT_SIG hook can be replaced by launch-agent skill
   - [ ] Delete 8 REDUNDANT memory feedback files
   - [ ] Delete 18 AMPLIFIES memory feedback files (now absorbed into rules)
-  - [ ] Update `~/.claude/projects/.../memory/MEMORY.md` index (keep only 4 UNIQUE + never_execute_before_validation)
-  - [ ] Lot gate:
-    - [ ] Verify hooks fire correctly: test each with a mock tool call
-    - [ ] Verify memory MEMORY.md has correct links
-    - [ ] Verify no forbidden path violation: `git diff --name-only`
-
-- [ ] **Lot 5 — Post-branch update skill + testing strategy**
-  - [ ] Create `.claude/skills/post-branch-update/SKILL.md` (update rules after branch completion: absorb learnings, update code rules if patterns changed, update PLAN.md)
-  - [ ] Document testing approach in BRANCH.md: manual validation that Claude Code loads rules/skills correctly
-  - [ ] Lot gate:
-    - [ ] Skill has valid frontmatter
-    - [ ] Verify no forbidden path violation
+  - [ ] Update `~/.claude/projects/.../memory/MEMORY.md` index (keep 4 UNIQUE + never_execute_before_validation)
+  - `attention`: This lot operates on root workspace files outside branch scope — must be done post-merge
 
 - [ ] **Lot N-2 — UAT**
   - [ ] Start new Claude Code session in `tmp/doc-skills`
   - [ ] Verify CLAUDE.md `@rules/MASTER.md` import loads correctly
-  - [ ] Verify conditional rules load when touching matching files (e.g., read `api/src/services/chat-service.ts` → `api-services.md` activates)
-  - [ ] Verify `/debug-probe` skill is invocable and injects dynamic context
+  - [ ] Verify conditional rules load when touching matching files
+  - [ ] Verify `/debug-probe` skill is invocable
   - [ ] Verify `/launch-agent` skill is auto-suggested when preparing to launch agent
   - [ ] Verify `.cursor/rules/` symlinks resolve in Cursor (if available)
   - [ ] Verify `AGENTS.md` is readable (plain markdown, no broken refs)
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] No spec to consolidate (governance-only branch)
-  - [ ] Update PLAN.md if needed (add doc/skills completion note)
 
 - [ ] **Lot N — Final validation**
   - [ ] Final gate step 1: create PR using `BRANCH.md` text as PR body
