@@ -234,7 +234,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] System prompt: replace verbose freeform block with short "call upskill first" instruction
       - [x] Fix `doc()` helper: accept `(Paragraph | Table)[]`, not `Paragraph[]`
       - [x] Fix `table()` helper: default width 9360 DXA, dual widths, cell margins, `ShadingType.CLEAR`
-      - [ ] Fix `doc()` helper: use `paragraphStyles` with built-in IDs + `outlineLevel` instead of inline TextRun formatting
+      - [x] Fix `doc()` helper: use `paragraphStyles` with built-in IDs + `outlineLevel` instead of inline TextRun formatting
       - [ ] Test: upskill returns skill content, generate after upskill produces valid DOCX with tables
   - [x] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop

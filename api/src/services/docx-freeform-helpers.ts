@@ -63,24 +63,14 @@ export type FreeformContext = {
 // Default style constants
 // ---------------------------------------------------------------------------
 
-const DEFAULT_FONT = 'Calibri';
-const DEFAULT_FONT_SIZE = 22; // half-points → 11pt
-const HEADING_COLOR = '1e293b'; // slate-800
+const DEFAULT_FONT = 'Arial';
+const DEFAULT_FONT_SIZE = 24; // half-points → 12pt
 
 // US Letter dimensions in DXA (1440 DXA = 1 inch)
 const PAGE_WIDTH = 12240; // 8.5 inches
 const PAGE_HEIGHT = 15840; // 11 inches
 const PAGE_MARGIN = 1440; // 1 inch
 const CONTENT_WIDTH = PAGE_WIDTH - 2 * PAGE_MARGIN; // 9360 DXA
-
-const HEADING_SIZES: Record<number, number> = {
-  1: 48, // 24pt
-  2: 40, // 20pt
-  3: 34, // 17pt
-  4: 28, // 14pt
-  5: 24, // 12pt
-  6: 22, // 11pt
-};
 
 const HEADING_LEVELS: Record<number, (typeof HeadingLevel)[keyof typeof HeadingLevel]> = {
   1: HeadingLevel.HEADING_1,
@@ -96,7 +86,7 @@ const HEADING_LEVELS: Record<number, (typeof HeadingLevel)[keyof typeof HeadingL
 // ---------------------------------------------------------------------------
 
 /**
- * Create a full Document with sensible defaults (Calibri 11pt, 1.15 spacing, standard margins).
+ * Create a full Document with sensible defaults (Arial 12pt, US Letter, 1" margins, paragraph styles).
  */
 export function doc(children: (Paragraph | Table)[], opts?: DocOpts): Document {
   return new Document({
@@ -107,11 +97,37 @@ export function doc(children: (Paragraph | Table)[], opts?: DocOpts): Document {
             font: DEFAULT_FONT,
             size: DEFAULT_FONT_SIZE,
           },
-          paragraph: {
-            spacing: { line: 276 }, // 1.15 line spacing (240 * 1.15)
-          },
         },
       },
+      paragraphStyles: [
+        {
+          id: 'Heading1',
+          name: 'Heading 1',
+          basedOn: 'Normal',
+          next: 'Normal',
+          quickFormat: true,
+          run: { size: 32, bold: true, font: DEFAULT_FONT },
+          paragraph: { spacing: { before: 240, after: 240 }, outlineLevel: 0 },
+        },
+        {
+          id: 'Heading2',
+          name: 'Heading 2',
+          basedOn: 'Normal',
+          next: 'Normal',
+          quickFormat: true,
+          run: { size: 28, bold: true, font: DEFAULT_FONT },
+          paragraph: { spacing: { before: 180, after: 180 }, outlineLevel: 1 },
+        },
+        {
+          id: 'Heading3',
+          name: 'Heading 3',
+          basedOn: 'Normal',
+          next: 'Normal',
+          quickFormat: true,
+          run: { size: 26, bold: true, font: DEFAULT_FONT },
+          paragraph: { spacing: { before: 120, after: 120 }, outlineLevel: 2 },
+        },
+      ],
     },
     numbering: {
       config: [
@@ -153,11 +169,15 @@ export function doc(children: (Paragraph | Table)[], opts?: DocOpts): Document {
       {
         properties: {
           page: {
+            size: {
+              width: PAGE_WIDTH,
+              height: PAGE_HEIGHT,
+            },
             margin: {
-              top: convertInchesToTwip(1),
-              bottom: convertInchesToTwip(1),
-              left: convertInchesToTwip(1),
-              right: convertInchesToTwip(1),
+              top: PAGE_MARGIN,
+              bottom: PAGE_MARGIN,
+              left: PAGE_MARGIN,
+              right: PAGE_MARGIN,
             },
           },
         },
@@ -168,7 +188,7 @@ export function doc(children: (Paragraph | Table)[], opts?: DocOpts): Document {
 }
 
 /**
- * Create a heading paragraph (H1-H6 with scaled sizes).
+ * Create a heading paragraph (H1-H6). Styling comes from paragraphStyles — no inline overrides.
  */
 export function h(
   level: number,
@@ -176,18 +196,12 @@ export function h(
   opts?: HeadingOpts
 ): Paragraph {
   const clampedLevel = Math.max(1, Math.min(6, level));
+  const runOpts: Record<string, unknown> = { text };
+  if (opts?.color) runOpts.color = opts.color;
   return new Paragraph({
     heading: HEADING_LEVELS[clampedLevel],
     alignment: opts?.align,
-    children: [
-      new TextRun({
-        text,
-        bold: true,
-        size: HEADING_SIZES[clampedLevel],
-        font: DEFAULT_FONT,
-        color: opts?.color ?? HEADING_COLOR,
-      }),
-    ],
+    children: [new TextRun(runOpts as ConstructorParameters<typeof TextRun>[0])],
   });
 }
 
