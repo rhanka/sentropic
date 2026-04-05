@@ -851,42 +851,48 @@ export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = 
     name: 'document_generate',
     description:
       'Generate a DOCX document from the current context (initiative, folder/dashboard, etc.). ' +
-      'Two modes: (1) Template mode — provide templateId to use a predefined template. ' +
-      '(2) Freeform mode — provide code (JavaScript using docx helpers) to generate a custom document. ' +
-      'templateId and code are mutually exclusive. The generated document will be available for download once processing completes.',
+      'Before generating your first document in a conversation, call this tool with `action: "upskill"` to learn DOCX best practices. ' +
+      'Then call with `action: "generate"` with your code. ' +
+      'For generate: two sub-modes — (1) Template mode with templateId, (2) Freeform mode with code (mutually exclusive).',
     parameters: {
       type: 'object',
       properties: {
+        action: {
+          type: 'string',
+          enum: ['upskill', 'generate'],
+          description:
+            'Action to perform. Call "upskill" first to learn DOCX creation best practices, then "generate" with your code.',
+        },
         templateId: {
           type: 'string',
           description:
             'Document template identifier. Examples: "usecase-onepage" for initiative one-pager, ' +
             '"executive-synthesis-multipage" for folder executive summary report. ' +
-            'Mutually exclusive with code.',
+            'Mutually exclusive with code. Only for action "generate".',
         },
         entityType: {
           type: 'string',
           enum: ['initiative', 'folder'],
-          description: 'Type of entity to generate the document for.',
+          description: 'Type of entity to generate the document for. Only for action "generate".',
         },
         entityId: {
           type: 'string',
-          description: 'ID of the entity (initiative ID or folder ID).',
+          description: 'ID of the entity (initiative ID or folder ID). Only for action "generate".',
         },
         code: {
           type: 'string',
           description:
             'JavaScript code using docx helpers (doc, h, p, bold, italic, list, table, pageBreak, hr) ' +
             'that returns a Document object. Available data: context.entity, context.initiatives, ' +
-            'context.matrix, context.workspace. Mutually exclusive with templateId.',
+            'context.matrix, context.workspace. Mutually exclusive with templateId. Only for action "generate".',
         },
         title: {
           type: 'string',
           description:
-            'Document title used as the file name. Example: "Rapport initiatives dossier X".',
+            'Document title used as the file name. Example: "Rapport initiatives dossier X". Only for action "generate".',
         },
       },
-      required: ['entityType', 'entityId'],
+      required: ['action'],
     },
   },
 };
