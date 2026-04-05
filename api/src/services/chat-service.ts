@@ -4749,7 +4749,20 @@ Always provide a descriptive \`title\` parameter (e.g. "Rapport initiatives doss
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
             streamSeq += 1;
           } else if (toolCall.name === 'document_generate') {
-            // Enqueue DOCX generation job via queue-manager
+            const action = typeof args.action === 'string' ? args.action : 'generate';
+
+            if (action === 'upskill') {
+              // Return DOCX creation skill content for LLM learning
+              const { getDocxFreeformSkill } = await import('./docx-freeform-skill');
+              result = {
+                status: 'completed',
+                mode: 'upskill',
+                skill: getDocxFreeformSkill(),
+              };
+              await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+              streamSeq += 1;
+            } else {
+            // Generate mode: enqueue DOCX generation job via queue-manager
             const templateId = typeof args.templateId === 'string' ? args.templateId : undefined;
             const code = typeof args.code === 'string' ? args.code : undefined;
             const title = typeof args.title === 'string' ? args.title : undefined;
@@ -4847,6 +4860,7 @@ Always provide a descriptive \`title\` parameter (e.g. "Rapport initiatives doss
             }
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
             streamSeq += 1;
+            } // end generate action
           } else if (toolCall.name === 'batch_create_organizations') {
             if (readOnly) throw new Error('Read-only workspace: batch_create_organizations is disabled');
             const description = typeof args.description === 'string' ? args.description : '';
