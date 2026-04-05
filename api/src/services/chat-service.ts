@@ -56,6 +56,8 @@ import { getWorkspaceRole, getWorkspaceType, hasWorkspaceRole, isWorkspaceDelete
 import { env } from '../config/env';
 import { writeChatGenerationTrace } from './chat-trace';
 import { generateCommentResolutionProposal } from './context-comments';
+import { generateFreeformDocx } from './docx-generation';
+import { putObject, getDocumentsBucketName } from './storage-s3';
 import type { ProviderId } from './provider-runtime';
 import {
   buildAssistantMessageHistoryDetails,
@@ -2594,9 +2596,16 @@ export class ChatService {
 
     // Workspace-type-aware tool layer (§14.2)
     const wsType = await getWorkspaceType(sessionWorkspaceId);
+    const wsTypeToolNames = new Set<string>();
+    const addWsTools = (defs: Parameters<typeof addTools>[0]) => {
+      addTools(defs);
+      for (const t of defs) {
+        const name = t.type === 'function' ? t.function?.name : undefined;
+        if (name) wsTypeToolNames.add(name);
+      }
+    };
     if (wsType === 'opportunity') {
-      // Extended object tools for opportunity workspace
-      addTools([
+      addWsTools([
         solutionsListTool,
         solutionGetTool,
         bidsListTool,
@@ -2608,17 +2617,14 @@ export class ChatService {
         batchCreateOrganizationsTool
       ]);
     } else if (wsType === 'ai-ideas') {
-      // Document generation for ai-ideas workspace
-      addTools([documentGenerateTool]);
+      addWsTools([documentGenerateTool]);
     } else if (wsType === 'neutral') {
-      // Cross-workspace tools for neutral workspace only
-      addTools([
+      addWsTools([
         workspaceListTool,
         initiativeSearchTool,
         taskDispatchTool
       ]);
     }
-    // ai-ideas and code: no extra tools beyond context-type tools
 
     const effectiveRequestedTools = new Set(requestedTools);
     if (todoToolRequested) {
@@ -2661,15 +2667,10 @@ export class ChatService {
         .filter((name): name is string => Boolean(name))
     );
 
-    if (Array.isArray(options.tools) && options.tools.length > 0 && tools?.length) {
-      const allowed = new Set<string>([
-        ...effectiveRequestedTools,
-        'history_analyze',
-        ...Array.from(localToolNames)
-      ]);
-      tools = tools.filter((t) => (t.type === 'function' ? allowed.has(t.function?.name || '') : false));
-      if (tools.length === 0) tools = undefined;
-    }
+    // Note: no post-hoc filtering of tools — the context-type and workspace-type
+    // layers above already select exactly which tools are available for this session.
+    // UI toggle (options.tools) adds optional tools (web_search, plan) via
+    // effectiveRequestedTools above; it does not restrict programmatic tools.
 
     const documentsToolName =
       documentsTool.type === 'function' ? documentsTool.function.name : 'documents';
@@ -2927,6 +2928,34 @@ Règles :
         ? `OUTILS ACTIFS POUR CETTE REPONSE :\n${activeToolNames.map((name) => `- \`${name}\``).join('\n')}\n\nRègle : si l'utilisateur demande les outils disponibles, répondre uniquement à partir de cette liste.`
         : `OUTILS ACTIFS POUR CETTE REPONSE :\n- Aucun outil actif.`;
     contextBlock += `\n\n${activeToolsBlock}`;
+
+    if (activeToolNames.includes('document_generate')) {
+      contextBlock += `\n\n## Document generation (freeform mode)
+
+You can generate DOCX documents by calling document_generate with a \`code\` parameter.
+The code is JavaScript that uses helper functions and returns a Document object.
+
+Available helpers: doc(), h(), p(), bold(), italic(), list(), table(), pageBreak(), hr()
+Available raw classes: Document, Paragraph, TextRun, Table, TableRow, TableCell, HeadingLevel, AlignmentType, etc.
+Available data: context.entity, context.initiatives, context.matrix, context.workspace
+
+Example:
+return doc([
+  h(1, "Analysis Report"),
+  p("Executive summary of the analysis."),
+  h(2, "Key Findings"),
+  list(["Finding 1: ...", "Finding 2: ...", "Finding 3: ..."]),
+  h(2, "Data"),
+  table(["Metric", "Value"], [["Revenue", "$1.2M"], ["Growth", "15%"]]),
+  pageBreak(),
+  h(2, "Conclusion"),
+  p("Based on the analysis..."),
+]);
+
+For advanced styling, use raw docx classes directly.
+Always return a Document object (use doc() helper or new Document({...})).
+Always provide a descriptive \`title\` parameter (e.g. "Rapport initiatives dossier X") — it is used as the download file name.`;
+    }
 
     const vscodeCodeAgentPayload = this.normalizeVsCodeCodeAgentPayload(
       options.vscodeCodeAgent,
@@ -4072,7 +4101,7 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'usecases_list') {
+          } else if (toolCall.name === 'initiatives_list') {
             if (!args.folderId || typeof args.folderId !== 'string') {
               throw new Error('Security: folderId is required');
             }
@@ -4721,17 +4750,101 @@ Règles :
             streamSeq += 1;
           } else if (toolCall.name === 'document_generate') {
             // Enqueue DOCX generation job via queue-manager
-            const templateId = typeof args.templateId === 'string' ? args.templateId : 'usecase-onepage';
+            const templateId = typeof args.templateId === 'string' ? args.templateId : undefined;
+            const code = typeof args.code === 'string' ? args.code : undefined;
+            const title = typeof args.title === 'string' ? args.title : undefined;
             const entityType = typeof args.entityType === 'string' ? args.entityType : 'initiative';
             const entityId = typeof args.entityId === 'string' ? args.entityId : '';
             if (!entityId) throw new Error('document_generate: entityId is required');
-            result = {
-              status: 'completed',
-              message: `Document generation queued for ${entityType} ${entityId} with template ${templateId}. The document will be available for download once processing completes.`,
-              templateId,
-              entityType,
-              entityId,
-            };
+            if (templateId && code) throw new Error('document_generate: templateId and code are mutually exclusive');
+            if (!templateId && !code) throw new Error('document_generate: either templateId or code is required');
+
+            if (code) {
+              // Freeform mode: synchronous generation per SPEC_EVOL_FREEFORM_DOCX §4
+              try {
+                const freeformResult = await generateFreeformDocx({
+                  code,
+                  entityType: entityType as 'initiative' | 'folder',
+                  entityId,
+                  workspaceId: sessionWorkspaceId,
+                });
+
+                const jobId = createId();
+                const bucket = getDocumentsBucketName();
+                const objectKey = `docx-cache/${sessionWorkspaceId}/freeform/${entityType}/${entityId}/${jobId}.docx`;
+
+                await putObject({
+                  bucket,
+                  key: objectKey,
+                  body: freeformResult.buffer,
+                  contentType: freeformResult.mimeType,
+                });
+
+                const fileName = title
+                  ? `${title.replace(/[^a-zA-Z0-9À-ÿ _-]/g, '')}.docx`
+                  : freeformResult.fileName;
+
+                const completedPayload = {
+                  state: 'done',
+                  progress: 100,
+                  fileName,
+                  mimeType: freeformResult.mimeType,
+                  byteLength: freeformResult.buffer.byteLength,
+                  storageBucket: bucket,
+                  storageKey: objectKey,
+                  queueClass: 'publishing',
+                  completedAt: new Date().toISOString(),
+                };
+
+                await db.run(sql`
+                  INSERT INTO job_queue (id, type, status, workspace_id, data, result, completed_at)
+                  VALUES (
+                    ${jobId},
+                    'docx_generate',
+                    'completed',
+                    ${sessionWorkspaceId},
+                    ${JSON.stringify({ entityType, entityId, mode: 'freeform' })},
+                    ${JSON.stringify(completedPayload)},
+                    ${completedPayload.completedAt}
+                  )
+                `);
+
+                result = {
+                  status: 'completed',
+                  mode: 'freeform',
+                  entityType,
+                  entityId,
+                  jobId,
+                  fileName,
+                  mimeType: freeformResult.mimeType,
+                  downloadUrl: `/docx/jobs/${jobId}/download`,
+                };
+              } catch (freeformError: unknown) {
+                const errMsg = freeformError instanceof Error ? freeformError.message : 'Unknown freeform error';
+                // Map engine error codes per spec §6.2
+                let errorCode = 'code_runtime_error';
+                if (errMsg.includes('SyntaxError') || errMsg.includes('syntax')) errorCode = 'code_syntax_error';
+                else if (errMsg.includes('timeout') || errMsg.includes('Timeout')) errorCode = 'code_timeout';
+                else if (errMsg.includes('not a Document') || errMsg.includes('invalid_return_type')) errorCode = 'invalid_return_type';
+                else if (errMsg.includes('not found') || errMsg.includes('Not found')) errorCode = 'not_found';
+                else if (errMsg.includes('putObject') || errMsg.includes('S3') || errMsg.includes('storage')) errorCode = 'storage_error';
+
+                result = {
+                  status: 'error',
+                  code: errorCode,
+                  error: errMsg,
+                };
+              }
+            } else {
+              // Template mode (unchanged)
+              result = {
+                status: 'completed',
+                message: `Document generation queued for ${entityType} ${entityId} with template ${templateId}. The document will be available for download once processing completes.`,
+                templateId,
+                entityType,
+                entityId,
+              };
+            }
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
             streamSeq += 1;
           } else if (toolCall.name === 'batch_create_organizations') {
