@@ -2930,31 +2930,10 @@ Règles :
     contextBlock += `\n\n${activeToolsBlock}`;
 
     if (activeToolNames.includes('document_generate')) {
-      contextBlock += `\n\n## Document generation (freeform mode)
-
-You can generate DOCX documents by calling document_generate with a \`code\` parameter.
-The code is JavaScript that uses helper functions and returns a Document object.
-
-Available helpers: doc(), h(), p(), bold(), italic(), list(), table(), pageBreak(), hr()
-Available raw classes: Document, Paragraph, TextRun, Table, TableRow, TableCell, HeadingLevel, AlignmentType, etc.
-Available data: context.entity, context.initiatives, context.matrix, context.workspace
-
-Example:
-return doc([
-  h(1, "Analysis Report"),
-  p("Executive summary of the analysis."),
-  h(2, "Key Findings"),
-  list(["Finding 1: ...", "Finding 2: ...", "Finding 3: ..."]),
-  h(2, "Data"),
-  table(["Metric", "Value"], [["Revenue", "$1.2M"], ["Growth", "15%"]]),
-  pageBreak(),
-  h(2, "Conclusion"),
-  p("Based on the analysis..."),
-]);
-
-For advanced styling, use raw docx classes directly.
-Always return a Document object (use doc() helper or new Document({...})).
-Always provide a descriptive \`title\` parameter (e.g. "Rapport initiatives dossier X") — it is used as the download file name.`;
+      contextBlock += `\n\n## Document generation
+You have the tool \`document_generate\`. Before generating your first DOCX in this conversation,
+call it with \`action: "upskill"\` to learn professional DOCX creation rules.
+Then call with \`action: "generate"\` and your code.`;
     }
 
     const vscodeCodeAgentPayload = this.normalizeVsCodeCodeAgentPayload(
