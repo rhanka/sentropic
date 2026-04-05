@@ -67,6 +67,12 @@ const DEFAULT_FONT = 'Calibri';
 const DEFAULT_FONT_SIZE = 22; // half-points → 11pt
 const HEADING_COLOR = '1e293b'; // slate-800
 
+// US Letter dimensions in DXA (1440 DXA = 1 inch)
+const PAGE_WIDTH = 12240; // 8.5 inches
+const PAGE_HEIGHT = 15840; // 11 inches
+const PAGE_MARGIN = 1440; // 1 inch
+const CONTENT_WIDTH = PAGE_WIDTH - 2 * PAGE_MARGIN; // 9360 DXA
+
 const HEADING_SIZES: Record<number, number> = {
   1: 48, // 24pt
   2: 40, // 20pt
@@ -235,7 +241,7 @@ export function list(items: string[], opts?: ListOpts): Paragraph[] {
 }
 
 /**
- * Create a table with header row styling.
+ * Create a table with header row styling, proper DXA widths, cell margins, and ShadingType.CLEAR.
  */
 export function table(
   headers: string[],
@@ -244,12 +250,22 @@ export function table(
 ): Table {
   const columnCount = headers.length;
 
+  // Compute column widths: use provided widths or equal distribution
+  const colWidths =
+    opts?.widths && opts.widths.length === columnCount
+      ? opts.widths
+      : Array(columnCount).fill(Math.floor(CONTENT_WIDTH / columnCount));
+
+  const cellMargins = { top: 80, bottom: 80, left: 120, right: 120 };
+
   const headerRow = new TableRow({
     tableHeader: true,
     children: headers.map(
-      (header) =>
+      (header, i) =>
         new TableCell({
-          shading: { type: ShadingType.SOLID, fill: 'e2e8f0', color: 'e2e8f0' },
+          width: { size: colWidths[i], type: WidthType.DXA },
+          shading: { type: ShadingType.CLEAR, fill: 'e2e8f0', color: 'e2e8f0' },
+          margins: cellMargins,
           children: [
             new Paragraph({
               children: [
@@ -273,8 +289,10 @@ export function table(
           .slice(0, columnCount)
           .concat(Array(Math.max(0, columnCount - row.length)).fill(''))
           .map(
-            (cell) =>
+            (cell, i) =>
               new TableCell({
+                width: { size: colWidths[i], type: WidthType.DXA },
+                margins: cellMargins,
                 children: [
                   new Paragraph({
                     children: [
@@ -291,7 +309,9 @@ export function table(
       })
   );
 
-  const tableOpts: ConstructorParameters<typeof Table>[0] = {
+  return new Table({
+    width: { size: colWidths.reduce((a: number, b: number) => a + b, 0), type: WidthType.DXA },
+    columnWidths: colWidths,
     rows: [headerRow, ...dataRows],
     borders: {
       top: { style: BorderStyle.SINGLE, size: 1, color: 'cbd5e1' },
@@ -301,14 +321,7 @@ export function table(
       insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: 'cbd5e1' },
       insideVertical: { style: BorderStyle.SINGLE, size: 1, color: 'cbd5e1' },
     },
-  };
-
-  if (opts?.widths && opts.widths.length === columnCount) {
-    tableOpts.columnWidths = opts.widths;
-    tableOpts.width = { size: opts.widths.reduce((a, b) => a + b, 0), type: WidthType.DXA };
-  }
-
-  return new Table(tableOpts);
+  });
 }
 
 /**
