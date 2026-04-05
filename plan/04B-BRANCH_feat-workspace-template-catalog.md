@@ -227,6 +227,15 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] UI download: reuse `downloadCompletedDocxJob` pattern with `withWorkspaceScope('/docx/jobs/{jobId}/download')`
       - [x] API runtimeSummary: include `docxCards` in summary mode so cards persist on page reload
       - [x] UI ChatPanel: extract docxCards from runtimeSummary on session load and history hydration
+    - [ ] BUG-L13-7: `document_generate` upskill + quality improvements (spec: `SPEC_EVOL_FREEFORM_DOCX.md` §7)
+      - [ ] Tool contract: add `action` param (`upskill` | `generate`), update tool definition in `tools.ts`
+      - [ ] Chat handler: route `action: "upskill"` → return DOCX creation skill in tool result
+      - [ ] Skill content: adapt Anthropic docx skill for sandbox context (page size, styles, tables, lists, critical rules)
+      - [ ] System prompt: replace verbose freeform block with short "call upskill first" instruction
+      - [ ] Fix `doc()` helper: accept `(Paragraph | Table)[]`, not `Paragraph[]`
+      - [ ] Fix `table()` helper: default width 9360 DXA, dual widths, cell margins, `ShadingType.CLEAR`
+      - [ ] Fix `doc()` helper: use `paragraphStyles` with built-in IDs + `outlineLevel` instead of inline TextRun formatting
+      - [ ] Test: upskill returns skill content, generate after upskill produces valid DOCX with tables
   - [x] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [x] Dev live-debug harness stabilized on root `ENV=dev` for Lot 13/UAT repros (`make exec-playwright-dev`, `make record-dev-playwright-auth`, helper endpoints, Maildev fallback)

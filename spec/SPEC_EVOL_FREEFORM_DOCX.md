@@ -24,9 +24,18 @@ This spec fixes the `code` / freeform path only:
 }
 ```
 
-### 2.2 Freeform mode
+### 2.2 Upskill mode
 ```json
 {
+  "action": "upskill"
+}
+```
+Returns the DOCX creation skill (rules, patterns, examples) in the tool result. The LLM reads it before generating code. No other parameters required.
+
+### 2.3 Freeform mode
+```json
+{
+  "action": "generate",
   "entityType": "folder",
   "entityId": "xxx",
   "code": "return doc([ h(1, 'Title'), p('Content...') ]);",
@@ -34,12 +43,12 @@ This spec fixes the `code` / freeform path only:
 }
 ```
 
-### 2.3 Rules
-- `entityType` and `entityId` are always required.
-- `entityType` is `initiative | folder`.
-- `templateId` and `code` are mutually exclusive.
-- If `code` is present, the handler must execute the synchronous freeform path defined in §4.
-- If `templateId` is present, use the existing template path; do not route template mode through the freeform engine.
+### 2.4 Rules
+- `action` is required: `"upskill"` or `"generate"`.
+- For `action: "generate"`: `entityType` and `entityId` are required. Either `templateId` or `code` must be provided (mutually exclusive).
+- For `action: "upskill"`: no other parameters needed.
+- The tool description must instruct the LLM to call `upskill` before its first `generate` call in a conversation.
+- `templateId` mode (existing) uses `action: "generate"` with `templateId` instead of `code`.
 - Freeform copy/prompts/tool descriptions must not promise an async queue. The success contract is: the tool returns a ready-to-use download link.
 
 ## 3. Freeform helper API
@@ -245,3 +254,107 @@ Freeform errors are returned immediately in the same `tool_call_result`. There i
 - No fake `"completed"` message with only explanatory prose.
 - No async job-status instructions for the UI.
 - No "download later" wording for freeform mode.
+
+## 7. Upskill — DOCX creation skill
+
+### 7.1 Purpose
+The `upskill` action returns a self-contained skill document that teaches the LLM how to produce professional DOCX output. The LLM calls `document_generate({ action: "upskill" })` before its first freeform generation in a conversation. The skill is returned in the `tool_call_result` and consumed by the LLM as context for subsequent `generate` calls.
+
+### 7.2 Tool description guidance
+The `document_generate` tool description must include:
+> "Before generating your first document in a conversation, call this tool with `action: 'upskill'` to learn DOCX best practices. Then call with `action: 'generate'` with your code."
+
+### 7.3 Upskill result payload
+```json
+{
+  "status": "completed",
+  "mode": "upskill",
+  "skill": "<skill content string>"
+}
+```
+
+### 7.4 Skill content
+The skill content returned by `upskill` is adapted from [anthropics/skills/docx](https://github.com/anthropics/skills/blob/main/skills/docx/SKILL.md), filtered for our sandbox context (no Python, no XML editing, no filesystem — only docx.js code generation executed in a `vm` sandbox).
+
+The skill must cover:
+
+#### 7.4.1 Setup & execution model
+- Code is executed in a sandboxed `vm.createContext` with docx.js globals and helper functions
+- The code must return a `Document` object (via `doc()` helper or `new Document({...})`)
+- Available data: `context.entity`, `context.initiatives`, `context.matrix`, `context.workspace`
+- Timeout: 30 seconds
+- No `require`, `import`, `fs`, `fetch` — only the injected globals
+
+#### 7.4.2 Page size (CRITICAL)
+- Always set page size explicitly — docx.js defaults to A4
+- US Letter: `width: 12240, height: 15840` (DXA, 1440 DXA = 1 inch)
+- Standard margins: 1440 DXA (1 inch) on all sides
+- Content width with 1" margins: 9360 DXA
+
+#### 7.4.3 Styles (CRITICAL)
+- Use `paragraphStyles` with exact built-in IDs: `"Heading1"`, `"Heading2"`, etc.
+- Include `outlineLevel` for TOC compatibility (0 for H1, 1 for H2, etc.)
+- Default font: Arial 12pt (universally supported)
+- Keep titles black for readability
+- Use named styles, not inline TextRun formatting for headings
+
+#### 7.4.4 Tables (CRITICAL)
+- **Tables need dual widths**: set both `columnWidths` on the table AND `width` on each cell
+- **Always use `WidthType.DXA`** — never `WidthType.PERCENTAGE` (breaks in Google Docs)
+- Table width = sum of columnWidths = content width (9360 DXA for US Letter with 1" margins)
+- **Always add cell margins**: `margins: { top: 80, bottom: 80, left: 120, right: 120 }`
+- **Use `ShadingType.CLEAR`** for table shading — never `SOLID` (causes black backgrounds)
+- Cell margins are internal padding — they reduce content area, not add to cell width
+
+Example:
+```javascript
+new Table({
+  width: { size: 9360, type: WidthType.DXA },
+  columnWidths: [4680, 4680],
+  rows: [
+    new TableRow({
+      children: [
+        new TableCell({
+          borders: { top: border, bottom: border, left: border, right: border },
+          width: { size: 4680, type: WidthType.DXA },
+          shading: { fill: "D5E8F0", type: ShadingType.CLEAR },
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+          children: [new Paragraph({ children: [new TextRun("Cell")] })]
+        })
+      ]
+    })
+  ]
+})
+```
+
+#### 7.4.5 Lists (CRITICAL)
+- **Never use unicode bullets** (`•`, `\u2022`) — use `LevelFormat.BULLET` with numbering config
+- Each numbering `reference` creates independent numbering sequences
+- Same reference = continues numbering; different reference = restarts
+
+#### 7.4.6 Helpers available
+- `doc(children, opts?)` — full Document with defaults (page size, margins, numbering)
+- `h(level, text, opts?)` — heading (1-6)
+- `p(text, opts?)` — paragraph
+- `bold(text)`, `italic(text)` — inline formatting
+- `list(items, opts?)` — bullet or ordered list
+- `table(headers, rows, opts?)` — table with headers
+- `pageBreak()`, `hr()` — structure
+- Helpers accept `(Paragraph | Table)[]` — mix freely in `doc()`
+
+#### 7.4.7 Other critical rules
+- **Never use `\n`** — use separate Paragraph elements
+- **PageBreak must be inside a Paragraph**
+- **Use separate Paragraph elements for spacing** — not empty TextRuns
+- For professional documents: use headers/footers, page numbers, consistent spacing
+- For data-heavy documents: prefer tables with proper widths over bullet lists
+
+### 7.5 System prompt change
+Replace the current freeform docx system prompt block (chat-service.ts ~line 2932) with a short instruction:
+```
+## Document generation
+You have the tool `document_generate`. Before generating your first DOCX in this conversation,
+call it with `action: "upskill"` to learn professional DOCX creation rules.
+Then call with `action: "generate"` and your code.
+```
+This is much shorter than the current block and does not leak the full skill into every system prompt.
