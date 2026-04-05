@@ -201,7 +201,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Keep existing scatter plot, cover page, sommaire, annex cover components — just render them via the slot
     - [x] Remove manual FieldCard wiring for exec summary sections
     - [x] Ensure print mode works: printOnly fields mount only on Ctrl+P, entity-loop renders each initiative via its own TemplateRenderer
-  - [x] **Bugs identifiés en UAT Lot 13**
+  - [ ] **Bugs identifiés en UAT Lot 13**
     - [x] BUG-L13-2: Références vides / [object Object] — handle object items `{title,url}` + shortKey for path-based keys.
     - [x] BUG-L13-3: Annexes absentes — scatter plot canvas null guard + printOnly via CSS `hidden`/`print-block` instead of Svelte conditional mount.
     - [x] BUG-L13-1: Print style — marges, page-breaks, polices, background. Correctifs :
@@ -209,30 +209,48 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Correctif 2: CSS print gap/spacing 0 sur TemplateRenderer + `:first-child` sans page-break entity-loop (couvre A2/A4/A6 extra marges, A3/A7 pages vierges)
       - [x] Correctif 3: bug B — initiative standalone bg overflow (double wrapper fix)
       - [x] Correctif 4: `pageContext` field modifier — cover/annex page context switching (couvre A2 marges cover, A3 page vierge, A6 marges annex cover)
+    - [x] BUG-L13-4: `document_generate` and workspace-type tools filtered out by `allowed` set — tools added via workspace-type layer were not included in the request-based filter whitelist.
+    - [x] BUG-L13-5: `document_generate` freeform mode — `templateId` required but should be optional for ad-hoc generation (spec: `SPEC_EVOL_FREEFORM_DOCX.md`)
+      - [x] Spec `spec/SPEC_EVOL_FREEFORM_DOCX.md` written and aligned with SPEC_VOL_AGENT_SANDBOX_SKILLS vision
+      - [x] Helper library `api/src/services/docx-freeform-helpers.ts` — `doc`, `h`, `p`, `bold`, `italic`, `list`, `table`, `pageBreak`, `hr`
+      - [x] Sandbox execution in worker via `vm.createContext` with docx exports + helpers + context data
+      - [x] `document_generate` tool: `templateId` optional, new `code` param, mutual exclusion
+      - [x] Chat service handler: detect freeform mode, enqueue with `mode: 'freeform'`
+      - [x] Queue manager: freeform path in `processDocxGenerate` — sandbox eval → `Packer.toBuffer` → S3
+      - [x] System prompt snippet for freeform docx generation helpers
+      - [x] Test: freeform code execution produces valid DOCX buffer
+    - [x] BUG-L13-6: `document_generate` freeform end-to-end wiring (spec: `SPEC_EVOL_FREEFORM_DOCX.md` §4-5)
+      - [x] Chat handler: call `generateFreeformDocx()` synchronously, upload S3, persist completed `job_queue` row, return `jobId` + `fileName` in tool result
+      - [x] Chat handler: `initiatives_list` dispatch name fix (already landed in separate commit)
+      - [x] Chat handler: remove broken tool filter (already landed in separate commit)
+      - [x] UI StreamMessage: detect `document_generate` tool result with `jobId`, render download card (inline, design-system-aligned)
+      - [x] UI download: reuse `downloadCompletedDocxJob` pattern with `withWorkspaceScope('/docx/jobs/{jobId}/download')`
+      - [x] API runtimeSummary: include `docxCards` in summary mode so cards persist on page reload
+      - [x] UI ChatPanel: extract docxCards from runtimeSummary on session load and history hydration
   - [x] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [x] Dev live-debug harness stabilized on root `ENV=dev` for Lot 13/UAT repros (`make exec-playwright-dev`, `make record-dev-playwright-auth`, helper endpoints, Maildev fallback)
   - [x] Follow-up deferred to BR-22: data-specific freeze on initiative `cc884370-765c-40f3-a754-ceaf9a05da04` when rendering/editing `constraints`; investigate post-merge in isolated mini-branch (suspected rich markdown list / TipTap `forceList` loop)
   - [ ] Lot gate *(consolidated BR-04B validation, including test checklists moved from Lot 11)*
-    - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-    - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [x] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+    - [x] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [ ] **API tests**
-      - [ ] Existing (non-reg): `api/tests/api/initiatives.test.ts` — verify initiative CRUD still passes with schema changes (organizationIds, proposal rename)
-      - [ ] Existing (non-reg): `api/tests/api/initiatives-generate-matrix.test.ts` — verify matrix generation
-      - [ ] Existing (non-reg): `api/tests/api/chat-tools.test.ts` — verify existing chat tools, proposal rename
-      - [ ] Existing (non-reg): `api/tests/unit/context-initiative-detail-contract.test.ts` — verify context contract
+      - [x] Existing (non-reg): `api/tests/api/initiatives.test.ts` — verify initiative CRUD still passes with schema changes (organizationIds, proposal rename) (18/18)
+      - [x] Existing (non-reg): `api/tests/api/initiatives-generate-matrix.test.ts` — verify matrix generation (10/10)
+      - [x] Existing (non-reg): `api/tests/api/chat-tools.test.ts` — verify existing chat tools, proposal rename (6/6 isolated)
+      - [x] Existing (non-reg): `api/tests/unit/context-initiative-detail-contract.test.ts` — verify context contract (2/2)
       - [x] Existing branch work: `api/tests/api/view-templates.test.ts` — CRUD, resolution by workspaceId+workspaceType+objectType, seed on workspace creation, copy/reset/delete
       - [x] Existing branch work: `api/tests/unit/chat-service-document-generate.test.ts` — document_generate tool definition + handler
       - [x] Existing branch work: `api/tests/unit/chat-service-batch-create-orgs.test.ts` — batch_create_organizations tool definition + handler
-      - [ ] Sub-lot gate: `make test-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-      - [ ] AI flaky tests (non-blocking): `make test-api-ai API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
+      - [ ] Sub-lot gate: `make test-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b` (388/394 — 6 failures: chat-tools 2, chat 1, docx 1, workflow-runtime 2 — all "Session not found" concurrency errors in full suite)
+      - [ ] AI flaky tests (non-blocking): `make test-api-ai API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b` (25/27 — 2 failures in initiative-generation-async, non-blocking)
     - [ ] **UI tests**
-      - [ ] Existing (non-reg): `ui/tests/stores/initiatives.test.ts` — verify store still works with new fields
-      - [ ] Existing (non-reg): `ui/tests/stores/organizations.test.ts` — verify store
+      - [x] Existing (non-reg): `ui/tests/stores/initiatives.test.ts` — verify store still works with new fields
+      - [x] Existing (non-reg): `ui/tests/stores/organizations.test.ts` — verify store
       - [x] Existing branch work: `ui/tests/stores/viewTemplateCache.test.ts` — resolveViewTemplate dedup, cache hit, clearViewTemplateCache
-      - [ ] Update `ui/tests/upstream/injected-script.test.ts` if TemplateRenderer API changed
+      - [x] Update `ui/tests/upstream/injected-script.test.ts` if TemplateRenderer API changed
       - [ ] Add tests for path-based getFieldValue, entity-loop rendering, printOnly gating
-      - [ ] Sub-lot gate: `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
+      - [x] Sub-lot gate: `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
     - [ ] **E2E tests**
       - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b`
       - [x] Existing (non-reg): `e2e/tests/05-usecase-detail.spec.ts` — initiative detail page renders via TemplateRenderer
