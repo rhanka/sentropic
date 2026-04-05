@@ -51,6 +51,7 @@ import { generateDocumentDetailedSummary, generateDocumentSummary, getDocumentDe
 import { getNextSequence, writeStreamEvent } from './stream-service';
 import type { DocxEntityType, DocxTemplateId } from './docx-service';
 import { runDocxGenerationInWorker } from './docx-render-worker';
+import { generateFreeformDocx } from './docx-generation';
 import type { CommentContextType } from './context-comments';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
 import type { ProviderId } from './provider-runtime';
@@ -472,7 +473,7 @@ export interface DocumentSummaryJobData {
 }
 
 export interface DocxGenerateJobData {
-  templateId: DocxTemplateId;
+  templateId?: DocxTemplateId;
   entityType: DocxEntityType;
   entityId: string;
   provided?: Record<string, unknown>;
@@ -480,6 +481,8 @@ export interface DocxGenerateJobData {
   locale?: string;
   requestId?: string;
   sourceHash?: string;
+  mode?: 'template' | 'freeform';
+  code?: string;
 }
 
 export type JobData =
@@ -3502,8 +3505,10 @@ export class QueueManager {
       throw new Error('Docx job workspace not found');
     }
 
+    const isFreeform = data.mode === 'freeform' && typeof data.code === 'string';
+
     await emitStatus('queued', 0, {
-      templateId: data.templateId,
+      templateId: isFreeform ? 'freeform' : data.templateId,
       entityType: data.entityType,
       entityId: data.entityId,
       queueClass: 'publishing',
@@ -3516,27 +3521,40 @@ export class QueueManager {
 
       await emitStatus('loading_data', 10);
 
-      const result = await runDocxGenerationInWorker({
-        input: {
-        templateId: data.templateId,
-        entityType: data.entityType,
-        entityId: data.entityId,
-        workspaceId: jobRow.workspaceId,
-        provided: data.provided ?? {},
-        controls: data.controls ?? {},
-        locale: data.locale,
-        requestId: data.requestId ?? jobId,
-        },
-        signal,
-        onProgress: async (event) => {
-          const progress = typeof event.progress === 'number' ? event.progress : 50;
-          await emitStatus(event.state || 'rendering', progress, {
-            current: event.current,
-            total: event.total,
-            message: event.message,
-          });
-        },
-      });
+      let result: { fileName: string; mimeType: string; buffer: Buffer };
+
+      if (isFreeform) {
+        // Freeform mode: sandbox execution
+        result = await generateFreeformDocx({
+          code: data.code!,
+          entityType: data.entityType,
+          entityId: data.entityId,
+          workspaceId: jobRow.workspaceId,
+        });
+      } else {
+        // Template mode (existing path)
+        result = await runDocxGenerationInWorker({
+          input: {
+            templateId: data.templateId!,
+            entityType: data.entityType,
+            entityId: data.entityId,
+            workspaceId: jobRow.workspaceId,
+            provided: data.provided ?? {},
+            controls: data.controls ?? {},
+            locale: data.locale,
+            requestId: data.requestId ?? jobId,
+          },
+          signal,
+          onProgress: async (event) => {
+            const progress = typeof event.progress === 'number' ? event.progress : 50;
+            await emitStatus(event.state || 'rendering', progress, {
+              current: event.current,
+              total: event.total,
+              message: event.message,
+            });
+          },
+        });
+      }
 
       if (signal?.aborted) {
         throw new DOMException('Docx generation cancelled', 'AbortError');
@@ -3548,7 +3566,8 @@ export class QueueManager {
       });
 
       const bucket = getDocumentsBucketName();
-      const objectKey = `docx-cache/${jobRow.workspaceId}/${data.templateId}/${data.entityType}/${data.entityId}/${jobId}.docx`;
+      const templateSlug = isFreeform ? 'freeform' : (data.templateId ?? 'unknown');
+      const objectKey = `docx-cache/${jobRow.workspaceId}/${templateSlug}/${data.entityType}/${data.entityId}/${jobId}.docx`;
       await putObject({
         bucket,
         key: objectKey,

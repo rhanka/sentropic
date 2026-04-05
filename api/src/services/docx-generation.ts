@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { folders, initiatives } from '../db/schema';
@@ -16,6 +17,8 @@ import {
 } from './docx-service';
 import { parseMatrixConfig } from '../utils/matrix';
 import { calculateInitiativeScores } from '../utils/scoring';
+import { Document, Packer } from 'docx';
+import { getSandboxGlobals, type FreeformContext } from './docx-freeform-helpers';
 
 export type DocxGenerateRequest = {
   templateId: DocxTemplateId;
@@ -503,4 +506,120 @@ export async function computeDocxSourceHash(
   }
 
   throw new Error('unknown_template');
+}
+
+// ---------------------------------------------------------------------------
+// Freeform DOCX generation (sandbox execution)
+// ---------------------------------------------------------------------------
+
+export type FreeformDocxRequest = {
+  code: string;
+  entityType: DocxEntityType;
+  entityId: string;
+  workspaceId: string;
+};
+
+async function loadFreeformContext(
+  entityType: DocxEntityType,
+  entityId: string,
+  workspaceId: string,
+): Promise<FreeformContext> {
+  if (entityType === 'initiative') {
+    const [record] = await db
+      .select()
+      .from(initiatives)
+      .where(and(eq(initiatives.id, entityId), eq(initiatives.workspaceId, workspaceId)));
+    if (!record) throw new Error('not_found');
+    const hydrated = await hydrateInitiative(record);
+    const [folder] = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, hydrated.folderId), eq(folders.workspaceId, workspaceId)));
+    return {
+      entity: hydrated as unknown as Record<string, unknown>,
+      initiatives: [],
+      matrix: parseMatrixConfig(folder?.matrixConfig ?? null) as unknown as Record<string, unknown> | null,
+      workspace: { id: workspaceId },
+    };
+  }
+
+  // folder
+  const [folder] = await db
+    .select()
+    .from(folders)
+    .where(and(eq(folders.id, entityId), eq(folders.workspaceId, workspaceId)));
+  if (!folder) throw new Error('not_found');
+
+  const rows = await db
+    .select()
+    .from(initiatives)
+    .where(and(eq(initiatives.folderId, entityId), eq(initiatives.workspaceId, workspaceId)))
+    .orderBy(asc(initiatives.createdAt));
+  const hydratedInitiatives = await hydrateInitiatives(rows);
+  const matrix = parseMatrixConfig(folder.matrixConfig ?? null);
+
+  return {
+    entity: {
+      id: folder.id,
+      name: folder.name,
+      description: folder.description,
+      executiveSummary: parseExecutiveSummary(folder.executiveSummary ?? null),
+    },
+    initiatives: hydratedInitiatives as unknown as Record<string, unknown>[],
+    matrix: matrix as unknown as Record<string, unknown> | null,
+    workspace: { id: workspaceId },
+  };
+}
+
+/**
+ * Execute freeform DOCX code in a sandboxed vm context.
+ * The code must return a Document instance.
+ */
+export async function generateFreeformDocx(
+  request: FreeformDocxRequest,
+): Promise<DocxGenerateResult> {
+  const { code, entityType, entityId, workspaceId } = request;
+
+  // Load context data
+  const contextData = await loadFreeformContext(entityType, entityId, workspaceId);
+
+  // Build sandbox globals
+  const globals = getSandboxGlobals(contextData);
+  const sandbox = vm.createContext(globals);
+
+  // Execute code in sandbox
+  let result: unknown;
+  try {
+    const wrappedCode = `(function() { ${code} })()`;
+    const script = new vm.Script(wrappedCode, { filename: 'freeform-docx.js' });
+    result = script.runInContext(sandbox, { timeout: 30_000 });
+  } catch (error: unknown) {
+    if (error instanceof SyntaxError) {
+      const msg = error.message || 'Syntax error in freeform code';
+      throw Object.assign(new Error(`code_syntax_error: ${msg}`), { code: 'code_syntax_error' });
+    }
+    if (error instanceof Error && error.message?.includes('Script execution timed out')) {
+      throw Object.assign(new Error('code_timeout: Script execution exceeded 30s limit'), { code: 'code_timeout' });
+    }
+    const msg = error instanceof Error ? error.message : String(error);
+    throw Object.assign(new Error(`code_runtime_error: ${msg}`), { code: 'code_runtime_error' });
+  }
+
+  // Validate return type
+  if (!result || !(result instanceof Document)) {
+    throw Object.assign(
+      new Error('invalid_return_type: Code must return a Document object (use the doc() helper or new Document({...}))'),
+      { code: 'invalid_return_type' },
+    );
+  }
+
+  // Pack to buffer
+  const buffer = Buffer.from(await Packer.toBuffer(result));
+  const entitySlug = entityType === 'folder' ? 'folder' : 'initiative';
+
+  return {
+    buffer,
+    mimeType: DOCX_MIME,
+    fileName: `freeform-${entitySlug}-${entityId.slice(0, 8)}.docx`,
+  };
 }

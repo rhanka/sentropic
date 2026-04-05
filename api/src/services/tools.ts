@@ -851,7 +851,9 @@ export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = 
     name: 'document_generate',
     description:
       'Generate a DOCX document from the current context (initiative, folder/dashboard, etc.). ' +
-      'The generated document will be available for download once processing completes.',
+      'Two modes: (1) Template mode — provide templateId to use a predefined template. ' +
+      '(2) Freeform mode — provide code (JavaScript using docx helpers) to generate a custom document. ' +
+      'templateId and code are mutually exclusive. The generated document will be available for download once processing completes.',
     parameters: {
       type: 'object',
       properties: {
@@ -859,7 +861,8 @@ export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = 
           type: 'string',
           description:
             'Document template identifier. Examples: "usecase-onepage" for initiative one-pager, ' +
-            '"dashboard-report" for folder executive summary report.',
+            '"executive-synthesis-multipage" for folder executive summary report. ' +
+            'Mutually exclusive with code.',
         },
         entityType: {
           type: 'string',
@@ -870,8 +873,20 @@ export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = 
           type: 'string',
           description: 'ID of the entity (initiative ID or folder ID).',
         },
+        code: {
+          type: 'string',
+          description:
+            'JavaScript code using docx helpers (doc, h, p, bold, italic, list, table, pageBreak, hr) ' +
+            'that returns a Document object. Available data: context.entity, context.initiatives, ' +
+            'context.matrix, context.workspace. Mutually exclusive with templateId.',
+        },
+        title: {
+          type: 'string',
+          description:
+            'Document title used as the file name. Example: "Rapport initiatives dossier X".',
+        },
       },
-      required: ['templateId', 'entityType', 'entityId'],
+      required: ['entityType', 'entityId'],
     },
   },
 };
