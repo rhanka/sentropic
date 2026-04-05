@@ -92,7 +92,7 @@ const HEADING_LEVELS: Record<number, (typeof HeadingLevel)[keyof typeof HeadingL
 /**
  * Create a full Document with sensible defaults (Calibri 11pt, 1.15 spacing, standard margins).
  */
-export function doc(children: Paragraph[], opts?: DocOpts): Document {
+export function doc(children: (Paragraph | Table)[], opts?: DocOpts): Document {
   return new Document({
     styles: (opts?.styles as Document['styles']) ?? {
       default: {
