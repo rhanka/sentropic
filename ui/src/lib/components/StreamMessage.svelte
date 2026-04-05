@@ -34,12 +34,15 @@
         contextBudgetPct: number | null;
         durationMs: number | null;
         reasoningEffortLabel: string | null;
+        docxCards?: Array<{ jobId: string; fileName: string }>;
       }
     | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
   export let onTerminal: ((t: 'done' | 'error') => void) | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
   export let onStreamEvent: ((t: string) => void) | undefined = undefined;
+  // eslint-disable-next-line no-unused-vars
+  export let onDocxDownload: ((card: { jobId: string; fileName: string }) => void) | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
   export let onTodoRuntime:
     | ((
@@ -550,6 +553,15 @@
         if (todoCard) {
           upsertTodoToolCard(todoCard);
         }
+      }
+      // Notify parent of document_generate completed results with a download target
+      if (
+        toolName === 'document_generate' &&
+        data?.result?.status === 'completed' &&
+        typeof data?.result?.jobId === 'string' &&
+        typeof data?.result?.fileName === 'string'
+      ) {
+        onDocxDownload?.({ jobId: data.result.jobId as string, fileName: data.result.fileName as string });
       }
     } else if (eventType === 'content_delta') {
       st.sawStarted = false;
