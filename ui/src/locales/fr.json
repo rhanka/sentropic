@@ -357,6 +357,8 @@
         "organizationContext": "Utiliser les informations de l'organisation sélectionnée comme contexte principal.",
         "organizationsContext": "Utiliser les informations des organisations sélectionnées comme contexte principal."
       },
+      "generateFolder": "Générer le dossier",
+      "generating": "Génération en cours...",
       "matrix": {
         "title": "Matrice d'évaluation du dossier",
         "useOrganization": "Réutiliser la matrice de {name}",
