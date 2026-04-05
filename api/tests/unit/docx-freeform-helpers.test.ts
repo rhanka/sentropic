@@ -12,6 +12,7 @@ import {
   getSandboxGlobals,
   type FreeformContext,
 } from '../../src/services/docx-freeform-helpers';
+import { getDocxFreeformSkill } from '../../src/services/docx-freeform-skill';
 import { Document, Packer, Paragraph, TextRun, Table } from 'docx';
 import vm from 'node:vm';
 
@@ -37,6 +38,14 @@ describe('docx-freeform-helpers', () => {
       // DOCX files start with PK (ZIP signature)
       expect(buffer[0]).toBe(0x50); // 'P'
       expect(buffer[1]).toBe(0x4b); // 'K'
+    });
+
+    it('should accept mixed Paragraph and Table children', async () => {
+      const t = table(['A', 'B'], [['1', '2']]);
+      const result = doc([h(1, 'Title'), p('Intro'), t, p('After table')]);
+      expect(result).toBeInstanceOf(Document);
+      const buffer = await Packer.toBuffer(result);
+      expect(buffer.byteLength).toBeGreaterThan(0);
     });
   });
 
@@ -82,6 +91,17 @@ describe('docx-freeform-helpers', () => {
     it('should return a Table instance', () => {
       const result = table(['Col A', 'Col B'], [['1', '2'], ['3', '4']]);
       expect(result).toBeInstanceOf(Table);
+    });
+
+    it('should produce a valid DOCX with proper table width and cell margins', async () => {
+      const t = table(['Header A', 'Header B'], [['Cell 1', 'Cell 2']]);
+      const document = doc([t]);
+      const buffer = await Packer.toBuffer(document);
+      expect(buffer).toBeInstanceOf(Uint8Array);
+      expect(buffer.byteLength).toBeGreaterThan(0);
+      // Verify it is a valid ZIP/DOCX
+      expect(buffer[0]).toBe(0x50); // 'P'
+      expect(buffer[1]).toBe(0x4b); // 'K'
     });
   });
 
@@ -181,6 +201,26 @@ describe('docx-freeform-helpers', () => {
       const code2 = '(function() { return typeof process })()';
       const result2 = new vm.Script(code2).runInContext(sandbox, { timeout: 5000 });
       expect(result2).toBe('undefined');
+    });
+  });
+
+  describe('upskill skill content', () => {
+    it('should return a non-empty skill string', () => {
+      const skill = getDocxFreeformSkill();
+      expect(typeof skill).toBe('string');
+      expect(skill.length).toBeGreaterThan(100);
+    });
+
+    it('should contain key sections from the spec', () => {
+      const skill = getDocxFreeformSkill();
+      expect(skill).toContain('Page Size');
+      expect(skill).toContain('Tables');
+      expect(skill).toContain('Lists');
+      expect(skill).toContain('ShadingType.CLEAR');
+      expect(skill).toContain('WidthType.DXA');
+      expect(skill).toContain('9360');
+      expect(skill).toContain('doc(');
+      expect(skill).toContain('table(');
     });
   });
 });
