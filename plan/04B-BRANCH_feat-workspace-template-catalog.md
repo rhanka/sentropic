@@ -229,7 +229,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] UI ChatPanel: extract docxCards from runtimeSummary on session load and history hydration
     - [ ] BUG-L13-7: `document_generate` upskill + quality improvements (spec: `SPEC_EVOL_FREEFORM_DOCX.md` §7)
       - [x] Tool contract: add `action` param (`upskill` | `generate`), update tool definition in `tools.ts`
-      - [ ] Chat handler: route `action: "upskill"` → return DOCX creation skill in tool result
+      - [x] Chat handler: route `action: "upskill"` → return DOCX creation skill in tool result
       - [ ] Skill content: adapt Anthropic docx skill for sandbox context (page size, styles, tables, lists, critical rules)
       - [ ] System prompt: replace verbose freeform block with short "call upskill first" instruction
       - [ ] Fix `doc()` helper: accept `(Paragraph | Table)[]`, not `Paragraph[]`
