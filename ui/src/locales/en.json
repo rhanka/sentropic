@@ -357,6 +357,8 @@
         "organizationContext": "Use the selected organization information as the main context.",
         "organizationsContext": "Use the selected organizations information as the main context."
       },
+      "generateFolder": "Generate folder",
+      "generating": "Generating...",
       "matrix": {
         "title": "Folder evaluation matrix",
         "useOrganization": "Reuse {name}'s matrix",

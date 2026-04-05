@@ -576,10 +576,10 @@
         <p class="text-xs text-slate-500">{$_('folders.new.multiOrg.createNewOrgsHint')}</p>
       </div>
 
-      <div class="space-y-3 rounded border border-slate-200 bg-slate-50 p-3">
+      <div class="space-y-3">
         <div class="text-sm font-medium text-slate-700">{$_('folders.new.matrix.title')}</div>
         {#if selectedOrgHasMatrixTemplate}
-          <label class="flex items-start gap-2 rounded border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+          <label class="flex items-start gap-2 text-sm text-slate-700">
             <input
               type="radio"
               class="mt-0.5"
@@ -589,7 +589,7 @@
             />
             <span>{$_('folders.new.matrix.useOrganization', { values: { name: selectedOrganization?.name || '' } })}</span>
           </label>
-          <label class="flex items-start gap-2 rounded border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+          <label class="flex items-start gap-2 text-sm text-slate-700">
             <input
               type="radio"
               class="mt-0.5"
@@ -601,7 +601,7 @@
           </label>
           <p class="text-xs text-slate-500">{$_('folders.new.matrix.useOrganizationHint')}</p>
         {:else}
-          <label class="flex items-start gap-2 rounded border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+          <label class="flex items-start gap-2 text-sm text-slate-700">
             <input type="radio" class="mt-0.5" checked disabled />
             <span>{$_('folders.new.matrix.generateAdHoc')}</span>
           </label>
@@ -710,4 +710,19 @@
 	      </div>
 	    {/if}
 	  </div>
+
+    <div class="flex justify-end">
+    <button
+      class="rounded-lg bg-primary text-white py-2.5 px-6 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      on:click={handleGenerate}
+      disabled={isGenerating || docsUploading || !canUseAIUi}
+      type="button"
+    >
+      {#if isGenerating}
+        {$_('folders.new.generating')}
+      {:else}
+        {$_('folders.new.generateFolder')}
+      {/if}
+    </button>
+    </div>
 </section>
