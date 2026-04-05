@@ -231,7 +231,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Tool contract: add `action` param (`upskill` | `generate`), update tool definition in `tools.ts`
       - [x] Chat handler: route `action: "upskill"` → return DOCX creation skill in tool result
       - [x] Skill content: adapt Anthropic docx skill for sandbox context (page size, styles, tables, lists, critical rules)
-      - [ ] System prompt: replace verbose freeform block with short "call upskill first" instruction
+      - [x] System prompt: replace verbose freeform block with short "call upskill first" instruction
       - [ ] Fix `doc()` helper: accept `(Paragraph | Table)[]`, not `Paragraph[]`
       - [ ] Fix `table()` helper: default width 9360 DXA, dual widths, cell margins, `ShadingType.CLEAR`
       - [ ] Fix `doc()` helper: use `paragraphStyles` with built-in IDs + `outlineLevel` instead of inline TextRun formatting
