@@ -204,25 +204,6 @@ export function parseReferencesInMarkdown(html: string, references: Reference[] 
 }
 
 /**
- * Parse les références [1], [2] dans un texte simple (pas markdown) et les remplace par des liens cliquables
- */
-export function parseReferencesInText(text: string, references: Reference[] = []): string {
-  if (!text || !references || references.length === 0) return text;
-  
-  // Remplacer les patterns [1], [2], etc par des liens cliquables
-  let html = text.replace(/\[(\d+)\]/g, (match, num) => {
-    const index = parseInt(num) - 1;
-    if (index >= 0 && index < references.length) {
-      return createReferenceLink(num, references[index]);
-    }
-    return match; // Si la référence n'existe pas, garder le texte original
-  });
-  
-  // Sanitizer le HTML avant de le retourner (protection XSS)
-  return sanitizeHtml(html);
-}
-
-/**
  * Rend du markdown en HTML avec parsing des références et options de styling
  * 
  * @param text - Le texte markdown à rendre
