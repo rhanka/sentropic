@@ -915,12 +915,8 @@ export const batchCreateOrganizationsTool: OpenAI.Chat.Completions.ChatCompletio
           description:
             'Text description of organizations to create. Can include names, industries, sizes, and other details.',
         },
-        workspaceId: {
-          type: 'string',
-          description: 'Workspace ID where organizations will be created.',
-        },
       },
-      required: ['description', 'workspaceId'],
+      required: ['description'],
     },
   },
 };
