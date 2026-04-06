@@ -2617,7 +2617,17 @@ export class ChatService {
         batchCreateOrganizationsTool
       ]);
     } else if (wsType === 'ai-ideas') {
-      addWsTools([documentGenerateTool]);
+      addWsTools([
+        solutionsListTool,
+        solutionGetTool,
+        bidsListTool,
+        bidGetTool,
+        productsListTool,
+        productGetTool,
+        gateReviewTool,
+        documentGenerateTool,
+        batchCreateOrganizationsTool
+      ]);
     } else if (wsType === 'neutral') {
       addWsTools([
         workspaceListTool,
@@ -4843,7 +4853,7 @@ Then call with \`action: "generate"\` and your code.`;
           } else if (toolCall.name === 'batch_create_organizations') {
             if (readOnly) throw new Error('Read-only workspace: batch_create_organizations is disabled');
             const description = typeof args.description === 'string' ? args.description : '';
-            const targetWorkspaceId = typeof args.workspaceId === 'string' ? args.workspaceId : sessionWorkspaceId;
+            const targetWorkspaceId = sessionWorkspaceId;
             if (!description) throw new Error('batch_create_organizations: description is required');
             result = {
               status: 'completed',
