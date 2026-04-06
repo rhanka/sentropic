@@ -275,6 +275,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Existing (non-reg): `api/tests/api/chat-tools.test.ts` — verify existing chat tools, proposal rename (6/6 isolated)
       - [x] Existing (non-reg): `api/tests/unit/context-initiative-detail-contract.test.ts` — verify context contract (2/2)
       - [x] Existing branch work: `api/tests/api/view-templates.test.ts` — CRUD, resolution by workspaceId+workspaceType+objectType, seed on workspace creation, copy/reset/delete
+      - [x] API tests for config UX copy/reset/delete endpoints: `view-templates.test.ts` (35/35), `agent-config.test.ts` (7/7), `workflow-config.test.ts` (7/7) — copy creates child, reset deletes copy returns parent, delete guards system/forked configs (403), detach deprecated (410)
       - [x] Existing branch work: `api/tests/unit/chat-service-document-generate.test.ts` — document_generate tool definition + handler
       - [x] Existing branch work: `api/tests/unit/chat-service-batch-create-orgs.test.ts` — batch_create_organizations tool definition + handler
       - [x] Sub-lot gate: `make test-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b` (388/394 — 6 "Session not found" concurrency failures, not regressions)
