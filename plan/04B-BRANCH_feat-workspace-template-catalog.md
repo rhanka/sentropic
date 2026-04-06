@@ -278,6 +278,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] API tests for config UX copy/reset/delete endpoints: `view-templates.test.ts` (35/35), `agent-config.test.ts` (7/7), `workflow-config.test.ts` (7/7) — copy creates child, reset deletes copy returns parent, delete guards system/forked configs (403), detach deprecated (410)
       - [x] Existing branch work: `api/tests/unit/chat-service-document-generate.test.ts` — document_generate tool definition + handler
       - [x] Existing branch work: `api/tests/unit/chat-service-batch-create-orgs.test.ts` — batch_create_organizations tool definition + handler
+      - [x] Fix chat-service-batch-create-orgs test failure (bid→proposal / tools alignment) — ai-ideas now has same tools as opportunity
       - [x] Sub-lot gate: `make test-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b` (388/394 — 6 "Session not found" concurrency failures, not regressions)
       - [x] AI flaky tests (non-blocking): `make test-api-ai API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b` (25/27 — 2 failures in initiative-generation-async, non-blocking)
     - [ ] **UI tests**
