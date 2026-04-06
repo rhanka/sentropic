@@ -217,6 +217,7 @@ type GeminiRequestBuildOptions = {
   };
   maxOutputTokens?: number;
   rawInput?: unknown[];
+  reasoningEffort?: string;
 };
 
 const stringifyContent = (value: unknown): string => {
@@ -377,6 +378,14 @@ export const buildGeminiRequestBody = (
     generationConfig.responseSchema = sanitizeGeminiResponseSchema(
       options.structuredOutput.schema
     );
+  }
+  // Gemini 3.1 reasoning: enable thinking when reasoning is requested
+  if (options.reasoningEffort && options.reasoningEffort !== 'none') {
+    const budgetMap: Record<string, number> = { low: 2048, medium: 4096, high: 8192, xhigh: 16384 };
+    generationConfig.thinkingConfig = {
+      thinkingBudget: budgetMap[options.reasoningEffort] ?? 8192,
+      includeThoughts: true,
+    };
   }
 
   const functionDeclarations = toGeminiToolDeclarations(
@@ -1050,6 +1059,7 @@ export async function* callLLMStream(
       structuredOutput: effectiveStructuredOutput,
       maxOutputTokens,
       rawInput,
+      reasoningEffort,
     });
 
     try {
@@ -1090,11 +1100,16 @@ export async function* callLLMStream(
 
         for (const part of parts) {
           if (typeof part.text === 'string' && part.text) {
-            emittedContent = true;
-            yield {
-              type: 'content_delta',
-              data: { delta: part.text },
-            };
+            // Gemini reasoning: parts with thought=true are thinking blocks
+            if (part.thought) {
+              yield { type: 'reasoning_delta', data: { delta: part.text } };
+            } else {
+              emittedContent = true;
+              yield {
+                type: 'content_delta',
+                data: { delta: part.text },
+              };
+            }
           }
 
           const functionCall = part.functionCall as Record<string, unknown> | undefined;
@@ -1622,13 +1637,10 @@ export async function* callLLMStream(
 
   const mapReasoningEffort = (effort: CallLLMStreamOptions['reasoningEffort']): unknown => {
     if (!effort) return undefined;
-    // OpenAI supports (notably for gpt-5-nano): minimal|low|medium|high.
-    // App-level accepts: none|low|medium|high|xhigh.
-    // Map to avoid 400s:
-    // - none  -> minimal (ONLY for gpt-5-nano; current gpt-5 models appear to accept "none")
-    // - xhigh -> high
-    // - low/medium/high passthrough
-    if (effort === 'none') return selectedModel.startsWith('gpt-5-nano') ? 'minimal' : 'none';
+    // OpenAI Responses API reasoning_effort: none|low|medium|high|xhigh.
+    // App-level accepts the same set.
+    // Map xhigh -> high (not always supported), rest passthrough.
+    if (effort === 'none') return 'none';
     if (effort === 'xhigh') return 'high';
     return effort;
   };
