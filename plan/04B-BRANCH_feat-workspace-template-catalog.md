@@ -67,7 +67,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] UI: hide "Copier" when copy already exists
   - [x] i18n: fork→Copier, add resetToDefault/customized/systemDefault
   - [x] bid → proposal rename in API/UI/locales (lost in commit 9917fa02, to re-implement)
-  - [ ] Tests updated for bid → proposal rename
+  - [x] Tests updated for bid → proposal rename
 
 - [x] **Lot 7 — Document generation infra + gate auto-todo**
   - [x] DOCX template stubs (solution-summary, proposal-summary, product-datasheet).
