@@ -1035,6 +1035,10 @@ export type SolutionRow = typeof solutions.$inferSelect;
 export type ProductRow = typeof products.$inferSelect;
 export type BidRow = typeof bids.$inferSelect;
 export type BidProductRow = typeof bidProducts.$inferSelect;
+/** @alias BidRow — renamed terminology */
+export type ProposalRow = BidRow;
+/** @alias BidProductRow — renamed terminology */
+export type ProposalProductRow = BidProductRow;
 export type WorkspaceTypeWorkflowRow = typeof workspaceTypeWorkflows.$inferSelect;
 export type ViewTemplateRow = typeof viewTemplates.$inferSelect;
 

@@ -715,15 +715,15 @@ export const solutionGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   }
 };
 
-export const bidsListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const proposalsListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
-    name: 'bids_list',
-    description: 'List bids for an initiative in the current workspace.',
+    name: 'proposals_list',
+    description: 'List proposals for an initiative in the current workspace.',
     parameters: {
       type: 'object',
       properties: {
-        initiativeId: { type: 'string', description: 'Initiative ID to list bids for.' },
+        initiativeId: { type: 'string', description: 'Initiative ID to list proposals for.' },
         select: { type: 'array', items: { type: 'string' }, description: 'Optional fields to select.' }
       },
       required: ['initiativeId']
@@ -731,21 +731,26 @@ export const bidsListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   }
 };
 
-export const bidGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const proposalGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
-    name: 'bid_get',
-    description: 'Get details of a specific bid.',
+    name: 'proposal_get',
+    description: 'Get details of a specific proposal.',
     parameters: {
       type: 'object',
       properties: {
-        bidId: { type: 'string', description: 'Bid ID.' },
+        proposalId: { type: 'string', description: 'Proposal ID.' },
         select: { type: 'array', items: { type: 'string' }, description: 'Optional fields to select.' }
       },
-      required: ['bidId']
+      required: ['proposalId']
     }
   }
 };
+
+/** @deprecated Use proposalsListTool */
+export const bidsListTool = proposalsListTool;
+/** @deprecated Use proposalGetTool */
+export const bidGetTool = proposalGetTool;
 
 export const productsListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',

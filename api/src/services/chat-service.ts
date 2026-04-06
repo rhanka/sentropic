@@ -38,8 +38,8 @@ import {
   planTool,
   solutionsListTool,
   solutionGetTool,
-  bidsListTool,
-  bidGetTool,
+  proposalsListTool,
+  proposalGetTool,
   productsListTool,
   productGetTool,
   gateReviewTool,
@@ -2608,8 +2608,8 @@ export class ChatService {
       addWsTools([
         solutionsListTool,
         solutionGetTool,
-        bidsListTool,
-        bidGetTool,
+        proposalsListTool,
+        proposalGetTool,
         productsListTool,
         productGetTool,
         gateReviewTool,
@@ -2620,8 +2620,8 @@ export class ChatService {
       addWsTools([
         solutionsListTool,
         solutionGetTool,
-        bidsListTool,
-        bidGetTool,
+        proposalsListTool,
+        proposalGetTool,
         productsListTool,
         productGetTool,
         gateReviewTool,
@@ -4681,8 +4681,8 @@ Then call with \`action: "generate"\` and your code.`;
             result = { status: 'completed', ...getResult };
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
             streamSeq += 1;
-          } else if (toolCall.name === 'bids_list') {
-            const listResult = await toolService.listBids({
+          } else if (toolCall.name === 'proposals_list') {
+            const listResult = await toolService.listProposals({
               initiativeId: args.initiativeId,
               workspaceId: sessionWorkspaceId,
               select: Array.isArray(args.select) ? args.select : null
@@ -4690,8 +4690,8 @@ Then call with \`action: "generate"\` and your code.`;
             result = { status: 'completed', ...listResult };
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
             streamSeq += 1;
-          } else if (toolCall.name === 'bid_get') {
-            const getResult = await toolService.getBid(args.bidId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
+          } else if (toolCall.name === 'proposal_get') {
+            const getResult = await toolService.getProposal(args.proposalId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
             result = { status: 'completed', ...getResult };
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
             streamSeq += 1;
