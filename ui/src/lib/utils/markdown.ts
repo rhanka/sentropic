@@ -168,14 +168,9 @@ function sanitizeHtml(html: string): string {
 /**
  * Crée un lien HTML vers une référence avec scroll smooth
  */
-export function createReferenceLink(num: string, ref: Reference): string {
+export function createReferenceLink(num: string, _ref: Reference): string {
   const refId = `ref-${num}`;
-  return `<a href="#${refId}" 
-              class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" 
-              title="${ref.title.replace(/"/g, '&quot;')}"
-              onclick="event.preventDefault(); document.getElementById('${refId}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;">
-              [${num}]
-            </a>`;
+  return `<a href="#${refId}" class="text-blue-600 hover:text-blue-800 cursor-pointer" style="text-decoration:none" onclick="event.preventDefault(); document.getElementById('${refId}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;">[${num}]</a>`;
 }
 
 /**
