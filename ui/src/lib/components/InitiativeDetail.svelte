@@ -159,13 +159,7 @@
       dataSources: d.dataSources || uc.dataSources || [],
       dataObjects: d.dataObjects || uc.dataObjects || [],
       deadline: d.deadline || uc.deadline || '',
-      references: ((d.references || uc.references || []) as Array<{title?: string; url?: string; excerpt?: string} | string>).map((ref: any) => {
-        if (typeof ref === 'string') return ref;
-        const title = ref.title || ref.url || '';
-        const url = ref.url || '';
-        const excerpt = ref.excerpt ? ` — ${ref.excerpt}` : '';
-        return url ? `[${title}](${url})${excerpt}` : `${title}${excerpt}`;
-      }),
+      references: (d.references || uc.references || []),
       valueScores: d.valueScores || uc.valueScores || [],
       complexityScores: d.complexityScores || uc.complexityScores || [],
       totalValueScore: totalValueScore,
