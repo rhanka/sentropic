@@ -3,8 +3,9 @@
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
   import { addToast } from '$lib/stores/toast';
-  import { apiGet, apiPost, apiPut } from '$lib/utils/api';
+  import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
   import { selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { Copy, Pencil, RotateCcw, Trash2, Lock, UserPen } from '@lucide/svelte';
 
   type SourceLevel = 'code' | 'admin' | 'user';
 
@@ -67,8 +68,9 @@
   let isLoading = false;
   let isRefreshing = false;
   let isSaving = false;
-  let isForking = false;
-  let isDetaching = false;
+  let isCopying = false;
+  let isResettingConfig = false;
+  let isDeletingConfig = false;
 
   let agentConfigs: AgentConfigItem[] = [];
   let workflowConfigs: WorkflowConfigItem[] = [];
@@ -403,95 +405,160 @@
     }
   };
 
-  const forkAgent = async (item: AgentConfigItem) => {
+  // Helper: is system/admin config?
+  const isSystemAgentConfig = (item: AgentConfigItem): boolean =>
+    item.sourceLevel === 'code' || item.sourceLevel === 'admin';
+  const isCopiedAgentConfig = (item: AgentConfigItem): boolean =>
+    item.sourceLevel === 'user' && !!item.parentId;
+  const isUserCreatedAgentConfig = (item: AgentConfigItem): boolean =>
+    item.sourceLevel === 'user' && !item.parentId;
+  const hasCopyForAgent = (parentId: string): boolean =>
+    agentConfigs.some(a => a.parentId === parentId && a.sourceLevel === 'user');
+
+  const isSystemWorkflowConfig = (item: WorkflowConfigItem): boolean =>
+    item.sourceLevel === 'code' || item.sourceLevel === 'admin';
+  const isCopiedWorkflowConfig = (item: WorkflowConfigItem): boolean =>
+    item.sourceLevel === 'user' && !!item.parentId;
+  const isUserCreatedWorkflowConfig = (item: WorkflowConfigItem): boolean =>
+    item.sourceLevel === 'user' && !item.parentId;
+  const hasCopyForWorkflow = (parentId: string): boolean =>
+    workflowConfigs.some(w => w.parentId === parentId && w.sourceLevel === 'user');
+
+  const copyAgent = async (item: AgentConfigItem) => {
     if (!canEdit) return;
-    isForking = true;
+    isCopying = true;
     try {
       const suffix = Date.now().toString().slice(-5);
-      await apiPost(`/agent-config/${item.id}/fork`, {
-        key: `${item.key}-fork-${suffix}`,
-        name: `${item.name} (fork)`,
+      await apiPost(`/agent-config/${item.id}/copy`, {
+        key: `${item.key}-copy-${suffix}`,
+        name: `${item.name} (${get(_)('settings.runtime.customized')})`,
       });
       await loadConfigs(true);
       addToast({
         type: 'success',
-        message: get(_)('settings.runtime.toasts.agentForked'),
+        message: get(_)('settings.runtime.toasts.copied'),
       });
     } catch (error) {
-      console.error('Failed to fork agent config:', error);
+      console.error('Failed to copy agent config:', error);
       addToast({
         type: 'error',
-        message: get(_)('settings.runtime.errors.forkAgent'),
+        message: get(_)('settings.runtime.errors.copy'),
       });
     } finally {
-      isForking = false;
+      isCopying = false;
     }
   };
 
-  const detachAgent = async (item: AgentConfigItem) => {
-    if (!canEdit || !item.parentId || item.isDetached) return;
-    isDetaching = true;
+  const resetAgent = async (item: AgentConfigItem) => {
+    if (!canEdit || !item.parentId) return;
+    if (!confirm(get(_)('settings.runtime.confirmReset'))) return;
+    isResettingConfig = true;
     try {
-      await apiPost(`/agent-config/${item.id}/detach`, {});
+      await apiPost(`/agent-config/${item.id}/reset`, {});
       await loadConfigs(true);
       addToast({
         type: 'success',
-        message: get(_)('settings.runtime.toasts.agentDetached'),
+        message: get(_)('settings.runtime.toasts.reset'),
       });
     } catch (error) {
-      console.error('Failed to detach agent config:', error);
+      console.error('Failed to reset agent config:', error);
       addToast({
         type: 'error',
-        message: get(_)('settings.runtime.errors.detachAgent'),
+        message: get(_)('settings.runtime.errors.reset'),
       });
     } finally {
-      isDetaching = false;
+      isResettingConfig = false;
     }
   };
 
-  const forkWorkflow = async (item: WorkflowConfigItem) => {
+  const deleteAgent = async (item: AgentConfigItem) => {
     if (!canEdit) return;
-    isForking = true;
+    if (!confirm(get(_)('settings.runtime.confirmDelete'))) return;
+    isDeletingConfig = true;
+    try {
+      await apiDelete(`/agent-config/${item.id}`);
+      await loadConfigs(true);
+      addToast({
+        type: 'success',
+        message: get(_)('settings.runtime.toasts.deleted'),
+      });
+    } catch (error) {
+      console.error('Failed to delete agent config:', error);
+      addToast({
+        type: 'error',
+        message: get(_)('settings.runtime.errors.delete'),
+      });
+    } finally {
+      isDeletingConfig = false;
+    }
+  };
+
+  const copyWorkflow = async (item: WorkflowConfigItem) => {
+    if (!canEdit) return;
+    isCopying = true;
     try {
       const suffix = Date.now().toString().slice(-5);
-      await apiPost(`/workflow-config/${item.id}/fork`, {
-        key: `${item.key}-fork-${suffix}`,
-        name: `${item.name} (fork)`,
+      await apiPost(`/workflow-config/${item.id}/copy`, {
+        key: `${item.key}-copy-${suffix}`,
+        name: `${item.name} (${get(_)('settings.runtime.customized')})`,
       });
       await loadConfigs(true);
       addToast({
         type: 'success',
-        message: get(_)('settings.runtime.toasts.workflowForked'),
+        message: get(_)('settings.runtime.toasts.copied'),
       });
     } catch (error) {
-      console.error('Failed to fork workflow config:', error);
+      console.error('Failed to copy workflow config:', error);
       addToast({
         type: 'error',
-        message: get(_)('settings.runtime.errors.forkWorkflow'),
+        message: get(_)('settings.runtime.errors.copy'),
       });
     } finally {
-      isForking = false;
+      isCopying = false;
     }
   };
 
-  const detachWorkflow = async (item: WorkflowConfigItem) => {
-    if (!canEdit || !item.parentId || item.isDetached) return;
-    isDetaching = true;
+  const resetWorkflow = async (item: WorkflowConfigItem) => {
+    if (!canEdit || !item.parentId) return;
+    if (!confirm(get(_)('settings.runtime.confirmReset'))) return;
+    isResettingConfig = true;
     try {
-      await apiPost(`/workflow-config/${item.id}/detach`, {});
+      await apiPost(`/workflow-config/${item.id}/reset`, {});
       await loadConfigs(true);
       addToast({
         type: 'success',
-        message: get(_)('settings.runtime.toasts.workflowDetached'),
+        message: get(_)('settings.runtime.toasts.reset'),
       });
     } catch (error) {
-      console.error('Failed to detach workflow config:', error);
+      console.error('Failed to reset workflow config:', error);
       addToast({
         type: 'error',
-        message: get(_)('settings.runtime.errors.detachWorkflow'),
+        message: get(_)('settings.runtime.errors.reset'),
       });
     } finally {
-      isDetaching = false;
+      isResettingConfig = false;
+    }
+  };
+
+  const deleteWorkflow = async (item: WorkflowConfigItem) => {
+    if (!canEdit) return;
+    if (!confirm(get(_)('settings.runtime.confirmDelete'))) return;
+    isDeletingConfig = true;
+    try {
+      await apiDelete(`/workflow-config/${item.id}`);
+      await loadConfigs(true);
+      addToast({
+        type: 'success',
+        message: get(_)('settings.runtime.toasts.deleted'),
+      });
+    } catch (error) {
+      console.error('Failed to delete workflow config:', error);
+      addToast({
+        type: 'error',
+        message: get(_)('settings.runtime.errors.delete'),
+      });
+    } finally {
+      isDeletingConfig = false;
     }
   };
 
@@ -565,66 +632,63 @@
                     {/if}
                   </div>
                   <div class="flex flex-wrap gap-2">
-                    <span class="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
-                      {$_('settings.runtime.source')}: {item.sourceLevel}
-                    </span>
-                    {#if item.parentId}
-                      <span
-                        class="rounded px-2 py-0.5 text-[11px]"
-                        class:bg-emerald-100={!item.isDetached}
-                        class:text-emerald-800={!item.isDetached}
-                        class:bg-amber-100={item.isDetached}
-                        class:text-amber-800={item.isDetached}
-                      >
-                        {item.isDetached
-                          ? $_('settings.runtime.inheritance.detached')
-                          : $_('settings.runtime.inheritance.attached')}
+                    {#if isSystemAgentConfig(item)}
+                      <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] bg-slate-100 text-slate-500">
+                        <Lock class="w-3 h-3" />
+                        {$_('settings.runtime.systemDefault')}
+                      </span>
+                    {:else if isCopiedAgentConfig(item)}
+                      <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] bg-blue-100 text-blue-700">
+                        <UserPen class="w-3 h-3" />
+                        ({$_('settings.runtime.customized')})
                       </span>
                     {/if}
-                    {#if hasInheritanceDrift(item)}
-                      <span class="rounded bg-rose-100 px-2 py-0.5 text-[11px] text-rose-700">
-                        {$_('settings.runtime.inheritance.drift')}
-                      </span>
-                    {/if}
-                  </div>
-                </div>
-
-                <div class="mt-2 grid gap-2 text-[11px] text-slate-600 md:grid-cols-2">
-                  <div>
-                    <span class="font-medium">{$_('settings.runtime.parent')}:</span>
-                    {item.parentId ?? '—'}
-                  </div>
-                  <div>
-                    <span class="font-medium">{$_('settings.runtime.root')}:</span>
-                    {item.lineageRootId ?? '—'}
                   </div>
                 </div>
 
                 {#if canEdit}
                   <div class="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
-                      on:click={() => openAgentEditor(item)}
-                    >
-                      {$_('settings.runtime.edit')}
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50"
-                      on:click={() => void forkAgent(item)}
-                      disabled={isForking || isSaving}
-                    >
-                      {$_('settings.runtime.fork')}
-                    </button>
-                    {#if item.parentId && !item.isDetached}
+                    {#if !isSystemAgentConfig(item)}
                       <button
                         type="button"
-                        class="rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
-                        on:click={() => void detachAgent(item)}
-                        disabled={isDetaching || isSaving}
+                        class="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                        on:click={() => openAgentEditor(item)}
                       >
-                        {$_('settings.runtime.detach')}
+                        <Pencil class="w-3 h-3" />
+                        {$_('settings.runtime.edit')}
+                      </button>
+                    {/if}
+                    {#if isSystemAgentConfig(item) && !hasCopyForAgent(item.id)}
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                        on:click={() => void copyAgent(item)}
+                        disabled={isCopying || isSaving}
+                      >
+                        <Copy class="w-3 h-3" />
+                        {$_('settings.runtime.copy')}
+                      </button>
+                    {/if}
+                    {#if isCopiedAgentConfig(item)}
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                        on:click={() => void resetAgent(item)}
+                        disabled={isResettingConfig || isSaving}
+                      >
+                        <RotateCcw class="w-3 h-3" />
+                        {$_('settings.runtime.resetToDefault')}
+                      </button>
+                    {/if}
+                    {#if isUserCreatedAgentConfig(item)}
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        on:click={() => void deleteAgent(item)}
+                        disabled={isDeletingConfig || isSaving}
+                      >
+                        <Trash2 class="w-3 h-3" />
+                        {$_('common.delete')}
                       </button>
                     {/if}
                   </div>
@@ -719,38 +783,17 @@
                     {/if}
                   </div>
                   <div class="flex flex-wrap gap-2">
-                    <span class="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
-                      {$_('settings.runtime.source')}: {item.sourceLevel}
-                    </span>
-                    {#if item.parentId}
-                      <span
-                        class="rounded px-2 py-0.5 text-[11px]"
-                        class:bg-emerald-100={!item.isDetached}
-                        class:text-emerald-800={!item.isDetached}
-                        class:bg-amber-100={item.isDetached}
-                        class:text-amber-800={item.isDetached}
-                      >
-                        {item.isDetached
-                          ? $_('settings.runtime.inheritance.detached')
-                          : $_('settings.runtime.inheritance.attached')}
+                    {#if isSystemWorkflowConfig(item)}
+                      <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] bg-slate-100 text-slate-500">
+                        <Lock class="w-3 h-3" />
+                        {$_('settings.runtime.systemDefault')}
+                      </span>
+                    {:else if isCopiedWorkflowConfig(item)}
+                      <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] bg-blue-100 text-blue-700">
+                        <UserPen class="w-3 h-3" />
+                        ({$_('settings.runtime.customized')})
                       </span>
                     {/if}
-                    {#if hasInheritanceDrift(item)}
-                      <span class="rounded bg-rose-100 px-2 py-0.5 text-[11px] text-rose-700">
-                        {$_('settings.runtime.inheritance.drift')}
-                      </span>
-                    {/if}
-                  </div>
-                </div>
-
-                <div class="mt-2 grid gap-2 text-[11px] text-slate-600 md:grid-cols-2">
-                  <div>
-                    <span class="font-medium">{$_('settings.runtime.parent')}:</span>
-                    {item.parentId ?? '—'}
-                  </div>
-                  <div>
-                    <span class="font-medium">{$_('settings.runtime.root')}:</span>
-                    {item.lineageRootId ?? '—'}
                   </div>
                 </div>
 
@@ -794,30 +837,48 @@
 
                 {#if canEdit}
                   <div class="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
-                      on:click={() => openWorkflowEditor(item)}
-                      data-testid={`workflow-config-edit-${item.key}`}
-                    >
-                      {$_('settings.runtime.edit')}
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50"
-                      on:click={() => void forkWorkflow(item)}
-                      disabled={isForking || isSaving}
-                    >
-                      {$_('settings.runtime.fork')}
-                    </button>
-                    {#if item.parentId && !item.isDetached}
+                    {#if !isSystemWorkflowConfig(item)}
                       <button
                         type="button"
-                        class="rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
-                        on:click={() => void detachWorkflow(item)}
-                        disabled={isDetaching || isSaving}
+                        class="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                        on:click={() => openWorkflowEditor(item)}
+                        data-testid={`workflow-config-edit-${item.key}`}
                       >
-                        {$_('settings.runtime.detach')}
+                        <Pencil class="w-3 h-3" />
+                        {$_('settings.runtime.edit')}
+                      </button>
+                    {/if}
+                    {#if isSystemWorkflowConfig(item) && !hasCopyForWorkflow(item.id)}
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                        on:click={() => void copyWorkflow(item)}
+                        disabled={isCopying || isSaving}
+                      >
+                        <Copy class="w-3 h-3" />
+                        {$_('settings.runtime.copy')}
+                      </button>
+                    {/if}
+                    {#if isCopiedWorkflowConfig(item)}
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                        on:click={() => void resetWorkflow(item)}
+                        disabled={isResettingConfig || isSaving}
+                      >
+                        <RotateCcw class="w-3 h-3" />
+                        {$_('settings.runtime.resetToDefault')}
+                      </button>
+                    {/if}
+                    {#if isUserCreatedWorkflowConfig(item)}
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        on:click={() => void deleteWorkflow(item)}
+                        disabled={isDeletingConfig || isSaving}
+                      >
+                        <Trash2 class="w-3 h-3" />
+                        {$_('common.delete')}
                       </button>
                     {/if}
                   </div>
