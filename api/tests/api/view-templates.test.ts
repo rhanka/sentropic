@@ -16,7 +16,7 @@ describe('View Templates API', () => {
   let viewer: any;
 
   beforeEach(async () => {
-    user = await createAuthenticatedUser('editor', `editor-${createTestId()}@example.com`);
+    user = await createAuthenticatedUser('admin_org', `admin-${createTestId()}@example.com`);
     viewer = await createAuthenticatedUser('guest', `viewer-${createTestId()}@example.com`);
     if (user.workspaceId) {
       await db
@@ -363,7 +363,7 @@ describe('View Templates API', () => {
       expect(forked.id).not.toBe(source.id);
       expect(forked.workspaceId).toBe(user.workspaceId);
       expect(forked.parentId).toBe(source.id);
-      expect(forked.sourceLevel).toBe('admin');
+      expect(forked.sourceLevel).toBe('user');
       expect(forked.isDetached).toBe(false);
     });
 
@@ -384,16 +384,17 @@ describe('View Templates API', () => {
       expect(detached!.parentId).toBe(source.id);
     });
 
-    it('should remove a workspace template', async () => {
+    it('should remove a user-created workspace template', async () => {
       const created = await viewTemplateService.create({
         workspaceId: user.workspaceId!,
         workspaceType: 'ai-ideas',
         objectType: 'initiative',
         descriptor: { tabs: [] },
+        sourceLevel: 'user',
       });
 
-      const removed = await viewTemplateService.remove(created.id);
-      expect(removed).toBe(true);
+      const result = await viewTemplateService.remove(created.id);
+      expect(result).toEqual({ deleted: true, forbidden: false });
 
       const retrieved = await viewTemplateService.getById(created.id);
       expect(retrieved).toBeNull();
@@ -408,16 +409,208 @@ describe('View Templates API', () => {
         sourceLevel: 'code',
       });
 
-      const removed = await viewTemplateService.remove(created.id);
-      expect(removed).toBe(false);
+      const result = await viewTemplateService.remove(created.id);
+      expect(result).toEqual({ deleted: false, forbidden: true });
 
       // Clean up manually since remove won't delete it
       await db.delete(viewTemplates).where(eq(viewTemplates.id, created.id));
     });
 
-    it('should return false when removing non-existent template', async () => {
-      const removed = await viewTemplateService.remove('non-existent');
-      expect(removed).toBe(false);
+    it('should return not-deleted when removing non-existent template', async () => {
+      const result = await viewTemplateService.remove('non-existent');
+      expect(result).toEqual({ deleted: false, forbidden: false });
+    });
+  });
+
+  describe('POST /view-templates/:id/copy', () => {
+    it('should copy a system template into the workspace', async () => {
+      // Create a system-level template (workspaceId=null)
+      const system = await viewTemplateService.create({
+        workspaceId: null,
+        workspaceType: 'ai-ideas',
+        objectType: 'initiative',
+        descriptor: { tabs: [{ key: 'sys', label: 'System', always: true, rows: [{ columns: 1, fields: [] }] }] },
+        sourceLevel: 'code',
+      });
+
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        `/api/v1/view-templates/${system.id}/copy`,
+        user.sessionToken!,
+        {},
+      );
+      expect(response.status).toBe(201);
+      const data = await response.json();
+      expect(data.id).not.toBe(system.id);
+      expect(data.parentId).toBe(system.id);
+      expect(data.workspaceId).toBe(user.workspaceId);
+
+      // Clean up: delete copy first (FK), then system parent
+      await db.delete(viewTemplates).where(eq(viewTemplates.id, data.id));
+      await db.delete(viewTemplates).where(eq(viewTemplates.id, system.id));
+    });
+
+    it('should return 409 when copy already exists', async () => {
+      const system = await viewTemplateService.create({
+        workspaceId: null,
+        workspaceType: 'ai-ideas',
+        objectType: 'initiative',
+        descriptor: { tabs: [{ key: 'dup', label: 'Dup', always: true, rows: [{ columns: 1, fields: [] }] }] },
+        sourceLevel: 'code',
+      });
+
+      // First copy succeeds
+      const first = await authenticatedRequest(
+        app,
+        'POST',
+        `/api/v1/view-templates/${system.id}/copy`,
+        user.sessionToken!,
+        {},
+      );
+      expect(first.status).toBe(201);
+
+      const firstData = await first.json();
+
+      // Second copy returns 409
+      const second = await authenticatedRequest(
+        app,
+        'POST',
+        `/api/v1/view-templates/${system.id}/copy`,
+        user.sessionToken!,
+        {},
+      );
+      expect(second.status).toBe(409);
+
+      // Clean up: delete copy first (FK), then system parent
+      await db.delete(viewTemplates).where(eq(viewTemplates.id, firstData.id));
+      await db.delete(viewTemplates).where(eq(viewTemplates.id, system.id));
+    });
+  });
+
+  describe('POST /view-templates/:id/reset', () => {
+    it('should delete the copy and return the system parent', async () => {
+      const system = await viewTemplateService.create({
+        workspaceId: null,
+        workspaceType: 'ai-ideas',
+        objectType: 'initiative',
+        descriptor: { tabs: [{ key: 'parent', label: 'Parent', always: true, rows: [{ columns: 1, fields: [] }] }] },
+        sourceLevel: 'code',
+      });
+
+      const copy = await viewTemplateService.copy(system.id, user.workspaceId!);
+
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        `/api/v1/view-templates/${copy.id}/reset`,
+        user.sessionToken!,
+        {},
+      );
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.id).toBe(system.id);
+
+      // Copy should be gone
+      const gone = await viewTemplateService.getById(copy.id);
+      expect(gone).toBeNull();
+
+      await db.delete(viewTemplates).where(eq(viewTemplates.id, system.id));
+    });
+
+    it('should return 400 when resetting a template without a parent', async () => {
+      const created = await viewTemplateService.create({
+        workspaceId: user.workspaceId!,
+        workspaceType: 'ai-ideas',
+        objectType: 'initiative',
+        descriptor: { tabs: [] },
+        sourceLevel: 'user',
+      });
+
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        `/api/v1/view-templates/${created.id}/reset`,
+        user.sessionToken!,
+        {},
+      );
+      expect(response.status).toBe(400);
+    });
+  });
+
+  describe('DELETE /view-templates/:id', () => {
+    it('should delete a user-created template with no parent', async () => {
+      const created = await viewTemplateService.create({
+        workspaceId: user.workspaceId!,
+        workspaceType: 'ai-ideas',
+        objectType: 'initiative',
+        descriptor: { tabs: [] },
+        sourceLevel: 'user',
+      });
+
+      const response = await authenticatedRequest(
+        app,
+        'DELETE',
+        `/api/v1/view-templates/${created.id}`,
+        user.sessionToken!,
+      );
+      expect(response.status).toBe(204);
+    });
+
+    it('should return 403 when deleting a system template', async () => {
+      const system = await viewTemplateService.create({
+        workspaceId: null,
+        workspaceType: 'ai-ideas',
+        objectType: 'initiative',
+        descriptor: { tabs: [] },
+        sourceLevel: 'code',
+      });
+
+      const response = await authenticatedRequest(
+        app,
+        'DELETE',
+        `/api/v1/view-templates/${system.id}`,
+        user.sessionToken!,
+      );
+      expect(response.status).toBe(403);
+
+      await db.delete(viewTemplates).where(eq(viewTemplates.id, system.id));
+    });
+
+    it('should return 403 when deleting a copied template (has parentId)', async () => {
+      const system = await viewTemplateService.create({
+        workspaceId: null,
+        workspaceType: 'ai-ideas',
+        objectType: 'initiative',
+        descriptor: { tabs: [{ key: 'x', label: 'X', always: true, rows: [{ columns: 1, fields: [] }] }] },
+        sourceLevel: 'code',
+      });
+      const copy = await viewTemplateService.copy(system.id, user.workspaceId!);
+
+      const response = await authenticatedRequest(
+        app,
+        'DELETE',
+        `/api/v1/view-templates/${copy.id}`,
+        user.sessionToken!,
+      );
+      expect(response.status).toBe(403);
+
+      // Clean up: delete copy first (FK constraint), then system parent
+      await db.delete(viewTemplates).where(eq(viewTemplates.id, copy.id));
+      await db.delete(viewTemplates).where(eq(viewTemplates.id, system.id));
+    });
+  });
+
+  describe('POST /view-templates/:id/detach (deprecated)', () => {
+    it('should return 410 Gone', async () => {
+      const response = await authenticatedRequest(
+        app,
+        'POST',
+        '/api/v1/view-templates/any-id/detach',
+        user.sessionToken!,
+        {},
+      );
+      expect(response.status).toBe(410);
     });
   });
 
