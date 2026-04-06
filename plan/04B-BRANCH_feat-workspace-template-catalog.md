@@ -259,7 +259,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Existing branch work: `ui/tests/stores/viewTemplateCache.test.ts` — resolveViewTemplate dedup, cache hit, clearViewTemplateCache
       - [x] Update `ui/tests/upstream/injected-script.test.ts` if TemplateRenderer API changed
       - [x] Add TemplateRenderer component tests (getFieldValue, entity-loop, printOnly, slots)
-      - [ ] Extend document_generate tests (upskill action, code mode, job row, error mapping)
+      - [x] Extend document_generate tests (upskill action, code mode, job row, error mapping)
       - [ ] Add chat-session-history docxCards extraction test
       - [ ] Add ChatPanel docx download card tests (live insertion, dedup, runtimeSummary hydration)
       - [x] Sub-lot gate: `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
