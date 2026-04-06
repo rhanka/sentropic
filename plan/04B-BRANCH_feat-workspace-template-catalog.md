@@ -236,10 +236,9 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Fix `table()` helper: default width 9360 DXA, dual widths, cell margins, `ShadingType.CLEAR`
       - [x] Fix `doc()` helper: use `paragraphStyles` with built-in IDs + `outlineLevel` instead of inline TextRun formatting
       - [x] Test: upskill returns skill content, generate after upskill produces valid DOCX with tables
-    - [ ] BUG-L13-8: references excerpts visible in print — hide excerpts in print/locked mode, show in normal mode
-      - [ ] Stop baking excerpt into string in InitiativeDetail `buildTemplateData` (removes double tiret)
-      - [ ] Add `hideExcerptInPrint` option to initiative template seed references field
-      - [ ] TemplateRenderer reads `hideExcerptInPrint` from field descriptor to conditionally hide excerpt in print
+    - [x] BUG-L13-8: references excerpts visible in print — hide excerpts via CSS `print-hidden` on excerpt span, stop baking excerpt in InitiativeDetail
+      - [x] Stop baking excerpt into string in InitiativeDetail `buildTemplateData` (removes double tiret)
+      - [x] Hide excerpt in print via CSS `print-hidden` class on renderReferenceExcerpt span
     - [ ] BUG-L13-9: org pages still use hardcoded `References.svelte` instead of TemplateRenderer references
       - [x] Replace `References.svelte` usage in `organizations/[id]/+page.svelte` with TemplateRenderer reference rendering
       - [x] Replace `References.svelte` usage in `organizations/new/+page.svelte` with TemplateRenderer reference rendering
