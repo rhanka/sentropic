@@ -57,11 +57,11 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
 
 - [ ] **Lot 6 — Config UX alignment + bid → proposal rename** *(implementation lost during rebase — commit 9917fa02 in reflog, spec restored from 35f23066)*
   - [x] Spec `SPEC_EVOL_CONFIG_UX_ALIGNMENT.md` — restored from lost commit 35f23066
-  - [ ] API: `POST /:id/copy` on view-templates (BUG-C1 — never implemented)
-  - [ ] API: `POST /:id/reset` on view-templates, agent-config, workflow-config
-  - [ ] API: `DELETE /:id` with guard on view-templates, agent-config, workflow-config
-  - [ ] API: rename `fork` → `copy` alias on agent-config, workflow-config
-  - [ ] API: remove `detach` endpoint on agent-config, workflow-config
+  - [x] API: `POST /:id/copy` on view-templates (BUG-C1 — never implemented)
+  - [x] API: `POST /:id/reset` on view-templates, agent-config, workflow-config
+  - [x] API: `DELETE /:id` with guard on view-templates, agent-config, workflow-config
+  - [x] API: rename `fork` → `copy` alias on agent-config, workflow-config
+  - [x] API: remove `detach` endpoint on agent-config, workflow-config
   - [ ] UI: icon-only buttons (Copy/Pencil/RotateCcw/Trash2) on all 3 settings surfaces
   - [ ] UI: Lock badge on system configs, UserPen + "(personnalisé)" on copies
   - [ ] UI: hide "Copier" when copy already exists

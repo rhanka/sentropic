@@ -220,9 +220,27 @@ export const viewTemplateService = {
     return row;
   },
 
-  async fork(sourceId: string, workspaceId: string): Promise<ViewTemplateRow> {
+  /**
+   * Copy a system/admin view template into a workspace-specific copy.
+   * Creates row with sourceLevel='user', parentId=source.id, isDetached=false.
+   * Only one copy per parent per workspace is allowed.
+   */
+  async copy(sourceId: string, workspaceId: string): Promise<ViewTemplateRow> {
     const [source] = await db.select().from(viewTemplates).where(eq(viewTemplates.id, sourceId));
     if (!source) throw new Error('Source view template not found');
+
+    // Check if a copy already exists for this parent in this workspace
+    const [existingCopy] = await db
+      .select()
+      .from(viewTemplates)
+      .where(
+        and(
+          eq(viewTemplates.workspaceId, workspaceId),
+          eq(viewTemplates.parentId, sourceId),
+        ),
+      )
+      .limit(1);
+    if (existingCopy) throw new Error('A copy already exists for this template in the workspace');
 
     const id = createId();
     const now = new Date();
@@ -235,7 +253,7 @@ export const viewTemplateService = {
       maturityStage: source.maturityStage,
       descriptor: source.descriptor as Record<string, unknown>,
       version: 1,
-      sourceLevel: 'admin',
+      sourceLevel: 'user',
       parentId: sourceId,
       isDetached: false,
       createdAt: now,
@@ -246,6 +264,35 @@ export const viewTemplateService = {
     return row;
   },
 
+  /**
+   * Fork (deprecated alias for copy).
+   */
+  async fork(sourceId: string, workspaceId: string): Promise<ViewTemplateRow> {
+    return this.copy(sourceId, workspaceId);
+  },
+
+  /**
+   * Reset a copied view template — delete the copy and return the system default.
+   * Only works on templates that have a parentId.
+   */
+  async reset(id: string): Promise<ViewTemplateRow | null> {
+    const [existing] = await db.select().from(viewTemplates).where(eq(viewTemplates.id, id));
+    if (!existing) return null;
+    if (!existing.parentId) throw new Error('Cannot reset a template without a parent');
+
+    const parentId = existing.parentId;
+
+    // Delete the copy
+    await db.delete(viewTemplates).where(eq(viewTemplates.id, id));
+
+    // Return the parent (system default)
+    const [parent] = await db.select().from(viewTemplates).where(eq(viewTemplates.id, parentId));
+    return parent ?? null;
+  },
+
+  /**
+   * Detach a forked view template from its parent (deprecated — no longer used in UX).
+   */
   async detach(id: string): Promise<ViewTemplateRow | null> {
     const [existing] = await db.select().from(viewTemplates).where(eq(viewTemplates.id, id));
     if (!existing) return null;
@@ -260,13 +307,23 @@ export const viewTemplateService = {
     return row;
   },
 
-  async remove(id: string): Promise<boolean> {
+  /**
+   * Delete a view template.
+   * Only allowed for user-created templates (sourceLevel='user' + parentId=null).
+   * Returns { deleted: boolean, forbidden: boolean }.
+   */
+  async remove(id: string): Promise<{ deleted: boolean; forbidden: boolean }> {
     const [existing] = await db.select().from(viewTemplates).where(eq(viewTemplates.id, id));
-    if (!existing) return false;
-    if (!existing.workspaceId) return false;
+    if (!existing) return { deleted: false, forbidden: false };
+    if (!existing.workspaceId) return { deleted: false, forbidden: true }; // system seed
+
+    // Guard: only user-created with no parent
+    if (existing.sourceLevel !== 'user' || existing.parentId !== null) {
+      return { deleted: false, forbidden: true };
+    }
 
     await db.delete(viewTemplates).where(eq(viewTemplates.id, id));
-    return true;
+    return { deleted: true, forbidden: false };
   },
 
   /**
