@@ -237,6 +237,15 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Fix `doc()` helper: use `paragraphStyles` with built-in IDs + `outlineLevel` instead of inline TextRun formatting
       - [x] Test: upskill returns skill content, generate after upskill produces valid DOCX with tables
     - [x] BUG-L13-8: references excerpts visible in print — hide excerpts in print/locked mode, show in normal mode
+    - [ ] BUG-L13-9: org pages still use hardcoded `References.svelte` instead of TemplateRenderer references
+      - [ ] Replace `References.svelte` usage in `organizations/[id]/+page.svelte` with TemplateRenderer reference rendering
+      - [ ] Replace `References.svelte` usage in `organizations/new/+page.svelte` with TemplateRenderer reference rendering
+      - [ ] Delete `References.svelte` (no remaining imports)
+    - [ ] BUG-L13-10: dead code cleanup post-TemplateRenderer migration
+      - [ ] Remove `parseReferencesInText()` from `ui/src/lib/utils/markdown.ts`
+      - [ ] Remove `arrayToNumberedMarkdown()` from `ui/src/lib/utils/markdown.ts`
+      - [ ] Remove dead `.layout-bottom.no-references` selectors from `ui/src/app.print.css`
+      - [ ] Remove stale imports referencing deleted functions
   - [x] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [x] Dev live-debug harness stabilized on root `ENV=dev` for Lot 13/UAT repros (`make exec-playwright-dev`, `make record-dev-playwright-auth`, helper endpoints, Maildev fallback)
