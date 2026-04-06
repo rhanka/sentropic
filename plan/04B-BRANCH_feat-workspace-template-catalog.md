@@ -253,7 +253,6 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] BUG-L13-11: annex initiative pages missing margins vs standalone — fix: change padding to margin on .usecase-annex-item, update .report-main-content override to preserve 0.6cm left/right margins
     - [x] BUG-L13-12: page-break rules moved from hardcoded CSS to template seed `pageBreakAfter`/`pageBreakBefore`/`pageBreakInside` attributes — TemplateRenderer applies inline styles, removed `report-break-after` and `report-analyse-with-break` CSS classes
     - [x] BUG-L13-13: reference `[1]` title leak in locked mode — move citation replacement before `marked()` using placeholders to prevent markdown link-reference interpretation
-    - [x] Print layout rules and spec documented (rules/print-layout.md, spec/SPEC_EVOL_PRINT_LAYOUT.md)
   - [x] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [x] Dev live-debug harness stabilized on root `ENV=dev` for Lot 13/UAT repros (`make exec-playwright-dev`, `make record-dev-playwright-auth`, helper endpoints, Maildev fallback)
@@ -295,36 +294,36 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
 
 - [ ] **Lot N-2 — UAT**
   - [ ] Web app — current template-driven surfaces
-    - [ ] `/initiative/{id}` : rendu identique visuellement (cartes colorées, layout 2/3+1/3, scores, sidebar)
-    - [ ] `/organizations/{id}` : rendu identique (variant plain)
-    - [ ] Dashboard courant : rendu via TemplateRenderer (synthèse, scatter plot via slot, print annexes via entity-loop)
-    - [ ] Edit mode : champs éditables, sauvegarde auto, indicateur unsaved
-    - [ ] Locked mode : champs en `@html`, pas d'édition
-    - [ ] Édition collaborative : 2 onglets même surface, modifier un champ → SSE met à jour l'autre sans écraser un champ localement sale
-    - [ ] Print : Ctrl+P fonctionne sur dashboard et initiative standalone
+    - [x] `/initiative/{id}` : rendu identique visuellement (cartes colorées, layout 2/3+1/3, scores, sidebar)
+    - [x] `/organizations/{id}` : rendu identique (variant plain)
+    - [x] Dashboard courant : rendu via TemplateRenderer (synthèse, scatter plot via slot, print annexes via entity-loop)
+    - [x] Edit mode : champs éditables, sauvegarde auto, indicateur unsaved
+    - [x] Locked mode : champs en `@html`, pas d'édition
+    - [x] Édition collaborative : 2 onglets même surface, modifier un champ → SSE met à jour l'autre sans écraser un champ localement sale
+    - [x] Print : Ctrl+P fonctionne sur dashboard et initiative standalone
   - [ ] Web app — dashboard / folder
-    - [ ] Dashboard visible et exploitable depuis le folder courant
-    - [ ] Scatter plot fonctionne via component slot
+    - [x] Dashboard visible et exploitable depuis le folder courant
+    - [x] Scatter plot fonctionne via component slot
   - [ ] Web app — config UX
-    - [ ] Settings templates: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
-    - [ ] Settings agents: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
-    - [ ] Settings workflows: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
-    - [ ] Badges Lock/UserPen corrects sur les 3 surfaces
+    - [!] Settings templates: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
+    - [!] Settings agents: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
+    - [!] Settings workflows: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
+    - [!] Badges Lock/UserPen corrects sur les 3 surfaces
   - [ ] Web app — chat tools
-    - [ ] Chat (opportunity workspace): `document_generate` visible dans les outils disponibles
-    - [ ] Chat (org context): `batch_create_organizations` visible dans les outils disponibles
-    - [ ] Chat: `document_generate` exécution → DOCX généré et téléchargeable
+    - [x] Chat (opportunity workspace): `document_generate` visible dans les outils disponibles
+    - [!] Chat (org context): `batch_create_organizations` visible dans les outils disponibles
+    - [x] Chat: `document_generate` exécution → DOCX généré et téléchargeable
   - [ ] Web app — multi-org
-    - [ ] Folder creation: multi-select orgs visible dans le formulaire
-    - [ ] Folder creation avec orgs sélectionnées → workflow `initiative_list_with_orgs` utilisé
-    - [ ] Folder creation avec "Créer de nouvelles orgs auto" coché → step `create_organizations` exécuté
-    - [ ] Folder creation sans orgs → workflow classique `initiative_list` (non-reg)
-    - [ ] bid → proposal: vérifier que le terme "proposal" apparaît partout (UI, API responses)
+    - [x] Folder creation: multi-select orgs visible dans le formulaire
+    - [x] Folder creation avec orgs sélectionnées → workflow `initiative_list_with_orgs` utilisé
+    - [x] Folder creation avec "Créer de nouvelles orgs auto" coché → step `create_organizations` exécuté
+    - [x] Folder creation sans orgs → workflow classique `initiative_list` (non-reg)
+    - [x] ~~bid → proposal: vérifier que le terme "proposal" apparaît partout (UI, API responses)~~ — deferred: no visible UI screen for proposals at this stage
   - [ ] Web app — non-regression
-    - [ ] Génération ai-ideas: créer un nouveau folder → générer des initiatives → vérifier rendu
-    - [ ] Chat: docs/comments/web_search fonctionnels
-    - [ ] Import/export initiative fonctionnel
-    - [ ] Markdown avec liens bleus et références numérotées
+    - [x] Génération ai-ideas: créer un nouveau folder → générer des initiatives → vérifier rendu
+    - [x] Chat: docs/comments/web_search fonctionnels
+    - [x] Import/export initiative fonctionnel
+    - [x] Markdown avec liens bleus et références numérotées
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate specs.
