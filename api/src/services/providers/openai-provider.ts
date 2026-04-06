@@ -87,6 +87,15 @@ const OPENAI_MODELS: ModelCatalogEntry[] = [
   },
   {
     providerId: 'openai',
+    modelId: 'gpt-5.4-nano',
+    label: 'GPT-5.4 Nano',
+    reasoningTier: 'standard',
+    supportsTools: true,
+    supportsStreaming: true,
+    defaultContexts: ['chat'],
+  },
+  {
+    providerId: 'openai',
     modelId: 'gpt-4.1-nano',
     label: 'GPT-4.1 Nano',
     reasoningTier: 'none',
