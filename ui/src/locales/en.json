@@ -759,8 +759,12 @@
       "descriptionLabel": "Description",
       "configJsonLabel": "Configuration (JSON)",
       "edit": "Edit",
-      "fork": "Fork",
-      "detach": "Detach",
+      "copy": "Copy",
+      "resetToDefault": "Reset to default",
+      "customized": "customized",
+      "systemDefault": "Default",
+      "confirmReset": "Reset to default configuration? The customized copy will be deleted.",
+      "confirmDelete": "Delete this configuration? This cannot be undone.",
       "save": "Save",
       "cancel": "Cancel",
       "inheritance": {
@@ -770,7 +774,7 @@
       },
       "agent": {
         "title": "Agent Configuration",
-        "description": "Configure generation agents with fork/detach and inheritance indicators."
+        "description": "Configure generation agents. Copy system configs to customize, reset to restore defaults."
       },
       "workflow": {
         "title": "Workflow Configuration",
@@ -786,10 +790,10 @@
       "toasts": {
         "agentSaved": "Agent configuration updated.",
         "workflowSaved": "Workflow configuration updated.",
-        "agentForked": "Agent configuration forked.",
-        "workflowForked": "Workflow configuration forked.",
-        "agentDetached": "Agent configuration detached from parent.",
-        "workflowDetached": "Workflow configuration detached from parent."
+        "copied": "Configuration copied.",
+        "reset": "Configuration reset to default.",
+        "deleted": "Configuration deleted.",
+        "saved": "Configuration saved."
       },
       "errors": {
         "load": "Failed to load AI agents/workflows configuration",
@@ -798,10 +802,10 @@
         "invalidWorkflowConfigJson": "Workflow configuration JSON must be a valid object",
         "saveAgent": "Failed to save agent configuration",
         "saveWorkflow": "Failed to save workflow configuration",
-        "forkAgent": "Failed to fork agent configuration",
-        "forkWorkflow": "Failed to fork workflow configuration",
-        "detachAgent": "Failed to detach agent configuration",
-        "detachWorkflow": "Failed to detach workflow configuration"
+        "copy": "Failed to copy configuration",
+        "reset": "Failed to reset configuration",
+        "delete": "Failed to delete configuration",
+        "save": "Failed to save configuration"
       }
     },
     "admin": {
