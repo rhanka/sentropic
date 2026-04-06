@@ -113,7 +113,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     expect(capturedTools).toContain('batch_create_organizations');
   });
 
-  it('should NOT include batch_create_organizations for ai-ideas workspace', async () => {
+  it('should include batch_create_organizations for ai-ideas workspace (same tools as opportunity)', async () => {
     await db.update(workspaces).set({ type: 'ai-ideas' }).where(eq(workspaces.id, workspaceId));
 
     const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
@@ -144,7 +144,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
       model,
     });
 
-    expect(capturedTools).not.toContain('batch_create_organizations');
+    expect(capturedTools).toContain('batch_create_organizations');
   });
 
   it('should NOT include batch_create_organizations for neutral workspace', async () => {
