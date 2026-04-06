@@ -6,7 +6,7 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import { Star, X, Minus } from '@lucide/svelte';
   import { _ } from 'svelte-i18n';
-  import { normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, arrayToMarkdown, arrayToNumberedMarkdown, markdownToArray, renderMarkdownWithRefs } from '$lib/utils/markdown';
+  import { normalizeUseCaseMarkdown, stripTrailingEmptyParagraph, arrayToMarkdown, markdownToArray, renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { resolveViewTemplate } from '$lib/stores/viewTemplateCache';
 
   // ---------------------------------------------------------------------------

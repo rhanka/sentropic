@@ -243,7 +243,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [ ] Delete `References.svelte` (no remaining imports)
     - [ ] BUG-L13-10: dead code cleanup post-TemplateRenderer migration
       - [x] Remove `parseReferencesInText()` from `ui/src/lib/utils/markdown.ts`
-      - [ ] Remove `arrayToNumberedMarkdown()` from `ui/src/lib/utils/markdown.ts`
+      - [x] Remove `arrayToNumberedMarkdown()` from `ui/src/lib/utils/markdown.ts`
       - [ ] Remove dead `.layout-bottom.no-references` selectors from `ui/src/app.print.css`
       - [ ] Remove stale imports referencing deleted functions
   - [x] **Spec update**
