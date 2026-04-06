@@ -58,11 +58,11 @@ describe('MistralProviderRuntime', () => {
       const models = runtime.listModels();
       expect(models).toHaveLength(2);
 
-      const devstral = models.find((m) => m.modelId === 'devstral-2512');
-      expect(devstral).toBeDefined();
-      expect(devstral!.providerId).toBe('mistral');
-      expect(devstral!.reasoningTier).toBe('standard');
-      expect(devstral!.supportsTools).toBe(true);
+      const mistralSmall = models.find((m) => m.modelId === 'mistral-small-2603');
+      expect(mistralSmall).toBeDefined();
+      expect(mistralSmall!.providerId).toBe('mistral');
+      expect(mistralSmall!.reasoningTier).toBe('standard');
+      expect(mistralSmall!.supportsTools).toBe(true);
 
       const large = models.find((m) => m.modelId === 'magistral-medium-2509');
       expect(large).toBeDefined();
