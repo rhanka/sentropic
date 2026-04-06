@@ -240,7 +240,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] BUG-L13-9: org pages still use hardcoded `References.svelte` instead of TemplateRenderer references
       - [x] Replace `References.svelte` usage in `organizations/[id]/+page.svelte` with TemplateRenderer reference rendering
       - [x] Replace `References.svelte` usage in `organizations/new/+page.svelte` with TemplateRenderer reference rendering
-      - [ ] Delete `References.svelte` (no remaining imports)
+      - [x] Delete `References.svelte` (no remaining imports)
     - [ ] BUG-L13-10: dead code cleanup post-TemplateRenderer migration
       - [x] Remove `parseReferencesInText()` from `ui/src/lib/utils/markdown.ts`
       - [x] Remove `arrayToNumberedMarkdown()` from `ui/src/lib/utils/markdown.ts`
