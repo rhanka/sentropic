@@ -244,8 +244,8 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [ ] BUG-L13-10: dead code cleanup post-TemplateRenderer migration
       - [x] Remove `parseReferencesInText()` from `ui/src/lib/utils/markdown.ts`
       - [x] Remove `arrayToNumberedMarkdown()` from `ui/src/lib/utils/markdown.ts`
-      - [ ] Remove dead `.layout-bottom.no-references` selectors from `ui/src/app.print.css`
-      - [ ] Remove stale imports referencing deleted functions
+      - [x] Remove dead `.layout-bottom.no-references` selectors from `ui/src/app.print.css`
+      - [x] Remove stale imports referencing deleted functions
   - [x] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [x] Dev live-debug harness stabilized on root `ENV=dev` for Lot 13/UAT repros (`make exec-playwright-dev`, `make record-dev-playwright-auth`, helper endpoints, Maildev fallback)
