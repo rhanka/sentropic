@@ -463,7 +463,7 @@
       {#each activeTab.rows ?? [] as row}
         {#if row.main && row.sidebar}
           <!-- Main + Sidebar row -->
-          <div class="grid gap-6 items-stretch {gridColsClass[row.columns] || 'lg:grid-cols-3'} {row.printClass || ''}">
+          <div class="grid gap-6 items-stretch {gridColsClass[row.columns] || 'lg:grid-cols-3'} {row.printClass || ''}" style:page-break-after={row.pageBreakAfter || null} style:page-break-inside={row.pageBreakInside || null} style:page-break-before={row.pageBreakBefore || null}>
             <!-- Main zone -->
             <div class="{colSpanClass[row.main?.span] || 'md:col-span-2'} {row.main?.printClass || ''}">
               <!-- Span fields (full width within main) -->
@@ -588,7 +588,7 @@
           </div>
         {:else}
           <!-- Simple row with flat fields -->
-          <div class="grid gap-6 {gridColsClass[row.columns] || 'grid-cols-1'} {row.printClass || ''}">
+          <div class="grid gap-6 {gridColsClass[row.columns] || 'grid-cols-1'} {row.printClass || ''}" style:page-break-after={row.pageBreakAfter || null} style:page-break-inside={row.pageBreakInside || null} style:page-break-before={row.pageBreakBefore || null}>
             {#each row.fields ?? [] as field (field.key)}
               <div id={field.id || null} class:hidden={field.printOnly && !isPrinting} class:print-block={field.printOnly} class:print-hidden={field.screenOnly} style:page={field.pageContext || null}>
               {#if field.type === 'scores-summary'}

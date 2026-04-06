@@ -418,7 +418,7 @@
     background: transparent !important;
     margin-top: 0 !important;
     margin-bottom: 0 !important;
-    page-break-after: always !important;
+    /* page-break-after now driven by template seed row.pageBreakAfter */
   }
 
   /* Les cartes de statistiques */
@@ -535,15 +535,7 @@
   }
 
   /* Saut de page avant et après (analyse, recommandation) */
-  .report-main-content .report-analyse-with-break {
-    page-break-before: always !important;
-    page-break-after: always !important;
-  }
-
-  /* Saut de page après seulement (introduction — collée au scatter/dashboard) */
-  .report-main-content .report-break-after {
-    page-break-after: always !important;
-  }
+  /* page-break rules for report sections now driven by template seed row.pageBreakAfter/Before/Inside */
 
   /* Garder un trait sous le titre de l'analyse et recommandation */
   .report-main-content .report-analyse .border-b {

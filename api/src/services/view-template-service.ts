@@ -406,15 +406,15 @@ function getAiIdeasTemplates(): ViewTemplateSeed[] {
           rows: [
             { columns: 1, fields: [{ key: 'cover_page', type: 'component', printOnly: true, pageContext: 'cover' }] },
             { columns: 1, fields: [{ key: 'executiveSummary.synthese_executive', type: 'text', color: 'white', screenOnly: true }] },
-            { columns: 1, printClass: 'report-introduction report-break-after', fields: [
+            { columns: 1, printClass: 'report-introduction', pageBreakAfter: 'always', pageBreakInside: 'avoid', fields: [
               { key: 'scatter_plot', type: 'component' },
               { key: 'executiveSummary.introduction', type: 'text', color: 'white', id: 'section-introduction' },
             ] },
             { columns: 1, fields: [{ key: 'sommaire', type: 'component', printOnly: true }] },
-            { columns: 1, printClass: 'report-analyse report-analyse-with-break', fields: [
+            { columns: 1, printClass: 'report-analyse', pageBreakBefore: 'always', pageBreakAfter: 'always', fields: [
               { key: 'executiveSummary.analyse', type: 'text', color: 'white', id: 'section-analyse' },
             ] },
-            { columns: 1, printClass: 'report-analyse report-analyse-with-break', fields: [{ key: 'executiveSummary.recommandation', type: 'text', color: 'white', id: 'section-recommandations' }] },
+            { columns: 1, printClass: 'report-analyse', pageBreakBefore: 'always', pageBreakAfter: 'always', fields: [{ key: 'executiveSummary.recommandation', type: 'text', color: 'white', id: 'section-recommandations' }] },
             { columns: 1, printClass: 'report-analyse', fields: [{ key: 'executiveSummary.references', type: 'list', id: 'section-references' }] },
             { columns: 1, fields: [{ key: 'annex_cover', type: 'component', printOnly: true, pageContext: 'cover' }] },
             { columns: 1, fields: [{ key: 'initiatives', type: 'entity-loop', collection: 'initiatives', templateRef: 'initiative', printOnly: true, pageContext: 'annex' }] },
@@ -515,15 +515,15 @@ function getOpportunityTemplates(): ViewTemplateSeed[] {
           rows: [
             { columns: 1, fields: [{ key: 'cover_page', type: 'component', printOnly: true, pageContext: 'cover' }] },
             { columns: 1, fields: [{ key: 'executiveSummary.synthese_executive', type: 'text', color: 'white', screenOnly: true }] },
-            { columns: 1, printClass: 'report-introduction report-break-after', fields: [
+            { columns: 1, printClass: 'report-introduction', pageBreakAfter: 'always', pageBreakInside: 'avoid', fields: [
               { key: 'scatter_plot', type: 'component' },
               { key: 'executiveSummary.introduction', type: 'text', color: 'white', id: 'section-introduction' },
             ] },
             { columns: 1, fields: [{ key: 'sommaire', type: 'component', printOnly: true }] },
-            { columns: 1, printClass: 'report-analyse report-analyse-with-break', fields: [
+            { columns: 1, printClass: 'report-analyse', pageBreakBefore: 'always', pageBreakAfter: 'always', fields: [
               { key: 'executiveSummary.analyse', type: 'text', color: 'white', id: 'section-analyse' },
             ] },
-            { columns: 1, printClass: 'report-analyse report-analyse-with-break', fields: [{ key: 'executiveSummary.recommandation', type: 'text', color: 'white', id: 'section-recommandations' }] },
+            { columns: 1, printClass: 'report-analyse', pageBreakBefore: 'always', pageBreakAfter: 'always', fields: [{ key: 'executiveSummary.recommandation', type: 'text', color: 'white', id: 'section-recommandations' }] },
             { columns: 1, printClass: 'report-analyse', fields: [{ key: 'executiveSummary.references', type: 'list', id: 'section-references' }] },
             { columns: 1, fields: [{ key: 'annex_cover', type: 'component', printOnly: true, pageContext: 'cover' }] },
             { columns: 1, fields: [{ key: 'initiatives', type: 'entity-loop', collection: 'initiatives', templateRef: 'initiative', printOnly: true, pageContext: 'annex' }] },
