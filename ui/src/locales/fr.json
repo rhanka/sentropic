@@ -759,8 +759,12 @@
       "descriptionLabel": "Description",
       "configJsonLabel": "Configuration (JSON)",
       "edit": "Modifier",
-      "fork": "Fork",
-      "detach": "Detach",
+      "copy": "Copier",
+      "resetToDefault": "Réinitialiser",
+      "customized": "personnalisé",
+      "systemDefault": "Par défaut",
+      "confirmReset": "Réinitialiser à la configuration par défaut ? La copie personnalisée sera supprimée.",
+      "confirmDelete": "Supprimer cette configuration ? Cette action est irréversible.",
       "save": "Sauvegarder",
       "cancel": "Annuler",
       "inheritance": {
@@ -769,8 +773,8 @@
         "drift": "Drift détecté"
       },
       "agent": {
-        "title": "Agent Configuration",
-        "description": "Configurez les agents de génération avec indicateurs fork/detach et héritage."
+        "title": "Configuration des agents",
+        "description": "Configurez les agents de génération. Copiez les configurations système pour personnaliser, réinitialisez pour restaurer les valeurs par défaut."
       },
       "workflow": {
         "title": "Workflow Configuration",
@@ -786,10 +790,10 @@
       "toasts": {
         "agentSaved": "Configuration agent mise à jour.",
         "workflowSaved": "Configuration workflow mise à jour.",
-        "agentForked": "Configuration agent forkée.",
-        "workflowForked": "Configuration workflow forkée.",
-        "agentDetached": "Configuration agent détachée du parent.",
-        "workflowDetached": "Configuration workflow détachée du parent."
+        "copied": "Configuration copiée.",
+        "reset": "Configuration réinitialisée.",
+        "deleted": "Configuration supprimée.",
+        "saved": "Configuration enregistrée."
       },
       "errors": {
         "load": "Échec du chargement de la configuration agents/workflows IA",
@@ -798,10 +802,10 @@
         "invalidWorkflowConfigJson": "Le JSON de configuration workflow doit être un objet valide",
         "saveAgent": "Échec de sauvegarde de la configuration agent",
         "saveWorkflow": "Échec de sauvegarde de la configuration workflow",
-        "forkAgent": "Échec du fork de la configuration agent",
-        "forkWorkflow": "Échec du fork de la configuration workflow",
-        "detachAgent": "Échec du detach de la configuration agent",
-        "detachWorkflow": "Échec du detach de la configuration workflow"
+        "copy": "Échec de la copie de la configuration",
+        "reset": "Échec de la réinitialisation de la configuration",
+        "delete": "Échec de la suppression de la configuration",
+        "save": "Échec de l'enregistrement de la configuration"
       }
     },
     "admin": {
