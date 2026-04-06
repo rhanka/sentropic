@@ -1663,14 +1663,6 @@
     box-sizing: border-box !important;
   }
 
-  /* Si Références n'est pas affiché: Prochaines étapes doit prendre 100% même en mode flex print */
-  .template-initiative .layout-bottom.no-references > .layout-bottom-nextsteps,
-  div.template-initiative div.layout-bottom.no-references > .layout-bottom-nextsteps {
-    width: 100% !important;
-    max-width: 100% !important;
-    flex: 0 0 100% !important;
-  }
-
   /* Cas particulier: si "Références" n'est pas affiché, "Prochaines étapes" doit prendre 100% */
   .template-initiative .layout-bottom > *:only-child,
   div.template-initiative div.layout-bottom > *:only-child {
@@ -1872,10 +1864,6 @@
     grid-column: 1 / -1 !important;
   }
 
-  /* Si Références n'est pas affiché: Prochaines étapes doit occuper 100% en mode grid print aussi */
-  .template-initiative .layout-bottom.no-references > .layout-bottom-nextsteps {
-    grid-column: 1 / -1 !important;
-  }
 }
 
 /* Use cases in dashboard (visible in print) */
