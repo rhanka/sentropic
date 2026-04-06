@@ -16,7 +16,6 @@
   import { addToast } from '$lib/stores/toast';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
-  import References from '$lib/components/References.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
   import type { OrgField } from '$lib/components/organization-form.types';

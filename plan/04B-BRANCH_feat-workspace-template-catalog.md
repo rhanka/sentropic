@@ -238,7 +238,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Test: upskill returns skill content, generate after upskill produces valid DOCX with tables
     - [x] BUG-L13-8: references excerpts visible in print — hide excerpts in print/locked mode, show in normal mode
     - [ ] BUG-L13-9: org pages still use hardcoded `References.svelte` instead of TemplateRenderer references
-      - [ ] Replace `References.svelte` usage in `organizations/[id]/+page.svelte` with TemplateRenderer reference rendering
+      - [x] Replace `References.svelte` usage in `organizations/[id]/+page.svelte` with TemplateRenderer reference rendering
       - [ ] Replace `References.svelte` usage in `organizations/new/+page.svelte` with TemplateRenderer reference rendering
       - [ ] Delete `References.svelte` (no remaining imports)
     - [ ] BUG-L13-10: dead code cleanup post-TemplateRenderer migration
