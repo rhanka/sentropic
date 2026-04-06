@@ -71,7 +71,7 @@
   async function loadTemplates() {
     loading = true;
     try {
-      templates = await listViewTemplates(workspaceType);
+      templates = await listViewTemplates($selectedWorkspace?.id ?? '', workspaceType);
     } catch {
       templates = [];
     } finally {
