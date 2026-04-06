@@ -31,7 +31,7 @@ describe("Agent config API", () => {
     await cleanupAuthData();
   });
 
-  it("supports get/put/fork/detach lifecycle", async () => {
+  it("supports get/put/fork/reset lifecycle", async () => {
     const putRes = await authenticatedRequest(app, "PUT", "/api/v1/agent-config", editor.sessionToken, {
       items: [
         {
@@ -68,16 +68,152 @@ describe("Agent config API", () => {
     const forkBody = await forkRes.json();
     expect(forkBody.item.parentId).toBe(root.id);
 
-    const detachRes = await authenticatedRequest(
+    // Reset: delete the fork, return parent
+    const resetRes = await authenticatedRequest(
       app,
       "POST",
-      `/api/v1/agent-config/${forkBody.item.id}/detach`,
+      `/api/v1/agent-config/${forkBody.item.id}/reset`,
       editor.sessionToken,
       {},
     );
-    expect(detachRes.status).toBe(200);
-    const detachBody = await detachRes.json();
-    expect(detachBody.item.isDetached).toBe(true);
+    expect(resetRes.status).toBe(200);
+    const resetBody = await resetRes.json();
+    expect(resetBody.item.id).toBe(root.id);
+  });
+
+  it("supports copy/reset lifecycle (new canonical endpoints)", async () => {
+    // Create a root agent config
+    const putRes = await authenticatedRequest(app, "PUT", "/api/v1/agent-config", editor.sessionToken, {
+      items: [
+        {
+          key: "analyst",
+          name: "Analyst",
+          description: "Analysis agent",
+          config: { model: "gpt-4.1-nano" },
+          sourceLevel: "admin",
+        },
+      ],
+    });
+    expect(putRes.status).toBe(200);
+    const root = (await putRes.json()).items[0];
+
+    // Copy via POST /:id/copy
+    const copyRes = await authenticatedRequest(
+      app,
+      "POST",
+      `/api/v1/agent-config/${root.id}/copy`,
+      editor.sessionToken,
+      { key: "analyst-copy", name: "Analyst Copy" },
+    );
+    expect(copyRes.status).toBe(201);
+    const copyBody = await copyRes.json();
+    expect(copyBody.item.parentId).toBe(root.id);
+    expect(copyBody.item.key).toBe("analyst-copy");
+
+    // Reset via POST /:id/reset — deletes copy, returns parent
+    const resetRes = await authenticatedRequest(
+      app,
+      "POST",
+      `/api/v1/agent-config/${copyBody.item.id}/reset`,
+      editor.sessionToken,
+      {},
+    );
+    expect(resetRes.status).toBe(200);
+    const resetBody = await resetRes.json();
+    expect(resetBody.item.id).toBe(root.id);
+  });
+
+  it("rejects reset on agent config without parent", async () => {
+    const putRes = await authenticatedRequest(app, "PUT", "/api/v1/agent-config", editor.sessionToken, {
+      items: [
+        {
+          key: "orphan",
+          name: "Orphan",
+          config: {},
+          sourceLevel: "admin",
+        },
+      ],
+    });
+    expect(putRes.status).toBe(200);
+    const root = (await putRes.json()).items[0];
+
+    const resetRes = await authenticatedRequest(
+      app,
+      "POST",
+      `/api/v1/agent-config/${root.id}/reset`,
+      editor.sessionToken,
+      {},
+    );
+    expect(resetRes.status).toBe(400);
+  });
+
+  it("rejects delete on system/forked agent config (403)", async () => {
+    const putRes = await authenticatedRequest(app, "PUT", "/api/v1/agent-config", editor.sessionToken, {
+      items: [
+        {
+          key: "system-agent",
+          name: "System Agent",
+          config: {},
+          sourceLevel: "admin",
+        },
+      ],
+    });
+    expect(putRes.status).toBe(200);
+    const root = (await putRes.json()).items[0];
+
+    // Fork it so it has a parent
+    const copyRes = await authenticatedRequest(
+      app,
+      "POST",
+      `/api/v1/agent-config/${root.id}/copy`,
+      editor.sessionToken,
+      { key: "system-agent-copy", name: "System Agent Copy" },
+    );
+    expect(copyRes.status).toBe(201);
+    const copy = (await copyRes.json()).item;
+
+    // Delete the copy (has parentId) — should be 403
+    const deleteRes = await authenticatedRequest(
+      app,
+      "DELETE",
+      `/api/v1/agent-config/${copy.id}`,
+      editor.sessionToken,
+    );
+    expect(deleteRes.status).toBe(403);
+  });
+
+  it("allows delete on user-created agent config with no parent", async () => {
+    const putRes = await authenticatedRequest(app, "PUT", "/api/v1/agent-config", editor.sessionToken, {
+      items: [
+        {
+          key: "user-custom",
+          name: "User Custom",
+          config: {},
+          sourceLevel: "user",
+        },
+      ],
+    });
+    expect(putRes.status).toBe(200);
+    const created = (await putRes.json()).items[0];
+
+    const deleteRes = await authenticatedRequest(
+      app,
+      "DELETE",
+      `/api/v1/agent-config/${created.id}`,
+      editor.sessionToken,
+    );
+    expect(deleteRes.status).toBe(204);
+  });
+
+  it("returns 410 Gone for deprecated detach endpoint", async () => {
+    const detachRes = await authenticatedRequest(
+      app,
+      "POST",
+      "/api/v1/agent-config/any-id/detach",
+      editor.sessionToken,
+      {},
+    );
+    expect(detachRes.status).toBe(410);
   });
 
   it("rejects put for viewer role", async () => {
