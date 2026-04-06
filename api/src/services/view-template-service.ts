@@ -362,7 +362,7 @@ function getAiIdeasTemplates(): ViewTemplateSeed[] {
             },
             { columns: 2, printClass: 'layout-bottom', fields: [
               { key: 'nextSteps', type: 'list', color: 'purple' },
-              { key: 'references', type: 'list' },
+              { key: 'references', type: 'list', hideExcerptInPrint: true },
             ]},
             { columns: 2, fields: [
               { key: 'valueScores', type: 'scores', color: 'green' },
