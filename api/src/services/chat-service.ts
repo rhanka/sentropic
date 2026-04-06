@@ -506,6 +506,7 @@ const toBudgetString = (value: unknown): string => {
 const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
   // OpenAI
   'gpt-5.4':       1_000_000,
+  'gpt-5.4-nano':  1_000_000,
   'gpt-4.1':       1_000_000,
   'gpt-4.1-nano':  1_000_000,
   // Gemini
@@ -515,7 +516,7 @@ const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
   'claude-sonnet-4-6': 1_000_000,
   'claude-opus-4-6':   1_000_000,
   // Mistral
-  'devstral-2512':          256_000,
+  'mistral-small-2603':     256_000,
   'magistral-medium-2509':  128_000,
   // Cohere
   'command-a-03-2025':           256_000,
