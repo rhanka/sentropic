@@ -647,48 +647,48 @@
                 </div>
 
                 {#if canEdit}
-                  <div class="mt-3 flex flex-wrap gap-2">
+                  <div class="mt-3 flex items-center gap-1">
                     {#if !isSystemAgentConfig(item)}
                       <button
                         type="button"
-                        class="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                        class="p-1 text-slate-400 hover:text-primary rounded disabled:opacity-50"
+                        title={$_('settings.runtime.edit')}
                         on:click={() => openAgentEditor(item)}
                       >
-                        <Pencil class="w-3 h-3" />
-                        {$_('settings.runtime.edit')}
+                        <Pencil class="w-4 h-4" />
                       </button>
                     {/if}
                     {#if isSystemAgentConfig(item) && !hasCopyForAgent(item.id)}
                       <button
                         type="button"
-                        class="inline-flex items-center gap-1 rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                        class="p-1 text-slate-400 hover:text-primary rounded disabled:opacity-50"
+                        title={$_('settings.runtime.copy')}
                         on:click={() => void copyAgent(item)}
                         disabled={isCopying || isSaving}
                       >
-                        <Copy class="w-3 h-3" />
-                        {$_('settings.runtime.copy')}
+                        <Copy class="w-4 h-4" />
                       </button>
                     {/if}
                     {#if isCopiedAgentConfig(item)}
                       <button
                         type="button"
-                        class="inline-flex items-center gap-1 rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                        class="p-1 text-slate-400 hover:text-amber-600 rounded disabled:opacity-50"
+                        title={$_('settings.runtime.resetToDefault')}
                         on:click={() => void resetAgent(item)}
                         disabled={isResettingConfig || isSaving}
                       >
-                        <RotateCcw class="w-3 h-3" />
-                        {$_('settings.runtime.resetToDefault')}
+                        <RotateCcw class="w-4 h-4" />
                       </button>
                     {/if}
                     {#if isUserCreatedAgentConfig(item)}
                       <button
                         type="button"
-                        class="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        class="p-1 text-slate-400 hover:text-red-600 rounded disabled:opacity-50"
+                        title={$_('common.delete')}
                         on:click={() => void deleteAgent(item)}
                         disabled={isDeletingConfig || isSaving}
                       >
-                        <Trash2 class="w-3 h-3" />
-                        {$_('common.delete')}
+                        <Trash2 class="w-4 h-4" />
                       </button>
                     {/if}
                   </div>
@@ -836,49 +836,49 @@
                 </div>
 
                 {#if canEdit}
-                  <div class="mt-3 flex flex-wrap gap-2">
+                  <div class="mt-3 flex items-center gap-1">
                     {#if !isSystemWorkflowConfig(item)}
                       <button
                         type="button"
-                        class="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                        class="p-1 text-slate-400 hover:text-primary rounded disabled:opacity-50"
+                        title={$_('settings.runtime.edit')}
                         on:click={() => openWorkflowEditor(item)}
                         data-testid={`workflow-config-edit-${item.key}`}
                       >
-                        <Pencil class="w-3 h-3" />
-                        {$_('settings.runtime.edit')}
+                        <Pencil class="w-4 h-4" />
                       </button>
                     {/if}
                     {#if isSystemWorkflowConfig(item) && !hasCopyForWorkflow(item.id)}
                       <button
                         type="button"
-                        class="inline-flex items-center gap-1 rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                        class="p-1 text-slate-400 hover:text-primary rounded disabled:opacity-50"
+                        title={$_('settings.runtime.copy')}
                         on:click={() => void copyWorkflow(item)}
                         disabled={isCopying || isSaving}
                       >
-                        <Copy class="w-3 h-3" />
-                        {$_('settings.runtime.copy')}
+                        <Copy class="w-4 h-4" />
                       </button>
                     {/if}
                     {#if isCopiedWorkflowConfig(item)}
                       <button
                         type="button"
-                        class="inline-flex items-center gap-1 rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                        class="p-1 text-slate-400 hover:text-amber-600 rounded disabled:opacity-50"
+                        title={$_('settings.runtime.resetToDefault')}
                         on:click={() => void resetWorkflow(item)}
                         disabled={isResettingConfig || isSaving}
                       >
-                        <RotateCcw class="w-3 h-3" />
-                        {$_('settings.runtime.resetToDefault')}
+                        <RotateCcw class="w-4 h-4" />
                       </button>
                     {/if}
                     {#if isUserCreatedWorkflowConfig(item)}
                       <button
                         type="button"
-                        class="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        class="p-1 text-slate-400 hover:text-red-600 rounded disabled:opacity-50"
+                        title={$_('common.delete')}
                         on:click={() => void deleteWorkflow(item)}
                         disabled={isDeletingConfig || isSaving}
                       >
-                        <Trash2 class="w-3 h-3" />
-                        {$_('common.delete')}
+                        <Trash2 class="w-4 h-4" />
                       </button>
                     {/if}
                   </div>
