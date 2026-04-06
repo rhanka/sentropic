@@ -29,6 +29,11 @@
   export let workspaceId: string = '';
   export let workspaceType: string = '';
   export let objectType: string = '';
+  export let sectionTitle: string = '';
+  export let sectionStyle: string = '';
+  export let sectionClass: string = '';
+  export let sectionId: string = '';
+  export let sectionDataAttrs: Record<string, string> = {};
 
   // ---------------------------------------------------------------------------
   // Path-based nested value access
@@ -459,7 +464,10 @@
   {/if}
 
   {#if activeTab}
-    <div class="{objectType ? 'template-' + objectType : ''} space-y-6">
+    <div id={sectionId || null} class="{objectType ? 'template-' + objectType : ''} {sectionClass} space-y-6" style={sectionStyle || null} {...sectionDataAttrs}>
+      {#if sectionTitle}
+        <h1 class="text-3xl font-semibold mb-4 annex-title">{sectionTitle}</h1>
+      {/if}
       {#each activeTab.rows ?? [] as row}
         {#if row.main && row.sidebar}
           <!-- Main + Sidebar row -->
@@ -678,8 +686,6 @@
               {:else if field.type === 'entity-loop'}
                 {#if field.collection && collections[field.collection] && field.templateRef && entityLoopTemplates[field.templateRef]}
                   {#each collections[field.collection] as entity, idx (entity.id)}
-                    <section id={entity.id ? `usecase-${entity.id}` : null} class="usecase-annex-section" style="page-break-before: always; {field.pageContext ? 'page: ' + field.pageContext : ''}" data-usecase-id={entity.id || ''} data-usecase-title={entity?.data?.name || entity?.name || ''}>
-                      <h1 class="text-3xl font-semibold mb-4">{entity?.data?.name || entity?.name || ''}</h1>
                       <svelte:self
                         template={entityLoopTemplates[field.templateRef]}
                         data={entity?.data ? { ...entity, ...entity.data } : entity}
@@ -690,8 +696,12 @@
                         entityId={entity.id ?? ''}
                         references={[]}
                         objectType={field.templateRef}
+                        sectionTitle={entity?.data?.name || entity?.name || ''}
+                        sectionStyle="page-break-before: always; {field.pageContext ? 'page: ' + field.pageContext : ''}"
+                        sectionClass="usecase-annex-item"
+                        sectionId={entity.id ? `usecase-${entity.id}` : ''}
+                        sectionDataAttrs={{ 'data-usecase-id': entity.id || '', 'data-usecase-title': entity?.data?.name || entity?.name || '' }}
                       />
-                    </section>
                   {/each}
                 {/if}
               {/if}

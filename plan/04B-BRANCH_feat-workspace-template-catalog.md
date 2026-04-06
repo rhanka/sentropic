@@ -249,7 +249,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Remove `arrayToNumberedMarkdown()` from `ui/src/lib/utils/markdown.ts`
       - [x] Remove dead `.layout-bottom.no-references` selectors from `ui/src/app.print.css`
       - [x] Remove stale imports referencing deleted functions
-    - [ ] BUG-L13-11: footer.jpg bg overflow on annex initiative pages — previous fix reverted (broke bg fade + caused title-only pages)
+    - [x] BUG-L13-11: footer.jpg bg clipped on annex initiative pages — fix: remove .usecase-annex-section wrapper, apply page-break/page directly on .template-initiative via sectionStyle/sectionClass/sectionId/sectionDataAttrs props; CSS migrated from .usecase-annex-section to .usecase-annex-item
     - [x] BUG-L13-12: page-break rules moved from hardcoded CSS to template seed `pageBreakAfter`/`pageBreakBefore`/`pageBreakInside` attributes — TemplateRenderer applies inline styles, removed `report-break-after` and `report-analyse-with-break` CSS classes
   - [x] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
