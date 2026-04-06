@@ -7,7 +7,7 @@ export type ChatToolScopeToggle = {
 
 // Tool IDs available per workspace type (§14.2)
 const EXTENDED_OBJECT_TOOL_IDS = new Set<string>([
-  'solutions_list', 'solution_get', 'bids_list', 'bid_get',
+  'solutions_list', 'solution_get', 'proposals_list', 'proposal_get',
   'products_list', 'product_get', 'gate_review',
   'document_generate', 'batch_create_organizations',
 ]);

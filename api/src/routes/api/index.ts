@@ -32,6 +32,7 @@ import { vscodeExtensionRouter } from './vscode-extension';
 import { solutionsRouter } from './solutions';
 import { productsRouter } from './products';
 import { bidsRouter } from './bids';
+import { proposalsRouter } from './proposals';
 import { viewTemplatesRouter } from './view-templates';
 import { requireAuth } from '../../middleware/auth';
 import { requireRole, requireAdmin } from '../../middleware/rbac';
@@ -62,6 +63,10 @@ apiRouter.route('/solutions', solutionsRouter);
 apiRouter.use('/products/*', requireAuth);
 apiRouter.route('/products', productsRouter);
 
+apiRouter.use('/proposals/*', requireAuth);
+apiRouter.route('/proposals', proposalsRouter);
+
+// Backward-compatible alias: /bids/* -> /proposals/*
 apiRouter.use('/bids/*', requireAuth);
 apiRouter.route('/bids', bidsRouter);
 
