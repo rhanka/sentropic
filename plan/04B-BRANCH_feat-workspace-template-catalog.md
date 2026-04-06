@@ -236,6 +236,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Fix `table()` helper: default width 9360 DXA, dual widths, cell margins, `ShadingType.CLEAR`
       - [x] Fix `doc()` helper: use `paragraphStyles` with built-in IDs + `outlineLevel` instead of inline TextRun formatting
       - [x] Test: upskill returns skill content, generate after upskill produces valid DOCX with tables
+    - [x] BUG-L13-8: references excerpts visible in print — hide excerpts in print/locked mode, show in normal mode
   - [x] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [x] Dev live-debug harness stabilized on root `ENV=dev` for Lot 13/UAT repros (`make exec-playwright-dev`, `make record-dev-playwright-auth`, helper endpoints, Maildev fallback)
