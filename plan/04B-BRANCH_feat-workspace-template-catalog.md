@@ -69,6 +69,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] bid → proposal rename in API/UI/locales (lost in commit 9917fa02, to re-implement)
   - [x] Tests updated for bid → proposal rename
   - [x] ViewTemplateCatalog integrated into settings page
+  - [x] Fix ViewTemplateCatalog empty — pass workspaceId to listViewTemplates API call
   - [x] TodoRuntimeConfigPanel buttons icon-only per spec (remove text labels, match ViewTemplateCatalog style)
 
 - [x] **Lot 7 — Document generation infra + gate auto-todo**

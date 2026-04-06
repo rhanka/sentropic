@@ -62,9 +62,9 @@ export async function resolveViewTemplate(
 /**
  * List all view templates for the current workspace.
  */
-export async function listViewTemplates(workspaceType?: string): Promise<ViewTemplateRecord[]> {
+export async function listViewTemplates(workspaceId: string, workspaceType?: string): Promise<ViewTemplateRecord[]> {
   try {
-    const params = workspaceType ? `?workspace_type=${workspaceType}` : '';
+    const params = `?workspaceId=${workspaceId}${workspaceType ? '&workspaceType=' + workspaceType : ''}`;
     const data = await apiGet<{ items: ViewTemplateRecord[] }>(`/view-templates${params}`);
     return data.items ?? [];
   } catch {
