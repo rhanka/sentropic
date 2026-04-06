@@ -243,11 +243,14 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Replace `References.svelte` usage in `organizations/[id]/+page.svelte` with TemplateRenderer reference rendering
       - [x] Replace `References.svelte` usage in `organizations/new/+page.svelte` with TemplateRenderer reference rendering
       - [x] Delete `References.svelte` (no remaining imports)
+    - [x] BUG-L13-11: footer.jpg bg overflow ~1cm at bottom of initiative annex pages — h1 outside .template-initiative pushes bg beyond page bottom; fix: reduce .template-initiative height by h1 total (22pt) + lock h1 line-height to 1.2
     - [ ] BUG-L13-10: dead code cleanup post-TemplateRenderer migration
       - [x] Remove `parseReferencesInText()` from `ui/src/lib/utils/markdown.ts`
       - [x] Remove `arrayToNumberedMarkdown()` from `ui/src/lib/utils/markdown.ts`
       - [x] Remove dead `.layout-bottom.no-references` selectors from `ui/src/app.print.css`
       - [x] Remove stale imports referencing deleted functions
+    - [ ] BUG-L13-11: footer.jpg bg overflow on annex initiative pages — previous fix reverted (broke bg fade + caused title-only pages)
+    - [x] BUG-L13-12: page-break rules moved from hardcoded CSS to template seed `pageBreakAfter`/`pageBreakBefore`/`pageBreakInside` attributes — TemplateRenderer applies inline styles, removed `report-break-after` and `report-analyse-with-break` CSS classes
   - [x] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [x] Dev live-debug harness stabilized on root `ENV=dev` for Lot 13/UAT repros (`make exec-playwright-dev`, `make record-dev-playwright-auth`, helper endpoints, Maildev fallback)
