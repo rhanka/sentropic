@@ -1,6 +1,6 @@
 <script lang="ts">
   /* eslint-disable svelte/no-at-html-tags */
-  // All {@html} usage in this file is routed through renderMarkdownWithRefs() or parseReferencesInText(),
+  // All {@html} usage in this file is routed through renderMarkdownWithRefs(),
   // which sanitizes HTML via DOMPurify to protect against XSS.
 
   import EditableInput from '$lib/components/EditableInput.svelte';
