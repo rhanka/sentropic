@@ -142,17 +142,17 @@
   .template-initiative.usecase-annex-item {
     display: block !important; /* Override screen display:none */
     page: annex;
-    padding: 0.6cm !important;
-    padding-top: 0 !important;
+    margin: 0.6cm !important;
+    margin-top: 0 !important;
     border-top: 0.6cm solid transparent !important;
-    padding-bottom: 0.6cm !important;
+    margin-bottom: 0.6cm !important;
     overflow: visible !important;
   }
 
-  /* First annex item: use padding-top instead of border-top */
+  /* First annex item: use margin-top instead of border-top */
   .template-initiative.usecase-annex-item:first-of-type {
     border-top: none !important;
-    padding-top: 0.6cm !important;
+    margin-top: 0.6cm !important;
   }
 
   /* Last annex item: avoid unnecessary page break */
@@ -326,10 +326,10 @@
     width: 100% !important;
   }
   
-  /* Cancel horizontal padding from parent for annex items */
+  /* Annex items use margin for 0.6cm inset (matching standalone parent padding) */
   .report-main-content .template-initiative.usecase-annex-item {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
+    margin-left: 0.6cm !important;
+    margin-right: 0.6cm !important;
   }
 
   /* Annex initiative title (inside .template-initiative via sectionTitle prop) */
