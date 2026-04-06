@@ -10,7 +10,7 @@ const TOGGLES: ChatToolScopeToggle[] = [
   { id: 'web', toolIds: ['web_search', 'web_extract'] },
   { id: 'initiative', toolIds: ['initiative_get', 'initiative_update'] },
   { id: 'solutions', toolIds: ['solutions_list', 'solution_get'] },
-  { id: 'bids', toolIds: ['bids_list', 'bid_get'] },
+  { id: 'proposals', toolIds: ['proposals_list', 'proposal_get'] },
   { id: 'products', toolIds: ['products_list', 'product_get'] },
   { id: 'gate', toolIds: ['gate_review'] },
   { id: 'workspace', toolIds: ['workspace_list'] },
@@ -28,7 +28,7 @@ describe('getWorkspaceTypeToolIds', () => {
   it('returns extended object tools for opportunity', () => {
     const tools = getWorkspaceTypeToolIds('opportunity');
     expect(tools.has('solutions_list')).toBe(true);
-    expect(tools.has('bids_list')).toBe(true);
+    expect(tools.has('proposals_list')).toBe(true);
     expect(tools.has('products_list')).toBe(true);
     expect(tools.has('gate_review')).toBe(true);
     expect(tools.has('workspace_list')).toBe(false);
@@ -58,7 +58,7 @@ describe('filterToolTogglesByWorkspaceType', () => {
     expect(ids).toContain('web');
     expect(ids).toContain('initiative');
     expect(ids).not.toContain('solutions');
-    expect(ids).not.toContain('bids');
+    expect(ids).not.toContain('proposals');
     expect(ids).not.toContain('workspace');
   });
 
@@ -68,7 +68,7 @@ describe('filterToolTogglesByWorkspaceType', () => {
     expect(ids).toContain('web');
     expect(ids).toContain('initiative');
     expect(ids).toContain('solutions');
-    expect(ids).toContain('bids');
+    expect(ids).toContain('proposals');
     expect(ids).toContain('products');
     expect(ids).toContain('gate');
     expect(ids).not.toContain('workspace');
@@ -84,7 +84,7 @@ describe('filterToolTogglesByWorkspaceType', () => {
     expect(ids).toContain('cross_search');
     expect(ids).toContain('dispatch');
     expect(ids).not.toContain('solutions');
-    expect(ids).not.toContain('bids');
+    expect(ids).not.toContain('proposals');
   });
 
   it('should keep only base tools for code workspace', () => {
