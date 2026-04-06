@@ -79,12 +79,14 @@
   }
 
   function renderReferenceListItem(item: unknown): string {
+    const showExcerpt = !isPrinting && !locked;
+
     if (item && typeof item === 'object') {
       const source = item as Record<string, unknown>;
       const title = typeof source.title === 'string' ? source.title.trim() : '';
       const url = typeof source.url === 'string' ? source.url.trim() : '';
       const excerpt =
-        typeof source.excerpt === 'string' && source.excerpt.trim().length > 0
+        showExcerpt && typeof source.excerpt === 'string' && source.excerpt.trim().length > 0
           ? source.excerpt.trim()
           : '';
 
@@ -103,7 +105,7 @@
       const linkMatch = item.match(/^\[(.*?)\]\(([^)]*)\)([\s\S]*)$/);
       if (linkMatch) {
         const [, title, url, trailing] = linkMatch;
-        const excerpt = trailing.trim();
+        const excerpt = showExcerpt ? trailing.trim() : '';
         return `${renderReferenceLink(title, url)}${excerpt ? renderReferenceExcerpt(excerpt) : ''}`;
       }
       return stripSingleParagraphWrapper(renderMarkdownWithRefs(item, references));
