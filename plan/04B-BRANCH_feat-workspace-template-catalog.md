@@ -253,6 +253,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] BUG-L13-11: annex initiative pages missing margins vs standalone — fix: change padding to margin on .usecase-annex-item, update .report-main-content override to preserve 0.6cm left/right margins
     - [x] BUG-L13-12: page-break rules moved from hardcoded CSS to template seed `pageBreakAfter`/`pageBreakBefore`/`pageBreakInside` attributes — TemplateRenderer applies inline styles, removed `report-break-after` and `report-analyse-with-break` CSS classes
     - [x] BUG-L13-13: reference `[1]` title leak in locked mode — move citation replacement before `marked()` using placeholders to prevent markdown link-reference interpretation
+    - [x] Print layout rules and spec documented (rules/print-layout.md, spec/SPEC_EVOL_PRINT_LAYOUT.md)
   - [x] **Spec update**
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [x] Dev live-debug harness stabilized on root `ENV=dev` for Lot 13/UAT repros (`make exec-playwright-dev`, `make record-dev-playwright-auth`, helper endpoints, Maildev fallback)
