@@ -1358,6 +1358,66 @@ export class TodoOrchestrationService {
     return updated;
   }
 
+  /**
+   * Reset an agent config copy — delete the copy and return the system parent.
+   */
+  async resetAgentConfig(actor: TodoActor, id: string) {
+    const [source] = await db
+      .select()
+      .from(agentDefinitions)
+      .where(and(eq(agentDefinitions.id, id), eq(agentDefinitions.workspaceId, actor.workspaceId)))
+      .limit(1);
+
+    if (!source) {
+      throw new TodoOrchestrationError(404, "Agent config not found");
+    }
+
+    if (!source.parentId) {
+      throw new TodoOrchestrationError(400, "Cannot reset an agent config without a parent");
+    }
+
+    const parentId = source.parentId;
+
+    // Delete the copy
+    await db
+      .delete(agentDefinitions)
+      .where(and(eq(agentDefinitions.id, id), eq(agentDefinitions.workspaceId, actor.workspaceId)));
+
+    // Return the parent
+    const [parent] = await db
+      .select()
+      .from(agentDefinitions)
+      .where(eq(agentDefinitions.id, parentId))
+      .limit(1);
+
+    return parent;
+  }
+
+  /**
+   * Delete a user-created agent config (sourceLevel='user' + parentId=null only).
+   */
+  async deleteAgentConfig(actor: TodoActor, id: string) {
+    const [source] = await db
+      .select()
+      .from(agentDefinitions)
+      .where(and(eq(agentDefinitions.id, id), eq(agentDefinitions.workspaceId, actor.workspaceId)))
+      .limit(1);
+
+    if (!source) {
+      throw new TodoOrchestrationError(404, "Agent config not found");
+    }
+
+    if (source.sourceLevel !== 'user' || source.parentId !== null) {
+      throw new TodoOrchestrationError(403, "Cannot delete: only user-created configs with no parent can be deleted");
+    }
+
+    await db
+      .delete(agentDefinitions)
+      .where(and(eq(agentDefinitions.id, id), eq(agentDefinitions.workspaceId, actor.workspaceId)));
+
+    return true;
+  }
+
   async listWorkflowConfigs(actor: TodoActor) {
     const defs = await db
       .select()
@@ -1644,6 +1704,86 @@ export class TodoOrchestrationService {
       .limit(1);
 
     return updated;
+  }
+
+  /**
+   * Reset a workflow config copy — delete the copy and return the system parent.
+   */
+  async resetWorkflowConfig(actor: TodoActor, id: string) {
+    const [source] = await db
+      .select()
+      .from(workflowDefinitions)
+      .where(and(eq(workflowDefinitions.id, id), eq(workflowDefinitions.workspaceId, actor.workspaceId)))
+      .limit(1);
+
+    if (!source) {
+      throw new TodoOrchestrationError(404, "Workflow config not found");
+    }
+
+    if (!source.parentId) {
+      throw new TodoOrchestrationError(400, "Cannot reset a workflow config without a parent");
+    }
+
+    const parentId = source.parentId;
+
+    // Delete associated tasks first
+    await db
+      .delete(workflowDefinitionTasks)
+      .where(
+        and(
+          eq(workflowDefinitionTasks.workflowDefinitionId, id),
+          eq(workflowDefinitionTasks.workspaceId, actor.workspaceId),
+        ),
+      );
+
+    // Delete the copy
+    await db
+      .delete(workflowDefinitions)
+      .where(and(eq(workflowDefinitions.id, id), eq(workflowDefinitions.workspaceId, actor.workspaceId)));
+
+    // Return the parent
+    const [parent] = await db
+      .select()
+      .from(workflowDefinitions)
+      .where(eq(workflowDefinitions.id, parentId))
+      .limit(1);
+
+    return parent;
+  }
+
+  /**
+   * Delete a user-created workflow config (sourceLevel='user' + parentId=null only).
+   */
+  async deleteWorkflowConfig(actor: TodoActor, id: string) {
+    const [source] = await db
+      .select()
+      .from(workflowDefinitions)
+      .where(and(eq(workflowDefinitions.id, id), eq(workflowDefinitions.workspaceId, actor.workspaceId)))
+      .limit(1);
+
+    if (!source) {
+      throw new TodoOrchestrationError(404, "Workflow config not found");
+    }
+
+    if (source.sourceLevel !== 'user' || source.parentId !== null) {
+      throw new TodoOrchestrationError(403, "Cannot delete: only user-created configs with no parent can be deleted");
+    }
+
+    // Delete associated tasks first
+    await db
+      .delete(workflowDefinitionTasks)
+      .where(
+        and(
+          eq(workflowDefinitionTasks.workflowDefinitionId, id),
+          eq(workflowDefinitionTasks.workspaceId, actor.workspaceId),
+        ),
+      );
+
+    await db
+      .delete(workflowDefinitions)
+      .where(and(eq(workflowDefinitions.id, id), eq(workflowDefinitions.workspaceId, actor.workspaceId)));
+
+    return true;
   }
 
   /**
