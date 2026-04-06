@@ -313,6 +313,8 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Chat (opportunity workspace): `document_generate` visible dans les outils disponibles
     - [!] Chat (org context): `batch_create_organizations` visible dans les outils disponibles
     - [x] Chat: `document_generate` exécution → DOCX généré et téléchargeable
+    - [x] BUG-UAT-A1: batch_create_organizations no longer asks for workspaceId — uses session workspace
+    - [x] BUG-UAT-A2: ai-ideas workspace now has same tools as opportunity (solutions, bids, products, gate_review, batch_create_organizations)
   - [ ] Web app — multi-org
     - [x] Folder creation: multi-select orgs visible dans le formulaire
     - [x] Folder creation avec orgs sélectionnées → workflow `initiative_list_with_orgs` utilisé
