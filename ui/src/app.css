@@ -18,8 +18,7 @@ body {
 }
 
 /* Hide use case annexes on screen (visible only in print) */
-/* Masquer les sections annexes dans le dashboard */
-.usecase-annex-section {
+.usecase-annex-item {
   display: none;
 }
 

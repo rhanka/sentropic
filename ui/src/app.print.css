@@ -54,8 +54,8 @@
     padding: 0 !important;
   }
 
-  /* Entity-loop: pas de page-break sur le premier item (évite page vierge après cover annexe) */
-  .usecase-annex-section:first-child {
+  /* Entity-loop: no page-break on first annex item (avoids blank page after annex cover) */
+  .usecase-annex-item:first-child {
     page-break-before: avoid !important;
     break-before: avoid !important;
   }
@@ -138,39 +138,37 @@
     padding-top: 0 !important;
   }
   
-  /* Dashboard : sections annexes */
-  .usecase-annex-section {
-    margin: 0 !important;
-    padding: 0.6cm !important; /* Marges reportées depuis @page annex */
-    /* Par défaut (fiches 2+), utiliser border-top pour éviter la suppression après saut de page */
+  /* Dashboard: annex items (class is on .template-initiative itself, no wrapper) */
+  .template-initiative.usecase-annex-item {
+    display: block !important; /* Override screen display:none */
+    page: annex;
+    padding: 0.6cm !important;
     padding-top: 0 !important;
     border-top: 0.6cm solid transparent !important;
     padding-bottom: 0.6cm !important;
-    overflow: visible !important; /* Permettre le débordement de l'image */
+    overflow: visible !important;
   }
 
-  /* Exception pour la 1ère fiche : Revenir au padding-top car border-top crée un décalage, 
-     et le padding est respecté en début de flux */
-  .usecase-annex-section:first-of-type {
+  /* First annex item: use padding-top instead of border-top */
+  .template-initiative.usecase-annex-item:first-of-type {
     border-top: none !important;
     padding-top: 0.6cm !important;
   }
 
-  /* Exception pour la dernière fiche : éviter saut de page inutile */
-  .usecase-annex-section:last-of-type,
-  .usecase-annex-section:last-of-type > .template-initiative {
+  /* Last annex item: avoid unnecessary page break */
+  .template-initiative.usecase-annex-item:last-of-type {
     page-break-after: avoid !important;
     break-after: avoid !important;
   }
 
-  /* Forcer un saut de page avant le 24ème cas d'usage */
-  .usecase-annex-section.force-page-break-before {
+  /* Force page break on specific annex items */
+  .template-initiative.usecase-annex-item.force-page-break-before {
     page-break-before: always !important;
     break-before: page !important;
   }
-  
-  /* Supprimer les marges du premier enfant (usecase-print) dans les sections annexes */
-  .usecase-annex-section > *:first-child {
+
+  /* Reset margins on first child inside annex items */
+  .template-initiative.usecase-annex-item > *:first-child {
     margin-top: 0 !important;
     padding-top: 0 !important;
   }
@@ -328,17 +326,18 @@
     width: 100% !important;
   }
   
-  /* Annuler le padding horizontal de la section parente pour les annexes */
-  .report-main-content .usecase-annex-section {
+  /* Cancel horizontal padding from parent for annex items */
+  .report-main-content .template-initiative.usecase-annex-item {
     margin-left: 0 !important;
     margin-right: 0 !important;
-
   }
 
-  .usecase-annex-section > h1 {
+  /* Annex initiative title (inside .template-initiative via sectionTitle prop) */
+  .template-initiative.usecase-annex-item > h1.annex-title {
     font-size: 15pt !important;
     margin: 0 0 4pt 0 !important;
     padding: 0 !important;
+    line-height: 1.2 !important;
   }
 
   /* Masquer le titre du dashboard en impression */
@@ -627,7 +626,8 @@
   /* Image footer.jpg en bas de page, collée bord à bord (marges de page à 0) */
   /* Utiliser position absolute pour que l'image n'apparaisse que sur les pages avec usecase-print */
   /* Sortir des marges du conteneur parent (padding 0.6cm) pour aller au bord de la page */
-  .template-initiative:not(.template-initiative .template-initiative)::before {
+  .template-initiative:not(.template-initiative .template-initiative)::before,
+  .template-initiative.usecase-annex-item::before {
     content: '';
     position: absolute;
     bottom: -0.6cm; /* Sortir de la marge basse du conteneur parent */
@@ -648,13 +648,6 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     color-adjust: exact !important;
-  }
-  
-  /* Dans les sections annexes, l'image doit sortir complètement du padding-bottom de 0.6cm de la section */
-  /* L'image doit sortir de .template-initiative (0cm) + padding-bottom de .usecase-annex-section (0.6cm) = -0.6cm */
-  /* Correction: -1.2cm était incorrect (double compensation). -0.6cm suffit. */
-  .usecase-annex-section > .template-initiative::before {
-    bottom: -0.6cm !important; /* Sortir du padding-bottom de la section annexe */
   }
   
   
@@ -1860,56 +1853,25 @@
 
 /* Use cases in dashboard (visible in print) */
 @media print {
-  /* Sections annexes dans le dashboard - structure unifiée avec vue individuelle */
-  .usecase-annex-section {
-    display: block !important;
-    /* page-break-before: auto; Auto au lieu de always pour éviter les pages blanches */
-    page: annex; /* Utiliser les marges réduites pour les annexes */
-    margin: 0 !important;
-    padding: 0.6cm !important; /* Marge interne de 0.6cm pour le contenu */
-    margin-top: 0 !important;
-    padding-top: 0.6cm !important;
-    padding-bottom: 0.6cm !important;
-    overflow: visible !important;
-  }
-  
-  /* Saut de page après chaque section sauf la dernière */
-  .usecase-annex-section:not(:last-child) {
+  /* Annex items in dashboard — unified structure with standalone view */
+  /* .usecase-annex-item is on .template-initiative itself, no wrapper needed */
+
+  /* Page break after each annex item except the last */
+  .template-initiative.usecase-annex-item:not(:last-child) {
     page-break-after: always;
   }
 
-  /* Le premier cas d'usage doit commencer sur une nouvelle page (après le séparateur qui a page-break-after) */
-  /* Le séparateur force déjà un saut, donc le premier cas commencera naturellement sur une nouvelle page */
-  
-  /* Pour les cas suivants, utiliser orphans pour forcer un saut si nécessaire sans créer de page blanche */
-  .usecase-annex-section:not(:first-of-type) {
-    orphans: 1; /* Force au moins 1 ligne en haut de page */
-    widows: 1; /* Force au moins 1 ligne en bas de page */
+  /* Subsequent items: reset top spacing */
+  .template-initiative.usecase-annex-item:not(:first-of-type) {
+    orphans: 1;
+    widows: 1;
     margin-top: 0 !important;
     padding-top: 0 !important;
   }
-  
-  /* S'assurer que usecase-print dans les sections annexes n'a pas de marges top */
-  .usecase-annex-section > .template-initiative {
+
+  /* Cancel space-y-6 inside annex items */
+  .template-initiative.usecase-annex-item.space-y-6 > * + * {
     margin-top: 0 !important;
-    padding-top: 0 !important;
-  }
-  
-  /* S'assurer que le premier enfant de la section annexe n'a pas de marges top */
-  .usecase-annex-section > *:first-child {
-    margin-top: 0 !important;
-    padding-top: 0 !important;
-  }
-  
-  /* Annuler les espacements space-y-6 en impression pour les sections annexes */
-  .usecase-annex-section > * + * {
-    margin-top: 0 !important;
-  }
-  
-  /* Dédoublonner space-y-6 : annuler space-y-6 sur usecase-print dans le dashboard */
-  /* Le dashboard a section.space-y-6 + div.space-y-6, la vue individuelle n'a qu'un seul */
-  .usecase-annex-section > .template-initiative.space-y-6 > * + * {
-    margin-top: 0 !important; /* Annuler le space-y-6 redondant */
   }
 
   /* S'assurer que le contenu principal utilise les marges normales */
