@@ -352,14 +352,14 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] Update SPEC_EVOL_FREEFORM_DOCX.md — status implemented
   - [ ] Consolidate remaining specs.
   - [ ] Update PLAN.md.
-  - [ ] Document workflow runtime model (spec/SPEC_WORKFLOW_RUNTIME.md or consolidate into SPEC.md):
-    - [ ] Workflow definition structure: tasks, transitions (start/normal/conditional/fanout/join/end), bindings
-    - [ ] Execution model: workflow_run_state, workflow_task_results, task lifecycle (pending→in_progress→completed/failed)
-    - [ ] Fanout/join semantics: sourcePath, itemKey, instanceKeyPath, join modes (all, all_main)
-    - [ ] Condition system: conditionEq, conditionNotEmpty, allOf, anyOf, notOf
-    - [ ] Executor registry: job/noop mapping, agentSelection rules
-    - [ ] Matrix barrier pattern: matrixBarrierJoinMetadata
-    - [ ] State management: inputs, orgContext, generation — state patches and replay safety
+  - [x] Document workflow runtime model (spec/SPEC_WORKFLOW_RUNTIME.md or consolidate into SPEC.md):
+    - [x] Workflow definition structure: tasks, transitions (start/normal/conditional/fanout/join/end), bindings
+    - [x] Execution model: workflow_run_state, workflow_task_results, task lifecycle (pending→in_progress→completed/failed)
+    - [x] Fanout/join semantics: sourcePath, itemKey, instanceKeyPath, join modes (all, all_main)
+    - [x] Condition system: conditionEq, conditionNotEmpty, allOf, anyOf, notOf
+    - [x] Executor registry: job/noop mapping, agentSelection rules
+    - [x] Matrix barrier pattern: matrixBarrierJoinMetadata
+    - [x] State management: inputs, orgContext, generation — state patches and replay safety
   - [ ] Document agentic model (spec/SPEC_AGENTIC_MODEL.md or consolidate):
     - [ ] Agent definition structure: key, name, description, config, sourceLevel, parentId
     - [ ] Agent seed per workspace type: shared agents (generate_organization) vs domain-specific (initiative_list, opportunity_list)
