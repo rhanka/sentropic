@@ -1,7 +1,7 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-03-30 — BR-04 structural branch in progress
-Previous window (2026-02-23 → 2026-03-08) closed. New timeline driven by BR-04 scope.
+Status: Updated 2026-04-06 — BR-04B (continuation) nearing completion, Lot N-1 in progress
+Previous window (2026-02-23 → 2026-03-08) closed. New timeline driven by BR-04/04B scope.
 
 ## 1) Current state
 
@@ -13,16 +13,19 @@ Previous window (2026-02-23 → 2026-03-08) closed. New timeline driven by BR-04
 - BR-05 `feat/vscode-plugin-v1` — done, merged
 - BR-13 `feat/chrome-plugin-download-distribution` — done, merged
 
+**Completed branches (continued):**
+- BR-04 `feat/workspace-template-catalog` — done, merged (workspace type system, initiative rename, multi-workflow registry, extended objects, gate system)
+
 **Active branch:**
-- BR-04 `feat/workspace-template-catalog` — **in progress** (Lot 0 spec framework). Scope expanded to full workspace type system, neutral orchestrator, initiative lifecycle, multi-domain foundation. Budget ~400 commits in 4 segments. See `BRANCH.md`.
+- BR-04B `feat/workspace-template-catalog` (continuation) — **nearing completion** (Lot N-1 docs consolidation in progress, Lot N final validation pending). Template-driven rendering, config UX alignment, chat tools wiring, generic workflow runtime, freeform DOCX generation. See `plan/04B-BRANCH_feat-workspace-template-catalog.md`.
 
 **Pending branches (blocked or dependent on BR-04):**
 - BR-06 through BR-12 — not started, pending BR-04 completion or independent scheduling.
 - BR-14, BR-16, BR-17, BR-20, BR-21, BR-22 — identified during BR-04 scope expansion and follow-up UAT/debug tracks.
 
-## 2) BR-04 as structural branch
+## 2) BR-04/04B as structural branch
 
-BR-04 is now the structural foundation for most future branches:
+BR-04 (merged) and BR-04B (nearing completion) together form the structural foundation for most future branches:
 - Introduces workspace type system (neutral, ai-ideas, opportunity, code)
 - Renames `use_cases` → `initiatives` (impacts all downstream branches)
 - Delivers multi-workflow registry (replaces single hardcoded workflow)
@@ -30,6 +33,14 @@ BR-04 is now the structural foundation for most future branches:
 - Adds gate system for initiative maturity
 - Defines workspace-type-aware chat tool scoping (§14)
 - Defines cross-cutting exclusions and branch articulation for parallel work (§15)
+
+BR-04B adds:
+- Template-driven rendering via TemplateRenderer (initiative, organization, dashboard)
+- Config UX alignment (ConfigItemCard shared component, copy/reset/delete)
+- Generic executable workflow runtime (transition-driven, replaces hardcoded sequencing)
+- Freeform DOCX generation via sandboxed code execution
+- Chat tools wiring (document_generate, batch_create_organizations)
+- Multi-org folder creation with fanout/join workflow
 
 Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 
@@ -41,7 +52,8 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-01 | `feat/model-runtime-openai-gemini` | done | BR-00 | — |
 | BR-02 | `feat/sso-chatgpt` | done | BR-00 | — |
 | BR-03 | `feat/todo-steering-workflow-core` | done | BR-00 | — |
-| BR-04 | `feat/workspace-template-catalog` | **active** | BR-03, BR-05 | — |
+| BR-04 | `feat/workspace-template-catalog` | done | BR-03, BR-05 | — |
+| BR-04B | `feat/workspace-template-catalog` (continuation) | **active** (Lot N-1) | BR-04 | — |
 | BR-05 | `feat/vscode-plugin-v1` | done | BR-01, BR-03 | — |
 | BR-06 | `feat/chrome-upstream-v1` | plan | BR-00 | low (contextType rename) |
 | BR-07 | `feat/release-ui-npm-and-pretest` | plan | BR-00, **BR-14** | none (blocked: npm export requires modular ChatWidget) |
@@ -69,7 +81,8 @@ graph TD
   BR01[BR-01 model openai+gemini ✓]
   BR02[BR-02 codex sign-in ✓]
   BR03[BR-03 todo+steering+workflow ✓]
-  BR04[BR-04 workspace types ⚡]
+  BR04[BR-04 workspace types ✓]
+  BR04B[BR-04B template catalog ⚡]
   BR05[BR-05 vscode v1 ✓]
   BR06[BR-06 chrome upstream v1]
   BR07[BR-07 ui npm + pretest]
@@ -94,6 +107,7 @@ graph TD
   BR00 --> BR03
   BR03 --> BR04
   BR05 --> BR04
+  BR04 --> BR04B
   BR01 --> BR05
   BR03 --> BR05
   BR00 --> BR06
@@ -126,8 +140,8 @@ graph TD
 
 ## 5) Scheduling post-BR-04
 
-**Wave A** (parallel to BR-04): BR-06 (Chrome upstream) + BR-08 (Claude/Mistral/Cohere) + BR-09 (SSO Google) + BR-14 (chat modularization) + BR-16 (document connectors)
-**Wave A2** (right after BR-04 merge): BR-20 (entity/config refactor follow-up) + BR-22 (rich markdown list stabilization hotfix)
+**Wave A** (parallel to BR-04B): BR-06 (Chrome upstream) + BR-08 (Claude/Mistral/Cohere) + BR-09 (SSO Google) + BR-14 (chat modularization) + BR-16 (document connectors)
+**Wave A2** (right after BR-04B merge): BR-20 (entity/config refactor follow-up) + BR-22 (rich markdown list stabilization hotfix)
 **Wave B** (after BR-04 + partial Wave A): BR-07 (UI npm, after BR-14) + BR-11 (Chrome multitab, after BR-06+BR-08) + BR-17 (RAG, after BR-08, optional BR-16)
 **Wave C** (after BR-04 + BR-08): BR-10 (VSCode v2) + BR-21 (CV transpose & profiles, if prioritized after BR-04B merge)
 **Wave D** (after Wave B/C): BR-12 (CI publish, after BR-05+BR-06+BR-07+BR-13)
