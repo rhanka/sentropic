@@ -5,6 +5,8 @@ import {
   chatSessions,
   chatStreamEvents,
   folders,
+  jobQueue,
+  organizations,
   users,
   workspaces,
   workspaceMemberships,
@@ -17,6 +19,34 @@ import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
 vi.mock('../../src/services/llm-runtime', () => {
   return {
     callLLMStream: vi.fn(),
+  };
+});
+
+// Mock queue-manager to avoid real job processing during tests.
+// addJob inserts a completed row so the poll loop exits immediately.
+vi.mock('../../src/services/queue-manager', async () => {
+  const { db: testDb } = await import('../../src/db/client');
+  const { organizations: orgsTable, jobQueue: jqTable } = await import('../../src/db/schema');
+  const { eq } = await import('drizzle-orm');
+  const { sql } = await import('drizzle-orm');
+  return {
+    queueManager: {
+      addJob: vi.fn(async (type: string, data: any, opts?: any) => {
+        const jobId = `mock-job-${Math.random().toString(36).slice(2, 10)}`;
+        // Insert a completed job row so the poll loop resolves
+        await testDb.run(sql`
+          INSERT INTO job_queue (id, type, data, status, created_at, workspace_id)
+          VALUES (${jobId}, ${type}, ${JSON.stringify(data)}, 'completed', ${new Date()}, ${opts?.workspaceId ?? 'default'})
+        `);
+        // Also mark the organization as completed (simulating enrichment)
+        if (type === 'organization_enrich' && data.organizationId) {
+          await testDb.update(orgsTable)
+            .set({ status: 'completed' })
+            .where(eq(orgsTable.id, data.organizationId));
+        }
+        return jobId;
+      }),
+    },
   };
 });
 
@@ -72,8 +102,10 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     await db.delete(chatStreamEvents);
     await db.delete(chatMessages);
     await db.delete(chatSessions).where(eq(chatSessions.userId, userId));
-    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+    await db.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
     await db.delete(folders).where(eq(folders.workspaceId, workspaceId));
+    await db.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
+    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
     await db.delete(users).where(eq(users.id, userId));
     vi.clearAllMocks();
@@ -233,6 +265,9 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     const resultData = resultEvent!.data as any;
     expect(resultData.result.status).toBe('completed');
     expect(resultData.result.workspaceId).toBe(workspaceId);
+    expect(resultData.result.totalCreated).toBe(3);
+    expect(resultData.result.totalEnriched).toBe(3);
+    expect(resultData.result.organizations).toHaveLength(3);
   });
 
   it('should reject batch_create_organizations when description is missing', async () => {

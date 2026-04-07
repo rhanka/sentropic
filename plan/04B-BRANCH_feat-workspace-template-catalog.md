@@ -330,6 +330,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [ ] Web app — chat tools
     - [x] Chat (opportunity workspace): `document_generate` visible dans les outils disponibles
     - [!] Chat (org context): `batch_create_organizations` visible dans les outils disponibles
+    - [x] Chat: `batch_create_organizations` exécution sync — lance sous-workflow `organization_batch_create` → fanout `organization_enrich` → poll completion → retourne liste enrichie
     - [x] Chat: `document_generate` exécution → DOCX généré et téléchargeable
     - [x] BUG-UAT-A1: batch_create_organizations no longer asks for workspaceId — uses session workspace
     - [x] BUG-UAT-A2: ai-ideas workspace now has same tools as opportunity (solutions, bids, products, gate_review, batch_create_organizations)

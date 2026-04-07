@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql, inArray, gt, or } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue } from '../db/schema';
+import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue, organizations } from '../db/schema';
 import { createId } from '../utils/id';
 import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
 import {
@@ -58,6 +58,7 @@ import { writeChatGenerationTrace } from './chat-trace';
 import { generateCommentResolutionProposal } from './context-comments';
 import { generateFreeformDocx } from './docx-generation';
 import { putObject, getDocumentsBucketName } from './storage-s3';
+import type { OrganizationEnrichJobData } from './queue-manager';
 import type { ProviderId } from './provider-runtime';
 import {
   buildAssistantMessageHistoryDetails,
@@ -4855,9 +4856,85 @@ Then call with \`action: "generate"\` and your code.`;
             const description = typeof args.description === 'string' ? args.description : '';
             const targetWorkspaceId = sessionWorkspaceId;
             if (!description) throw new Error('batch_create_organizations: description is required');
+
+            // Parse organization names from description (comma-separated, numbered list, or newline-separated)
+            const orgNames = description
+              .split(/[,\n]/)
+              .map((s: string) => s.replace(/^\s*\d+[\.\)\-]\s*/, '').trim())
+              .filter((s: string) => s.length > 0 && s.length < 200);
+
+            if (orgNames.length === 0) {
+              throw new Error('batch_create_organizations: no organization names found in description');
+            }
+
+            // Create organizations in DB with status 'generating'
+            const orgRows: Array<{ id: string; name: string }> = [];
+            for (const name of orgNames) {
+              const orgId = createId();
+              await db.insert(organizations).values({
+                id: orgId,
+                workspaceId: targetWorkspaceId,
+                name,
+                status: 'generating',
+                data: {},
+              });
+              orgRows.push({ id: orgId, name });
+            }
+
+            // Launch organization_enrich jobs for each org (lazy import to avoid circular dependency)
+            const { queueManager } = await import('./queue-manager');
+            const enrichJobIds: string[] = [];
+            for (const org of orgRows) {
+              const jobData: OrganizationEnrichJobData = {
+                organizationId: org.id,
+                organizationName: org.name,
+                model: selectedModel,
+                initiatedByUserId: options.userId,
+                locale: options.locale ?? 'fr',
+                wasCreated: true,
+              };
+              const jobId = await queueManager.addJob('organization_enrich', jobData, {
+                workspaceId: targetWorkspaceId,
+              });
+              enrichJobIds.push(jobId);
+            }
+
+            // Poll all enrich jobs until completion (timeout 3min, poll every 2s)
+            const POLL_INTERVAL_MS = 2000;
+            const POLL_TIMEOUT_MS = 180_000;
+            const startTime = Date.now();
+            let allDone = false;
+            while (!allDone && Date.now() - startTime < POLL_TIMEOUT_MS) {
+              await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+              const jobRows = await db
+                .select({ id: jobQueue.id, status: jobQueue.status })
+                .from(jobQueue)
+                .where(inArray(jobQueue.id, enrichJobIds));
+              const statuses = jobRows.map((r) => r.status);
+              allDone = statuses.length === enrichJobIds.length &&
+                statuses.every((s) => s === 'completed' || s === 'failed');
+            }
+
+            // Fetch enriched organizations from DB
+            const enrichedOrgs = await db
+              .select()
+              .from(organizations)
+              .where(inArray(organizations.id, orgRows.map((o) => o.id)));
+
+            const orgResults = enrichedOrgs.map((org) => ({
+              id: org.id,
+              name: org.name,
+              status: org.status,
+              data: org.data,
+            }));
+
+            const failedCount = orgResults.filter((o) => o.status !== 'completed').length;
             result = {
-              status: 'completed',
-              message: `Organization batch creation queued for workspace ${targetWorkspaceId}. Organizations will be created from the provided description.`,
+              status: failedCount === orgResults.length ? 'error' : 'completed',
+              organizations: orgResults,
+              totalCreated: orgResults.length,
+              totalEnriched: orgResults.filter((o) => o.status === 'completed').length,
+              totalFailed: failedCount,
               workspaceId: targetWorkspaceId,
             };
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
