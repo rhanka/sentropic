@@ -1,6 +1,6 @@
 # SPEC EVOL — Config UX Alignment (Agent / Workflow / Template)
 
-Status: Validated (2026-03-23)
+Status: Implemented (2026-04-07) — BR-04B Lot 6. Shared `ConfigItemCard.svelte` component across all 3 surfaces.
 
 ## 1) Problem
 

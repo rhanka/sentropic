@@ -346,7 +346,10 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Markdown avec liens bleus et références numérotées
 
 - [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Consolidate specs.
+  - [x] Update SPEC_EVOL_CONFIG_UX_ALIGNMENT.md — status implemented, ConfigItemCard mutualized
+  - [x] Update SPEC_EVOL_WORKSPACE_TYPES.md — §10.2 freeform mode, §10.4 mutualized templates, §10.5 aligned tools
+  - [x] Update SPEC_EVOL_FREEFORM_DOCX.md — status implemented
+  - [ ] Consolidate remaining specs.
   - [ ] Update PLAN.md.
   - [ ] Review and update rules/skills — based on BR-04B audit (2 agents, 13 sessions, 400+ incidents):
     - [ ] For each existing rule file: diff against audit findings, identify rules that exist but are repeatedly violated, understand WHY (visibility? precision? no mechanical enforcement?), and fix the root cause (reword, move, add hook)
