@@ -32,6 +32,24 @@
     workflow_launch: 'Workflow launch',
   };
 
+  /**
+   * Parse a template descriptor and return a human-readable summary
+   * showing tab count, field count, and field types used.
+   */
+  function describeTemplate(descriptor: any): string {
+    if (!descriptor?.tabs) return 'No descriptor';
+    const tabs = descriptor.tabs as any[];
+    const fields = tabs.flatMap((t: any) =>
+      (t.rows || []).flatMap((r: any) => [
+        ...(r.fields || []),
+        ...(r.main?.fields || []),
+        ...(r.sidebar?.fields || []),
+      ]),
+    );
+    const types = [...new Set(fields.map((f: any) => f.type))].filter(Boolean);
+    return `${tabs.length} tab${tabs.length > 1 ? 's' : ''} · ${fields.length} field${fields.length > 1 ? 's' : ''} (${types.join(', ')})`;
+  }
+
   // Check if a copy already exists for a given parent template in this workspace
   function hasCopyInWorkspace(parentId: string): boolean {
     return templates.some(t => t.parentId === parentId && t.sourceLevel === 'user');
@@ -139,8 +157,8 @@
             name: OBJECT_TYPE_LABELS[template.objectType] ?? template.objectType,
             key: template.objectType,
             description: template.maturityStage
-              ? `Stage: ${template.maturityStage} · v${template.version}`
-              : `v${template.version}`,
+              ? `Stage: ${template.maturityStage} · ${describeTemplate(template.descriptor)}`
+              : describeTemplate(template.descriptor),
             sourceLevel: template.sourceLevel,
             parentId: template.parentId,
           }}
