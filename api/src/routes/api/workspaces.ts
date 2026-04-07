@@ -21,6 +21,7 @@ import {
   executionEvents,
   entityLinks,
   guardrails,
+  viewTemplates,
 } from '../../db/schema';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { requireEditor } from '../../middleware/rbac';
@@ -124,6 +125,15 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
     );
   } catch (seedErr) {
     console.error('Failed to seed workflows for workspace type', type, seedErr);
+    // Non-fatal: workspace is created, seeding can be retried
+  }
+
+  // Seed default view templates for this workspace type (§12.6)
+  try {
+    const { viewTemplateService } = await import('../../services/view-template-service');
+    await viewTemplateService.seedForWorkspace(id, type);
+  } catch (seedErr) {
+    console.error('Failed to seed view templates for workspace type', type, seedErr);
     // Non-fatal: workspace is created, seeding can be retried
   }
 
@@ -289,6 +299,9 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
     }
     await tx.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, workspaceId));
     await tx.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, workspaceId));
+
+    // BR-04B: view templates
+    await tx.delete(viewTemplates).where(eq(viewTemplates.workspaceId, workspaceId));
 
     // Core business tables
     await tx.delete(initiatives).where(eq(initiatives.workspaceId, workspaceId));

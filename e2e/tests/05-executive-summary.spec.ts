@@ -163,7 +163,7 @@ test.describe('Executive summary rendering', () => {
       await page.waitForLoadState('domcontentloaded');
       await page.emulateMedia({ media: 'print' });
 
-      const annexSections = page.locator('.usecase-annex-section');
+      const annexSections = page.locator('.usecase-annex-item');
       await expect(annexSections).toHaveCount(useCaseTitles.length);
 
       const renderedTitles = await annexSections.evaluateAll((nodes) =>

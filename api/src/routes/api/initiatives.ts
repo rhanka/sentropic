@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { db, pool } from '../../db/client';
 import { organizations, folders, initiatives } from '../../db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { createId } from '../../utils/id';
 import { parseMatrixConfig } from '../../utils/matrix';
 import { calculateInitiativeScores, type ScoreEntry } from '../../utils/scoring';
@@ -13,7 +13,7 @@ import { defaultMatrixConfig } from '../../config/default-matrix';
 // default-prompts removed (BR-04); prompts now in split agent files + default-chat-system
 import { queueManager } from '../../services/queue-manager';
 import { settingsService } from '../../services/settings';
-import { todoOrchestrationService } from '../../services/todo-orchestration';
+import { todoOrchestrationService, type MatrixSource } from '../../services/todo-orchestration';
 import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
 import { isObjectLockedError, requireLockOwnershipForMutation } from '../../services/lock-service';
@@ -223,6 +223,14 @@ export const hydrateInitiative = async (row: SerializedInitiative): Promise<Init
     data.name = 'Cas d\'usage sans nom';
   }
   
+  const [organization] = row.organizationId
+    ? await db
+        .select({ name: organizations.name })
+        .from(organizations)
+        .where(and(eq(organizations.id, row.organizationId), eq(organizations.workspaceId, row.workspaceId)))
+        .limit(1)
+    : [];
+
   // Calculer les scores dynamiquement
   const computedScores = calculateInitiativeScores(matrix, data as InitiativeData);
   
@@ -230,6 +238,7 @@ export const hydrateInitiative = async (row: SerializedInitiative): Promise<Init
     id: row.id,
     folderId: row.folderId,
     organizationId: row.organizationId,
+    organizationName: organization?.name ?? null,
     status: row.status ?? 'completed',
     model: row.model,
     createdAt: row.createdAt,
@@ -254,6 +263,22 @@ export const hydrateInitiatives = async (rows: SerializedInitiative[]): Promise<
       : await db.select().from(folders).where(eq(folders.id, folderId));
     if (folder) {
       foldersMap.set(folderId, folder);
+    }
+  }
+
+  const organizationIds = [...new Set(
+    rows
+      .map((row) => row.organizationId)
+      .filter((organizationId): organizationId is string => typeof organizationId === 'string' && organizationId.length > 0)
+  )];
+  const organizationNames = new Map<string, string>();
+  if (workspaceId && organizationIds.length > 0) {
+    const organizationRows = await db
+      .select({ id: organizations.id, name: organizations.name })
+      .from(organizations)
+      .where(and(eq(organizations.workspaceId, workspaceId), inArray(organizations.id, organizationIds)));
+    for (const organization of organizationRows) {
+      organizationNames.set(organization.id, organization.name);
     }
   }
   
@@ -312,6 +337,7 @@ export const hydrateInitiatives = async (rows: SerializedInitiative[]): Promise<
       id: row.id,
       folderId: row.folderId,
       organizationId: row.organizationId,
+      organizationName: row.organizationId ? (organizationNames.get(row.organizationId) ?? null) : null,
       status: row.status ?? 'completed',
       model: row.model,
       createdAt: row.createdAt,
@@ -368,7 +394,7 @@ initiativesRouter.get('/', async (c) => {
   const rows = folderId
     ? await db.select().from(initiatives).where(and(eq(initiatives.workspaceId, targetWorkspaceId), eq(initiatives.folderId, folderId)))
     : await db.select().from(initiatives).where(eq(initiatives.workspaceId, targetWorkspaceId));
-  const hydrated = await Promise.all(rows.map(row => hydrateInitiative(row)));
+  const hydrated = await hydrateInitiatives(rows);
   return c.json({ items: hydrated });
 });
 
@@ -629,7 +655,9 @@ const generateInput = z.object({
   initiative_count: z.coerce.number().int().min(1).max(25).optional(),
   organization_id: z.string().optional(),
   matrix_mode: z.enum(['organization', 'generate', 'default']).optional(),
-  model: z.string().optional()
+  model: z.string().optional(),
+  org_ids: z.array(z.string()).optional(),
+  create_new_orgs: z.boolean().optional(),
 });
 
 initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(), zValidator('json', generateInput), async (c) => {
@@ -644,9 +672,28 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
       appLocaleHeader: c.req.header('x-app-locale'),
       acceptLanguageHeader: c.req.header('accept-language')
     });
-    const { input, folder_id, initiative_count, organization_id, matrix_mode, model } = c.req.valid('json');
-    const organizationId = organization_id;
+    const { input, folder_id, initiative_count, organization_id, matrix_mode, model, org_ids, create_new_orgs } = c.req.valid('json');
+    const resolvedOrgIds = Array.from(
+      new Set(
+        (org_ids ?? []).filter(
+          (orgId): orgId is string => typeof orgId === 'string' && orgId.trim().length > 0,
+        ),
+      ),
+    );
+    const organizationId =
+      organization_id ?? (resolvedOrgIds.length === 1 ? resolvedOrgIds[0] : undefined);
     const isExplicitDefaultMatrixMode = matrix_mode === 'default';
+
+    if (resolvedOrgIds.length > 0) {
+      const existingOrganizations = await db
+        .select({ id: organizations.id })
+        .from(organizations)
+        .where(eq(organizations.workspaceId, workspaceId));
+      const existingOrganizationIds = new Set(existingOrganizations.map((organization) => organization.id));
+      if (!resolvedOrgIds.every((orgId) => existingOrganizationIds.has(orgId))) {
+        return c.json({ message: 'Not found' }, 404);
+      }
+    }
     
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings({ userId });
@@ -664,19 +711,22 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
     }
 
     const resolvedMatrixMode: MatrixMode = (() => {
-      if (!organizationId) return 'default';
       if (matrix_mode) return matrix_mode;
+      if (!organizationId) return 'default';
       return organizationMatrixTemplate ? 'organization' : 'generate';
     })();
+    const resolvedMatrixSource: MatrixSource =
+      resolvedMatrixMode === 'organization'
+        ? 'organization'
+        : resolvedMatrixMode === 'generate'
+          ? 'prompt'
+          : 'default';
 
     if (resolvedMatrixMode === 'organization' && !organizationId) {
       return c.json({ message: 'matrix_mode=organization requires organization_id' }, 400);
     }
     if (resolvedMatrixMode === 'organization' && !organizationMatrixTemplate) {
       return c.json({ message: 'Organization matrix template not found' }, 400);
-    }
-    if (resolvedMatrixMode === 'generate' && !organizationId) {
-      return c.json({ message: 'matrix_mode=generate requires organization_id' }, 400);
     }
     
     let folderId: string | undefined;
@@ -691,6 +741,9 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
         .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)))
         .limit(1);
       if (!folder) return c.json({ message: 'Not found' }, 404);
+      const hasExplicitOrgSelection = organization_id !== undefined || org_ids !== undefined;
+      const requestedFolderOrganizationId =
+        organizationId ?? (resolvedOrgIds.length === 1 ? resolvedOrgIds[0] : null);
 
       if (organizationId) {
         // Already validated above; keep defensive check for maintainability.
@@ -704,7 +757,7 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
           status: 'generating',
           // Garder la description synchronisée avec l'input (source de vérité côté UI pour /dossier/new)
           description: input,
-          organizationId: organizationId ?? folder.organizationId,
+          organizationId: hasExplicitOrgSelection ? requestedFolderOrganizationId : folder.organizationId,
           matrixConfig:
             resolvedMatrixMode === 'organization'
               ? JSON.stringify(organizationMatrixTemplate)
@@ -720,6 +773,8 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
       // Sinon, créer un nouveau dossier (comportement par défaut de /use-cases/generate)
       const folderName = `Génération - ${new Date().toLocaleDateString('fr-FR')}`;
       const folderDescription = `Dossier généré automatiquement pour: ${input}`;
+      const requestedFolderOrganizationId =
+        organizationId ?? (resolvedOrgIds.length === 1 ? resolvedOrgIds[0] : null);
       
       folderId = createId();
 
@@ -728,7 +783,7 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
         workspaceId,
         name: folderName,
         description: folderDescription,
-        organizationId: organizationId || null,
+        organizationId: requestedFolderOrganizationId,
         matrixConfig:
           resolvedMatrixMode === 'organization'
             ? JSON.stringify(organizationMatrixTemplate)
@@ -750,7 +805,10 @@ initiativesRouter.post('/generate', requireEditor, requireWorkspaceEditorRole(),
         input,
         model: selectedModel,
         initiativeCount: initiative_count,
-        locale: requestLocale
+        locale: requestLocale,
+        autoCreateOrganizations: create_new_orgs,
+        matrixSource: resolvedMatrixSource,
+        orgIds: resolvedOrgIds,
       }
     );
 

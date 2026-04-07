@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
 import { defaultMatrixConfig } from '../../src/config/default-matrix';
-import { folders, jobQueue, organizations, initiatives } from '../../src/db/schema';
+import { agentDefinitions, folders, jobQueue, organizations, initiatives } from '../../src/db/schema';
 import { queueManager } from '../../src/services/queue-manager';
 import {
   authenticatedRequest,
@@ -40,6 +40,43 @@ describe('Use Cases Generate - Matrix Mode', () => {
     return org.id as string;
   }
 
+  async function getWorkflowRoleForJob(jobId: string) {
+    const [job] = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, jobId), eq(jobQueue.workspaceId, user.workspaceId)))
+      .limit(1);
+    expect(job).toBeDefined();
+
+    const payload = JSON.parse(String(job!.data)) as {
+      workflow?: { agentDefinitionId?: string | null; agentMap?: Record<string, string>; taskKey?: string };
+    };
+    const workflow = payload.workflow;
+    expect(typeof workflow?.agentDefinitionId).toBe('string');
+    const [agent] = await db
+      .select({ config: agentDefinitions.config })
+      .from(agentDefinitions)
+      .where(and(eq(agentDefinitions.id, workflow!.agentDefinitionId!), eq(agentDefinitions.workspaceId, user.workspaceId)))
+      .limit(1);
+    expect(agent).toBeDefined();
+    return {
+      role: (agent!.config as Record<string, unknown> | null)?.role as string | undefined,
+      taskKey: workflow?.taskKey,
+      agentMap: workflow?.agentMap ?? {},
+      agentDefinitionId: workflow?.agentDefinitionId ?? null,
+    };
+  }
+
+  async function getJob(jobId: string) {
+    const [job] = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, jobId), eq(jobQueue.workspaceId, user.workspaceId)))
+      .limit(1);
+    expect(job).toBeDefined();
+    return job!;
+  }
+
   it('defaults to matrix_mode=default when no organization is provided', async () => {
     const response = await authenticatedRequest(
       app,
@@ -67,6 +104,9 @@ describe('Use Cases Generate - Matrix Mode', () => {
     expect(folder).toBeDefined();
     expect(folder?.matrixConfig).toBeTruthy();
     expect(JSON.parse(folder!.matrixConfig!)).toEqual(defaultMatrixConfig);
+
+    const workflowRole = await getWorkflowRoleForJob(data.jobId);
+    expect(workflowRole.role).toBe('usecase_list_generation');
   });
 
   it('defaults to matrix_mode=organization when org template exists', async () => {
@@ -168,6 +208,84 @@ describe('Use Cases Generate - Matrix Mode', () => {
     expect(typeof agentMap?.generation_todo_sync).toBe('string');
     expect(typeof agentMap?.generation_usecase_detail).toBe('string');
     expect(typeof agentMap?.generation_executive_summary).toBe('string');
+  });
+
+  it('routes initiative generation through initiative_list_with_orgs when org_ids are provided', async () => {
+    const organizationId = await createOrganization();
+
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/initiatives/generate',
+      user.sessionToken!,
+      {
+        input: `Generate ${createTestId()}`,
+        initiative_count: 1,
+        org_ids: [organizationId],
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.jobId).toBeDefined();
+
+    const job = await getJob(data.jobId);
+    expect(job.type).toBe('initiative_list');
+    const payload = JSON.parse(String(job.data)) as {
+      workflow?: { workflowRunId?: string; workflowDefinitionId?: string };
+    };
+    expect(typeof payload.workflow?.workflowRunId).toBe('string');
+    expect(typeof payload.workflow?.workflowDefinitionId).toBe('string');
+
+    const workflowRole = await getWorkflowRoleForJob(data.jobId);
+    expect(workflowRole.taskKey).toBe('generation_usecase_list');
+    expect(workflowRole.role).toBe('initiative_list_with_orgs');
+    expect(workflowRole.agentMap.generation_usecase_list).toBe(workflowRole.agentDefinitionId);
+
+    const jobs = await db
+      .select()
+      .from(jobQueue)
+      .where(eq(jobQueue.workspaceId, user.workspaceId));
+    expect(jobs.some((queuedJob) => queuedJob.type === 'organization_batch_create')).toBe(false);
+  });
+
+  it('routes initiative generation through initiative_list_with_orgs when create_new_orgs is true', async () => {
+    const response = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/initiatives/generate',
+      user.sessionToken!,
+      {
+        input: `Generate ${createTestId()}`,
+        initiative_count: 1,
+        create_new_orgs: true,
+      }
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.jobId).toBeDefined();
+
+    const jobs = await db
+      .select()
+      .from(jobQueue)
+      .where(eq(jobQueue.workspaceId, user.workspaceId));
+    const initiativeListJob = jobs.find((job) => job.id === data.jobId);
+    expect(initiativeListJob?.type).toBe('initiative_list');
+    expect(jobs.some((job) => job.type === 'organization_batch_create')).toBe(false);
+
+    const payload = JSON.parse(String(initiativeListJob!.data)) as {
+      workflow?: {
+        workflowRunId?: string;
+        workflowDefinitionId?: string;
+        taskKey?: string;
+        agentMap?: Record<string, string>;
+      };
+    };
+    expect(payload.workflow?.taskKey).toBe('generation_usecase_list');
+    expect(typeof payload.workflow?.workflowRunId).toBe('string');
+    expect(typeof payload.workflow?.workflowDefinitionId).toBe('string');
+    expect(typeof payload.workflow?.agentMap?.generation_usecase_list).toBe('string');
   });
 
   it('rejects explicit matrix_mode=organization when organization has no template', async () => {
@@ -301,7 +419,7 @@ describe('Use Cases Generate - Matrix Mode', () => {
     expect(typeof agentMap?.generation_executive_summary).toBe('string');
   });
 
-  it('falls back to matrix_mode=default when explicit generate is sent without organization', async () => {
+  it('accepts explicit matrix_mode=generate without organization and enqueues an ad hoc matrix job', async () => {
     const response = await authenticatedRequest(
       app,
       'POST',
@@ -315,8 +433,27 @@ describe('Use Cases Generate - Matrix Mode', () => {
 
     expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data.matrix_mode).toBe('default');
-    expect(data.matrixJobId).toBeUndefined();
+    expect(data.matrix_mode).toBe('generate');
+    expect(data.matrixJobId).toBeDefined();
+    expect(data.jobId).toBeDefined();
+
+    const jobs = await db
+      .select()
+      .from(jobQueue)
+      .where(eq(jobQueue.workspaceId, user.workspaceId));
+    const initiativeListJob = jobs.find((job) => job.id === data.jobId);
+    const matrixJob = jobs.find((job) => job.id === data.matrixJobId);
+    expect(initiativeListJob?.type).toBe('initiative_list');
+    expect(matrixJob?.type).toBe('matrix_generate');
+
+    const [folder] = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, data.folder_id), eq(folders.workspaceId, user.workspaceId)))
+      .limit(1);
+    expect(folder).toBeDefined();
+    expect(folder?.organizationId).toBeNull();
+    expect(folder?.matrixConfig).toBeNull();
   });
 
   it('blocks usecase detail when matrix_generate failed for the folder (strict policy)', async () => {

@@ -340,20 +340,31 @@
       "loadingModelCatalog": "Chargement des modèles…",
       "loadingOrganizations": "Chargement des organisations…",
       "noOrganizations": "Aucune organisation disponible.",
+      "multiOrg": {
+        "title": "Organisations ciblées (optionnel)",
+        "hint": "Sélectionnez jusqu'à plusieurs organisations pour orienter la génération. Laisser vide permet aussi une génération générique.",
+        "noneSelected": "Aucune organisation",
+        "selectedCount": "{count} organisations sélectionnées",
+        "createNewOrgs": "Créer de nouvelles organisations automatiquement",
+        "createNewOrgsHint": "L'IA pourra proposer et créer de nouvelles organisations à partir du titre, du contexte et des documents du dossier."
+      },
       "documentsTitle": "Documents",
       "documentsHelp": "Ajouter des documents au contexte. Un résumé est généré automatiquement.",
       "addDocument": "Ajouter un document",
       "noDocumentsYet": "Aucun document pour le moment.",
       "defaultInput": {
         "documentsContext": "Utiliser les documents du dossier comme contexte principal.",
-        "organizationContext": "Utiliser les informations de l'organisation sélectionnée comme contexte principal."
+        "organizationContext": "Utiliser les informations de l'organisation sélectionnée comme contexte principal.",
+        "organizationsContext": "Utiliser les informations des organisations sélectionnées comme contexte principal."
       },
+      "generateFolder": "Générer le dossier",
+      "generating": "Génération en cours...",
       "matrix": {
-        "title": "Matrice d'évaluation",
-        "useOrganization": "Utiliser la matrice de l'organisation",
-        "useOrganizationHint": "Option cochée par défaut quand l'organisation possède déjà une matrice sauvegardée.",
-        "generateOrganization": "Générer une matrice pour l'organisation",
-        "generateOrganizationHint": "Option cochée par défaut car aucune matrice n'est encore associée à cette organisation."
+        "title": "Matrice d'évaluation du dossier",
+        "useOrganization": "Réutiliser la matrice de {name}",
+        "useOrganizationHint": "Si une matrice est déjà disponible pour l'organisation sélectionnée, vous pouvez la réutiliser ou générer une matrice ad hoc pour ce dossier.",
+        "generateAdHoc": "Générer une matrice ad hoc pour ce dossier",
+        "generateAdHocHint": "La matrice sera générée à partir du titre, du contexte, des documents et des organisations ciblées du dossier."
       },
       "errors": {
         "draftCreateFailed": "Impossible de créer un brouillon de dossier",
@@ -748,8 +759,12 @@
       "descriptionLabel": "Description",
       "configJsonLabel": "Configuration (JSON)",
       "edit": "Modifier",
-      "fork": "Fork",
-      "detach": "Detach",
+      "copy": "Copier",
+      "resetToDefault": "Réinitialiser",
+      "customized": "personnalisé",
+      "systemDefault": "Par défaut",
+      "confirmReset": "Réinitialiser à la configuration par défaut ? La copie personnalisée sera supprimée.",
+      "confirmDelete": "Supprimer cette configuration ? Cette action est irréversible.",
       "save": "Sauvegarder",
       "cancel": "Annuler",
       "inheritance": {
@@ -758,8 +773,8 @@
         "drift": "Drift détecté"
       },
       "agent": {
-        "title": "Agent Configuration",
-        "description": "Configurez les agents de génération avec indicateurs fork/detach et héritage."
+        "title": "Configuration des agents",
+        "description": "Configurez les agents de génération. Copiez les configurations système pour personnaliser, réinitialisez pour restaurer les valeurs par défaut."
       },
       "workflow": {
         "title": "Workflow Configuration",
@@ -775,10 +790,10 @@
       "toasts": {
         "agentSaved": "Configuration agent mise à jour.",
         "workflowSaved": "Configuration workflow mise à jour.",
-        "agentForked": "Configuration agent forkée.",
-        "workflowForked": "Configuration workflow forkée.",
-        "agentDetached": "Configuration agent détachée du parent.",
-        "workflowDetached": "Configuration workflow détachée du parent."
+        "copied": "Configuration copiée.",
+        "reset": "Configuration réinitialisée.",
+        "deleted": "Configuration supprimée.",
+        "saved": "Configuration enregistrée."
       },
       "errors": {
         "load": "Échec du chargement de la configuration agents/workflows IA",
@@ -787,10 +802,10 @@
         "invalidWorkflowConfigJson": "Le JSON de configuration workflow doit être un objet valide",
         "saveAgent": "Échec de sauvegarde de la configuration agent",
         "saveWorkflow": "Échec de sauvegarde de la configuration workflow",
-        "forkAgent": "Échec du fork de la configuration agent",
-        "forkWorkflow": "Échec du fork de la configuration workflow",
-        "detachAgent": "Échec du detach de la configuration agent",
-        "detachWorkflow": "Échec du detach de la configuration workflow"
+        "copy": "Échec de la copie de la configuration",
+        "reset": "Échec de la réinitialisation de la configuration",
+        "delete": "Échec de la suppression de la configuration",
+        "save": "Échec de l'enregistrement de la configuration"
       }
     },
     "admin": {
@@ -1340,7 +1355,9 @@
       "failed": "failed"
     },
     "type": {
+      "organizationBatchCreate": "Préparation organisations",
       "organizationEnrich": "Enrichissement organisation",
+      "organizationTargetsJoin": "Consolidation organisations",
       "matrixGenerate": "Génération matrice",
       "usecaseList": "Génération initiatives",
       "usecaseDetail": "Détail initiative",

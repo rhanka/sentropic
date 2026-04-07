@@ -100,6 +100,24 @@ workflowConfigRouter.put(
   },
 );
 
+// Copy (new canonical endpoint)
+workflowConfigRouter.post(
+  "/:id/copy",
+  requireWorkspaceEditorRole(),
+  zValidator("json", forkWorkflowSchema),
+  async (c) => {
+    try {
+      const actor = actorFromContext(c);
+      const body = c.req.valid("json");
+      const item = await todoOrchestrationService.forkWorkflowConfig(actor, c.req.param("id")!, body);
+      return c.json({ item }, 201);
+    } catch (error) {
+      return handleTodoError(c, error);
+    }
+  },
+);
+
+// Fork (deprecated alias for copy)
 workflowConfigRouter.post(
   "/:id/fork",
   requireWorkspaceEditorRole(),
@@ -116,14 +134,31 @@ workflowConfigRouter.post(
   },
 );
 
-workflowConfigRouter.post("/:id/detach", requireWorkspaceEditorRole(), async (c) => {
+// Reset — delete the copy and return system parent
+workflowConfigRouter.post("/:id/reset", requireWorkspaceEditorRole(), async (c) => {
   try {
     const actor = actorFromContext(c);
-    const item = await todoOrchestrationService.detachWorkflowConfig(actor, c.req.param("id")!);
+    const item = await todoOrchestrationService.resetWorkflowConfig(actor, c.req.param("id")!);
     return c.json({ item });
   } catch (error) {
     return handleTodoError(c, error);
   }
+});
+
+// Delete — user-created only (sourceLevel='user' + parentId=null)
+workflowConfigRouter.delete("/:id", requireWorkspaceEditorRole(), async (c) => {
+  try {
+    const actor = actorFromContext(c);
+    await todoOrchestrationService.deleteWorkflowConfig(actor, c.req.param("id")!);
+    return c.body(null, 204);
+  } catch (error) {
+    return handleTodoError(c, error);
+  }
+});
+
+// Detach (deprecated — returns 410 Gone)
+workflowConfigRouter.post("/:id/detach", requireWorkspaceEditorRole(), async (c) => {
+  return c.json({ error: "Detach is no longer supported. Use reset instead." }, 410);
 });
 
 // ---------------------------------------------------------------------------

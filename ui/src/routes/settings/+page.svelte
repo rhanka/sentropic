@@ -31,6 +31,7 @@
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
   import WorkspaceSettingsPanel from '$lib/components/WorkspaceSettingsPanel.svelte';
   import TodoRuntimeConfigPanel from '$lib/components/TodoRuntimeConfigPanel.svelte';
+  import ViewTemplateCatalog from '$lib/components/ViewTemplateCatalog.svelte';
   import { Copy, Download, RefreshCw } from '@lucide/svelte';
 
   interface CatalogProvider {
@@ -973,6 +974,10 @@
   </div>
 
   <TodoRuntimeConfigPanel />
+
+  <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="view-template-catalog-card">
+    <ViewTemplateCatalog />
+  </div>
 
   <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="chrome-extension-download-card">
     <div class="flex flex-wrap items-start justify-between gap-4">

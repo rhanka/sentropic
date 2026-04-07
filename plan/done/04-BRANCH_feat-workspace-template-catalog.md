@@ -581,46 +581,17 @@ The Lot 8 generic dispatch was incomplete: `startInitiativeGenerationWorkflow` s
 
 ---
 
-#### Lot N 
+#### Lot rattrapage tests (deferred gates from lots 3-9quater)
 
-- [x] fix(api): import handler — use `initiative_` file prefix instead of `usecase_` in preview and import
-- [x] fix(api): rename `usecase_` streamId prefix to `initiative_` in queue-manager
-- [x] fix(ui): export scope `usecase`→`initiative` + wait `workspaceScopeHydrated` before `loadUseCase()`
-- [x] fix(ui): TOOL_TOGGLES add `read_initiative`/`update_initiative` IDs + remove stale session clear from `loadSessions()`
-- [x] fix(ui): StreamMessage use `initiative_` prefix in folders and initiative detail pages
-- [x] fix(ui): remove BR-03 scope boundary notice from settings panel
-- [x] fix(deps): npm audit fix + UI Dockerfile audit --omit=dev
-- [x] fix(test): `import-export.test.ts` — use `initiative_` prefix in test zip
-- [x] fix(test): `initiative-generation-async.test.ts` — clean zombie jobs + purge queue before auth cleanup
-- [x] fix(test): `chat-tools.test.ts` — deterministic `web_extract` prompt with explicit URLs
-- [x] fix(test): `seed-test-data.ts` — add BR-04 table cleanup (workspaceTypeWorkflows, workflowDefinitions, agentDefinitions)
-- [x] fix(e2e): `05-usecase-detail.spec.ts` — rename usecase→initiative labels and routes
-- [x] fix(e2e): `03-chat.spec.ts` — send button, context route, delete confirm, clipboard, stale ref after edit
-- [x] fix(e2e): `03-chat-chrome-extension.spec.ts` — fresh session for restricted toolset + menu locator fix
-- [x] fix(e2e): `07-matrix.spec.ts` — lock race (explicit release via API) + export click force
-- [x] fix(e2e): `07-import-export.spec.ts` — rename labels "Cas d'usage"→"Initiatives"
-- [x] fix(e2e): remove `describe.serial` from all E2E specs — prevents masking skipped tests as passing
-- [x] fix(ci): split E2E group-c (03+05+07) → group-c (03) + group-e (05+07) to avoid lock/presence concurrence
-- [x] fix(ci): split AI test suite into 3 balanced shards (~60s each) for isolation
-- [x] feat(make): add `doc-backup`, `doc-backup-prod`, `doc-restore` targets (MinIO `mc mirror` via `docker compose exec`)
-- [x] fix(api): separate `chat` queue class from `ai` generation — chat not blocked by generation concurrency
-- [x] fix(api): improve `update_initiative` tool description — explicit paths, types, and examples for list fields
-- [x] **Doc consolidation**
-  - [x] `SPEC_EVOL_WORKSPACE_TYPES.md` §1-§6, §14 → merge into `SPEC.md`
-  - [x] `SPEC_EVOL_WORKSPACE_TYPES.md` §7 → merge into `SPEC.md` + update §2.2 in `SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`
-  - [x] `SPEC_EVOL_MODEL_PROVIDERS_RUNTIME.md` → checked: delivered by BR-08 (not BR-04), marked as delivered, kept for BR-08 consolidation
-  - [x] Update `SPEC.md` table of contents
-  - [x] Keep `SPEC_EVOL_WORKSPACE_TYPES.md` §9-§10, §15 (BR-04B scope)
-  - [x] Keep other `SPEC_EVOL_*` as-is (BR-05, BR-06, BR-08, BR-15)
-- [ ] **UAT smoke (surfaces impactées)**
-  - [x] Import/export : exporter workspace → importer dans un autre → preview détecte les initiatives
-  - [x] Import depuis page dossier (Actions → Importer) → dialog fonctionne
-  - [x] Streaming génération initiative (StreamMessage `initiative_`) sur page dossier et initiative detail
-  - [x] Chat tool toggles : "Initiatives (lecture)" et "Initiatives (mise à jour)" visibles et fonctionnels
-  - [x] Chat session maintenue entre 2 messages consécutifs
-  - [x] Chat context organisation : `primaryContextType=organization` sur `/organizations/{id}`
-  - [x] Navigation directe `/initiative/{id}` → pas de 404 / page blanche
-  - [x] Paramètres : pas de bandeau "scope boundary" BR-03
+- [ ] `make typecheck-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make typecheck-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make lint-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make lint-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make test-api API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make test-ui API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=test-feat-workspace-template-catalog`
+- [ ] `make build-api build-ui-image API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=e2e-feat-workspace-template-catalog`
+- [ ] `make clean test-e2e API_PORT=8704 UI_PORT=5104 MAILDEV_UI_PORT=1004 ENV=e2e-feat-workspace-template-catalog`
+
 
 
 ---

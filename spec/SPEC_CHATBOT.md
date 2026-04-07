@@ -48,8 +48,8 @@
   - [x] Display in object views via `StreamMessage` (jobs)
   - [ ] Table `structured_generation_runs` (not created)
   - [ ] Tables `prompts`/`prompt_versions` (prompts in `settings.prompts` JSON)
-- [ ] **CU-009: Object creation via chat**
-  - Users cannot create new objects directly via chat (no direct creation)
+- [x] **CU-009: Object creation via chat** (partial: batch organization creation)
+  - [x] `batch_create_organizations` tool: create multiple organizations from text description (BR-04B)
   - AI can suggest object creation based on the conversation (suggestion only)
   - Create/delete/move operations are done via tools in chat
 - [x] **CU-010: Consultation and search (chat history navigation)** (partial: consultation via tools)
@@ -75,11 +75,14 @@
   - AI can detect inconsistencies and propose corrections on request
   - AI can suggest similar or complementary use cases on request
   - Suggestions are explicit in the conversation (not implicit)
-- [ ] **CU-014: Export and sharing**
-  - Export a chat session (JSON, Markdown, PDF) — secondary feature
-  - Share sessions between users (collaboration)
-  - Export object modification history for audit — secondary feature
-  - Exports include full reasoning for traceability
+- [x] **CU-014: Export and sharing** (partial: DOCX generation via chat)
+  - [x] `document_generate` tool: freeform DOCX generation from chat context (upskill + generate pattern) (BR-04B)
+  - [x] Template-based DOCX generation via `document_generate` with `templateId` (BR-04B)
+  - [x] Download card rendered inline in chat via `runtimeSummary.docxCards`
+  - Export a chat session (JSON, Markdown, PDF) — secondary feature (remaining)
+  - Share sessions between users (collaboration) (remaining)
+  - Export object modification history for audit — secondary feature (remaining)
+  - Exports include full reasoning for traceability (remaining)
 - [x] **CU-015: Session management** (partial: create/delete)
   - [x] A user can have multiple active sessions for the same object
   - [x] Session deletion (`DELETE /api/v1/chat/sessions/:id`)
@@ -771,9 +774,10 @@ const replay = await replayChatSession('session-789');
 **To implement**:
 - [x] Model switch in sessions (UI + API)
 - [ ] Deepen with higher‑tier model
-- [ ] Object creation via chat (tools)
+- [x] Object creation via chat: `batch_create_organizations` (BR-04B, partial — organizations only)
 - [ ] Suggestions and recommendations (proactive AI)
-- [ ] Export and sharing (JSON, Markdown, PDF)
+- [x] DOCX generation via chat: `document_generate` (freeform + template modes, BR-04B)
+- [ ] Export and sharing (JSON, Markdown, PDF) (remaining)
 - [ ] User feedback (👍/👎) on suggestions
 - [ ] Automatic retry with correction for recoverable errors
 - [ ] Voice extension: stub `audio_chunk` (event type) in SSE

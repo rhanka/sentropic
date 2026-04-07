@@ -18,6 +18,7 @@ export type ChatHistoryRunSegment = {
     contextBudgetPct: number | null;
     durationMs: number | null;
     reasoningEffortLabel: string | null;
+    docxCards?: Array<{ jobId: string; fileName: string }>;
   };
 };
 
@@ -70,6 +71,8 @@ const buildRuntimeSummary = (
   let contextBudgetPct: number | null = null;
   let reasoningEffortLabel: string | null = null;
   const seenToolCalls = new Set<string>();
+  const toolNameById: Record<string, string> = {};
+  const docxCards: Array<{ jobId: string; fileName: string }> = [];
   let startedAtMs: number | null = null;
   let endedAtMs: number | null = null;
 
@@ -94,13 +97,33 @@ const buildRuntimeSummary = (
         ((event.data as { tool_call_id?: unknown } | null | undefined)?.tool_call_id ??
           ''),
       ).trim();
+      const name = String(
+        ((event.data as { name?: unknown } | null | undefined)?.name ?? ''),
+      ).trim();
       if (toolCallId) {
+        if (name) toolNameById[toolCallId] = name;
         if (!seenToolCalls.has(toolCallId)) {
           seenToolCalls.add(toolCallId);
           toolCount += 1;
         }
       } else {
         toolCount += 1;
+      }
+      continue;
+    }
+    if (event.eventType === 'tool_call_result') {
+      const toolCallId = String(
+        ((event.data as { tool_call_id?: unknown } | null | undefined)?.tool_call_id ?? ''),
+      ).trim();
+      const toolName = toolCallId ? toolNameById[toolCallId] : undefined;
+      const result = (event.data as { result?: Record<string, unknown> } | null | undefined)?.result;
+      if (
+        toolName === 'document_generate' &&
+        result?.status === 'completed' &&
+        typeof result?.jobId === 'string' &&
+        typeof result?.fileName === 'string'
+      ) {
+        docxCards.push({ jobId: result.jobId, fileName: result.fileName });
       }
       continue;
     }
@@ -184,6 +207,7 @@ const buildRuntimeSummary = (
     contextBudgetPct,
     durationMs,
     reasoningEffortLabel,
+    ...(docxCards.length > 0 ? { docxCards } : {}),
   };
 };
 

@@ -26,6 +26,7 @@ import {
   workflowDefinitionTasks,
   workflowDefinitions,
   agentDefinitions,
+  viewTemplates,
   ADMIN_WORKSPACE_ID,
 } from '../../src/db/schema.js';
 import { testMatrix } from './test-data.js';
@@ -69,6 +70,7 @@ export async function seedTestData() {
     await db.delete(workflowDefinitions);
     await db.delete(agentDefinitions);
     await db.delete(workspaceMemberships);
+    await db.delete(viewTemplates); // FK -> workspaces
     await db.delete(workspaces);
     
     // Note: businessConfig is kept as it contains business configuration
