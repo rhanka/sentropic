@@ -71,6 +71,9 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] ViewTemplateCatalog integrated into settings page
   - [x] Fix ViewTemplateCatalog empty — pass workspaceId to listViewTemplates API call
   - [x] TodoRuntimeConfigPanel buttons icon-only per spec (remove text labels, match ViewTemplateCatalog style)
+  - [x] Create shared ConfigItemCard component
+  - [x] Refactor agents+workflows to use ConfigItemCard
+  - [x] Refactor ViewTemplateCatalog to use ConfigItemCard, flat list
 
 - [x] **Lot 7 — Document generation infra + gate auto-todo**
   - [x] DOCX template stubs (solution-summary, proposal-summary, product-datasheet).
@@ -342,7 +345,11 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate specs.
   - [ ] Update PLAN.md.
-  - [ ] Update rules/skills to enforce single migration per branch (include journal + snapshot cleanup procedure)
+  - [ ] Review and update rules/skills — based on BR-04B audit (2 agents, 13 sessions, 400+ incidents):
+    - [ ] For each existing rule file: diff against audit findings, identify rules that exist but are repeatedly violated, understand WHY (visibility? precision? no mechanical enforcement?), and fix the root cause (reword, move, add hook)
+    - [ ] For each audit finding with no existing rule: add the rule in the right file
+    - [ ] For recurring patterns (print debug loops, wrong branch, hallucinated checkboxes): create skills or hooks that mechanically prevent the mistake instead of relying on text rules
+    - [ ] Audit reports available in session `185d0021` agents `a22a2d6f6e30c303e` (reproaches) and `a6d7c6fa856e30657` (improvements)
   - [x] Merge migrations 0025+0026 into single 0025 + add bid→proposal cleanup + update drizzle journal
 
 - [ ] **Lot N — Final validation**

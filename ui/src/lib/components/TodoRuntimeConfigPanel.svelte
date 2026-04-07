@@ -5,7 +5,8 @@
   import { addToast } from '$lib/stores/toast';
   import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
   import { selectedWorkspaceRole } from '$lib/stores/workspaceScope';
-  import { Copy, Pencil, RotateCcw, Trash2, Lock, UserPen } from '@lucide/svelte';
+  import { Pencil } from '@lucide/svelte';
+  import ConfigItemCard from './ConfigItemCard.svelte';
 
   type SourceLevel = 'code' | 'admin' | 'user';
 
@@ -405,22 +406,9 @@
     }
   };
 
-  // Helper: is system/admin config?
-  const isSystemAgentConfig = (item: AgentConfigItem): boolean =>
-    item.sourceLevel === 'code' || item.sourceLevel === 'admin';
-  const isCopiedAgentConfig = (item: AgentConfigItem): boolean =>
-    item.sourceLevel === 'user' && !!item.parentId;
-  const isUserCreatedAgentConfig = (item: AgentConfigItem): boolean =>
-    item.sourceLevel === 'user' && !item.parentId;
   const hasCopyForAgent = (parentId: string): boolean =>
     agentConfigs.some(a => a.parentId === parentId && a.sourceLevel === 'user');
 
-  const isSystemWorkflowConfig = (item: WorkflowConfigItem): boolean =>
-    item.sourceLevel === 'code' || item.sourceLevel === 'admin';
-  const isCopiedWorkflowConfig = (item: WorkflowConfigItem): boolean =>
-    item.sourceLevel === 'user' && !!item.parentId;
-  const isUserCreatedWorkflowConfig = (item: WorkflowConfigItem): boolean =>
-    item.sourceLevel === 'user' && !item.parentId;
   const hasCopyForWorkflow = (parentId: string): boolean =>
     workflowConfigs.some(w => w.parentId === parentId && w.sourceLevel === 'user');
 
@@ -622,78 +610,16 @@
         {:else}
           <div class="space-y-3">
             {#each agentConfigs as item (item.id)}
-              <div class="rounded border border-slate-200 p-3" data-testid={`workflow-config-card-${item.key}`}>
-                <div class="flex flex-wrap items-start justify-between gap-2">
-                  <div class="space-y-1">
-                    <div class="font-medium text-slate-900">{item.name}</div>
-                    <div class="text-xs text-slate-500">{item.key}</div>
-                    {#if item.description}
-                      <div class="text-sm text-slate-700">{item.description}</div>
-                    {/if}
-                  </div>
-                  <div class="flex flex-wrap gap-2">
-                    {#if isSystemAgentConfig(item)}
-                      <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] bg-slate-100 text-slate-500">
-                        <Lock class="w-3 h-3" />
-                        {$_('settings.runtime.systemDefault')}
-                      </span>
-                    {:else if isCopiedAgentConfig(item)}
-                      <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] bg-blue-100 text-blue-700">
-                        <UserPen class="w-3 h-3" />
-                        ({$_('settings.runtime.customized')})
-                      </span>
-                    {/if}
-                  </div>
-                </div>
-
-                {#if canEdit}
-                  <div class="mt-3 flex items-center gap-1">
-                    {#if !isSystemAgentConfig(item)}
-                      <button
-                        type="button"
-                        class="p-1 text-slate-400 hover:text-primary rounded disabled:opacity-50"
-                        title={$_('settings.runtime.edit')}
-                        on:click={() => openAgentEditor(item)}
-                      >
-                        <Pencil class="w-4 h-4" />
-                      </button>
-                    {/if}
-                    {#if isSystemAgentConfig(item) && !hasCopyForAgent(item.id)}
-                      <button
-                        type="button"
-                        class="p-1 text-slate-400 hover:text-primary rounded disabled:opacity-50"
-                        title={$_('settings.runtime.copy')}
-                        on:click={() => void copyAgent(item)}
-                        disabled={isCopying || isSaving}
-                      >
-                        <Copy class="w-4 h-4" />
-                      </button>
-                    {/if}
-                    {#if isCopiedAgentConfig(item)}
-                      <button
-                        type="button"
-                        class="p-1 text-slate-400 hover:text-amber-600 rounded disabled:opacity-50"
-                        title={$_('settings.runtime.resetToDefault')}
-                        on:click={() => void resetAgent(item)}
-                        disabled={isResettingConfig || isSaving}
-                      >
-                        <RotateCcw class="w-4 h-4" />
-                      </button>
-                    {/if}
-                    {#if isUserCreatedAgentConfig(item)}
-                      <button
-                        type="button"
-                        class="p-1 text-slate-400 hover:text-red-600 rounded disabled:opacity-50"
-                        title={$_('common.delete')}
-                        on:click={() => void deleteAgent(item)}
-                        disabled={isDeletingConfig || isSaving}
-                      >
-                        <Trash2 class="w-4 h-4" />
-                      </button>
-                    {/if}
-                  </div>
-                {/if}
-
+              <ConfigItemCard
+                item={{ id: item.id, name: item.name, key: item.key, description: item.description, sourceLevel: item.sourceLevel, parentId: item.parentId }}
+                hasCopy={hasCopyForAgent(item.id)}
+                onCopy={canEdit ? (id) => { const found = agentConfigs.find(a => a.id === id); if (found) void copyAgent(found); } : null}
+                onEdit={canEdit ? (id) => { const found = agentConfigs.find(a => a.id === id); if (found) openAgentEditor(found); } : null}
+                onReset={canEdit ? (id) => { const found = agentConfigs.find(a => a.id === id); if (found) void resetAgent(found); } : null}
+                onDelete={canEdit ? (id) => { const found = agentConfigs.find(a => a.id === id); if (found) void deleteAgent(found); } : null}
+                disabled={isCopying || isSaving || isResettingConfig || isDeletingConfig}
+                testId={`workflow-config-card-${item.key}`}
+              >
                 {#if editingAgentId === item.id}
                   <div class="mt-3 space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
                     <div>
@@ -756,7 +682,7 @@
                     </div>
                   </div>
                 {/if}
-              </div>
+              </ConfigItemCard>
             {/each}
           </div>
         {/if}
@@ -773,30 +699,15 @@
         {:else}
           <div class="space-y-3">
             {#each workflowConfigs as item (item.id)}
-              <div class="rounded border border-slate-200 p-3">
-                <div class="flex flex-wrap items-start justify-between gap-2">
-                  <div class="space-y-1">
-                    <div class="font-medium text-slate-900">{item.name}</div>
-                    <div class="text-xs text-slate-500">{item.key}</div>
-                    {#if item.description}
-                      <div class="text-sm text-slate-700">{item.description}</div>
-                    {/if}
-                  </div>
-                  <div class="flex flex-wrap gap-2">
-                    {#if isSystemWorkflowConfig(item)}
-                      <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] bg-slate-100 text-slate-500">
-                        <Lock class="w-3 h-3" />
-                        {$_('settings.runtime.systemDefault')}
-                      </span>
-                    {:else if isCopiedWorkflowConfig(item)}
-                      <span class="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] bg-blue-100 text-blue-700">
-                        <UserPen class="w-3 h-3" />
-                        ({$_('settings.runtime.customized')})
-                      </span>
-                    {/if}
-                  </div>
-                </div>
-
+              <ConfigItemCard
+                item={{ id: item.id, name: item.name, key: item.key, description: item.description, sourceLevel: item.sourceLevel, parentId: item.parentId }}
+                hasCopy={hasCopyForWorkflow(item.id)}
+                onCopy={canEdit ? (id) => { const found = workflowConfigs.find(w => w.id === id); if (found) void copyWorkflow(found); } : null}
+                onEdit={canEdit ? (id) => { const found = workflowConfigs.find(w => w.id === id); if (found) openWorkflowEditor(found); } : null}
+                onReset={canEdit ? (id) => { const found = workflowConfigs.find(w => w.id === id); if (found) void resetWorkflow(found); } : null}
+                onDelete={canEdit ? (id) => { const found = workflowConfigs.find(w => w.id === id); if (found) void deleteWorkflow(found); } : null}
+                disabled={isCopying || isSaving || isResettingConfig || isDeletingConfig}
+              >
                 <div class="mt-2 text-xs text-slate-700">
                   <div class="font-medium">{$_('settings.runtime.workflow.tasksLabel')}</div>
                   <p class="mt-1 text-[11px] text-slate-500">
@@ -834,55 +745,6 @@
                     </div>
                   {/if}
                 </div>
-
-                {#if canEdit}
-                  <div class="mt-3 flex items-center gap-1">
-                    {#if !isSystemWorkflowConfig(item)}
-                      <button
-                        type="button"
-                        class="p-1 text-slate-400 hover:text-primary rounded disabled:opacity-50"
-                        title={$_('settings.runtime.edit')}
-                        on:click={() => openWorkflowEditor(item)}
-                        data-testid={`workflow-config-edit-${item.key}`}
-                      >
-                        <Pencil class="w-4 h-4" />
-                      </button>
-                    {/if}
-                    {#if isSystemWorkflowConfig(item) && !hasCopyForWorkflow(item.id)}
-                      <button
-                        type="button"
-                        class="p-1 text-slate-400 hover:text-primary rounded disabled:opacity-50"
-                        title={$_('settings.runtime.copy')}
-                        on:click={() => void copyWorkflow(item)}
-                        disabled={isCopying || isSaving}
-                      >
-                        <Copy class="w-4 h-4" />
-                      </button>
-                    {/if}
-                    {#if isCopiedWorkflowConfig(item)}
-                      <button
-                        type="button"
-                        class="p-1 text-slate-400 hover:text-amber-600 rounded disabled:opacity-50"
-                        title={$_('settings.runtime.resetToDefault')}
-                        on:click={() => void resetWorkflow(item)}
-                        disabled={isResettingConfig || isSaving}
-                      >
-                        <RotateCcw class="w-4 h-4" />
-                      </button>
-                    {/if}
-                    {#if isUserCreatedWorkflowConfig(item)}
-                      <button
-                        type="button"
-                        class="p-1 text-slate-400 hover:text-red-600 rounded disabled:opacity-50"
-                        title={$_('common.delete')}
-                        on:click={() => void deleteWorkflow(item)}
-                        disabled={isDeletingConfig || isSaving}
-                      >
-                        <Trash2 class="w-4 h-4" />
-                      </button>
-                    {/if}
-                  </div>
-                {/if}
 
                 {#if editingWorkflowId === item.id}
                   <div class="mt-3 space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
@@ -961,7 +823,7 @@
                     </div>
                   </div>
                 {/if}
-              </div>
+              </ConfigItemCard>
             {/each}
           </div>
         {/if}
