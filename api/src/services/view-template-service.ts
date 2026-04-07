@@ -49,45 +49,65 @@ export interface UpdateViewTemplateInput {
 
 export const viewTemplateService = {
   /**
-   * List view templates for a workspace (includes system seeds where workspace_id is null).
+   * List view templates for a workspace.
+   * Aligned with agent/workflow pattern: DB is source of truth.
+   * Lazy-seeds any code-level templates missing from DB (handles old workspaces
+   * that were created before new templates were added).
    */
   async list(workspaceId: string, workspaceType?: string): Promise<ViewTemplateRow[]> {
-    const conditions = [];
+    const wt = workspaceType ?? 'ai-ideas';
+
+    // 1. Get existing DB rows for this workspace
+    const conditions = [eq(viewTemplates.workspaceId, workspaceId)];
     if (workspaceType) {
       conditions.push(eq(viewTemplates.workspaceType, workspaceType));
     }
 
-    const wsTemplates = await db
+    let wsTemplates = await db
       .select()
       .from(viewTemplates)
-      .where(
-        conditions.length > 0
-          ? and(eq(viewTemplates.workspaceId, workspaceId), ...conditions)
-          : eq(viewTemplates.workspaceId, workspaceId),
-      )
+      .where(and(...conditions))
       .orderBy(viewTemplates.objectType, viewTemplates.maturityStage);
 
-    const systemTemplates = await db
-      .select()
-      .from(viewTemplates)
-      .where(
-        conditions.length > 0
-          ? and(isNull(viewTemplates.workspaceId), ...conditions)
-          : isNull(viewTemplates.workspaceId),
-      )
-      .orderBy(viewTemplates.objectType, viewTemplates.maturityStage);
+    // 2. Lazy-seed: check code seeds and insert any missing ones
+    const codeSeeds = getDefaultViewTemplates(wt);
+    const existingKeys = new Set(
+      wsTemplates.map((t) => `${t.objectType}:${t.maturityStage ?? ''}`),
+    );
 
-    const byKey = new Map<string, ViewTemplateRow>();
-    for (const t of systemTemplates) {
-      const key = `${t.workspaceType}:${t.objectType}:${t.maturityStage ?? ''}`;
-      byKey.set(key, t);
-    }
-    for (const t of wsTemplates) {
-      const key = `${t.workspaceType}:${t.objectType}:${t.maturityStage ?? ''}`;
-      byKey.set(key, t);
+    const missing = codeSeeds.filter(
+      (s) => !existingKeys.has(`${s.objectType}:${s.maturityStage ?? ''}`),
+    );
+
+    if (missing.length > 0) {
+      const now = new Date();
+      for (const seed of missing) {
+        const id = createId();
+        await db.insert(viewTemplates).values({
+          id,
+          workspaceId,
+          workspaceType: seed.workspaceType,
+          objectType: seed.objectType,
+          maturityStage: seed.maturityStage ?? null,
+          descriptor: seed.descriptor,
+          version: 1,
+          sourceLevel: 'code',
+          parentId: null,
+          isDetached: false,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
+      // Re-query after lazy seeding
+      wsTemplates = await db
+        .select()
+        .from(viewTemplates)
+        .where(and(...conditions))
+        .orderBy(viewTemplates.objectType, viewTemplates.maturityStage);
     }
 
-    return Array.from(byKey.values());
+    return wsTemplates;
   },
 
   async getById(id: string): Promise<ViewTemplateRow | null> {
@@ -328,7 +348,7 @@ export const viewTemplateService = {
 
   /**
    * Seed default view templates for a workspace type.
-   * Called on workspace creation.
+   * Called on workspace creation. Seeds ALL templates (common + type-specific).
    */
   async seedForWorkspace(workspaceId: string, workspaceType: string): Promise<void> {
     const seeds = getDefaultViewTemplates(workspaceType);
@@ -357,6 +377,8 @@ export const viewTemplateService = {
 
 // ---------------------------------------------------------------------------
 // Default view template descriptors per workspace type (spec §12.5 format)
+// Mutualized: common templates shared across workspace types, type-specific
+// templates only where descriptors truly differ.
 // ---------------------------------------------------------------------------
 
 interface ViewTemplateSeed {
@@ -369,11 +391,10 @@ interface ViewTemplateSeed {
 function getDefaultViewTemplates(workspaceType: string): ViewTemplateSeed[] {
   switch (workspaceType) {
     case 'ai-ideas':
-      return getAiIdeasTemplates();
     case 'opportunity':
-      return getOpportunityTemplates();
+      return [...getCommonTemplates(workspaceType), ...getTypeSpecificTemplates(workspaceType)];
     case 'code':
-      return []; // code workspace uses ai-ideas templates (same initiative layout)
+      return [...getCommonTemplates('code')];
     case 'neutral':
       return []; // neutral workspace has no detail views (container-only)
     default:
@@ -382,16 +403,161 @@ function getDefaultViewTemplates(workspaceType: string): ViewTemplateSeed[] {
 }
 
 // ---------------------------------------------------------------------------
-// ai-ideas templates (spec §12.5 — Initiative ai-ideas, Organization, Dashboard)
+// Common templates — identical across ai-ideas, opportunity, code
 // ---------------------------------------------------------------------------
 
-function getAiIdeasTemplates(): ViewTemplateSeed[] {
+function getCommonTemplates(workspaceType: string): ViewTemplateSeed[] {
   return [
     {
-      workspaceType: 'ai-ideas',
-      objectType: 'initiative',
+      workspaceType,
+      objectType: 'organization',
       descriptor: {
         tabs: [{
+          key: 'detail', label: 'Detail', always: true,
+          rows: [
+            { columns: 2, fields: [
+              { key: 'size', type: 'text' },
+              { key: 'technologies', type: 'text' },
+            ]},
+            { columns: 1, fields: [
+              { key: 'products', type: 'text' },
+              { key: 'processes', type: 'text' },
+              { key: 'kpis', type: 'text' },
+              { key: 'challenges', type: 'text' },
+              { key: 'objectives', type: 'text' },
+            ]},
+            { columns: 1, fields: [
+              { key: 'references', type: 'list' },
+            ]},
+          ],
+        }],
+      },
+    },
+    {
+      workspaceType,
+      objectType: 'dashboard',
+      descriptor: {
+        tabs: [{
+          key: 'main', always: true,
+          rows: [
+            { columns: 1, fields: [{ key: 'cover_page', type: 'component', printOnly: true, pageContext: 'cover' }] },
+            { columns: 1, fields: [{ key: 'executiveSummary.synthese_executive', type: 'text', color: 'white', screenOnly: true }] },
+            { columns: 1, printClass: 'report-introduction', pageBreakAfter: 'always', pageBreakInside: 'avoid', fields: [
+              { key: 'scatter_plot', type: 'component' },
+              { key: 'executiveSummary.introduction', type: 'text', color: 'white', id: 'section-introduction' },
+            ] },
+            { columns: 1, fields: [{ key: 'sommaire', type: 'component', printOnly: true }] },
+            { columns: 1, printClass: 'report-analyse', pageBreakBefore: 'always', pageBreakAfter: 'always', fields: [
+              { key: 'executiveSummary.analyse', type: 'text', color: 'white', id: 'section-analyse' },
+            ] },
+            { columns: 1, printClass: 'report-analyse', pageBreakBefore: 'always', pageBreakAfter: 'always', fields: [{ key: 'executiveSummary.recommandation', type: 'text', color: 'white', id: 'section-recommandations' }] },
+            { columns: 1, printClass: 'report-analyse', fields: [{ key: 'executiveSummary.references', type: 'list', id: 'section-references' }] },
+            { columns: 1, fields: [{ key: 'annex_cover', type: 'component', printOnly: true, pageContext: 'cover' }] },
+            { columns: 1, fields: [{ key: 'initiatives', type: 'entity-loop', collection: 'initiatives', templateRef: 'initiative', printOnly: true, pageContext: 'annex' }] },
+          ],
+        }],
+      },
+    },
+    {
+      workspaceType,
+      objectType: 'solution',
+      descriptor: {
+        tabs: [{
+          key: 'detail', label: 'Detail', always: true,
+          rows: [{ columns: 1, fields: [{ key: 'solutions', type: 'child-list' }] }],
+        }],
+      },
+    },
+    {
+      workspaceType,
+      objectType: 'product',
+      descriptor: {
+        tabs: [{
+          key: 'detail', label: 'Detail', always: true,
+          rows: [{ columns: 1, fields: [{ key: 'products', type: 'child-list' }] }],
+        }],
+      },
+    },
+    {
+      workspaceType,
+      objectType: 'proposal',
+      descriptor: {
+        tabs: [{
+          key: 'detail', label: 'Detail', always: true,
+          rows: [{ columns: 1, fields: [{ key: 'proposals', type: 'child-list' }] }],
+        }],
+      },
+    },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Type-specific templates — initiative layout differs between workspace types
+// ---------------------------------------------------------------------------
+
+function getTypeSpecificTemplates(workspaceType: string): ViewTemplateSeed[] {
+  switch (workspaceType) {
+    case 'ai-ideas':
+      return [getAiIdeasInitiative()];
+    case 'opportunity':
+      return [getOpportunityInitiative()];
+    default:
+      return [];
+  }
+}
+
+function getAiIdeasInitiative(): ViewTemplateSeed {
+  return {
+    workspaceType: 'ai-ideas',
+    objectType: 'initiative',
+    descriptor: {
+      tabs: [{
+        key: 'detail', label: 'Detail', always: true,
+        rows: [
+          { columns: 3, printClass: 'layout-head', fields: [
+            { key: 'totalValue', type: 'scores-summary', color: 'green' },
+            { key: 'totalComplexity', type: 'scores-summary', color: 'red' },
+            { key: 'deadline', type: 'text' },
+          ]},
+          { columns: 3, printClass: 'layout-main',
+            main: { span: 2, columns: 2, printClass: 'column-a colspan-2-print', printGridClass: 'layout-quad', fields: [
+              { key: 'description', type: 'text', span: 2 },
+              { key: 'problem', type: 'text', color: 'orange' },
+              { key: 'solution', type: 'text', color: 'blue' },
+              { key: 'benefits', type: 'list', color: 'green' },
+              { key: 'constraints', type: 'list', color: 'red' },
+              { key: 'metrics', type: 'list', color: 'blue' },
+              { key: 'risks', type: 'list', color: 'red' },
+            ]},
+            sidebar: { span: 1, printClass: 'column-b', fields: [
+              { key: 'contact', type: 'text' },
+              { key: 'domain', type: 'text' },
+              { key: 'technologies', type: 'list' },
+              { key: 'dataSources', type: 'list' },
+              { key: 'dataObjects', type: 'list' },
+            ]},
+          },
+          { columns: 2, printClass: 'layout-bottom', fields: [
+            { key: 'nextSteps', type: 'list', color: 'purple' },
+            { key: 'references', type: 'list', hideExcerptInPrint: true },
+          ]},
+          { columns: 2, fields: [
+            { key: 'valueScores', type: 'scores', color: 'green' },
+            { key: 'complexityScores', type: 'scores', color: 'red' },
+          ]},
+        ],
+      }],
+    },
+  };
+}
+
+function getOpportunityInitiative(): ViewTemplateSeed {
+  return {
+    workspaceType: 'opportunity',
+    objectType: 'initiative',
+    descriptor: {
+      tabs: [
+        {
           key: 'detail', label: 'Detail', always: true,
           rows: [
             { columns: 3, printClass: 'layout-head', fields: [
@@ -413,180 +579,27 @@ function getAiIdeasTemplates(): ViewTemplateSeed[] {
                 { key: 'contact', type: 'text' },
                 { key: 'domain', type: 'text' },
                 { key: 'technologies', type: 'list' },
-                { key: 'dataSources', type: 'list' },
-                { key: 'dataObjects', type: 'list' },
               ]},
             },
             { columns: 2, printClass: 'layout-bottom', fields: [
               { key: 'nextSteps', type: 'list', color: 'purple' },
-              { key: 'references', type: 'list', hideExcerptInPrint: true },
+              { key: 'references', type: 'list' },
             ]},
             { columns: 2, fields: [
               { key: 'valueScores', type: 'scores', color: 'green' },
               { key: 'complexityScores', type: 'scores', color: 'red' },
             ]},
           ],
-        }],
-      },
+        },
+        {
+          key: 'solutions', label: 'Solutions', showWhen: 'hasSolutions',
+          rows: [{ columns: 1, fields: [{ key: 'solutions', type: 'child-list' }] }],
+        },
+        {
+          key: 'proposals', label: 'Proposals', showWhen: 'hasProposals',
+          rows: [{ columns: 1, fields: [{ key: 'proposals', type: 'child-list' }] }],
+        },
+      ],
     },
-    {
-      workspaceType: 'ai-ideas',
-      objectType: 'organization',
-      descriptor: {
-        tabs: [{
-          key: 'detail', label: 'Detail', always: true,
-          rows: [
-            { columns: 2, fields: [
-              { key: 'size', type: 'text' },
-              { key: 'technologies', type: 'text' },
-            ]},
-            { columns: 1, fields: [
-              { key: 'products', type: 'text' },
-              { key: 'processes', type: 'text' },
-              { key: 'kpis', type: 'text' },
-              { key: 'challenges', type: 'text' },
-              { key: 'objectives', type: 'text' },
-            ]},
-            { columns: 1, fields: [
-              { key: 'references', type: 'list' },
-            ]},
-          ],
-        }],
-      },
-    },
-    {
-      workspaceType: 'ai-ideas',
-      objectType: 'dashboard',
-      descriptor: {
-        tabs: [{
-          key: 'main', always: true,
-          rows: [
-            { columns: 1, fields: [{ key: 'cover_page', type: 'component', printOnly: true, pageContext: 'cover' }] },
-            { columns: 1, fields: [{ key: 'executiveSummary.synthese_executive', type: 'text', color: 'white', screenOnly: true }] },
-            { columns: 1, printClass: 'report-introduction', pageBreakAfter: 'always', pageBreakInside: 'avoid', fields: [
-              { key: 'scatter_plot', type: 'component' },
-              { key: 'executiveSummary.introduction', type: 'text', color: 'white', id: 'section-introduction' },
-            ] },
-            { columns: 1, fields: [{ key: 'sommaire', type: 'component', printOnly: true }] },
-            { columns: 1, printClass: 'report-analyse', pageBreakBefore: 'always', pageBreakAfter: 'always', fields: [
-              { key: 'executiveSummary.analyse', type: 'text', color: 'white', id: 'section-analyse' },
-            ] },
-            { columns: 1, printClass: 'report-analyse', pageBreakBefore: 'always', pageBreakAfter: 'always', fields: [{ key: 'executiveSummary.recommandation', type: 'text', color: 'white', id: 'section-recommandations' }] },
-            { columns: 1, printClass: 'report-analyse', fields: [{ key: 'executiveSummary.references', type: 'list', id: 'section-references' }] },
-            { columns: 1, fields: [{ key: 'annex_cover', type: 'component', printOnly: true, pageContext: 'cover' }] },
-            { columns: 1, fields: [{ key: 'initiatives', type: 'entity-loop', collection: 'initiatives', templateRef: 'initiative', printOnly: true, pageContext: 'annex' }] },
-          ],
-        }],
-      },
-    },
-  ];
-}
-
-// ---------------------------------------------------------------------------
-// opportunity templates (spec §12.5 — Initiative opportunity)
-// ---------------------------------------------------------------------------
-
-function getOpportunityTemplates(): ViewTemplateSeed[] {
-  return [
-    {
-      workspaceType: 'opportunity',
-      objectType: 'initiative',
-      descriptor: {
-        tabs: [
-          {
-            key: 'detail', label: 'Detail', always: true,
-            rows: [
-              { columns: 3, printClass: 'layout-head', fields: [
-                { key: 'totalValue', type: 'scores-summary', color: 'green' },
-                { key: 'totalComplexity', type: 'scores-summary', color: 'red' },
-                { key: 'deadline', type: 'text' },
-              ]},
-              { columns: 3, printClass: 'layout-main',
-                main: { span: 2, columns: 2, printClass: 'column-a colspan-2-print', printGridClass: 'layout-quad', fields: [
-                  { key: 'description', type: 'text', span: 2 },
-                  { key: 'problem', type: 'text', color: 'orange' },
-                  { key: 'solution', type: 'text', color: 'blue' },
-                  { key: 'benefits', type: 'list', color: 'green' },
-                  { key: 'constraints', type: 'list', color: 'red' },
-                  { key: 'metrics', type: 'list', color: 'blue' },
-                  { key: 'risks', type: 'list', color: 'red' },
-                ]},
-                sidebar: { span: 1, printClass: 'column-b', fields: [
-                  { key: 'contact', type: 'text' },
-                  { key: 'domain', type: 'text' },
-                  { key: 'technologies', type: 'list' },
-                ]},
-              },
-              { columns: 2, printClass: 'layout-bottom', fields: [
-                { key: 'nextSteps', type: 'list', color: 'purple' },
-                { key: 'references', type: 'list' },
-              ]},
-              { columns: 2, fields: [
-                { key: 'valueScores', type: 'scores', color: 'green' },
-                { key: 'complexityScores', type: 'scores', color: 'red' },
-              ]},
-            ],
-          },
-          {
-            key: 'solutions', label: 'Solutions', showWhen: 'hasSolutions',
-            rows: [{ columns: 1, fields: [{ key: 'solutions', type: 'child-list' }] }],
-          },
-          {
-            key: 'proposals', label: 'Proposals', showWhen: 'hasProposals',
-            rows: [{ columns: 1, fields: [{ key: 'proposals', type: 'child-list' }] }],
-          },
-        ],
-      },
-    },
-    {
-      workspaceType: 'opportunity',
-      objectType: 'organization',
-      descriptor: {
-        tabs: [{
-          key: 'detail', label: 'Detail', always: true,
-          rows: [
-            { columns: 2, fields: [
-              { key: 'size', type: 'text' },
-              { key: 'technologies', type: 'text' },
-            ]},
-            { columns: 1, fields: [
-              { key: 'products', type: 'text' },
-              { key: 'processes', type: 'text' },
-              { key: 'kpis', type: 'text' },
-              { key: 'challenges', type: 'text' },
-              { key: 'objectives', type: 'text' },
-            ]},
-            { columns: 1, fields: [
-              { key: 'references', type: 'list' },
-            ]},
-          ],
-        }],
-      },
-    },
-    {
-      workspaceType: 'opportunity',
-      objectType: 'dashboard',
-      descriptor: {
-        tabs: [{
-          key: 'main', always: true,
-          rows: [
-            { columns: 1, fields: [{ key: 'cover_page', type: 'component', printOnly: true, pageContext: 'cover' }] },
-            { columns: 1, fields: [{ key: 'executiveSummary.synthese_executive', type: 'text', color: 'white', screenOnly: true }] },
-            { columns: 1, printClass: 'report-introduction', pageBreakAfter: 'always', pageBreakInside: 'avoid', fields: [
-              { key: 'scatter_plot', type: 'component' },
-              { key: 'executiveSummary.introduction', type: 'text', color: 'white', id: 'section-introduction' },
-            ] },
-            { columns: 1, fields: [{ key: 'sommaire', type: 'component', printOnly: true }] },
-            { columns: 1, printClass: 'report-analyse', pageBreakBefore: 'always', pageBreakAfter: 'always', fields: [
-              { key: 'executiveSummary.analyse', type: 'text', color: 'white', id: 'section-analyse' },
-            ] },
-            { columns: 1, printClass: 'report-analyse', pageBreakBefore: 'always', pageBreakAfter: 'always', fields: [{ key: 'executiveSummary.recommandation', type: 'text', color: 'white', id: 'section-recommandations' }] },
-            { columns: 1, printClass: 'report-analyse', fields: [{ key: 'executiveSummary.references', type: 'list', id: 'section-references' }] },
-            { columns: 1, fields: [{ key: 'annex_cover', type: 'component', printOnly: true, pageContext: 'cover' }] },
-            { columns: 1, fields: [{ key: 'initiatives', type: 'entity-loop', collection: 'initiatives', templateRef: 'initiative', printOnly: true, pageContext: 'annex' }] },
-          ],
-        }],
-      },
-    },
-  ];
+  };
 }
