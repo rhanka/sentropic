@@ -346,12 +346,12 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Import/export initiative fonctionnel
     - [x] Markdown avec liens bleus et références numérotées
 
-- [ ] **Lot N-1 — Docs consolidation**
+- [x] **Lot N-1 — Docs consolidation**
   - [x] Update SPEC_EVOL_CONFIG_UX_ALIGNMENT.md — status implemented, ConfigItemCard mutualized
   - [x] Update SPEC_EVOL_WORKSPACE_TYPES.md — §10.2 freeform mode, §10.4 mutualized templates, §10.5 aligned tools
   - [x] Update SPEC_EVOL_FREEFORM_DOCX.md — status implemented
-  - [ ] Consolidate remaining specs.
-  - [ ] Update PLAN.md.
+  - [x] Consolidate remaining specs (SPEC.md, SPEC_TEMPLATING.md, SPEC_CHATBOT.md, TOOLS.md, DATA_MODEL.md)
+  - [x] Update PLAN.md and TODO.md
   - [x] Document workflow runtime model (spec/SPEC_WORKFLOW_RUNTIME.md or consolidate into SPEC.md):
     - [x] Workflow definition structure: tasks, transitions (start/normal/conditional/fanout/join/end), bindings
     - [x] Execution model: workflow_run_state, workflow_task_results, task lifecycle (pending→in_progress→completed/failed)
@@ -367,24 +367,21 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Prompt system: default prompts per agent, org-aware prompts, structured output schemas
     - [x] Tool dispatch: context-type tools, workspace-type tools, tool filtering
     - [x] Chat integration: system prompt construction, tool availability, freeform DOCX upskill pattern
-  - [ ] Review and update rules/skills — based on BR-04B audit (2 agents, 13 sessions, 400+ incidents):
-    - [ ] For each existing rule file: diff against audit findings, identify rules that exist but are repeatedly violated, understand WHY (visibility? precision? no mechanical enforcement?), and fix the root cause (reword, move, add hook)
-    - [ ] For each audit finding with no existing rule: add the rule in the right file
-    - [ ] For recurring patterns (print debug loops, wrong branch, hallucinated checkboxes): create skills or hooks that mechanically prevent the mistake instead of relying on text rules
-    - [ ] Audit reports available in session `185d0021` agents `a22a2d6f6e30c303e` (reproaches) and `a6d7c6fa856e30657` (improvements)
   - [x] Merge migrations 0025+0026 into single 0025 + add bid→proposal cleanup + update drizzle journal
 
-- [ ] **Lot N — Final validation**
-  - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-  - [ ] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-  - [ ] Retest API: `make test-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
-  - [ ] Retest UI: `make test-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test`
-  - [ ] Retest E2E groups: cf Lot 11 gate
-  - [ ] AI flaky tests + document signatures
-  - [ ] Record explicit user sign-off if any AI flaky test is accepted
-  - [ ] Create/update PR using `BRANCH.md` as PR body
-  - [ ] Run/verify branch CI on PR
-  - [ ] Once UAT + CI OK, remove `BRANCH.md`, push, merge
+- [x] **Lot N — Final validation**
+  - [x] `make typecheck-api typecheck-ui` — CI green
+  - [x] `make lint-api lint-ui` — CI green
+  - [x] Retest API — CI green
+  - [x] Retest UI — CI green (3 markdown tests fixed for title removal BUG-L13-13)
+  - [x] Retest E2E — CI green
+  - [x] AI flaky tests — org-aware test fixed (accept null organizationId per prompt contract), initiative-generation-async passes
+  - [x] PR #103 created and CI verified
+  - [x] BRANCH.md removed, moved to `plan/done/`, push, merge
+
+## Deferred to BR-25
+
+- Rules & skills audit — absorb BR-04B learnings (400+ incidents) into rules, create hooks for mechanical enforcement. See `plan/25-BRANCH_chore-rules-skills-audit.md`.
 
 ## Deferred to BR-20
 
