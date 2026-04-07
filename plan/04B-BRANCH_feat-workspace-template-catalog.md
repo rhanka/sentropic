@@ -74,6 +74,9 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] Create shared ConfigItemCard component
   - [x] Refactor agents+workflows to use ConfigItemCard
   - [x] Refactor ViewTemplateCatalog to use ConfigItemCard, flat list
+  - [x] Align view template seed/list on agent/workflow pattern (DB = source of truth, seed all common templates at workspace creation, list returns DB)
+  - [x] Mutualize common templates (initiative, organization, dashboard, solution, product, proposal) across workspace types
+  - [x] Enrich template description in ConfigItemCard (tabs count, fields count, field types)
 
 - [x] **Lot 7 — Document generation infra + gate auto-todo**
   - [x] DOCX template stubs (solution-summary, proposal-summary, product-datasheet).
