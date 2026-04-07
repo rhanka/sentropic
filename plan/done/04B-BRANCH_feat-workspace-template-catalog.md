@@ -392,9 +392,3 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
 
 - Rich markdown list editor stabilization for initiative `constraints`: freeze reproduced on `cc884370-765c-40f3-a754-ceaf9a05da04`, likely around `TemplateRenderer` / `EditableInput` / `TipTap` list forcing and markdown roundtrip on rich list items.
 
-## Future runtime extensions (out of BR-04 scope once Lot 12 is complete)
-
-- [ ] Generic runtime message / interrupt / resume API exposed to product/UI surfaces.
-- [ ] Generic child/sub-workflow execution across arbitrary workflow families.
-- [ ] Advanced reducers / reusable join strategies beyond the needs of current workflows.
-- [ ] Compensation / saga patterns and broader workflow-version migration concerns.
