@@ -342,6 +342,8 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Consolidate specs.
   - [ ] Update PLAN.md.
+  - [ ] Update rules/skills to enforce single migration per branch (include journal + snapshot cleanup procedure)
+  - [x] Merge migrations 0025+0026 into single 0025 + add bid→proposal cleanup + update drizzle journal
 
 - [ ] **Lot N — Final validation**
   - [ ] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
