@@ -54,11 +54,11 @@ describe('markdown utils', () => {
       expect(html).toContain('[2]');
       expect(html).toContain('href="#ref-1"');
       expect(html).toContain('href="#ref-2"');
-      // Title should NOT leak into visible text (only in title attribute)
+      // Title should NOT leak into visible text
       expect(html).not.toContain('>Foo');
       expect(html).not.toContain('>Baz');
-      // Title should be in the title attribute (quotes escaped, > kept as-is in attr)
-      expect(html).toContain('title="Foo>Bar"');
+      // Title attribute was removed to prevent leak in locked mode (BUG-L13-13)
+      expect(html).not.toContain('title=');
     });
 
     it('should not break when no references are provided', () => {
@@ -74,8 +74,9 @@ describe('markdown utils', () => {
       ];
       const html = renderMarkdownWithRefs('see [1]', specialRefs);
       expect(html).toContain('href="#ref-1"');
-      // Title with quotes should be escaped
-      expect(html).toContain('title="Title &quot;with&quot;');
+      // Title attribute removed (BUG-L13-13) — title should not appear anywhere
+      expect(html).not.toContain('Title');
+      expect(html).not.toContain('quotes');
     });
 
     it('should leave [N] intact when N exceeds reference count', () => {
