@@ -3,9 +3,10 @@
 ## 1. Purpose
 
 ### 1.1 Functional objective
-Provide a template-driven DOCX generation capability for two business documents:
-- use case one-page report;
-- executive synthesis multipage report with annexed use cases.
+Provide a template-driven DOCX generation capability for business documents:
+- initiative one-page report (renamed from "use case one-page");
+- executive synthesis multipage report with annexed initiatives;
+- freeform DOCX generation via chat tool (`document_generate`).
 
 The primary concern is functional templating (layout control, marker contract, lifecycle), not endpoint design alone.
 
@@ -28,16 +29,21 @@ Out of scope in this spec:
 ## 2. Functional model
 
 ### 2.1 Templated document families
-- `usecase-onepage`
-  - Source entity: `usecase`.
+- `usecase-onepage` (aliased as `initiative-onepage`)
+  - Source entity: `initiative` (DB table: `use_cases`, renamed from "use case" at the domain level).
   - Output: one-page document.
   - Current implementation exists and is the migration baseline.
 - `executive-synthesis-multipage`
   - Source entity: `folder`.
   - Output: multipage synthesis with optional annex and optional dashboard visual.
+- Freeform DOCX (via chat tool)
+  - Source entity: any context (initiative, folder, dashboard, etc.).
+  - Output: LLM-generated DOCX via `docx.js` code execution in VM sandbox.
+  - Triggered by the `document_generate` chat tool with `action: "generate"` and `code` payload.
+  - See `SPEC_EVOL_FREEFORM_DOCX.md` for full specification.
 
 ### 2.2 Functional sections
-- Use case one-page sections:
+- Initiative one-page sections (formerly "use case one-page"):
   - title and summary fields;
   - detailed blocks (problem, solution, lists, references);
   - scoring visualization and matrix-related values.
@@ -68,6 +74,20 @@ Rules:
 - Mapping should be "as-is first": prefer direct object paths over per-field remapping.
 - Include target context is the object passed in `WITH (...)` and becomes the root context of the included template.
 
+### 2.4 Freeform DOCX generation (BR-04B)
+
+Freeform DOCX generation uses `docx.js` code executed in an isolated VM sandbox (`vm2` or Node `vm`). The LLM writes JavaScript code that imports `docx` to build a document programmatically.
+
+Two-phase pattern:
+1. **Upskill**: LLM calls `document_generate({ action: "upskill" })` to receive a self-contained skill document with DOCX best practices and `docx.js` API patterns.
+2. **Generate**: LLM calls `document_generate({ action: "generate", code: "..." })` with the `docx.js` code. The code is executed in a sandbox, produces a DOCX buffer, which is uploaded to S3 and a download link returned.
+
+Implementation: `api/src/services/docx-generation.ts` (generateFreeformDocx) + `api/src/services/docx-freeform-helpers.ts` (VM sandbox helpers). Execution is synchronous inside `chat-service.ts` (not queued via `job_queue`).
+
+Download card is rendered inline in chat via `runtimeSummary.docxCards` in `StreamMessage.svelte`.
+
+See `SPEC_EVOL_FREEFORM_DOCX.md` for the full specification.
+
 ## 3. Template lifecycle vs business objects
 
 ### 3.1 Lifecycle phases
@@ -86,10 +106,10 @@ Rules:
   - contract version can change only with explicit migration/update.
 
 ### 3.2 Object articulation
-- `usecase-onepage` template binds to `use_cases` (+ folder matrix context when needed).
+- `usecase-onepage` template binds to `initiatives` (DB table: `use_cases`) (+ folder matrix context when needed).
 - `executive-synthesis-multipage` template binds to:
   - `folders` (executive summary source);
-  - linked `use_cases` (annex source);
+  - linked `initiatives` (annex source);
   - optional dashboard payload from client provided data.
 
 ### 3.3 Intake bundle for executive synthesis (single lock point)
@@ -144,7 +164,7 @@ Rules:
 - Templating layer consumes normalized DTOs; it does not own business state.
 - Template files are stored under `api/templates` in this phase.
 
-### 4.3 Include contract for annex use cases
+### 4.3 Include contract for annex initiatives (formerly "annex use cases")
 - Master template annex iteration pattern:
 ```txt
 {{FOR uc IN (usecases || [])}}
@@ -162,7 +182,7 @@ Rules:
 ## 5. Technical support model (API and processing)
 
 ### 5.1 Legacy model (pre-Wave 2, for context)
-- Legacy route: `GET /api/v1/use-cases/:id/docx` (now disabled with `410 Gone`)
+- Legacy route: `GET /api/v1/use-cases/:id/docx` (now disabled with `410 Gone`; aliased as `GET /api/v1/initiatives/:id/docx`)
 - Existing renderer path kept as technical base:
   - `api/src/services/docx-service.ts`
   - template loading from `api/templates`
@@ -337,3 +357,44 @@ Current limitations:
 - No UI design workflow for templates.
 - No final e2e/UAT execution in this spec.
 - No full template governance UI/versioning workflow in this lot.
+
+## 9. Template catalog per workspace type (BR-04B)
+
+### 9.1 Extended template families
+
+Current families (Wave 2):
+- `usecase-onepage` (entity: initiative)
+- `executive-synthesis-multipage` (entity: folder)
+
+New families per workspace type:
+- `opportunity-brief` (entity: initiative, type: opportunity, stage: G0-G2)
+- `solution-proposal` (entity: solution, type: opportunity, stage: G2-G5)
+- `bid-document` (entity: proposal, type: opportunity, stage: G5)
+- `product-datasheet` (entity: product, type: any, stage: G5-G7)
+
+### 9.2 Template x stage binding
+
+Templates are available based on initiative maturity stage:
+- Stage G0: `usecase-onepage`, `opportunity-brief`
+- Stage G2: `solution-proposal`
+- Stage G5: `bid-document`, `product-datasheet`
+- Stage G7: `product-datasheet` (delivery documentation)
+
+This binding is informational (UI suggests relevant templates), not enforced.
+
+### 9.3 DOCX template stubs (BR-04B)
+
+Stub DOCX templates added in `api/templates/`:
+- `solution-summary.docx`
+- `proposal-summary.docx` (renamed from `bid-summary.docx`)
+- `product-datasheet.docx`
+
+### 9.4 View template catalog alignment (BR-04B)
+
+View templates (UI layout descriptors, distinct from DOCX templates) are now aligned with the agent/workflow pattern:
+- DB is the source of truth (view templates are seeded per workspace type at workspace creation).
+- Common templates (organization, dashboard, solution, product, proposal) are shared across all workspace types.
+- Initiative template differs between ai-ideas and opportunity (different fields/tabs).
+- Lazy-seed on `listViewTemplates()` ensures old workspaces get newly added templates.
+- Config UX uses the shared `ConfigItemCard.svelte` component for agents, workflows, and view templates.
+- See `SPEC_EVOL_CONFIG_UX_ALIGNMENT.md` for the mutualized config UX spec.
