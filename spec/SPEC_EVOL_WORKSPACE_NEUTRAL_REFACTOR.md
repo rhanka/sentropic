@@ -57,7 +57,62 @@ Chat sessions are scoped to the **folder**, adapting to the content mix:
 - Workflow registry must support multiple workflows per workspace (already partially done with generic dispatch)
 - Gate system adapts per-object-type, not per-workspace-type
 
-### UI
+### UI — Purely template-driven entity views
+
+All entity views (initiative, organisation, report/dashboard) must be **purely template-driven**. No per-entity-type page logic.
+
+#### Single dynamic route
+
+```
+/entity/[type]/[id]
+```
+
+One route, one page file. The `type` param determines the template and API endpoint. This forces generic rendering — no hardcoded per-type pages.
+
+#### EntityPage wrapper
+
+The page file contains only:
+
+```svelte
+<EntityPage objectType={type} entityId={id} />
+```
+
+`EntityPage` handles all cross-cutting concerns generically:
+
+| Concern | Implementation |
+|---|---|
+| Template resolution | `resolveViewTemplate(workspaceType, objectType)` |
+| Data loading | `apiGet(/entities/{type}/{id})` or type-specific endpoint |
+| SSE stream | Subscribe to entity stream, update `data` on events |
+| Collaborative editing | `dirtyFields: Set<string>` — SSE updates skip fields being edited locally. EditableInput signals dirty on focus, clean on save. |
+| Lock/presence | Acquire lock on mount, release on leave. Pass `locked` prop. |
+| Comment counts | Fetch and pass `commentCounts` + `onOpenComments` callback |
+| Header | Template-driven — a field `type: "header"` in the template with title, badges, org link |
+| FileMenu | Import/export/delete — generic by objectType |
+| Save handlers | `apiEndpoint` derived from objectType+entityId, `onFieldSaved` triggers data reload |
+| Print mode | `beforeprint`/`afterprint` listeners, pass `isPrinting` prop |
+
+#### TemplateRenderer becomes stateless
+
+Current state (BR-04B): TemplateRenderer manages its own `textBuffers`, `listBuffers`, `scoreBuffers` + SSE reactive sync block (100+ lines).
+
+Target state: TemplateRenderer receives `data` as a read-only prop. No internal buffers. EntityPage manages the data lifecycle:
+- EntityPage holds `data` + `dirtyFields`
+- SSE update arrives → EntityPage updates `data` for all fields NOT in `dirtyFields`
+- User edits a field → EditableInput signals `dirty` → field added to `dirtyFields`
+- User saves → EditableInput signals `clean` → field removed from `dirtyFields`, `data` updated with saved value
+
+#### Dashboard becomes a report entity
+
+The current dashboard is not an entity — it's a page with hardcoded layout. In the target state:
+- A **report** is a first-class entity created in the folder (type `report`)
+- The dashboard page becomes `/entity/report/[id]`
+- The report template defines: cover page, sommaire, synthèse, scatter plot, introduction, analyse, recommandation, references, annexes (entity-loop over folder initiatives)
+- Scatter plot, cover page, sommaire are `component` slots — EntityPage provides them generically or the template references reusable components
+
+This eliminates: `initiative/[id]/+page.svelte` (635 lines), `organizations/[id]/+page.svelte` (669 lines), `dashboard/+page.svelte` (1800+ lines).
+
+### UI — Other
 - Folder view needs multi-type object listing with type filters
 - Workspace creation simplified (no mandatory type selection upfront)
 - Settings: workflow configuration per workspace becomes "available workflows" (multi-select)

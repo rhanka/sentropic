@@ -5,13 +5,14 @@
   import { addToast } from '$lib/stores/toast';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
-  import { currentOrganizationId, organizationsStore, fetchOrganizations } from '$lib/stores/organizations';
+  import { organizationsStore, fetchOrganizations } from '$lib/stores/organizations';
   import { createDraftFolder, updateFolder, currentFolderId, type Folder } from '$lib/stores/folders';
   import { apiGet, apiPost } from '$lib/utils/api';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import EditableInput from '$lib/components/EditableInput.svelte';
-  import { Brain, Save, Trash2, Loader2, CirclePlus } from '@lucide/svelte';
-  import { workspaceReadOnlyScope } from '$lib/stores/workspaceScope';
+  import MenuPopover from '$lib/components/MenuPopover.svelte';
+  import { Brain, Save, Trash2, Loader2, CirclePlus, ChevronDown } from '@lucide/svelte';
+  import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import type { Organization } from '$lib/stores/organizations';
 
   type ModelProviderId = 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere';
@@ -56,17 +57,23 @@
   let isGenerating = false;
   let originalName: string | null = null;
   let originalContext: string | null = null;
+  let resolvedGenerationInput = '';
+  let canUseAIUi = false;
   let AUTO_DRAFT_NAME = $_('common.draft');
   $: AUTO_DRAFT_NAME = $_('common.draft');
   let isAutoName = false;
   let isLoadingOrganizations = false;
   let lastOrgIdApplied: string | null = null;
   let orgSyncTimer: ReturnType<typeof setTimeout> | null = null;
+  let organizationMenuOpen = false;
+  let organizationMenuTrigger: HTMLButtonElement | null = null;
+  let selectedOrganizationsLabel = '';
   let selectedOrganization: Organization | null = null;
   let selectedOrgHasMatrixTemplate = false;
-  let useOrganizationMatrix = true;
-  let generateOrganizationMatrix = true;
-  let lastMatrixOptionsOrgId: string | null = null;
+  let selectedOrgIds: string[] = [];
+  let createNewOrgs = false;
+  let linkedOrganizationId: string | null = null;
+  let selectedMatrixMode: MatrixModeRequest = 'generate';
   let modelCatalog: ModelCatalogPayload = {
     providers: [],
     models: [],
@@ -79,6 +86,14 @@
   let isLoadingModelCatalog = false;
 
   type MatrixModeRequest = 'organization' | 'generate' | 'default';
+
+  const toggleOrganizationSelection = (organizationId: string) => {
+    if (selectedOrgIds.includes(organizationId)) {
+      selectedOrgIds = selectedOrgIds.filter((id) => id !== organizationId);
+      return;
+    }
+    selectedOrgIds = [...selectedOrgIds, organizationId];
+  };
 
   const loadOrganizations = async () => {
     isLoadingOrganizations = true;
@@ -165,11 +180,6 @@
   onMount(() => {
     void loadOrganizations();
     void loadModelCatalog();
-    if ($workspaceReadOnlyScope) {
-      addToast({ type: 'error', message: get(_)('folders.new.errors.readOnlyCreateDisabled') });
-      goto('/folders');
-      return;
-    }
 
     // Si arrivée depuis la liste en cliquant sur un brouillon
     void (async () => {
@@ -180,8 +190,7 @@
         const loaded = await apiGet<Folder>(`/folders/${draftId}`);
         folder = { ...folder, ...loaded };
         currentFolderId.set(loaded.id);
-        // Reprendre la sélection organisation si présente
-        if (loaded.organizationId) currentOrganizationId.set(loaded.organizationId);
+        selectedOrgIds = loaded.organizationId ? [loaded.organizationId] : [];
         lastOrgIdApplied = loaded.organizationId ?? null;
         // Si le nom est le nom automatique, rester en mode auto-name (save désactivé tant que nom réel pas fourni)
         isAutoName = (loaded.name || '').trim() === AUTO_DRAFT_NAME;
@@ -193,14 +202,22 @@
       }
     })();
   });
+  let readOnlyChecked = false;
+  $: if ($workspaceScopeHydrated && !readOnlyChecked) {
+    readOnlyChecked = true;
+    if ($workspaceReadOnlyScope) {
+      addToast({ type: 'error', message: get(_)('folders.new.errors.readOnlyCreateDisabled') });
+      goto('/folders');
+    }
+  }
 
   const syncSelectedOrganizationToDraft = () => {
     if (!folder.id) return;
-    const nextOrgId = $currentOrganizationId || null;
+    const nextOrgId = linkedOrganizationId;
     if (nextOrgId === lastOrgIdApplied) return;
     if (orgSyncTimer) clearTimeout(orgSyncTimer);
     orgSyncTimer = setTimeout(() => {
-      void updateFolder(folder.id as string, { organizationId: nextOrgId || undefined } as any).catch(() => {});
+      void updateFolder(folder.id as string, { organizationId: nextOrgId } as any).catch(() => {});
       lastOrgIdApplied = nextOrgId;
       orgSyncTimer = null;
     }, 200);
@@ -220,10 +237,11 @@
       const created = await createDraftFolder({
         name: draftName,
         description: context ? folder.description || undefined : undefined,
-        organizationId: $currentOrganizationId || undefined,
+        organizationId: linkedOrganizationId || undefined,
       });
-      folder = { ...folder, ...created, organizationId: created.organizationId ?? ($currentOrganizationId || null) };
-      lastOrgIdApplied = created.organizationId ?? ($currentOrganizationId || null);
+      const createdOrganizationId = linkedOrganizationId ?? created.organizationId ?? null;
+      folder = { ...folder, ...created, organizationId: createdOrganizationId };
+      lastOrgIdApplied = createdOrganizationId;
       isAutoName = !name;
       originalName = created.name ?? draftName;
       originalContext = created.description ?? (folder.description || '');
@@ -241,7 +259,7 @@
     const name = (folder.name || '').trim();
     const context = (folder.description || '').trim();
     // Draft can be created with either a name OR a context (or later when user wants to add docs).
-    if ((name || context) && !folder.id && !isCreatingDraft && !$workspaceReadOnlyScope) {
+    if ((name || context) && !folder.id && !isCreatingDraft && $workspaceScopeHydrated && !$workspaceReadOnlyScope) {
       if (draftTimer) clearTimeout(draftTimer);
       draftTimer = setTimeout(() => {
         void ensureDraftFolder();
@@ -249,20 +267,31 @@
     }
   }
 
-  const canUseAI = () => {
-    const name = isAutoName ? '' : (folder.name || '').trim();
-    const context = (folder.description || '').trim();
-    return Boolean(name || context || hasAnyDoc || $currentOrganizationId);
-  };
+  const canUseAI = () => Boolean(resolvedGenerationInput);
 
-  // Derived flags (avoid relying on function calls for UI enablement).
-  $: realName = isAutoName ? '' : (folder.name || '').trim();
-  $: hasContext = Boolean((folder.description || '').trim());
-  $: hasOrganization = Boolean($currentOrganizationId);
-  $: canUseAIUi = Boolean(realName || hasContext || hasAnyDoc || hasOrganization);
+  $: {
+    const context = (folder.description || '').trim();
+    const title = isAutoName ? '' : (folder.name || '').trim();
+
+    if (context) {
+      resolvedGenerationInput = context;
+    } else if (title) {
+      resolvedGenerationInput = title;
+    } else if (hasAnyDoc) {
+      resolvedGenerationInput = $_('folders.new.defaultInput.documentsContext');
+    } else if (selectedOrgIds.length > 1) {
+      resolvedGenerationInput = $_('folders.new.defaultInput.organizationsContext');
+    } else if (selectedOrgIds.length === 1) {
+      resolvedGenerationInput = $_('folders.new.defaultInput.organizationContext');
+    } else {
+      resolvedGenerationInput = '';
+    }
+
+    canUseAIUi = Boolean(resolvedGenerationInput);
+  }
 
   const handleSave = async () => {
-    if ($workspaceReadOnlyScope) {
+    if ($workspaceScopeHydrated && $workspaceReadOnlyScope) {
       addToast({ type: 'error', message: get(_)('folders.new.errors.readOnlyActionNotAllowed') });
       return;
     }
@@ -277,7 +306,7 @@
       await updateFolder(id, {
         name: folder.name,
         description: folder.description,
-        organizationId: $currentOrganizationId || undefined,
+        organizationId: linkedOrganizationId,
         status: 'completed',
       } as any);
 
@@ -294,7 +323,7 @@
   };
 
   const handleGenerate = async () => {
-    if ($workspaceReadOnlyScope) {
+    if ($workspaceScopeHydrated && $workspaceReadOnlyScope) {
       addToast({ type: 'error', message: get(_)('folders.new.errors.readOnlyActionNotAllowed') });
       return;
     }
@@ -306,29 +335,22 @@
       const id = await ensureDraftFolder();
       if (!id) throw new Error(get(_)('folders.new.errors.draftCreateFailed'));
 
-      const context = (folder.description || '').trim();
-      const input =
-        context ||
-        (hasAnyDoc
-          ? get(_)('folders.new.defaultInput.documentsContext')
-          : ($currentOrganizationId ? get(_)('folders.new.defaultInput.organizationContext') : ''));
+      const input = resolvedGenerationInput;
       if (!input) throw new Error(get(_)('folders.new.errors.missingInput'));
 
-      const matrixMode = (() => {
-        if (!$currentOrganizationId) return undefined;
-        if (selectedOrgHasMatrixTemplate) {
-          return useOrganizationMatrix ? ('organization' as MatrixModeRequest) : ('default' as MatrixModeRequest);
-        }
-        return generateOrganizationMatrix ? ('generate' as MatrixModeRequest) : ('default' as MatrixModeRequest);
-      })();
+      const matrixMode = selectedOrgHasMatrixTemplate && selectedMatrixMode === 'organization'
+        ? ('organization' as MatrixModeRequest)
+        : ('generate' as MatrixModeRequest);
 
       await apiPost('/initiatives/generate', {
         input,
         folder_id: id,
         initiative_count: nbUseCases,
-        organization_id: $currentOrganizationId || undefined,
+        organization_id: linkedOrganizationId || undefined,
         matrix_mode: matrixMode,
         model: selectedGenerationModelId || undefined,
+        ...(selectedOrgIds.length > 0 ? { org_ids: selectedOrgIds } : {}),
+        ...(createNewOrgs ? { create_new_orgs: true } : {}),
       });
 
       addToast({ type: 'info', message: get(_)('folders.new.toast.generationStarted') });
@@ -359,15 +381,22 @@
   // Capture initial values once the draft exists (for EditableInput originalValue).
   $: if (folder.id && originalName === null) originalName = folder.name || '';
   $: if (folder.id && originalContext === null) originalContext = folder.description || '';
+  $: linkedOrganizationId = selectedOrgIds.length === 1 ? selectedOrgIds[0] : null;
+  $: selectedOrganizationsLabel =
+    selectedOrgIds.length === 0
+      ? $_('folders.new.multiOrg.noneSelected')
+      : selectedOrgIds.length === 1
+        ? ($organizationsStore.find((organization) => organization.id === selectedOrgIds[0])?.name ??
+          $_('folders.new.multiOrg.noneSelected'))
+        : $_('folders.new.multiOrg.selectedCount', {
+          values: { count: selectedOrgIds.length },
+        });
   $: if (folder.id) syncSelectedOrganizationToDraft();
-  $: selectedOrganization = $organizationsStore.find((org) => org.id === ($currentOrganizationId || '')) ?? null;
+  $: selectedOrganization = $organizationsStore.find((org) => org.id === (linkedOrganizationId || '')) ?? null;
   $: selectedOrgHasMatrixTemplate = !!selectedOrganization?.hasMatrixTemplate;
   $: {
-    const orgId = $currentOrganizationId || null;
-    if (orgId !== lastMatrixOptionsOrgId) {
-      lastMatrixOptionsOrgId = orgId;
-      useOrganizationMatrix = true;
-      generateOrganizationMatrix = true;
+    if (!selectedOrgHasMatrixTemplate && selectedMatrixMode !== 'generate') {
+      selectedMatrixMode = 'generate';
     }
   }
 
@@ -475,45 +504,110 @@
 
 	  <div class="rounded border border-slate-200 bg-white p-6 space-y-4">
 	    <div class="space-y-2">
-	      <div class="text-sm font-medium text-slate-700">{$_('folders.new.orgOptional')}</div>
+	      <div class="text-sm font-medium text-slate-700">{$_('folders.new.multiOrg.title')}</div>
 	      {#if isLoadingOrganizations}
 	        <div class="w-full rounded border border-slate-300 p-2 bg-slate-50 text-slate-500">
 	          {$_('folders.new.loadingOrganizations')}
 	        </div>
 	      {:else}
-	        <select class="w-full rounded border border-slate-300 p-2" bind:value={$currentOrganizationId}>
-	          <option value="">{$_('folders.new.unspecified')}</option>
-	          {#each $organizationsStore as organization (organization.id)}
-	            <option value={organization.id}>{organization.name}</option>
-	          {/each}
-	        </select>
-	        {#if $organizationsStore.length === 0}
-	          <p class="text-sm text-slate-500">
-	            {$_('folders.new.noOrganizations')}
-	            <a href="/organizations" class="text-blue-600 hover:text-blue-800 underline">{$_('folders.new.createOrg')}</a>
-	          </p>
-	        {/if}
+	        <MenuPopover
+            bind:open={organizationMenuOpen}
+            bind:triggerRef={organizationMenuTrigger}
+            align="left"
+            widthClass="w-full"
+            menuPaddingClass="p-0"
+          >
+            <svelte:fragment slot="trigger" let:toggle>
+              <button
+                type="button"
+                class="flex w-full items-center justify-between rounded border border-slate-300 bg-white p-2 text-left text-slate-700"
+                aria-haspopup="menu"
+                aria-expanded={organizationMenuOpen}
+                aria-label={$_('folders.new.multiOrg.title')}
+                on:click={toggle}
+                bind:this={organizationMenuTrigger}
+              >
+                <span class="truncate">{selectedOrganizationsLabel}</span>
+                <ChevronDown class="h-4 w-4 shrink-0 text-slate-500" />
+              </button>
+            </svelte:fragment>
+            <svelte:fragment slot="menu">
+              <div class="max-h-52 overflow-y-auto p-2">
+                {#if $organizationsStore.length === 0}
+                  <div class="px-2 py-3 text-sm text-slate-500">
+                    {$_('folders.new.noOrganizations')}
+                  </div>
+                {:else}
+                  <div class="space-y-1">
+                    {#each $organizationsStore as organization (organization.id)}
+                      <button
+                        type="button"
+                        role="menuitemcheckbox"
+                        aria-checked={selectedOrgIds.includes(organization.id)}
+                        class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                        on:click={() => toggleOrganizationSelection(organization.id)}
+                      >
+                        <span class={`flex h-4 w-4 items-center justify-center rounded border text-[10px] ${selectedOrgIds.includes(organization.id) ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-transparent'}`}>
+                          ✓
+                        </span>
+                        <span class="truncate">{organization.name}</span>
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            </svelte:fragment>
+          </MenuPopover>
+          <p class="text-xs text-slate-500">{$_('folders.new.multiOrg.hint')}</p>
+          {#if $organizationsStore.length === 0}
+            <p class="text-sm text-slate-500">
+              {$_('folders.new.noOrganizations')}
+              <a href="/organizations" class="text-blue-600 hover:text-blue-800 underline">{$_('folders.new.createOrg')}</a>
+            </p>
+          {/if}
 	      {/if}
 	    </div>
 
-      {#if $currentOrganizationId}
-        <div class="space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
-          <div class="text-sm font-medium text-slate-700">{$_('folders.new.matrix.title')}</div>
-          {#if selectedOrgHasMatrixTemplate}
-            <label class="flex items-start gap-2 text-sm text-slate-700">
-              <input type="checkbox" class="mt-0.5" bind:checked={useOrganizationMatrix} />
-              <span>{$_('folders.new.matrix.useOrganization')}</span>
-            </label>
-            <p class="text-xs text-slate-500">{$_('folders.new.matrix.useOrganizationHint')}</p>
-          {:else}
-            <label class="flex items-start gap-2 text-sm text-slate-700">
-              <input type="checkbox" class="mt-0.5" bind:checked={generateOrganizationMatrix} />
-              <span>{$_('folders.new.matrix.generateOrganization')}</span>
-            </label>
-            <p class="text-xs text-slate-500">{$_('folders.new.matrix.generateOrganizationHint')}</p>
-          {/if}
-        </div>
-      {/if}
+      <div class="space-y-2">
+        <label class="flex items-start gap-2 text-sm text-slate-700">
+          <input type="checkbox" class="mt-0.5 rounded" bind:checked={createNewOrgs} />
+          <span>{$_('folders.new.multiOrg.createNewOrgs')}</span>
+        </label>
+        <p class="text-xs text-slate-500">{$_('folders.new.multiOrg.createNewOrgsHint')}</p>
+      </div>
+
+      <div class="space-y-3">
+        <div class="text-sm font-medium text-slate-700">{$_('folders.new.matrix.title')}</div>
+        {#if selectedOrgHasMatrixTemplate}
+          <label class="flex items-start gap-2 text-sm text-slate-700">
+            <input
+              type="radio"
+              class="mt-0.5"
+              name="folder-matrix-mode"
+              value="organization"
+              bind:group={selectedMatrixMode}
+            />
+            <span>{$_('folders.new.matrix.useOrganization', { values: { name: selectedOrganization?.name || '' } })}</span>
+          </label>
+          <label class="flex items-start gap-2 text-sm text-slate-700">
+            <input
+              type="radio"
+              class="mt-0.5"
+              name="folder-matrix-mode"
+              value="generate"
+              bind:group={selectedMatrixMode}
+            />
+            <span>{$_('folders.new.matrix.generateAdHoc')}</span>
+          </label>
+          <p class="text-xs text-slate-500">{$_('folders.new.matrix.useOrganizationHint')}</p>
+        {:else}
+          <label class="flex items-start gap-2 text-sm text-slate-700">
+            <input type="radio" class="mt-0.5" checked disabled />
+            <span>{$_('folders.new.matrix.generateAdHoc')}</span>
+          </label>
+          <p class="text-xs text-slate-500">{$_('folders.new.matrix.generateAdHocHint')}</p>
+        {/if}
+      </div>
 
 	    <div class="space-y-2">
 	      <div class="text-sm font-medium text-slate-700">{$_('folders.new.context')}</div>
@@ -616,4 +710,19 @@
 	      </div>
 	    {/if}
 	  </div>
+
+    <div class="flex justify-end">
+    <button
+      class="rounded-lg bg-primary text-white py-2.5 px-6 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      on:click={handleGenerate}
+      disabled={isGenerating || docsUploading || !canUseAIUi}
+      type="button"
+    >
+      {#if isGenerating}
+        {$_('folders.new.generating')}
+      {:else}
+        {$_('folders.new.generateFolder')}
+      {/if}
+    </button>
+    </div>
 </section>

@@ -733,8 +733,8 @@
           {/if}
         </div>
 
-        <div class="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100">
-          <span class="text-xs text-slate-400 whitespace-nowrap">
+	        <div class="px-3 sm:px-4 pb-3 sm:pb-4 pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-100 min-w-0">
+	          <span class="text-xs text-slate-400 whitespace-nowrap">
             {#if isDetailing}
               {$_('usecase.status.detailing')}
             {:else if isGenerating}
@@ -746,10 +746,21 @@
             {/if}
           </span>
 
-          <div class="flex items-center gap-2 flex-wrap">
-            {#if useCase.model}
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 whitespace-nowrap">
-                {formatCompactModelLabel(useCase.model)}
+	          <div class="flex items-center gap-1.5 flex-nowrap shrink-0">
+	            {#if useCase.organizationId}
+	              <span
+	                class="inline-flex items-center max-w-[6.75rem] sm:max-w-[7.5rem] px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700"
+	                title={useCase.organizationName || $_('organizations.organization')}
+	              >
+	                <span class="truncate">{useCase.organizationName || $_('organizations.organization')}</span>
+	              </span>
+	            {/if}
+	            {#if useCase.model}
+	              <span
+	                class="inline-flex items-center max-w-[4.5rem] sm:max-w-[5rem] px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700"
+	                title={formatCompactModelLabel(useCase.model)}
+	              >
+	                <span class="truncate">{formatCompactModelLabel(useCase.model)}</span>
               </span>
             {/if}
             {#if isDetailing}

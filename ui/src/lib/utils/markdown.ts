@@ -168,14 +168,9 @@ function sanitizeHtml(html: string): string {
 /**
  * Crée un lien HTML vers une référence avec scroll smooth
  */
-export function createReferenceLink(num: string, ref: Reference): string {
+export function createReferenceLink(num: string, _ref: Reference): string {
   const refId = `ref-${num}`;
-  return `<a href="#${refId}" 
-              class="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" 
-              title="${ref.title.replace(/"/g, '&quot;')}"
-              onclick="event.preventDefault(); document.getElementById('${refId}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;">
-              [${num}]
-            </a>`;
+  return `<a href="#${refId}" class="text-blue-600 hover:text-blue-800 cursor-pointer" style="text-decoration:none" onclick="event.preventDefault(); document.getElementById('${refId}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;">[${num}]</a>`;
 }
 
 /**
@@ -195,25 +190,6 @@ export function parseReferencesInMarkdown(html: string, references: Reference[] 
 }
 
 /**
- * Parse les références [1], [2] dans un texte simple (pas markdown) et les remplace par des liens cliquables
- */
-export function parseReferencesInText(text: string, references: Reference[] = []): string {
-  if (!text || !references || references.length === 0) return text;
-  
-  // Remplacer les patterns [1], [2], etc par des liens cliquables
-  let html = text.replace(/\[(\d+)\]/g, (match, num) => {
-    const index = parseInt(num) - 1;
-    if (index >= 0 && index < references.length) {
-      return createReferenceLink(num, references[index]);
-    }
-    return match; // Si la référence n'existe pas, garder le texte original
-  });
-  
-  // Sanitizer le HTML avant de le retourner (protection XSS)
-  return sanitizeHtml(html);
-}
-
-/**
  * Rend du markdown en HTML avec parsing des références et options de styling
  * 
  * @param text - Le texte markdown à rendre
@@ -227,37 +203,67 @@ export function renderMarkdownWithRefs(
   options: RenderMarkdownOptions = {}
 ): string {
   if (!text) return '';
-  
+
   // Normaliser le markdown (puces unicode, sauts de ligne, etc.)
-  const normalized = normalizeUseCaseMarkdown(text);
-  
+  let normalized = normalizeUseCaseMarkdown(text);
+
+  // Strip pre-existing markdown reference links that were baked into the data
+  // during AI generation.  These have the form:
+  //   [\[N\]](#ref-N "title")  or  [[N]](#ref-N "title")
+  // We collapse them back to plain [N] so the placeholder logic below can
+  // handle them uniformly.
+  normalized = normalized.replace(
+    /\[\\?\[(\d+)\\?\]\]\(#ref-\d+(?:\s+"[^"]*")?\)/g,
+    (_match, num) => `[${num}]`
+  );
+
+  // Replace [1], [2], etc. with placeholders BEFORE marked() to prevent
+  // marked from interpreting them as markdown link references (which would
+  // leak the title into visible text).
+  const placeholderMap = new Map<string, string>();
+  if (references && references.length > 0) {
+    normalized = normalized.replace(/\[(\d+)\]/g, (match, num) => {
+      const index = parseInt(num) - 1;
+      if (index >= 0 && index < references.length) {
+        const placeholder = `XREFX${num}XREFX`;
+        placeholderMap.set(placeholder, createReferenceLink(num, references[index]));
+        return placeholder;
+      }
+      return match;
+    });
+  }
+
   // Convertir markdown en HTML
   const markedResult = marked(normalized);
   let html = typeof markedResult === 'string' ? markedResult : String(markedResult);
-  
+
   // Post-traitement optionnel pour les styles CSS
   const {
     addListStyles = false,
     addHeadingStyles = false,
     listPadding = 1.5
   } = options;
-  
+
   if (addListStyles) {
     html = html.replace(/<ul>/g, `<ul class="list-disc space-y-2 mb-4" style="padding-left:${listPadding}rem;">`);
     html = html.replace(/<ol>/g, `<ol class="list-decimal space-y-2 mb-4" style="padding-left:${listPadding}rem;">`);
     html = html.replace(/<li>/g, '<li class="mb-1">');
   }
-  
+
   if (addHeadingStyles) {
     html = html.replace(/<h2>/g, '<h2 class="text-xl font-semibold text-slate-900 mt-6 mb-4">');
     html = html.replace(/<h3>/g, '<h3 class="text-lg font-semibold text-slate-800 mt-4 mb-3">');
   }
-  
-  // Parser les références [1], [2], etc.
-  html = parseReferencesInMarkdown(html, references);
-  
+
   // Sanitizer le HTML avant de le retourner (protection XSS)
-  return sanitizeHtml(html);
+  html = sanitizeHtml(html);
+
+  // Restore placeholders with actual reference links AFTER sanitization
+  for (const [placeholder, link] of placeholderMap) {
+    html = html.split(placeholder).join(link);
+  }
+
+  return html;
 }
 
 /**

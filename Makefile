@@ -11,6 +11,7 @@ COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev
 export API_PORT ?= 8787
 export UI_PORT ?= 5173
 export MAILDEV_UI_PORT ?= 1080
+export PLAYWRIGHT_DEV_UI_PORT ?= 5174
 export VITE_API_BASE_URL ?= http://localhost:$(API_PORT)/api/v1
 export VITE_EXTENSION_PROFILE ?= uat
 export VITE_EXTENSION_API_BASE_URL ?= http://localhost:$(API_PORT)/api/v1
@@ -23,6 +24,9 @@ export VITE_EXTENSION_WS_BASE_URL_BUILD ?=
 export API_BASE_URL ?= http://localhost:$(API_PORT)
 export UI_BASE_URL ?= http://localhost:$(UI_PORT)
 export MAILDEV_API_URL ?= http://localhost:$(MAILDEV_UI_PORT)
+export PLAYWRIGHT_UI_BASE_URL ?=
+export PLAYWRIGHT_API_BASE_URL ?=
+export PLAYWRIGHT_MAILDEV_API_URL ?=
 export WEBAUTHN_ORIGIN ?= http://localhost:$(UI_PORT)
 export WEBAUTHN_RP_ID ?= localhost
 export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*
@@ -308,24 +312,26 @@ logs-dev-vscode: ## Stream OpenVSCode mounted dev lane logs
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile vscode logs -f openvscode-dev
 
 .PHONY: up-dev-playwright
-up-dev-playwright: ## Start Playwright dev helper on top of the standard dev stack
+up-dev-playwright: ## Start or reuse the Playwright dev helper on top of the standard dev stack
 	@playwright_ui_port="$${PLAYWRIGHT_DEV_UI_PORT:-5174}"; \
-	ui_origin="http://host.docker.internal:$$playwright_ui_port"; \
-	api_origin="http://host.docker.internal:$(API_PORT)"; \
-	CORS_ALLOWED_ORIGINS="http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,$$ui_origin,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*" \
+	playwright_ui_base_url="$${PLAYWRIGHT_UI_BASE_URL:-http://host.docker.internal:$$playwright_ui_port}"; \
+	playwright_api_base_url="$${PLAYWRIGHT_API_BASE_URL:-http://host.docker.internal:$(API_PORT)}"; \
+	playwright_maildev_api_url="$${PLAYWRIGHT_MAILDEV_API_URL:-http://maildev:1080}"; \
+	CORS_ALLOWED_ORIGINS="http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,$$playwright_ui_base_url,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*" \
 	DISABLE_RATE_LIMIT=true \
 	PLAYWRIGHT_DEV_UI_PORT="$$playwright_ui_port" \
-	UI_BASE_URL="$$ui_origin" \
-	API_BASE_URL="$$api_origin" \
-	VITE_API_BASE_URL="$$api_origin/api/v1" \
-	VITE_EXTENSION_API_BASE_URL="$$api_origin/api/v1" \
-	VITE_EXTENSION_APP_BASE_URL="$$ui_origin" \
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright up -d --force-recreate api ui-playwright-dev playwright-dev
+	UI_BASE_URL="$$playwright_ui_base_url" \
+	API_BASE_URL="$$playwright_api_base_url" \
+	MAILDEV_API_URL="$$playwright_maildev_api_url" \
+	VITE_API_BASE_URL="$$playwright_api_base_url/api/v1" \
+	VITE_EXTENSION_API_BASE_URL="$$playwright_api_base_url/api/v1" \
+	VITE_EXTENSION_APP_BASE_URL="$$playwright_ui_base_url" \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright up -d api ui-playwright-dev playwright-dev
 
 .PHONY: down-dev-playwright
 down-dev-playwright: ## Stop Playwright dev helper
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright stop playwright-dev >/dev/null 2>&1 || true
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright rm -f playwright-dev >/dev/null 2>&1 || true
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright stop ui-playwright-dev playwright-dev >/dev/null 2>&1 || true
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright rm -f ui-playwright-dev playwright-dev >/dev/null 2>&1 || true
 
 .PHONY: ps-dev-playwright
 ps-dev-playwright: ## Show Playwright dev helper
@@ -339,9 +345,31 @@ logs-dev-playwright: ## Stream Playwright dev helper logs
 shell-dev-playwright: up-dev-playwright ## Open a shell inside the Playwright dev helper
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec playwright-dev sh
 
+.PHONY: exec-playwright-dev
+exec-playwright-dev: up-dev-playwright ## Exec a command in the Playwright dev helper with the live-debug lane bootstrapped
+	@if [ -z "$$CMD" ]; then \
+	  echo "Usage: make exec-playwright-dev CMD=\"<command>\" API_PORT=<api> UI_PORT=<ui> MAILDEV_UI_PORT=<maildev> REGISTRY=local ENV=dev"; \
+	  exit 2; \
+	fi
+	@ui_base_url="$${PLAYWRIGHT_UI_BASE_URL:-http://host.docker.internal:$${PLAYWRIGHT_DEV_UI_PORT:-5174}}"; \
+	api_base_url="$${PLAYWRIGHT_API_BASE_URL:-http://host.docker.internal:$(API_PORT)}"; \
+	maildev_api_url="$${PLAYWRIGHT_MAILDEV_API_URL:-http://maildev:1080}"; \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec -T \
+	  -e UI_BASE_URL="$$ui_base_url" \
+	  -e API_BASE_URL="$$api_base_url" \
+	  -e MAILDEV_API_URL="$$maildev_api_url" \
+	  playwright-dev sh -lc "$$CMD"
+
 .PHONY: record-dev-playwright-auth
 record-dev-playwright-auth: up-dev-playwright ## Record a reusable Playwright storageState against ENV=dev
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec -T playwright-dev sh -lc ' \
+	@ui_base_url="$${PLAYWRIGHT_UI_BASE_URL:-http://host.docker.internal:$${PLAYWRIGHT_DEV_UI_PORT:-5174}}"; \
+	api_base_url="$${PLAYWRIGHT_API_BASE_URL:-http://host.docker.internal:$(API_PORT)}"; \
+	maildev_api_url="$${PLAYWRIGHT_MAILDEV_API_URL:-http://maildev:1080}"; \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec -T \
+	  -e UI_BASE_URL="$$ui_base_url" \
+	  -e API_BASE_URL="$$api_base_url" \
+	  -e MAILDEV_API_URL="$$maildev_api_url" \
+	  playwright-dev sh -lc ' \
 	  email="$${DEV_PLAYWRIGHT_AUTH_EMAIL:-admin@sent-tech.ca}"; \
 	  echo "▶ Recording Playwright dev auth for $$email"; \
 	  npx playwright test --config playwright.dev.config.ts tests/dev/00-record-auth.spec.ts --workers=1 --retries=0 --reporter=list --grep "$$email"; \
@@ -353,7 +381,14 @@ test-e2e-dev: up-dev-playwright ## Run scoped Playwright against ENV=dev without
 	  echo "❌ E2E_SPEC is required (example: tests/dev/01-chat-bootstrap-reload.spec.ts)"; \
 	  exit 2; \
 	fi
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec -T playwright-dev sh -lc ' \
+	@ui_base_url="$${PLAYWRIGHT_UI_BASE_URL:-http://host.docker.internal:$${PLAYWRIGHT_DEV_UI_PORT:-5174}}"; \
+	api_base_url="$${PLAYWRIGHT_API_BASE_URL:-http://host.docker.internal:$(API_PORT)}"; \
+	maildev_api_url="$${PLAYWRIGHT_MAILDEV_API_URL:-http://maildev:1080}"; \
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile playwright exec -T \
+	  -e UI_BASE_URL="$$ui_base_url" \
+	  -e API_BASE_URL="$$api_base_url" \
+	  -e MAILDEV_API_URL="$$maildev_api_url" \
+	  playwright-dev sh -lc ' \
 	  test -f /app/.auth/dev-state.json || { \
 	    echo "❌ Missing /app/.auth/dev-state.json. Record a manual dev storageState before using test-e2e-dev."; \
 	    exit 2; \

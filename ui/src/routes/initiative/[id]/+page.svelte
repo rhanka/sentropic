@@ -88,7 +88,7 @@
       document.body.classList.add('printing');
       
       // Force all sections to be visible (Svelte conditionals might hide them)
-      const useCasePrint = document.querySelector('.usecase-print');
+      const useCasePrint = document.querySelector('.template-initiative');
       if (useCasePrint) {
         // Force display of all child divs
         useCasePrint.querySelectorAll('div').forEach(el => {
@@ -99,7 +99,7 @@
         });
       }
 
-      // Force margin-top to 0 for section and usecase-print containers
+      // Force margin-top to 0 for section and template-initiative containers
       const section = document.querySelector('section.space-y-6');
       if (section) {
         const htmlEl = section as HTMLElement;
@@ -160,6 +160,8 @@
       if (data?.deleted) return;
       if (data?.useCase) {
         useCase = { ...(useCase || {}), ...data.useCase };
+        organizationId = useCase?.organizationId ?? organizationId;
+        organizationName = useCase?.organizationName ?? organizationName;
         initiativesStore.update(items => items.map(uc => uc.id === currentId ? useCase : uc));
         recalculateScoresFromCurrentUseCase();
         if (!matrix) {
@@ -174,10 +176,6 @@
       if (!useCase?.folderId || folderId !== useCase.folderId) return;
       if (data?.folder?.matrixConfig) {
         matrix = data.folder.matrixConfig;
-      }
-      if (data?.folder) {
-        organizationId = data.folder.organizationId ?? organizationId;
-        organizationName = data.folder.organizationName ?? organizationName;
       }
       void loadMatrixAndCalculateScores();
       return;
@@ -399,6 +397,8 @@
     }
     try {
       useCase = await apiGet(`/initiatives/${useCaseId}`);
+      organizationId = useCase?.organizationId ?? null;
+      organizationName = useCase?.organizationName ?? null;
       
       // Mettre à jour le store avec les données fraîches
       initiativesStore.update(items => 
@@ -414,6 +414,8 @@
       // Fallback sur le store local en cas d'erreur
       const useCases = $initiativesStore;
       useCase = useCases.find(uc => uc.id === useCaseId);
+      organizationId = useCase?.organizationId ?? null;
+      organizationName = useCase?.organizationName ?? null;
       
       if (!useCase) {
         addToast({ type: 'error', message: get(_)('usecase.errors.load') });
@@ -487,8 +489,8 @@
       // Charger la matrice depuis le dossier
       const folderResp: any = await apiGet(`/folders/${useCase.folderId}`);
       matrix = folderResp?.matrixConfig ?? null;
-      organizationId = folderResp?.organizationId ?? null;
-      organizationName = folderResp?.organizationName ?? null;
+      organizationId = useCase?.organizationId ?? folderResp?.organizationId ?? null;
+      organizationName = useCase?.organizationName ?? folderResp?.organizationName ?? null;
       recalculateScoresFromCurrentUseCase();
     } catch (err) {
       console.error('Failed to load matrix:', err);

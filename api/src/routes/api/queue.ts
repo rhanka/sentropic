@@ -196,6 +196,7 @@ queueRouter.get('/stats', async (c) => {
       failed: jobs.filter(j => j.status === 'failed').length,
       byType: {
         organization_enrich: jobs.filter(j => j.type === 'organization_enrich').length,
+        organization_targets_join: jobs.filter(j => j.type === 'organization_targets_join').length,
         matrix_generate: jobs.filter(j => j.type === 'matrix_generate').length,
         initiative_list: jobs.filter(j => j.type === 'initiative_list').length,
         initiative_detail: jobs.filter(j => j.type === 'initiative_detail').length,

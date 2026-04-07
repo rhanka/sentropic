@@ -715,15 +715,15 @@ export const solutionGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   }
 };
 
-export const bidsListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const proposalsListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
-    name: 'bids_list',
-    description: 'List bids for an initiative in the current workspace.',
+    name: 'proposals_list',
+    description: 'List proposals for an initiative in the current workspace.',
     parameters: {
       type: 'object',
       properties: {
-        initiativeId: { type: 'string', description: 'Initiative ID to list bids for.' },
+        initiativeId: { type: 'string', description: 'Initiative ID to list proposals for.' },
         select: { type: 'array', items: { type: 'string' }, description: 'Optional fields to select.' }
       },
       required: ['initiativeId']
@@ -731,21 +731,26 @@ export const bidsListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   }
 };
 
-export const bidGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+export const proposalGetTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
-    name: 'bid_get',
-    description: 'Get details of a specific bid.',
+    name: 'proposal_get',
+    description: 'Get details of a specific proposal.',
     parameters: {
       type: 'object',
       properties: {
-        bidId: { type: 'string', description: 'Bid ID.' },
+        proposalId: { type: 'string', description: 'Proposal ID.' },
         select: { type: 'array', items: { type: 'string' }, description: 'Optional fields to select.' }
       },
-      required: ['bidId']
+      required: ['proposalId']
     }
   }
 };
+
+/** @deprecated Use proposalsListTool */
+export const bidsListTool = proposalsListTool;
+/** @deprecated Use proposalGetTool */
+export const bidGetTool = proposalGetTool;
 
 export const productsListTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
@@ -839,6 +844,86 @@ export const taskDispatchTool: OpenAI.Chat.Completions.ChatCompletionTool = {
       required: ['workspaceId', 'title']
     }
   }
+};
+
+/**
+ * Tool for generating a DOCX document from the current context.
+ * Enqueues a document generation job via queue-manager.
+ */
+export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'document_generate',
+    description:
+      'Generate a DOCX document from the current context (initiative, folder/dashboard, etc.). ' +
+      'Before generating your first document in a conversation, call this tool with `action: "upskill"` to learn DOCX best practices. ' +
+      'Then call with `action: "generate"` with your code. ' +
+      'For generate: two sub-modes — (1) Template mode with templateId, (2) Freeform mode with code (mutually exclusive).',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['upskill', 'generate'],
+          description:
+            'Action to perform. Call "upskill" first to learn DOCX creation best practices, then "generate" with your code.',
+        },
+        templateId: {
+          type: 'string',
+          description:
+            'Document template identifier. Examples: "usecase-onepage" for initiative one-pager, ' +
+            '"executive-synthesis-multipage" for folder executive summary report. ' +
+            'Mutually exclusive with code. Only for action "generate".',
+        },
+        entityType: {
+          type: 'string',
+          enum: ['initiative', 'folder'],
+          description: 'Type of entity to generate the document for. Only for action "generate".',
+        },
+        entityId: {
+          type: 'string',
+          description: 'ID of the entity (initiative ID or folder ID). Only for action "generate".',
+        },
+        code: {
+          type: 'string',
+          description:
+            'JavaScript code using docx helpers (doc, h, p, bold, italic, list, table, pageBreak, hr) ' +
+            'that returns a Document object. Available data: context.entity, context.initiatives, ' +
+            'context.matrix, context.workspace. Mutually exclusive with templateId. Only for action "generate".',
+        },
+        title: {
+          type: 'string',
+          description:
+            'Document title used as the file name. Example: "Rapport initiatives dossier X". Only for action "generate".',
+        },
+      },
+      required: ['action'],
+    },
+  },
+};
+
+/**
+ * Tool for batch-creating organizations from a prompt description.
+ */
+export const batchCreateOrganizationsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'batch_create_organizations',
+    description:
+      'Create multiple organizations at once from a text description. ' +
+      'The AI will parse the description and create structured organization entries in the workspace.',
+    parameters: {
+      type: 'object',
+      properties: {
+        description: {
+          type: 'string',
+          description:
+            'Text description of organizations to create. Can include names, industries, sizes, and other details.',
+        },
+      },
+      required: ['description'],
+    },
+  },
 };
 
 export interface SearchResult {

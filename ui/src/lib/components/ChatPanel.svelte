@@ -57,6 +57,7 @@
     Paperclip,
     X,
     Plus,
+    Download,
     FileText,
     Globe,
     Link2,
@@ -83,6 +84,7 @@
     Search,
     GitBranch
   } from '@lucide/svelte';
+  import { downloadCompletedDocxJob } from '$lib/utils/docx';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { postChatSteer } from '$lib/utils/chat-steer';
   import {
@@ -171,6 +173,7 @@
     contextBudgetPct: number | null;
     durationMs: number | null;
     reasoningEffortLabel: string | null;
+    docxCards?: Array<{ jobId: string; fileName: string }>;
   };
   type ProjectedTimelineItem =
     | {
@@ -765,6 +768,7 @@
   let historyHydrationSwapPending = false;
   let historyHydrationStickBottom = false;
   let optimisticSteerMessages: LocalMessage[] = [];
+  let docxCardsByMessageId = new Map<string, { jobId: string; fileName: string }[]>();
   let previousAiWorkspaceId: string | null | undefined = undefined;
   let workspaceSessionRescopeInFlight = false;
 
@@ -1587,6 +1591,7 @@
             collectedEvents,
           ),
         );
+        scanEventsForDocxCards(messageId, collectedEvents);
         projectedAssistantComputationByMessageId = new Map(
           projectedAssistantComputationByMessageId,
         );
@@ -3417,6 +3422,44 @@
     }
   };
 
+  const handleDocxDownload = (messageId: string, card: { jobId: string; fileName: string }) => {
+    const existing = docxCardsByMessageId.get(messageId) ?? [];
+    if (existing.some(c => c.jobId === card.jobId)) return;
+    docxCardsByMessageId = new Map(docxCardsByMessageId);
+    docxCardsByMessageId.set(messageId, [...existing, card]);
+  };
+
+  const extractDocxCardsFromRuntimeSummary = (
+    messageId: string,
+    summary: { docxCards?: Array<{ jobId: string; fileName: string }> } | undefined,
+  ) => {
+    if (!summary?.docxCards || summary.docxCards.length === 0) return;
+    for (const card of summary.docxCards) {
+      handleDocxDownload(messageId, card);
+    }
+  };
+
+  const scanEventsForDocxCards = (messageId: string, events: readonly { eventType: string; data: any }[]) => {
+    const toolNames: Record<string, string> = {};
+    for (const ev of events) {
+      if (ev.eventType === 'tool_call_start' && ev.data?.tool_call_id && ev.data?.name) {
+        toolNames[ev.data.tool_call_id] = ev.data.name;
+      }
+      if (ev.eventType === 'tool_call_result') {
+        const toolId = String(ev.data?.tool_call_id ?? '');
+        const toolName = toolNames[toolId];
+        if (
+          toolName === 'document_generate' &&
+          ev.data?.result?.status === 'completed' &&
+          typeof ev.data?.result?.jobId === 'string' &&
+          typeof ev.data?.result?.fileName === 'string'
+        ) {
+          handleDocxDownload(messageId, { jobId: ev.data.result.jobId, fileName: ev.data.result.fileName });
+        }
+      }
+    }
+  };
+
   const handleTodoRuntimeToolResult = (update: TodoRuntimeToolResultEvent) => {
     const result = asRuntimeRecord(update.result) ?? {};
     const runtime = asRuntimeRecord(result.todoRuntime) ?? result;
@@ -3531,6 +3574,7 @@
       mergeProjectionHistoryEvents(next.get(normalizedId) ?? [], events),
     );
     initialEventsByMessageId = next;
+    scanEventsForDocxCards(normalizedId, events);
   };
 
   const ingestSessionHistoryMeta = (line: SessionHistoryMetaLine) => {
@@ -3768,6 +3812,9 @@
         runtimeSummaryByMessageId = new Map(runtimeSummaryByMessageId);
         runtimeSummaryByMessageId.set(item.message.id, item.segment.runtimeSummary);
       }
+      if (item.kind === 'runtime-segment' && item.segment.runtimeSummary) {
+        extractDocxCardsFromRuntimeSummary(item.message.id, item.segment.runtimeSummary);
+      }
 
       const existingTimelineIndex = nextHistory.findIndex(
         (entry) => entry.key === item.key,
@@ -3784,6 +3831,9 @@
 
     messages = nextMessages;
     initialEventsByMessageId = nextInitialEvents;
+    for (const [msgId, events] of nextInitialEvents) {
+      scanEventsForDocxCards(msgId, events);
+    }
     historyTimelineItems = nextHistory;
     stagedHistoryTimelineItems = [];
 
@@ -4011,7 +4061,13 @@
     stagedHistoryTimelineItems = [];
     historyTimelineSessionId = snapshot.sessionId;
     initialEventsByMessageId = snapshot.initialEvents;
+    for (const [msgId, events] of snapshot.initialEvents) {
+      scanEventsForDocxCards(msgId, events);
+    }
     runtimeSummaryByMessageId = snapshot.runtimeSummaries;
+    for (const [msgId, summary] of snapshot.runtimeSummaries) {
+      extractDocxCardsFromRuntimeSummary(msgId, summary);
+    }
     applySessionCheckpoints(snapshot.checkpoints);
     sessionDocs = snapshot.documents;
     sessionDocsError = null;
@@ -5125,7 +5181,28 @@
                     initialEvents={item.segment.events}
                     initiallyExpanded={false}
                     deferCollapsedDetails={!useUnifiedActiveRunPresentation(item.message)}
+                    onDocxDownload={(card) => handleDocxDownload(m.id, card)}
                   />
+                  {#if item.isTerminal && item.isLastAssistantSegment}
+                    {@const docxCards = docxCardsByMessageId.get(m.id) ?? []}
+                    {#each docxCards as card (card.jobId)}
+                      <div class="rounded border border-slate-200 bg-white px-2 py-1.5 flex items-center gap-2 max-w-[14rem] mt-1">
+                        <FileText class="w-4 h-4 text-primary shrink-0" />
+                        <div class="min-w-0 flex-1">
+                          <div class="text-xs font-medium text-slate-900 truncate">{card.fileName}</div>
+                          <div class="text-[10px] text-slate-500">DOCX</div>
+                        </div>
+                        <button
+                          class="ml-auto text-primary hover:bg-slate-100 rounded p-1"
+                          type="button"
+                          aria-label={$_('common.downloadDocx')}
+                          on:click={() => downloadCompletedDocxJob(card.jobId, card.fileName)}
+                        >
+                          <Download class="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    {/each}
+                  {/if}
                   {#if item.isTerminal && item.isLastAssistantSegment}
                     <div
                       class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500"
@@ -5210,6 +5287,7 @@
                     showRuntimeInlinePreview={item.isActiveRuntimeSegment}
                     acknowledgementText={item.acknowledgementText}
                     onTodoRuntime={handleTodoRuntimeToolResult}
+                    onDocxDownload={(card) => handleDocxDownload(item.message.id, card)}
                   />
                 </div>
               </div>

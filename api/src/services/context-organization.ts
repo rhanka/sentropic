@@ -1,6 +1,29 @@
 import { executeWithToolsStream } from './tools';
 import { ORGANIZATION_PROMPTS } from '../config/default-chat-system';
 
+const STRUCTURED_JSON_REPAIR_PROMPT = `You are a strict JSON repair engine.
+
+Your task:
+- Repair the malformed JSON response so it becomes one valid JSON object.
+- Keep the original semantic intent and values as much as possible.
+- Respect the target schema.
+- Do not add commentary.
+
+Target schema name:
+{{schema_name}}
+
+Target schema JSON:
+{{schema_json}}
+
+Malformed JSON response:
+{{malformed_json}}
+
+Rules:
+- Return ONLY one valid JSON object.
+- No markdown fences.
+- No extra text before or after JSON.
+- If a field is missing, infer the safest schema-compliant value from context.`;
+
 export interface OrganizationData {
   industry: string;
   size: string;
@@ -61,6 +84,144 @@ function coerceOrganizationData(value: unknown): OrganizationData {
           .filter((r) => r.title.trim() && r.url.trim())
       : undefined
   };
+}
+
+function compactText(value: string, maxLength = 260): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function parseJsonLenient<T>(raw: string): T {
+  const cleaned = raw
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1)) as T;
+    }
+    throw new Error('No JSON object boundaries found');
+  }
+}
+
+function extractJsonStringField(rawContent: string, field: string): string {
+  const escapedField = field.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = rawContent.match(new RegExp(`"${escapedField}"\\s*:\\s*"([^"]*)"`, 'i'));
+  return match?.[1]?.trim() ?? '';
+}
+
+function extractReferenceUrls(rawContent: string): Array<{ title: string; url: string; excerpt?: string }> {
+  const matches = Array.from(rawContent.matchAll(/https?:\/\/[^\s)"']+/g));
+  const uniqueUrls = Array.from(new Set(matches.map((match) => match[0]))).slice(0, 5);
+  return uniqueUrls.map((url) => ({
+    title: url,
+    url,
+  }));
+}
+
+function buildOrganizationFallback(params: {
+  organizationName: string;
+  rawContent: string;
+  existingData?: unknown;
+}): OrganizationData {
+  const existing = coerceOrganizationData(params.existingData);
+  const excerpt = compactText(params.rawContent, 320);
+  const infer = (field: keyof OrganizationData, fallback: string): string => {
+    const extracted = extractJsonStringField(params.rawContent, field);
+    const existingValue = existing[field];
+    return extracted || (typeof existingValue === 'string' && existingValue.trim().length > 0 ? existingValue : fallback);
+  };
+
+  return {
+    industry: infer('industry', 'Services'),
+    size: infer('size', 'Informations non disponibles'),
+    products: infer('products', `Offres et services liés à ${params.organizationName}.`),
+    processes: infer('processes', `Processus métier et workflows opérationnels autour de ${params.organizationName}.`),
+    kpis: infer('kpis', 'Temps de traitement, qualité de service, adoption, ROI.'),
+    challenges: infer('challenges', `Contraintes d’intégration, de données et d’adoption pour ${params.organizationName}.`),
+    objectives: infer('objectives', `Accélérer les gains opérationnels et la valeur métier via ${params.organizationName}.`),
+    technologies: infer('technologies', excerpt || 'IA générative, automatisation, intégration SI.'),
+    references: extractReferenceUrls(params.rawContent),
+  };
+}
+
+async function parseOrganizationWithSingleRepair(params: {
+  rawContent: string;
+  model?: string;
+  signal?: AbortSignal;
+  organizationName: string;
+  existingData?: unknown;
+}): Promise<OrganizationData> {
+  try {
+    return coerceOrganizationData(parseJsonLenient<unknown>(params.rawContent));
+  } catch {
+    const repairPrompt = STRUCTURED_JSON_REPAIR_PROMPT
+      .replace('{{schema_name}}', 'organization_info')
+      .replace('{{schema_json}}', JSON.stringify({
+        type: 'object',
+        additionalProperties: true,
+        properties: {
+          industry: { type: 'string' },
+          size: { type: 'string' },
+          products: { type: 'string' },
+          processes: { type: 'string' },
+          kpis: { type: 'string' },
+          challenges: { type: 'string' },
+          objectives: { type: 'string' },
+          technologies: { type: 'string' },
+          references: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: true,
+              properties: {
+                title: { type: 'string' },
+                url: { type: 'string' },
+                excerpt: { type: 'string' },
+              },
+              required: ['title', 'url'],
+            },
+          },
+        },
+        required: ['industry', 'size', 'products', 'processes', 'kpis', 'challenges', 'objectives', 'technologies'],
+      }, null, 2))
+      .replace('{{malformed_json}}', params.rawContent);
+
+    try {
+      const { content: repairedContent } = await executeWithToolsStream(repairPrompt, {
+        model: params.model,
+        useWebSearch: false,
+        responseFormat: 'json_object',
+        promptId: 'structured_json_repair',
+        signal: params.signal,
+      });
+      if (!repairedContent) {
+        throw new Error('Aucune réponse reçue lors de la tentative de réparation JSON');
+      }
+      return coerceOrganizationData(parseJsonLenient<unknown>(repairedContent));
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+      const isProviderAbort = message.includes('request was aborted') || message.includes('aborterror');
+      if (params.signal?.aborted && !isProviderAbort) {
+        throw error;
+      }
+      return buildOrganizationFallback({
+        organizationName: params.organizationName,
+        rawContent: params.rawContent,
+        existingData: params.existingData,
+      });
+    }
+  }
 }
 
 // Configuration métier par défaut
@@ -142,8 +303,13 @@ export const enrichOrganization = async (
   }
 
   try {
-    const parsed = JSON.parse(content) as unknown;
-    return coerceOrganizationData(parsed);
+    return await parseOrganizationWithSingleRepair({
+      rawContent: content,
+      model,
+      signal,
+      organizationName,
+      existingData: opts?.existingData,
+    });
   } catch (parseError) {
     console.error('Erreur de parsing JSON:', parseError);
     console.error('Contenu reçu:', content);
@@ -200,34 +366,17 @@ export const enrichOrganizationStream = async (
   }
 
   try {
-    const cleaned = accumulatedContent
-      .trim()
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```\s*$/i, '')
-      .trim();
-
-    const tryParse = (s: string) => JSON.parse(s);
-
-    let parsedData: unknown;
-    try {
-      parsedData = tryParse(cleaned);
-    } catch {
-      const firstBrace = cleaned.indexOf('{');
-      const lastBrace = cleaned.lastIndexOf('}');
-      if (firstBrace >= 0 && lastBrace > firstBrace) {
-        parsedData = tryParse(cleaned.slice(firstBrace, lastBrace + 1));
-      } else {
-        throw new Error('No JSON object boundaries found');
-      }
-    }
-
-    return coerceOrganizationData(parsedData);
+    return await parseOrganizationWithSingleRepair({
+      rawContent: accumulatedContent,
+      model,
+      signal,
+      organizationName,
+      existingData: opts?.existingData,
+    });
   } catch (parseError) {
     console.error('Erreur de parsing JSON:', parseError);
     console.error('Contenu reçu:', accumulatedContent);
     throw new Error("Erreur lors du parsing de la réponse de l'IA");
   }
 };
-
 

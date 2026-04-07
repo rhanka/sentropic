@@ -1,25 +1,32 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../src/db/client";
 import {
   agentDefinitions,
   executionEvents,
   executionRuns,
+  jobQueue,
   workflowDefinitionTasks,
   workflowDefinitions,
+  workflowRunState,
+  workflowTaskResults,
+  workflowTaskTransitions,
   workspaceMemberships,
   workspaceTypeWorkflows,
 } from "../../src/db/schema";
 import { createAuthenticatedUser, cleanupAuthData } from "../utils/auth-helper";
 import { todoOrchestrationService, type TodoActor } from "../../src/services/todo-orchestration";
 import { USE_CASE_GENERATION_WORKFLOW_KEY } from "../../src/config/default-workflows";
+import { queueManager } from "../../src/services/queue-manager";
 
 describe("Generic dispatch and backward compat", () => {
   let editor: any;
   let actor: TodoActor;
+  let processJobsSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
     editor = await createAuthenticatedUser("editor");
+    processJobsSpy = vi.spyOn(queueManager, "processJobs").mockResolvedValue();
     actor = {
       userId: editor.id,
       role: editor.role,
@@ -28,9 +35,13 @@ describe("Generic dispatch and backward compat", () => {
   });
 
   afterEach(async () => {
+    processJobsSpy.mockRestore();
     if (editor?.workspaceId) {
       await db.delete(executionEvents).where(eq(executionEvents.workspaceId, editor.workspaceId));
+      await db.delete(workflowTaskResults).where(eq(workflowTaskResults.workspaceId, editor.workspaceId));
+      await db.delete(workflowRunState).where(eq(workflowRunState.workspaceId, editor.workspaceId));
       await db.delete(executionRuns).where(eq(executionRuns.workspaceId, editor.workspaceId));
+      await db.delete(jobQueue).where(eq(jobQueue.workspaceId, editor.workspaceId));
       await db.delete(workspaceTypeWorkflows);
       await db.delete(workflowDefinitionTasks).where(eq(workflowDefinitionTasks.workspaceId, editor.workspaceId));
       await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, editor.workspaceId));
@@ -38,6 +49,7 @@ describe("Generic dispatch and backward compat", () => {
       await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, editor.workspaceId));
     }
     await cleanupAuthData();
+    vi.restoreAllMocks();
   });
 
   describe("seedWorkflowsForType", () => {
@@ -68,7 +80,18 @@ describe("Generic dispatch and backward compat", () => {
             eq(workflowDefinitionTasks.workflowDefinitionId, wfDef.id),
           ),
         );
-      expect(wfTasks.length).toBe(7); // 7 tasks in ai-ideas workflow (incl. generation_create_organizations)
+      expect(wfTasks.length).toBe(9); // 9 tasks in ai-ideas workflow including org fanout/join runtime tasks
+
+      const transitions = await db
+        .select()
+        .from(workflowTaskTransitions)
+        .where(
+          and(
+            eq(workflowTaskTransitions.workspaceId, actor.workspaceId),
+            eq(workflowTaskTransitions.workflowDefinitionId, wfDef.id),
+          ),
+        );
+      expect(transitions.length).toBeGreaterThan(0);
 
       // Check agents seeded
       const agents = await db
@@ -116,7 +139,7 @@ describe("Generic dispatch and backward compat", () => {
             eq(workflowDefinitionTasks.workflowDefinitionId, wfDef.id),
           ),
         );
-      expect(wfTasks.length).toBe(5); // 5 tasks in opportunity workflow
+      expect(wfTasks.length).toBe(5); // opportunity_qualification remains a noop-only workflow
 
       // Check opportunity-specific agents
       const agents = await db
@@ -209,6 +232,13 @@ describe("Generic dispatch and backward compat", () => {
       expect(run).toBeTruthy();
       expect(run.status).toBe("in_progress");
 
+      const [runState] = await db
+        .select()
+        .from(workflowRunState)
+        .where(eq(workflowRunState.runId, result.workflowRunId))
+        .limit(1);
+      expect(runState).toBeTruthy();
+
       // Verify event was logged
       const [event] = await db
         .select()
@@ -223,6 +253,119 @@ describe("Generic dispatch and backward compat", () => {
       await expect(
         todoOrchestrationService.startWorkflow(actor, "nonexistent_workflow"),
       ).rejects.toThrow("Workflow not found");
+    });
+
+    it("runs noop-only workflows through the same generic transition scheduler", async () => {
+      await todoOrchestrationService.seedWorkflowsForType(actor, "opportunity");
+
+      const result = await todoOrchestrationService.startWorkflow(
+        actor,
+        "opportunity_qualification",
+        {},
+      );
+
+      const [run] = await db
+        .select()
+        .from(executionRuns)
+        .where(eq(executionRuns.id, result.workflowRunId))
+        .limit(1);
+      expect(run?.status).toBe("completed");
+
+      const [runState] = await db
+        .select()
+        .from(workflowRunState)
+        .where(eq(workflowRunState.runId, result.workflowRunId))
+        .limit(1);
+      expect(runState?.status).toBe("completed");
+
+      const taskResults = await db
+        .select({
+          taskKey: workflowTaskResults.taskKey,
+          status: workflowTaskResults.status,
+        })
+        .from(workflowTaskResults)
+        .where(eq(workflowTaskResults.runId, result.workflowRunId));
+      expect(taskResults).toHaveLength(5);
+      expect(taskResults.every((row) => row.status === "completed")).toBe(true);
+    });
+
+    it("dispatches opportunity_identification through generic matrix/list transitions", async () => {
+      await todoOrchestrationService.seedWorkflowsForType(actor, "opportunity");
+
+      const addJobSpy = vi
+        .spyOn(queueManager, "addJob")
+        .mockResolvedValueOnce("job-opportunity-matrix")
+        .mockResolvedValueOnce("job-opportunity-list");
+
+      const result = await todoOrchestrationService.startWorkflow(actor, "opportunity_identification", {
+        folderId: "folder-opportunity",
+        input: "Qualify digital twin opportunities",
+        matrixMode: "generate",
+        matrixSource: "prompt",
+        model: "gpt-4.1-nano",
+        initiativeCount: 5,
+        locale: "fr",
+        autoCreateOrganizations: false,
+      });
+
+      expect(addJobSpy).toHaveBeenNthCalledWith(
+        1,
+        "matrix_generate",
+        expect.objectContaining({
+          folderId: "folder-opportunity",
+          matrixSource: "prompt",
+          workflow: expect.objectContaining({
+            workflowRunId: result.workflowRunId,
+            taskKey: "matrix_prepare",
+          }),
+        }),
+        expect.objectContaining({ workspaceId: actor.workspaceId, maxRetries: 1 }),
+      );
+      expect(addJobSpy).toHaveBeenNthCalledWith(
+        2,
+        "initiative_list",
+        expect.objectContaining({
+          folderId: "folder-opportunity",
+          matrixMode: "generate",
+          workflow: expect.objectContaining({
+            workflowRunId: result.workflowRunId,
+            taskKey: "opportunity_list",
+          }),
+        }),
+        expect.objectContaining({ workspaceId: actor.workspaceId, maxRetries: 1 }),
+      );
+    });
+
+    it("dispatches the org-aware list first for opportunity_identification auto-create flows", async () => {
+      await todoOrchestrationService.seedWorkflowsForType(actor, "opportunity");
+
+      const addJobSpy = vi
+        .spyOn(queueManager, "addJob")
+        .mockResolvedValueOnce("job-opportunity-list-with-orgs");
+
+      const result = await todoOrchestrationService.startWorkflow(actor, "opportunity_identification", {
+        folderId: "folder-opportunity-auto-create",
+        input: "Find organizations and opportunities in aerospace MRO",
+        matrixMode: "generate",
+        matrixSource: "prompt",
+        model: "gpt-4.1-nano",
+        initiativeCount: 5,
+        locale: "fr",
+        autoCreateOrganizations: true,
+      });
+
+      expect(addJobSpy).toHaveBeenCalledWith(
+        "initiative_list",
+        expect.objectContaining({
+          folderId: "folder-opportunity-auto-create",
+          input: "Find organizations and opportunities in aerospace MRO",
+          workflow: expect.objectContaining({
+            workflowRunId: result.workflowRunId,
+            taskKey: "opportunity_list",
+          }),
+        }),
+        expect.objectContaining({ workspaceId: actor.workspaceId, maxRetries: 1 }),
+      );
     });
   });
 

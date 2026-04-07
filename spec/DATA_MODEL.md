@@ -148,13 +148,38 @@ erDiagram
 
 Notes:
 - `organizations.data` is **JSONB** (organization profile: `industry`, `size`, `products`, `processes`, `kpis`, `references`, etc.).
-- `use_cases.data` is **JSONB** (contains `name`, `description`, scores, etc. - migration 0008).
+- `use_cases.data` is **JSONB** (contains `name`, `description`, scores, etc. - migration 0008). Domain name: "initiative" (renamed from "use case" in BR-04).
 - `workspaces.owner_user_id` is **nullable** (no unique constraint).
 - `workspaces.hidden_at` indicates visibility (hidden workspaces).
 - `workspace_memberships` is the source of truth for roles (`viewer` | `commenter` | `editor` | `admin`).
 - `comments` stores comments in flat threads (`thread_id`), scoped by workspace.
 - `comments.tool_call_id` traces AI tool-driven notes/comments.
 - `extension_tool_permissions` persists extension local-tool authorization policies (`allow` / `deny`) per user/workspace/tool/origin.
+
+## Extended business objects (BR-04)
+
+- `solutions`: `id` (PK), `workspace_id` (FK), `initiative_id` (FK), `status` (draft|validated|archived), `version`, `data` (JSONB), timestamps.
+- `products`: `id` (PK), `workspace_id` (FK), `initiative_id` (FK), `solution_id` (FK, nullable), `status` (draft|active|delivered|archived), `version`, `data` (JSONB), timestamps.
+- `bids` (domain name: "proposals" since BR-04B): `id` (PK), `workspace_id` (FK), `initiative_id` (FK), `status` (draft|review|finalized|contract), `version`, `data` (JSONB: clauses, profiles, pricing), timestamps.
+- `bid_products`: `id` (PK), `bid_id` (FK), `product_id` (FK), `data` (JSONB), timestamps. Unique on `(bid_id, product_id)`.
+
+## Workflow runtime (BR-04 + BR-04B)
+
+- `workflow_definitions`: `id` (PK), `workspace_id` (FK), `key`, `name`, `description`, `source_level`, `parent_id`, `config` (JSONB), timestamps. Unique on `(workspace_id, key)`.
+- `workflow_definition_tasks`: `id` (PK), `workspace_id` (FK), `workflow_definition_id` (FK), `task_key` (free text), `agent_definition_id` (FK, nullable), `order`, `config` (JSONB), timestamps.
+- `workspace_type_workflows`: `id` (PK), `workspace_type`, `workflow_definition_id` (FK), `is_default`, `trigger_stage`, `config` (JSONB), timestamps. Unique on `(workspace_type, workflow_definition_id)`.
+- `workflow_task_transitions` (BR-04B): `id` (PK), `workspace_id` (FK), `workflow_definition_id` (FK), `from_task_key`, `to_task_key`, `transition_type` (sequential|parallel|conditional|join), `condition` (JSONB), `metadata` (JSONB), timestamps.
+- `workflow_run_state` (BR-04B): `run_id` (PK), `workspace_id` (FK), `workflow_definition_id` (FK), `status` (pending|running|completed|failed|cancelled), `inputs` (JSONB), `state` (JSONB), `error` (text), timestamps.
+- `workflow_task_results` (BR-04B): composite PK `(run_id, task_key, task_instance_key)`, `workspace_id` (FK), `workflow_definition_id` (FK), `status` (pending|running|completed|failed|skipped), `inputs` (JSONB), `outputs` (JSONB), `error` (text), `started_at`, `completed_at`, timestamps.
+
+See `SPEC_WORKFLOW_RUNTIME.md` for the full generic workflow runtime specification.
+
+## View templates (BR-04 + BR-04B)
+
+- `view_templates`: `id` (PK), `workspace_id` (FK), `workspace_type`, `object_type`, `source_level` (code|user), `parent_id` (FK, nullable — for user copies), `name`, `description`, `descriptor` (JSONB — view template DSL), `version`, timestamps.
+- DB is source of truth. Lazy-seed on `listViewTemplates()` ensures old workspaces get newly added templates.
+- Common templates (organization, dashboard, solution, product, proposal) shared across all workspace types.
+- See `SPEC_EVOL_CONFIG_UX_ALIGNMENT.md` for config UX mutualization.
 
 ## Prompts (current vs target)
 

@@ -5,10 +5,21 @@ import { app } from '../../src/app';
 import { db } from '../../src/db/client';
 import { chatStreamEvents } from '../../src/db/schema';
 import { eq, sql } from 'drizzle-orm';
+import { queueManager } from '../../src/services/queue-manager';
+
+async function hardResetQueue(): Promise<void> {
+  queueManager.pause();
+  try {
+    await queueManager.cancelAllProcessing('test-cleanup');
+    await db.run(sql`DELETE FROM job_queue`);
+  } finally {
+    queueManager.resume();
+  }
+}
 
 describe('AI Workflow - Complete Integration Test', () => {
   let createdFolderId: string | null = null;
-  let createdOrganizationId: string | null = null;
+  let createdOrganizationIds: string[] = [];
   let user: any;
 
   beforeEach(async () => {
@@ -16,11 +27,11 @@ describe('AI Workflow - Complete Integration Test', () => {
   });
 
   beforeAll(async () => {
-    // Clear ALL jobs from queue (including zombie processing jobs from prior runs)
-    await db.run(sql`DELETE FROM job_queue`);
+    await hardResetQueue();
   });
 
   afterEach(async () => {
+    await hardResetQueue();
     // Cleanup created resources
     if (createdFolderId) {
       try {
@@ -28,15 +39,12 @@ describe('AI Workflow - Complete Integration Test', () => {
       } catch {}
       createdFolderId = null;
     }
-    if (createdOrganizationId) {
+    for (const organizationId of createdOrganizationIds) {
       try {
-        await authenticatedRequest(app, 'DELETE', `/api/v1/organizations/${createdOrganizationId}`, user.sessionToken!);
+        await authenticatedRequest(app, 'DELETE', `/api/v1/organizations/${organizationId}`, user.sessionToken!);
       } catch {}
-      createdOrganizationId = null;
     }
-    // Purge queue before cleaning auth data to avoid FK violations
-    // (queue processor may still reference the user being deleted)
-    await db.run(sql`DELETE FROM job_queue`);
+    createdOrganizationIds = [];
     await cleanupAuthData();
   });
 
@@ -69,7 +77,8 @@ describe('AI Workflow - Complete Integration Test', () => {
     );
     expect(draft.status).toBe(201);
     const draftData = await draft.json();
-    createdOrganizationId = draftData.id as string;
+    const createdOrganizationId = draftData.id as string;
+    createdOrganizationIds = [createdOrganizationId];
     expect(draftData.status).toBe('draft');
 
     // 2) Start organization enrichment
@@ -141,10 +150,10 @@ describe('AI Workflow - Complete Integration Test', () => {
       attempts2++;
     } while (folderResponse.status === 200 && (await folderResponse.clone().json()).status === 'generating' && attempts2 < maxAttempts2);
 
-    // 7) Verify folder is completed and associated with organization
+    // 7) Verify folder exists and stays attached to the organization while the workflow continues
     expect(folderResponse.status).toBe(200);
     const folderData = await folderResponse.json();
-    expect(folderData.status).toBe('completed');
+    expect(['generating', 'completed']).toContain(folderData.status);
     expect(folderData.organizationId).toBe(createdOrganizationId);
 
     // 8) Wait for initiatives to complete with polling
@@ -246,12 +255,9 @@ describe('AI Workflow - Complete Integration Test', () => {
     let attempts3 = 0;
     const maxAttempts3 = 10;
     
-    // Create admin user for queue stats access
-    const adminUser = await createAuthenticatedUser('admin_app');
-    
     do {
       await sleep(5000); // Wait 5 seconds between checks
-      queueStats = await authenticatedRequest(app, 'GET', '/api/v1/queue/stats', adminUser.sessionToken!);
+      queueStats = await authenticatedRequest(app, 'GET', '/api/v1/queue/stats', user.sessionToken!);
       attempts3++;
     } while (queueStats.status === 200 && ((await queueStats.clone().json()).pending > 0 || (await queueStats.clone().json()).processing > 0) && attempts3 < maxAttempts3);
     
@@ -264,14 +270,92 @@ describe('AI Workflow - Complete Integration Test', () => {
     
     // Log final queue status for debugging
     console.log('Final queue status:', queueData);
-    
-    // Cleanup admin user
-    await cleanupAuthData();
 
+    let finalFolderResponse;
+    let finalFolderData;
+    let attempts6 = 0;
+    const maxAttempts6 = 6;
+    do {
+      await sleep(2000);
+      finalFolderResponse = await authenticatedRequest(app, 'GET', `/api/v1/folders/${createdFolderId}`, user.sessionToken!);
+      expect(finalFolderResponse.status).toBe(200);
+      finalFolderData = await finalFolderResponse.json();
+      attempts6++;
+    } while (finalFolderData.status !== 'completed' && attempts6 < maxAttempts6);
+
+    expect(finalFolderData.status).toBe('completed');
+    
     // Cleanup stream events
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, folderStreamId));
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, initiativeStreamId));
       }, 120000);
+
+  it('should accept the org-aware list schema with explicit org_ids and complete generation', async () => {
+    const orgAlphaResponse = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/organizations',
+      user.sessionToken!,
+      { name: `Org aware Alpha ${createTestId()}`, industry: 'Manufacturing' }
+    );
+    expect(orgAlphaResponse.status).toBe(201);
+    const orgAlpha = await orgAlphaResponse.json();
+
+    const orgBetaResponse = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/organizations',
+      user.sessionToken!,
+      { name: `Org aware Beta ${createTestId()}`, industry: 'Logistics' }
+    );
+    expect(orgBetaResponse.status).toBe(201);
+    const orgBeta = await orgBetaResponse.json();
+
+    createdOrganizationIds = [orgAlpha.id, orgBeta.id];
+
+    const generateResponse = await authenticatedRequest(
+      app,
+      'POST',
+      '/api/v1/initiatives/generate',
+      user.sessionToken!,
+      {
+        input: 'Generate 3 AI initiatives spanning manufacturing and logistics operations',
+        org_ids: createdOrganizationIds,
+        matrix_mode: 'generate',
+        model: getTestModel(),
+      }
+    );
+    expect(generateResponse.status).toBe(200);
+    const generateData = await generateResponse.json();
+    expect(generateData.success).toBe(true);
+    expect(generateData.created_folder_id).toBeDefined();
+    createdFolderId = generateData.created_folder_id;
+
+    let initiativesResponse;
+    let completedInitiatives: any[] = [];
+    let attempts = 0;
+    const maxAttempts = 24;
+
+    while (completedInitiatives.length === 0 && attempts < maxAttempts) {
+      await sleep(5000);
+      initiativesResponse = await authenticatedRequest(app, 'GET', `/api/v1/initiatives?folder_id=${createdFolderId}`, user.sessionToken!);
+      expect(initiativesResponse.status).toBe(200);
+      const initiativesData = await initiativesResponse.json();
+      completedInitiatives = initiativesData.items.filter((initiative: any) => initiative.status === 'completed');
+      attempts++;
+    }
+
+    expect(completedInitiatives.length).toBeGreaterThan(0);
+    const firstCompleted = completedInitiatives[0];
+    // organizationId may be null when the LLM returns organizationIds: [] (valid per prompt contract)
+    // When assigned, it must reference one of the provided org IDs
+    if (firstCompleted.organizationId) {
+      expect(createdOrganizationIds).toContain(firstCompleted.organizationId);
+    }
+    // At least one initiative across the batch should have an org assigned
+    const anyWithOrg = completedInitiatives.some((i: any) => i.organizationId != null);
+    expect(anyWithOrg).toBe(true);
+    expect(firstCompleted.data?.name).toBeDefined();
+    expect(firstCompleted.data?.description).toBeDefined();
+  }, 180000);
 });
-
-

@@ -2363,7 +2363,7 @@ export class ToolService {
     };
   }
   // ---------------------------
-  // Extended objects (solutions, products, bids)
+  // Extended objects (solutions, products, proposals)
   // ---------------------------
 
   async listSolutions(opts: { initiativeId: string; workspaceId: string; select?: string[] | null }) {
@@ -2389,7 +2389,7 @@ export class ToolService {
     return { solutionId, data: select ? pickObjectFields(obj, select) : obj };
   }
 
-  async listBids(opts: { initiativeId: string; workspaceId: string; select?: string[] | null }) {
+  async listProposals(opts: { initiativeId: string; workspaceId: string; select?: string[] | null }) {
     const rows = await db.select().from(bids)
       .where(and(eq(bids.initiativeId, opts.initiativeId), eq(bids.workspaceId, opts.workspaceId)));
     const select = Array.isArray(opts.select) ? opts.select.filter(Boolean) : null;
@@ -2400,16 +2400,26 @@ export class ToolService {
     return { items, count: rows.length };
   }
 
-  async getBid(bidId: string, opts?: { workspaceId?: string; select?: string[] | null }) {
-    if (!bidId) throw new Error('bidId is required');
+  /** @deprecated Use listProposals */
+  async listBids(opts: { initiativeId: string; workspaceId: string; select?: string[] | null }) {
+    return this.listProposals(opts);
+  }
+
+  async getProposal(proposalId: string, opts?: { workspaceId?: string; select?: string[] | null }) {
+    if (!proposalId) throw new Error('proposalId is required');
     const where = opts?.workspaceId
-      ? and(eq(bids.id, bidId), eq(bids.workspaceId, opts.workspaceId))
-      : eq(bids.id, bidId);
+      ? and(eq(bids.id, proposalId), eq(bids.workspaceId, opts.workspaceId))
+      : eq(bids.id, proposalId);
     const [row] = await db.select().from(bids).where(where).limit(1);
-    if (!row) throw new Error('Bid not found');
+    if (!row) throw new Error('Proposal not found');
     const select = Array.isArray(opts?.select) ? opts?.select.filter(Boolean) : null;
     const obj: Record<string, unknown> = { id: row.id, status: row.status, version: row.version, ...(row.data as Record<string, unknown> ?? {}) };
-    return { bidId, data: select ? pickObjectFields(obj, select) : obj };
+    return { proposalId, data: select ? pickObjectFields(obj, select) : obj };
+  }
+
+  /** @deprecated Use getProposal */
+  async getBid(bidId: string, opts?: { workspaceId?: string; select?: string[] | null }) {
+    return this.getProposal(bidId, opts);
   }
 
   async listProducts(opts: { workspaceId: string; initiativeId?: string; select?: string[] | null }) {

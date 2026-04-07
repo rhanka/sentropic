@@ -4,6 +4,10 @@
  * Uses "opportunity", "initiative", "business opportunity" instead.
  */
 import type { DefaultGenerationAgentDefinition } from './default-agents-types';
+import {
+  buildOrgAwareListPrompt,
+  ORG_AWARE_LIST_OUTPUT_SCHEMA,
+} from './default-org-aware-prompts';
 
 export const OPPORTUNITY_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = [
   {
@@ -21,7 +25,7 @@ export const OPPORTUNITY_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition>
     key: "matrix_generation_agent",
     name: "Matrix generation agent",
     description:
-      "Generates organization-specific matrix descriptions for opportunity scoring. Supports custom axes when customAxes flag is enabled (D).",
+      "Generates context-specific matrix descriptions for opportunity scoring. Supports custom axes when customAxes flag is enabled (D).",
     sourceLevel: "code",
     config: {
       role: "matrix_generation",
@@ -34,16 +38,16 @@ export const OPPORTUNITY_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition>
        * When false (default), standard behavior: adapt descriptions only, keep axis IDs.
        */
       customAxes: false,
-      promptTemplate: `Tu dois adapter les descriptions de niveaux d'une matrice de priorisation d'opportunités pour l'organisation suivante:
-- Nom: {{organization_name}}
-- Contexte organisation: {{organization_info}}
+      promptTemplate: `Tu dois adapter les descriptions de niveaux d'une matrice de priorisation d'opportunités pour le contexte principal suivant:
+- Nom du contexte: {{organization_name}}
+- Contexte métier: {{organization_info}}
 
 Matrice de base (axes, poids, seuils - NE PAS MODIFIER):
 {{base_matrix}}
 
 Objectif:
 - Conserver STRICTEMENT la structure de la matrice de base (ids d'axes, poids, seuils).
-- Adapter UNIQUEMENT les textes des levelDescriptions pour refléter le contexte métier de l'organisation.
+- Adapter UNIQUEMENT les textes des levelDescriptions pour refléter le contexte métier du dossier et, si disponibles, des organisations ciblées.
 
 Contraintes obligatoires:
 - Ne jamais changer les axisId.
@@ -199,8 +203,6 @@ IMPORTANT:
 - Génère le titre et la description pour chaque opportunité
 - La description doit être en markdown, avec mise en exergue en gras, et le cas échéant en liste bullet point pour être percutante
 - Pour chaque opportunité, numérote les références (1, 2, 3...) et utilise [1], [2], [3] dans la description pour référencer ces numéros
-- Si des organisations sont listées dans {{organizations_list}}, mappe chaque opportunité à une ou plusieurs organisations pertinentes via le champ "organizationIds" (tableau d'IDs). Une opportunité peut concerner plusieurs organisations si le périmètre le justifie.
-- Si aucune organisation n'est disponible, omets le champ "organizationIds"
 
 Réponds UNIQUEMENT avec un JSON valide:
 {
@@ -209,18 +211,35 @@ Réponds UNIQUEMENT avec un JSON valide:
     {
       "titre": "titre court 1",
       "description": "Description courte (60-100 mots) de l'opportunité business",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
-      "organizationIds": ["org_id_1", "org_id_2"]
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
     },
     {
       "titre": "titre court 2",
       "description": "Description courte (60-100 mots) de l'opportunité business",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
-      "organizationIds": ["org_id_1"]
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
     },
     ...
   ]
 }`,
+    },
+  },
+  {
+    key: "opportunity_list_with_orgs_agent",
+    name: "Opportunity list with orgs agent",
+    description:
+      "Generates a structured list of candidate opportunities oriented around selected organizations.",
+    sourceLevel: "code",
+    config: {
+      role: "initiative_list_with_orgs",
+      promptId: "use_case_list_with_orgs",
+      outputSchema: ORG_AWARE_LIST_OUTPUT_SCHEMA,
+      promptTemplate: buildOrgAwareListPrompt({
+        listHeadline: "Genere une liste d'opportunites business orientees autour des organisations selectionnees.",
+        countLabel: "Nombre d'opportunites a generer",
+        researchFocus: "trouver des informations recentes sur les tendances du marche, les opportunites business et les entreprises reelles les plus pertinentes pour cette demande",
+        itemLabelSingular: "opportunite",
+        itemDescriptionLabel: "opportunites",
+      }),
     },
   },
   {
@@ -445,6 +464,9 @@ Informations de l'organisation (si disponibles): {{organization_info}}
 Opportunités prioritaires (top opportunités):
 {{top_cas}}
 
+Références disponibles issues des opportunités:
+{{references_context}}
+
 Liste complète des opportunités analysées:
 {{use_cases}}
 
@@ -459,6 +481,8 @@ Pour chaque opportunité, les informations suivantes sont disponibles:
 IMPORTANT:
 - La liste des opportunités prioritaires (top opportunités) sont fournies ci-dessus - utilise-les comme référence principale pour les recommandations
 - Utilise web_extract (mais pas web_search) uniquement en cas de besoin, avec des URLs valides uniquement. Si les opportunités n'ont pas de références ou si tu n'as pas d'URLs valides à extraire, n'utilise pas cet outil.
+- Utilise en priorité les références structurées ci-dessus pour remplir la section "references"
+- La section "references" doit contenir les références effectivement utilisées ou citées dans le rapport
 - Fais une analyse stratégique globale de l'ensemble des opportunités
 - Identifie les tendances de marché, les synergies et les défis communs
 - Mets l'accent sur les opportunités prioritaires dans l'analyse et les recommandations
@@ -472,7 +496,7 @@ OBLIGATOIRE: Réponds UNIQUEMENT avec un JSON valide contenant:
   "introduction": "...",
   "analyse": "...",
   "recommandation": "...",
-  "synthese_executive": "..."
+  "synthese_executive": "...",
   "references": [ { "title": "description du lien 1", "url": "url du lien 1" }, { "title": "description du lien 2", "url": "url du lien 2" }, ...]
 }
 

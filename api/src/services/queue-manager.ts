@@ -1,5 +1,5 @@
 import { db, pool } from '../db/client';
-import { and, sql, eq, desc } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { createId } from '../utils/id';
 import { enrichOrganization, type OrganizationData } from './context-organization';
 import {
@@ -26,7 +26,12 @@ import {
   type JobQueueRow,
   contextDocuments,
   contextModificationHistory,
+  executionRuns,
   users,
+  workflowDefinitionTasks,
+  workflowRunState,
+  workflowTaskTransitions,
+  workflowTaskResults,
   workspaceMemberships,
 } from '../db/schema';
 import { settingsService } from './settings';
@@ -46,6 +51,7 @@ import { generateDocumentDetailedSummary, generateDocumentSummary, getDocumentDe
 import { getNextSequence, writeStreamEvent } from './stream-service';
 import type { DocxEntityType, DocxTemplateId } from './docx-service';
 import { runDocxGenerationInWorker } from './docx-render-worker';
+import { generateFreeformDocx } from './docx-generation';
 import type { CommentContextType } from './context-comments';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
 import type { ProviderId } from './provider-runtime';
@@ -75,28 +81,110 @@ function parseJsonField<T = unknown>(value: unknown): T | null {
   }
 }
 
-const GENERATION_WORKFLOW_TASK_KEYS = new Set<string>([
-  'generation_create_organizations',
-  'generation_context_prepare',
-  'generation_matrix_prepare',
-  'generation_initiative_list',
-  'generation_usecase_list',
-  'generation_todo_sync',
-  'generation_initiative_detail',
-  'generation_usecase_detail',
-  'generation_executive_summary',
-  'create_organizations',
-  'context_prepare',
-  'matrix_prepare',
-  'opportunity_list',
-  'todo_sync',
-  'opportunity_detail',
-  'executive_summary',
-]);
-
-function isGenerationWorkflowTaskKey(value: unknown): value is GenerationWorkflowTaskKey {
-  return typeof value === 'string' && GENERATION_WORKFLOW_TASK_KEYS.has(value);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
 }
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+}
+
+type WorkflowOrganizationTarget = {
+  organizationId: string;
+  organizationName: string;
+  skipIfCompleted?: boolean;
+  wasCreated?: boolean;
+};
+
+function readOrganizationTargets(value: unknown): WorkflowOrganizationTarget[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!isRecord(item)) return null;
+      const organizationId =
+        typeof item.organizationId === 'string' && item.organizationId.trim()
+          ? item.organizationId.trim()
+          : '';
+      const organizationName =
+        typeof item.organizationName === 'string' && item.organizationName.trim()
+          ? item.organizationName.trim()
+          : '';
+      if (!organizationId || !organizationName) return null;
+      return {
+        organizationId,
+        organizationName,
+        skipIfCompleted: item.skipIfCompleted === true,
+        wasCreated: item.wasCreated === true,
+      } as WorkflowOrganizationTarget;
+    })
+    .filter((item): item is WorkflowOrganizationTarget => item !== null);
+}
+
+type WorkflowGeneratedInitiative = {
+  id: string;
+  name: string;
+  description?: string;
+  organizationIds?: string[];
+  organizationName?: string;
+};
+
+function normalizeOrganizationName(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function readGeneratedInitiatives(value: unknown): WorkflowGeneratedInitiative[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!isRecord(item)) return null;
+      const id = typeof item.id === 'string' ? item.id.trim() : '';
+      const name = typeof item.name === 'string' ? item.name.trim() : '';
+      if (!id || !name) return null;
+      const organizationIds = readStringArray(item.organizationIds);
+      const organizationName = normalizeOrganizationName(item.organizationName);
+      const description = typeof item.description === 'string' && item.description.trim()
+        ? item.description.trim()
+        : undefined;
+      return {
+        id,
+        name,
+        description,
+        organizationIds,
+        organizationName: organizationName || undefined,
+      } as WorkflowGeneratedInitiative;
+    })
+    .filter((item): item is WorkflowGeneratedInitiative => item !== null);
+}
+
+function jobDataToRecord(jobData: JobData): Record<string, unknown> {
+  return isRecord(jobData) ? jobData : {};
+}
+
+function deepMergeState(base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...base };
+  for (const [key, patchValue] of Object.entries(patch)) {
+    const currentValue = next[key];
+    if (isRecord(currentValue) && isRecord(patchValue)) {
+      next[key] = deepMergeState(currentValue, patchValue);
+      continue;
+    }
+    next[key] = patchValue;
+  }
+  return next;
+}
+
+type WorkflowTaskRuntimeStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+
+type WorkflowTaskCompletion = {
+  output?: Record<string, unknown>;
+  statePatch?: Record<string, unknown>;
+  currentTaskKey?: string | null;
+  currentTaskInstanceKey?: string | null;
+  runStatus?: WorkflowTaskRuntimeStatus;
+};
 
 function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkflowRuntimeContext | null {
   if (!value || typeof value !== 'object') return null;
@@ -104,7 +192,7 @@ function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkfl
   if (typeof record.workflowRunId !== 'string' || typeof record.workflowDefinitionId !== 'string') {
     return null;
   }
-  if (!isGenerationWorkflowTaskKey(record.taskKey)) {
+  if (typeof record.taskKey !== 'string' || !record.taskKey.trim()) {
     return null;
   }
   const toNullableString = (candidate: unknown): string | null =>
@@ -127,17 +215,6 @@ function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkfl
     taskKey: record.taskKey,
     agentDefinitionId: toNullableString(record.agentDefinitionId),
     agentMap,
-  };
-}
-
-function cloneWorkflowContextForTask(
-  workflow: GenerationWorkflowRuntimeContext,
-  taskKey: GenerationWorkflowTaskKey
-): GenerationWorkflowRuntimeContext {
-  return {
-    ...workflow,
-    taskKey,
-    agentDefinitionId: workflow.agentMap[taskKey] ?? null,
   };
 }
 
@@ -241,6 +318,7 @@ export function buildGeneratedInitiativePayloadForPersistence(
 export type JobType =
   | 'organization_enrich'
   | 'organization_batch_create'
+  | 'organization_targets_join'
   | 'matrix_generate'
   | 'initiative_list'
   | 'initiative_detail'
@@ -251,29 +329,45 @@ export type JobType =
 
 export type MatrixMode = 'organization' | 'generate' | 'default';
 
-export type GenerationWorkflowTaskKey =
-  | 'generation_create_organizations'
-  | 'generation_context_prepare'
-  | 'generation_matrix_prepare'
-  | 'generation_initiative_list'
-  | 'generation_todo_sync'
-  | 'generation_initiative_detail'
-  | 'generation_executive_summary'
-  | 'create_organizations'
-  | 'context_prepare'
-  | 'matrix_prepare'
-  | 'opportunity_list'
-  | 'todo_sync'
-  | 'opportunity_detail'
-  | 'executive_summary';
+export type GenerationWorkflowTaskKey = string;
 
 export interface GenerationWorkflowRuntimeContext {
   workflowRunId: string;
   workflowDefinitionId: string;
-  taskKey: GenerationWorkflowTaskKey;
+  taskKey: string;
   agentDefinitionId: string | null;
   agentMap: Record<string, string>; // task key → agent definition ID
 }
+
+type WorkflowTaskExecutionDefinition = {
+  taskKey: string;
+  orderIndex: number;
+  agentDefinitionId: string | null;
+  metadata: Record<string, unknown>;
+};
+
+type WorkflowTransitionDefinition = {
+  fromTaskKey: string | null;
+  toTaskKey: string | null;
+  transitionType: string;
+  condition: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+};
+
+type WorkflowRuntimeDefinition = {
+  tasks: Map<string, WorkflowTaskExecutionDefinition>;
+  transitions: WorkflowTransitionDefinition[];
+  agentMap: Record<string, string>;
+  agentIdsByKey: Record<string, string>;
+};
+
+type WorkflowDispatchDescriptor = {
+  taskKey: string;
+  taskInstanceKey: string;
+  executor: string;
+  jobType?: JobType;
+  jobId?: string;
+};
 
 export interface OrganizationEnrichJobData {
   organizationId: string;
@@ -281,11 +375,33 @@ export interface OrganizationEnrichJobData {
   model?: string;
   initiatedByUserId?: string;
   locale?: string;
+  workflow?: GenerationWorkflowRuntimeContext;
+  skipIfCompleted?: boolean;
+  wasCreated?: boolean;
+}
+
+export interface OrganizationBatchCreateJobData {
+  folderId: string;
+  input: string;
+  model?: string;
+  initiatedByUserId?: string;
+  locale?: string;
+  workflow?: GenerationWorkflowRuntimeContext;
+}
+
+export interface OrganizationTargetsJoinJobData {
+  sourceTaskKey: string;
+  initiatedByUserId?: string;
+  locale?: string;
+  workflow?: GenerationWorkflowRuntimeContext;
 }
 
 export interface MatrixGenerateJobData {
   folderId: string;
-  organizationId: string;
+  input?: string;
+  organizationId?: string;
+  orgIds?: string[];
+  matrixSource?: 'organization' | 'prompt' | 'default';
   model?: string;
   initiatedByUserId?: string;
   locale?: string;
@@ -302,6 +418,8 @@ export interface InitiativeListJobData {
   initiatedByUserId?: string;
   locale?: string;
   workflow?: GenerationWorkflowRuntimeContext;
+  /** Selected organization IDs for multi-org initiative generation (Lot 12) */
+  orgIds?: string[];
 }
 
 export interface InitiativeDetailJobData {
@@ -355,7 +473,7 @@ export interface DocumentSummaryJobData {
 }
 
 export interface DocxGenerateJobData {
-  templateId: DocxTemplateId;
+  templateId?: DocxTemplateId;
   entityType: DocxEntityType;
   entityId: string;
   provided?: Record<string, unknown>;
@@ -363,10 +481,14 @@ export interface DocxGenerateJobData {
   locale?: string;
   requestId?: string;
   sourceHash?: string;
+  mode?: 'template' | 'freeform';
+  code?: string;
 }
 
 export type JobData =
   | OrganizationEnrichJobData
+  | OrganizationBatchCreateJobData
+  | OrganizationTargetsJoinJobData
   | MatrixGenerateJobData
   | InitiativeListJobData
   | InitiativeDetailJobData
@@ -496,6 +618,975 @@ export class QueueManager {
     } finally {
       client.release();
     }
+  }
+
+  private getGenerationWorkflowContextForJobData(jobData: JobData): GenerationWorkflowRuntimeContext | null {
+    if (!jobData || typeof jobData !== 'object') return null;
+    return parseGenerationWorkflowRuntimeContext((jobData as { workflow?: unknown }).workflow);
+  }
+
+  private getWorkflowTaskInstanceKey(jobType: JobType, jobData: JobData): string {
+    if (jobType === 'initiative_detail') {
+      const initiativeId = (jobData as InitiativeDetailJobData | undefined)?.initiativeId;
+      if (typeof initiativeId === 'string' && initiativeId.trim()) {
+        return initiativeId;
+      }
+    }
+    if (jobType === 'organization_enrich') {
+      const organizationId = (jobData as OrganizationEnrichJobData | undefined)?.organizationId;
+      if (typeof organizationId === 'string' && organizationId.trim()) {
+        return organizationId;
+      }
+    }
+    return 'main';
+  }
+
+  private getJobAttempt(jobData: JobData): number {
+    const jobDataRecord = jobDataToRecord(jobData);
+    const retry = isRecord(jobDataRecord._retry)
+      ? (jobDataRecord._retry as Record<string, unknown>)
+      : null;
+    const attempt = retry && typeof retry.attempt === 'number' ? retry.attempt : 0;
+    return Math.max(1, attempt + 1);
+  }
+
+  private async getWorkflowRunStateSnapshot(runId: string): Promise<{
+    status: string;
+    state: Record<string, unknown>;
+    version: number;
+    currentTaskKey: string | null;
+    currentTaskInstanceKey: string | null;
+  } | null> {
+    const [row] = await db
+      .select({
+        status: workflowRunState.status,
+        state: workflowRunState.state,
+        version: workflowRunState.version,
+        currentTaskKey: workflowRunState.currentTaskKey,
+        currentTaskInstanceKey: workflowRunState.currentTaskInstanceKey,
+      })
+      .from(workflowRunState)
+      .where(eq(workflowRunState.runId, runId))
+      .limit(1);
+
+    if (!row) return null;
+    return {
+      status: row.status,
+      state: isRecord(row.state) ? row.state : {},
+      version: row.version ?? 1,
+      currentTaskKey: row.currentTaskKey ?? null,
+      currentTaskInstanceKey: row.currentTaskInstanceKey ?? null,
+    };
+  }
+
+  private async markExecutionRunStatus(
+    runId: string,
+    status: 'in_progress' | 'completed' | 'failed',
+  ): Promise<void> {
+    const now = new Date();
+    await db
+      .update(executionRuns)
+      .set({
+        status,
+        completedAt: status === 'completed' || status === 'failed' ? now : null,
+        updatedAt: now,
+      })
+      .where(eq(executionRuns.id, runId));
+  }
+
+  private async mergeWorkflowRunState(params: {
+    runId: string;
+    status?: WorkflowTaskRuntimeStatus;
+    statePatch?: Record<string, unknown>;
+    currentTaskKey?: string | null;
+    currentTaskInstanceKey?: string | null;
+  }): Promise<void> {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const current = await this.getWorkflowRunStateSnapshot(params.runId);
+      if (!current) return;
+
+      const nextState = params.statePatch ? deepMergeState(current.state, params.statePatch) : current.state;
+      const now = new Date();
+      const nextVersion = current.version + (params.statePatch ? 1 : 0);
+
+      const updatedRows = await db
+        .update(workflowRunState)
+        .set({
+          status: params.status ?? current.status,
+          state: nextState,
+          version: nextVersion,
+          currentTaskKey:
+            Object.prototype.hasOwnProperty.call(params, 'currentTaskKey')
+              ? (params.currentTaskKey ?? null)
+              : current.currentTaskKey,
+          currentTaskInstanceKey:
+            Object.prototype.hasOwnProperty.call(params, 'currentTaskInstanceKey')
+              ? (params.currentTaskInstanceKey ?? null)
+              : current.currentTaskInstanceKey,
+          checkpointedAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(workflowRunState.runId, params.runId),
+            eq(workflowRunState.version, current.version),
+          ),
+        )
+        .returning({ runId: workflowRunState.runId });
+
+      if (updatedRows.length > 0) {
+        return;
+      }
+    }
+
+    throw new Error(`Failed to merge workflow run state for ${params.runId} after concurrent updates`);
+  }
+
+  private async upsertWorkflowTaskResult(params: {
+    workflow: GenerationWorkflowRuntimeContext;
+    workspaceId: string;
+    taskInstanceKey: string;
+    status: WorkflowTaskRuntimeStatus;
+    inputPayload?: Record<string, unknown>;
+    output?: Record<string, unknown>;
+    statePatch?: Record<string, unknown>;
+    attempts?: number;
+    lastError?: Record<string, unknown> | null;
+    startedAt?: Date | null;
+    completedAt?: Date | null;
+  }): Promise<void> {
+    const now = new Date();
+    const insertValues = {
+      runId: params.workflow.workflowRunId,
+      workspaceId: params.workspaceId,
+      workflowDefinitionId: params.workflow.workflowDefinitionId,
+      taskKey: params.workflow.taskKey,
+      taskInstanceKey: params.taskInstanceKey,
+      status: params.status,
+      inputPayload: params.inputPayload ?? {},
+      output: params.output ?? {},
+      statePatch: params.statePatch ?? {},
+      attempts: params.attempts ?? 1,
+      lastError: params.lastError ?? null,
+      startedAt: params.startedAt ?? now,
+      completedAt: params.completedAt ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const updateSet = {
+      status: params.status,
+      inputPayload: params.inputPayload ?? {},
+      output: params.output ?? {},
+      statePatch: params.statePatch ?? {},
+      attempts: params.attempts ?? 1,
+      lastError: params.lastError ?? null,
+      ...(params.startedAt !== undefined ? { startedAt: params.startedAt } : {}),
+      ...(params.completedAt !== undefined ? { completedAt: params.completedAt } : {}),
+      updatedAt: now,
+    };
+    await db
+      .insert(workflowTaskResults)
+      .values(insertValues)
+      .onConflictDoUpdate({
+        target: [
+          workflowTaskResults.runId,
+          workflowTaskResults.taskKey,
+          workflowTaskResults.taskInstanceKey,
+        ],
+        set: updateSet,
+      });
+  }
+
+  private async markWorkflowTaskStarted(params: {
+    workflow: GenerationWorkflowRuntimeContext;
+    workspaceId: string;
+    taskInstanceKey: string;
+    jobData: JobData;
+  }): Promise<void> {
+    const startedAt = new Date();
+    await this.upsertWorkflowTaskResult({
+      workflow: params.workflow,
+      workspaceId: params.workspaceId,
+      taskInstanceKey: params.taskInstanceKey,
+      status: 'in_progress',
+      inputPayload: jobDataToRecord(params.jobData),
+      output: {},
+      statePatch: {},
+      attempts: this.getJobAttempt(params.jobData),
+      lastError: null,
+      startedAt,
+      completedAt: null,
+    });
+    await this.mergeWorkflowRunState({
+      runId: params.workflow.workflowRunId,
+      status: 'in_progress',
+      currentTaskKey: params.workflow.taskKey,
+      currentTaskInstanceKey: params.taskInstanceKey,
+    });
+    await this.markExecutionRunStatus(params.workflow.workflowRunId, 'in_progress');
+  }
+
+  private async completeWorkflowTask(params: {
+    workflow: GenerationWorkflowRuntimeContext;
+    workspaceId: string;
+    taskInstanceKey: string;
+    jobData: JobData;
+    completion?: WorkflowTaskCompletion;
+  }): Promise<void> {
+    const completedAt = new Date();
+    const output = params.completion?.output ?? {};
+    const statePatch = params.completion?.statePatch ?? {};
+    await this.upsertWorkflowTaskResult({
+      workflow: params.workflow,
+      workspaceId: params.workspaceId,
+      taskInstanceKey: params.taskInstanceKey,
+      status: 'completed',
+      inputPayload: jobDataToRecord(params.jobData),
+      output,
+      statePatch,
+      attempts: this.getJobAttempt(params.jobData),
+      lastError: null,
+      startedAt: undefined,
+      completedAt,
+    });
+    await this.mergeWorkflowRunState({
+      runId: params.workflow.workflowRunId,
+      status: params.completion?.runStatus ?? 'in_progress',
+      statePatch,
+      currentTaskKey: params.completion?.currentTaskKey,
+      currentTaskInstanceKey: params.completion?.currentTaskInstanceKey,
+    });
+    const nextRunStatus = params.completion?.runStatus ?? 'in_progress';
+    if (nextRunStatus === 'completed') {
+      await this.markExecutionRunStatus(params.workflow.workflowRunId, 'completed');
+      return;
+    }
+
+    const runtimeState = await this.getWorkflowRunStateSnapshot(params.workflow.workflowRunId);
+    if (!runtimeState) return;
+
+    const runtimeDefinition = await this.loadWorkflowRuntimeDefinition(
+      params.workspaceId,
+      params.workflow.workflowDefinitionId,
+    );
+    const runContext = await this.getWorkflowRunContext(params.workflow.workflowRunId);
+    await this.dispatchWorkflowTransitions({
+      workspaceId: params.workspaceId,
+      workflowRunId: params.workflow.workflowRunId,
+      workflowDefinitionId: params.workflow.workflowDefinitionId,
+      runtimeDefinition,
+      runContext,
+      state: runtimeState.state,
+      fromTaskKey: params.workflow.taskKey,
+    });
+    await this.dispatchReadyWorkflowJoins({
+      workspaceId: params.workspaceId,
+      workflowRunId: params.workflow.workflowRunId,
+      workflowDefinitionId: params.workflow.workflowDefinitionId,
+      runtimeDefinition,
+      runContext,
+      state: runtimeState.state,
+    });
+  }
+
+  private async failWorkflowTask(params: {
+    workflow: GenerationWorkflowRuntimeContext;
+    workspaceId: string;
+    taskInstanceKey: string;
+    jobData: JobData;
+    error: unknown;
+  }): Promise<void> {
+    const completedAt = new Date();
+    const errorPayload = {
+      name: params.error instanceof Error ? params.error.name : 'Error',
+      message: params.error instanceof Error ? params.error.message : String(params.error),
+    };
+    await this.upsertWorkflowTaskResult({
+      workflow: params.workflow,
+      workspaceId: params.workspaceId,
+      taskInstanceKey: params.taskInstanceKey,
+      status: 'failed',
+      inputPayload: jobDataToRecord(params.jobData),
+      output: {},
+      statePatch: {},
+      attempts: this.getJobAttempt(params.jobData),
+      lastError: errorPayload,
+      startedAt: undefined,
+      completedAt,
+    });
+    await this.mergeWorkflowRunState({
+      runId: params.workflow.workflowRunId,
+      status: 'failed',
+      currentTaskKey: params.workflow.taskKey,
+      currentTaskInstanceKey: params.taskInstanceKey,
+    });
+    await this.markExecutionRunStatus(params.workflow.workflowRunId, 'failed');
+  }
+
+  private getPathValue(source: unknown, path: string): unknown {
+    if (!path) return source;
+    const segments = path.split('.').filter(Boolean);
+    let current: unknown = source;
+    for (const segment of segments) {
+      if (!isRecord(current)) return undefined;
+      current = current[segment];
+    }
+    return current;
+  }
+
+  private evaluateWorkflowCondition(condition: unknown, state: Record<string, unknown>): boolean {
+    if (!isRecord(condition) || Object.keys(condition).length === 0) {
+      return true;
+    }
+    if (Array.isArray(condition.all)) {
+      return condition.all.every((entry) => this.evaluateWorkflowCondition(entry, state));
+    }
+    if (Array.isArray(condition.any)) {
+      return condition.any.some((entry) => this.evaluateWorkflowCondition(entry, state));
+    }
+    if (condition.not !== undefined) {
+      return !this.evaluateWorkflowCondition(condition.not, state);
+    }
+    const path = typeof condition.path === 'string' ? condition.path : '';
+    const operator = typeof condition.operator === 'string' ? condition.operator : 'eq';
+    const currentValue = path ? this.getPathValue(state, path) : undefined;
+    switch (operator) {
+      case 'eq':
+        return currentValue === condition.value;
+      case 'truthy':
+        return Boolean(currentValue);
+      case 'not_empty':
+        if (Array.isArray(currentValue)) return currentValue.length > 0;
+        if (typeof currentValue === 'string') return currentValue.trim().length > 0;
+        return Boolean(currentValue);
+      default:
+        return false;
+    }
+  }
+
+  private resolveWorkflowBindingValue(
+    binding: unknown,
+    context: {
+      state: Record<string, unknown>;
+      run: Record<string, unknown>;
+      item?: unknown;
+    },
+  ): unknown {
+    if (typeof binding === 'string') {
+      if (binding === '$state') return context.state;
+      if (binding.startsWith('$state.')) return this.getPathValue(context.state, binding.slice('$state.'.length));
+      if (binding === '$run') return context.run;
+      if (binding.startsWith('$run.')) return this.getPathValue(context.run, binding.slice('$run.'.length));
+      if (binding === '$item') return context.item;
+      if (binding.startsWith('$item.')) return this.getPathValue(context.item, binding.slice('$item.'.length));
+      return binding;
+    }
+    if (Array.isArray(binding)) {
+      return binding.map((entry) => this.resolveWorkflowBindingValue(entry, context));
+    }
+    if (isRecord(binding)) {
+      return Object.fromEntries(
+        Object.entries(binding).map(([key, value]) => [key, this.resolveWorkflowBindingValue(value, context)]),
+      );
+    }
+    return binding;
+  }
+
+  private async loadWorkflowRuntimeDefinition(
+    workspaceId: string,
+    workflowDefinitionId: string,
+  ): Promise<WorkflowRuntimeDefinition> {
+    const [taskRows, transitionRows, agentRows] = await Promise.all([
+      db
+        .select({
+          taskKey: workflowDefinitionTasks.taskKey,
+          orderIndex: workflowDefinitionTasks.orderIndex,
+          agentDefinitionId: workflowDefinitionTasks.agentDefinitionId,
+          metadata: workflowDefinitionTasks.metadata,
+        })
+        .from(workflowDefinitionTasks)
+        .where(
+          and(
+            eq(workflowDefinitionTasks.workspaceId, workspaceId),
+            eq(workflowDefinitionTasks.workflowDefinitionId, workflowDefinitionId),
+          ),
+        )
+        .orderBy(asc(workflowDefinitionTasks.orderIndex), asc(workflowDefinitionTasks.createdAt)),
+      db
+        .select({
+          fromTaskKey: workflowTaskTransitions.fromTaskKey,
+          toTaskKey: workflowTaskTransitions.toTaskKey,
+          transitionType: workflowTaskTransitions.transitionType,
+          condition: workflowTaskTransitions.condition,
+          metadata: workflowTaskTransitions.metadata,
+        })
+        .from(workflowTaskTransitions)
+        .where(
+          and(
+            eq(workflowTaskTransitions.workspaceId, workspaceId),
+            eq(workflowTaskTransitions.workflowDefinitionId, workflowDefinitionId),
+          ),
+        )
+        .orderBy(asc(workflowTaskTransitions.createdAt)),
+      db
+        .select({ key: agentDefinitions.key, id: agentDefinitions.id })
+        .from(agentDefinitions)
+        .where(eq(agentDefinitions.workspaceId, workspaceId)),
+    ]);
+
+    const tasks = new Map<string, WorkflowTaskExecutionDefinition>();
+    const agentMap: Record<string, string> = {};
+    for (const row of taskRows) {
+      tasks.set(row.taskKey, {
+        taskKey: row.taskKey,
+        orderIndex: row.orderIndex,
+        agentDefinitionId: row.agentDefinitionId ?? null,
+        metadata: isRecord(row.metadata) ? row.metadata : {},
+      });
+      if (row.agentDefinitionId) {
+        agentMap[row.taskKey] = row.agentDefinitionId;
+      }
+    }
+
+    const agentIdsByKey: Record<string, string> = {};
+    for (const row of agentRows) {
+      agentIdsByKey[row.key] = row.id;
+    }
+
+    return {
+      tasks,
+      transitions: transitionRows.map((row) => ({
+        fromTaskKey: row.fromTaskKey ?? null,
+        toTaskKey: row.toTaskKey ?? null,
+        transitionType: row.transitionType,
+        condition: isRecord(row.condition) ? row.condition : {},
+        metadata: isRecord(row.metadata) ? row.metadata : {},
+      })),
+      agentMap,
+      agentIdsByKey,
+    };
+  }
+
+  private async getWorkflowRunContext(runId: string): Promise<Record<string, unknown>> {
+    const [runRow] = await db
+      .select({
+        startedByUserId: executionRuns.startedByUserId,
+      })
+      .from(executionRuns)
+      .where(eq(executionRuns.id, runId))
+      .limit(1);
+
+    return {
+      startedByUserId: runRow?.startedByUserId ?? null,
+    };
+  }
+
+  private async getWorkflowTaskResultStatus(
+    runId: string,
+    taskKey: string,
+    taskInstanceKey: string,
+  ): Promise<WorkflowTaskRuntimeStatus | null> {
+    const [row] = await db
+      .select({ status: workflowTaskResults.status })
+      .from(workflowTaskResults)
+      .where(
+        and(
+          eq(workflowTaskResults.runId, runId),
+          eq(workflowTaskResults.taskKey, taskKey),
+          eq(workflowTaskResults.taskInstanceKey, taskInstanceKey),
+        ),
+      )
+      .limit(1);
+    return (row?.status as WorkflowTaskRuntimeStatus | undefined) ?? null;
+  }
+
+  private async reserveWorkflowTaskDispatch(params: {
+    workflowRunId: string;
+    workflowDefinitionId: string;
+    workspaceId: string;
+    taskKey: string;
+    taskInstanceKey: string;
+    inputPayload: Record<string, unknown>;
+  }): Promise<boolean> {
+    const now = new Date();
+    const inserted = await db
+      .insert(workflowTaskResults)
+      .values({
+        runId: params.workflowRunId,
+        workspaceId: params.workspaceId,
+        workflowDefinitionId: params.workflowDefinitionId,
+        taskKey: params.taskKey,
+        taskInstanceKey: params.taskInstanceKey,
+        status: 'pending',
+        inputPayload: params.inputPayload,
+        output: {},
+        statePatch: {},
+        attempts: 0,
+        lastError: null,
+        startedAt: null,
+        completedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({
+        target: [
+          workflowTaskResults.runId,
+          workflowTaskResults.taskKey,
+          workflowTaskResults.taskInstanceKey,
+        ],
+      })
+      .returning({ runId: workflowTaskResults.runId });
+
+    return inserted.length > 0;
+  }
+
+  private buildWorkflowTaskInstanceKey(
+    item: unknown,
+    index: number,
+    metadata: Record<string, unknown>,
+    fallbackTaskKey: string,
+  ): string {
+    const fanout = isRecord(metadata.fanout) ? metadata.fanout : {};
+    const configuredPath = typeof fanout.instanceKeyPath === 'string' ? fanout.instanceKeyPath : null;
+    if (configuredPath) {
+      const configuredValue = this.getPathValue(item, configuredPath);
+      if (typeof configuredValue === 'string' && configuredValue.trim()) {
+        return configuredValue.trim();
+      }
+    }
+    if (isRecord(item)) {
+      const candidateId = typeof item.id === 'string' ? item.id.trim() : '';
+      if (candidateId) return candidateId;
+      const candidateKey = typeof item.key === 'string' ? item.key.trim() : '';
+      if (candidateKey) return candidateKey;
+    }
+    return `${fallbackTaskKey}:${index}`;
+  }
+
+  private async isWorkflowJoinTransitionReady(params: {
+    workflowRunId: string;
+    runtimeDefinition: WorkflowRuntimeDefinition;
+    transition: WorkflowTransitionDefinition;
+    state: Record<string, unknown>;
+  }): Promise<boolean> {
+    const join = isRecord(params.transition.metadata.join) ? params.transition.metadata.join : {};
+    const requiredTaskKeys = Array.isArray(join.requiredTaskKeys)
+      ? join.requiredTaskKeys.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      : [];
+
+    if (requiredTaskKeys.length > 0) {
+      const completedMainRows = await db
+        .select({ taskKey: workflowTaskResults.taskKey })
+        .from(workflowTaskResults)
+        .where(
+          and(
+            eq(workflowTaskResults.runId, params.workflowRunId),
+            inArray(workflowTaskResults.taskKey, requiredTaskKeys),
+            eq(workflowTaskResults.taskInstanceKey, 'main'),
+            eq(workflowTaskResults.status, 'completed'),
+          ),
+        );
+      const completedKeys = new Set(completedMainRows.map((row) => row.taskKey));
+      return requiredTaskKeys.every((taskKey) => completedKeys.has(taskKey));
+    }
+
+    const joinedTaskKey =
+      typeof join.taskKey === 'string' && join.taskKey.trim().length > 0
+        ? join.taskKey
+        : params.transition.fromTaskKey;
+    if (!joinedTaskKey) return false;
+
+    const completedRows = await db
+      .select({ taskInstanceKey: workflowTaskResults.taskInstanceKey })
+      .from(workflowTaskResults)
+      .where(
+        and(
+          eq(workflowTaskResults.runId, params.workflowRunId),
+          eq(workflowTaskResults.taskKey, joinedTaskKey),
+          eq(workflowTaskResults.status, 'completed'),
+        ),
+      );
+    const completedInstanceKeys = new Set(
+      completedRows
+        .map((row) => row.taskInstanceKey?.trim())
+        .filter((value): value is string => Boolean(value)),
+    );
+
+    const expectedSourcePath = typeof join.expectedSourcePath === 'string' ? join.expectedSourcePath : null;
+    if (expectedSourcePath) {
+      const expectedItems = this.getPathValue(params.state, expectedSourcePath);
+      const allowEmpty = join.allowEmpty === true;
+      if (!Array.isArray(expectedItems)) {
+        return false;
+      }
+      if (expectedItems.length === 0) {
+        return allowEmpty;
+      }
+      const upstreamFanoutTransition = params.runtimeDefinition.transitions.find(
+        (transition) =>
+          transition.transitionType === 'fanout' &&
+          transition.toTaskKey === joinedTaskKey &&
+          this.getPathValue(transition.metadata, 'fanout.sourcePath') === expectedSourcePath,
+      );
+      const instanceKeyMetadata = upstreamFanoutTransition?.metadata ?? params.transition.metadata;
+      return expectedItems.every((item, index) =>
+        completedInstanceKeys.has(
+          this.buildWorkflowTaskInstanceKey(item, index, instanceKeyMetadata, joinedTaskKey),
+        ),
+      );
+    }
+
+    return completedInstanceKeys.has('main');
+  }
+
+  private resolveWorkflowTaskAgentDefinitionId(
+    task: WorkflowTaskExecutionDefinition,
+    state: Record<string, unknown>,
+    agentIdsByKey: Record<string, string>,
+  ): string | null {
+    const metadata = isRecord(task.metadata) ? task.metadata : {};
+    const selection = isRecord(metadata.agentSelection) ? metadata.agentSelection : null;
+    if (!selection) {
+      return task.agentDefinitionId;
+    }
+    const rules = Array.isArray(selection.rules) ? selection.rules : [];
+    for (const rule of rules) {
+      if (!isRecord(rule)) continue;
+      if (!this.evaluateWorkflowCondition(rule.condition, state)) continue;
+      const agentKey = typeof rule.agentKey === 'string' ? rule.agentKey : null;
+      if (agentKey && agentIdsByKey[agentKey]) {
+        return agentIdsByKey[agentKey];
+      }
+    }
+    const defaultAgentKey = typeof selection.defaultAgentKey === 'string' ? selection.defaultAgentKey : null;
+    if (defaultAgentKey && agentIdsByKey[defaultAgentKey]) {
+      return agentIdsByKey[defaultAgentKey];
+    }
+    return task.agentDefinitionId;
+  }
+
+  private async dispatchWorkflowTask(params: {
+    workspaceId: string;
+    workflowRunId: string;
+    workflowDefinitionId: string;
+    runtimeDefinition: WorkflowRuntimeDefinition;
+    runContext: Record<string, unknown>;
+    state: Record<string, unknown>;
+    taskKey: string;
+    taskInstanceKey: string;
+    item?: unknown;
+  }): Promise<WorkflowDispatchDescriptor[]> {
+    const task = params.runtimeDefinition.tasks.get(params.taskKey);
+    if (!task) return [];
+
+    const metadata = isRecord(task.metadata) ? task.metadata : {};
+    const executor = typeof metadata.executor === 'string' ? metadata.executor : 'noop';
+    const inputBindings = isRecord(metadata.inputBindings) ? metadata.inputBindings : {};
+    const resolvedPayload = this.resolveWorkflowBindingValue(inputBindings, {
+      state: params.state,
+      run: params.runContext,
+      item: params.item,
+    });
+    const inputPayload = isRecord(resolvedPayload) ? resolvedPayload : {};
+    const agentDefinitionId = this.resolveWorkflowTaskAgentDefinitionId(
+      task,
+      params.state,
+      params.runtimeDefinition.agentIdsByKey,
+    );
+    const workflowContext: GenerationWorkflowRuntimeContext = {
+      workflowRunId: params.workflowRunId,
+      workflowDefinitionId: params.workflowDefinitionId,
+      taskKey: params.taskKey,
+      agentDefinitionId,
+      agentMap: {
+        ...params.runtimeDefinition.agentMap,
+        ...(agentDefinitionId ? { [params.taskKey]: agentDefinitionId } : {}),
+      },
+    };
+
+    const existingStatus = await this.getWorkflowTaskResultStatus(
+      params.workflowRunId,
+      params.taskKey,
+      params.taskInstanceKey,
+    );
+    if (existingStatus && existingStatus !== 'failed') {
+      return [];
+    }
+    if (!existingStatus) {
+      const reserved = await this.reserveWorkflowTaskDispatch({
+        workflowRunId: params.workflowRunId,
+        workflowDefinitionId: params.workflowDefinitionId,
+        workspaceId: params.workspaceId,
+        taskKey: params.taskKey,
+        taskInstanceKey: params.taskInstanceKey,
+        inputPayload,
+      });
+      if (!reserved) {
+        return [];
+      }
+    }
+
+    if (executor === 'noop') {
+      const now = new Date();
+      await this.upsertWorkflowTaskResult({
+        workflow: workflowContext,
+        workspaceId: params.workspaceId,
+        taskInstanceKey: params.taskInstanceKey,
+        status: 'completed',
+        inputPayload,
+        output: {},
+        statePatch: {},
+        attempts: 1,
+        lastError: null,
+        startedAt: now,
+        completedAt: now,
+      });
+      await this.mergeWorkflowRunState({
+        runId: params.workflowRunId,
+        status: 'in_progress',
+        currentTaskKey: params.taskKey,
+        currentTaskInstanceKey: params.taskInstanceKey,
+      });
+      return this.dispatchWorkflowTransitions({
+        workspaceId: params.workspaceId,
+        workflowRunId: params.workflowRunId,
+        workflowDefinitionId: params.workflowDefinitionId,
+        runtimeDefinition: params.runtimeDefinition,
+        runContext: params.runContext,
+        state: params.state,
+        fromTaskKey: params.taskKey,
+      });
+    }
+
+    if (executor === 'job') {
+      const jobType = typeof metadata.jobType === 'string' ? (metadata.jobType as JobType) : null;
+      if (!jobType) {
+        throw new Error(`Workflow task ${params.taskKey} is missing metadata.jobType`);
+      }
+      await this.upsertWorkflowTaskResult({
+        workflow: workflowContext,
+        workspaceId: params.workspaceId,
+        taskInstanceKey: params.taskInstanceKey,
+        status: 'pending',
+        inputPayload,
+        output: {},
+        statePatch: {},
+        attempts: 0,
+        lastError: null,
+        startedAt: null,
+        completedAt: null,
+      });
+      let jobId: string;
+      try {
+        jobId = await this.addJob(
+          jobType,
+          {
+            ...inputPayload,
+            workflow: workflowContext,
+          } as JobData,
+          { workspaceId: params.workspaceId, maxRetries: 1 },
+        );
+      } catch (error) {
+        await this.upsertWorkflowTaskResult({
+          workflow: workflowContext,
+          workspaceId: params.workspaceId,
+          taskInstanceKey: params.taskInstanceKey,
+          status: 'failed',
+          inputPayload,
+          output: {},
+          statePatch: {},
+          attempts: 0,
+          lastError: {
+            name: error instanceof Error ? error.name : 'Error',
+            message: error instanceof Error ? error.message : String(error),
+          },
+          startedAt: null,
+          completedAt: new Date(),
+        });
+        throw error;
+      }
+      await this.mergeWorkflowRunState({
+        runId: params.workflowRunId,
+        status: 'in_progress',
+        currentTaskKey: params.taskKey,
+        currentTaskInstanceKey: params.taskInstanceKey,
+      });
+      return [{
+        taskKey: params.taskKey,
+        taskInstanceKey: params.taskInstanceKey,
+        executor,
+        jobType,
+        jobId,
+      }];
+    }
+
+    throw new Error(`Unsupported workflow executor "${executor}" for task ${params.taskKey}`);
+  }
+
+  private async dispatchWorkflowTransitions(params: {
+    workspaceId: string;
+    workflowRunId: string;
+    workflowDefinitionId: string;
+    runtimeDefinition: WorkflowRuntimeDefinition;
+    runContext: Record<string, unknown>;
+    state: Record<string, unknown>;
+    fromTaskKey: string | null;
+  }): Promise<WorkflowDispatchDescriptor[]> {
+    const matchingTransitions = params.runtimeDefinition.transitions.filter(
+      (transition) => transition.fromTaskKey === params.fromTaskKey,
+    );
+    const dispatched: WorkflowDispatchDescriptor[] = [];
+    for (const transition of matchingTransitions) {
+      const conditionMatches = this.evaluateWorkflowCondition(transition.condition, params.state);
+      if (!conditionMatches) {
+        continue;
+      }
+      if (transition.transitionType === 'end' || !transition.toTaskKey) {
+        await this.mergeWorkflowRunState({
+          runId: params.workflowRunId,
+          status: 'completed',
+          currentTaskKey: params.fromTaskKey,
+          currentTaskInstanceKey: 'main',
+        });
+        await this.markExecutionRunStatus(params.workflowRunId, 'completed');
+        continue;
+      }
+      if (transition.transitionType === 'fanout') {
+        const fanout = isRecord(transition.metadata.fanout) ? transition.metadata.fanout : {};
+        const sourcePath = typeof fanout.sourcePath === 'string' ? fanout.sourcePath : null;
+        if (!sourcePath) {
+          continue;
+        }
+        const sourceItems = this.getPathValue(params.state, sourcePath);
+        if (!Array.isArray(sourceItems)) {
+          continue;
+        }
+        for (const [index, item] of sourceItems.entries()) {
+          dispatched.push(
+            ...(await this.dispatchWorkflowTask({
+              workspaceId: params.workspaceId,
+              workflowRunId: params.workflowRunId,
+              workflowDefinitionId: params.workflowDefinitionId,
+              runtimeDefinition: params.runtimeDefinition,
+              runContext: params.runContext,
+              state: params.state,
+              taskKey: transition.toTaskKey,
+              taskInstanceKey: this.buildWorkflowTaskInstanceKey(
+                item,
+                index,
+                transition.metadata,
+                transition.toTaskKey,
+              ),
+              item,
+            })),
+          );
+        }
+        continue;
+      }
+      if (transition.transitionType === 'join') {
+        const isReady = await this.isWorkflowJoinTransitionReady({
+          workflowRunId: params.workflowRunId,
+          runtimeDefinition: params.runtimeDefinition,
+          transition,
+          state: params.state,
+        });
+        if (!isReady) {
+          continue;
+        }
+        dispatched.push(
+          ...(await this.dispatchWorkflowTask({
+            workspaceId: params.workspaceId,
+            workflowRunId: params.workflowRunId,
+            workflowDefinitionId: params.workflowDefinitionId,
+            runtimeDefinition: params.runtimeDefinition,
+            runContext: params.runContext,
+            state: params.state,
+            taskKey: transition.toTaskKey,
+            taskInstanceKey: 'main',
+          })),
+        );
+        continue;
+      }
+      dispatched.push(
+        ...(await this.dispatchWorkflowTask({
+          workspaceId: params.workspaceId,
+          workflowRunId: params.workflowRunId,
+          workflowDefinitionId: params.workflowDefinitionId,
+          runtimeDefinition: params.runtimeDefinition,
+          runContext: params.runContext,
+          state: params.state,
+          taskKey: transition.toTaskKey,
+          taskInstanceKey: 'main',
+        })),
+      );
+    }
+    return dispatched;
+  }
+
+  private async dispatchReadyWorkflowJoins(params: {
+    workspaceId: string;
+    workflowRunId: string;
+    workflowDefinitionId: string;
+    runtimeDefinition: WorkflowRuntimeDefinition;
+    runContext: Record<string, unknown>;
+    state: Record<string, unknown>;
+  }): Promise<WorkflowDispatchDescriptor[]> {
+    const dispatched: WorkflowDispatchDescriptor[] = [];
+    for (const transition of params.runtimeDefinition.transitions) {
+      if (transition.transitionType !== 'join' || !transition.toTaskKey) {
+        continue;
+      }
+      if (!this.evaluateWorkflowCondition(transition.condition, params.state)) {
+        continue;
+      }
+      const isReady = await this.isWorkflowJoinTransitionReady({
+        workflowRunId: params.workflowRunId,
+        runtimeDefinition: params.runtimeDefinition,
+        transition,
+        state: params.state,
+      });
+      if (!isReady) {
+        continue;
+      }
+      dispatched.push(
+        ...(await this.dispatchWorkflowTask({
+          workspaceId: params.workspaceId,
+          workflowRunId: params.workflowRunId,
+          workflowDefinitionId: params.workflowDefinitionId,
+          runtimeDefinition: params.runtimeDefinition,
+          runContext: params.runContext,
+          state: params.state,
+          taskKey: transition.toTaskKey,
+          taskInstanceKey: 'main',
+        })),
+      );
+    }
+    return dispatched;
+  }
+
+  async dispatchWorkflowEntryTasks(params: {
+    workspaceId: string;
+    workflowRunId: string;
+    workflowDefinitionId: string;
+  }): Promise<WorkflowDispatchDescriptor[]> {
+    const runtimeDefinition = await this.loadWorkflowRuntimeDefinition(
+      params.workspaceId,
+      params.workflowDefinitionId,
+    );
+    const runtimeState = await this.getWorkflowRunStateSnapshot(params.workflowRunId);
+    if (!runtimeState) {
+      throw new Error(`Workflow run state not found for ${params.workflowRunId}`);
+    }
+    const runContext = await this.getWorkflowRunContext(params.workflowRunId);
+    return this.dispatchWorkflowTransitions({
+      workspaceId: params.workspaceId,
+      workflowRunId: params.workflowRunId,
+      workflowDefinitionId: params.workflowDefinitionId,
+      runtimeDefinition,
+      runContext,
+      state: runtimeState.state,
+      fromTaskKey: null,
+    });
   }
 
   private async resolveGenerationPromptOverride(
@@ -1061,7 +2152,17 @@ export class QueueManager {
           SET status = 'processing', started_at = ${now}
           FROM picked
           WHERE q.id = picked.id
-          RETURNING q.*
+          RETURNING
+            q.id AS "id",
+            q.type AS "type",
+            q.status AS "status",
+            q.workspace_id AS "workspaceId",
+            q.data AS "data",
+            q.result AS "result",
+            q.error AS "error",
+            q.created_at AS "createdAt",
+            q.started_at AS "startedAt",
+            q.completed_at AS "completedAt"
         `)) as JobQueueRow[];
         return rows ?? [];
       };
@@ -1112,7 +2213,10 @@ export class QueueManager {
   private async processJob(job: JobQueueRow): Promise<void> {
     const jobId = job.id;
     const jobType = job.type as JobType;
-    const jobData = JSON.parse(job.data) as unknown;
+    const jobData = JSON.parse(job.data) as JobData;
+    const workflow = this.getGenerationWorkflowContextForJobData(jobData);
+    const workflowTaskInstanceKey = this.getWorkflowTaskInstanceKey(jobType, jobData);
+    const workspaceId = job.workspaceId ?? ADMIN_WORKSPACE_ID;
 
     const getRetryMeta = (value: unknown): { attempt: number; maxRetries: number } => {
       if (!value || typeof value !== 'object') return { attempt: 0, maxRetries: 0 };
@@ -1140,6 +2244,7 @@ export class QueueManager {
 
     const isRetryableInitiativeError = (err: unknown): boolean => {
       const msg = err instanceof Error ? err.message : String(err);
+      const lowerMsg = msg.toLowerCase();
       // JSON/format issues (LLM returned non-JSON or concatenated junk)
       if (msg.includes('Erreur lors du parsing') || msg.includes('Invalid JSON') || msg.includes('Unexpected non-whitespace character') || msg.includes('No JSON object boundaries')) {
         return true;
@@ -1149,11 +2254,41 @@ export class QueueManager {
         return true;
       }
       // Transient network/OpenAI-ish issues (best-effort)
-      if (msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.includes('ECONNRESET') || msg.includes('ETIMEDOUT') || msg.includes('ENOTFOUND')) {
+      if (
+        msg.includes('429') ||
+        lowerMsg.includes('rate limit') ||
+        msg.includes('ECONNRESET') ||
+        msg.includes('ETIMEDOUT') ||
+        msg.includes('ENOTFOUND')
+      ) {
         return true;
       }
       return false;
     };
+
+    const isRetryableWorkflowError = (err: unknown): boolean => {
+      if (isRetryableInitiativeError(err)) {
+        return true;
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      const lowerMsg = msg.toLowerCase();
+      return (
+        lowerMsg.includes('aborterror') ||
+        lowerMsg.includes('terminated') ||
+        lowerMsg.includes('stream aborted') ||
+        lowerMsg.includes('aborted') ||
+        lowerMsg.includes('timed out') ||
+        lowerMsg.includes('timeout') ||
+        lowerMsg.includes('temporarily unavailable') ||
+        lowerMsg.includes('upstream') ||
+        lowerMsg.includes('overloaded') ||
+        lowerMsg.includes('econnreset') ||
+        lowerMsg.includes('etimedout') ||
+        lowerMsg.includes('enotfound')
+      );
+    };
+
+    let controller: AbortController | null = null;
 
     try {
       console.log(`🔄 Processing job ${jobId} (${jobType})`);
@@ -1170,45 +2305,81 @@ export class QueueManager {
         return;
       }
 
-      const controller = new AbortController();
+      controller = new AbortController();
       this.jobControllers.set(jobId, controller);
 
+      if (workflow) {
+        await this.markWorkflowTaskStarted({
+          workflow,
+          workspaceId,
+          taskInstanceKey: workflowTaskInstanceKey,
+          jobData,
+        });
+      }
+
       // Traiter selon le type
+      let workflowCompletion: WorkflowTaskCompletion | undefined;
       switch (jobType) {
         case 'organization_enrich':
-          await this.processOrganizationEnrich(jobData as unknown as OrganizationEnrichJobData, jobId, controller.signal);
+          workflowCompletion = (await this.processOrganizationEnrich(
+            jobData as OrganizationEnrichJobData,
+            jobId,
+            controller.signal,
+          )) ?? undefined;
+          break;
+        case 'organization_batch_create':
+          workflowCompletion = (await this.processOrganizationBatchCreate(
+            jobData as OrganizationBatchCreateJobData,
+            controller.signal,
+          )) ?? undefined;
+          break;
+        case 'organization_targets_join':
+          workflowCompletion = (await this.processOrganizationTargetsJoin(
+            jobData as OrganizationTargetsJoinJobData,
+            controller.signal,
+          )) ?? undefined;
           break;
         case 'matrix_generate':
-          await this.processMatrixGenerate(jobData as unknown as MatrixGenerateJobData, controller.signal);
+          workflowCompletion = (await this.processMatrixGenerate(jobData as MatrixGenerateJobData, controller.signal)) ?? undefined;
           break;
         case 'initiative_list':
-          await this.processInitiativeList(jobData as unknown as InitiativeListJobData, controller.signal);
+          workflowCompletion = (await this.processInitiativeList(jobData as InitiativeListJobData, controller.signal)) ?? undefined;
           break;
         case 'initiative_detail':
-          await this.processInitiativeDetail(jobData as unknown as InitiativeDetailJobData, controller.signal);
+          workflowCompletion = (await this.processInitiativeDetail(jobData as InitiativeDetailJobData, controller.signal)) ?? undefined;
           break;
         case 'executive_summary':
-          await this.processExecutiveSummary(jobData as unknown as ExecutiveSummaryJobData, controller.signal);
+          workflowCompletion = (await this.processExecutiveSummary(jobData as ExecutiveSummaryJobData, controller.signal)) ?? undefined;
           break;
         case 'chat_message':
-          await this.processChatMessage(jobData as unknown as ChatMessageJobData, controller.signal);
+          await this.processChatMessage(jobData as ChatMessageJobData, controller.signal);
           break;
         case 'document_summary':
           await this.processDocumentSummary(
-            jobData as unknown as DocumentSummaryJobData,
+            jobData as DocumentSummaryJobData,
             jobId,
             controller.signal
           );
           break;
         case 'docx_generate':
           await this.processDocxGenerate(
-            jobData as unknown as DocxGenerateJobData,
+            jobData as DocxGenerateJobData,
             jobId,
             controller.signal
           );
           break;
         default:
           throw new Error(`Unknown job type: ${jobType}`);
+      }
+
+      if (workflow) {
+        await this.completeWorkflowTask({
+          workflow,
+          workspaceId,
+          taskInstanceKey: workflowTaskInstanceKey,
+          jobData,
+          completion: workflowCompletion,
+        });
       }
 
       // Marquer comme terminé
@@ -1223,15 +2394,33 @@ export class QueueManager {
     } catch (error) {
       console.error(`❌ Job ${jobId} failed:`, error);
 
-      // Retry logic (bounded) for use case generation jobs only.
-      // IMPORTANT: never retry on AbortError (user/admin cancel).
-      if ((jobType === 'initiative_list' || jobType === 'initiative_detail') && retryMax > 0 && retryAttempt < retryMax && !isAbort(error) && isRetryableInitiativeError(error)) {
+      // Retry logic (bounded) for workflow jobs on transient/provider failures.
+      // IMPORTANT: only suppress retries for explicit local cancellations.
+      const wasCancelledLocally = controller?.signal.aborted === true;
+      if (workflow && retryMax > 0 && retryAttempt < retryMax && !wasCancelledLocally && isRetryableWorkflowError(error)) {
         const nextAttempt = retryAttempt + 1;
+        const jobDataRecord = jobDataToRecord(jobData);
         const nextData =
           jobData && typeof jobData === 'object'
-            ? { ...(jobData as Record<string, unknown>), _retry: { attempt: nextAttempt, maxRetries: retryMax } }
+            ? { ...jobDataRecord, _retry: { attempt: nextAttempt, maxRetries: retryMax } }
             : { _retry: { attempt: nextAttempt, maxRetries: retryMax } };
         const msg = error instanceof Error ? error.message : 'Unknown error';
+        await this.upsertWorkflowTaskResult({
+          workflow,
+          workspaceId,
+          taskInstanceKey: workflowTaskInstanceKey,
+          status: 'pending',
+          inputPayload: nextData,
+          output: {},
+          statePatch: {},
+          attempts: retryAttempt + 1,
+          lastError: {
+            name: error instanceof Error ? error.name : 'Error',
+            message: msg,
+          },
+          startedAt: null,
+          completedAt: null,
+        });
         await db.run(sql`
           UPDATE job_queue
           SET status = 'pending',
@@ -1244,6 +2433,16 @@ export class QueueManager {
         await this.notifyJobEvent(jobId);
         console.warn(`🔁 Retrying job ${jobId} (${jobType}) attempt ${nextAttempt}/${retryMax}`);
         return;
+      }
+
+      if (workflow) {
+        await this.failWorkflowTask({
+          workflow,
+          workspaceId,
+          taskInstanceKey: workflowTaskInstanceKey,
+          jobData,
+          error,
+        });
       }
 
       // Annulation utilisateur: pour le chat, on finalise avec le contenu partiel.
@@ -1317,8 +2516,12 @@ export class QueueManager {
   /**
    * Worker pour l'enrichissement d'organisation
    */
-  private async processOrganizationEnrich(data: OrganizationEnrichJobData, jobId: string, signal?: AbortSignal): Promise<void> {
-    const { organizationId, organizationName, model, initiatedByUserId, locale } = data;
+  private async processOrganizationEnrich(
+    data: OrganizationEnrichJobData,
+    jobId: string,
+    signal?: AbortSignal,
+  ): Promise<WorkflowTaskCompletion | void> {
+    const { organizationId, organizationName, model, initiatedByUserId, locale, skipIfCompleted, wasCreated } = data;
     
     // Générer un streamId pour le streaming
     // IMPORTANT:
@@ -1331,6 +2534,17 @@ export class QueueManager {
     const workspaceId = typeof existingOrg?.workspaceId === 'string' ? existingOrg.workspaceId : '';
     const existingData = parseOrgData(existingOrg?.data);
     const effectiveName = (existingOrg?.name || organizationName || '').trim() || organizationName;
+
+    if (skipIfCompleted && existingOrg?.status === 'completed') {
+      return {
+        output: {
+          organizationId,
+          organizationName: effectiveName,
+          wasCreated: wasCreated === true,
+          skipped: true,
+        },
+      };
+    }
 
     // Only expose documents tool if this organization has attached documents.
     const hasOrgDocs = await (async () => {
@@ -1456,32 +2670,462 @@ export class QueueManager {
       createdBy: initiatedByUserId,
       locale
     });
+
+    return {
+      output: {
+        organizationId,
+        organizationName: effectiveName,
+        wasCreated: wasCreated === true,
+        skipped: false,
+      },
+    };
   }
 
-  private async processMatrixGenerate(data: MatrixGenerateJobData, signal?: AbortSignal): Promise<void> {
-    const { folderId, organizationId, model, initiatedByUserId, locale } = data;
+  private async processOrganizationBatchCreate(
+    data: OrganizationBatchCreateJobData,
+    _signal?: AbortSignal,
+  ): Promise<WorkflowTaskCompletion> {
+    const { folderId, input } = data;
+    const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
+    if (!workflow) {
+      throw new Error('Workflow runtime metadata is required for organization_batch_create jobs');
+    }
+
+    const [folder] = await db
+      .select({ id: folders.id, workspaceId: folders.workspaceId })
+      .from(folders)
+      .where(eq(folders.id, folderId))
+      .limit(1);
+    if (!folder) {
+      throw new Error('Folder not found for organization batch creation');
+    }
+
+    const runtimeState = await this.getWorkflowRunStateSnapshot(workflow.workflowRunId);
+    const currentState = runtimeState?.state ?? {};
+    const orgContextState = isRecord(currentState.orgContext) ? currentState.orgContext : {};
+    const generationState = isRecord(currentState.generation) ? currentState.generation : {};
+    const selectedOrgIds = readStringArray(orgContextState.selectedOrgIds);
+    const generatedInitiatives = readGeneratedInitiatives(generationState.initiatives);
+    if (generatedInitiatives.length === 0) {
+      throw new Error('Organization target preparation requires org-aware list outputs');
+    }
+
+    const existingOrgRows = await db
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        status: organizations.status,
+        data: organizations.data,
+      })
+      .from(organizations)
+      .where(eq(organizations.workspaceId, folder.workspaceId));
+    const existingById = new Map(existingOrgRows.map((org) => [org.id, org]));
+    const existingByName = new Map(
+      existingOrgRows.map((org) => [org.name.trim().toLocaleLowerCase('en-US'), org]),
+    );
+    const relatedInitiativesByOrgName = new Map<string, string[]>();
+    const createdOrganizationsPayload: Array<{
+      id: string;
+      name: string;
+      sector: string;
+      description: string;
+      location: string;
+    }> = [];
+    const organizationRowsToInsert: Array<typeof organizations.$inferInsert> = [];
+    const organizationTargets = new Map<string, WorkflowOrganizationTarget>();
+    const matchedExistingIds = new Set<string>();
+    const createdOrgIds: string[] = [];
+    const createdByName = new Map<string, { id: string; name: string }>();
+
+    const registerTarget = (
+      organizationId: string,
+      organizationName: string,
+      options: { skipIfCompleted: boolean; wasCreated: boolean },
+    ) => {
+      const existingTarget = organizationTargets.get(organizationId);
+      if (existingTarget) {
+        organizationTargets.set(organizationId, {
+          organizationId,
+          organizationName: existingTarget.organizationName || organizationName,
+          skipIfCompleted: existingTarget.skipIfCompleted !== false && options.skipIfCompleted,
+          wasCreated: existingTarget.wasCreated === true || options.wasCreated,
+        });
+        return;
+      }
+      organizationTargets.set(organizationId, {
+        organizationId,
+        organizationName,
+        skipIfCompleted: options.skipIfCompleted,
+        wasCreated: options.wasCreated,
+      });
+    };
+
+    const ensureTargetForExistingId = (organizationId: string) => {
+      const existingOrg = existingById.get(organizationId);
+      if (!existingOrg) return null;
+      matchedExistingIds.add(organizationId);
+      registerTarget(existingOrg.id, existingOrg.name, {
+        skipIfCompleted: existingOrg.status === 'completed',
+        wasCreated: false,
+      });
+      return existingOrg.id;
+    };
+
+    const ensureTargetForOrganizationName = (organizationName: string) => {
+      const normalizedName = organizationName.toLocaleLowerCase('en-US');
+      if (!normalizedName) return null;
+
+      const existingOrg = existingByName.get(normalizedName);
+      if (existingOrg) {
+        matchedExistingIds.add(existingOrg.id);
+        registerTarget(existingOrg.id, existingOrg.name, {
+          skipIfCompleted: existingOrg.status === 'completed',
+          wasCreated: false,
+        });
+        return {
+          organizationId: existingOrg.id,
+          organizationName: existingOrg.name,
+          wasCreated: false,
+        };
+      }
+
+      const existingCreated = createdByName.get(normalizedName);
+      if (existingCreated) {
+        registerTarget(existingCreated.id, existingCreated.name, {
+          skipIfCompleted: false,
+          wasCreated: true,
+        });
+        return {
+          organizationId: existingCreated.id,
+          organizationName: existingCreated.name,
+          wasCreated: true,
+        };
+      }
+
+      const organizationId = createId();
+      const relatedInitiatives = relatedInitiativesByOrgName.get(normalizedName) ?? [];
+      const objectives = relatedInitiatives.length > 0
+        ? `Initiatives candidates: ${relatedInitiatives.join('; ')}`
+        : input;
+
+      createdOrgIds.push(organizationId);
+      createdByName.set(normalizedName, { id: organizationId, name: organizationName });
+      createdOrganizationsPayload.push({
+        id: organizationId,
+        name: organizationName,
+        sector: '',
+        description: objectives,
+        location: '',
+      });
+      organizationRowsToInsert.push({
+        id: organizationId,
+        workspaceId: folder.workspaceId,
+        name: organizationName,
+        status: 'generating',
+        data: {
+          industry: '',
+          size: '',
+          products: '',
+          processes: '',
+          kpis: '',
+          challenges: '',
+          objectives,
+          technologies: '',
+          references: [],
+          location: '',
+        } as OrganizationData & { location: string },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      registerTarget(organizationId, organizationName, {
+        skipIfCompleted: false,
+        wasCreated: true,
+      });
+      return {
+        organizationId,
+        organizationName,
+        wasCreated: true,
+      };
+    };
+
+    for (const initiative of generatedInitiatives) {
+      const organizationName = normalizeOrganizationName(initiative.organizationName);
+      if (!organizationName) continue;
+      const normalizedName = organizationName.toLocaleLowerCase('en-US');
+      relatedInitiativesByOrgName.set(normalizedName, [
+        ...(relatedInitiativesByOrgName.get(normalizedName) ?? []),
+        initiative.name,
+      ]);
+    }
+
+    for (const selectedOrgId of selectedOrgIds) {
+      ensureTargetForExistingId(selectedOrgId);
+    }
+
+    const resolvedInitiatives = generatedInitiatives.map((initiative) => {
+      const resolvedIds = new Set<string>();
+      for (const organizationId of initiative.organizationIds ?? []) {
+        const existingId = ensureTargetForExistingId(organizationId);
+        if (existingId) {
+          resolvedIds.add(existingId);
+        }
+      }
+
+      const organizationName = normalizeOrganizationName(initiative.organizationName);
+      if (organizationName) {
+        const resolvedByName = ensureTargetForOrganizationName(organizationName);
+        if (resolvedByName?.organizationId) {
+          resolvedIds.add(resolvedByName.organizationId);
+        }
+      }
+
+      if (resolvedIds.size === 0 && selectedOrgIds.length === 1) {
+        const selectedId = ensureTargetForExistingId(selectedOrgIds[0]);
+        if (selectedId) {
+          resolvedIds.add(selectedId);
+        }
+      }
+
+      const normalizedIds = Array.from(resolvedIds);
+      return {
+        id: initiative.id,
+        name: initiative.name,
+        ...(initiative.description ? { description: initiative.description } : {}),
+        ...(normalizedIds.length > 0 ? { organizationIds: normalizedIds } : {}),
+        ...(organizationName ? { organizationName } : {}),
+      };
+    });
+
+    if (organizationRowsToInsert.length > 0) {
+      await db.insert(organizations).values(organizationRowsToInsert);
+      for (const row of organizationRowsToInsert) {
+        await this.notifyOrganizationEvent(row.id);
+      }
+    }
+
+    for (const initiative of resolvedInitiatives) {
+      if (!Array.isArray(initiative.organizationIds) || initiative.organizationIds.length !== 1) {
+        continue;
+      }
+      await db
+        .update(initiatives)
+        .set({
+          organizationId: initiative.organizationIds[0],
+        })
+        .where(and(eq(initiatives.id, initiative.id), eq(initiatives.workspaceId, folder.workspaceId)));
+    }
+
+    return {
+      output: {
+        organizationTargets: Array.from(organizationTargets.values()),
+        createdOrgIds,
+        matchedExistingIds: Array.from(matchedExistingIds),
+        resolvedTargetCount: organizationTargets.size,
+      },
+      statePatch: {
+        orgContext: {
+          organizationTargets: Array.from(organizationTargets.values()),
+          createdOrgIds,
+          createdOrganizations: createdOrganizationsPayload,
+        },
+        generation: {
+          initiatives: resolvedInitiatives,
+        },
+      },
+    };
+  }
+
+  private async processOrganizationTargetsJoin(
+    data: OrganizationTargetsJoinJobData,
+    signal?: AbortSignal,
+  ): Promise<WorkflowTaskCompletion> {
+    if (signal?.aborted) {
+      throw new Error('Organization targets join aborted');
+    }
+
+    const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
+    if (!workflow) {
+      throw new Error('Workflow runtime metadata is required for organization_targets_join jobs');
+    }
+
+    const runtimeState = await this.getWorkflowRunStateSnapshot(workflow.workflowRunId);
+    const currentState = runtimeState?.state ?? {};
+    const orgContextState = isRecord(currentState.orgContext) ? currentState.orgContext : {};
+    const selectedOrgIds = readStringArray(orgContextState.selectedOrgIds);
+    const organizationTargets = readOrganizationTargets(orgContextState.organizationTargets);
+    if (organizationTargets.length === 0) {
+      return {
+        output: {
+          effectiveOrgIds: selectedOrgIds,
+          resolvedTargetCount: 0,
+          createdOrgIds: readStringArray(orgContextState.createdOrgIds),
+        },
+        statePatch: {
+          orgContext: {
+            effectiveOrgIds: selectedOrgIds,
+          },
+        },
+      };
+    }
+
+    const completedRows = await db
+      .select({
+        taskInstanceKey: workflowTaskResults.taskInstanceKey,
+        output: workflowTaskResults.output,
+      })
+      .from(workflowTaskResults)
+      .where(
+        and(
+          eq(workflowTaskResults.runId, workflow.workflowRunId),
+          eq(workflowTaskResults.taskKey, data.sourceTaskKey),
+          eq(workflowTaskResults.status, 'completed'),
+        ),
+      );
+
+    const completedByOrgId = new Map<string, Record<string, unknown>>();
+    for (const row of completedRows) {
+      if (!isRecord(row.output)) continue;
+      const organizationId =
+        typeof row.output.organizationId === 'string' && row.output.organizationId.trim()
+          ? row.output.organizationId.trim()
+          : (typeof row.taskInstanceKey === 'string' && row.taskInstanceKey.trim()
+              ? row.taskInstanceKey.trim()
+              : '');
+      if (!organizationId) continue;
+      completedByOrgId.set(organizationId, row.output);
+    }
+
+    const resolvedTargets = organizationTargets.filter((target) => completedByOrgId.has(target.organizationId));
+    const effectiveOrgIds = Array.from(
+      new Set([...selectedOrgIds, ...resolvedTargets.map((target) => target.organizationId)]),
+    );
+    if (effectiveOrgIds.length === 0) {
+      throw new Error('Organization targets join resolved no organizations');
+    }
+
+    const createdOrgIds = resolvedTargets
+      .filter((target) => completedByOrgId.get(target.organizationId)?.wasCreated === true)
+      .map((target) => target.organizationId);
+
+    const createdOrgRows =
+      createdOrgIds.length > 0
+        ? await db
+            .select({ id: organizations.id, name: organizations.name, data: organizations.data })
+            .from(organizations)
+            .where(inArray(organizations.id, createdOrgIds))
+        : [];
+
+    const createdOrganizations = createdOrgRows.map((org) => {
+      const orgData = parseOrgData(org.data);
+      return {
+        id: org.id,
+        name: org.name,
+        sector: typeof orgData.industry === 'string' ? orgData.industry : '',
+        description: typeof orgData.objectives === 'string' ? orgData.objectives : '',
+        location: typeof orgData.location === 'string' ? orgData.location : '',
+      };
+    });
+
+    return {
+      output: {
+        effectiveOrgIds,
+        createdOrgIds,
+      },
+      statePatch: {
+        orgContext: {
+          effectiveOrgIds,
+          createdOrgIds,
+          createdOrganizations,
+        },
+      },
+    };
+  }
+
+  private async processMatrixGenerate(data: MatrixGenerateJobData, signal?: AbortSignal): Promise<WorkflowTaskCompletion | void> {
+    const { folderId, input, organizationId, orgIds, model, initiatedByUserId, locale } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
     const [folder] = await db
-      .select()
+      .select({
+        id: folders.id,
+        workspaceId: folders.workspaceId,
+        name: folders.name,
+        description: folders.description,
+        organizationId: folders.organizationId,
+      })
       .from(folders)
       .where(eq(folders.id, folderId))
       .limit(1);
     if (!folder) throw new Error('Folder not found for matrix generation');
+    const runtimeState = workflow ? await this.getWorkflowRunStateSnapshot(workflow.workflowRunId) : null;
+    const currentState = runtimeState?.state ?? {};
+    const orgContextState = isRecord(currentState.orgContext) ? currentState.orgContext : {};
+    const inputsState = isRecord(currentState.inputs) ? currentState.inputs : {};
+    const effectiveOrgIdsFromState = readStringArray(orgContextState.effectiveOrgIds);
+    const selectedOrgIdsFromState = readStringArray(orgContextState.selectedOrgIds);
+    const createdOrgIdsFromState = readStringArray(orgContextState.createdOrgIds);
+    const requestedInputFromState =
+      typeof inputsState.input === 'string' && inputsState.input.trim().length > 0
+        ? inputsState.input.trim()
+        : '';
+    const resolvedOrgIds =
+      orgIds && orgIds.length > 0
+        ? orgIds
+        : effectiveOrgIdsFromState.length > 0
+          ? effectiveOrgIdsFromState
+          : Array.from(new Set([...selectedOrgIdsFromState, ...createdOrgIdsFromState]));
+    const resolvedOrganizationId =
+      organizationId ??
+      folder.organizationId ??
+      (resolvedOrgIds.length === 1 ? resolvedOrgIds[0] : undefined);
+    const effectiveResolvedOrgIds =
+      resolvedOrgIds.length > 0
+        ? resolvedOrgIds
+        : resolvedOrganizationId
+          ? [resolvedOrganizationId]
+          : [];
 
-    const [organization] = await db
-      .select()
-      .from(organizations)
-      .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, folder.workspaceId)))
-      .limit(1);
-    if (!organization) throw new Error('Organization not found for matrix generation');
+    const organizationRows =
+      effectiveResolvedOrgIds.length > 0
+        ? await db
+            .select({ id: organizations.id, name: organizations.name, data: organizations.data })
+            .from(organizations)
+            .where(and(
+              eq(organizations.workspaceId, folder.workspaceId),
+              sql`${organizations.id} = ANY(ARRAY[${sql.join(effectiveResolvedOrgIds.map((id) => sql`${id}`), sql`, `)}]::text[])`,
+            ))
+        : [];
+    let selectedOrganization =
+      organizationRows.find((organization) => organization.id === resolvedOrganizationId) ?? null;
+    if (!selectedOrganization && resolvedOrganizationId) {
+      const [organization] = await db
+        .select({ id: organizations.id, name: organizations.name, data: organizations.data })
+        .from(organizations)
+        .where(and(eq(organizations.id, resolvedOrganizationId), eq(organizations.workspaceId, folder.workspaceId)))
+        .limit(1);
+      selectedOrganization = organization ?? null;
+    }
 
     const aiSettings = await settingsService.getAISettings();
     const selectedModel = model || aiSettings.defaultModel;
-
-    const orgData = parseOrgData(organization.data);
-    const organizationInfo = JSON.stringify(
-      {
+    const folderName =
+      typeof folder.name === 'string' &&
+      folder.name.trim() &&
+      folder.name.trim() !== 'Brouillon' &&
+      !folder.name.startsWith('Génération -')
+        ? folder.name.trim()
+        : '';
+    const contextName = folderName || selectedOrganization?.name || 'Dossier';
+    const organizationContextRows =
+      organizationRows.length > 0
+        ? organizationRows
+        : selectedOrganization
+          ? [selectedOrganization]
+          : [];
+    const organizationContext = organizationContextRows.map((organization) => {
+      const orgData = parseOrgData(organization.data);
+      return {
+        id: organization.id,
         name: organization.name,
         industry: orgData.industry,
         size: orgData.size,
@@ -1491,9 +3135,20 @@ export class QueueManager {
         challenges: orgData.challenges,
         objectives: orgData.objectives,
         technologies: orgData.technologies,
+      };
+    });
+    const contextInfo = JSON.stringify(
+      {
+        folder: {
+          id: folder.id,
+          name: folderName || null,
+          description: folder.description || null,
+        },
+        requestedInput: input || requestedInputFromState || folder.description || folderName || null,
+        selectedOrganizations: organizationContext,
       },
       null,
-      2
+      2,
     );
 
     const streamId = `matrix_${folderId}`;
@@ -1505,8 +3160,8 @@ export class QueueManager {
     );
     const baseMatrix = await this.resolveBaseMatrixFromAgent(folder.workspaceId, matrixAgentId);
     const template = await generateOrganizationMatrixTemplate(
-      organization.name,
-      organizationInfo,
+      contextName,
+      contextInfo,
       baseMatrix,
       selectedModel,
       signal,
@@ -1515,28 +3170,14 @@ export class QueueManager {
     );
     const generatedMatrix = mergeOrganizationMatrixTemplate(baseMatrix, template);
 
-    const nextOrgData = {
-      ...orgData,
-      matrixTemplate: generatedMatrix,
-      matrixTemplateMeta: {
-        generatedAt: new Date().toISOString(),
-        model: selectedModel,
-        promptId: matrixPromptOverride.promptId,
-        version: 1,
-      },
-    };
-
-    await db
-      .update(organizations)
-      .set({ data: nextOrgData, updatedAt: new Date() })
-      .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, folder.workspaceId)));
-
     await db
       .update(folders)
-      .set({ matrixConfig: JSON.stringify(generatedMatrix), organizationId })
+      .set({
+        matrixConfig: JSON.stringify(generatedMatrix),
+        organizationId: effectiveResolvedOrgIds.length === 1 ? effectiveResolvedOrgIds[0] : null,
+      })
       .where(and(eq(folders.id, folderId), eq(folders.workspaceId, folder.workspaceId)));
 
-    await this.notifyOrganizationEvent(organizationId);
     await this.notifyFolderEvent(folderId);
     await this.createAutoGenerationFieldComments({
       workspaceId: folder.workspaceId,
@@ -1546,14 +3187,20 @@ export class QueueManager {
       createdBy: initiatedByUserId,
       locale
     });
-    await this.createAutoGenerationFieldComments({
-      workspaceId: folder.workspaceId,
-      contextType: 'organization',
-      contextId: organizationId,
-      sectionKeys: ['matrixTemplate'],
-      createdBy: initiatedByUserId,
-      locale
-    });
+
+    return {
+      output: {
+        folderId,
+        organizationId: resolvedOrganizationId ?? null,
+        effectiveOrgIds: effectiveResolvedOrgIds,
+        generated: true,
+      },
+      statePatch: {
+        orgContext: {
+          effectiveOrgIds: effectiveResolvedOrgIds,
+        },
+      },
+    };
   }
 
   private sanitizePgText(input: string): string {
@@ -1565,6 +3212,18 @@ export class QueueManager {
       out += input[i];
     }
     return out;
+  }
+
+  private async getLatestMatrixJobState(folderId: string): Promise<{ status: string; error: string | null } | null> {
+    const rows = (await db.all(sql`
+      SELECT status, error
+      FROM job_queue
+      WHERE type = 'matrix_generate'
+        AND (data::jsonb ->> 'folderId') = ${folderId}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `)) as Array<{ status: string; error: string | null }>;
+    return rows[0] ?? null;
   }
 
   private trimToMaxWords(text: string, maxWords: number): { text: string; trimmed: boolean; words: number } {
@@ -1846,8 +3505,10 @@ export class QueueManager {
       throw new Error('Docx job workspace not found');
     }
 
+    const isFreeform = data.mode === 'freeform' && typeof data.code === 'string';
+
     await emitStatus('queued', 0, {
-      templateId: data.templateId,
+      templateId: isFreeform ? 'freeform' : data.templateId,
       entityType: data.entityType,
       entityId: data.entityId,
       queueClass: 'publishing',
@@ -1860,27 +3521,40 @@ export class QueueManager {
 
       await emitStatus('loading_data', 10);
 
-      const result = await runDocxGenerationInWorker({
-        input: {
-        templateId: data.templateId,
-        entityType: data.entityType,
-        entityId: data.entityId,
-        workspaceId: jobRow.workspaceId,
-        provided: data.provided ?? {},
-        controls: data.controls ?? {},
-        locale: data.locale,
-        requestId: data.requestId ?? jobId,
-        },
-        signal,
-        onProgress: async (event) => {
-          const progress = typeof event.progress === 'number' ? event.progress : 50;
-          await emitStatus(event.state || 'rendering', progress, {
-            current: event.current,
-            total: event.total,
-            message: event.message,
-          });
-        },
-      });
+      let result: { fileName: string; mimeType: string; buffer: Buffer };
+
+      if (isFreeform) {
+        // Freeform mode: sandbox execution
+        result = await generateFreeformDocx({
+          code: data.code!,
+          entityType: data.entityType,
+          entityId: data.entityId,
+          workspaceId: jobRow.workspaceId,
+        });
+      } else {
+        // Template mode (existing path)
+        result = await runDocxGenerationInWorker({
+          input: {
+            templateId: data.templateId!,
+            entityType: data.entityType,
+            entityId: data.entityId,
+            workspaceId: jobRow.workspaceId,
+            provided: data.provided ?? {},
+            controls: data.controls ?? {},
+            locale: data.locale,
+            requestId: data.requestId ?? jobId,
+          },
+          signal,
+          onProgress: async (event) => {
+            const progress = typeof event.progress === 'number' ? event.progress : 50;
+            await emitStatus(event.state || 'rendering', progress, {
+              current: event.current,
+              total: event.total,
+              message: event.message,
+            });
+          },
+        });
+      }
 
       if (signal?.aborted) {
         throw new DOMException('Docx generation cancelled', 'AbortError');
@@ -1892,7 +3566,8 @@ export class QueueManager {
       });
 
       const bucket = getDocumentsBucketName();
-      const objectKey = `docx-cache/${jobRow.workspaceId}/${data.templateId}/${data.entityType}/${data.entityId}/${jobId}.docx`;
+      const templateSlug = isFreeform ? 'freeform' : (data.templateId ?? 'unknown');
+      const objectKey = `docx-cache/${jobRow.workspaceId}/${templateSlug}/${data.entityType}/${data.entityId}/${jobId}.docx`;
       await putObject({
         bucket,
         key: objectKey,
@@ -1939,8 +3614,11 @@ export class QueueManager {
   /**
    * Worker pour la génération de liste de cas d'usage
    */
-  private async processInitiativeList(data: InitiativeListJobData, signal?: AbortSignal): Promise<void> {
-    const { folderId, input, organizationId, matrixMode, model, initiativeCount, initiatedByUserId, locale } = data;
+  private async processInitiativeList(
+    data: InitiativeListJobData,
+    signal?: AbortSignal,
+  ): Promise<WorkflowTaskCompletion | void> {
+    const { folderId, input, organizationId, matrixMode: _matrixMode, model, initiativeCount, initiatedByUserId, locale, orgIds } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
     const [folder] = await db
@@ -1958,12 +3636,33 @@ export class QueueManager {
       throw new Error('Folder not found');
     }
     const workspaceId = folder.workspaceId;
-    const resolvedOrganizationId = organizationId ?? folder.organizationId ?? undefined;
-    
+    const runtimeState = workflow ? await this.getWorkflowRunStateSnapshot(workflow.workflowRunId) : null;
+    const currentState = runtimeState?.state ?? {};
+    const orgContextState = isRecord(currentState.orgContext) ? currentState.orgContext : {};
+    const effectiveOrgIdsFromState = readStringArray(orgContextState.effectiveOrgIds);
+    const selectedOrgIdsFromState = readStringArray(orgContextState.selectedOrgIds);
+    const createdOrgIdsFromState = readStringArray(orgContextState.createdOrgIds);
+    const resolvedOrgIds =
+      orgIds && orgIds.length > 0
+        ? orgIds
+        : effectiveOrgIdsFromState.length > 0
+          ? effectiveOrgIdsFromState
+          : Array.from(new Set([...selectedOrgIdsFromState, ...createdOrgIdsFromState]));
+    const resolvedOrganizationId =
+      organizationId ??
+      folder.organizationId ??
+      (resolvedOrgIds.length === 1 ? resolvedOrgIds[0] : undefined);
+    const effectiveResolvedOrgIds =
+      resolvedOrgIds.length > 0
+        ? resolvedOrgIds
+        : resolvedOrganizationId
+          ? [resolvedOrganizationId]
+          : [];
+
     // Récupérer le modèle par défaut depuis les settings si non fourni
     const aiSettings = await settingsService.getAISettings();
     const selectedModel = model || aiSettings.defaultModel;
-    
+
     // Récupérer les informations de l'organisation si nécessaire
     let organizationInfo = '';
     if (resolvedOrganizationId) {
@@ -1993,6 +3692,35 @@ export class QueueManager {
       }
     } else {
       console.log('ℹ️ Aucune entreprise sélectionnée pour cette génération');
+    }
+
+    // Build multi-org organizations context (Lot 12)
+    let organizationsContext = '';
+    if (effectiveResolvedOrgIds.length > 0) {
+      try {
+        const orgRows = await db
+          .select({ id: organizations.id, name: organizations.name, data: organizations.data })
+          .from(organizations)
+          .where(and(
+            eq(organizations.workspaceId, workspaceId),
+            sql`${organizations.id} = ANY(ARRAY[${sql.join(effectiveResolvedOrgIds.map(id => sql`${id}`), sql`, `)}]::text[])`,
+          ));
+        const orgDetails = orgRows.map((org) => {
+          const orgData = parseOrgData(org.data);
+          return {
+            id: org.id,
+            name: org.name,
+            industry: orgData.industry,
+            products: orgData.products,
+            challenges: orgData.challenges,
+            objectives: orgData.objectives,
+          };
+        });
+        organizationsContext = JSON.stringify(orgDetails, null, 2);
+        console.log(`📊 Multi-org context loaded for ${orgRows.length} organizations`);
+      } catch (error) {
+        console.warn('Error fetching multi-org context:', error);
+      }
     }
 
     const documentsContexts = await this.getDocumentsContextsForGeneration({
@@ -2031,6 +3759,7 @@ export class QueueManager {
       streamId,
       listPromptOverride,
       listPromptOverride.outputSchema,
+      organizationsContext || undefined,
     );
     
     // Mettre à jour le nom du dossier
@@ -2066,10 +3795,35 @@ export class QueueManager {
       });
     }
 
-    // Créer les cas d'usage en mode generating
-    // Note: InitiativeListItem n'a que 'titre', pas 'title'
-    const draftInitiatives = initiativeList.initiatives.map((initiativeItem: InitiativeListItem) => {
+    const allowedOrgIds = new Set(
+      Array.from(new Set([...effectiveResolvedOrgIds, ...selectedOrgIdsFromState, ...effectiveOrgIdsFromState])),
+    );
+    const normalizedListItems = initiativeList.initiatives.map((initiativeItem: InitiativeListItem) => {
       const title = initiativeItem.titre || String(initiativeItem);
+      const mappedOrganizationIds = Array.from(
+        new Set(
+          readStringArray(initiativeItem.organizationIds).filter((organizationId) =>
+            allowedOrgIds.size > 0 ? allowedOrgIds.has(organizationId) : false,
+          ),
+        ),
+      );
+      const fallbackOrganizationIds =
+        mappedOrganizationIds.length > 0
+          ? mappedOrganizationIds
+          : allowedOrgIds.size === 1
+            ? [Array.from(allowedOrgIds)[0]]
+            : [];
+      return {
+        title,
+        description: initiativeItem.description || '',
+        organizationIds: fallbackOrganizationIds,
+        organizationName: normalizeOrganizationName(initiativeItem.organizationName) || undefined,
+      };
+    });
+
+    // Créer les cas d'usage en mode generating
+    const draftInitiatives = normalizedListItems.map((initiativeItem) => {
+      const title = initiativeItem.title;
       const initiativeData: InitiativeData = {
         name: title, // Stocker name dans data
         description: initiativeItem.description || '', // Stocker description dans data
@@ -2089,7 +3843,12 @@ export class QueueManager {
         id: createId(),
         workspaceId,
         folderId: folderId,
-        organizationId: organizationId || null,
+        organizationId:
+          initiativeItem.organizationIds.length === 1
+            ? initiativeItem.organizationIds[0]
+            : effectiveResolvedOrgIds.length === 1
+              ? effectiveResolvedOrgIds[0]
+              : null,
         data: initiativeData as InitiativeDataJson, // Drizzle accepte JSONB directement (inclut name et description)
         model: selectedModel,
         status: 'generating',
@@ -2115,87 +3874,48 @@ export class QueueManager {
       });
     }
 
-    // Marquer le dossier comme terminé
-    await db.update(folders)
-      .set({ status: 'completed' })
-      .where(eq(folders.id, folderId));
-    await this.notifyFolderEvent(folderId);
-
     if (!workflow) {
       throw new Error('Workflow runtime metadata is required for initiative_list generation jobs');
     }
+    console.log(`📋 Generated ${draftInitiatives.length} use cases and stored workflow fanout inputs`);
 
-    // Workflow runtime chain: detail fanout is triggered from workflow metadata only.
-    if (this.cancelAllInProgress || this.paused) {
-      console.warn('⏸️ Skipping workflow detail fanout due to pause/cancel');
-    } else {
-      // Resolve the detail task key from agentMap (may be 'generation_initiative_detail' or 'opportunity_detail')
-      const detailTaskKey = Object.keys(workflow.agentMap).find(k => k.includes('detail')) ?? 'generation_initiative_detail';
-      const detailWorkflow = cloneWorkflowContextForTask(workflow, detailTaskKey as GenerationWorkflowTaskKey);
-      for (const initiative of draftInitiatives) {
-        try {
-          const initiativeName = (initiative.data as InitiativeData)?.name || 'Cas d\'usage sans nom';
-          await this.addJob('initiative_detail', {
-            initiativeId: initiative.id,
-            initiativeName,
-            folderId,
-            matrixMode,
-            model: selectedModel,
-            initiatedByUserId,
-            locale,
-            workflow: detailWorkflow,
-          }, { workspaceId, maxRetries: 1 });
-        } catch (e) {
-          console.warn('Skipped enqueue initiative_detail:', (e as Error).message);
-        }
-      }
-    }
-
-    console.log(`📋 Generated ${draftInitiatives.length} use cases and scheduled workflow detailing`);
-  }
-
-  private async getLatestMatrixJobState(folderId: string): Promise<{ status: string; error: string | null } | null> {
-    const rows = (await db.all(sql`
-      SELECT status, error
-      FROM job_queue
-      WHERE type = 'matrix_generate'
-        AND (data::jsonb ->> 'folderId') = ${folderId}
-      ORDER BY created_at DESC
-      LIMIT 1
-    `)) as Array<{ status: string; error: string | null }>;
-    return rows[0] ?? null;
-  }
-
-  private async waitForGeneratedMatrix(folderId: string, signal?: AbortSignal, timeoutMs = 180000, pollMs = 1500): Promise<MatrixConfig> {
-    const startedAt = Date.now();
-
-    while (Date.now() - startedAt < timeoutMs) {
-      if (signal?.aborted) throw new Error('Matrix wait aborted');
-
-      const [folder] = await db
-        .select({ matrixConfig: folders.matrixConfig })
-        .from(folders)
-        .where(eq(folders.id, folderId))
-        .limit(1);
-
-      const parsed = parseMatrixConfig(folder?.matrixConfig ?? null);
-      if (parsed) return parsed;
-
-      const matrixJob = await this.getLatestMatrixJobState(folderId);
-      if (matrixJob?.status === 'failed') {
-        throw new Error(matrixJob.error || 'Matrix generation failed');
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, pollMs));
-    }
-
-    throw new Error('Matrix generation timed out');
+    return {
+      output: {
+        folderId,
+        initiativeIds: draftInitiatives.map((initiative) => initiative.id),
+        effectiveOrgIds: effectiveResolvedOrgIds,
+        organizationId: resolvedOrganizationId ?? null,
+        initiativeCount: draftInitiatives.length,
+      },
+      statePatch: {
+        orgContext: {
+          effectiveOrgIds: effectiveResolvedOrgIds,
+        },
+        generation: {
+          initiativeIds: draftInitiatives.map((initiative) => initiative.id),
+          initiatives: draftInitiatives.map((initiative, index) => ({
+            id: initiative.id,
+            name: (initiative.data as InitiativeData)?.name || 'Cas d\'usage sans nom',
+            description: (initiative.data as InitiativeData)?.description || '',
+            ...(normalizedListItems[index]?.organizationIds.length
+              ? { organizationIds: normalizedListItems[index].organizationIds }
+              : {}),
+            ...(normalizedListItems[index]?.organizationName
+              ? { organizationName: normalizedListItems[index].organizationName }
+              : {}),
+          })),
+        },
+      },
+    };
   }
 
   /**
    * Worker pour le détail d'un cas d'usage
    */
-  private async processInitiativeDetail(data: InitiativeDetailJobData, signal?: AbortSignal): Promise<void> {
+  private async processInitiativeDetail(
+    data: InitiativeDetailJobData,
+    signal?: AbortSignal,
+  ): Promise<WorkflowTaskCompletion | void> {
     const { initiativeId, initiativeName, folderId, matrixMode, model, initiatedByUserId, locale } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
     
@@ -2208,22 +3928,50 @@ export class QueueManager {
     if (!folder) {
       throw new Error('Dossier non trouvé');
     }
+    const [initiativeRow] = await db
+      .select({ organizationId: initiatives.organizationId })
+      .from(initiatives)
+      .where(and(eq(initiatives.id, initiativeId), eq(initiatives.workspaceId, folder.workspaceId)))
+      .limit(1);
+    const runtimeState = workflow ? await this.getWorkflowRunStateSnapshot(workflow.workflowRunId) : null;
+    const runtimeRunState = runtimeState?.state ?? {};
+    const generationState = isRecord(runtimeRunState.generation) ? runtimeRunState.generation : {};
+    const generatedInitiatives = readGeneratedInitiatives(generationState.initiatives);
+    const generatedInitiative = generatedInitiatives.find((initiative) => initiative.id === initiativeId);
+    const scopedOrganizationIds =
+      generatedInitiative?.organizationIds && generatedInitiative.organizationIds.length > 0
+        ? generatedInitiative.organizationIds
+        : initiativeRow?.organizationId
+          ? [initiativeRow.organizationId]
+          : folder.organizationId
+            ? [folder.organizationId]
+            : [];
+    const primaryOrganizationId = scopedOrganizationIds[0] ?? null;
     
-    let matrixConfig = parseMatrixConfig(folder.matrixConfig ?? null);
-    if (!matrixConfig && matrixMode === 'generate') {
-      matrixConfig = await this.waitForGeneratedMatrix(folderId, signal);
+    const matrixConfig = parseMatrixConfig(folder.matrixConfig ?? null);
+    if (!matrixConfig) {
+      if (matrixMode === 'generate') {
+        const latestMatrixJob = await this.getLatestMatrixJobState(folderId);
+        if (latestMatrixJob?.status === 'failed') {
+          throw new Error(latestMatrixJob.error || 'Matrix generation failed');
+        }
+      }
+      throw new Error('Configuration de matrice non trouvée');
     }
-    if (!matrixConfig) throw new Error('Configuration de matrice non trouvée');
     
     // Organization info (prompt uses organization_info)
     let organizationInfo = '';
-    if (folder.organizationId) {
+    if (scopedOrganizationIds.length > 0) {
       try {
-        const [org] = await db.select().from(organizations).where(eq(organizations.id, folder.organizationId));
-        if (org) {
-          const orgData = parseOrgData(org.data);
-          organizationInfo = JSON.stringify(
-            {
+        const orgRows = await db
+          .select()
+          .from(organizations)
+          .where(inArray(organizations.id, scopedOrganizationIds));
+        if (orgRows.length > 0) {
+          const orgPayload = orgRows.map((org) => {
+            const orgData = parseOrgData(org.data);
+            return {
+              id: org.id,
               name: org.name,
               industry: orgData.industry,
               size: orgData.size,
@@ -2231,14 +3979,17 @@ export class QueueManager {
               processes: orgData.processes,
               challenges: orgData.challenges,
               objectives: orgData.objectives,
-              technologies: orgData.technologies
-            },
+              technologies: orgData.technologies,
+            };
+          });
+          organizationInfo = JSON.stringify(
+            orgPayload.length === 1 ? orgPayload[0] : { organizations: orgPayload },
             null,
-            2
+            2,
           );
-          console.log(`📊 Organization info loaded for ${org.name}:`, organizationInfo);
+          console.log(`📊 Organization info loaded for ${orgRows.length} organization(s):`, organizationInfo);
         } else {
-          console.warn(`⚠️ Organization not found with id: ${folder.organizationId}`);
+          console.warn(`⚠️ Organization not found with ids: ${scopedOrganizationIds.join(', ')}`);
         }
       } catch (error) {
         console.error('Error fetching organization:', error);
@@ -2250,7 +4001,7 @@ export class QueueManager {
     const documentsContexts = await this.getDocumentsContextsForGeneration({
       workspaceId: folder.workspaceId,
       folderId,
-      organizationId: folder.organizationId,
+      organizationId: primaryOrganizationId,
     });
     const documentsContextJson = await this.buildDocumentsContextJsonForGeneration({
       workspaceId: folder.workspaceId,
@@ -2333,6 +4084,7 @@ export class QueueManager {
     // On met à jour uniquement data qui contient toutes les colonnes métier
     await db.update(initiatives)
       .set({
+        organizationId: primaryOrganizationId,
         data: initiativeData as InitiativeDataJson, // Drizzle accepte JSONB directement (inclut name, description, domain, technologies, deadline, contact, benefits, etc.)
         model: selectedModel,
         status: 'completed'
@@ -2348,64 +4100,21 @@ export class QueueManager {
       locale
     });
 
-    // Vérifier si tous les use cases du dossier sont complétés
-    const allInitiatives = await db
-      .select()
-      .from(initiatives)
-      .where(and(eq(initiatives.folderId, folderId), eq(initiatives.workspaceId, folder.workspaceId)));
-    const allCompleted = allInitiatives.length > 0 && allInitiatives.every(uc => uc.status === 'completed');
-
-    if (allCompleted) {
-      // Vérifier si une synthèse exécutive existe déjà
-      const [currentFolder] = await db
-        .select()
-        .from(folders)
-        .where(and(eq(folders.id, folderId), eq(folders.workspaceId, folder.workspaceId)));
-      const hasExecutiveSummary = currentFolder?.executiveSummary;
-
-      if (!hasExecutiveSummary) {
-        console.log(`✅ Tous les use cases du dossier ${folderId} sont complétés, déclenchement de la génération de la synthèse exécutive`);
-        
-        // Mettre à jour le statut du dossier
-        await db.update(folders)
-          .set({ status: 'generating' })
-          .where(and(eq(folders.id, folderId), eq(folders.workspaceId, folder.workspaceId)));
-        await this.notifyFolderEvent(folderId);
-
-        if (!workflow) {
-          console.log('ℹ️ Workflow metadata missing on initiative_detail; executive summary enqueue skipped');
-          return;
-        }
-
-        // Resolve executive summary task key from agentMap
-        const summaryTaskKey = Object.keys(workflow.agentMap).find(k => k.includes('executive_summary') || k.includes('summary')) ?? 'generation_executive_summary';
-        const executiveSummaryWorkflow = cloneWorkflowContextForTask(
-          workflow,
-          summaryTaskKey as GenerationWorkflowTaskKey
-        );
-        try {
-          await this.addJob('executive_summary', {
-            folderId,
-            model: selectedModel,
-            initiatedByUserId,
-            locale,
-            workflow: executiveSummaryWorkflow,
-          }, { workspaceId: folder.workspaceId });
-          console.log(`📝 Workflow executive_summary job added for folder ${folderId}`);
-        } catch (error) {
-          console.error(`❌ Failed to enqueue workflow executive_summary job:`, error);
-          // Keep initiative_detail completion even if summary enqueue fails.
-        }
-      } else {
-        console.log(`ℹ️ Le dossier ${folderId} a déjà une synthèse exécutive, pas de régénération automatique`);
-      }
-    }
+    return {
+      output: {
+        initiativeId,
+        folderId,
+      },
+    };
   }
 
   /**
    * Worker pour la génération de synthèse exécutive
    */
-  private async processExecutiveSummary(data: ExecutiveSummaryJobData, signal?: AbortSignal): Promise<void> {
+  private async processExecutiveSummary(
+    data: ExecutiveSummaryJobData,
+    signal?: AbortSignal,
+  ): Promise<WorkflowTaskCompletion | void> {
     const { folderId, valueThreshold, complexityThreshold, model, initiatedByUserId, locale } = data;
     const workflow = parseGenerationWorkflowRuntimeContext(data.workflow);
 
@@ -2476,6 +4185,13 @@ export class QueueManager {
     }
 
     console.log(`✅ Synthèse exécutive générée et stockée pour le dossier ${folderId}`);
+
+    return {
+      output: {
+        folderId,
+        generated: true,
+      },
+    };
   }
 
   /**

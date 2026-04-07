@@ -36,7 +36,8 @@ describe('todo chat rendering utils', () => {
     const html = renderMarkdownWithRefs(markdown, references);
 
     expect(html).toContain('href="#ref-1"');
-    expect(html).toContain('TODO API contract');
+    // Title no longer rendered in link (BUG-L13-13 fix)
+    expect(html).toContain('[1]');
     expect(html).toContain('Validate contract against');
   });
 

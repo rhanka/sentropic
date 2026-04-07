@@ -501,13 +501,219 @@ Replace generation-specific dispatch in `todo-orchestration.ts`:
 
 **Current**: `startUseCaseGenerationWorkflow()` hardcodes the workflow key and task sequence.
 
-**Target**: `startWorkflow(workspaceId, workflowKey)` resolves the workflow from `workspace_type_workflows` → `workflow_definitions` → ordered `workflow_definition_tasks`, then dispatches generically. The generation-specific logic moves into the agents themselves (via `config.promptTemplate`), not the orchestration layer.
+**Target**: `startWorkflow(workspaceId, workflowKey)` resolves the workflow from `workspace_type_workflows` → `workflow_definitions` → ordered `workflow_definition_tasks`, then dispatches generically. The generation-specific logic moves into the agents themselves (via `config.promptTemplate`) and into declarative runtime metadata, not into the orchestration layer.
 
 The generic dispatch spans TWO services:
 - `todo-orchestration.ts`: resolves workflow tasks from DB, builds an `agentMap: Record<string, string>` (task key → agent definition ID), dispatches jobs with the agentMap.
 - `queue-manager.ts`: receives jobs with the agentMap, resolves agent prompt from DB via agent definition ID. NO hardcoded task assignment fields, NO legacy named fields (`usecaseDetailAgentId`, etc.), NO switch on task keys. The `GenerationWorkflowRuntimeContext` carries `agentMap` instead of named `taskAssignments`.
 
 **Zero legacy**: after §7.4 is complete, there must be NO reference to `usecaseListAgentId`, `usecaseDetailAgentId`, `ROLE_TO_LEGACY_FIELD`, `ROLE_TO_LEGACY_ALIAS`, or any hardcoded task-key-to-agent mapping. Agent resolution is ALWAYS by task key lookup in the agentMap or by querying the DB.
+
+#### 7.4.1 Executable workflow graph target
+
+The BR-04 target is a **library-neutral executable workflow graph**. The internal model must remain conceptually compatible with:
+- **LangGraph-style concepts**: stateful graph, nodes, edges, conditional routing, fanout/join, interrupts/checkpoints.
+- **Temporal-style concepts**: durable workflow execution, activities, child workflows, retry/timeout policy, signals/updates/queries.
+
+This compatibility is conceptual only. **BR-04 does not adopt LangGraph or Temporal as dependencies.** The product keeps its own DB schema and runtime, but the model must remain reversible toward these ecosystems.
+
+#### 7.4.2 Internal concept mapping
+
+| Internal concept | Purpose | External analogue |
+|---|---|---|
+| `workflow_definitions` | Graph or subgraph definition | LangGraph graph / Temporal workflow |
+| `workflow_definition_tasks` | Executable nodes | LangGraph node / Temporal activity or child workflow |
+| `workflow_task_transitions` | Explicit transitions between nodes | LangGraph edges / Temporal control flow |
+| `workflow_run_state` | Shared persisted state for one run | LangGraph state + checkpointer |
+| `workflow_task_results` | Persisted node outputs / state patches | Activity result / state update |
+| `workflow_run_messages` or `workflow_run_waits` | Human/runtime messages, approvals, resumes | LangGraph interrupt / Temporal signal-update |
+| `execution_events` | Audit log and timeline | Execution history / trace |
+
+#### 7.4.3 Node runtime contract
+
+Each workflow task remains a row in `workflow_definition_tasks`, but its runtime behavior is no longer implied only by `orderIndex`.
+
+The executable contract of a task is defined by:
+- `taskKey` — stable node identifier.
+- `agentDefinitionId` — default agent or executor binding.
+- `inputSchema` / `outputSchema` — typed contract at the node boundary.
+- `metadata.executor` — `agent | activity | tool | subworkflow | noop`.
+- `metadata.jobType` — queue/runtime executor key when the node maps to a background worker.
+- `metadata.inputBindings` — how run state and prior node results are mapped into the task input payload.
+- `metadata.outputBindings` — how task outputs update run state.
+- `metadata.condition` — optional run condition for the node or transition.
+- `metadata.retryPolicy` — max attempts, backoff, retryable error classes.
+- `metadata.timeoutPolicy` — execution timeout / wait timeout.
+- `metadata.idempotencyKeyTemplate` — deterministic key for replay-safe side effects.
+
+Completion rule for BR-04:
+- the runtime MAY keep a technical executor registry (`jobType` / `executorKey` → worker implementation);
+- the runtime MUST NOT keep workflow-sequencing logic in code for existing workflows.
+
+Forbidden after Lot 12 completion:
+- `switch` / `if` logic that decides the next workflow task from `task.agentRole`;
+- task discovery based on task-key string heuristics such as `includes("detail")`, `includes("summary")`, `includes("opportunity_list")`, etc.;
+- workflow-specific barrier helpers such as waiting for matrix completion via bespoke polling outside the generic scheduler;
+- business-table scans used as implicit join logic for workflow progression when the same rule should be expressed as a transition/join in workflow metadata.
+
+Allowed after Lot 12 completion:
+- executor dispatch by technical key (`metadata.executor`, `metadata.jobType`, `metadata.subworkflowKey`);
+- worker-internal business logic for the side effect of one node;
+- generic scheduler code that evaluates declarative transitions, bindings, retry policy, and join/fanout rules.
+
+#### 7.4.3a Legacy parity contract
+
+For workflow families and generation entrypoints that already existed on `main` before BR-04B, the runtime refactor MUST preserve observable behavior unless the spec explicitly and deliberately changes the product contract.
+
+This parity contract applies to:
+- request validation and accepted input combinations;
+- default resolution (`matrix_mode`, `organization_id`, folder matrix initialization, title/context fallback behavior);
+- persisted business side effects (folder state, initiatives created, summary creation, matrix materialization);
+- queue-visible execution topology for pre-existing work units.
+
+Concrete rule:
+- for an existing non-multi-org scenario, the BR-04B runtime MUST remain entry/output compatible with `main`;
+- the generic runtime MAY change internal plumbing, but MUST NOT silently change product semantics.
+
+Queue visibility rule:
+- the queue-manager remains the source of truth for job tracking and concurrency regulation;
+- a workflow MUST NOT hide multiple independently meaningful LLM/tool work units behind one opaque job if doing so removes queue visibility or per-unit retry/concurrency control.
+
+Implication for organization auto-create:
+- `create_organizations` is NOT specified as one monolithic “batch LLM job”;
+- on the org-aware generation path, `initiative_list_with_orgs` (or the workspace-type-specific equivalent) runs first and produces the initiative x organization-oriented pairing;
+- if `createNewOrgs` is enabled, `create_organizations` runs after `initiative_list_with_orgs` and before `initiative_detail`;
+- `create_organizations` is specified as a visible subgraph composed of:
+  - a target-discovery/preparation step derived from the org-aware list output and selected context;
+  - one visible create/enrich execution per organization candidate (fanout);
+  - an explicit join before downstream detail generation and any consumer that needs resolved organization ids.
+
+#### 7.4.3b Workflow objects: structural nodes vs agents
+
+The runtime model must distinguish clearly between:
+
+- **workflow structural nodes**: start, conditional routing, fanout, join, end, noop/context-preparation;
+- **agent nodes**: one concrete AI/business worker invoked by the workflow with explicit inputs and outputs.
+
+Rules:
+- batch/parallelism is a workflow concern, never an agent concern;
+- a `fanout` node does not imply a dedicated “batch agent”;
+- a `join` node is workflow structure only and must not be modeled as an agent with a prompt;
+- if a prompt exists, it must correspond to a real agent node used for business work.
+
+Implication for organization generation:
+- the misleading concept `organization_batch_agent` is not part of the target model;
+- the org-aware generation path must use:
+  - a domain list agent (`initiative_list_with_orgs_agent` or `opportunity_list_with_orgs_agent`);
+  - a workflow fanout over organization targets;
+  - one **shared unitary** organization agent (`generate_organization_agent`, or `create_or_enrich_organization_agent` if existing rows may also be enriched);
+  - a workflow join over organization results.
+
+Shared vs domain-specific responsibility:
+- **shared workflow structure**:
+  - `*_organizations_fanout`
+  - `*_organizations_join`
+- **shared agent**:
+  - `generate_organization_agent` / `create_or_enrich_organization_agent`
+- **domain-specific agents**:
+  - `initiative_list_with_orgs_agent`
+  - `opportunity_list_with_orgs_agent`
+  - `initiative_detail_agent`
+  - `opportunity_detail_agent`
+- **matrix generation**:
+  - same workflow role in both domains
+  - not truly shared unless the prompt/config/base-matrix are actually unified
+  - if prompts remain distinct, they must be treated as domain-specific matrix agents even if the workflow position is the same.
+
+#### 7.4.4 Transitions, fanout, join
+
+`orderIndex` remains useful as a default display/ordering hint, but execution semantics must come from explicit transitions.
+
+Add `workflow_task_transitions` with at least:
+- `workflowDefinitionId`
+- `fromTaskKey`
+- `toTaskKey`
+- `transitionType`: `normal | conditional | fanout | join | end`
+- `condition`
+- `metadata`
+
+Transition metadata supports:
+- `fanout.sourcePath` — array in run state to iterate over
+- `fanout.itemKey` — per-item binding name
+- `fanout.instanceKeyPath` — optional path used to derive a stable per-item task instance key
+- `join.mode` — `all | any | quorum`
+- `join.requiredTaskKeys` — explicit barrier on one or more upstream main-task completions
+- `join.reducerKey` — reducer used to merge parallel results
+
+This allows flows like:
+- generate or reuse the folder-level matrix as required by the resolved matrix mode while preserving the canonical non-multi-org path
+- route to `initiative_list` or `initiative_list_with_orgs`
+- when the org-aware path is selected, execute `initiative_list_with_orgs` before any `create_organizations` work
+- derive organization targets from the org-aware list output and selected context
+- fan out one create/enrich execution per organization target
+- join the created or matched organization set back into run state before `initiative_detail`
+- fan out one `initiative_detail` execution per generated initiative
+- join when all details are completed, then enqueue `executive_summary`
+
+Matrix semantics:
+- the generated matrix is attached to the folder/run context first;
+- `matrix_mode=organization` means “reuse one existing organization matrix” and therefore requires a unique reusable source organization;
+- `matrix_mode=generate` means “generate a dossier/folder ad hoc matrix” and MUST work for `0`, `1`, or `N` selected organizations;
+- selected or auto-created organizations may influence the generated matrix context, but do not make the matrix an organization-owned artifact by default.
+
+#### 7.4.5 Run state, results, durable execution
+
+Execution must not rely only on side effects in business tables or on `execution_events`.
+
+Add:
+- `workflow_run_state` — current materialized state for a run, versioned/checkpointed.
+- `workflow_task_results` — one row per task execution (or task instance for fanout), storing normalized output, status, timing, and retry counters.
+
+Rules:
+- `execution_events` remains the audit stream, not the only runtime source of truth.
+- Side effects and non-deterministic operations happen inside executors/workers, not in the scheduler.
+- Replay/resume must be safe: already persisted task results are reused instead of rerunning side effects.
+
+#### 7.4.6 Messages, interrupts, and child workflows
+
+The runtime must support controlled pauses and external input without bespoke business code:
+- pause waiting for approval or user clarification
+- resume with payload
+- cancel a run
+- inspect current run state
+
+This is modeled via workflow-run messages/waits, conceptually equivalent to:
+- LangGraph interrupts + resume
+- Temporal signals / updates / queries
+
+Subgraphs/child workflows are modeled as task nodes with:
+- `metadata.executor = "subworkflow"`
+- `metadata.subworkflowKey`
+
+#### 7.4.7 Delivery staging
+
+**BR-04B completion target (mandatory)**:
+- reusable `workflow_task_transitions` engine for **all existing workflow families**;
+- generic scheduler for ready tasks, conditional transitions, replay-safe execution, and state/result persistence;
+- shared `workflow_run_state`;
+- persisted `workflow_task_results`;
+- declarative `inputBindings` / `outputBindings` for all existing seeded workflows;
+- generic conditional routing for list-task selection;
+- preservation of legacy entry/output parity for pre-existing non-multi-org generation flows;
+- preservation of queue-visible job topology for pre-existing work units, with no opaque multi-call “batch” workers that bypass queue-level regulation;
+- organization auto-create modeled as a visible subgraph (target discovery -> per-organization create/enrich fanout -> join) with state binding, executed after `initiative_list_with_orgs` and before `initiative_detail` on the org-aware path;
+- generic fanout/join support sufficient for the existing generation workflows (`initiative_detail` / `executive_summary`);
+- removal of workflow-specific sequencing hardcoding from `todo-orchestration.ts` and `queue-manager.ts` for the currently existing workflows:
+  - `ai_usecase_generation`
+  - `opportunity_identification`
+  - `opportunity_qualification`
+  - `code_analysis`
+
+**Outside BR-04 scope (future extensions, not required to declare Lot 12 complete)**:
+- generic runtime message / interrupt / resume API exposed to product/UI surfaces;
+- generic child/sub-workflow runtime across arbitrary workflow families;
+- advanced reducers / reusable join strategies beyond the needs of current workflows;
+- compensation/saga patterns and broader workflow-version migration concerns.
 
 ### 7.5 Workflow versioning
 
@@ -526,6 +732,24 @@ Workflow keys are logical identifiers (e.g. `ai_usecase_generation`, not `ai_use
 | `code` | `code_analysis` | context_prepare, codebase_scan, issue_triage, implementation_plan |
 
 Seed data created on workspace creation (same pattern as BR-03 `ensureDefaultGenerationAgents`).
+
+For `ai_usecase_generation` and `opportunity_identification`, the sequence above is the canonical legacy path. Optional organization auto-create, when enabled on the org-aware path, inserts an additive subgraph after the domain-specific org-aware list step and before the domain-specific detail step; it does not redefine the canonical non-multi-org path and it must not run before the org-aware list step.
+
+Normalized target naming for clarity:
+- `initiative_context_prepare` / `opportunity_context_prepare`
+- `initiative_list_with_orgs` / `opportunity_list_with_orgs`
+- `initiative_organizations_fanout` / `opportunity_organizations_fanout`
+- `initiative_generate_organization` / `opportunity_generate_organization`
+- `initiative_organizations_join` / `opportunity_organizations_join`
+- `initiative_matrix_prepare` / `opportunity_matrix_prepare`
+- `initiative_todo_sync` / `opportunity_todo_sync`
+- `initiative_detail` / `opportunity_detail`
+- `initiative_executive_summary` / `opportunity_executive_summary`
+
+This normalized naming does **not** require that every node be backed by a distinct agent:
+- fanout/join/context nodes remain workflow-only;
+- `generate_organization` is the shared unitary agent role reused by both workflows;
+- list/detail/matrix agents remain domain-specific unless explicitly unified.
 
 ### 7.7 Dependency on BR-15
 
@@ -571,10 +795,10 @@ These are chat tools (§3.3), not workflow agents.
 | Target file | Content |
 |---|---|
 | `default-chat-system.ts` | Chat system prompt per workspace type (cadrage AI / opportunity / code) + chat-level prompts common to all types (reasoning eval, session title, conversation auto) |
-| `default-agents-ai-ideas.ts` | AI-specific agents with prompts: `generation_orchestrator`, `matrix_generation_agent` (AI matrix prompt), `usecase_list_agent` (AI list prompt), `todo_projection_agent`, `usecase_detail_agent` (AI detail prompt), `executive_synthesis_agent` (AI synthesis prompt) |
-| `default-agents-opportunity.ts` | Opportunity-specific agents with neutral prompts: `opportunity_orchestrator`, `matrix_generation_agent` (neutral matrix prompt), `opportunity_list_agent` (neutral list prompt), `todo_projection_agent`, `opportunity_detail_agent` (neutral detail prompt), `executive_synthesis_agent` (neutral synthesis prompt) |
+| `default-agents-ai-ideas.ts` | AI-specific agents with prompts: `generation_orchestrator`, AI-domain matrix agent, `usecase_list_agent`, `initiative_list_with_orgs_agent`, `todo_projection_agent`, `usecase_detail_agent`, `executive_synthesis_agent` |
+| `default-agents-opportunity.ts` | Opportunity-specific agents with prompts: `opportunity_orchestrator`, opportunity-domain matrix agent, `opportunity_list_agent`, `opportunity_list_with_orgs_agent`, `todo_projection_agent`, `opportunity_detail_agent`, `executive_synthesis_agent` |
 | `default-agents-code.ts` | Code-specific agents with prompts: `codebase_analyst`, `issue_triager`, `implementation_planner` |
-| `default-agents-shared.ts` | Agents available on ALL workspace types: `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` — each with its prompt |
+| `default-agents-shared.ts` | Agents available on ALL workspace types: shared organization generation agent, `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` — each with its prompt |
 
 `structured_json_repair` prompt moves to a local constant in `context-initiative.ts` (utility, not an agent).
 
@@ -586,8 +810,8 @@ Each agent definition carries its prompt in `config.promptTemplate` (string). No
 
 | Workspace type | Specific agents | Shared agents (all types) |
 |---|---|---|
-| ai-ideas | `generation_orchestrator`, `matrix_generation_agent`, `usecase_list_agent`, `todo_projection_agent`, `usecase_detail_agent`, `executive_synthesis_agent` | `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` |
-| opportunity | `opportunity_orchestrator`, `matrix_generation_agent` (neutral prompt), `opportunity_list_agent`, `todo_projection_agent`, `opportunity_detail_agent`, `executive_synthesis_agent` (neutral prompt) | same shared agents |
+| ai-ideas | `generation_orchestrator`, AI-domain matrix agent, `usecase_list_agent`, `initiative_list_with_orgs_agent`, `todo_projection_agent`, `usecase_detail_agent`, `executive_synthesis_agent` | shared organization generation agent, `demand_analyst`, `solution_architect`, `bid_writer`, `gate_reviewer`, `comment_assistant`, `history_analyzer`, `document_summarizer`, `document_analyzer` |
+| opportunity | `opportunity_orchestrator`, opportunity-domain matrix agent, `opportunity_list_agent`, `opportunity_list_with_orgs_agent`, `todo_projection_agent`, `opportunity_detail_agent`, `executive_synthesis_agent` | same shared agents |
 | code | `codebase_analyst`, `issue_triager`, `implementation_planner` | same shared agents |
 
 #### Chat system prompt per workspace type
@@ -605,7 +829,13 @@ Chat-level prompts (reasoning eval, session title, conversation auto) remain com
 
 ### 8.4 Opportunity identification workflow — neutral prompts (E, F)
 
-The `opportunity_identification` workflow is a clone of `ai_usecase_generation` with neutral prompts. It uses the same task sequence (context_prepare → matrix_prepare → opportunity_list → todo_sync → opportunity_detail → executive_summary) but all agents carry neutral prompts.
+The `opportunity_identification` workflow is a clone of `ai_usecase_generation` with neutral prompts. It uses the same workflow structure as the AI-ideas flow, but domain-specific list/detail/matrix agents and labels.
+
+Clarification:
+- same workflow role does not mean same agent implementation;
+- `initiative_matrix_prepare` and `opportunity_matrix_prepare` occupy the same place in the graph, but are considered domain-specific as long as their prompt/config differ;
+- `initiative_detail` and `opportunity_detail` are also domain-specific;
+- `generate_organization` is the shared agent role reused by both workflows.
 
 #### Neutral prompt guidelines
 
@@ -692,11 +922,23 @@ A workflow task generates documents as part of the initiative lifecycle:
 
 ### 10.2 Mode B — Ad-hoc generation (chat tool)
 
-New chat tool `document_generate`:
-- User requests document from chat context (e.g. "generate a bid document for this initiative").
-- Tool resolves appropriate template based on initiative type + stage.
-- Enqueues `docx_generate` job (existing mechanism).
-- Returns job reference for download.
+Chat tool `document_generate` with two modes:
+- **Template mode**: `action: "generate"` with `templateId` — resolves existing DOCX template + data → renders → stores to S3 → returns download link.
+- **Freeform mode**: `action: "generate"` with `code` — LLM generates docx.js code executed in VM sandbox → renders → stores to S3 → returns download link. LLM should call `action: "upskill"` first to learn DOCX best practices.
+- See `SPEC_EVOL_FREEFORM_DOCX.md` for full freeform spec.
+
+Implementation note (BR-04B): freeform execution is synchronous inside the chat handler. Download card rendered inline in chat via `runtimeSummary.docxCards`.
+
+### 10.4 View template catalog — mutualized across workspace types (BR-04B)
+
+- Common templates (organization, dashboard, solution, product, proposal) shared across all workspace types.
+- Initiative template differs between ai-ideas and opportunity (different fields/tabs).
+- DB is source of truth (aligned with agent/workflow pattern). Lazy-seed on `list()` ensures old workspaces get new templates.
+- Config UX: shared `ConfigItemCard.svelte` for all 3 surfaces (agents, workflows, templates). See `SPEC_EVOL_CONFIG_UX_ALIGNMENT.md`.
+
+### 10.5 Chat tools — same tools for ai-ideas and opportunity (BR-04B)
+
+Both workspace types now share the same tool set: `solutions_list`, `solution_get`, `proposals_list`, `proposal_get`, `products_list`, `product_get`, `gate_review`, `document_generate`, `batch_create_organizations`.
 
 ### 10.3 PPTX support (spec only)
 
@@ -748,7 +990,17 @@ Implementation priority: DOCX first, PPTX as stretch goal within BR-04 budget.
 - `POST /api/v1/workspace-types/:type/workflows` — register a workflow for a type.
 - `DELETE /api/v1/workspace-types/:type/workflows/:id` — unregister.
 
-### 11.6 Cross-workspace endpoints (neutral)
+### 11.6 Workflow run endpoints
+
+- `GET /api/v1/workflow-runs/:id` — read workflow run metadata and current status.
+- `GET /api/v1/workflow-runs/:id/state` — read current materialized run state.
+- `GET /api/v1/workflow-runs/:id/results` — list persisted task results for the run.
+- `POST /api/v1/workflow-runs/:id/messages` — send a runtime message / approval / resume payload to a waiting run.
+- `POST /api/v1/workflow-runs/:id/cancel` — cancel a run.
+
+These endpoints are library-neutral equivalents of LangGraph resume/interrupt inspection and Temporal signal/update/query patterns.
+
+### 11.7 Cross-workspace endpoints (neutral)
 
 - `GET /api/v1/neutral/dashboard` — aggregated dashboard data across workspaces.
 - `POST /api/v1/neutral/dispatch-todo` — create todo in target workspace.
@@ -858,7 +1110,48 @@ The view template renderer supports these widget types:
 | `object_picker` | Picker for an existing object (organization, etc.) | workflow launch context |
 | `number` | Numeric input | count, budget, score |
 
+| `component` | Slot rendered by parent page | scatter plot, cover page, sommaire |
+| `entity-loop` | Iterates over a collection, renders each entity with a referenced template | initiative annexes in dashboard |
+| `scores-summary` | Star/X rating summary | totalValue, totalComplexity |
+
 New widget types can be added as components without changing the template engine.
+
+#### Field modifiers
+
+| Modifier | Type | Description |
+|---|---|---|
+| `printOnly` | boolean | Field visible only in print (CSS `hidden`/`print:block`, always mounted in DOM). |
+| `screenOnly` | boolean | Field visible only on screen (CSS `print:hidden`). |
+| `collection` | string | For `entity-loop`: key in the `collections` prop passed to TemplateRenderer. |
+| `templateRef` | string | For `entity-loop`: objectType to resolve the template for each entity. |
+| `id` | string | HTML `id` attribute on the field wrapper (for TOC anchor links). |
+| `pageContext` | string | CSS named page context (`cover`, `annex`). Sets `page: <value>` on the field wrapper for `@page` rule switching in print. |
+
+#### TemplateRenderer wrapper class
+
+Each TemplateRenderer instance adds a CSS class `template-{objectType}` on its root `<div>`. This scopes print CSS rules to a specific template type (e.g. `.template-initiative .column-a { display: contents }`) without requiring hardcoded wrapper classes.
+
+The `objectType` is derived from the template descriptor or the `templateRef` in entity-loop context.
+
+#### Entity-loop print layout
+
+Each entity-loop item is wrapped in a `<section>` with `page-break-before: always`. This ensures each entity starts on a new page in print. No configuration needed — it's the default behavior of entity-loop.
+
+#### Path-based field keys
+
+Field `key` supports dot-notation paths to access nested data: `data.executive_summary.synthese_executive` traverses `data.executive_summary.synthese_executive` from the root data object. This avoids hardcoded flat mappings between template keys and data structure.
+
+#### Collections prop
+
+For `entity-loop` fields, the parent passes a `collections` prop to TemplateRenderer:
+```svelte
+<TemplateRenderer
+  template={dashboardTemplate}
+  data={folder}
+  collections={{ initiatives: filteredUseCases }}
+/>
+```
+The `entity-loop` field references `collection: "initiatives"` which maps to `collections.initiatives`.
 
 ### 12.5 View templates per workspace type
 

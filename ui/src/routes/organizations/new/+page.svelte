@@ -18,7 +18,6 @@
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import { unsavedChangesStore } from '$lib/stores/unsavedChanges';
   import { Brain, Save, Trash2, Loader2 } from '@lucide/svelte';
-  import References from '$lib/components/References.svelte';
   import { workspaceReadOnlyScope, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import { normalizeMarkdownLineEndings } from '$lib/utils/markdown';
 
@@ -265,15 +264,5 @@
       {/if}
     </div>
 
-    <div slot="afterProcesses">
-      {#if organization.references && organization.references.length > 0}
-    <div class="rounded border border-slate-200 bg-white p-4">
-          <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-            <h3 class="font-semibold">{$_('common.references')}</h3>
-      </div>
-          <References references={organization.references} referencesScaleFactor={1} />
-    </div>
-      {/if}
-    </div>
   </OrganizationForm>
 {/if}

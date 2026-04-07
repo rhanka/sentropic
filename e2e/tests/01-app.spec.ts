@@ -37,7 +37,7 @@ test.describe('Application principale', () => {
       'Accueil',
       'Dossiers', 
       'Organisations',
-      'Cas d\'usage',
+      'Initiatives',
       'Évaluation',
       'Dashboard',
     ];
