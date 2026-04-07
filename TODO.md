@@ -197,8 +197,8 @@ Roadmap specifications:
   - [x] Delivered TODO management v1, steering mode v1, workflow core (14 new tables, 19+ endpoints).
 - [x] **BR-04** `feat/workspace-template-catalog` — done, merged.
   - [x] Delivered workspace type system (neutral, ai-ideas, opportunity, code), initiative rename, multi-workflow registry, extended objects (solutions, products, bids), gate system.
-- [ ] **BR-04B** `feat/workspace-template-catalog` (continuation) — **nearing completion** (Lot N-1 in progress, Lot N pending).
-  - [ ] Template-driven rendering (TemplateRenderer), config UX alignment (ConfigItemCard), generic workflow runtime, freeform DOCX generation, chat tools wiring, multi-org folder creation. See `plan/04B-BRANCH_feat-workspace-template-catalog.md`.
+- [x] **BR-04B** `feat/workspace-template-catalog` (continuation) — **done, merged**.
+  - [x] Template-driven rendering (TemplateRenderer), config UX alignment (ConfigItemCard), generic workflow runtime, freeform DOCX generation, chat tools wiring, multi-org folder creation. See `plan/done/04B-BRANCH_feat-workspace-template-catalog.md`.
 - [x] **BR-05** `feat/vscode-plugin-v1` — done, merged.
   - [x] Delivered VSCode plugin v1 (plan, tools, summary, checkpoint, Codex sign-in).
 - [ ] **BR-06** `feat/chrome-upstream-v1`
@@ -234,6 +234,11 @@ Roadmap specifications:
   - [ ] Document chunking + vector embeddings (pgvector).
   - [ ] Semantic search mode for `documents` tool in chat.
   - [ ] Depends on BR-16 (optional, works with local docs) + BR-08 (Cohere embeddings).
+
+- [ ] **BR-23** `feat/multi-agent-framework-comparison`
+  - [ ] Compare LangGraph / Agno / Temporal for multi-agent orchestration. Lot 0 research + recommendation. See `plan/23-BRANCH_feat-multi-agent-framework-comparison.md`.
+- [ ] **BR-25** `chore/rules-skills-audit`
+  - [ ] Absorb BR-04B audit learnings (400+ incidents) into rules and hooks. Mechanical enforcement. See `plan/25-BRANCH_chore-rules-skills-audit.md`.
 
 #### Branch closure rules for this roadmap
 

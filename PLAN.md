@@ -1,6 +1,6 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-04-06 — BR-04B (continuation) nearing completion, Lot N-1 in progress
+Status: Updated 2026-04-07 — BR-04B done, next: BR-23 (framework comparison), BR-25 (rules audit)
 Previous window (2026-02-23 → 2026-03-08) closed. New timeline driven by BR-04/04B scope.
 
 ## 1) Current state
@@ -16,16 +16,20 @@ Previous window (2026-02-23 → 2026-03-08) closed. New timeline driven by BR-04
 **Completed branches (continued):**
 - BR-04 `feat/workspace-template-catalog` — done, merged (workspace type system, initiative rename, multi-workflow registry, extended objects, gate system)
 
-**Active branch:**
-- BR-04B `feat/workspace-template-catalog` (continuation) — **nearing completion** (Lot N-1 docs consolidation in progress, Lot N final validation pending). Template-driven rendering, config UX alignment, chat tools wiring, generic workflow runtime, freeform DOCX generation. See `plan/04B-BRANCH_feat-workspace-template-catalog.md`.
+**Completed branches (continued):**
+- BR-04B `feat/workspace-template-catalog` (continuation) — **done, merged**. Template-driven rendering, config UX alignment, chat tools wiring, generic workflow runtime, freeform DOCX generation. See `plan/done/04B-BRANCH_feat-workspace-template-catalog.md`.
 
-**Pending branches (blocked or dependent on BR-04):**
-- BR-06 through BR-12 — not started, pending BR-04 completion or independent scheduling.
+**Next branches:**
+- BR-23 `feat/multi-agent-framework-comparison` — compare LangGraph/Agno/Temporal. See `plan/23-BRANCH_feat-multi-agent-framework-comparison.md`.
+- BR-25 `chore/rules-skills-audit` — absorb BR-04B audit learnings. See `plan/25-BRANCH_chore-rules-skills-audit.md`.
+
+**Pending branches (unblocked by BR-04B completion):**
+- BR-06 through BR-12 — not started, now unblocked.
 - BR-14, BR-16, BR-17, BR-20, BR-21, BR-22 — identified during BR-04 scope expansion and follow-up UAT/debug tracks.
 
 ## 2) BR-04/04B as structural branch
 
-BR-04 (merged) and BR-04B (nearing completion) together form the structural foundation for most future branches:
+BR-04 (merged) and BR-04B (merged) together form the structural foundation for most future branches:
 - Introduces workspace type system (neutral, ai-ideas, opportunity, code)
 - Renames `use_cases` → `initiatives` (impacts all downstream branches)
 - Delivers multi-workflow registry (replaces single hardcoded workflow)
@@ -53,7 +57,7 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-02 | `feat/sso-chatgpt` | done | BR-00 | — |
 | BR-03 | `feat/todo-steering-workflow-core` | done | BR-00 | — |
 | BR-04 | `feat/workspace-template-catalog` | done | BR-03, BR-05 | — |
-| BR-04B | `feat/workspace-template-catalog` (continuation) | **active** (Lot N-1) | BR-04 | — |
+| BR-04B | `feat/workspace-template-catalog` (continuation) | **done** | BR-04 | — |
 | BR-05 | `feat/vscode-plugin-v1` | done | BR-01, BR-03 | — |
 | BR-06 | `feat/chrome-upstream-v1` | plan | BR-00 | low (contextType rename) |
 | BR-07 | `feat/release-ui-npm-and-pretest` | plan | BR-00, **BR-14** | none (blocked: npm export requires modular ChatWidget) |
