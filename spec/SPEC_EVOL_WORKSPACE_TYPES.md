@@ -922,11 +922,23 @@ A workflow task generates documents as part of the initiative lifecycle:
 
 ### 10.2 Mode B — Ad-hoc generation (chat tool)
 
-New chat tool `document_generate`:
-- User requests document from chat context (e.g. "generate a bid document for this initiative").
-- Tool resolves appropriate template based on initiative type + stage.
-- Enqueues `docx_generate` job (existing mechanism).
-- Returns job reference for download.
+Chat tool `document_generate` with two modes:
+- **Template mode**: `action: "generate"` with `templateId` — resolves existing DOCX template + data → renders → stores to S3 → returns download link.
+- **Freeform mode**: `action: "generate"` with `code` — LLM generates docx.js code executed in VM sandbox → renders → stores to S3 → returns download link. LLM should call `action: "upskill"` first to learn DOCX best practices.
+- See `SPEC_EVOL_FREEFORM_DOCX.md` for full freeform spec.
+
+Implementation note (BR-04B): freeform execution is synchronous inside the chat handler. Download card rendered inline in chat via `runtimeSummary.docxCards`.
+
+### 10.4 View template catalog — mutualized across workspace types (BR-04B)
+
+- Common templates (organization, dashboard, solution, product, proposal) shared across all workspace types.
+- Initiative template differs between ai-ideas and opportunity (different fields/tabs).
+- DB is source of truth (aligned with agent/workflow pattern). Lazy-seed on `list()` ensures old workspaces get new templates.
+- Config UX: shared `ConfigItemCard.svelte` for all 3 surfaces (agents, workflows, templates). See `SPEC_EVOL_CONFIG_UX_ALIGNMENT.md`.
+
+### 10.5 Chat tools — same tools for ai-ideas and opportunity (BR-04B)
+
+Both workspace types now share the same tool set: `solutions_list`, `solution_get`, `proposals_list`, `proposal_get`, `products_list`, `product_get`, `gate_review`, `document_generate`, `batch_create_organizations`.
 
 ### 10.3 PPTX support (spec only)
 

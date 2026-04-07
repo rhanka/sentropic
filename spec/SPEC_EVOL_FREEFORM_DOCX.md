@@ -1,6 +1,6 @@
 # SPEC_EVOL — Freeform DOCX Generation (document_generate mode B.2)
 
-Status: Implementation spec for BR-04B. Extends SPEC_TEMPLATING.md and SPEC_EVOL_WORKSPACE_TYPES.md §10.2.
+Status: Implemented (2026-04-06) — BR-04B. Sync execution, upskill action, download card, runtimeSummary persistence.
 
 ## 1. Context
 
