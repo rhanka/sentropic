@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import { createHash } from 'crypto';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { workspaces, workspaceMemberships, workspaceTypeWorkflows, workflowDefinitionTasks, workflowDefinitions, agentDefinitions } from '../../src/db/schema';
+import { workspaces, workspaceMemberships, workspaceTypeWorkflows, workflowDefinitionTasks, workflowDefinitions, agentDefinitions, viewTemplates } from '../../src/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { createTestId } from '../utils/test-helpers';
 
@@ -97,6 +97,7 @@ describe('Workspaces API', () => {
       }
       await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, id));
       await db.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, id));
+      await db.delete(viewTemplates).where(eq(viewTemplates.workspaceId, id));
       await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, id));
       await db.delete(workspaces).where(eq(workspaces.id, id));
     }

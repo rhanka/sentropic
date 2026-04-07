@@ -39,6 +39,27 @@
     margin: 2cm 2cm 2cm 2cm; /* Marges normales pour le rapport principal */
   }
 
+  /* TemplateRenderer: supprimer gaps/spacing en print pour éviter pages vierges */
+  .template-dashboard .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0 !important;
+  }
+  .template-dashboard .space-y-6 > * + * {
+    margin-top: 0 !important;
+  }
+  .template-dashboard .grid.gap-6 {
+    gap: 0 !important;
+  }
+  .template-dashboard {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Entity-loop: no page-break on first annex item (avoids blank page after annex cover) */
+  .usecase-annex-item:first-child {
+    page-break-before: avoid !important;
+    break-before: avoid !important;
+  }
+
   /* Marges à 0 pour les annexes (usecases) - les marges sont reportées sur les conteneurs */
   @page annex {
     size: A4;
@@ -117,39 +138,37 @@
     padding-top: 0 !important;
   }
   
-  /* Dashboard : sections annexes */
-  .usecase-annex-section {
-    margin: 0 !important;
-    padding: 0.6cm !important; /* Marges reportées depuis @page annex */
-    /* Par défaut (fiches 2+), utiliser border-top pour éviter la suppression après saut de page */
-    padding-top: 0 !important;
+  /* Dashboard: annex items (class is on .template-initiative itself, no wrapper) */
+  .template-initiative.usecase-annex-item {
+    display: block !important; /* Override screen display:none */
+    page: annex;
+    margin: 0.6cm !important;
+    margin-top: 0 !important;
     border-top: 0.6cm solid transparent !important;
-    padding-bottom: 0.6cm !important;
-    overflow: visible !important; /* Permettre le débordement de l'image */
+    margin-bottom: 0 !important;
+    overflow: visible !important;
   }
 
-  /* Exception pour la 1ère fiche : Revenir au padding-top car border-top crée un décalage, 
-     et le padding est respecté en début de flux */
-  .usecase-annex-section:first-of-type {
+  /* First annex item: use margin-top instead of border-top */
+  .template-initiative.usecase-annex-item:first-of-type {
     border-top: none !important;
-    padding-top: 0.6cm !important;
+    margin-top: 0.6cm !important;
   }
 
-  /* Exception pour la dernière fiche : éviter saut de page inutile */
-  .usecase-annex-section:last-of-type,
-  .usecase-annex-section:last-of-type > .usecase-print {
+  /* Last annex item: avoid unnecessary page break */
+  .template-initiative.usecase-annex-item:last-of-type {
     page-break-after: avoid !important;
     break-after: avoid !important;
   }
 
-  /* Forcer un saut de page avant le 24ème cas d'usage */
-  .usecase-annex-section.force-page-break-before {
+  /* Force page break on specific annex items */
+  .template-initiative.usecase-annex-item.force-page-break-before {
     page-break-before: always !important;
     break-before: page !important;
   }
-  
-  /* Supprimer les marges du premier enfant (usecase-print) dans les sections annexes */
-  .usecase-annex-section > *:first-child {
+
+  /* Reset margins on first child inside annex items */
+  .template-initiative.usecase-annex-item > *:first-child {
     margin-top: 0 !important;
     padding-top: 0 !important;
   }
@@ -299,16 +318,26 @@
   }
 
   /* Contenu principal du rapport */
-  .report-main-content {
+  section.report-main-content.space-y-6 {
     page: auto;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
   }
   
-  /* Annuler le padding horizontal de la section parente pour les annexes */
-  .report-main-content > .usecase-annex-section {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
+  /* Annex items use margin for 0.6cm inset (matching standalone parent padding) */
+  .report-main-content .template-initiative.usecase-annex-item {
+    margin-left: 0.6cm !important;
+    margin-right: 0.6cm !important;
+  }
+
+  /* Annex initiative title (inside .template-initiative via sectionTitle prop) */
+  .template-initiative.usecase-annex-item > h1.annex-title {
+    font-size: 15pt !important;
+    margin: 0 0 4pt 0 !important;
+    padding: 0 !important;
+    line-height: 1.2 !important;
   }
 
   /* Masquer le titre du dashboard en impression */
@@ -388,8 +417,7 @@
     background: transparent !important;
     margin-top: 0 !important;
     margin-bottom: 0 !important;
-    page-break-after: always !important; /* Saut de page après cette section */
-    page-break-inside: avoid !important; /* Évite de couper la section en deux */
+    /* page-break-after now driven by template seed row.pageBreakAfter */
   }
 
   /* Les cartes de statistiques */
@@ -494,17 +522,19 @@
   }
 
   /* Styles pour l'analyse et recommandation - retirer le cadre mais garder le trait */
-  .report-main-content .report-analyse {
+  .report-main-content .report-analyse,
+  .report-main-content .report-analyse [data-comment-section],
+  .report-main-content .report-introduction [data-comment-section],
+  .report-main-content .report-break-after [data-comment-section] {
     border: none !important;
     box-shadow: none !important;
     background: transparent !important;
     padding: 0 !important;
+    border-radius: 0 !important;
   }
 
-  /* Saut de page uniquement après l'analyse */
-  .report-main-content .report-analyse-with-break {
-    page-break-after: always !important;
-  }
+  /* Saut de page avant et après (analyse, recommandation) */
+  /* page-break rules for report sections now driven by template seed row.pageBreakAfter/Before/Inside */
 
   /* Garder un trait sous le titre de l'analyse et recommandation */
   .report-main-content .report-analyse .border-b {
@@ -515,7 +545,8 @@
 
   /* Réduire la taille des h2 dans le contenu de l'analyse et recommandation */
   .report-main-content .report-analyse .prose h2 {
-    font-size: 12pt !important; /* Réduit de 14pt à 12pt */
+    font-size: 12pt !important;
+    font-weight: 700 !important;
     margin-top: 0.3cm !important;
     margin-bottom: 0.2cm !important;
     padding-top: 0 !important;
@@ -577,7 +608,7 @@
   }
 
   /* Use case specific styles - FORCE 1 PAGE */
-  .usecase-print {
+  .template-initiative {
     max-width: 100% !important;
     padding: 0 !important;
     padding-top: 0 !important;
@@ -595,9 +626,10 @@
   /* Image footer.jpg en bas de page, collée bord à bord (marges de page à 0) */
   /* Utiliser position absolute pour que l'image n'apparaisse que sur les pages avec usecase-print */
   /* Sortir des marges du conteneur parent (padding 0.6cm) pour aller au bord de la page */
-  .usecase-print::before {
+  .template-initiative:not(.template-initiative .template-initiative)::before,
+  .template-initiative.usecase-annex-item::before {
     content: '';
-    position: absolute; /* Position absolute pour être relatif au conteneur usecase-print */
+    position: absolute;
     bottom: -0.6cm; /* Sortir de la marge basse du conteneur parent */
     left: -0.6cm; /* Sortir de la marge gauche du conteneur parent */
     right: -0.6cm; /* Sortir de la marge droite du conteneur parent */
@@ -618,49 +650,42 @@
     color-adjust: exact !important;
   }
   
-  /* Dans les sections annexes, l'image doit sortir complètement du padding-bottom de 0.6cm de la section */
-  /* L'image doit sortir de .usecase-print (0cm) + padding-bottom de .usecase-annex-section (0.6cm) = -0.6cm */
-  /* Correction: -1.2cm était incorrect (double compensation). -0.6cm suffit. */
-  .usecase-annex-section > .usecase-print::before {
-    bottom: -0.6cm !important; /* Sortir du padding-bottom de la section annexe */
-  }
-  
   
   
   
   /* S'assurer que le contenu est au-dessus de l'image et du gradient */
-  .usecase-print > * {
+  .template-initiative > * {
     position: relative;
     z-index: 1;
   }
   
 
   /* Force display of ALL elements in use case print - override everything */
-  .usecase-print * {
+  .template-initiative * {
     visibility: visible !important;
     opacity: 1 !important;
   }
   
   /* Force display of all conditional sections in print - override Svelte conditionals */
-  .usecase-print [class*="rounded-lg"],
-  .usecase-print [class*="border"],
-  .usecase-print [class*="shadow-sm"],
-  .usecase-print > div[class*="grid"],
-  .usecase-print > div[class*="rounded"],
-  .usecase-print > div {
+  .template-initiative [class*="rounded-lg"],
+  .template-initiative [class*="border"],
+  .template-initiative [class*="shadow-sm"],
+  .template-initiative > div[class*="grid"],
+  .template-initiative > div[class*="rounded"],
+  .template-initiative > div {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
   
   /* Force grid display */
-  .usecase-print .grid,
-  .usecase-print [class*="grid"] {
+  .template-initiative .grid,
+  .template-initiative [class*="grid"] {
     display: grid !important;
   }
 
   /* Headers and titles - COMPACT */
-  .usecase-print h1 {
+  .template-initiative h1 {
     font-size: 15pt !important;
     padding: 0 !important;
     page-break-after: avoid;
@@ -668,19 +693,19 @@
   }
 
   /* Remove top margin from print-only title wrapper and first child */
-  .usecase-print > .print-only:first-child,
-  .usecase-print > div:first-child.print-only {
+  .template-initiative > .print-only:first-child,
+  .template-initiative > div:first-child.print-only {
     margin-top: 0 !important;
     padding-top: 0 !important;
   }
 
-  .usecase-print > .print-only:first-child h1,
-  .usecase-print > div:first-child.print-only h1 {
+  .template-initiative > .print-only:first-child h1,
+  .template-initiative > div:first-child.print-only h1 {
     margin-top: 0 !important;
     padding-top: 0 !important;
   }
 
-  .usecase-print h2 {
+  .template-initiative h2 {
     font-size: 10pt !important;
     margin: 8pt 0 4pt 0 !important;
     padding: 0 !important;
@@ -689,7 +714,7 @@
     font-weight: 600;
   }
 
-  .usecase-print h3 {
+  .template-initiative h3 {
     font-size: 9pt !important;
     padding: 0 !important;
     page-break-after: avoid;
@@ -697,7 +722,7 @@
     font-weight: 600;
   }
 
-  .usecase-print h4 {
+  .template-initiative h4 {
     font-size: 8pt !important;
     margin: 1pt 0 0.5pt 0 !important; /* Réduit de 50% : 2pt -> 1pt en haut, 1pt -> 0.5pt en bas */
     padding: 0 !important;
@@ -705,18 +730,18 @@
   }
 
   /* Sections - MINIMAL SPACING */
-  .usecase-print section {
+  .template-initiative section {
     margin-bottom: 2pt !important;
     page-break-inside: avoid;
   }
 
   /* Cards and boxes - COMPACT - Retirer toutes les bordures et rendre transparent */
-  .usecase-print .rounded-lg,
-  .usecase-print .border,
-  .usecase-print .shadow-sm,
-  .usecase-print [class*="border-"],
-  .usecase-print [class*="bg-white"],
-  .usecase-print [class*="bg-slate"] {
+  .template-initiative .rounded-lg,
+  .template-initiative .border,
+  .template-initiative .shadow-sm,
+  .template-initiative [class*="border-"],
+  .template-initiative [class*="bg-white"],
+  .template-initiative [class*="bg-slate"] {
     border: none !important; /* Retirer toutes les bordures des cartes */
     box-shadow: none !important;
     background-color: transparent !important; /* Rendre transparent pour voir l'image de fond */
@@ -732,21 +757,21 @@
   }
 
   /* Exclure les dernières cartes de chaque colonne des marges bottom pour alignement parfait */
-  .usecase-print .layout-main > .column-a > .rounded-lg:last-child,
-  .usecase-print .layout-main > .column-b > .rounded-lg:last-child,
-  .usecase-print .layout-main > .column-a > .grid:last-child,
-  .usecase-print .layout-main > .column-b > .grid:last-child {
+  .template-initiative .layout-main > .column-a > .rounded-lg:last-child,
+  .template-initiative .layout-main > .column-b > .rounded-lg:last-child,
+  .template-initiative .layout-main > .column-a > .grid:last-child,
+  .template-initiative .layout-main > .column-b > .grid:last-child {
     margin-bottom: 0 !important;
   }
 
   /* Exclure les cartes du bloc 2x2 (Benefits/Constraints/Metrics/Risks) des marges génériques */
-  .usecase-print .layout-main > .column-a > .layout-quad > .rounded-lg {
+  .template-initiative .layout-main > .column-a > .layout-quad > .rounded-lg {
     margin-bottom: 0 !important;
     margin-top: 0 !important;
   }
 
   /* Exclure le grid layout-quad dans column-a des marges génériques */
-  .usecase-print .layout-main > .column-a > .layout-quad {
+  .template-initiative .layout-main > .column-a > .layout-quad {
     margin-bottom: 0 !important;
     margin-top: 0 !important;
     padding-bottom: 0 !important;
@@ -754,7 +779,7 @@
   }
 
   /* Remove card headers padding et rendre transparent */
-  .usecase-print .rounded-t-lg {
+  .template-initiative .rounded-t-lg {
     margin: -6pt -6pt 4pt -6pt !important;
     padding: 4pt 6pt !important;
     border-top: none !important;
@@ -766,29 +791,29 @@
   }
 
   /* Forcer le border-bottom sur les headers même s'ils ont la classe border-b */
-  .usecase-print .rounded-t-lg.border-b,
-  .usecase-print .rounded-t-lg.border-b.border-slate-200 {
+  .template-initiative .rounded-t-lg.border-b,
+  .template-initiative .rounded-t-lg.border-b.border-slate-200 {
     border-bottom: 0.1px solid #6b7280 !important; /* Ligne de séparation entre titre et contenu */
   }
 
   /* Forcer la même couleur de trait pour tous les headers, même ceux avec des couleurs de fond */
-  .usecase-print .rounded-t-lg.bg-green-100,
-  .usecase-print .rounded-t-lg.bg-red-100,
-  .usecase-print .rounded-t-lg.bg-blue-100,
-  .usecase-print .rounded-t-lg.bg-purple-100,
-  .usecase-print .rounded-t-lg.bg-white {
+  .template-initiative .rounded-t-lg.bg-green-100,
+  .template-initiative .rounded-t-lg.bg-red-100,
+  .template-initiative .rounded-t-lg.bg-blue-100,
+  .template-initiative .rounded-t-lg.bg-purple-100,
+  .template-initiative .rounded-t-lg.bg-white {
     border-bottom: 0.1px solid #6b7280 !important; /* Même couleur de trait pour tous */
   }
 
   /* Grid layouts - COMPACT */
   /* EXCLURE les layouts de cette règle générale */
-  .usecase-print .grid:not(.layout-head):not(.layout-main):not(.layout-bottom) {
+  .template-initiative .grid:not(.layout-head):not(.layout-main):not(.layout-bottom) {
     gap: 0 !important; /* Annuler gap entre cartes */
     margin-bottom: 0 !important;
   }
 
 
-  .usecase-print .md\:grid-cols-2 {
+  .template-initiative .md\:grid-cols-2 {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
     gap: 6pt !important;
@@ -803,8 +828,8 @@
 
   /* Lists - COMPACT */
   /* EXCLURE Technologies (qui a ml-4) de cette règle générale */
-  .usecase-print ul:not(.ml-4),
-  .usecase-print ol:not(.ml-4) {
+  .template-initiative ul:not(.ml-4),
+  .template-initiative ol:not(.ml-4) {
     margin-left: 6pt !important;
     margin-bottom: 4pt !important;
     margin-top: 2pt !important;
@@ -813,50 +838,50 @@
 
   /* Marges de gauche réduites pour les listes dans les box (Bénéfices, Risques, Mesures, Sources, Données) */
   /* EXCLURE Description (.prose) et Technologies (qui a ml-4) */
-  .usecase-print .rounded-lg ul:not(.prose ul):not(.ml-4),
-  .usecase-print .border ul:not(.prose ul):not(.ml-4),
-  .usecase-print .shadow-sm ul:not(.prose ul):not(.ml-4) {
+  .template-initiative .rounded-lg ul:not(.prose ul):not(.ml-4),
+  .template-initiative .border ul:not(.prose ul):not(.ml-4),
+  .template-initiative .shadow-sm ul:not(.prose ul):not(.ml-4) {
     margin-left: 2pt !important;
     padding-left: 2pt !important;
   }
 
   /* Marges de gauche réduites pour les listes avec list-disc, SAUF celles avec ml-4 (Technologies) */
-  .usecase-print ul.list-disc:not(.prose ul.list-disc):not(.ml-4) {
+  .template-initiative ul.list-disc:not(.prose ul.list-disc):not(.ml-4) {
     margin-left: 2pt !important;
     padding-left: 2pt !important;
   }
 
   /* Marges réduites pour les listes dans Description (.prose) */
-  .usecase-print .prose ul,
-  .usecase-print .prose ol {
+  .template-initiative .prose ul,
+  .template-initiative .prose ol {
     margin-left: 6pt !important;
     padding-left: 4pt !important;
   }
 
 
   /* Marges de gauche réduites pour les li avec flex (Bénéfices, Risques, Mesures) */
-  .usecase-print .rounded-lg li.flex,
-  .usecase-print .border li.flex,
-  .usecase-print .shadow-sm li.flex {
+  .template-initiative .rounded-lg li.flex,
+  .template-initiative .border li.flex,
+  .template-initiative .shadow-sm li.flex {
     margin-left: 0 !important;
     padding-left: 0 !important;
   }
 
-  .usecase-print li {
+  .template-initiative li {
     margin-bottom: 0.5pt !important;
     font-size: 7.5pt !important;
     line-height: 1.25;
   }
 
   /* Marges inférieures encore plus réduites pour les li dans les box */
-  .usecase-print .rounded-lg li,
-  .usecase-print .border li,
-  .usecase-print .shadow-sm li {
+  .template-initiative .rounded-lg li,
+  .template-initiative .border li,
+  .template-initiative .shadow-sm li {
     margin-bottom: 0.3pt !important;
   }
 
   /* Paragraphs - COMPACT */
-  .usecase-print p {
+  .template-initiative p {
     margin: 0 0 2pt 0 !important;
     font-size: 7.5pt !important;
     line-height: 1.25;
@@ -909,20 +934,20 @@
 
   /* Spacing - COMPACT for use cases */
   /* EXCLURE les layouts de cette règle générale */
-  .usecase-print .space-y-6 > *:not(.layout-head):not(.layout-main):not(.layout-bottom) + *:not(.layout-head):not(.layout-main):not(.layout-bottom) {
+  .template-initiative .space-y-6 > *:not(.layout-head):not(.layout-main):not(.layout-bottom) + *:not(.layout-head):not(.layout-main):not(.layout-bottom) {
     margin-top: 2pt !important;
   }
   
   
-  .usecase-print .space-y-4 > * + * {
+  .template-initiative .space-y-4 > * + * {
     margin-top: 2pt !important;
   }
 
-  .usecase-print .space-y-2 > * + * {
+  .template-initiative .space-y-2 > * + * {
     margin-top: 0.5pt !important;
   }
   
-  .usecase-print .space-y-3 > * + * {
+  .template-initiative .space-y-3 > * + * {
     margin-top: 1pt !important;
   }
 
@@ -939,16 +964,16 @@
   }
 
   /* Hide status banners and non-essential info in use case print */
-  .usecase-print .rounded.border-blue-200,
-  .usecase-print .bg-blue-50 {
+  .template-initiative .rounded.border-blue-200,
+  .template-initiative .bg-blue-50 {
     display: none !important;
   }
 
   /* Compact score cards headers - keep but make minimal (for value/complexity axes) */
-  .usecase-print .bg-green-100,
-  .usecase-print .bg-red-100,
-  .usecase-print .bg-blue-100,
-  .usecase-print .bg-purple-100 {
+  .template-initiative .bg-green-100,
+  .template-initiative .bg-red-100,
+  .template-initiative .bg-blue-100,
+  .template-initiative .bg-purple-100 {
     padding: 1pt 3pt !important;
     font-size: 7pt !important;
     font-weight: 600;
@@ -958,50 +983,50 @@
   }
 
   /* Make score cards more compact */
-  .usecase-print .bg-green-100 + *,
-  .usecase-print .bg-red-100 + * {
+  .template-initiative .bg-green-100 + *,
+  .template-initiative .bg-red-100 + * {
     margin-top: 2pt !important;
   }
 
   /* Text sizes in use case - plus petit pour les contenus hors description */
-  .usecase-print .text-xs {
+  .template-initiative .text-xs {
     font-size: 6.5pt !important;
     line-height: 1.2;
   }
 
   /* Taille réduite pour les textes dans les listes et sections (hors description) */
-  .usecase-print ul li:not(.prose li),
-  .usecase-print ol li:not(.prose li),
-  .usecase-print .space-y-2 li:not(.prose li),
-  .usecase-print .space-y-3 li:not(.prose li) {
+  .template-initiative ul li:not(.prose li),
+  .template-initiative ol li:not(.prose li),
+  .template-initiative .space-y-2 li:not(.prose li),
+  .template-initiative .space-y-3 li:not(.prose li) {
     font-size: 6.5pt !important;
     line-height: 1.2;
   }
 
   /* Forcer les éléments enfants des li à hériter de la taille (pour markdown rendu) */
-  .usecase-print ul li:not(.prose li) *,
-  .usecase-print ol li:not(.prose li) *,
-  .usecase-print .space-y-2 li:not(.prose li) *,
-  .usecase-print .space-y-3 li:not(.prose li) * {
+  .template-initiative ul li:not(.prose li) *,
+  .template-initiative ol li:not(.prose li) *,
+  .template-initiative .space-y-2 li:not(.prose li) *,
+  .template-initiative .space-y-3 li:not(.prose li) * {
     font-size: inherit !important;
     line-height: inherit !important;
   }
 
   /* Taille réduite pour les textes dans les box (hors description) */
-  .usecase-print .rounded-lg .text-slate-600:not(.prose),
-  .usecase-print .border .text-slate-600:not(.prose),
-  .usecase-print .shadow-sm .text-slate-600:not(.prose) {
+  .template-initiative .rounded-lg .text-slate-600:not(.prose),
+  .template-initiative .border .text-slate-600:not(.prose),
+  .template-initiative .shadow-sm .text-slate-600:not(.prose) {
     font-size: 6.5pt !important;
   }
 
   /* Icons - smaller or hide */
-  .usecase-print svg {
+  .template-initiative svg {
     width: 10pt !important;
     height: 10pt !important;
   }
 
   /* Remove unnecessary borders and backgrounds */
-  .usecase-print .border-b:not(.rounded-t-lg) {
+  .template-initiative .border-b:not(.rounded-t-lg) {
     border-bottom: none !important; /* Retirer toutes les bordures, sauf celles des headers */
     padding-bottom: 3pt !important;
     margin-bottom: 3pt !important;
@@ -1009,88 +1034,88 @@
 
 
   /* Description normale (prose) reste à 10px = 7.5pt */
-  .usecase-print .prose:not(.description-compact-print):not(.prose-sm) {
+  .template-initiative .prose:not(.description-compact-print):not(.prose-sm) {
     font-size: 7.5pt !important;
     line-height: 1.5 !important;
   }
 
-  .usecase-print .prose:not(.description-compact-print):not(.prose-sm) * {
+  .template-initiative .prose:not(.description-compact-print):not(.prose-sm) * {
     font-size: inherit !important;
     line-height: inherit !important;
   }
 
   /* Forcer la taille pour prose-sm (délai, contact) en mode print - APRÈS les règles générales pour priorité */
-  .usecase-print .prose.prose-sm,
-  .usecase-print .prose.prose-sm *,
-  .usecase-print div.prose.prose-sm,
-  .usecase-print div.prose.prose-sm *,
-  .usecase-print span.prose.prose-sm,
-  .usecase-print span.prose.prose-sm *,
-  .usecase-print .text-sm.prose.prose-sm,
-  .usecase-print .text-sm.prose.prose-sm * {
+  .template-initiative .prose.prose-sm,
+  .template-initiative .prose.prose-sm *,
+  .template-initiative div.prose.prose-sm,
+  .template-initiative div.prose.prose-sm *,
+  .template-initiative span.prose.prose-sm,
+  .template-initiative span.prose.prose-sm *,
+  .template-initiative .text-sm.prose.prose-sm,
+  .template-initiative .text-sm.prose.prose-sm * {
     font-size: 6.5pt !important;
     line-height: 1.2 !important;
   }
 
   /* Forcer text-sm à 6.5pt - priorité maximale */
-  .usecase-print .text-sm,
-  .usecase-print .text-sm *,
-  .usecase-print span.text-sm,
-  .usecase-print span.text-sm *,
-  .usecase-print .text-sm.prose,
-  .usecase-print .text-sm.prose *,
-  .usecase-print span.text-sm.prose,
-  .usecase-print span.text-sm.prose * {
+  .template-initiative .text-sm,
+  .template-initiative .text-sm *,
+  .template-initiative span.text-sm,
+  .template-initiative span.text-sm *,
+  .template-initiative .text-sm.prose,
+  .template-initiative .text-sm.prose *,
+  .template-initiative span.text-sm.prose,
+  .template-initiative span.text-sm.prose * {
     font-size: 6.5pt !important;
     line-height: 1.2 !important;
   }
 
   /* S'assurer que markdown-wrapper dans un contexte text-sm ou prose-sm hérite de 6.5pt */
-  .usecase-print .text-sm .markdown-wrapper,
-  .usecase-print .text-sm .markdown-wrapper *,
-  .usecase-print .prose.prose-sm .markdown-wrapper,
-  .usecase-print .prose.prose-sm .markdown-wrapper * {
+  .template-initiative .text-sm .markdown-wrapper,
+  .template-initiative .text-sm .markdown-wrapper *,
+  .template-initiative .prose.prose-sm .markdown-wrapper,
+  .template-initiative .prose.prose-sm .markdown-wrapper * {
     font-size: 6.5pt !important;
     line-height: 1.2 !important;
   }
 
   /* Réduire la taille de police pour les descriptions longues en mode impression - priorité maximale */
-  .usecase-print .prose.description-compact-print,
-  .usecase-print div.prose.description-compact-print,
-  div.usecase-print .prose.description-compact-print,
-  .usecase-print .text-slate-600.prose.description-compact-print,
-  .usecase-print .prose.description-compact-print .markdown-wrapper,
-  .usecase-print div.prose.description-compact-print .markdown-wrapper {
+  .template-initiative .prose.description-compact-print,
+  .template-initiative div.prose.description-compact-print,
+  div.template-initiative .prose.description-compact-print,
+  .template-initiative .text-slate-600.prose.description-compact-print,
+  .template-initiative .prose.description-compact-print .markdown-wrapper,
+  .template-initiative div.prose.description-compact-print .markdown-wrapper {
     font-size: 6.5pt !important;
     line-height: 1.2 !important;
   }
 
   /* Forcer tous les éléments enfants des descriptions compactes */
-  .usecase-print .prose.description-compact-print *,
-  .usecase-print div.prose.description-compact-print *,
-  div.usecase-print .prose.description-compact-print *,
-  .usecase-print .text-slate-600.prose.description-compact-print *,
-  .usecase-print .prose.description-compact-print .markdown-wrapper *,
-  .usecase-print div.prose.description-compact-print .markdown-wrapper * {
+  .template-initiative .prose.description-compact-print *,
+  .template-initiative div.prose.description-compact-print *,
+  div.template-initiative .prose.description-compact-print *,
+  .template-initiative .text-slate-600.prose.description-compact-print *,
+  .template-initiative .prose.description-compact-print .markdown-wrapper *,
+  .template-initiative div.prose.description-compact-print .markdown-wrapper * {
     font-size: 6.5pt !important;
     line-height: 1.2 !important;
   }
 
-  .usecase-print .prose p {
+  .template-initiative .prose p {
     margin-bottom: 4pt !important;
   }
 
-  .usecase-print .prose p:last-child {
+  .template-initiative .prose p:last-child {
     margin-bottom: 0 !important;
   }
 
   /* Éviter les sauts de ligne supplémentaires après les liens de référence inline */
-  .usecase-print .prose a,
-  .usecase-print .prose p a,
-  .usecase-print ul li a,
-  .usecase-print ul li span a,
-  .usecase-print ul.space-y-2 li a,
-  .usecase-print ul.space-y-2 li span a {
+  .template-initiative .prose a,
+  .template-initiative .prose p a,
+  .template-initiative ul li a,
+  .template-initiative ul li span a,
+  .template-initiative ul.space-y-2 li a,
+  .template-initiative ul.space-y-2 li span a {
     display: inline !important;
     white-space: nowrap !important;
     margin: 0 !important;
@@ -1098,147 +1123,147 @@
   }
 
   /* Force two-column layout for scores section (détails axes) - EXCLUDE layout-head and layout-main */
-  .usecase-print .grid.gap-6:not(.layout-head):not(.layout-main) {
+  .template-initiative .grid.gap-6:not(.layout-head):not(.layout-main) {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
     gap: 0 !important; /* Annuler gap entre cartes */
   }
 
   /* Compact three-column layout - EXCLUDE layout-head and layout-main */
-  .usecase-print .lg\:grid-cols-3:not(.layout-head):not(.layout-main) {
+  .template-initiative .lg\:grid-cols-3:not(.layout-head):not(.layout-main) {
     grid-template-columns: repeat(3, 1fr) !important;
   }
 
 
   /* Hide model badges and tags */
-  .usecase-print .inline-flex.items-center.px-3,
-  .usecase-print .rounded-full {
+  .template-initiative .inline-flex.items-center.px-3,
+  .template-initiative .rounded-full {
     display: none !important;
   }
 
   /* Compact references */
-  .usecase-print .space-y-2 > * + * {
+  .template-initiative .space-y-2 > * + * {
     margin-top: 2pt !important;
   }
 
   /* Ensure content fits on one page */
-  .usecase-print * {
+  .template-initiative * {
     max-height: none !important;
   }
 
   /* Remove excessive padding from all elements */
-  .usecase-print [class*="p-"]:not(.usecase-print [class*="px-"]) {
+  .template-initiative [class*="p-"]:not(.template-initiative [class*="px-"]) {
     padding-top: 0 !important;
     padding-bottom: 0 !important;
   }
 
-  .usecase-print [class*="py-"] {
+  .template-initiative [class*="py-"] {
     padding-top: 2pt !important;
     padding-bottom: 2pt !important;
   }
 
-  .usecase-print [class*="mb-"] {
+  .template-initiative [class*="mb-"] {
     margin-bottom: 3pt !important;
   }
 
   /* Exclure les éléments du bloc 2x2 des règles génériques mb- */
-  .usecase-print .layout-main > .column-a > .layout-quad [class*="mb-"] {
+  .template-initiative .layout-main > .column-a > .layout-quad [class*="mb-"] {
     margin-bottom: 0 !important;
   }
 
-  .usecase-print [class*="mt-"] {
+  .template-initiative [class*="mt-"] {
     margin-top: 3pt !important;
   }
 
   /* Exclure les éléments du bloc 2x2 des règles génériques mt- */
-  .usecase-print .layout-main > .column-a > .layout-quad [class*="mt-"] {
+  .template-initiative .layout-main > .column-a > .layout-quad [class*="mt-"] {
     margin-top: 0 !important;
   }
 
   /* Optimize description section */
-  .usecase-print .prose-sm {
+  .template-initiative .prose-sm {
     font-size: 7.5pt !important;
     line-height: 1.25 !important;
   }
 
   /* Compact information sections */
-  .usecase-print .space-y-3 > * + * {
+  .template-initiative .space-y-3 > * + * {
     margin-top: 2pt !important;
   }
 
   /* Make stars and ratings smaller */
-  .usecase-print .flex.items-center.gap-1 svg,
-  .usecase-print .flex.items-center.gap-2 svg {
+  .template-initiative .flex.items-center.gap-1 svg,
+  .template-initiative .flex.items-center.gap-2 svg {
     width: 8pt !important;
     height: 8pt !important;
   }
 
   /* Compact flex containers */
-  .usecase-print .flex.items-center.gap-3 {
+  .template-initiative .flex.items-center.gap-3 {
     gap: 4pt !important;
   }
 
   /* Reduce font sizes in score displays */
-  .usecase-print .text-2xl {
+  .template-initiative .text-2xl {
     font-size: 14pt !important;
   }
 
-  .usecase-print .text-xl {
+  .template-initiative .text-xl {
     font-size: 12pt !important;
   }
 
   /* Optimize matrix details section */
-  .usecase-print .space-y-4 > * + * {
+  .template-initiative .space-y-4 > * + * {
     margin-top: 4pt !important;
   }
 
   /* Ensure all sections are visible in print - force display */
-  .usecase-print .rounded-lg,
-  .usecase-print .border,
-  .usecase-print .shadow-sm {
+  .template-initiative .rounded-lg,
+  .template-initiative .border,
+  .template-initiative .shadow-sm {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
 
   /* Force display of References component */
-  .usecase-print .space-y-2:has(> div[id^="ref-"]) {
+  .template-initiative .space-y-2:has(> div[id^="ref-"]) {
     display: block !important;
   }
 
   /* Force display of all lists (sources, data, etc.) */
-  .usecase-print ul.space-y-2 {
+  .template-initiative ul.space-y-2 {
     display: block !important;
   }
 
   /* Force display of matrix details section */
   /* EXCLURE layout-bottom pour éviter les conflits */
-  .usecase-print .grid.md\:grid-cols-2:not(.layout-bottom) {
+  .template-initiative .grid.md\:grid-cols-2:not(.layout-bottom) {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
   }
 
   /* Compact references section */
-  .usecase-print .space-y-2 > * + * {
+  .template-initiative .space-y-2 > * + * {
     margin-top: 1pt !important;
   }
 
   /* Make references, sources, and data sections very compact */
-  .usecase-print ul.space-y-2 li {
+  .template-initiative ul.space-y-2 li {
     margin-bottom: 0.3pt !important;
     font-size: 6.5pt !important;
     line-height: 1.2;
   }
 
   /* Compact references links */
-  .usecase-print a {
+  .template-initiative a {
     font-size: 6.5pt !important;
     line-height: 1.2;
     text-decoration: none !important; /* Ne pas souligner les liens */
   }
 
   /* Optimize three-column layout for better space usage - EXCLUDE layout-head, layout-main, and layout-bottom */
-  .usecase-print .lg\:grid-cols-3:not(.layout-head):not(.layout-main):not(.layout-bottom) {
+  .template-initiative .lg\:grid-cols-3:not(.layout-head):not(.layout-main):not(.layout-bottom) {
     display: grid !important;
     grid-template-columns: 1.2fr 1fr 0.8fr !important;
     gap: 4pt !important;
@@ -1247,7 +1272,7 @@
 
   /* Make matrix details (value/complexity axes) more compact */
   /* EXCLURE layout-bottom de cette règle générale pour éviter les conflits */
-  .usecase-print .md\:grid-cols-2:not(.layout-bottom) {
+  .template-initiative .md\:grid-cols-2:not(.layout-bottom) {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
     gap: 4pt !important;
@@ -1255,8 +1280,8 @@
   }
 
   /* Compact value/complexity axis cards */
-  .usecase-print .space-y-4 > div,
-  .usecase-print .space-y-4 > div.rounded {
+  .template-initiative .space-y-4 > div,
+  .template-initiative .space-y-4 > div.rounded {
     margin-bottom: 3pt !important;
     padding: 3pt 0 !important; /* Annuler marges gauche et droite */
     border: none !important; /* Retirer complètement les bordures des axes unitaires */
@@ -1265,48 +1290,48 @@
   }
 
   /* Retirer border-top des cartes contenant les axes valeur/complexité */
-  .usecase-print .space-y-4 {
+  .template-initiative .space-y-4 {
     border-top: none !important;
   }
 
   /* Compact axis titles and descriptions */
-  .usecase-print .space-y-4 h4 {
+  .template-initiative .space-y-4 h4 {
     font-size: 8pt !important;
     margin: 2pt 0 1pt 0 !important;
   }
 
   /* Réduire la marge entre le titre et le texte de chaque axe (mb-2 = 8pt -> 2pt, réduit de 50% par rapport à 4pt) */
-  .usecase-print .space-y-4 > div > div.flex.items-center.justify-between {
+  .template-initiative .space-y-4 > div > div.flex.items-center.justify-between {
     margin-bottom: 2pt !important; /* Réduire de 50% (4pt -> 2pt) */
   }
 
   /* Titres des axes (h5) - taille réduite */
-  .usecase-print .space-y-4 h5 {
+  .template-initiative .space-y-4 h5 {
     font-size: 6.5pt !important; /* Réduire la taille du titre */
     margin: 0 !important;
     line-height: 1.2;
   }
 
-  .usecase-print .space-y-4 p {
+  .template-initiative .space-y-4 p {
     font-size: 6pt !important; /* Réduire la taille du texte */
     margin: 0 0 1pt 0 !important;
     line-height: 1.2;
   }
 
   /* Compact stars and X marks in axes */
-  .usecase-print .space-y-4 .flex.items-center svg {
+  .template-initiative .space-y-4 .flex.items-center svg {
     width: 6pt !important;
     height: 6pt !important;
   }
 
   /* Compact score displays */
-  .usecase-print .space-y-4 .text-slate-500 {
+  .template-initiative .space-y-4 .text-slate-500 {
     font-size: 7pt !important;
   }
 
   /* Make references component compact */
-  .usecase-print .space-y-2 > div,
-  .usecase-print .space-y-2 > div.flex {
+  .template-initiative .space-y-2 > div,
+  .template-initiative .space-y-2 > div.flex {
     margin-bottom: 1pt !important;
     font-size: 7.5pt !important;
     line-height: 1.2;
@@ -1315,18 +1340,18 @@
   }
 
   /* Ajuster l'alignement vertical des éléments dans les références */
-  .usecase-print .space-y-2 > div[id^="ref-"] {
+  .template-initiative .space-y-2 > div[id^="ref-"] {
     align-items: center !important;
   }
 
   /* Retirer le mt-0.5 du chiffre et de l'icône en impression pour un meilleur alignement */
-  .usecase-print .space-y-2 > div[id^="ref-"] > span:first-child,
-  .usecase-print .space-y-2 > div[id^="ref-"] > svg {
+  .template-initiative .space-y-2 > div[id^="ref-"] > span:first-child,
+  .template-initiative .space-y-2 > div[id^="ref-"] > svg {
     margin-top: 0 !important;
   }
 
   /* S'assurer que le lien est bien aligné et tronquer si trop long */
-  .usecase-print .space-y-2 > div[id^="ref-"] > a {
+  .template-initiative .space-y-2 > div[id^="ref-"] > a {
     line-height: 1.2;
     display: inline-block;
     vertical-align: middle;
@@ -1339,147 +1364,147 @@
   }
 
   /* S'assurer que le conteneur flex permet la troncature */
-  .usecase-print .space-y-2 > div[id^="ref-"] {
+  .template-initiative .space-y-2 > div[id^="ref-"] {
     min-width: 0 !important;
     overflow: hidden !important;
   }
 
   /* Retirer la marge bottom du dernier élément dans les références */
-  .usecase-print .space-y-2 > div:last-child,
-  .usecase-print .space-y-2 > div.flex:last-child,
-  .usecase-print .space-y-2:has(> div[id^="ref-"]) > div:last-child {
+  .template-initiative .space-y-2 > div:last-child,
+  .template-initiative .space-y-2 > div.flex:last-child,
+  .template-initiative .space-y-2:has(> div[id^="ref-"]) > div:last-child {
     margin-bottom: 0 !important;
   }
 
   /* Ensure References component is visible */
-  .usecase-print .space-y-2 {
+  .template-initiative .space-y-2 {
     display: block !important;
   }
 
   /* Hide icons in lists for more space */
-  .usecase-print ul li svg {
+  .template-initiative ul li svg {
     width: 6pt !important;
     height: 6pt !important;
     margin-right: 2pt !important;
   }
 
   /* Compact list items - remove extra spacing */
-  .usecase-print ul li.flex {
+  .template-initiative ul li.flex {
     gap: 2pt !important;
     margin-bottom: 0.5pt !important;
     display: flex !important;
   }
 
   /* Supprimer les marges des éléments markdown générés dans les li (p, strong, etc.) */
-  .usecase-print ul li.flex span p,
-  .usecase-print ul li.flex span > p,
-  .usecase-print ul.space-y-2 li span p,
-  .usecase-print ul.space-y-2 li span > p,
-  .usecase-print ul li.flex span *,
-  .usecase-print ul.space-y-2 li span * {
+  .template-initiative ul li.flex span p,
+  .template-initiative ul li.flex span > p,
+  .template-initiative ul.space-y-2 li span p,
+  .template-initiative ul.space-y-2 li span > p,
+  .template-initiative ul li.flex span *,
+  .template-initiative ul.space-y-2 li span * {
     margin-top: 0 !important;
     margin-bottom: 0 !important;
   }
   
   /* Spécifiquement pour les paragraphes générés par markdown */
-  .usecase-print ul li.flex span p,
-  .usecase-print ul.space-y-2 li span p {
+  .template-initiative ul li.flex span p,
+  .template-initiative ul.space-y-2 li span p {
     padding: 0 !important;
     line-height: inherit !important;
   }
 
   /* Ensure all list items are visible */
-  .usecase-print ul li {
+  .template-initiative ul li {
     display: list-item !important;
     visibility: visible !important;
   }
 
   /* Reduce padding in all cards even more */
-  .usecase-print .p-4 {
+  .template-initiative .p-4 {
     padding: 4pt !important;
   }
 
   /* Compact card headers */
-  .usecase-print .px-3.py-2 {
+  .template-initiative .px-3.py-2 {
     padding: 2pt 3pt !important;
     font-size: 7.5pt !important;
   }
 
   /* Make all text smaller in use case print */
-  .usecase-print {
+  .template-initiative {
     font-size: 7.5pt !important;
   }
 
   /* Compact grid gaps */
-  .usecase-print .gap-6 {
+  .template-initiative .gap-6 {
     gap: 0pt !important;
   }
 
   /* Ensure references section is visible and compact */
-  .usecase-print .rounded-lg.border-slate-200 {
+  .template-initiative .rounded-lg.border-slate-200 {
     padding-left: 4pt !important;
     padding-right: 4pt !important;
   }
 
   /* Compact the entire layout - reduce all vertical spacing */
-  .usecase-print > * {
+  .template-initiative > * {
     margin-bottom: 4pt !important;
     display: block !important;
     visibility: visible !important;
   }
 
-  .usecase-print > *:first-child {
+  .template-initiative > *:first-child {
     margin-top: 0 !important;
     padding-top: 0 !important;
   }
 
-  .usecase-print > *:last-child {
+  .template-initiative > *:last-child {
     margin-bottom: 0 !important;
   }
 
   /* Force display of all grid sections */
-  .usecase-print .grid {
+  .template-initiative .grid {
     display: grid !important;
     visibility: visible !important;
   }
 
   /* Exclure le grid layout-quad dans column-a des marges génériques des grids */
-  .usecase-print .layout-main > .column-a > .layout-quad {
+  .template-initiative .layout-main > .column-a > .layout-quad {
     margin: 0 !important;
     padding: 0 !important;
   }
 
   /* Ensure h5 in axis cards are visible - mais pas pour les axes */
-  .usecase-print h5:not(.space-y-4 h5) {
+  .template-initiative h5:not(.space-y-4 h5) {
     font-size: 8pt !important;
     margin: 0 0 1pt 0 !important;
     font-weight: 600;
   }
 
   /* Ensure score descriptions in axes are visible - taille réduite */
-  .usecase-print .space-y-4 p.text-sm {
+  .template-initiative .space-y-4 p.text-sm {
     font-size: 6pt !important; /* Réduire la taille du texte */
     margin: 0 !important;
     line-height: 1;
   }
 
   /* Force display of all conditional sections */
-  .usecase-print [class*="grid"] {
+  .template-initiative [class*="grid"] {
     display: grid !important;
     visibility: visible !important;
   }
   
-  .usecase-print [class*="space-y"] {
+  .template-initiative [class*="space-y"] {
     display: block !important;
     visibility: visible !important;
   }
   
   /* Override any inline styles that might hide sections */
-  .usecase-print [style*="display: none"] {
+  .template-initiative [style*="display: none"] {
     display: block !important;
   }
   
-  .usecase-print [style*="display:none"] {
+  .template-initiative [style*="display:none"] {
     display: block !important;
   }
 
@@ -1489,7 +1514,7 @@
      ============================================ */
 
   /* Header layout (scores + infos) en 3 colonnes égales en print */
-  .usecase-print .layout-head.lg\:grid-cols-3.grid.gap-6 {
+  .template-initiative .layout-head.lg\:grid-cols-3.grid.gap-6 {
     display: grid !important;
     grid-template-columns: repeat(3, 1fr) !important;
     gap: 0 !important; /* Annuler gap entre cartes */
@@ -1497,7 +1522,7 @@
   }
 
   /* A/B layout : 2/3 (A) - 1/3 (B) en print */
-  .usecase-print .layout-main.lg\:grid-cols-3.grid.gap-6 {
+  .template-initiative .layout-main.lg\:grid-cols-3.grid.gap-6 {
     display: grid !important;
     grid-template-columns: 2fr 1fr !important;
     align-items: stretch !important; /* Les colonnes ont la même hauteur */
@@ -1506,8 +1531,8 @@
   }
 
   /* Alignement top/bottom des colonnes A et B en impression */
-  .usecase-print .layout-main > .column-a,
-  .usecase-print .layout-main > .column-b {
+  .template-initiative .layout-main > .column-a,
+  .template-initiative .layout-main > .column-b {
     display: flex !important;
     flex-direction: column !important;
     gap: 0pt !important; /* Marge minimale entre les divs */
@@ -1522,9 +1547,9 @@
   }
 
   /* Les boites (cartes) dans les colonnes s'étirent pour remplir l'espace disponible */
-  .usecase-print .layout-main > .column-a > .rounded-lg,
-  .usecase-print .layout-main > .column-b > .rounded-lg,
-  .usecase-print .layout-main > .column-a > .grid {
+  .template-initiative .layout-main > .column-a > .rounded-lg,
+  .template-initiative .layout-main > .column-b > .rounded-lg,
+  .template-initiative .layout-main > .column-a > .grid {
     flex-grow: 1 !important; /* Les boites s'étirent pour remplir l'espace */
     flex-shrink: 0 !important; /* Ne pas rétrécir en dessous de leur contenu */
     display: flex !important;
@@ -1532,33 +1557,33 @@
   }
 
   /* Supprimer toutes les marges bottom des derniers éléments pour un alignement parfait */
-  .usecase-print .layout-main > .column-a > *:last-child,
-  .usecase-print .layout-main > .column-b > *:last-child {
+  .template-initiative .layout-main > .column-a > *:last-child,
+  .template-initiative .layout-main > .column-b > *:last-child {
     margin-bottom: 0 !important;
     padding-bottom: 0 !important;
   }
 
   /* Supprimer la marge bottom des groupes grid dans column-a (comme en desktop) */
-  .usecase-print .layout-main > .column-a > .grid {
+  .template-initiative .layout-main > .column-a > .grid {
     margin-bottom: 0 !important;
     padding-bottom: 0 !important;
   }
 
   /* Supprimer la marge bottom du dernier élément dans layout-quad (comme en desktop) */
-  .usecase-print .layout-main > .column-a > .layout-quad > *:last-child {
+  .template-initiative .layout-main > .column-a > .layout-quad > *:last-child {
     margin-bottom: 0 !important;
     padding-bottom: 0 !important;
   }
 
   /* Supprimer la marge bottom des groupes grid dans column-b */
-  .usecase-print .layout-main > .column-b > .grid {
+  .template-initiative .layout-main > .column-b > .grid {
     margin-bottom: 0 !important;
     padding-bottom: 0 !important;
   }
 
   /* S'assurer que les dernières cartes de chaque colonne ont exactement les mêmes paddings et marges */
-  .usecase-print .layout-main > .column-a > .rounded-lg:last-child,
-  .usecase-print .layout-main > .column-b > .rounded-lg:last-child {
+  .template-initiative .layout-main > .column-a > .rounded-lg:last-child,
+  .template-initiative .layout-main > .column-b > .rounded-lg:last-child {
     margin-bottom: 0 !important;
     margin-top: 0 !important;
     padding: 4pt !important; /* Padding uniforme sur tous les côtés */
@@ -1573,14 +1598,14 @@
   }
 
   /* Le contenu interne des cartes s'étire pour remplir l'espace disponible */
-  .usecase-print .layout-main > .column-a > .rounded-lg > *:last-child,
-  .usecase-print .layout-main > .column-b > .rounded-lg > *:last-child {
+  .template-initiative .layout-main > .column-a > .rounded-lg > *:last-child,
+  .template-initiative .layout-main > .column-b > .rounded-lg > *:last-child {
     flex-grow: 1 !important; /* Le contenu s'étire pour remplir l'espace */
   }
 
   /* S'assurer que les headers des dernières cartes ont exactement les mêmes marges */
-  .usecase-print .layout-main > .column-a > .rounded-lg:last-child .rounded-t-lg,
-  .usecase-print .layout-main > .column-b > .rounded-lg:last-child .rounded-t-lg {
+  .template-initiative .layout-main > .column-a > .rounded-lg:last-child .rounded-t-lg,
+  .template-initiative .layout-main > .column-b > .rounded-lg:last-child .rounded-t-lg {
     margin-bottom: 0pt !important; /* Même marge bottom que les autres */
     margin-top: 0pt !important; /* Compenser le padding-top de la carte */
     margin-left: -4pt !important;
@@ -1588,8 +1613,8 @@
   }
 
   /* S'assurer que le contenu interne des dernières cartes n'ajoute pas de marge */
-  .usecase-print .layout-main > .column-a > .rounded-lg:last-child > *:last-child,
-  .usecase-print .layout-main > .column-b > .rounded-lg:last-child > *:last-child {
+  .template-initiative .layout-main > .column-a > .rounded-lg:last-child > *:last-child,
+  .template-initiative .layout-main > .column-b > .rounded-lg:last-child > *:last-child {
     margin-bottom: 0 !important;
     padding-bottom: 0 !important;
   }
@@ -1598,15 +1623,15 @@
   /* Utiliser flexbox au lieu de grid pour éviter les problèmes de preview */
   /* PLACER CETTE RÈGLE EN DERNIER pour override toutes les autres règles */
   /* RÈGLES GLOBALES POUR LAYOUT-BOTTOM - S'appliquent en impression et preview */
-  .usecase-print .layout-bottom.md\:grid-cols-2.grid.gap-6,
-  .usecase-print .layout-bottom.grid.gap-6,
-  .usecase-print div.layout-bottom.md\:grid-cols-2,
-  .usecase-print div.layout-bottom,
-  .usecase-print .layout-bottom[class*="grid"],
-  .usecase-print .layout-bottom[class*="md:grid-cols-2"],
-  .usecase-print .layout-bottom[class*="md\\:grid-cols-2"],
-  div.usecase-print div.layout-bottom.md\:grid-cols-2.grid.gap-6,
-  div.usecase-print div.layout-bottom.grid.gap-6 {
+  .template-initiative .layout-bottom.md\:grid-cols-2.grid.gap-6,
+  .template-initiative .layout-bottom.grid.gap-6,
+  .template-initiative div.layout-bottom.md\:grid-cols-2,
+  .template-initiative div.layout-bottom,
+  .template-initiative .layout-bottom[class*="grid"],
+  .template-initiative .layout-bottom[class*="md:grid-cols-2"],
+  .template-initiative .layout-bottom[class*="md\\:grid-cols-2"],
+  div.template-initiative div.layout-bottom.md\:grid-cols-2.grid.gap-6,
+  div.template-initiative div.layout-bottom.grid.gap-6 {
     display: flex !important;
     flex-wrap: wrap !important;
     gap: 0 !important;
@@ -1615,66 +1640,58 @@
   }
   
   /* Forcer chaque enfant à prendre exactement 50% de la largeur */
-  .usecase-print .layout-bottom > *,
-  div.usecase-print div.layout-bottom > * {
+  .template-initiative .layout-bottom > *,
+  div.template-initiative div.layout-bottom > * {
     width: 50% !important;
     max-width: 50% !important;
     flex: 0 0 50% !important;
     box-sizing: border-box !important;
   }
 
-  /* Si Références n'est pas affiché: Prochaines étapes doit prendre 100% même en mode flex print */
-  .usecase-print .layout-bottom.no-references > .layout-bottom-nextsteps,
-  div.usecase-print div.layout-bottom.no-references > .layout-bottom-nextsteps {
-    width: 100% !important;
-    max-width: 100% !important;
-    flex: 0 0 100% !important;
-  }
-
   /* Cas particulier: si "Références" n'est pas affiché, "Prochaines étapes" doit prendre 100% */
-  .usecase-print .layout-bottom > *:only-child,
-  div.usecase-print div.layout-bottom > *:only-child {
+  .template-initiative .layout-bottom > *:only-child,
+  div.template-initiative div.layout-bottom > *:only-child {
     width: 100% !important;
     max-width: 100% !important;
     flex: 0 0 100% !important;
   }
   
   /* S'assurer qu'aucune règle lg:grid-cols-3 ne s'applique à layout-bottom */
-  .usecase-print .layout-bottom.lg\:grid-cols-3,
-  .usecase-print .layout-bottom[class*="lg:grid-cols-3"],
-  div.usecase-print div.layout-bottom.lg\:grid-cols-3 {
+  .template-initiative .layout-bottom.lg\:grid-cols-3,
+  .template-initiative .layout-bottom[class*="lg:grid-cols-3"],
+  div.template-initiative div.layout-bottom.lg\:grid-cols-3 {
     display: flex !important;
     flex-wrap: wrap !important;
   }
   
   /* S'assurer qu'aucune classe Tailwind ne modifie la largeur */
-  .usecase-print .layout-bottom > *[class*="col-span"],
-  .usecase-print .layout-bottom > *[class*="lg:col-span"],
-  .usecase-print .layout-bottom > *[class*="md:col-span"],
-  div.usecase-print div.layout-bottom > *[class*="col-span"] {
+  .template-initiative .layout-bottom > *[class*="col-span"],
+  .template-initiative .layout-bottom > *[class*="lg:col-span"],
+  .template-initiative .layout-bottom > *[class*="md:col-span"],
+  div.template-initiative div.layout-bottom > *[class*="col-span"] {
     width: 50% !important;
     max-width: 50% !important;
     flex: 0 0 50% !important;
   }
 
   /* Description prend toute la colonne A (première colonne de 2fr) */
-  .usecase-print .layout-main .column-a.lg\:col-span-2 {
+  .template-initiative .layout-main .column-a.lg\:col-span-2 {
     grid-column: 1 !important;
   }
 
   /* Neutraliser lg:col-span-2 pour les éléments dans layout-main en print */
-  .usecase-print .layout-main .lg\:col-span-2 {
+  .template-initiative .layout-main .lg\:col-span-2 {
     grid-column: 1 !important;
   }
 
   /* Les groupes Bénéfices/Risques et Mesures/Prochaines étapes restent dans la colonne A */
-  .usecase-print .layout-main > .grid.lg\:grid-cols-2.lg\:col-span-2 {
+  .template-initiative .layout-main > .grid.lg\:grid-cols-2.lg\:col-span-2 {
     grid-column: 1 !important;
     align-items: stretch !important; /* Les colonnes ont la même hauteur */
   }
 
   /* 2x2 grid (Benefits/Constraints/Metrics/Risks) alignment in print */
-  .usecase-print .layout-main > .column-a > .layout-quad {
+  .template-initiative .layout-main > .column-a > .layout-quad {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
     gap: 0 !important;
@@ -1682,7 +1699,7 @@
   }
 
   /* All 4 cards in layout-quad stretch to fill their cell */
-  .usecase-print .layout-main > .column-a > .layout-quad > .rounded-lg {
+  .template-initiative .layout-main > .column-a > .layout-quad > .rounded-lg {
     display: flex !important;
     flex-direction: column !important;
     flex-grow: 1 !important;
@@ -1692,12 +1709,12 @@
   }
 
   /* Card content stretches to fill available space */
-  .usecase-print .layout-main > .column-a > .layout-quad > .rounded-lg > *:last-child {
+  .template-initiative .layout-main > .column-a > .layout-quad > .rounded-lg > *:last-child {
     flex-grow: 1 !important;
   }
 
   /* Colonne B (Technologies, Sources, Données, Références) dans la colonne 2 */
-  .usecase-print .layout-main > .column-b.lg\:col-span-1 {
+  .template-initiative .layout-main > .column-b.lg\:col-span-1 {
     grid-column: 2 !important;
   }
 
@@ -1706,13 +1723,13 @@
      ============================================ */
   /* Marges plus importantes pour Technologies (qui utilise ml-4 = 16px = ~12pt) */
   /* Spécificité maximale pour s'assurer que cette règle prend le dessus sur toutes les autres */
-  .usecase-print .rounded-lg.border.shadow-sm ul.list-disc.ml-4,
-  .usecase-print .rounded-lg.border ul.list-disc.ml-4,
-  .usecase-print .rounded-lg.shadow-sm ul.list-disc.ml-4,
-  .usecase-print .rounded-lg ul.list-disc.ml-4,
-  .usecase-print .border ul.list-disc.ml-4,
-  .usecase-print .shadow-sm ul.list-disc.ml-4,
-  .usecase-print ul.list-disc.ml-4 {
+  .template-initiative .rounded-lg.border.shadow-sm ul.list-disc.ml-4,
+  .template-initiative .rounded-lg.border ul.list-disc.ml-4,
+  .template-initiative .rounded-lg.shadow-sm ul.list-disc.ml-4,
+  .template-initiative .rounded-lg ul.list-disc.ml-4,
+  .template-initiative .border ul.list-disc.ml-4,
+  .template-initiative .shadow-sm ul.list-disc.ml-4,
+  .template-initiative ul.list-disc.ml-4 {
     margin-left: 9pt !important;
     padding-left: 5pt !important;
   }
@@ -1721,23 +1738,23 @@
      MARGES ENTRE LAYOUTS - DOIT VENIR EN TOUT DERNIER
      ============================================ */
   /* Supprimer toutes les marges bottom des layouts */
-  .usecase-print .layout-head,
-  .usecase-print .layout-main,
-  .usecase-print .layout-bottom {
+  .template-initiative .layout-head,
+  .template-initiative .layout-main,
+  .template-initiative .layout-bottom {
     margin-top: 0 !important; /* Annuler marge haute */
     margin-bottom: 0 !important; /* Annuler marge basse */
   }
 
   /* Marges très réduites entre layouts dans space-y-6 - Spécificité maximale avec sélecteurs multiples */
   /* Cibler directement les layouts qui suivent d'autres layouts */
-  .usecase-print.space-y-6 > .layout-head + .layout-main,
-  .usecase-print.space-y-6 > .layout-main + .layout-bottom,
-  .usecase-print .space-y-6 > .layout-head + .layout-main,
-  .usecase-print .space-y-6 > .layout-main + .layout-bottom,
-  div.usecase-print.space-y-6 > div.layout-head + div.layout-main,
-  div.usecase-print.space-y-6 > div.layout-main + div.layout-bottom,
-  .usecase-print.space-y-6 > div.layout-head + div.layout-main,
-  .usecase-print.space-y-6 > div.layout-main + div.layout-bottom {
+  .template-initiative.space-y-6 > .layout-head + .layout-main,
+  .template-initiative.space-y-6 > .layout-main + .layout-bottom,
+  .template-initiative .space-y-6 > .layout-head + .layout-main,
+  .template-initiative .space-y-6 > .layout-main + .layout-bottom,
+  div.template-initiative.space-y-6 > div.layout-head + div.layout-main,
+  div.template-initiative.space-y-6 > div.layout-main + div.layout-bottom,
+  .template-initiative.space-y-6 > div.layout-head + div.layout-main,
+  .template-initiative.space-y-6 > div.layout-main + div.layout-bottom {
     margin-top: 0 !important; /* Annuler marge entre layouts */
   }
 
@@ -1745,59 +1762,59 @@
      SUPPRESSION MARGES TOP DU TITRE - DOIT VENIR EN TOUT DERNIER
      ============================================ */
   /* Supprimer la marge supérieure du premier enfant (titre print-only) */
-  .usecase-print.space-y-6 > *:first-child,
-  div.usecase-print.space-y-6 > div:first-child,
-  .usecase-print.space-y-6 > .print-only:first-child,
-  div.usecase-print.space-y-6 > div.print-only:first-child {
+  .template-initiative.space-y-6 > *:first-child,
+  div.template-initiative.space-y-6 > div:first-child,
+  .template-initiative.space-y-6 > .print-only:first-child,
+  div.template-initiative.space-y-6 > div.print-only:first-child {
     margin-top: 0 !important;
     padding-top: 0 !important;
   }
 
   /* Supprimer la marge supérieure du h1 dans le titre print-only */
-  .usecase-print.space-y-6 > .print-only:first-child h1,
-  div.usecase-print.space-y-6 > div.print-only:first-child h1,
-  .usecase-print > .print-only:first-child h1,
-  div.usecase-print > div.print-only:first-child h1 {
+  .template-initiative.space-y-6 > .print-only:first-child h1,
+  div.template-initiative.space-y-6 > div.print-only:first-child h1,
+  .template-initiative > .print-only:first-child h1,
+  div.template-initiative > div.print-only:first-child h1 {
     margin-top: 0 !important;
     padding-top: 0 !important;
   }
 
   /* Override Tailwind space-y-6 pour le premier enfant - Spécificité maximale */
-  .usecase-print.space-y-6 > *:first-child,
-  div.usecase-print.space-y-6 > *:first-child,
-  .usecase-print.space-y-6 > div:first-child,
-  div.usecase-print.space-y-6 > div:first-child,
-  section.space-y-6 > .usecase-print.space-y-6 > *:first-child,
-  section.space-y-6 > div.usecase-print.space-y-6 > *:first-child {
+  .template-initiative.space-y-6 > *:first-child,
+  div.template-initiative.space-y-6 > *:first-child,
+  .template-initiative.space-y-6 > div:first-child,
+  div.template-initiative.space-y-6 > div:first-child,
+  section.space-y-6 > .template-initiative.space-y-6 > *:first-child,
+  section.space-y-6 > div.template-initiative.space-y-6 > *:first-child {
     margin-top: 0 !important;
     padding-top: 0 !important;
   }
 
   /* Override Tailwind space-y-6 généré - cibler spécifiquement le sélecteur Tailwind dans usecase-print */
-  .usecase-print.space-y-6 > * + * {
+  .template-initiative.space-y-6 > * + * {
     margin-top: 0 !important; /* Annuler toutes les marges verticales entre cartes */
   }
 
   /* Mais forcer le premier enfant à 0 */
-  .usecase-print.space-y-6 > *:first-child + * {
+  .template-initiative.space-y-6 > *:first-child + * {
     margin-top: 0 !important; /* Annuler toutes les marges verticales entre cartes */
   }
 
   /* RÈGLE FINALE - Forcer absolument la marge à 0 pour le titre print-only */
-  section.space-y-6 > div.usecase-print.space-y-6 > div.print-only:first-child,
-  section.space-y-6 > .usecase-print.space-y-6 > .print-only:first-child,
-  div.usecase-print.space-y-6 > div.print-only:first-child,
-  .usecase-print.space-y-6 > .print-only:first-child {
+  section.space-y-6 > div.template-initiative.space-y-6 > div.print-only:first-child,
+  section.space-y-6 > .template-initiative.space-y-6 > .print-only:first-child,
+  div.template-initiative.space-y-6 > div.print-only:first-child,
+  .template-initiative.space-y-6 > .print-only:first-child {
     margin-top: 0 !important;
     margin-bottom: 0 !important;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
   }
 
-  section.space-y-6 > div.usecase-print.space-y-6 > div.print-only:first-child h1,
-  section.space-y-6 > .usecase-print.space-y-6 > .print-only:first-child h1,
-  div.usecase-print.space-y-6 > div.print-only:first-child h1,
-  .usecase-print.space-y-6 > .print-only:first-child h1 {
+  section.space-y-6 > div.template-initiative.space-y-6 > div.print-only:first-child h1,
+  section.space-y-6 > .template-initiative.space-y-6 > .print-only:first-child h1,
+  div.template-initiative.space-y-6 > div.print-only:first-child h1,
+  .template-initiative.space-y-6 > .print-only:first-child h1 {
     margin-top: 0 !important;
     margin-bottom: 0 !important;
     padding-top: 0 !important;
@@ -1811,85 +1828,50 @@
 /* Utiliser @media print uniquement car c'est ce qui s'applique en preview */
 @media print {
   /* Règle très spécifique pour override toutes les règles Tailwind en preview */
-  .usecase-print .layout-bottom.md\:grid-cols-2.grid.gap-6,
-  .usecase-print .layout-bottom.grid.gap-6,
-  .usecase-print div.layout-bottom.md\:grid-cols-2,
-  .usecase-print div.layout-bottom,
-  .usecase-print .layout-bottom[class*="grid"],
-  .usecase-print .layout-bottom[class*="md:grid-cols-2"],
-  .usecase-print .layout-bottom[class*="md\\:grid-cols-2"] {
+  .template-initiative .layout-bottom.md\:grid-cols-2.grid.gap-6,
+  .template-initiative .layout-bottom.grid.gap-6,
+  .template-initiative div.layout-bottom.md\:grid-cols-2,
+  .template-initiative div.layout-bottom,
+  .template-initiative .layout-bottom[class*="grid"],
+  .template-initiative .layout-bottom[class*="md:grid-cols-2"],
+  .template-initiative .layout-bottom[class*="md\\:grid-cols-2"] {
     grid-template-columns: 1fr 1fr !important;
     display: grid !important;
   }
   
   /* Forcer les enfants directs à ne pas avoir de grid-column spécifique */
-  .usecase-print .layout-bottom > * {
+  .template-initiative .layout-bottom > * {
     grid-column: auto !important;
   }
 
   /* Cas particulier: si un seul bloc est rendu (ex: Références absent), occuper 100% */
-  .usecase-print .layout-bottom > *:only-child {
+  .template-initiative .layout-bottom > *:only-child {
     grid-column: 1 / -1 !important;
   }
 
-  /* Si Références n'est pas affiché: Prochaines étapes doit occuper 100% en mode grid print aussi */
-  .usecase-print .layout-bottom.no-references > .layout-bottom-nextsteps {
-    grid-column: 1 / -1 !important;
-  }
 }
 
 /* Use cases in dashboard (visible in print) */
 @media print {
-  /* Sections annexes dans le dashboard - structure unifiée avec vue individuelle */
-  .usecase-annex-section {
-    display: block !important;
-    /* page-break-before: auto; Auto au lieu de always pour éviter les pages blanches */
-    page: annex; /* Utiliser les marges réduites pour les annexes */
-    margin: 0 !important;
-    padding: 0.6cm !important; /* Marge interne de 0.6cm pour le contenu */
-    margin-top: 0 !important;
-    padding-top: 0.6cm !important;
-    padding-bottom: 0.6cm !important;
-    overflow: visible !important;
-  }
-  
-  /* Saut de page après chaque section sauf la dernière */
-  .usecase-annex-section:not(:last-child) {
+  /* Annex items in dashboard — unified structure with standalone view */
+  /* .usecase-annex-item is on .template-initiative itself, no wrapper needed */
+
+  /* Page break after each annex item except the last */
+  .template-initiative.usecase-annex-item:not(:last-child) {
     page-break-after: always;
   }
 
-  /* Le premier cas d'usage doit commencer sur une nouvelle page (après le séparateur qui a page-break-after) */
-  /* Le séparateur force déjà un saut, donc le premier cas commencera naturellement sur une nouvelle page */
-  
-  /* Pour les cas suivants, utiliser orphans pour forcer un saut si nécessaire sans créer de page blanche */
-  .usecase-annex-section:not(:first-of-type) {
-    orphans: 1; /* Force au moins 1 ligne en haut de page */
-    widows: 1; /* Force au moins 1 ligne en bas de page */
+  /* Subsequent items: reset top spacing */
+  .template-initiative.usecase-annex-item:not(:first-of-type) {
+    orphans: 1;
+    widows: 1;
     margin-top: 0 !important;
     padding-top: 0 !important;
   }
-  
-  /* S'assurer que usecase-print dans les sections annexes n'a pas de marges top */
-  .usecase-annex-section > .usecase-print {
+
+  /* Cancel space-y-6 inside annex items */
+  .template-initiative.usecase-annex-item.space-y-6 > * + * {
     margin-top: 0 !important;
-    padding-top: 0 !important;
-  }
-  
-  /* S'assurer que le premier enfant de la section annexe n'a pas de marges top */
-  .usecase-annex-section > *:first-child {
-    margin-top: 0 !important;
-    padding-top: 0 !important;
-  }
-  
-  /* Annuler les espacements space-y-6 en impression pour les sections annexes */
-  .usecase-annex-section > * + * {
-    margin-top: 0 !important;
-  }
-  
-  /* Dédoublonner space-y-6 : annuler space-y-6 sur usecase-print dans le dashboard */
-  /* Le dashboard a section.space-y-6 + div.space-y-6, la vue individuelle n'a qu'un seul */
-  .usecase-annex-section > .usecase-print.space-y-6 > * + * {
-    margin-top: 0 !important; /* Annuler le space-y-6 redondant */
   }
 
   /* S'assurer que le contenu principal utilise les marges normales */
@@ -1899,7 +1881,7 @@
 
   /* Page cas-usage/[id] : utiliser les mêmes marges réduites que les annexes */
   /* Cette règle s'applique maintenant aussi aux sections annexes du dashboard */
-  section.space-y-6 > .usecase-print {
+  section.space-y-6 > .template-initiative {
     page: annex; /* Utiliser les marges réduites (0.6cm) comme les annexes */
   }
   

@@ -2,47 +2,20 @@
  * Shared agents available on ALL workspace types.
  */
 import type { DefaultGenerationAgentDefinition } from './default-agents-types';
+import { ORGANIZATION_PROMPTS } from './default-chat-system';
 
 export const SHARED_AGENTS: ReadonlyArray<DefaultGenerationAgentDefinition> = [
   {
-    key: "organization_batch_agent",
-    name: "Organization batch agent",
+    key: "generate_organization_agent",
+    name: "Generate organization agent",
     description:
-      "Generates a structured list of organizations from a user prompt, checking existing workspace organizations to avoid duplicates.",
+      "Generates or enriches one organization profile from a real company name.",
     sourceLevel: "code",
     config: {
-      role: "organization_batch",
+      role: "organization_generation",
       domain: "shared",
-      promptId: "organization_batch_create",
-      promptTemplate: `Based on the user's request, generate a structured list of organisations to create in the workspace.
-
-User request: {{user_input}}
-
-Existing organisations in the workspace (DO NOT create duplicates):
-{{existing_organizations}}
-
-Instructions:
-- Generate organisations that match the user's request context.
-- Check existing organisations above and skip any that already exist (match by name, case-insensitive).
-- For each new organisation, provide: name, sector, description, location.
-- Be specific and factual. Use web_search to find accurate information about real organisations when the request references known entities.
-- If the user asks for a specific number, respect that count (excluding duplicates).
-
-IMPORTANT:
-- Respond ONLY with valid JSON, no text before or after.
-- Each organisation must have all four fields populated.
-
-Expected JSON format:
-{
-  "organizations": [
-    {
-      "name": "Organization name",
-      "sector": "Industry sector (e.g. Pharmaceuticals, Technology, Finance)",
-      "description": "Brief description of the organization (30-60 words)",
-      "location": "City, Country or Region"
-    }
-  ]
-}`,
+      promptId: "organization_info",
+      promptTemplate: ORGANIZATION_PROMPTS.organization_info,
     },
   },
   {

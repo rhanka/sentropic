@@ -7,6 +7,29 @@ import { AI_IDEAS_AGENTS } from '../config/default-agents-ai-ideas';
 import { settingsService } from './settings';
 import { hydrateInitiatives } from '../routes/api/initiatives';
 
+const STRUCTURED_JSON_REPAIR_PROMPT = `You are a strict JSON repair engine.
+
+Your task:
+- Repair the malformed JSON response so it becomes one valid JSON object.
+- Keep the original semantic intent and values as much as possible.
+- Respect the target schema.
+- Do not add commentary.
+
+Target schema name:
+{{schema_name}}
+
+Target schema JSON:
+{{schema_json}}
+
+Malformed JSON response:
+{{malformed_json}}
+
+Rules:
+- Return ONLY one valid JSON object.
+- No markdown fences.
+- No extra text before or after JSON.
+- If a field is missing, infer the safest schema-compliant value from context.`;
+
 type OrganizationData = {
   industry?: string;
   size?: string;
@@ -57,6 +80,11 @@ export interface ExecutiveSummaryResult {
     analyse: string;
     recommandation: string;
     synthese_executive: string;
+    references: Array<{
+      title: string;
+      url: string;
+      excerpt?: string;
+    }>;
   };
   top_cases: string[];
   thresholds: {
@@ -65,6 +93,16 @@ export interface ExecutiveSummaryResult {
     median_value: number;
     median_complexity: number;
   };
+}
+
+type ExecutiveSummaryReference = ExecutiveSummaryResult['executive_summary']['references'][number];
+
+function compactText(value: string, maxLength = 600): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 }
 
 function readStringField(source: Record<string, unknown>, keys: string[]): string {
@@ -77,14 +115,199 @@ function readStringField(source: Record<string, unknown>, keys: string[]): strin
   return '';
 }
 
-function normalizeExecutiveSummaryPayload(payload: unknown): ExecutiveSummaryResult['executive_summary'] {
+function normalizeExecutiveSummaryReferences(value: unknown): ExecutiveSummaryResult['executive_summary']['references'] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const source = item as Record<string, unknown>;
+      const title = typeof source.title === 'string' ? source.title.trim() : '';
+      const url = typeof source.url === 'string' ? source.url.trim() : '';
+      const excerpt = typeof source.excerpt === 'string' && source.excerpt.trim().length > 0
+        ? source.excerpt.trim()
+        : undefined;
+      if (!title || !url) return null;
+      return { title, url, excerpt };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+}
+
+function buildExecutiveSummaryReferencesContext(params: {
+  initiativesList: Array<{
+    data: {
+      name?: string | null;
+      references?: ExecutiveSummaryReference[];
+    };
+  }>;
+  topCases: string[];
+}): string {
+  const topCaseNames = new Set(
+    params.topCases
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0)
+  );
+
+  const collected: Array<ExecutiveSummaryReference & { initiativeName: string; isTopCase: boolean }> = [];
+  const seenUrls = new Set<string>();
+
+  const orderedInitiatives = [
+    ...params.initiativesList.filter((initiative) => topCaseNames.has((initiative.data.name ?? '').trim())),
+    ...params.initiativesList.filter((initiative) => !topCaseNames.has((initiative.data.name ?? '').trim())),
+  ];
+
+  for (const initiative of orderedInitiatives) {
+    const initiativeName = initiative.data.name?.trim() || 'Cas d’usage sans nom';
+    const references = Array.isArray(initiative.data.references) ? initiative.data.references : [];
+    const isTopCase = topCaseNames.has(initiativeName);
+
+    for (const reference of references) {
+      const title = reference?.title?.trim();
+      const url = reference?.url?.trim();
+      if (!title || !url || seenUrls.has(url)) continue;
+      seenUrls.add(url);
+      collected.push({
+        title,
+        url,
+        excerpt: reference.excerpt?.trim() || undefined,
+        initiativeName,
+        isTopCase,
+      });
+    }
+  }
+
+  if (collected.length === 0) {
+    return 'Aucune référence structurée disponible dans les cas d’usage/opportunités.';
+  }
+
+  return collected
+    .map((reference, index) => {
+      const prefix = reference.isTopCase ? 'prioritaire' : 'secondaire';
+      const excerpt = reference.excerpt ? ` — ${compactText(reference.excerpt, 220)}` : '';
+      return `${index + 1}. [${reference.title}](${reference.url}) [${prefix}] (source: ${reference.initiativeName})${excerpt}`;
+    })
+    .join('\n');
+}
+
+export function normalizeExecutiveSummaryPayload(payload: unknown): ExecutiveSummaryResult['executive_summary'] {
   const source = (payload && typeof payload === 'object') ? (payload as Record<string, unknown>) : {};
   return {
     introduction: readStringField(source, ['introduction', 'intro']),
     analyse: readStringField(source, ['analyse', 'analysis']),
     recommandation: readStringField(source, ['recommandation', 'recommendation', 'recommendations']),
     synthese_executive: readStringField(source, ['synthese_executive', 'executive_summary', 'summary']),
+    references: normalizeExecutiveSummaryReferences(source.references),
   };
+}
+
+function buildExecutiveSummaryFallback(params: {
+  folderName: string;
+  organizationName?: string | null;
+  initiativesList: Array<{
+    data: { name?: string | null };
+    totalValueScore?: number | null;
+    totalComplexityScore?: number | null;
+  }>;
+  topCases: string[];
+  effectiveValueThreshold: number;
+  effectiveComplexityThreshold: number;
+  medianValue: number;
+  medianComplexity: number;
+  rawContent?: string;
+}): ExecutiveSummaryResult['executive_summary'] {
+  const initiativeCount = params.initiativesList.length;
+  const organizationSegment = params.organizationName ? ` pour ${params.organizationName}` : '';
+  const highlightedCases = (params.topCases.length > 0
+    ? params.topCases
+    : params.initiativesList
+        .map((initiative) => initiative.data?.name)
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+  ).slice(0, 3);
+  const highlightedText =
+    highlightedCases.length > 0
+      ? highlightedCases.join(', ')
+      : 'les cas d’usage les plus prometteurs du dossier';
+  const rawExcerpt =
+    typeof params.rawContent === 'string' && params.rawContent.trim().length > 0
+      ? compactText(params.rawContent, 700)
+      : '';
+
+  return {
+    introduction: `Le dossier ${params.folderName}${organizationSegment} regroupe ${initiativeCount} initiatives analysées avec un seuil de valeur de ${params.effectiveValueThreshold} et un seuil de complexité de ${params.effectiveComplexityThreshold}.`,
+    analyse: `Les initiatives les plus solides se concentrent autour de ${highlightedText}. Les médianes observées sont de ${params.medianValue} en valeur et ${params.medianComplexity} en complexité, ce qui permet de distinguer les cas rapides à lancer des sujets plus structurants.`,
+    recommandation: `Prioriser d’abord ${highlightedText}, valider les prérequis métier et data, puis dérouler les autres initiatives par vagues successives à partir des seuils retenus.`,
+    synthese_executive: rawExcerpt || `Le portefeuille est exploitable immédiatement. Les initiatives prioritaires sont ${highlightedText}, avec une recommandation de lancement progressif en commençant par les cas à forte valeur et faible complexité.`,
+    references: [],
+  };
+}
+
+function parseJsonLenient<T>(raw: string): T {
+  const cleaned = raw
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1)) as T;
+    }
+    throw new Error('No JSON object boundaries found');
+  }
+}
+
+async function parseExecutiveSummaryWithSingleRepair(params: {
+  rawContent: string;
+  model?: string;
+  signal?: AbortSignal;
+}): Promise<Record<string, unknown>> {
+  try {
+    return parseJsonLenient<Record<string, unknown>>(params.rawContent);
+  } catch {
+    const repairPrompt = STRUCTURED_JSON_REPAIR_PROMPT
+      .replace('{{schema_name}}', 'executive_summary')
+      .replace('{{schema_json}}', JSON.stringify({
+        type: 'object',
+        additionalProperties: true,
+        properties: {
+          introduction: { type: 'string' },
+          analyse: { type: 'string' },
+          recommandation: { type: 'string' },
+          synthese_executive: { type: 'string' },
+          references: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                title: { type: 'string' },
+                url: { type: 'string' },
+                excerpt: { type: 'string' },
+              },
+              required: ['title', 'url'],
+            },
+          },
+        },
+        required: ['introduction', 'analyse', 'recommandation', 'synthese_executive', 'references'],
+      }, null, 2))
+      .replace('{{malformed_json}}', params.rawContent);
+
+    const { content: repairedContent } = await executeWithToolsStream(repairPrompt, {
+      model: params.model,
+      useWebSearch: false,
+      responseFormat: 'json_object',
+      promptId: 'structured_json_repair',
+      signal: params.signal,
+    });
+    if (!repairedContent) {
+      throw new Error('Aucune réponse reçue lors de la tentative de réparation JSON');
+    }
+    return parseJsonLenient<Record<string, unknown>>(repairedContent);
+  }
 }
 
 /**
@@ -165,6 +388,11 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     ? topCases.map((name, index) => `${index + 1}. ${name}`).join('\n')
     : 'Aucun cas d\'usage prioritaire identifié';
 
+  const referencesContext = buildExecutiveSummaryReferencesContext({
+    initiativesList,
+    topCases,
+  });
+
   let organizationInfo = 'No organization info available';
   if (folder.organizationId) {
     const data = parseOrganizationData(folder.organizationData);
@@ -199,6 +427,7 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
     .replace('{{folder_description}}', folder.description || folder.name)
     .replace('{{organization_info}}', organizationInfo)
     .replace('{{top_cas}}', topCasesFormatted)
+    .replace('{{references_context}}', referencesContext)
     .replace('{{use_cases}}', initiativesFormatted);
 
   // Documents: autoriser l'outil documents pour le dossier, l'organisation, et les cas d'usage du dossier (si des documents existent).
@@ -264,47 +493,52 @@ Contact: ${uc.data.contact || 'Non spécifié'}`;
 
   // Appeler OpenAI (toujours avec streaming)
   const finalStreamId = streamId || `executive_summary_${folderId}_${Date.now()}`;
-  const result = await executeWithToolsStream(prompt, {
-    model: selectedModel,
-    useWebSearch: true,
-    useDocuments: documentsContexts.length > 0,
-    documentsContexts,
-    responseFormat: 'json_object',
-    ...getReasoningParamsForModel(selectedModel, 'high', 'detailed'),
-    promptId,
-    streamId: finalStreamId,
-    signal
-  });
-  const content = result.content || '';
+  let content = '';
+  let normalizedExecutiveSummary: ExecutiveSummaryResult['executive_summary'];
 
-  if (!content) throw new Error('No response from AI');
-
-  // Parser le JSON
-  let executiveSummary;
   try {
-    const cleaned = content
-      .trim()
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```\s*$/i, '')
-      .trim();
-    try {
-      executiveSummary = JSON.parse(cleaned);
-    } catch {
-      const firstBrace = cleaned.indexOf('{');
-      const lastBrace = cleaned.lastIndexOf('}');
-      if (firstBrace >= 0 && lastBrace > firstBrace) {
-        executiveSummary = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
-      } else {
-        throw new Error('No JSON object boundaries found');
-      }
-    }
-  } catch (parseError) {
-    console.error('Error parsing AI response JSON:', parseError);
-    throw new Error(`Invalid JSON response from AI: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
-  }
+    const result = await executeWithToolsStream(prompt, {
+      model: selectedModel,
+      useWebSearch: true,
+      useDocuments: documentsContexts.length > 0,
+      documentsContexts,
+      responseFormat: 'json_object',
+      ...getReasoningParamsForModel(selectedModel, 'high', 'detailed'),
+      promptId,
+      streamId: finalStreamId,
+      signal
+    });
+    content = result.content || '';
 
-  const normalizedExecutiveSummary = normalizeExecutiveSummaryPayload(executiveSummary);
+    if (!content) {
+      throw new Error('No response from AI');
+    }
+
+    const executiveSummary = await parseExecutiveSummaryWithSingleRepair({
+      rawContent: content,
+      model: selectedModel,
+      signal,
+    });
+    normalizedExecutiveSummary = normalizeExecutiveSummaryPayload(executiveSummary);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+    const isProviderAbort = errorMessage.includes('request was aborted') || errorMessage.includes('aborterror');
+    if (signal?.aborted && !isProviderAbort) {
+      throw error;
+    }
+    console.error('Error generating executive summary from AI, using deterministic fallback:', error);
+    normalizedExecutiveSummary = buildExecutiveSummaryFallback({
+      folderName: folder.name,
+      organizationName: folder.organizationName,
+      initiativesList,
+      topCases,
+      effectiveValueThreshold,
+      effectiveComplexityThreshold,
+      medianValue,
+      medianComplexity,
+      rawContent: content,
+    });
+  }
 
   // Stocker dans la base de données
   await db.update(folders)

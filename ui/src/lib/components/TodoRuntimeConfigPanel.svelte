@@ -3,8 +3,10 @@
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
   import { addToast } from '$lib/stores/toast';
-  import { apiGet, apiPost, apiPut } from '$lib/utils/api';
+  import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
   import { selectedWorkspaceRole } from '$lib/stores/workspaceScope';
+  import { Pencil } from '@lucide/svelte';
+  import ConfigItemCard from './ConfigItemCard.svelte';
 
   type SourceLevel = 'code' | 'admin' | 'user';
 
@@ -67,8 +69,9 @@
   let isLoading = false;
   let isRefreshing = false;
   let isSaving = false;
-  let isForking = false;
-  let isDetaching = false;
+  let isCopying = false;
+  let isResettingConfig = false;
+  let isDeletingConfig = false;
 
   let agentConfigs: AgentConfigItem[] = [];
   let workflowConfigs: WorkflowConfigItem[] = [];
@@ -403,95 +406,147 @@
     }
   };
 
-  const forkAgent = async (item: AgentConfigItem) => {
+  const hasCopyForAgent = (parentId: string): boolean =>
+    agentConfigs.some(a => a.parentId === parentId && a.sourceLevel === 'user');
+
+  const hasCopyForWorkflow = (parentId: string): boolean =>
+    workflowConfigs.some(w => w.parentId === parentId && w.sourceLevel === 'user');
+
+  const copyAgent = async (item: AgentConfigItem) => {
     if (!canEdit) return;
-    isForking = true;
+    isCopying = true;
     try {
       const suffix = Date.now().toString().slice(-5);
-      await apiPost(`/agent-config/${item.id}/fork`, {
-        key: `${item.key}-fork-${suffix}`,
-        name: `${item.name} (fork)`,
+      await apiPost(`/agent-config/${item.id}/copy`, {
+        key: `${item.key}-copy-${suffix}`,
+        name: `${item.name} (${get(_)('settings.runtime.customized')})`,
       });
       await loadConfigs(true);
       addToast({
         type: 'success',
-        message: get(_)('settings.runtime.toasts.agentForked'),
+        message: get(_)('settings.runtime.toasts.copied'),
       });
     } catch (error) {
-      console.error('Failed to fork agent config:', error);
+      console.error('Failed to copy agent config:', error);
       addToast({
         type: 'error',
-        message: get(_)('settings.runtime.errors.forkAgent'),
+        message: get(_)('settings.runtime.errors.copy'),
       });
     } finally {
-      isForking = false;
+      isCopying = false;
     }
   };
 
-  const detachAgent = async (item: AgentConfigItem) => {
-    if (!canEdit || !item.parentId || item.isDetached) return;
-    isDetaching = true;
+  const resetAgent = async (item: AgentConfigItem) => {
+    if (!canEdit || !item.parentId) return;
+    if (!confirm(get(_)('settings.runtime.confirmReset'))) return;
+    isResettingConfig = true;
     try {
-      await apiPost(`/agent-config/${item.id}/detach`, {});
+      await apiPost(`/agent-config/${item.id}/reset`, {});
       await loadConfigs(true);
       addToast({
         type: 'success',
-        message: get(_)('settings.runtime.toasts.agentDetached'),
+        message: get(_)('settings.runtime.toasts.reset'),
       });
     } catch (error) {
-      console.error('Failed to detach agent config:', error);
+      console.error('Failed to reset agent config:', error);
       addToast({
         type: 'error',
-        message: get(_)('settings.runtime.errors.detachAgent'),
+        message: get(_)('settings.runtime.errors.reset'),
       });
     } finally {
-      isDetaching = false;
+      isResettingConfig = false;
     }
   };
 
-  const forkWorkflow = async (item: WorkflowConfigItem) => {
+  const deleteAgent = async (item: AgentConfigItem) => {
     if (!canEdit) return;
-    isForking = true;
+    if (!confirm(get(_)('settings.runtime.confirmDelete'))) return;
+    isDeletingConfig = true;
+    try {
+      await apiDelete(`/agent-config/${item.id}`);
+      await loadConfigs(true);
+      addToast({
+        type: 'success',
+        message: get(_)('settings.runtime.toasts.deleted'),
+      });
+    } catch (error) {
+      console.error('Failed to delete agent config:', error);
+      addToast({
+        type: 'error',
+        message: get(_)('settings.runtime.errors.delete'),
+      });
+    } finally {
+      isDeletingConfig = false;
+    }
+  };
+
+  const copyWorkflow = async (item: WorkflowConfigItem) => {
+    if (!canEdit) return;
+    isCopying = true;
     try {
       const suffix = Date.now().toString().slice(-5);
-      await apiPost(`/workflow-config/${item.id}/fork`, {
-        key: `${item.key}-fork-${suffix}`,
-        name: `${item.name} (fork)`,
+      await apiPost(`/workflow-config/${item.id}/copy`, {
+        key: `${item.key}-copy-${suffix}`,
+        name: `${item.name} (${get(_)('settings.runtime.customized')})`,
       });
       await loadConfigs(true);
       addToast({
         type: 'success',
-        message: get(_)('settings.runtime.toasts.workflowForked'),
+        message: get(_)('settings.runtime.toasts.copied'),
       });
     } catch (error) {
-      console.error('Failed to fork workflow config:', error);
+      console.error('Failed to copy workflow config:', error);
       addToast({
         type: 'error',
-        message: get(_)('settings.runtime.errors.forkWorkflow'),
+        message: get(_)('settings.runtime.errors.copy'),
       });
     } finally {
-      isForking = false;
+      isCopying = false;
     }
   };
 
-  const detachWorkflow = async (item: WorkflowConfigItem) => {
-    if (!canEdit || !item.parentId || item.isDetached) return;
-    isDetaching = true;
+  const resetWorkflow = async (item: WorkflowConfigItem) => {
+    if (!canEdit || !item.parentId) return;
+    if (!confirm(get(_)('settings.runtime.confirmReset'))) return;
+    isResettingConfig = true;
     try {
-      await apiPost(`/workflow-config/${item.id}/detach`, {});
+      await apiPost(`/workflow-config/${item.id}/reset`, {});
       await loadConfigs(true);
       addToast({
         type: 'success',
-        message: get(_)('settings.runtime.toasts.workflowDetached'),
+        message: get(_)('settings.runtime.toasts.reset'),
       });
     } catch (error) {
-      console.error('Failed to detach workflow config:', error);
+      console.error('Failed to reset workflow config:', error);
       addToast({
         type: 'error',
-        message: get(_)('settings.runtime.errors.detachWorkflow'),
+        message: get(_)('settings.runtime.errors.reset'),
       });
     } finally {
-      isDetaching = false;
+      isResettingConfig = false;
+    }
+  };
+
+  const deleteWorkflow = async (item: WorkflowConfigItem) => {
+    if (!canEdit) return;
+    if (!confirm(get(_)('settings.runtime.confirmDelete'))) return;
+    isDeletingConfig = true;
+    try {
+      await apiDelete(`/workflow-config/${item.id}`);
+      await loadConfigs(true);
+      addToast({
+        type: 'success',
+        message: get(_)('settings.runtime.toasts.deleted'),
+      });
+    } catch (error) {
+      console.error('Failed to delete workflow config:', error);
+      addToast({
+        type: 'error',
+        message: get(_)('settings.runtime.errors.delete'),
+      });
+    } finally {
+      isDeletingConfig = false;
     }
   };
 
@@ -555,81 +610,16 @@
         {:else}
           <div class="space-y-3">
             {#each agentConfigs as item (item.id)}
-              <div class="rounded border border-slate-200 p-3" data-testid={`workflow-config-card-${item.key}`}>
-                <div class="flex flex-wrap items-start justify-between gap-2">
-                  <div class="space-y-1">
-                    <div class="font-medium text-slate-900">{item.name}</div>
-                    <div class="text-xs text-slate-500">{item.key}</div>
-                    {#if item.description}
-                      <div class="text-sm text-slate-700">{item.description}</div>
-                    {/if}
-                  </div>
-                  <div class="flex flex-wrap gap-2">
-                    <span class="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
-                      {$_('settings.runtime.source')}: {item.sourceLevel}
-                    </span>
-                    {#if item.parentId}
-                      <span
-                        class="rounded px-2 py-0.5 text-[11px]"
-                        class:bg-emerald-100={!item.isDetached}
-                        class:text-emerald-800={!item.isDetached}
-                        class:bg-amber-100={item.isDetached}
-                        class:text-amber-800={item.isDetached}
-                      >
-                        {item.isDetached
-                          ? $_('settings.runtime.inheritance.detached')
-                          : $_('settings.runtime.inheritance.attached')}
-                      </span>
-                    {/if}
-                    {#if hasInheritanceDrift(item)}
-                      <span class="rounded bg-rose-100 px-2 py-0.5 text-[11px] text-rose-700">
-                        {$_('settings.runtime.inheritance.drift')}
-                      </span>
-                    {/if}
-                  </div>
-                </div>
-
-                <div class="mt-2 grid gap-2 text-[11px] text-slate-600 md:grid-cols-2">
-                  <div>
-                    <span class="font-medium">{$_('settings.runtime.parent')}:</span>
-                    {item.parentId ?? '—'}
-                  </div>
-                  <div>
-                    <span class="font-medium">{$_('settings.runtime.root')}:</span>
-                    {item.lineageRootId ?? '—'}
-                  </div>
-                </div>
-
-                {#if canEdit}
-                  <div class="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
-                      on:click={() => openAgentEditor(item)}
-                    >
-                      {$_('settings.runtime.edit')}
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50"
-                      on:click={() => void forkAgent(item)}
-                      disabled={isForking || isSaving}
-                    >
-                      {$_('settings.runtime.fork')}
-                    </button>
-                    {#if item.parentId && !item.isDetached}
-                      <button
-                        type="button"
-                        class="rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
-                        on:click={() => void detachAgent(item)}
-                        disabled={isDetaching || isSaving}
-                      >
-                        {$_('settings.runtime.detach')}
-                      </button>
-                    {/if}
-                  </div>
-                {/if}
-
+              <ConfigItemCard
+                item={{ id: item.id, name: item.name, key: item.key, description: item.description, sourceLevel: item.sourceLevel, parentId: item.parentId }}
+                hasCopy={hasCopyForAgent(item.id)}
+                onCopy={canEdit ? (id) => { const found = agentConfigs.find(a => a.id === id); if (found) void copyAgent(found); } : null}
+                onEdit={canEdit ? (id) => { const found = agentConfigs.find(a => a.id === id); if (found) openAgentEditor(found); } : null}
+                onReset={canEdit ? (id) => { const found = agentConfigs.find(a => a.id === id); if (found) void resetAgent(found); } : null}
+                onDelete={canEdit ? (id) => { const found = agentConfigs.find(a => a.id === id); if (found) void deleteAgent(found); } : null}
+                disabled={isCopying || isSaving || isResettingConfig || isDeletingConfig}
+                testId={`workflow-config-card-${item.key}`}
+              >
                 {#if editingAgentId === item.id}
                   <div class="mt-3 space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
                     <div>
@@ -692,7 +682,7 @@
                     </div>
                   </div>
                 {/if}
-              </div>
+              </ConfigItemCard>
             {/each}
           </div>
         {/if}
@@ -709,51 +699,15 @@
         {:else}
           <div class="space-y-3">
             {#each workflowConfigs as item (item.id)}
-              <div class="rounded border border-slate-200 p-3">
-                <div class="flex flex-wrap items-start justify-between gap-2">
-                  <div class="space-y-1">
-                    <div class="font-medium text-slate-900">{item.name}</div>
-                    <div class="text-xs text-slate-500">{item.key}</div>
-                    {#if item.description}
-                      <div class="text-sm text-slate-700">{item.description}</div>
-                    {/if}
-                  </div>
-                  <div class="flex flex-wrap gap-2">
-                    <span class="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
-                      {$_('settings.runtime.source')}: {item.sourceLevel}
-                    </span>
-                    {#if item.parentId}
-                      <span
-                        class="rounded px-2 py-0.5 text-[11px]"
-                        class:bg-emerald-100={!item.isDetached}
-                        class:text-emerald-800={!item.isDetached}
-                        class:bg-amber-100={item.isDetached}
-                        class:text-amber-800={item.isDetached}
-                      >
-                        {item.isDetached
-                          ? $_('settings.runtime.inheritance.detached')
-                          : $_('settings.runtime.inheritance.attached')}
-                      </span>
-                    {/if}
-                    {#if hasInheritanceDrift(item)}
-                      <span class="rounded bg-rose-100 px-2 py-0.5 text-[11px] text-rose-700">
-                        {$_('settings.runtime.inheritance.drift')}
-                      </span>
-                    {/if}
-                  </div>
-                </div>
-
-                <div class="mt-2 grid gap-2 text-[11px] text-slate-600 md:grid-cols-2">
-                  <div>
-                    <span class="font-medium">{$_('settings.runtime.parent')}:</span>
-                    {item.parentId ?? '—'}
-                  </div>
-                  <div>
-                    <span class="font-medium">{$_('settings.runtime.root')}:</span>
-                    {item.lineageRootId ?? '—'}
-                  </div>
-                </div>
-
+              <ConfigItemCard
+                item={{ id: item.id, name: item.name, key: item.key, description: item.description, sourceLevel: item.sourceLevel, parentId: item.parentId }}
+                hasCopy={hasCopyForWorkflow(item.id)}
+                onCopy={canEdit ? (id) => { const found = workflowConfigs.find(w => w.id === id); if (found) void copyWorkflow(found); } : null}
+                onEdit={canEdit ? (id) => { const found = workflowConfigs.find(w => w.id === id); if (found) openWorkflowEditor(found); } : null}
+                onReset={canEdit ? (id) => { const found = workflowConfigs.find(w => w.id === id); if (found) void resetWorkflow(found); } : null}
+                onDelete={canEdit ? (id) => { const found = workflowConfigs.find(w => w.id === id); if (found) void deleteWorkflow(found); } : null}
+                disabled={isCopying || isSaving || isResettingConfig || isDeletingConfig}
+              >
                 <div class="mt-2 text-xs text-slate-700">
                   <div class="font-medium">{$_('settings.runtime.workflow.tasksLabel')}</div>
                   <p class="mt-1 text-[11px] text-slate-500">
@@ -791,37 +745,6 @@
                     </div>
                   {/if}
                 </div>
-
-                {#if canEdit}
-                  <div class="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
-                      on:click={() => openWorkflowEditor(item)}
-                      data-testid={`workflow-config-edit-${item.key}`}
-                    >
-                      {$_('settings.runtime.edit')}
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50"
-                      on:click={() => void forkWorkflow(item)}
-                      disabled={isForking || isSaving}
-                    >
-                      {$_('settings.runtime.fork')}
-                    </button>
-                    {#if item.parentId && !item.isDetached}
-                      <button
-                        type="button"
-                        class="rounded border border-amber-300 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:opacity-50"
-                        on:click={() => void detachWorkflow(item)}
-                        disabled={isDetaching || isSaving}
-                      >
-                        {$_('settings.runtime.detach')}
-                      </button>
-                    {/if}
-                  </div>
-                {/if}
 
                 {#if editingWorkflowId === item.id}
                   <div class="mt-3 space-y-2 rounded border border-slate-200 bg-slate-50 p-3">
@@ -900,7 +823,7 @@
                     </div>
                   </div>
                 {/if}
-              </div>
+              </ConfigItemCard>
             {/each}
           </div>
         {/if}

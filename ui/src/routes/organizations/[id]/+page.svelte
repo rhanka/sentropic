@@ -16,7 +16,6 @@
   import { addToast } from '$lib/stores/toast';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
-  import References from '$lib/components/References.svelte';
   import DocumentsBlock from '$lib/components/DocumentsBlock.svelte';
   import OrganizationForm from '$lib/components/OrganizationForm.svelte';
   import type { OrgField } from '$lib/components/organization-form.types';
@@ -664,22 +663,6 @@
     </div>
 
     <div slot="bottom">
-	      <!-- References (read-only, end of page) -->
-      {#if organization.references && organization.references.length > 0}
-        <div class="rounded border border-slate-200 bg-white p-4" data-comment-section="references">
-          <div class="bg-white text-slate-800 px-3 py-2 rounded-t-lg -mx-4 -mt-4 mb-4 border-b border-slate-200">
-	            <h3 class="font-semibold flex items-center gap-2 group">
-	              {$_('common.references')}
-	              <CommentBadge
-                count={commentCounts?.references ?? 0}
-                disabled={!openCommentsFor}
-                on:click={() => openCommentsFor('references')}
-              />
-            </h3>
-          </div>
-          <References references={organization.references} referencesScaleFactor={1} />
-        </div>
-      {/if}
     </div>
   </OrganizationForm>
   <!-- Commentaires gérés par ChatWidget -->

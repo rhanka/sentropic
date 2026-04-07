@@ -195,8 +195,10 @@ Roadmap specifications:
 - [x] **BR-02** `feat/sso-chatgpt` — done (product pivot, docs/process only).
 - [x] **BR-03** `feat/todo-steering-workflow-core` — done, merged.
   - [x] Delivered TODO management v1, steering mode v1, workflow core (14 new tables, 19+ endpoints).
-- [ ] **BR-04** `feat/workspace-template-catalog` — **active** (scope expanded).
-  - [ ] Deliver workspace type system (neutral, ai-ideas, opportunity, code), initiative lifecycle with maturity gates, extended objects (solutions, products, bids), multi-workflow registry, template-driven artifact production. ~400 commits, 4 segments. See `BRANCH.md` and `spec/SPEC_EVOL_WORKSPACE_TYPES.md`.
+- [x] **BR-04** `feat/workspace-template-catalog` — done, merged.
+  - [x] Delivered workspace type system (neutral, ai-ideas, opportunity, code), initiative rename, multi-workflow registry, extended objects (solutions, products, bids), gate system.
+- [x] **BR-04B** `feat/workspace-template-catalog` (continuation) — **done, merged**.
+  - [x] Template-driven rendering (TemplateRenderer), config UX alignment (ConfigItemCard), generic workflow runtime, freeform DOCX generation, chat tools wiring, multi-org folder creation. See `plan/done/04B-BRANCH_feat-workspace-template-catalog.md`.
 - [x] **BR-05** `feat/vscode-plugin-v1` — done, merged.
   - [x] Delivered VSCode plugin v1 (plan, tools, summary, checkpoint, Codex sign-in).
 - [ ] **BR-06** `feat/chrome-upstream-v1`
@@ -232,6 +234,11 @@ Roadmap specifications:
   - [ ] Document chunking + vector embeddings (pgvector).
   - [ ] Semantic search mode for `documents` tool in chat.
   - [ ] Depends on BR-16 (optional, works with local docs) + BR-08 (Cohere embeddings).
+
+- [ ] **BR-23** `feat/multi-agent-framework-comparison`
+  - [ ] Compare LangGraph / Agno / Temporal for multi-agent orchestration. Lot 0 research + recommendation. See `plan/23-BRANCH_feat-multi-agent-framework-comparison.md`.
+- [ ] **BR-25** `chore/rules-skills-audit`
+  - [ ] Absorb BR-04B audit learnings (400+ incidents) into rules and hooks. Mechanical enforcement. See `plan/25-BRANCH_chore-rules-skills-audit.md`.
 
 #### Branch closure rules for this roadmap
 

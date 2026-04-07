@@ -1,3 +1,19 @@
+/** A view template record as returned by the API */
+export type ViewTemplateRecord = {
+  id: string;
+  workspaceId: string | null;
+  workspaceType: string;
+  objectType: string;
+  maturityStage?: string | null;
+  descriptor: Record<string, unknown>;
+  version: number;
+  sourceLevel: string;
+  parentId: string | null;
+  isDetached: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 /** Supported view modes */
 export type ViewMode = 'container' | 'detail';
 

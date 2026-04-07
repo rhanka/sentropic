@@ -27,7 +27,7 @@ const putAgentConfigsSchema = z.object({
     .min(1),
 });
 
-const forkAgentSchema = z.object({
+const copyAgentSchema = z.object({
   key: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
 });
@@ -77,7 +77,8 @@ agentConfigRouter.put("/", requireWorkspaceEditorRole(), zValidator("json", putA
   }
 });
 
-agentConfigRouter.post("/:id/fork", requireWorkspaceEditorRole(), zValidator("json", forkAgentSchema), async (c) => {
+// Copy (new canonical endpoint)
+agentConfigRouter.post("/:id/copy", requireWorkspaceEditorRole(), zValidator("json", copyAgentSchema), async (c) => {
   try {
     const actor = actorFromContext(c);
     const body = c.req.valid("json");
@@ -88,12 +89,41 @@ agentConfigRouter.post("/:id/fork", requireWorkspaceEditorRole(), zValidator("js
   }
 });
 
-agentConfigRouter.post("/:id/detach", requireWorkspaceEditorRole(), async (c) => {
+// Fork (deprecated alias for copy)
+agentConfigRouter.post("/:id/fork", requireWorkspaceEditorRole(), zValidator("json", copyAgentSchema), async (c) => {
   try {
     const actor = actorFromContext(c);
-    const item = await todoOrchestrationService.detachAgentConfig(actor, c.req.param("id")!);
+    const body = c.req.valid("json");
+    const item = await todoOrchestrationService.forkAgentConfig(actor, c.req.param("id")!, body);
+    return c.json({ item }, 201);
+  } catch (error) {
+    return handleTodoError(c, error);
+  }
+});
+
+// Reset — delete the copy and return system parent
+agentConfigRouter.post("/:id/reset", requireWorkspaceEditorRole(), async (c) => {
+  try {
+    const actor = actorFromContext(c);
+    const item = await todoOrchestrationService.resetAgentConfig(actor, c.req.param("id")!);
     return c.json({ item });
   } catch (error) {
     return handleTodoError(c, error);
   }
+});
+
+// Delete — user-created only (sourceLevel='user' + parentId=null)
+agentConfigRouter.delete("/:id", requireWorkspaceEditorRole(), async (c) => {
+  try {
+    const actor = actorFromContext(c);
+    await todoOrchestrationService.deleteAgentConfig(actor, c.req.param("id")!);
+    return c.body(null, 204);
+  } catch (error) {
+    return handleTodoError(c, error);
+  }
+});
+
+// Detach (deprecated — returns 410 Gone)
+agentConfigRouter.post("/:id/detach", requireWorkspaceEditorRole(), async (c) => {
+  return c.json({ error: "Detach is no longer supported. Use reset instead." }, 410);
 });

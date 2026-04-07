@@ -13,10 +13,14 @@ const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
 // Parse allowed origins from environment variable
 const allowedOrigins = parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS);
 
-// Security Headers (CSP, HSTS, COOP, COEP)
-app.use('*', async (c, next) => {
-  // Apply security headers
-  await secureHeaders({
+// Security Headers (CSP, HSTS, COOP)
+// secureHeaders() returns a middleware — invoke the factory ONCE, register the result.
+// NOTE: CORP and COEP are NOT set here because they block legitimate cross-origin
+// API requests from the frontend (e.g. localhost:5173 → localhost:8787).
+// CORP is applied selectively per-route below (e.g. bookmarklet endpoints).
+app.use(
+  '*',
+  secureHeaders({
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
@@ -30,19 +34,27 @@ app.use('*', async (c, next) => {
       frameAncestors: ["'none'"],
       upgradeInsecureRequests: [],
     },
-    // Only add HSTS header for HTTPS requests
-    strictTransportSecurity: c.req.header('x-forwarded-proto') === 'https' || 
-                            c.req.header('x-forwarded-ssl') === 'on' ||
-                            c.req.url.startsWith('https://') ? 
-                            'max-age=31536000; includeSubDomains; preload' : undefined,
+    strictTransportSecurity: 'max-age=31536000; includeSubDomains; preload',
     crossOriginOpenerPolicy: 'same-origin',
-    crossOriginEmbedderPolicy: 'require-corp',
-    crossOriginResourcePolicy: 'same-origin',
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: false,
     xContentTypeOptions: 'nosniff',
     xFrameOptions: 'DENY',
     xXssProtection: '1; mode=block',
     referrerPolicy: 'strict-origin-when-cross-origin',
-  })(c, next);
+  }),
+);
+
+// Explicit CORP for public bookmarklet endpoints (must be cross-origin loadable).
+// Global CORP is disabled to allow cross-origin API requests; these endpoints
+// explicitly opt in to 'cross-origin' so browsers can load them from any origin.
+app.use('/api/v1/bookmarklet/injected-script.js', async (c, next) => {
+  await next();
+  c.res.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+});
+app.use('/api/v1/bookmarklet/probe.js', async (c, next) => {
+  await next();
+  c.res.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
 });
 
 // Global HTTP logging (opt-in)

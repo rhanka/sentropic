@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql, inArray, gt, or } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue } from '../db/schema';
+import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue, organizations } from '../db/schema';
 import { createId } from '../utils/id';
 import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
 import {
@@ -38,14 +38,16 @@ import {
   planTool,
   solutionsListTool,
   solutionGetTool,
-  bidsListTool,
-  bidGetTool,
+  proposalsListTool,
+  proposalGetTool,
   productsListTool,
   productGetTool,
   gateReviewTool,
   workspaceListTool,
   initiativeSearchTool,
-  taskDispatchTool
+  taskDispatchTool,
+  documentGenerateTool,
+  batchCreateOrganizationsTool
 } from './tools';
 import { toolService } from './tool-service';
 import { todoOrchestrationService } from './todo-orchestration';
@@ -54,6 +56,9 @@ import { getWorkspaceRole, getWorkspaceType, hasWorkspaceRole, isWorkspaceDelete
 import { env } from '../config/env';
 import { writeChatGenerationTrace } from './chat-trace';
 import { generateCommentResolutionProposal } from './context-comments';
+import { generateFreeformDocx } from './docx-generation';
+import { putObject, getDocumentsBucketName } from './storage-s3';
+import type { OrganizationEnrichJobData } from './queue-manager';
 import type { ProviderId } from './provider-runtime';
 import {
   buildAssistantMessageHistoryDetails,
@@ -2592,26 +2597,45 @@ export class ChatService {
 
     // Workspace-type-aware tool layer (§14.2)
     const wsType = await getWorkspaceType(sessionWorkspaceId);
+    const wsTypeToolNames = new Set<string>();
+    const addWsTools = (defs: Parameters<typeof addTools>[0]) => {
+      addTools(defs);
+      for (const t of defs) {
+        const name = t.type === 'function' ? t.function?.name : undefined;
+        if (name) wsTypeToolNames.add(name);
+      }
+    };
     if (wsType === 'opportunity') {
-      // Extended object tools for opportunity workspace
-      addTools([
+      addWsTools([
         solutionsListTool,
         solutionGetTool,
-        bidsListTool,
-        bidGetTool,
+        proposalsListTool,
+        proposalGetTool,
         productsListTool,
         productGetTool,
-        gateReviewTool
+        gateReviewTool,
+        documentGenerateTool,
+        batchCreateOrganizationsTool
+      ]);
+    } else if (wsType === 'ai-ideas') {
+      addWsTools([
+        solutionsListTool,
+        solutionGetTool,
+        proposalsListTool,
+        proposalGetTool,
+        productsListTool,
+        productGetTool,
+        gateReviewTool,
+        documentGenerateTool,
+        batchCreateOrganizationsTool
       ]);
     } else if (wsType === 'neutral') {
-      // Cross-workspace tools for neutral workspace only
-      addTools([
+      addWsTools([
         workspaceListTool,
         initiativeSearchTool,
         taskDispatchTool
       ]);
     }
-    // ai-ideas and code: no extra tools beyond context-type tools
 
     const effectiveRequestedTools = new Set(requestedTools);
     if (todoToolRequested) {
@@ -2654,15 +2678,10 @@ export class ChatService {
         .filter((name): name is string => Boolean(name))
     );
 
-    if (Array.isArray(options.tools) && options.tools.length > 0 && tools?.length) {
-      const allowed = new Set<string>([
-        ...effectiveRequestedTools,
-        'history_analyze',
-        ...Array.from(localToolNames)
-      ]);
-      tools = tools.filter((t) => (t.type === 'function' ? allowed.has(t.function?.name || '') : false));
-      if (tools.length === 0) tools = undefined;
-    }
+    // Note: no post-hoc filtering of tools — the context-type and workspace-type
+    // layers above already select exactly which tools are available for this session.
+    // UI toggle (options.tools) adds optional tools (web_search, plan) via
+    // effectiveRequestedTools above; it does not restrict programmatic tools.
 
     const documentsToolName =
       documentsTool.type === 'function' ? documentsTool.function.name : 'documents';
@@ -2920,6 +2939,13 @@ Règles :
         ? `OUTILS ACTIFS POUR CETTE REPONSE :\n${activeToolNames.map((name) => `- \`${name}\``).join('\n')}\n\nRègle : si l'utilisateur demande les outils disponibles, répondre uniquement à partir de cette liste.`
         : `OUTILS ACTIFS POUR CETTE REPONSE :\n- Aucun outil actif.`;
     contextBlock += `\n\n${activeToolsBlock}`;
+
+    if (activeToolNames.includes('document_generate')) {
+      contextBlock += `\n\n## Document generation
+You have the tool \`document_generate\`. Before generating your first DOCX in this conversation,
+call it with \`action: "upskill"\` to learn professional DOCX creation rules.
+Then call with \`action: "generate"\` and your code.`;
+    }
 
     const vscodeCodeAgentPayload = this.normalizeVsCodeCodeAgentPayload(
       options.vscodeCodeAgent,
@@ -4065,7 +4091,7 @@ Règles :
               options.assistantMessageId
             );
             streamSeq += 1;
-          } else if (toolCall.name === 'usecases_list') {
+          } else if (toolCall.name === 'initiatives_list') {
             if (!args.folderId || typeof args.folderId !== 'string') {
               throw new Error('Security: folderId is required');
             }
@@ -4656,8 +4682,8 @@ Règles :
             result = { status: 'completed', ...getResult };
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
             streamSeq += 1;
-          } else if (toolCall.name === 'bids_list') {
-            const listResult = await toolService.listBids({
+          } else if (toolCall.name === 'proposals_list') {
+            const listResult = await toolService.listProposals({
               initiativeId: args.initiativeId,
               workspaceId: sessionWorkspaceId,
               select: Array.isArray(args.select) ? args.select : null
@@ -4665,8 +4691,8 @@ Règles :
             result = { status: 'completed', ...listResult };
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
             streamSeq += 1;
-          } else if (toolCall.name === 'bid_get') {
-            const getResult = await toolService.getBid(args.bidId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
+          } else if (toolCall.name === 'proposal_get') {
+            const getResult = await toolService.getProposal(args.proposalId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
             result = { status: 'completed', ...getResult };
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
             streamSeq += 1;
@@ -4710,6 +4736,207 @@ Règles :
               { title: args.title, description: typeof args.description === 'string' ? args.description : undefined, sessionId: options.sessionId }
             );
             result = { ...taskResult, status: 'completed', dispatched: true };
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+          } else if (toolCall.name === 'document_generate') {
+            const action = typeof args.action === 'string' ? args.action : 'generate';
+
+            if (action === 'upskill') {
+              // Return DOCX creation skill content for LLM learning
+              const { getDocxFreeformSkill } = await import('./docx-freeform-skill');
+              result = {
+                status: 'completed',
+                mode: 'upskill',
+                skill: getDocxFreeformSkill(),
+              };
+              await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+              streamSeq += 1;
+            } else {
+            // Generate mode: enqueue DOCX generation job via queue-manager
+            const templateId = typeof args.templateId === 'string' ? args.templateId : undefined;
+            const code = typeof args.code === 'string' ? args.code : undefined;
+            const title = typeof args.title === 'string' ? args.title : undefined;
+            const entityType = typeof args.entityType === 'string' ? args.entityType : 'initiative';
+            const entityId = typeof args.entityId === 'string' ? args.entityId : '';
+            if (!entityId) throw new Error('document_generate: entityId is required');
+            if (templateId && code) throw new Error('document_generate: templateId and code are mutually exclusive');
+            if (!templateId && !code) throw new Error('document_generate: either templateId or code is required');
+
+            if (code) {
+              // Freeform mode: synchronous generation per SPEC_EVOL_FREEFORM_DOCX §4
+              try {
+                const freeformResult = await generateFreeformDocx({
+                  code,
+                  entityType: entityType as 'initiative' | 'folder',
+                  entityId,
+                  workspaceId: sessionWorkspaceId,
+                });
+
+                const jobId = createId();
+                const bucket = getDocumentsBucketName();
+                const objectKey = `docx-cache/${sessionWorkspaceId}/freeform/${entityType}/${entityId}/${jobId}.docx`;
+
+                await putObject({
+                  bucket,
+                  key: objectKey,
+                  body: freeformResult.buffer,
+                  contentType: freeformResult.mimeType,
+                });
+
+                const fileName = title
+                  ? `${title.replace(/[^a-zA-Z0-9À-ÿ _-]/g, '')}.docx`
+                  : freeformResult.fileName;
+
+                const completedPayload = {
+                  state: 'done',
+                  progress: 100,
+                  fileName,
+                  mimeType: freeformResult.mimeType,
+                  byteLength: freeformResult.buffer.byteLength,
+                  storageBucket: bucket,
+                  storageKey: objectKey,
+                  queueClass: 'publishing',
+                  completedAt: new Date().toISOString(),
+                };
+
+                await db.run(sql`
+                  INSERT INTO job_queue (id, type, status, workspace_id, data, result, completed_at)
+                  VALUES (
+                    ${jobId},
+                    'docx_generate',
+                    'completed',
+                    ${sessionWorkspaceId},
+                    ${JSON.stringify({ entityType, entityId, mode: 'freeform' })},
+                    ${JSON.stringify(completedPayload)},
+                    ${completedPayload.completedAt}
+                  )
+                `);
+
+                result = {
+                  status: 'completed',
+                  mode: 'freeform',
+                  entityType,
+                  entityId,
+                  jobId,
+                  fileName,
+                  mimeType: freeformResult.mimeType,
+                  downloadUrl: `/docx/jobs/${jobId}/download`,
+                };
+              } catch (freeformError: unknown) {
+                const errMsg = freeformError instanceof Error ? freeformError.message : 'Unknown freeform error';
+                // Map engine error codes per spec §6.2
+                let errorCode = 'code_runtime_error';
+                if (errMsg.includes('SyntaxError') || errMsg.includes('syntax')) errorCode = 'code_syntax_error';
+                else if (errMsg.includes('timeout') || errMsg.includes('Timeout')) errorCode = 'code_timeout';
+                else if (errMsg.includes('not a Document') || errMsg.includes('invalid_return_type')) errorCode = 'invalid_return_type';
+                else if (errMsg.includes('not found') || errMsg.includes('Not found')) errorCode = 'not_found';
+                else if (errMsg.includes('putObject') || errMsg.includes('S3') || errMsg.includes('storage')) errorCode = 'storage_error';
+
+                result = {
+                  status: 'error',
+                  code: errorCode,
+                  error: errMsg,
+                };
+              }
+            } else {
+              // Template mode (unchanged)
+              result = {
+                status: 'completed',
+                message: `Document generation queued for ${entityType} ${entityId} with template ${templateId}. The document will be available for download once processing completes.`,
+                templateId,
+                entityType,
+                entityId,
+              };
+            }
+            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+            streamSeq += 1;
+            } // end generate action
+          } else if (toolCall.name === 'batch_create_organizations') {
+            if (readOnly) throw new Error('Read-only workspace: batch_create_organizations is disabled');
+            const description = typeof args.description === 'string' ? args.description : '';
+            const targetWorkspaceId = sessionWorkspaceId;
+            if (!description) throw new Error('batch_create_organizations: description is required');
+
+            // Parse organization names from description (comma-separated, numbered list, or newline-separated)
+            const orgNames = description
+              .split(/[,\n]/)
+              .map((s: string) => s.replace(/^\s*\d+[\.\)\-]\s*/, '').trim())
+              .filter((s: string) => s.length > 0 && s.length < 200);
+
+            if (orgNames.length === 0) {
+              throw new Error('batch_create_organizations: no organization names found in description');
+            }
+
+            // Create organizations in DB with status 'generating'
+            const orgRows: Array<{ id: string; name: string }> = [];
+            for (const name of orgNames) {
+              const orgId = createId();
+              await db.insert(organizations).values({
+                id: orgId,
+                workspaceId: targetWorkspaceId,
+                name,
+                status: 'generating',
+                data: {},
+              });
+              orgRows.push({ id: orgId, name });
+            }
+
+            // Launch organization_enrich jobs for each org (lazy import to avoid circular dependency)
+            const { queueManager } = await import('./queue-manager');
+            const enrichJobIds: string[] = [];
+            for (const org of orgRows) {
+              const jobData: OrganizationEnrichJobData = {
+                organizationId: org.id,
+                organizationName: org.name,
+                model: selectedModel,
+                initiatedByUserId: options.userId,
+                locale: options.locale ?? 'fr',
+                wasCreated: true,
+              };
+              const jobId = await queueManager.addJob('organization_enrich', jobData, {
+                workspaceId: targetWorkspaceId,
+              });
+              enrichJobIds.push(jobId);
+            }
+
+            // Poll all enrich jobs until completion (timeout 3min, poll every 2s)
+            const POLL_INTERVAL_MS = 2000;
+            const POLL_TIMEOUT_MS = 180_000;
+            const startTime = Date.now();
+            let allDone = false;
+            while (!allDone && Date.now() - startTime < POLL_TIMEOUT_MS) {
+              await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+              const jobRows = await db
+                .select({ id: jobQueue.id, status: jobQueue.status })
+                .from(jobQueue)
+                .where(inArray(jobQueue.id, enrichJobIds));
+              const statuses = jobRows.map((r) => r.status);
+              allDone = statuses.length === enrichJobIds.length &&
+                statuses.every((s) => s === 'completed' || s === 'failed');
+            }
+
+            // Fetch enriched organizations from DB
+            const enrichedOrgs = await db
+              .select()
+              .from(organizations)
+              .where(inArray(organizations.id, orgRows.map((o) => o.id)));
+
+            const orgResults = enrichedOrgs.map((org) => ({
+              id: org.id,
+              name: org.name,
+              status: org.status,
+              data: org.data,
+            }));
+
+            const failedCount = orgResults.filter((o) => o.status !== 'completed').length;
+            result = {
+              status: failedCount === orgResults.length ? 'error' : 'completed',
+              organizations: orgResults,
+              totalCreated: orgResults.length,
+              totalEnriched: orgResults.filter((o) => o.status === 'completed').length,
+              totalFailed: failedCount,
+              workspaceId: targetWorkspaceId,
+            };
             await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
             streamSeq += 1;
           } else {
