@@ -112,15 +112,15 @@ Gate transitions are governed by the workspace's `gate_config` (free / soft-gate
 
 **Product** — attached to a solution (1:N) and to an initiative (direct FK). Lifecycle: `draft -> active -> delivered -> archived`. `solution_id` nullable (product may exist independently).
 
-**Bid / Contract** — attached to an initiative (1:N). Data-driven object (clauses, profiles, pricing). Lifecycle: `draft -> review -> finalized -> contract`. References N products via `bid_products` junction. A finalized bid becomes a contract (same row, status = `contract`).
+**Proposal / Contract** (DB table: `bids`, renamed to "proposal" at the domain/UI level in BR-04B) — attached to an initiative (1:N). Data-driven object (clauses, profiles, pricing). Lifecycle: `draft -> review -> finalized -> contract`. References N products via `bid_products` junction. A finalized proposal becomes a contract (same row, status = `contract`).
 
 **Business chain** (opportunity workspace):
 ```
 Initiative (demand/opportunity)
   -> Solution (proposed answer)
     -> Product (deliverables)
-  -> Bid (commercial proposal, references products)
-    -> Contract (finalized bid)
+  -> Proposal (commercial proposal, references products; DB table: bids)
+    -> Contract (finalized proposal)
       -> Delivery tracking (via product status)
 ```
 
@@ -410,7 +410,7 @@ Initiative (demand/opportunity)
 
 Key backend/API variables:
 - Entity management: `Organization`, `Folder`, `Initiative` (renamed from `UseCase`), `MatrixConfig` (axes, weights, thresholds, descriptions), `BusinessConfig` (sectors, processes).
-- Extended objects: `Solution`, `Product`, `Bid`, `BidProduct` (opportunity domain).
+- Extended objects: `Solution`, `Product`, `Proposal` (DB: `Bid`), `BidProduct` (opportunity domain).
 - Generation context: `currentOrganizationId`, folder→organization association, prompts/configs.
 - Aggregations: counts by level, scoring, normalization for charts.
 
@@ -430,9 +430,12 @@ Main tables (simplified):
 - `initiatives` (renamed from `use_cases`): `id`, `workspace_id`, `folder_id`, `organization_id?`, `status` (`draft|generating|detailing|completed`), `model?`, `antecedent_id` (self-FK, lineage), `maturity_stage` (`G0|G2|G5|G7`, nullable), `gate_status` (`pending|approved|rejected`, nullable), `template_snapshot_id`, `data` (**JSONB**: contains `name`, `description`, `valueScores`, `complexityScores`, `references`, etc.)
 - `solutions`: `id`, `workspace_id`, `initiative_id`, `status` (`draft|validated|archived`), `version`, `data` (JSONB), timestamps
 - `products`: `id`, `workspace_id`, `initiative_id`, `solution_id` (nullable), `status` (`draft|active|delivered|archived`), `version`, `data` (JSONB), timestamps
-- `bids`: `id`, `workspace_id`, `initiative_id`, `status` (`draft|review|finalized|contract`), `version`, `data` (JSONB: clauses, profiles, pricing), timestamps
+- `bids` (domain name: "proposals", renamed in BR-04B): `id`, `workspace_id`, `initiative_id`, `status` (`draft|review|finalized|contract`), `version`, `data` (JSONB: clauses, profiles, pricing), timestamps
 - `bid_products`: `id`, `bid_id`, `product_id`, `data` (JSONB: unit price, conditions), timestamps. Unique on `(bid_id, product_id)`
 - `workspace_type_workflows`: `id`, `workspace_type`, `workflow_definition_id`, `is_default`, `trigger_stage`, `config` (JSONB), timestamps. Unique on `(workspace_type, workflow_definition_id)`
+- `workflow_task_transitions` (BR-04B): `id`, `workspace_id`, `workflow_definition_id`, `from_task_key`, `to_task_key`, `transition_type` (`sequential|parallel|conditional|join`), `condition` (JSONB), `metadata` (JSONB), timestamps. Indexes on `(workflow_definition_id, from_task_key)`, `(workflow_definition_id, to_task_key)`
+- `workflow_run_state` (BR-04B): `run_id` (PK), `workspace_id`, `workflow_definition_id`, `status` (`pending|running|completed|failed|cancelled`), `inputs` (JSONB), `state` (JSONB), `error` (text), timestamps. Indexes on `workspace_id`, `status`, `workflow_definition_id`
+- `workflow_task_results` (BR-04B): composite PK `(run_id, task_key, task_instance_key)`, `workspace_id`, `workflow_definition_id`, `status` (`pending|running|completed|failed|skipped`), `inputs` (JSONB), `outputs` (JSONB), `error` (text), `started_at`, `completed_at`, timestamps. Indexes on `workspace_id`, `workflow_definition_id`, `status`
 - `job_queue`: `id`, `workspace_id`, `type`, `status`, `data` (JSON string), `result?`, `error?`, timestamps
 
 Auth & sessions:
@@ -621,19 +624,19 @@ Main endpoints (API v1):
   - PUT `/api/v1/initiatives/{id}` → update
   - PATCH `/api/v1/initiatives/{id}` → partial update (supports `maturity_stage` transition with gate evaluation)
   - DELETE `/api/v1/initiatives/{id}` → delete
-  - POST `/api/v1/initiatives/generate` → start generation (job queue): body `{ input, folder_id?, organization_id?, matrix_mode?, use_case_count?, model? }` → returns `{ created_folder_id?, folder_id, matrix_mode, jobId, matrixJobId? }`
+  - POST `/api/v1/initiatives/generate` → start generation (job queue): body `{ input, folder_id?, organization_id?, orgIds?: string[], createNewOrgs?: boolean, matrix_mode?, use_case_count?, model? }` → returns `{ created_folder_id?, folder_id, matrix_mode, jobId, matrixJobId? }`. Multi-org support (BR-04B): `orgIds` selects multiple organizations, `createNewOrgs` triggers organization creation from LLM list output via workflow fanout/join.
   - Backward-compatible alias: `/api/v1/use-cases/*` forwards to `/api/v1/initiatives/*`
 
-- Extended objects (solutions, products, bids)
+- Extended objects (solutions, products, proposals)
   - GET/POST `/api/v1/initiatives/{id}/solutions` → CRUD solutions for an initiative
   - GET/PUT/DELETE `/api/v1/solutions/{id}`
   - GET/POST `/api/v1/initiatives/{id}/products` → CRUD products
   - GET/POST `/api/v1/solutions/{id}/products` → CRUD products for a solution
   - GET/PUT/DELETE `/api/v1/products/{id}`
-  - GET/POST `/api/v1/initiatives/{id}/bids` → CRUD bids
+  - GET/POST `/api/v1/initiatives/{id}/bids` → CRUD proposals (DB: bids, domain name: proposals since BR-04B)
   - GET/PUT/DELETE `/api/v1/bids/{id}`
-  - POST `/api/v1/bids/{id}/products` → attach products to bid
-  - DELETE `/api/v1/bids/{id}/products/{productId}` → detach product from bid
+  - POST `/api/v1/bids/{id}/products` → attach products to proposal
+  - DELETE `/api/v1/bids/{id}/products/{productId}` → detach product from proposal
 
 - Gate review
   - POST `/api/v1/initiatives/{id}/gate-review` → evaluate gate criteria for maturity stage transition. Request: `{ target_stage: "G2" }`. Response: `{ gate_passed, warnings, blockers }`
@@ -694,6 +697,7 @@ Dedicated TypeScript services:
 - `api/src/services/context-organization.ts` → AI organization enrichment
 - `api/src/services/context-initiative.ts` → AI initiative generation (renamed from `context-usecase.ts`)
 - `api/src/services/todo-orchestration.ts` → generic workflow dispatch (`startWorkflow(workspaceId, workflowKey)`)
+- `api/src/services/docx-generation.ts` → freeform DOCX generation (VM sandbox) + `docx-freeform-helpers.ts` (BR-04B)
 - `api/src/services/settings.ts` → settings and configuration management
 - `api/src/services/tools.ts` → chat tool definitions and dispatch
 
@@ -711,6 +715,17 @@ Parameters: prompts, models, limits (retries/parallelism) stored in DB (`/settin
 **Open task-key mapping**: `workflow_definition_tasks.task_key` is a free `text` field. Agent resolution: task key -> lookup `agentDefinitionId` on the `workflow_definition_tasks` row. Type safety via Zod validation of workflow structure.
 
 **Generic dispatch**: `startWorkflow(workspaceId, workflowKey)` resolves the workflow from `workspace_type_workflows` -> `workflow_definitions` -> ordered `workflow_definition_tasks`, then dispatches generically. The `GenerationWorkflowRuntimeContext` carries `agentMap: Record<string, string>` (task key to agent definition ID).
+
+**Generic executable workflow runtime (BR-04B)**: The workflow runtime is transition-driven. Task sequencing is defined by `workflow_task_transitions` (not hardcoded `switch` statements or string heuristics). Key components:
+- `workflow_task_transitions`: stores `fromTaskKey`, `toTaskKey`, `transitionType` (sequential, parallel, conditional, join), `condition` (JSONB), `metadata` (JSONB).
+- `workflow_run_state`: persists the current state of a workflow run (inputs, materialized state, status).
+- `workflow_task_results`: persists task outputs per run (inputs, outputs, status, timing).
+- The runtime uses a generic executor registry (`executor` / `jobType` / `subworkflowKey` -> implementation). No workflow-specific sequencing hardcoding remains.
+- Ready entry nodes are dispatched generically (replaces `switch (task.agentRole)` routing).
+- Next-node resolution is transition-driven (replaces `includes("detail")` / `includes("summary")` heuristics).
+- Transition + binding driven scheduling replaces workflow-specific matrix waiting / unlock logic.
+- Legacy parity: for pre-existing non-multi-org paths, the runtime preserves `main` entry/output semantics and queue-visible work topology.
+- See `SPEC_WORKFLOW_RUNTIME.md` for the full runtime specification.
 
 **Seed workflows per type**:
 
@@ -749,8 +764,8 @@ Tool availability is a function of `(workspace_type, context_type, role)`:
 1. **Base tools** (always available): `web_search`, `web_extract`, `documents`, `history_analyze`
 2. **Context-type tools**: `organizations_list`, `folders_list`, `initiatives_list`
 3. **Workspace-type tools**:
-   - `ai-ideas`: `read_initiative`, `update_initiative_field`, `comment_assistant`
-   - `opportunity`: all of `ai-ideas` + `solutions_list`, `solution_get`, `bids_list`, `bid_get`, `products_list`, `product_get`, `gate_review`
+   - `ai-ideas`: `read_initiative`, `update_initiative_field`, `comment_assistant`, `solutions_list`, `solution_get`, `proposals_list`, `proposal_get`, `products_list`, `product_get`, `gate_review`, `document_generate`, `batch_create_organizations`
+   - `opportunity`: same tools as `ai-ideas` (unified in BR-04B): `solutions_list`, `solution_get`, `proposals_list`, `proposal_get`, `products_list`, `product_get`, `gate_review`, `document_generate`, `batch_create_organizations`
    - `code`: `read_initiative`, `update_initiative_field` + code-specific tools
    - `neutral`: cross-workspace tools only (`dispatch_todo`, `workspaces_list`, `initiative_search_cross_workspace`)
 
@@ -784,7 +799,10 @@ Key components:
 - `RatingsTable` tables for value/complexity axes; direct store binding + recompute (server-side API or client-side display only).
 - `Matrix` page: weight/threshold forms, dialog to edit level descriptions.
 - `Dashboard`: charts (Recharts -> Svelte alternatives: `layercake`, `apexcharts` svelte, or `recharts` via wrapper if needed); backend can provide pre-normalized data.
-- `ViewTemplateRenderer.svelte` — generic view template renderer (container + detail modes).
+- `TemplateRenderer.svelte` — JSON-driven generic view template renderer (BR-04B). Reads view template descriptors (tabs, rows, grids, field types) and renders layouts with `FieldCard`, `ScoreTable`, `EditableInput`, `entity-loop`, `printOnly`, component slots, and path-based keys. Supports `pageBreak*` attributes for print layout control. Adds CSS class `template-{objectType}` on root div for scoped print CSS. See `SPEC_EVOL_PRINT_LAYOUT.md` for print contract.
+- `FieldCard.svelte` — extracted from InitiativeDetail card pattern (BR-04B). Supports 3 variants: `colored`, `plain`, `bordered`.
+- `ScoreTable.svelte` — extracted from score axes rendering (BR-04B).
+- `ConfigItemCard.svelte` — shared config UX component for agents, workflows, view templates settings (BR-04B). See `SPEC_EVOL_CONFIG_UX_ALIGNMENT.md`.
 - `ContainerView.svelte` — container view sub-component (workspace->folders, folder->initiatives, neutral->workspaces).
 - `GateReview.svelte` — gate criteria evaluation view with pass/fail indicators.
 
