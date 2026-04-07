@@ -55,7 +55,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] Template seeds migrated to spec 12.5 format (ai-ideas, opportunity, organization, dashboard).
   - [x] View template API route + workspace seed hook.
 
-- [ ] **Lot 6 — Config UX alignment + bid → proposal rename** *(implementation lost during rebase — commit 9917fa02 in reflog, spec restored from 35f23066)*
+- [x] **Lot 6 — Config UX alignment + bid → proposal rename** *(implementation lost during rebase — commit 9917fa02 in reflog, spec restored from 35f23066)*
   - [x] Spec `SPEC_EVOL_CONFIG_UX_ALIGNMENT.md` — restored from lost commit 35f23066
   - [x] API: `POST /:id/copy` on view-templates (BUG-C1 — never implemented)
   - [x] API: `POST /:id/reset` on view-templates, agent-config, workflow-config
@@ -217,7 +217,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Keep existing scatter plot, cover page, sommaire, annex cover components — just render them via the slot
     - [x] Remove manual FieldCard wiring for exec summary sections
     - [x] Ensure print mode works: printOnly fields mount only on Ctrl+P, entity-loop renders each initiative via its own TemplateRenderer
-  - [ ] **Bugs identifiés en UAT Lot 13**
+  - [x] **Bugs identifiés en UAT Lot 13**
     - [x] BUG-L13-2: Références vides / [object Object] — handle object items `{title,url}` + shortKey for path-based keys.
     - [x] BUG-L13-3: Annexes absentes — scatter plot canvas null guard + printOnly via CSS `hidden`/`print-block` instead of Svelte conditional mount.
     - [x] BUG-L13-1: Print style — marges, page-breaks, polices, background. Correctifs :
@@ -255,12 +255,12 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] BUG-L13-8: references excerpts visible in print — hide excerpts via CSS `print-hidden` on excerpt span, stop baking excerpt in InitiativeDetail
       - [x] Stop baking excerpt into string in InitiativeDetail `buildTemplateData` (removes double tiret)
       - [x] Hide excerpt in print via CSS `print-hidden` class on renderReferenceExcerpt span
-    - [ ] BUG-L13-9: org pages still use hardcoded `References.svelte` instead of TemplateRenderer references
+    - [x] BUG-L13-9: org pages still use hardcoded `References.svelte` instead of TemplateRenderer references
       - [x] Replace `References.svelte` usage in `organizations/[id]/+page.svelte` with TemplateRenderer reference rendering
       - [x] Replace `References.svelte` usage in `organizations/new/+page.svelte` with TemplateRenderer reference rendering
       - [x] Delete `References.svelte` (no remaining imports)
     - [x] BUG-L13-11: footer.jpg bg overflow ~1cm at bottom of initiative annex pages — h1 outside .template-initiative pushes bg beyond page bottom; fix: reduce .template-initiative height by h1 total (22pt) + lock h1 line-height to 1.2
-    - [ ] BUG-L13-10: dead code cleanup post-TemplateRenderer migration
+    - [x] BUG-L13-10: dead code cleanup post-TemplateRenderer migration
       - [x] Remove `parseReferencesInText()` from `ui/src/lib/utils/markdown.ts`
       - [x] Remove `arrayToNumberedMarkdown()` from `ui/src/lib/utils/markdown.ts`
       - [x] Remove dead `.layout-bottom.no-references` selectors from `ui/src/app.print.css`
@@ -273,7 +273,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Update §12.4 with component, entity-loop, printOnly, path-based keys, collections prop
   - [x] Dev live-debug harness stabilized on root `ENV=dev` for Lot 13/UAT repros (`make exec-playwright-dev`, `make record-dev-playwright-auth`, helper endpoints, Maildev fallback)
   - [x] Follow-up deferred to BR-22: data-specific freeze on initiative `cc884370-765c-40f3-a754-ceaf9a05da04` when rendering/editing `constraints`; investigate post-merge in isolated mini-branch (suspected rich markdown list / TipTap `forceList` loop)
-  - [ ] Lot gate *(consolidated BR-04B validation, including test checklists moved from Lot 11)*
+  - [x] Lot gate *(consolidated BR-04B validation, including test checklists moved from Lot 11)*
     - [x] `make typecheck-api typecheck-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [x] `make lint-api lint-ui API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b`
     - [x] **API tests**
@@ -288,7 +288,7 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Fix chat-service-batch-create-orgs test failure (bid→proposal / tools alignment) — ai-ideas now has same tools as opportunity
       - [x] Sub-lot gate: `make test-api API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b` (388/394 — 6 "Session not found" concurrency failures, not regressions)
       - [x] AI flaky tests (non-blocking): `make test-api-ai API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=test-feat-workspace-template-catalog-b` (25/27 — 2 failures in initiative-generation-async, non-blocking)
-    - [ ] **UI tests**
+    - [x] **UI tests**
       - [x] Existing (non-reg): `ui/tests/stores/initiatives.test.ts` — verify store still works with new fields
       - [x] Existing (non-reg): `ui/tests/stores/organizations.test.ts` — verify store
       - [x] Existing branch work: `ui/tests/stores/viewTemplateCache.test.ts` — resolveViewTemplate dedup, cache hit, clearViewTemplateCache
@@ -310,8 +310,8 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
       - [x] Sub-lot gate group 06+: `make clean test-e2e API_PORT=8705 UI_PORT=5105 MAILDEV_UI_PORT=1005 ENV=e2e-feat-workspace-template-catalog-b E2E_GROUP="06"`
       - [x] AI flaky tests (non-blocking): 170 passed, 2 AI flaky (00-ai-generation, 03-chat), non-blocking
 
-- [ ] **Lot N-2 — UAT**
-  - [ ] Web app — current template-driven surfaces
+- [x] **Lot N-2 — UAT**
+  - [x] Web app — current template-driven surfaces
     - [x] `/initiative/{id}` : rendu identique visuellement (cartes colorées, layout 2/3+1/3, scores, sidebar)
     - [x] `/organizations/{id}` : rendu identique (variant plain)
     - [x] Dashboard courant : rendu via TemplateRenderer (synthèse, scatter plot via slot, print annexes via entity-loop)
@@ -319,28 +319,28 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Locked mode : champs en `@html`, pas d'édition
     - [x] Édition collaborative : 2 onglets même surface, modifier un champ → SSE met à jour l'autre sans écraser un champ localement sale
     - [x] Print : Ctrl+P fonctionne sur dashboard et initiative standalone
-  - [ ] Web app — dashboard / folder
+  - [x] Web app — dashboard / folder
     - [x] Dashboard visible et exploitable depuis le folder courant
     - [x] Scatter plot fonctionne via component slot
-  - [ ] Web app — config UX
-    - [!] Settings templates: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
-    - [!] Settings agents: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
-    - [!] Settings workflows: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
-    - [!] Badges Lock/UserPen corrects sur les 3 surfaces
-  - [ ] Web app — chat tools
+  - [x] Web app — config UX
+    - [x] Settings templates: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
+    - [x] Settings agents: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
+    - [x] Settings workflows: Copier/Modifier/Réinitialiser/Supprimer fonctionnels
+    - [x] Badges Lock/UserPen corrects sur les 3 surfaces
+  - [x] Web app — chat tools
     - [x] Chat (opportunity workspace): `document_generate` visible dans les outils disponibles
-    - [!] Chat (org context): `batch_create_organizations` visible dans les outils disponibles
+    - [x] Chat (org context): `batch_create_organizations` visible dans les outils disponibles
     - [x] Chat: `batch_create_organizations` exécution sync — lance sous-workflow `organization_batch_create` → fanout `organization_enrich` → poll completion → retourne liste enrichie
     - [x] Chat: `document_generate` exécution → DOCX généré et téléchargeable
     - [x] BUG-UAT-A1: batch_create_organizations no longer asks for workspaceId — uses session workspace
     - [x] BUG-UAT-A2: ai-ideas workspace now has same tools as opportunity (solutions, bids, products, gate_review, batch_create_organizations)
-  - [ ] Web app — multi-org
+  - [x] Web app — multi-org
     - [x] Folder creation: multi-select orgs visible dans le formulaire
     - [x] Folder creation avec orgs sélectionnées → workflow `initiative_list_with_orgs` utilisé
     - [x] Folder creation avec "Créer de nouvelles orgs auto" coché → step `create_organizations` exécuté
     - [x] Folder creation sans orgs → workflow classique `initiative_list` (non-reg)
     - [x] ~~bid → proposal: vérifier que le terme "proposal" apparaît partout (UI, API responses)~~ — deferred: no visible UI screen for proposals at this stage
-  - [ ] Web app — non-regression
+  - [x] Web app — non-regression
     - [x] Génération ai-ideas: créer un nouveau folder → générer des initiatives → vérifier rendu
     - [x] Chat: docs/comments/web_search fonctionnels
     - [x] Import/export initiative fonctionnel
@@ -352,6 +352,21 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
   - [x] Update SPEC_EVOL_FREEFORM_DOCX.md — status implemented
   - [ ] Consolidate remaining specs.
   - [ ] Update PLAN.md.
+  - [ ] Document workflow runtime model (spec/SPEC_WORKFLOW_RUNTIME.md or consolidate into SPEC.md):
+    - [ ] Workflow definition structure: tasks, transitions (start/normal/conditional/fanout/join/end), bindings
+    - [ ] Execution model: workflow_run_state, workflow_task_results, task lifecycle (pending→in_progress→completed/failed)
+    - [ ] Fanout/join semantics: sourcePath, itemKey, instanceKeyPath, join modes (all, all_main)
+    - [ ] Condition system: conditionEq, conditionNotEmpty, allOf, anyOf, notOf
+    - [ ] Executor registry: job/noop mapping, agentSelection rules
+    - [ ] Matrix barrier pattern: matrixBarrierJoinMetadata
+    - [ ] State management: inputs, orgContext, generation — state patches and replay safety
+  - [ ] Document agentic model (spec/SPEC_AGENTIC_MODEL.md or consolidate):
+    - [ ] Agent definition structure: key, name, description, config, sourceLevel, parentId
+    - [ ] Agent seed per workspace type: shared agents (generate_organization) vs domain-specific (initiative_list, opportunity_list)
+    - [ ] Agent selection at runtime: agentSelection rules in task metadata
+    - [ ] Prompt system: default prompts per agent, org-aware prompts, structured output schemas
+    - [ ] Tool dispatch: context-type tools, workspace-type tools, tool filtering
+    - [ ] Chat integration: system prompt construction, tool availability, freeform DOCX upskill pattern
   - [ ] Review and update rules/skills — based on BR-04B audit (2 agents, 13 sessions, 400+ incidents):
     - [ ] For each existing rule file: diff against audit findings, identify rules that exist but are repeatedly violated, understand WHY (visibility? precision? no mechanical enforcement?), and fix the root cause (reword, move, add hook)
     - [ ] For each audit finding with no existing rule: add the rule in the right file
