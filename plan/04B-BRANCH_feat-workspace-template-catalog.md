@@ -360,13 +360,13 @@ Continuation of BR-04. Template-driven rendering using existing components, conf
     - [x] Executor registry: job/noop mapping, agentSelection rules
     - [x] Matrix barrier pattern: matrixBarrierJoinMetadata
     - [x] State management: inputs, orgContext, generation — state patches and replay safety
-  - [ ] Document agentic model (spec/SPEC_AGENTIC_MODEL.md or consolidate):
-    - [ ] Agent definition structure: key, name, description, config, sourceLevel, parentId
-    - [ ] Agent seed per workspace type: shared agents (generate_organization) vs domain-specific (initiative_list, opportunity_list)
-    - [ ] Agent selection at runtime: agentSelection rules in task metadata
-    - [ ] Prompt system: default prompts per agent, org-aware prompts, structured output schemas
-    - [ ] Tool dispatch: context-type tools, workspace-type tools, tool filtering
-    - [ ] Chat integration: system prompt construction, tool availability, freeform DOCX upskill pattern
+  - [x] Document agentic model (spec/SPEC_AGENTIC_MODEL.md or consolidate):
+    - [x] Agent definition structure: key, name, description, config, sourceLevel, parentId
+    - [x] Agent seed per workspace type: shared agents (generate_organization) vs domain-specific (initiative_list, opportunity_list)
+    - [x] Agent selection at runtime: agentSelection rules in task metadata
+    - [x] Prompt system: default prompts per agent, org-aware prompts, structured output schemas
+    - [x] Tool dispatch: context-type tools, workspace-type tools, tool filtering
+    - [x] Chat integration: system prompt construction, tool availability, freeform DOCX upskill pattern
   - [ ] Review and update rules/skills — based on BR-04B audit (2 agents, 13 sessions, 400+ incidents):
     - [ ] For each existing rule file: diff against audit findings, identify rules that exist but are repeatedly violated, understand WHY (visibility? precision? no mechanical enforcement?), and fix the root cause (reword, move, add hook)
     - [ ] For each audit finding with no existing rule: add the rule in the right file
