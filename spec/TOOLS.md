@@ -36,6 +36,21 @@ This document is the single checklist for **chat tools**: what is already implem
   - Actions: close thread, reassign, add note (batch-enabled)
   - Traceability: comments created by the tool include `tool_call_id`
 
+### Document generation tools (BR-04B)
+- [x] `document_generate` (two-phase pattern: `action=upskill` then `action=generate`)
+  - **Upskill**: returns a self-contained DOCX skill document for the LLM to learn best practices before generating.
+  - **Generate (template mode)**: `action: "generate"` with `templateId` — resolves existing DOCX template + data, renders, stores to S3, returns download link.
+  - **Generate (freeform mode)**: `action: "generate"` with `code` — LLM-written `docx.js` code executed in VM sandbox, produces DOCX buffer, uploaded to S3, returns download link.
+  - Freeform execution is synchronous inside the chat handler (not queued).
+  - Download card rendered inline in chat via `runtimeSummary.docxCards`.
+  - See `SPEC_EVOL_FREEFORM_DOCX.md` for full freeform specification.
+
+### Organization batch tools (BR-04B)
+- [x] `batch_create_organizations`
+  - Creates multiple organizations at once from a text description.
+  - The AI parses the description and creates structured organization entries in the workspace.
+  - Part of the multi-org folder creation workflow (orgIds/createNewOrgs support).
+
 ### TODO runtime tools
 - [x] `plan` (unified contract: `action=create|update_plan|update_task`)
   - Session contract:
@@ -123,6 +138,7 @@ This document is the single checklist for **chat tools**: what is already implem
 - [x] Add alias tool `usecase_update` (single-entity) for `update_usecase_field`
 - [x] Update prompts to prefer `usecase_get`/`usecase_update` (legacy names still supported)
 - [ ] Deprecate/remove `read_usecase`/`update_usecase_field` once stable
+- [x] bid → proposal rename (BR-04B): `proposals_list` and `proposal_get` are the canonical tools; `bidsListTool` and `bidGetTool` kept as deprecated aliases
 
 ### Use case detail: matrix + organization access (read-only)
 - [ ] From `primaryContextType=usecase`, allow:
@@ -135,7 +151,7 @@ This document is the single checklist for **chat tools**: what is already implem
   - [ ] organization reads from matrix view (read-only, via folder.organizationId)
 
 ### Batch / destructive tools (⚠ high-impact)
-- [ ] `organizations_create_batch`
+- [x] `batch_create_organizations` (BR-04B — sync handler, creates N orgs from text description)
 - [ ] `organizations_update_batch`
 - [ ] `organizations_delete_batch`
 - [ ] Folder batch create/update/delete tools
