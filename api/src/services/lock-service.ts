@@ -2,6 +2,7 @@ import { and, eq, gt, lt } from 'drizzle-orm';
 import { db, pool } from '../db/client';
 import { objectLocks, users } from '../db/schema';
 import { createId } from '../utils/id';
+import { findPgError } from '../utils/pg-errors';
 import { hasWorkspaceRole } from './workspace-access';
 
 export type LockObjectType = 'organization' | 'folder' | 'initiative';
@@ -194,7 +195,7 @@ export async function acquireLock(options: {
       });
       return { type: 'acquired' as const };
     } catch (err: unknown) {
-      if (typeof err === 'object' && err && 'code' in err && (err as { code?: string }).code === '23505') {
+      if (findPgError(err, '23505')) {
         return { type: 'conflict' as const };
       }
       throw err;
