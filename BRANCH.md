@@ -12,6 +12,10 @@ Fix HIGH and moderate npm audit vulnerabilities in API dependencies to unblock D
 - **Allowed Paths (implementation scope)**:
   - `api/package.json`
   - `api/package-lock.json`
+  - `api/src/utils/pg-errors.ts`
+  - `api/src/services/stream-service.ts`
+  - `api/src/services/lock-service.ts`
+  - `api/tests/unit/stream-service.test.ts`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -52,8 +56,16 @@ Fix HIGH and moderate npm audit vulnerabilities in API dependencies to unblock D
     - [x] `npm audit --audit-level=high --omit=dev` exits 0 (0 vulnerabilities)
     - [x] TypeScript compilation passes
 
-- [ ] **Lot 2 — Commit, push, PR**
-  - [ ] Stage `api/package.json`, `api/package-lock.json`, `BRANCH.md`.
+- [x] **Lot 2 — Fix drizzle-orm 0.45.2 error wrapping breaking pg 23505 detection**
+  - [x] Create `api/src/utils/pg-errors.ts` with `findPgError` helper (recursive `.cause` unwrapping).
+  - [x] Update `api/src/services/stream-service.ts` to use `findPgError` for conflict detection.
+  - [x] Update `api/src/services/lock-service.ts` to use `findPgError` for conflict detection.
+  - [x] Add wrapped-error test case in `api/tests/unit/stream-service.test.ts`.
+  - [x] Typecheck passes (no errors in changed files).
+  - [x] Unit tests pass (23/23 including new DrizzleQueryError-wrapped test).
+
+- [ ] **Lot 3 — Commit, push, PR**
+  - [ ] Stage changed files and `BRANCH.md`.
   - [ ] Commit with `make commit`.
   - [ ] Push branch.
   - [ ] Create PR targeting main.
