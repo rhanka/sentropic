@@ -256,6 +256,37 @@ describe('Stream Service', () => {
       expect(attempts).toBe(2);
     });
 
+    it('retries on DrizzleQueryError-wrapped sequence conflict', async () => {
+      let attempts = 0;
+
+      const sequence = await writeStreamEventWithSequenceRetry(
+        testStreamId,
+        'status',
+        { state: 'steer_received' },
+        {
+          maxAttempts: 3,
+          deps: {
+            getNextSequenceFn: async () => 12,
+            writeStreamEventFn: async () => {
+              attempts += 1;
+              if (attempts === 1) {
+                const pgErr = new Error('duplicate key value violates unique constraint');
+                (pgErr as Error & { code?: string; constraint?: string }).code = '23505';
+                (pgErr as Error & { code?: string; constraint?: string }).constraint =
+                  'chat_stream_events_stream_id_sequence_unique';
+                const wrapper = new Error('DrizzleQueryError: Failed query');
+                (wrapper as Error & { cause?: unknown }).cause = pgErr;
+                throw wrapper;
+              }
+            },
+          },
+        },
+      );
+
+      expect(attempts).toBe(2);
+      expect(sequence).toBe(12);
+    });
+
     it('throws when sequence conflict persists beyond max attempts', async () => {
       let attempts = 0;
 
