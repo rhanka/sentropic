@@ -1,21 +1,18 @@
 import { db, pool } from '../db/client';
 import { chatStreamEvents } from '../db/schema';
 import { createId } from '../utils/id';
+import { findPgError } from '../utils/pg-errors';
 import { sql, eq, and, gt } from 'drizzle-orm';
 import type { StreamEventType } from './llm-runtime';
 
 const DEFAULT_SEQUENCE_RETRY_ATTEMPTS = 6;
 
 const isStreamSequenceConflictError = (error: unknown): boolean => {
-  if (!error || typeof error !== 'object') return false;
-  const maybe = error as { code?: unknown; constraint?: unknown; message?: unknown };
-  const code = typeof maybe.code === 'string' ? maybe.code : '';
-  if (code !== '23505') return false;
-  const constraint = typeof maybe.constraint === 'string' ? maybe.constraint : '';
-  const message = typeof maybe.message === 'string' ? maybe.message : '';
+  const pgError = findPgError(error, '23505');
+  if (!pgError) return false;
   return (
-    constraint.includes('chat_stream_events_stream_id_sequence_unique') ||
-    message.includes('chat_stream_events_stream_id_sequence_unique')
+    (pgError.constraint?.includes('chat_stream_events_stream_id_sequence_unique') ?? false) ||
+    (pgError.message?.includes('chat_stream_events_stream_id_sequence_unique') ?? false)
   );
 };
 
