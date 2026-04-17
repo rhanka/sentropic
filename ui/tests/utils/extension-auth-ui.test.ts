@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveExtensionAuthUiState } from '../../src/lib/utils/extension-auth-ui';
+import {
+  resolveExtensionAuthUiState,
+  resolveExtensionChatGateState,
+} from '../../src/lib/utils/extension-auth-ui';
 
 describe('extension auth UI state', () => {
   it('requires a session token only for VSCode token-bootstrap hosts', () => {
@@ -65,5 +68,49 @@ describe('extension auth UI state', () => {
         loginUrl: 'https://top-ai-ideas.local/auth/login',
       }).showOpenLogin,
     ).toBe(false);
+  });
+
+  it('blocks the chat panel until extension auth is known and connected', () => {
+    expect(
+      resolveExtensionChatGateState({
+        isExtensionConfigAvailable: true,
+        authStatusLoaded: false,
+        connected: false,
+        isVisible: true,
+      }),
+    ).toEqual({
+      blockChatPanel: true,
+      showLoadingState: true,
+      showAuthState: false,
+      shouldAutoOpenSettings: false,
+    });
+
+    expect(
+      resolveExtensionChatGateState({
+        isExtensionConfigAvailable: true,
+        authStatusLoaded: true,
+        connected: false,
+        isVisible: true,
+      }),
+    ).toEqual({
+      blockChatPanel: true,
+      showLoadingState: false,
+      showAuthState: true,
+      shouldAutoOpenSettings: true,
+    });
+
+    expect(
+      resolveExtensionChatGateState({
+        isExtensionConfigAvailable: true,
+        authStatusLoaded: true,
+        connected: true,
+        isVisible: true,
+      }),
+    ).toEqual({
+      blockChatPanel: false,
+      showLoadingState: false,
+      showAuthState: false,
+      shouldAutoOpenSettings: false,
+    });
   });
 });

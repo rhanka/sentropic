@@ -543,7 +543,6 @@ chatRouter.post('/messages/:id/steer', requireWorkspaceAccessRole(), zValidator(
     },
     {
       messageId: streamId,
-      maxAttempts: 6,
     },
   );
 

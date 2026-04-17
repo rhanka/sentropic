@@ -180,7 +180,6 @@ Roadmap specifications:
 - `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`
 - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md`
 - `spec/SPEC_EVOL_VSCODE_PLUGIN.md`
-- `spec/SPEC_EVOL_CHROME_UPSTREAM.md`
 - `spec/SPEC_EVOL_RELEASE_QA_PIPELINE.md`
 
 #### Week 1 target (deadline: 2026-03-01)
