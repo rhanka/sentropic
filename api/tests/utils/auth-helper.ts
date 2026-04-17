@@ -18,12 +18,46 @@ export interface TestUser {
   workspaceId?: string | null;
 }
 
-const trackedTestUserIds = new Set<string>();
-const trackedTestUserEmails = new Set<string>();
+type TrackedAuthScope = {
+  userIds: Set<string>;
+  emails: Set<string>;
+};
+
+const DEFAULT_TRACKED_AUTH_OWNER = '__default__';
+const trackedAuthScopes = new Map<string, TrackedAuthScope>();
 
 function uniqueTestEmail(role: UserRole): string {
   const worker = process.env.VITEST_WORKER_ID || 'w0';
   return `${role}-${worker}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
+}
+
+function resolveTrackedAuthOwner(): string {
+  const explicitOwner = process.env.TEST_CLEANUP_OWNER?.trim();
+  if (explicitOwner) return explicitOwner;
+
+  const stack = new Error().stack ?? '';
+  const lines = stack.split('\n');
+
+  for (const line of lines) {
+    const match = line.match(/(\/app\/tests\/[^\s)]+|\/[^:\s)]+\/tests\/[^\s)]+|tests\/[^\s)]+)/);
+    const candidate = match?.[1];
+    if (!candidate) continue;
+    if (candidate.endsWith('/utils/auth-helper.ts')) continue;
+    return candidate;
+  }
+
+  return `${DEFAULT_TRACKED_AUTH_OWNER}:${process.env.VITEST_WORKER_ID || 'w0'}`;
+}
+
+function getTrackedAuthScope(owner = resolveTrackedAuthOwner()): TrackedAuthScope {
+  const existing = trackedAuthScopes.get(owner);
+  if (existing) return existing;
+  const created: TrackedAuthScope = {
+    userIds: new Set<string>(),
+    emails: new Set<string>(),
+  };
+  trackedAuthScopes.set(owner, created);
+  return created;
 }
 
 
@@ -41,14 +75,15 @@ export async function cleanupAuthData() {
     return;
   }
 
-  if (trackedTestUserIds.size === 0 && trackedTestUserEmails.size === 0) {
+  const owner = resolveTrackedAuthOwner();
+  const scope = trackedAuthScopes.get(owner);
+  if (!scope || (scope.userIds.size === 0 && scope.emails.size === 0)) {
     return;
   }
 
-  const userIds = Array.from(trackedTestUserIds);
-  const emails = Array.from(trackedTestUserEmails);
-  trackedTestUserIds.clear();
-  trackedTestUserEmails.clear();
+  const userIds = Array.from(scope.userIds);
+  const emails = Array.from(scope.emails);
+  trackedAuthScopes.delete(owner);
 
   if (emails.length > 0) {
     await db.delete(emailVerificationCodes).where(inArray(emailVerificationCodes.email, emails));
@@ -99,8 +134,9 @@ export async function createTestUser(options: {
     createdAt: new Date(),
     updatedAt: new Date(),
   });
-  trackedTestUserIds.add(userId);
-  trackedTestUserEmails.add(resolvedEmail);
+  const trackedScope = getTrackedAuthScope();
+  trackedScope.userIds.add(userId);
+  trackedScope.emails.add(resolvedEmail);
 
   let sessionToken: string | undefined;
   let workspaceId: string | null = null;

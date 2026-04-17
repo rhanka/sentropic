@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import { env } from '../../config/env';
+import { register, touchTab, evictStaleTabs, unregister } from '../../services/tab-registry';
+import type { TabSource } from '../../services/tab-registry';
 
 const DEFAULT_EXTENSION_VERSION = '0.1.0';
 const DEFAULT_EXTENSION_SOURCE = 'ui/chrome-ext';
@@ -38,6 +40,55 @@ const buildFallbackDownloadUrlFromOrigin = (originHeader: string | undefined): s
 };
 
 export const chromeExtensionRouter = new Hono();
+
+// --- Tab registration / keepalive / unregister endpoints ---
+
+const VALID_TAB_SOURCES = new Set<TabSource>(['chrome_plugin', 'bookmarklet']);
+
+chromeExtensionRouter.post('/tabs/register', async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const tab_id = typeof body.tab_id === 'string' ? body.tab_id.trim() : '';
+  const url = typeof body.url === 'string' ? body.url.trim() : '';
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  const source = typeof body.source === 'string' ? body.source.trim() : '';
+
+  if (!VALID_TAB_SOURCES.has(source as TabSource)) {
+    return c.json({ message: 'Invalid source. Must be "chrome_plugin" or "bookmarklet".' }, 400);
+  }
+
+  const entry = register({
+    tab_id: tab_id || undefined,
+    source: source as TabSource,
+    url,
+    title,
+    userId: user.userId,
+  });
+
+  return c.json({ ok: true, tab_id: entry.tab_id });
+});
+
+chromeExtensionRouter.post('/tabs/keepalive', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const tab_id = typeof body.tab_id === 'string' ? body.tab_id.trim() : '';
+
+  if (!tab_id) {
+    return c.json({ message: 'tab_id is required.' }, 400);
+  }
+
+  touchTab(tab_id);
+  const evicted = evictStaleTabs(45_000);
+
+  return c.json({ ok: true, evicted_count: evicted.length });
+});
+
+chromeExtensionRouter.delete('/tabs/:tabId', async (c) => {
+  const tabId = c.req.param('tabId');
+  unregister(tabId);
+  return c.json({ ok: true });
+});
+
+// --- Download endpoint ---
 
 chromeExtensionRouter.get('/download', async (c) => {
   const config = readConfig();
