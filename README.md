@@ -53,28 +53,90 @@ What ships today:
 - **Delivery** — UI on GitHub Pages, API on Scaleway Container Serverless,
   Docker-first dev environment, Make-only commands.
 
-### Architecture — today
+### System architecture — today
+
+End-to-end picture: the three user surfaces (web UI, Chrome extension,
+VSCode extension), the Hono API and LLM runtime, the PostgreSQL-backed data
+layer, and the external AI / identity providers.
 
 ```mermaid
 flowchart TB
-    User[User]
-    UI["SvelteKit 5 UI<br/>Tailwind · i18n EN/FR"]
-    API["Hono API<br/>TypeScript · REST/OpenAPI"]
-    AI["LLM Runtime<br/>multi-provider"]
-    DB[("PostgreSQL 17")]
-    Queue["PostgreSQL-backed Queue"]
-    LLMs["OpenAI / Anthropic / Cohere"]
-    OIDC["OIDC Providers<br/>Google / LinkedIn"]
+    subgraph Surfaces["User surfaces"]
+        WebUI["Web UI<br/>SvelteKit 5 · Tailwind<br/>i18n EN/FR · static build"]
+        Chrome["Chrome extension<br/>sidepanel + content script<br/>ui/chrome-ext/ (BR-06/13)"]
+        VSCode["VSCode extension<br/>webview + local tools<br/>ui/vscode-ext/ (BR-05)"]
+    end
 
-    User --> UI
-    UI -->|REST/JSON| API
-    API --> AI
-    AI --> LLMs
+    subgraph Backend["Backend services"]
+        API["Hono API<br/>TypeScript · REST + OpenAPI<br/>WebAuthn · RBAC · rate-limit"]
+        Runtime["LLM Runtime<br/>multi-provider<br/>quota · retries · streaming"]
+        Queue["Job Queue<br/>PostgreSQL-backed<br/>QueueManager"]
+    end
+
+    subgraph Data["Data layer"]
+        DB[("PostgreSQL 17<br/>Drizzle migrations")]
+        Docs[("Document chunks<br/>+ embeddings<br/>(BR-16a in-situ)")]
+    end
+
+    subgraph External["External providers"]
+        LLMs["OpenAI · Anthropic<br/>Cohere · Mistral"]
+        OIDC["OIDC / SSO<br/>Google · LinkedIn"]
+        GDrive["Google Drive<br/>(BR-16a, in-situ docs)"]
+    end
+
+    subgraph DevOps["DevOps"]
+        Make["Makefile<br/>build · test · deploy"]
+        Compose["Docker Compose<br/>per-branch ENV isolation"]
+        CI["GitHub Actions<br/>content-hashed images<br/>GH Pages · Scaleway"]
+    end
+
+    WebUI -->|REST/JSON · cookies| API
+    Chrome -->|REST/JSON · session token| API
+    VSCode -->|REST/JSON · session token| API
+
+    API --> Runtime
     API --> DB
     API --> Queue
-    Queue --> AI
+    Queue --> Runtime
+    Runtime --> LLMs
+
     API -->|OIDC| OIDC
+    API -->|OAuth + changes.list| GDrive
+    GDrive -.->|chunk + embed| Docs
+    Docs -.-> DB
+
+    Make --> Compose
+    Make --> CI
+    CI -->|deploy| WebUI
+    CI -->|deploy| API
+
+    classDef surface fill:#e1f5fe,stroke:#0288d1
+    classDef backend fill:#f3e5f5,stroke:#7b1fa2
+    classDef data fill:#e8f5e8,stroke:#2e7d32
+    classDef external fill:#fff8e1,stroke:#f57f17
+    classDef devops fill:#fff3e0,stroke:#ef6c00
+    class WebUI,Chrome,VSCode surface
+    class API,Runtime,Queue backend
+    class DB,Docs data
+    class LLMs,OIDC,GDrive external
+    class Make,Compose,CI devops
 ```
+
+**Surface notes.**
+
+- **Web UI** (`ui/`) — SvelteKit 5, static build, served on GitHub Pages in
+  prod. All application features live here today.
+- **Chrome extension** (`ui/chrome-ext/`) — MV3 sidepanel that hosts the chat
+  surface against *any* web page, with a content script for in-page tool
+  execution and a network bridge for upstream control. Packaged as a
+  downloadable `.zip` (BR-13), upstream control shipped in BR-06.
+- **VSCode extension** (`ui/vscode-ext/`) — webview hosting the same chat
+  surface, with an auth bridge for session continuity, a stream proxy for
+  model output, and local tools (file read / write / exec) governed by a
+  permission layer. Packaged as `.vsix` (BR-05).
+
+All three surfaces talk to the same API — the chat SDK extraction (BR-14) is
+what lets them share the exact same client code, not just the same endpoints.
 
 ## Near-term scope — the ecosystem pieces, one brick at a time
 
@@ -95,6 +157,101 @@ language:
 
 Long horizon (not on any current wave): TypeScript OS primitives, a compiler,
 and eventually an in-house LLM.
+
+## Target architecture — workflows and AI-native UI
+
+Two architectural pillars sit above the system described in the previous
+section. Today they are partial (chat SDK in BR-14, runtime in BR-14b,
+connectors in BR-16a); the diagram below sketches the steady-state they
+converge towards.
+
+### Workflow runtime — `@entropic/flow` (agentic graphs)
+
+A LangGraph / Temporal equivalent published standalone. A workflow is a graph
+of typed nodes (LLM call, tool call, human-in-the-loop, sub-workflow) with
+explicit state, streaming events, and replayable runs. It drives the chat SDK
+and is driven by it symmetrically — a chat turn is just one workflow type.
+
+### AI-native UI templating — `@entropic/ui`
+
+UI primitives designed from the ground up for AI generation and collaborative
+editing of AI-generated artifacts. A template is declarative and
+round-trippable: the model proposes structure, the UI renders it, edits flow
+back into the same shape. Deliberately framework-agnostic (conviction: step
+away from React), with a SvelteKit reference implementation.
+
+```mermaid
+flowchart TB
+    subgraph Clients["Clients — reuse same SDKs"]
+        WebC["Web UI"]
+        ChromeC["Chrome ext"]
+        VSCodeC["VSCode ext"]
+        CLI["Future CLI"]
+    end
+
+    subgraph ChatSDK["@entropic/chat — BR-14"]
+        Transport["Transport<br/>(SSE default, pluggable)"]
+        AuthBridge["Auth bridge<br/>(session token seam)"]
+        ProviderSeam["Provider seam<br/>(→ runtime)"]
+        ToolReg["Tool registry<br/>(→ BR-19 tools)"]
+    end
+
+    subgraph Flow["@entropic/flow — future BR-07/07b"]
+        Graph["Workflow graph<br/>typed nodes + edges"]
+        State["Run state<br/>streaming · replayable"]
+        HITL["Human-in-the-loop<br/>checkpoints"]
+    end
+
+    subgraph UI["@entropic/ui — future"]
+        Tpl["AI-native templates<br/>(declarative, round-trip)"]
+        Collab["Collaborative artifacts<br/>(multi-user on AI output)"]
+        Primitives["Framework-agnostic<br/>primitives (post-React)"]
+    end
+
+    subgraph Runtime["LLM Runtime — BR-14b"]
+        MultiLLM["Multi-provider<br/>abstraction"]
+        Quota["Quota · retries<br/>streaming normalization"]
+    end
+
+    Clients --> ChatSDK
+    Clients --> UI
+
+    ChatSDK --> Flow
+    ChatSDK --> Runtime
+    Flow --> Runtime
+    Flow -.->|renders via| UI
+    UI -.->|edits feed back| Flow
+
+    classDef clients fill:#e1f5fe,stroke:#0288d1
+    classDef sdk fill:#f3e5f5,stroke:#7b1fa2
+    classDef flow fill:#fce4ec,stroke:#c2185b
+    classDef ui fill:#e0f2f1,stroke:#00796b
+    classDef rt fill:#fff3e0,stroke:#ef6c00
+    class WebC,ChromeC,VSCodeC,CLI clients
+    class Transport,AuthBridge,ProviderSeam,ToolReg sdk
+    class Graph,State,HITL flow
+    class Tpl,Collab,Primitives ui
+    class MultiLLM,Quota rt
+```
+
+**How it maps to active branches.**
+
+- **BR-14** — extracts the web UI's chat into `@entropic/chat`, a publishable
+  npm library with explicit seams (transport, auth, provider, tool registry).
+  Benchmark: Vercel AI SDK. All three surfaces (web, Chrome, VSCode) switch
+  to it.
+- **BR-14b** — extracts the API's LLM runtime into the same namespace, so
+  `@entropic/chat` can drive any backend that speaks the runtime's protocol.
+  Blocked on the BR-14 handoff contract (seams defined in BR-14 scoping).
+- **BR-07 / BR-07b** — `@entropic/flow`. Initial implementation is the chat
+  request graph; expands to agentic graphs with tools, sub-workflows, and
+  HITL checkpoints. Published alongside `@entropic/chat`.
+- **BR-16a** — Google Drive SSO + in-situ indexing. Documents stay in Drive;
+  only chunks + embeddings land in our DB. This is the first real consumer of
+  the runtime's tool abstraction beyond LLM calls.
+- **AI-native UI templating** — not yet a branch. Prior art from the Top AI
+  Ideas matrix / dashboard feeds the design; the first target is a
+  collaborative artifact surface for AI-generated assessment reports.
 
 ## Using the repo
 
