@@ -3,9 +3,141 @@ import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
-import { chatStreamEvents } from '../../src/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { chatStreamEvents, jobQueue, workflowTaskResults } from '../../src/db/schema';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { queueManager } from '../../src/services/queue-manager';
+
+type AsyncFailureScope = {
+  workspaceId?: string | null;
+  workflowRunId?: string;
+};
+
+type PollResult<T> = {
+  done: boolean;
+  value: T;
+};
+
+const POLL_INTERVAL_MS = 1000;
+const FULL_WORKFLOW_INITIATIVE_COUNT = 3;
+const ORG_AWARE_INITIATIVE_COUNT = 3;
+
+function compact(value: string, maxLength = 800): string {
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength)}...`;
+}
+
+function stringifyForError(value: unknown): string {
+  try {
+    return compact(JSON.stringify(value));
+  } catch {
+    return String(value);
+  }
+}
+
+function parseJsonObject(raw: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function jobBelongsToWorkflow(jobData: string, workflowRunId: string): boolean {
+  const parsed = parseJsonObject(jobData);
+  const workflow = parsed?.workflow;
+  return Boolean(
+    workflow &&
+      typeof workflow === 'object' &&
+      !Array.isArray(workflow) &&
+      (workflow as { workflowRunId?: unknown }).workflowRunId === workflowRunId
+  );
+}
+
+async function assertNoAsyncFailures(scope: AsyncFailureScope): Promise<void> {
+  if (scope.workflowRunId) {
+    const failedTasks = await db
+      .select({
+        taskKey: workflowTaskResults.taskKey,
+        taskInstanceKey: workflowTaskResults.taskInstanceKey,
+        lastError: workflowTaskResults.lastError,
+      })
+      .from(workflowTaskResults)
+      .where(and(eq(workflowTaskResults.runId, scope.workflowRunId), eq(workflowTaskResults.status, 'failed')));
+
+    if (failedTasks.length > 0) {
+      throw new Error(
+        `Workflow ${scope.workflowRunId} failed: ${failedTasks
+          .map((task) => `${task.taskKey}/${task.taskInstanceKey}: ${stringifyForError(task.lastError)}`)
+          .join('; ')}`
+      );
+    }
+  }
+
+  if (!scope.workspaceId) return;
+
+  const failedJobs = await db
+    .select({
+      id: jobQueue.id,
+      type: jobQueue.type,
+      error: jobQueue.error,
+      data: jobQueue.data,
+    })
+    .from(jobQueue)
+    .where(and(eq(jobQueue.workspaceId, scope.workspaceId), eq(jobQueue.status, 'failed')))
+    .orderBy(desc(jobQueue.createdAt));
+
+  const relevantFailedJobs = scope.workflowRunId
+    ? failedJobs.filter((job) => jobBelongsToWorkflow(job.data, scope.workflowRunId!))
+    : failedJobs;
+
+  if (relevantFailedJobs.length > 0) {
+    throw new Error(
+      `Async job failed: ${relevantFailedJobs
+        .map((job) => `${job.type}/${job.id}: ${job.error ?? 'Unknown error'}`)
+        .join('; ')}`
+    );
+  }
+}
+
+async function waitFor<T>(
+  description: string,
+  options: {
+    timeoutMs: number;
+    intervalMs?: number;
+    failureScope?: AsyncFailureScope;
+  },
+  read: () => Promise<PollResult<T>>
+): Promise<T> {
+  const deadline = Date.now() + options.timeoutMs;
+  let lastValue: T | undefined;
+
+  while (true) {
+    if (options.failureScope) {
+      await assertNoAsyncFailures(options.failureScope);
+    }
+
+    const result = await read();
+    lastValue = result.value;
+    if (result.done) return result.value;
+
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Timed out waiting for ${description} after ${options.timeoutMs}ms. Last value: ${stringifyForError(lastValue)}`
+      );
+    }
+
+    await sleep(Math.min(options.intervalMs ?? POLL_INTERVAL_MS, Math.max(1, deadline - Date.now())));
+  }
+}
+
+async function fetchInitiatives(folderId: string, sessionToken: string): Promise<any[]> {
+  const initiativesResponse = await authenticatedRequest(app, 'GET', `/api/v1/initiatives?folder_id=${folderId}`, sessionToken);
+  expect(initiativesResponse.status).toBe(200);
+  const initiativesData = await initiativesResponse.json();
+  return initiativesData.items;
+}
 
 async function hardResetQueue(): Promise<void> {
   queueManager.pause();
@@ -96,19 +228,19 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(enrichData.jobId).toBeDefined();
 
     // 3) Wait for organization enrichment completion with polling
-    let enrichedOrganization;
-    let attempts = 0;
-    const maxAttempts = 5; // 5 * 5s = 25s max
-    
-    do {
-      await sleep(5000); // Wait 5 seconds between checks
-      enrichedOrganization = await authenticatedRequest(app, 'GET', `/api/v1/organizations/${createdOrganizationId}`, user.sessionToken!);
-      attempts++;
-    } while (enrichedOrganization.status === 200 && (await enrichedOrganization.clone().json()).status === 'enriching' && attempts < maxAttempts);
+    const enrichedState = await waitFor(
+      'organization enrichment',
+      { timeoutMs: 45000, failureScope: { workspaceId: user.workspaceId } },
+      async () => {
+        const response = await authenticatedRequest(app, 'GET', `/api/v1/organizations/${createdOrganizationId}`, user.sessionToken!);
+        const data = response.status === 200 ? await response.json() : { httpStatus: response.status };
+        return { done: response.status !== 200 || data.status !== 'enriching', value: { response, data } };
+      }
+    );
 
     // 4) Verify organization enrichment completed
-    expect(enrichedOrganization.status).toBe(200);
-    const enrichedData = await enrichedOrganization.json();
+    expect(enrichedState.response.status).toBe(200);
+    const enrichedData = enrichedState.data;
     expect(enrichedData.status).toBe('completed');
     expect(enrichedData.industry).toBeDefined();
     expect(enrichedData.industry).not.toBeNull();
@@ -120,7 +252,7 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(enrichedData.technologies).toBeDefined();
 
     // 5) Start initiative generation with the enriched organization
-    const input = `Generate 5 AI initiatives for ${organizationName} in the ${enrichedData.industry} industry`;
+    const input = `Generate ${FULL_WORKFLOW_INITIATIVE_COUNT} AI initiative for ${organizationName} in the ${enrichedData.industry} industry`;
     const generateResponse = await authenticatedRequest(
       app,
       'POST',
@@ -128,6 +260,7 @@ describe('AI Workflow - Complete Integration Test', () => {
       user.sessionToken!,
       {
         input,
+        initiative_count: FULL_WORKFLOW_INITIATIVE_COUNT,
         organization_id: createdOrganizationId,
         model: getTestModel()
       }
@@ -137,63 +270,49 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(generateData.success).toBe(true);
     expect(generateData.status).toBe('generating');
     expect(generateData.created_folder_id).toBeDefined();
+    expect(typeof generateData.workflow_run_id).toBe('string');
     createdFolderId = generateData.created_folder_id;
+    const workflowRunId = generateData.workflow_run_id as string;
 
-    // 6) Wait for initiative generation completion with polling
-    let folderResponse;
-    let attempts2 = 0;
-    const maxAttempts2 = 5; // 5 * 5s = 15s max
-    
-    do {
-      await sleep(5000); // Wait 5 seconds between checks
-      folderResponse = await authenticatedRequest(app, 'GET', `/api/v1/folders/${createdFolderId}`, user.sessionToken!);
-      attempts2++;
-    } while (folderResponse.status === 200 && (await folderResponse.clone().json()).status === 'generating' && attempts2 < maxAttempts2);
-
-    // 7) Verify folder exists and stays attached to the organization while the workflow continues
+    // 6) Verify folder exists and stays attached to the organization while the workflow continues
+    const folderResponse = await authenticatedRequest(app, 'GET', `/api/v1/folders/${createdFolderId}`, user.sessionToken!);
     expect(folderResponse.status).toBe(200);
     const folderData = await folderResponse.json();
     expect(['generating', 'completed']).toContain(folderData.status);
     expect(folderData.organizationId).toBe(createdOrganizationId);
 
-    // 8) Wait for initiatives to complete with polling
-    let initiativesResponse;
-    let attempts4 = 0;
-    const maxAttempts4 = 6; // 12 * 5s = 30s max
-    
-    do {
-      await sleep(5000); // Wait 5 seconds between checks
-      initiativesResponse = await authenticatedRequest(app, 'GET', `/api/v1/initiatives?folder_id=${createdFolderId}`, user.sessionToken!);
-      attempts4++;
-    } while (initiativesResponse.status === 200 && (await initiativesResponse.clone().json()).items.length === 0 && attempts4 < maxAttempts4);
+    // 7) Wait for list generation to create initiatives
+    const initiatives = await waitFor(
+      'initiative list creation',
+      { timeoutMs: 45000, failureScope: { workspaceId: user.workspaceId, workflowRunId } },
+      async () => {
+        const items = await fetchInitiatives(createdFolderId!, user.sessionToken!);
+        return { done: items.length > 0, value: items };
+      }
+    );
 
-    expect(initiativesResponse.status).toBe(200);
-    const initiativesData = await initiativesResponse.json();
-    expect(initiativesData.items.length).toBeGreaterThan(0);
-    
-    const initiatives = initiativesData.items;
+    expect(initiatives.length).toBeGreaterThan(0);
     console.log('Initiatives found:', initiatives.length);
     console.log('Use case statuses:', initiatives.map((uc: any) => uc.status));
     
-    // Wait until at least 80% of initiatives are completed (polling)
+    // 8) Wait until at least 80% of initiatives are completed
     const totalCount = initiatives.length;
     const threshold = Math.ceil(0.8 * totalCount);
-    let completedInitiatives = initiatives.filter((uc: any) => uc.status === 'completed');
-    let attempts5 = 0;
-    const maxAttempts5 = 24; // 24 * 5s = 120s max
-
-    while (completedInitiatives.length < threshold && attempts5 < maxAttempts5) {
-      await sleep(5000);
-      const updatedResponse = await authenticatedRequest(app, 'GET', `/api/v1/initiatives?folder_id=${createdFolderId}`, user.sessionToken!);
-      if (updatedResponse.status === 200) {
-        const updatedData = await updatedResponse.json();
-        const updatedInitiatives = updatedData.items;
-        completedInitiatives = updatedInitiatives.filter((uc: any) => uc.status === 'completed');
-        console.log(`Attempt ${attempts5 + 1}: Completed initiatives after wait: ${completedInitiatives.length}/${updatedInitiatives.length}`);
+    const completedState = await waitFor(
+      'initiative detail completion threshold',
+      { timeoutMs: 120000, failureScope: { workspaceId: user.workspaceId, workflowRunId } },
+      async () => {
+        const updatedInitiatives = await fetchInitiatives(createdFolderId!, user.sessionToken!);
+        const completed = updatedInitiatives.filter((uc: any) => uc.status === 'completed');
+        console.log(`Completed initiatives after wait: ${completed.length}/${updatedInitiatives.length}`);
         console.log('Current statuses:', updatedInitiatives.map((uc: any) => uc.status));
+        return {
+          done: completed.length >= threshold,
+          value: { completed, updatedInitiatives },
+        };
       }
-      attempts5++;
-    }
+    );
+    const completedInitiatives = completedState.completed;
 
     console.log(`Final result: ${completedInitiatives.length} completed initiatives out of ${totalCount} total`);
     expect(completedInitiatives.length).toBeGreaterThanOrEqual(threshold);
@@ -251,38 +370,34 @@ describe('AI Workflow - Complete Integration Test', () => {
     expect(allAssociated).toBe(true);
 
     // 10) Wait for all jobs to complete and verify queue is clean
-    let queueStats;
-    let attempts3 = 0;
-    const maxAttempts3 = 10;
-    
-    do {
-      await sleep(5000); // Wait 5 seconds between checks
-      queueStats = await authenticatedRequest(app, 'GET', '/api/v1/queue/stats', user.sessionToken!);
-      attempts3++;
-    } while (queueStats.status === 200 && ((await queueStats.clone().json()).pending > 0 || (await queueStats.clone().json()).processing > 0) && attempts3 < maxAttempts3);
-    
-    expect(queueStats.status).toBe(200);
-    const queueData = await queueStats.json();
+    const queueData = await waitFor(
+      'queue idle',
+      { timeoutMs: 60000, failureScope: { workspaceId: user.workspaceId, workflowRunId } },
+      async () => {
+        const queueStats = await authenticatedRequest(app, 'GET', '/api/v1/queue/stats', user.sessionToken!);
+        expect(queueStats.status).toBe(200);
+        const data = await queueStats.json();
+        return { done: data.pending === 0 && data.processing === 0, value: data };
+      }
+    );
+
     expect(queueData.pending).toBe(0);
-    // Allow some jobs to still be processing (they might be finishing up)
-    // Note: Can be higher due to multiple initiative detail jobs running in parallel
-    expect(queueData.processing).toBeLessThanOrEqual(30);
+    expect(queueData.processing).toBe(0);
+    expect(queueData.failed).toBe(0);
     
     // Log final queue status for debugging
     console.log('Final queue status:', queueData);
 
-    let finalFolderResponse;
-    let finalFolderData;
-    let attempts6 = 0;
-    const maxAttempts6 = 6;
-    do {
-      await sleep(2000);
-      finalFolderResponse = await authenticatedRequest(app, 'GET', `/api/v1/folders/${createdFolderId}`, user.sessionToken!);
-      expect(finalFolderResponse.status).toBe(200);
-      finalFolderData = await finalFolderResponse.json();
-      attempts6++;
-    } while (finalFolderData.status !== 'completed' && attempts6 < maxAttempts6);
-
+    const finalFolderData = await waitFor(
+      'folder completion',
+      { timeoutMs: 12000, failureScope: { workspaceId: user.workspaceId, workflowRunId } },
+      async () => {
+        const finalFolderResponse = await authenticatedRequest(app, 'GET', `/api/v1/folders/${createdFolderId}`, user.sessionToken!);
+        expect(finalFolderResponse.status).toBe(200);
+        const data = await finalFolderResponse.json();
+        return { done: data.status === 'completed', value: data };
+      }
+    );
     expect(finalFolderData.status).toBe('completed');
     
     // Cleanup stream events
@@ -290,7 +405,7 @@ describe('AI Workflow - Complete Integration Test', () => {
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, initiativeStreamId));
       }, 120000);
 
-  it('should accept the org-aware list schema with explicit org_ids and complete generation', async () => {
+  it('should accept the org-aware list schema with explicit org_ids', async () => {
     const orgAlphaResponse = await authenticatedRequest(
       app,
       'POST',
@@ -319,9 +434,10 @@ describe('AI Workflow - Complete Integration Test', () => {
       '/api/v1/initiatives/generate',
       user.sessionToken!,
       {
-        input: 'Generate 3 AI initiatives spanning manufacturing and logistics operations',
+        input: `Generate ${ORG_AWARE_INITIATIVE_COUNT} AI initiatives spanning manufacturing and logistics operations`,
+        initiative_count: ORG_AWARE_INITIATIVE_COUNT,
         org_ids: createdOrganizationIds,
-        matrix_mode: 'generate',
+        matrix_mode: 'default',
         model: getTestModel(),
       }
     );
@@ -329,33 +445,30 @@ describe('AI Workflow - Complete Integration Test', () => {
     const generateData = await generateResponse.json();
     expect(generateData.success).toBe(true);
     expect(generateData.created_folder_id).toBeDefined();
+    expect(typeof generateData.workflow_run_id).toBe('string');
     createdFolderId = generateData.created_folder_id;
+    const workflowRunId = generateData.workflow_run_id as string;
 
-    let initiativesResponse;
-    let completedInitiatives: any[] = [];
-    let attempts = 0;
-    const maxAttempts = 24;
+    const generatedInitiatives = await waitFor(
+      'org-aware initiative list creation',
+      { timeoutMs: 90000, failureScope: { workspaceId: user.workspaceId, workflowRunId } },
+      async () => {
+        const items = await fetchInitiatives(createdFolderId!, user.sessionToken!);
+        return { done: items.length > 0, value: items };
+      }
+    );
 
-    while (completedInitiatives.length === 0 && attempts < maxAttempts) {
-      await sleep(5000);
-      initiativesResponse = await authenticatedRequest(app, 'GET', `/api/v1/initiatives?folder_id=${createdFolderId}`, user.sessionToken!);
-      expect(initiativesResponse.status).toBe(200);
-      const initiativesData = await initiativesResponse.json();
-      completedInitiatives = initiativesData.items.filter((initiative: any) => initiative.status === 'completed');
-      attempts++;
-    }
-
-    expect(completedInitiatives.length).toBeGreaterThan(0);
-    const firstCompleted = completedInitiatives[0];
+    expect(generatedInitiatives.length).toBeGreaterThan(0);
+    const firstGenerated = generatedInitiatives[0];
     // organizationId may be null when the LLM returns organizationIds: [] (valid per prompt contract)
     // When assigned, it must reference one of the provided org IDs
-    if (firstCompleted.organizationId) {
-      expect(createdOrganizationIds).toContain(firstCompleted.organizationId);
+    if (firstGenerated.organizationId) {
+      expect(createdOrganizationIds).toContain(firstGenerated.organizationId);
     }
     // At least one initiative across the batch should have an org assigned
-    const anyWithOrg = completedInitiatives.some((i: any) => i.organizationId != null);
+    const anyWithOrg = generatedInitiatives.some((i: any) => i.organizationId != null);
     expect(anyWithOrg).toBe(true);
-    expect(firstCompleted.data?.name).toBeDefined();
-    expect(firstCompleted.data?.description).toBeDefined();
+    expect(firstGenerated.data?.name).toBeDefined();
+    expect(firstGenerated.data?.description).toBeDefined();
   }, 180000);
 });
