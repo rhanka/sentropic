@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM node:24-alpine3.22 AS base
+FROM node:24-alpine3.23 AS base
 # Security: Update npm to latest version to fix glob vulnerabilities in npm dependencies
 RUN npm install -g npm@latest
 # Security: Force update glob in npm itself to fix CVE-2025-64756
@@ -36,6 +36,17 @@ RUN mkdir -p /tmp/minimatch-update && \
       mv package minimatch; \
     fi && \
     rm -rf /tmp/minimatch-update
+# Security: Force update picomatch inside npm's tinyglobby to fix CVE-2026-33671
+RUN mkdir -p /tmp/picomatch-update && \
+    cd /tmp/picomatch-update && \
+    npm pack picomatch@4.0.4 && \
+    cd /usr/local/lib/node_modules/npm/node_modules && \
+    if [ -d tinyglobby/node_modules/picomatch ]; then \
+      rm -rf tinyglobby/node_modules/picomatch && \
+      tar -xzf /tmp/picomatch-update/picomatch-4.0.4.tgz && \
+      mv package tinyglobby/node_modules/picomatch; \
+    fi && \
+    rm -rf /tmp/picomatch-update
 WORKDIR /app
 COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
 RUN if [ -f package-lock.json ]; then npm ci; \
@@ -52,7 +63,7 @@ CMD ["npm", "run", "dev"]
 FROM base AS build
 RUN npm run build
 
-FROM node:24-alpine3.22 AS production
+FROM node:24-alpine3.23 AS production
 # Security: Update npm to latest version to fix glob vulnerabilities in npm dependencies
 RUN npm install -g npm@latest
 # Security: Force update glob in npm itself to fix CVE-2025-64756
@@ -89,6 +100,17 @@ RUN mkdir -p /tmp/minimatch-update && \
       mv package minimatch; \
     fi && \
     rm -rf /tmp/minimatch-update
+# Security: Force update picomatch inside npm's tinyglobby to fix CVE-2026-33671
+RUN mkdir -p /tmp/picomatch-update && \
+    cd /tmp/picomatch-update && \
+    npm pack picomatch@4.0.4 && \
+    cd /usr/local/lib/node_modules/npm/node_modules && \
+    if [ -d tinyglobby/node_modules/picomatch ]; then \
+      rm -rf tinyglobby/node_modules/picomatch && \
+      tar -xzf /tmp/picomatch-update/picomatch-4.0.4.tgz && \
+      mv package tinyglobby/node_modules/picomatch; \
+    fi && \
+    rm -rf /tmp/picomatch-update
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=base /app/package.json ./
