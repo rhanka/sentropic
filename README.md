@@ -1,340 +1,167 @@
 # Entropic
 
-> **Heads-up — this PR renames the repo.** Until the GitHub rename of
-> `rhanka/top-ai-ideas-fullstack` → `rhanka/entropic` lands and the in-code
-> rename of `@top-ai/*` is dispatched across BR-14 / BR-14b, references to
-> "top-ai" still appear in the codebase. See
-> [`README.intent.md`](README.intent.md) for the founding intent, and
-> [`PLAN.md`](PLAN.md) for the dispatch status.
+Public site: https://entropic.sent-tech.ca
 
-**Entropic is a decentralized, open-source substrate for AI-coded software.**
+French editorial reference: [README.fr.md](README.fr.md)
 
-> MANDATORY for contributors: read [`rules/MASTER.md`](rules/MASTER.md) and the
-> companion rule files before opening any PR.
+Transition plan: [TRANSITION.md](TRANSITION.md)
 
-## What this is
+Entropic is an open-source foundation for building software where AI is not bolted on after the fact, but becomes a structural part of the experience: chat interfaces, agentic workflows, multi-model runtimes, UI templates, and business applications generated or assisted by AI.
 
-Entropic is a working repository that doubles as:
+The project starts from a simple conviction: as agent-assisted development accelerates, organizations will be able to reclaim a growing share of their software systems. Instead of stacking closed SaaS products, they will be able to assemble, adapt, and maintain tools that are closer to their real processes.
 
-1. **A progressively-growing replacement for the commercial AI ecosystem** —
-   agentic workflows, AI SDKs, coding CLIs — rebuilt standalone, in open source,
-   with no commercial telos.
-2. **A platform for real consulting business cases** — AI/IT assessment,
-   opportunity & bid management — running *on* the substrate as proof that it
-   holds up under real workloads.
-3. **A long-horizon bet** that agent coding makes it realistic for any company
-   to build its own OS, its own AI stack, and its own tools — and that the
-   software industry's next decade is entropic (dispersion), not consolidative.
+Entropic explores that direction pragmatically: by building a real product first, then progressively extracting the generic building blocks that make it possible.
 
-The name carries three meanings, in order of seriousness:
+## Why this name
 
-- **Shannon entropy** — the mathematical substrate LLMs actually operate on.
-- **A counter-positioning to Anthropic** — decentralized alternative to
-  frontier-lab-as-platform.
-- **A wink at the SaaSpocalypse** — the industry-wide refactor we're betting on.
+The name Entropic first points to Shannon entropy: information, uncertainty, compression, probability distributions. This is the mathematical vocabulary language models operate in, long before the brands and interfaces that commercialize them.
 
-Read [`README.intent.md`](README.intent.md) for the founding 10-point manifesto.
+It also carries a deliberate nod to Anthropic. Where the large labs concentrate models, platforms, and access, Entropic is interested in the opposite movement: redistributing building blocks, making usage composable, documenting interfaces, and letting others adapt them.
 
-## Current state — what actually runs today
+Finally, the name echoes the "SaaSpocalypse": the idea that many business software categories will be recomposed by smaller, better-tooled teams that can produce specific systems instead of buying generic and constraining tools.
 
-The repository currently hosts one working application — **Top AI Ideas** — a
-consulting-facing tool that generates and evaluates AI use-cases for an
-organization. Top AI Ideas is *one business case* running on the platform; it
-is not the project.
+## Direction
 
-What ships today:
+We start from TypeScript and JavaScript because they are currently the closest languages to the convergence point between interface, server, extension, automation, and distribution. This is a practical choice before it is an ideological one: it lets us connect a runtime, a UI, a browser extension, an IDE extension, and publishable libraries quickly.
 
-- **UI** — SvelteKit 5 + Tailwind, static build, EN/FR i18n.
-- **API** — Hono + Drizzle + Zod on Node 20, REST + OpenAPI.
-- **Data** — PostgreSQL 17 with a custom PostgreSQL-backed job queue (no Redis).
-- **AI** — multi-provider runtime around OpenAI / Anthropic / Cohere, quota and
-  retry management.
-- **Auth** — WebAuthn passkeys, email verification, magic-link fallback, RBAC.
-- **Delivery** — UI on GitHub Pages, API on Scaleway Container Serverless,
-  Docker-first dev environment, Make-only commands.
+The project aims to progressively replace selected pieces of the commercial AI ecosystem: chat SDKs, multi-LLM runtimes, agentic workflows, coding tools, document connectors, interface templates, and collaborative surfaces around AI-generated objects.
 
-### System architecture — today
+The business applications built on top may be specific, commercial, or internal, but the core must remain inspectable, reusable, and adaptable.
 
-End-to-end picture: the three user surfaces (web UI, Chrome extension,
-VSCode extension), the Hono API and LLM runtime, the PostgreSQL-backed data
-layer, and the external AI / identity providers.
+## Commitment
+
+The Entropic foundation remains, and will remain, open source and free to use. It aims to provide a set of functions that lets people avoid the "god nodes" and lock-in that for-profit SaaS tends to produce by design. The non-profit purpose is explicit, and so is the non-growth posture of the project.
+
+## Current state
+
+The first application ground is consulting: Top AI Ideas for identifying and evaluating AI use cases, followed by opportunity, qualification, proposal, and bid-management workflows.
+
+These applications are not the project itself. They are used to test the foundation in real cases, with business objects, documents, workflows, users, permissions, exports, and operational constraints.
+
+## What already exists
+
+Entropic is not only an architectural intention. This repository already contains a usable product and several foundation pieces that are starting to detach from the initial business case.
+
+### Chat UI
+
+The chat interface already exists in the web application and acts as the common surface for interactions with models, tools, business contexts, and workflows. It handles sessions, history, streaming, tool calls, permissions, and multiple work contexts.
+
+Two extensions extend that surface:
+
+- a Chrome extension that exposes the chat in a side panel and allows controlled actions on the current tab;
+- a VSCode extension that embeds the same assistance logic in the development environment, with local tools and a permission layer.
+
+BR-14a extracts this surface into a publishable library, `@entropic/chat`, so the chat is no longer only a Top AI Ideas component but a reusable building block.
+
+### Agentic Workflow
+
+The project already has a workflow runtime: configurable agents, workflow definitions, ordered tasks, execution state, steering TODOs, and steering mechanisms. The historical AI-idea generation workflows have been generalized into a multi-workflow model by workspace type.
+
+The trajectory is to move from business orchestration that is still partly tied to the first use cases toward a more generic engine: task graphs, explicit transitions, fanout/join, checkpoints, resumability, and human interventions.
+
+This layer prefigures `@entropic/flow`.
+
+### LLM Mesh
+
+The LLM runtime already supports several providers: OpenAI, Gemini, Claude, Mistral, and Cohere across the delivered branches. It handles model selection, global or user keys, streaming, quotas, retries, and capability differences between providers.
+
+This piece now becomes the priority in the BR-14 sequence: before extracting the chat, Entropic should publish a first npm library centered on model access, `@entropic/llm-mesh`. The goal is an open equivalent to the Vercel AI SDK for LLM access: stable contracts on the application side, interchangeable providers on the execution side, explicit capabilities per model.
+
+BR-14c owns that extraction: OpenAI, Anthropic/Claude, Google/Gemini, Mistral, and Cohere; token-based or Codex-account-based usage; and later preparation for Gemini Code Assist and Claude Code accounts. BR-14b becomes the internal refactor that migrates the application runtime onto this abstraction.
+
+### UI Templates
+
+Entropic already contains a view-template system. Screens are no longer only hard-coded components: some business objects can be rendered through view descriptors, with layouts, widgets, fields, actions, and variants by workspace type.
+
+This logic is central to what comes next. AI-generated or AI-enriched objects are not just text blocks: they are structured, editable, comparable, exportable, and sometimes collaborative artifacts. UI templates should make it possible to render these objects without rebuilding a specific interface for every new business case.
+
+### Business Cases
+
+Top AI Ideas is the first business case: identifying, generating, evaluating, and prioritizing AI use cases for an organization. It is the initial testbed for chat, the LLM runtime, evaluation matrices, folders, organizations, exports, and generation workflows.
+
+The second axis is opportunity management: qualification, solutions, products, proposals, bids, and maturity gates. This moves Entropic beyond "AI ideas" and verifies that the foundation can support more generic business processes.
+
+## Current Overview
 
 ```mermaid
 flowchart TB
     subgraph Surfaces["User surfaces"]
-        WebUI["Web UI<br/>SvelteKit 5 · Tailwind<br/>i18n EN/FR · static build"]
-        Chrome["Chrome extension<br/>sidepanel + content script<br/>ui/chrome-ext/ (BR-06/13)"]
-        VSCode["VSCode extension<br/>webview + local tools<br/>ui/vscode-ext/ (BR-05)"]
+        Web["Web app<br/>Top AI Ideas + Opportunities"]
+        Chrome["Chrome extension<br/>side panel + tab actions"]
+        VSCode["VSCode extension<br/>chat + local tools"]
     end
 
-    subgraph Backend["Backend services"]
-        API["Hono API<br/>TypeScript · REST + OpenAPI<br/>WebAuthn · RBAC · rate-limit"]
-        Runtime["LLM Runtime<br/>multi-provider<br/>quota · retries · streaming"]
-        Queue["Job Queue<br/>PostgreSQL-backed<br/>QueueManager"]
+    subgraph Core["Current Entropic foundation"]
+        Chat["Chat UI<br/>sessions · streaming · tools · permissions"]
+        Workflow["Workflow runtime<br/>agents · tasks · steering · TODO"]
+        LLM["Application LLM mesh<br/>OpenAI · Gemini · Claude · Mistral · Cohere"]
+        Templates["UI templates<br/>views · widgets · actions · business objects"]
     end
 
-    subgraph Data["Data layer"]
-        DB[("PostgreSQL 17<br/>Drizzle migrations")]
-        Docs[("Document chunks<br/>+ embeddings<br/>(BR-16a in-situ)")]
+    subgraph Business["Business applications"]
+        Ideas["Top AI Ideas<br/>AI use cases · scoring · folders"]
+        Opps["Opportunities<br/>qualification · solutions · bids"]
     end
 
-    subgraph External["External providers"]
-        LLMs["OpenAI · Anthropic<br/>Cohere · Mistral"]
-        OIDC["OIDC / SSO<br/>Google · LinkedIn"]
-        GDrive["Google Drive<br/>(BR-16a, in-situ docs)"]
-    end
+    Web --> Chat
+    Chrome --> Chat
+    VSCode --> Chat
 
-    subgraph DevOps["DevOps"]
-        Make["Makefile<br/>build · test · deploy"]
-        Compose["Docker Compose<br/>per-branch ENV isolation"]
-        CI["GitHub Actions<br/>content-hashed images<br/>GH Pages · Scaleway"]
-    end
+    Chat --> Workflow
+    Chat --> LLM
+    Workflow --> LLM
+    Templates --> Web
 
-    WebUI -->|REST/JSON · cookies| API
-    Chrome -->|REST/JSON · session token| API
-    VSCode -->|REST/JSON · session token| API
-
-    API --> Runtime
-    API --> DB
-    API --> Queue
-    Queue --> Runtime
-    Runtime --> LLMs
-
-    API -->|OIDC| OIDC
-    API -->|OAuth + changes.list| GDrive
-    GDrive -.->|chunk + embed| Docs
-    Docs -.-> DB
-
-    Make --> Compose
-    Make --> CI
-    CI -->|deploy| WebUI
-    CI -->|deploy| API
-
-    classDef surface fill:#e1f5fe,stroke:#0288d1
-    classDef backend fill:#f3e5f5,stroke:#7b1fa2
-    classDef data fill:#e8f5e8,stroke:#2e7d32
-    classDef external fill:#fff8e1,stroke:#f57f17
-    classDef devops fill:#fff3e0,stroke:#ef6c00
-    class WebUI,Chrome,VSCode surface
-    class API,Runtime,Queue backend
-    class DB,Docs data
-    class LLMs,OIDC,GDrive external
-    class Make,Compose,CI devops
+    Ideas --> Templates
+    Opps --> Templates
+    Ideas --> Workflow
+    Opps --> Workflow
 ```
 
-**Surface notes.**
+## Target Architecture
 
-- **Web UI** (`ui/`) — SvelteKit 5, static build, served on GitHub Pages in
-  prod. All application features live here today.
-- **Chrome extension** (`ui/chrome-ext/`) — MV3 sidepanel that hosts the chat
-  surface against *any* web page, with a content script for in-page tool
-  execution and a network bridge for upstream control. Packaged as a
-  downloadable `.zip` (BR-13), upstream control shipped in BR-06.
-- **VSCode extension** (`ui/vscode-ext/`) — webview hosting the same chat
-  surface, with an auth bridge for session continuity, a stream proxy for
-  model output, and local tools (file read / write / exec) governed by a
-  permission layer. Packaged as `.vsix` (BR-05).
-
-All three surfaces talk to the same API — the chat SDK extraction (BR-14) is
-what lets them share the exact same client code, not just the same endpoints.
-
-## Near-term scope — the ecosystem pieces, one brick at a time
-
-The active engineering plan lives in [`PLAN.md`](PLAN.md). The agenda, in plain
-language:
-
-- **`@entropic/chat` — publishable chat SDK** (BR-14). The bar is "as well put
-  together as the Vercel AI SDK", shipped as an npm library independent from
-  the Top AI Ideas UI.
-- **LLM runtime refactor** (BR-14b). Clean multi-provider abstraction so the
-  chat SDK can be embedded in any project.
-- **Document connectors** (BR-16a, BR-16b). Google Drive SSO with in-situ
-  indexing first; SharePoint / OneDrive and generic abstraction next.
-- **Agentic workflows** (BR-07 / BR-07b). A LangGraph-equivalent positioned for
-  standalone publication.
-- **UI templating for AI-generated interfaces** and collaborative work on
-  AI-generated artifacts — new surface area, not yet broken out into branches.
-
-Long horizon (not on any current wave): TypeScript OS primitives, a compiler,
-and eventually an in-house LLM.
-
-## Target architecture — workflows and AI-native UI
-
-Two architectural pillars sit above the system described in the previous
-section. Today they are partial (chat SDK in BR-14, runtime in BR-14b,
-connectors in BR-16a); the diagram below sketches the steady-state they
-converge towards.
-
-### Workflow runtime — `@entropic/flow` (agentic graphs)
-
-A LangGraph / Temporal equivalent published standalone. A workflow is a graph
-of typed nodes (LLM call, tool call, human-in-the-loop, sub-workflow) with
-explicit state, streaming events, and replayable runs. It drives the chat SDK
-and is driven by it symmetrically — a chat turn is just one workflow type.
-
-### AI-native UI templating — `@entropic/ui`
-
-UI primitives designed from the ground up for AI generation and collaborative
-editing of AI-generated artifacts. A template is declarative and
-round-trippable: the model proposes structure, the UI renders it, edits flow
-back into the same shape. Deliberately framework-agnostic (conviction: step
-away from React), with a SvelteKit reference implementation.
+The trajectory is to extract generic building blocks from the current product without losing contact with real usage.
 
 ```mermaid
 flowchart TB
-    subgraph Clients["Clients — reuse same SDKs"]
-        WebC["Web UI"]
-        ChromeC["Chrome ext"]
-        VSCodeC["VSCode ext"]
-        CLI["Future CLI"]
+    subgraph Apps["Applications built on Entropic"]
+        TopAI["Top AI Ideas"]
+        Opportunity["Opportunity management"]
+        Future["Other business applications"]
     end
 
-    subgraph ChatSDK["@entropic/chat — BR-14"]
-        Transport["Transport<br/>(SSE default, pluggable)"]
-        AuthBridge["Auth bridge<br/>(session token seam)"]
-        ProviderSeam["Provider seam<br/>(→ runtime)"]
-        ToolReg["Tool registry<br/>(→ BR-19 tools)"]
+    subgraph Packages["Entropic packages"]
+        EntropicMesh["@entropic/llm-mesh<br/>providers · account/token auth · streaming"]
+        EntropicChat["@entropic/chat<br/>chat UI · transport · auth bridge · tools"]
+        EntropicFlow["@entropic/flow<br/>agentic workflows · graphs · checkpoints"]
+        EntropicUI["@entropic/ui<br/>templates · artifacts · collaboration"]
     end
 
-    subgraph Flow["@entropic/flow — future BR-07/07b"]
-        Graph["Workflow graph<br/>typed nodes + edges"]
-        State["Run state<br/>streaming · replayable"]
-        HITL["Human-in-the-loop<br/>checkpoints"]
+    subgraph Providers["Providers and environments"]
+        Models["LLM models<br/>OpenAI · Anthropic · Google · Mistral · Cohere"]
+        CodeAssist["Code-assistant accounts<br/>Codex · Gemini Code Assist · Claude Code"]
+        Docs["Documents<br/>Drive · SharePoint · files"]
+        DevTools["Environments<br/>Web · Chrome · VSCode · CLI"]
     end
 
-    subgraph UI["@entropic/ui — future"]
-        Tpl["AI-native templates<br/>(declarative, round-trip)"]
-        Collab["Collaborative artifacts<br/>(multi-user on AI output)"]
-        Primitives["Framework-agnostic<br/>primitives (post-React)"]
-    end
-
-    subgraph Runtime["LLM Runtime — BR-14b"]
-        MultiLLM["Multi-provider<br/>abstraction"]
-        Quota["Quota · retries<br/>streaming normalization"]
-    end
-
-    Clients --> ChatSDK
-    Clients --> UI
-
-    ChatSDK --> Flow
-    ChatSDK --> Runtime
-    Flow --> Runtime
-    Flow -.->|renders via| UI
-    UI -.->|edits feed back| Flow
-
-    classDef clients fill:#e1f5fe,stroke:#0288d1
-    classDef sdk fill:#f3e5f5,stroke:#7b1fa2
-    classDef flow fill:#fce4ec,stroke:#c2185b
-    classDef ui fill:#e0f2f1,stroke:#00796b
-    classDef rt fill:#fff3e0,stroke:#ef6c00
-    class WebC,ChromeC,VSCodeC,CLI clients
-    class Transport,AuthBridge,ProviderSeam,ToolReg sdk
-    class Graph,State,HITL flow
-    class Tpl,Collab,Primitives ui
-    class MultiLLM,Quota rt
+    Apps --> EntropicChat
+    Apps --> EntropicUI
+    EntropicChat --> EntropicFlow
+    EntropicChat --> EntropicMesh
+    EntropicFlow --> EntropicMesh
+    EntropicUI --> EntropicFlow
+    EntropicMesh --> Models
+    EntropicMesh --> CodeAssist
+    EntropicFlow --> Docs
+    EntropicChat --> DevTools
 ```
 
-**How it maps to active branches.**
+## Next Extractions
 
-- **BR-14** — extracts the web UI's chat into `@entropic/chat`, a publishable
-  npm library with explicit seams (transport, auth, provider, tool registry).
-  Benchmark: Vercel AI SDK. All three surfaces (web, Chrome, VSCode) switch
-  to it.
-- **BR-14b** — extracts the API's LLM runtime into the same namespace, so
-  `@entropic/chat` can drive any backend that speaks the runtime's protocol.
-  Blocked on the BR-14 handoff contract (seams defined in BR-14 scoping).
-- **BR-07 / BR-07b** — `@entropic/flow`. Initial implementation is the chat
-  request graph; expands to agentic graphs with tools, sub-workflows, and
-  HITL checkpoints. Published alongside `@entropic/chat`.
-- **BR-16a** — Google Drive SSO + in-situ indexing. Documents stay in Drive;
-  only chunks + embeddings land in our DB. This is the first real consumer of
-  the runtime's tool abstraction beyond LLM calls.
-- **AI-native UI templating** — not yet a branch. Prior art from the Top AI
-  Ideas matrix / dashboard feeds the design; the first target is a
-  collaborative artifact surface for AI-generated assessment reports.
+- **BR-14c**: extract the LLM mesh first as `@entropic/llm-mesh`, published as an npm library, with OpenAI, Claude, Gemini, Mistral, Cohere, token or Codex-account usage, and preparation for Gemini Code Assist / Claude Code accounts.
+- **BR-14b**: refactor the application LLM runtime so it consumes this provider-agnostic abstraction instead of remaining a monolithic internal runtime.
+- **BR-14a**: extract the chat surface into `@entropic/chat`, publishable and reusable outside Top AI Ideas, built on the LLM mesh contract rather than the details of the application runtime.
+- **BR-16a**: connect Google Drive while keeping documents in situ, with chunk indexing and embeddings stored by Entropic.
+- **BR-07 / BR-07b**: prepare npm publication and move the workflow runtime toward a standalone building block comparable in spirit to LangGraph or Temporal, but adapted to this project.
 
-## Using the repo
-
-### Dev environment
-
-```bash
-make dev         # Docker-first, starts UI + API + Postgres + MailDev
-make down        # Stop everything
-make ps-all      # Inspect running services across branch worktrees
-```
-
-Never run `npm`, `python`, or `docker` directly. All commands go through
-`make`. Never set `ENV=...` as a shell prefix — it is always the *last*
-argument to a `make` target.
-
-### Branch isolation
-
-Each active branch uses its own worktree under `tmp/<slug>/`, with its own
-`ENV`, `API_PORT`, `UI_PORT`, and `MAILDEV_UI_PORT`. See
-[`rules/workflow.md`](rules/workflow.md) and [`PLAN.md`](PLAN.md) §6 for the
-port convention.
-
-### Contributing
-
-- Commits are atomic (`make commit MSG="..."`), under ~150 lines, with
-  selective `git add` (never `git add .`).
-- Every branch declares `Allowed Paths` / `Forbidden Paths` in its `BRANCH.md`,
-  templated from [`plan/BRANCH_TEMPLATE.md`](plan/BRANCH_TEMPLATE.md).
-- Full rule set: [`rules/MASTER.md`](rules/MASTER.md).
-
-## Configuration reference
-
-### UI
-
-- `VITE_API_BASE_URL` — API backend base URL. Defaults to
-  `http://localhost:8787/api/v1` locally; set in `docker-compose.yml` for
-  Compose runs; set in CI for production.
-
-### API
-
-- `CORS_ALLOWED_ORIGINS` — comma-separated origin list, supports `*` subdomain
-  wildcards (e.g. `https://*.sent-tech.ca`).
-- `JWT_SECRET` — random 32+ chars for JWT signing.
-- `DATABASE_URL` — PostgreSQL connection string.
-- `OPENAI_API_KEY` / provider API keys — as needed by the LLM runtime.
-- `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGIN` — WebAuthn relying-party config.
-- `MAIL_PASSWORD` — SMTP password (Brevo or other).
-
-Never commit these. Use the platform secrets manager (GitHub Secrets, Scaleway
-Secrets).
-
-## Security posture
-
-- **Passkeys by default** — WebAuthn with discoverable credentials, email
-  verification (6-digit code, 10-min TTL), magic-link fallback for device
-  reset only.
-- **Sessions** — `HttpOnly` / `Secure` / `SameSite=Lax` cookies with JWT.
-- **RBAC hierarchy** — `admin_app > admin_org > editor > guest`, with User
-  Verification required for admin actions.
-- **Anti-replay & anti-cloning** — strict challenge TTL and credential-counter
-  validation.
-- **Rate limiting** — every auth endpoint; email verification capped at
-  3 codes / email / 10 min.
-- **Security headers** — CSP, HSTS, COOP, COEP, `X-Content-Type-Options`,
-  `X-Frame-Options`.
-
-Details: [`spec/WORKFLOW_AUTH.md`](spec/WORKFLOW_AUTH.md).
-
-## Repository layout
-
-- `ui/` — SvelteKit 5 application (Top AI Ideas front-end, soon `@entropic/chat`
-  consumer).
-- `api/` — Hono API and LLM runtime.
-- `rules/` — engineering rules (MASTER + workflow + conductor + subagents +
-  testing + security).
-- `plan/` — active branch execution files and orchestration artifacts.
-- `spec/` — technical specs per surface.
-- `e2e/` — Playwright end-to-end tests.
-- `docs/` — user-facing documentation.
-- `tmp/` — per-branch worktrees (gitignored).
-
-## License & intent
-
-Open source. No commercial telos for the substrate itself. Business-case
-surfaces (Top AI Ideas and successors) are separate products running on top.
-See [`README.intent.md`](README.intent.md) for the founding manifesto.
+The important point is that each extraction must remain connected to concrete usage. Entropic is not trying to accumulate abstractions for their own sake: every building block is first tested in a real application, then made reusable.
