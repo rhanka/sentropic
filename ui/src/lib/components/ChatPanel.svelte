@@ -82,10 +82,11 @@
     ChevronDown,
     Terminal,
     Search,
-    GitBranch
+    GitBranch,
   } from '@lucide/svelte';
   import { downloadCompletedDocxJob } from '$lib/utils/docx';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
+  import { generateInjectedScript } from '$lib/upstream/injected-script';
   import { postChatSteer } from '$lib/utils/chat-steer';
   import {
     filterPermissionPromptsForPendingStream,
@@ -1365,6 +1366,9 @@
   let sessionDocsReloadTimer: ReturnType<typeof setTimeout> | null = null;
   let showComposerMenu = false;
   let composerMenuButtonRef: HTMLButtonElement | null = null;
+  let composerMenuContextsMaxH = '';
+  let composerMenuToolsMaxH = '';
+  let composerMenuFixedStyle = '';
   // eslint-disable-next-line no-unused-vars
   let handleDocumentClick: ((_: MouseEvent) => void) | null = null;
   // eslint-disable-next-line no-unused-vars
@@ -4663,6 +4667,15 @@
 
   $: if (mode === 'ai' && showComposerMenu) {
     void loadExtensionActiveTabContext();
+    // Compute dynamic max-heights for context/tool sections
+    if (panelEl && composerMenuButtonRef) {
+      const panelTop = panelEl.getBoundingClientRect().top;
+      const btnTop = composerMenuButtonRef.getBoundingClientRect().top;
+      const availableH = btnTop - panelTop - 160; // leave room for header, file input, padding
+      const halfH = Math.max(60, Math.floor(availableH / 2));
+      composerMenuContextsMaxH = 'max-height:' + halfH + 'px';
+      composerMenuToolsMaxH = 'max-height:' + halfH + 'px';
+    }
   }
 
   $: if (mode === 'ai' && $workspaceScopeHydrated) {
@@ -5703,6 +5716,7 @@
             align="left"
             widthClass="w-80"
             menuClass="p-3 space-y-3"
+            strategy="fixed"
             bind:open={showComposerMenu}
             bind:triggerRef={composerMenuButtonRef}
           >
@@ -5744,7 +5758,7 @@
                   {$_('chat.contexts.none')}
                 </div>
               {:else}
-                <div class="space-y-1 max-h-40 overflow-auto slim-scroll">
+                <div class="space-y-1 overflow-auto slim-scroll" style={composerMenuContextsMaxH || 'max-height:10rem'}>
                   {#if extensionActiveTabContext}
                     <div
                       class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 bg-slate-50"
@@ -5784,7 +5798,7 @@
                 <div class="text-xs font-semibold text-slate-600 mb-1">
                   {$_('chat.tools.title')}
                 </div>
-                <div class="space-y-1 max-h-48 overflow-auto slim-scroll">
+                <div class="space-y-1 overflow-auto slim-scroll" style={composerMenuToolsMaxH || 'max-height:12rem'}>
                   {#each getVisibleToolToggles() as t (t.id)}
                     <button
                       class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
@@ -5820,6 +5834,7 @@
                   {/if}
                 </div>
               </div>
+
             </svelte:fragment>
           </MenuPopover>
           <select

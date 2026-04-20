@@ -10,6 +10,11 @@ test.describe('Chat heavy flows', () => {
   const ADMIN_STATE = './.auth/state.json';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_A_EMAIL = 'e2e-user-a@example.com';
+  const composerMenu = (page: any) =>
+    page
+      .locator('div.fixed.shadow-lg, div.absolute.shadow-lg')
+      .filter({ hasText: 'Contexte(s)' })
+      .first();
 
   const assistantWrapper = (page: any) => page.locator('div.flex.justify-start');
   const assistantBubble = (page: any) =>
@@ -109,11 +114,13 @@ test.describe('Chat heavy flows', () => {
 
     const menuButton = page.locator('button[aria-label="Ouvrir le menu"]');
     await menuButton.click();
-    const menu = page.locator('div.absolute').filter({ hasText: 'Contexte(s)' }).first();
+    const menu = composerMenu(page);
     const fileInput = menu.locator('input[type="file"]');
     const fixturePath = path.resolve(process.cwd(), 'tests/fixtures/README.md');
     await fileInput.setInputFiles(fixturePath);
-    await expect(page.locator('div.absolute').filter({ hasText: 'Contexte(s)' })).toHaveCount(0);
+    await expect(
+      page.locator('div.fixed.shadow-lg, div.absolute.shadow-lg').filter({ hasText: 'Contexte(s)' }),
+    ).toHaveCount(0);
 
     const docRow = page
       .locator('div', { hasText: 'README.md' })

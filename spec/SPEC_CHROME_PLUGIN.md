@@ -302,6 +302,45 @@ Precedence:
   - robust active-tab resolution (sender tab + fallback queries)
   - non-injectable URL guardrails (`chrome://`, `chrome-extension://`, etc.)
 
+### 4.6 Upstream Control (Webapp → Extension → Tab)
+
+In addition to the extension-local execution path (sidepanel/overlay), the webapp chat can dispatch `tab_read` / `tab_action` to Chrome tabs registered by a connected extension.
+
+Tab Registry (in-memory, API-side):
+- Chrome extension registers the active tab via `POST /api/v1/chrome-extension/tabs/register` from `background.ts`.
+- Keepalive every 15s via `POST /api/v1/chrome-extension/tabs/keepalive`.
+- Unregister via `DELETE /api/v1/chrome-extension/tabs/:tabId` on `chrome.tabs.onRemoved`.
+- Re-register on `chrome.tabs.onActivated` and `chrome.tabs.onUpdated` (status=complete).
+- Eviction after 45s without keepalive.
+- `tab_id` format: `chrome_<tabId>` (string).
+
+Chat-service tool injection:
+- When a user has registered tabs AND the chat client has no local tab tools (= webapp, not extension sidepanel), the chat-service injects `tab_read` and `tab_action` tool definitions with descriptions enumerating connected tabs (`tab_id`, `url`, `title`).
+- When the client HAS local tab tools (= extension sidepanel), the local execution path is unchanged (`pendingLocalToolCalls`). Upstream injection is skipped.
+
+Command dispatch flow:
+
+```
+Webapp chat → AI emits tab_read / tab_action tool call
+  → chat-service writes awaiting_external_result to the assistant stream
+  → extension sidepanel detects the pending tool call (SSE proxy)
+  → extension executes the tool locally on the targeted tab
+  → extension POSTs the result via /chat/messages/:id/tool-results
+  → chat-service resumes generation with the tool result
+```
+
+Extension-side additions (minimal, no refactor of sidepanel/overlay/SSE proxy):
+- `chrome.tabs.onActivated` → register active tab.
+- `chrome.tabs.onUpdated` (status=complete) → re-register on navigation.
+- `chrome.tabs.onRemoved` → unregister.
+- 15s keepalive interval.
+- Immediate active-tab registration right after a successful extension `Connect` + on worker startup, so the webapp sees a registered tab without requiring a manual tab switch.
+
+Screenshot capture (W1):
+- JPEG quality 95, max 1280px width.
+- `chrome.tabs.captureVisibleTab` from the service worker.
+- Returned as a base64 data URL in the tool result; passed to the LLM as text in the current runtime (multimodal upload is deferred to a later branch).
+
 ---
 
 ## 5. API Evolution (Current)
@@ -364,6 +403,29 @@ UI consumption:
 
 - `/settings` reads this endpoint and renders version/source + download CTA.
 - Error payload message is surfaced in the settings Chrome extension card.
+
+### 5.5 Tab Registry API
+
+Endpoints (session-authenticated, per-user scope):
+
+- `POST /api/v1/chrome-extension/tabs/register`
+  - Payload: `{ tabId: number | string, url: string, title: string }`
+  - Response: `{ tab_id: string }` (canonical `chrome_<tabId>`)
+- `POST /api/v1/chrome-extension/tabs/keepalive`
+  - Payload: `{ tab_id: string }`
+- `DELETE /api/v1/chrome-extension/tabs/:tabId`
+
+Behavior:
+
+- In-memory registry keyed by `(userId, tab_id)`.
+- Entries evicted after 45s without keepalive.
+- Chat-service reads the per-user tab list to decide upstream `tab_read` / `tab_action` tool injection.
+
+### 5.6 Composer Menu ("+") Layout
+
+- Composer `+` menu uses `MenuPopover strategy="fixed"` to escape host `overflow: hidden` contexts (chat shell, extension sidepanel, overlay).
+- Dynamic max-height for the context/tool sections keeps long lists scrollable without overflowing the viewport.
+- No regression on existing tools when extension is disconnected.
 
 ---
 

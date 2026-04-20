@@ -41,7 +41,6 @@ export const apiRouter = new Hono();
 
 // Public routes (no authentication required)
 apiRouter.route('/health', healthRouter);
-
 // Editor routes (require editor role or higher)
 apiRouter.use('/organizations/*', requireAuth);
 apiRouter.route('/organizations', organizationsRouter);
