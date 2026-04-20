@@ -50,6 +50,8 @@ import {
   batchCreateOrganizationsTool
 } from './tools';
 import { toolService } from './tool-service';
+import { listTabs as listRegisteredTabs } from './tab-registry';
+import type { TabEntry } from './tab-registry';
 import { todoOrchestrationService } from './todo-orchestration';
 import { ensureWorkspaceForUser } from './workspace-service';
 import { getWorkspaceRole, getWorkspaceType, hasWorkspaceRole, isWorkspaceDeleted } from './workspace-access';
@@ -816,6 +818,89 @@ export class ChatService {
     }
 
     return tools;
+  }
+
+  /**
+   * Build server-side tab_read / tab_action tool definitions for webapp context.
+   * These are injected when the client has no local tab tools but tabs are registered.
+   */
+  private buildServerTabToolDefinitions(
+    registeredTabs: TabEntry[],
+  ): OpenAI.Chat.Completions.ChatCompletionTool[] {
+    if (registeredTabs.length === 0) return [];
+
+    const tabListDesc = registeredTabs
+      .map(
+        (t) =>
+          `- tab_id="${t.tab_id}" source=${t.source} url=${t.url} title="${t.title}"`,
+      )
+      .join('\n');
+
+    const tabReadTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+      type: 'function',
+      function: {
+        name: 'tab_read',
+        description: `Read content from a connected browser tab. Available tabs:\n${tabListDesc}`,
+        parameters: {
+          type: 'object',
+          properties: {
+            tab_id: {
+              type: 'string',
+              description: 'The tab_id to read from.',
+            },
+            mode: {
+              type: 'string',
+              enum: ['info', 'dom', 'screenshot', 'elements'],
+              description:
+                'Reading mode: info (basic page info), dom (page DOM text), screenshot (visual capture), elements (interactive elements).',
+            },
+          },
+          required: ['tab_id', 'mode'],
+        } as OpenAI.FunctionParameters,
+      },
+    };
+
+    const tabActionTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+      type: 'function',
+      function: {
+        name: 'tab_action',
+        description: `Perform an action on a connected browser tab. Available tabs:\n${tabListDesc}`,
+        parameters: {
+          type: 'object',
+          properties: {
+            tab_id: {
+              type: 'string',
+              description: 'The tab_id to act on.',
+            },
+            action: {
+              type: 'string',
+              enum: ['scroll', 'click', 'type', 'wait'],
+              description: 'The action to perform.',
+            },
+            selector: {
+              type: 'string',
+              description: 'CSS selector for click/type targets.',
+            },
+            value: {
+              type: 'string',
+              description: 'Value for type action.',
+            },
+            direction: {
+              type: 'string',
+              enum: ['up', 'down'],
+              description: 'Scroll direction.',
+            },
+            waitMs: {
+              type: 'number',
+              description: 'Wait duration in milliseconds.',
+            },
+          },
+          required: ['tab_id', 'action'],
+        } as OpenAI.FunctionParameters,
+      },
+    };
+
+    return [tabReadTool, tabActionTool];
   }
 
   private normalizeVsCodeCodeAgentPayload(
@@ -2664,9 +2749,26 @@ export class ChatService {
       addTools([commentAssistantTool]);
     }
     addTools([historyAnalyzeTool]);
-    const localTools = this.normalizeLocalToolDefinitions(
+    let localTools = this.normalizeLocalToolDefinitions(
       options.localToolDefinitions
     );
+
+    // Server-side tab tool injection for webapp context:
+    // If the client did NOT provide local tab_read/tab_action definitions,
+    // check if tabs are registered for this user and inject server-side definitions.
+    const clientHasTabTools = localTools.some(
+      (t) =>
+        t.type === 'function' &&
+        (t.function?.name === 'tab_read' || t.function?.name === 'tab_action'),
+    );
+    if (!clientHasTabTools) {
+      const registeredTabs = listRegisteredTabs(options.userId);
+      if (registeredTabs.length > 0) {
+        const serverTabTools = this.buildServerTabToolDefinitions(registeredTabs);
+        localTools = [...localTools, ...serverTabTools];
+      }
+    }
+
     addTools(localTools);
     tools = toolSet.size > 0 ? Array.from(toolSet.values()) : hasDocuments ? [documentsTool] : undefined;
 

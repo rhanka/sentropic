@@ -6,6 +6,7 @@ import { sql, eq, and, gt } from 'drizzle-orm';
 import type { StreamEventType } from './llm-runtime';
 
 const DEFAULT_SEQUENCE_RETRY_ATTEMPTS = 6;
+const STREAM_SEQUENCE_LOCK_NAMESPACE = 'chat_stream_events';
 
 const isStreamSequenceConflictError = (error: unknown): boolean => {
   const pgError = findPgError(error, '23505');
@@ -44,6 +45,25 @@ export function generateStreamId(promptId?: string, jobId?: string, messageId?: 
  * Écrit un événement de streaming dans la base de données
  * et envoie un NOTIFY PostgreSQL pour temps réel
  */
+async function notifyStreamEvent(
+  streamId: string,
+  eventType: StreamEventType,
+  sequence: number,
+): Promise<void> {
+  const notifyPayload = JSON.stringify({
+    stream_id: streamId,
+    sequence,
+    event_type: eventType,
+  });
+
+  const client = await pool.connect();
+  try {
+    await client.query(`NOTIFY stream_events, '${notifyPayload.replace(/'/g, "''")}'`);
+  } finally {
+    client.release();
+  }
+}
+
 export async function writeStreamEvent(
   streamId: string,
   eventType: StreamEventType,
@@ -66,22 +86,7 @@ export async function writeStreamEvent(
         sequence: nextSequence,
       });
 
-      // Envoyer un NOTIFY PostgreSQL pour temps réel
-      // Payload minimal : stream_id, sequence, event_type (pour éviter dépassement 8k)
-      const notifyPayload = JSON.stringify({
-        stream_id: streamId,
-        sequence: nextSequence,
-        event_type: eventType,
-      });
-
-      // Utiliser le pool PostgreSQL directement pour NOTIFY
-      const client = await pool.connect();
-      try {
-        await client.query(`NOTIFY stream_events, '${notifyPayload.replace(/'/g, "''")}'`);
-      } finally {
-        client.release();
-      }
-
+      await notifyStreamEvent(streamId, eventType, nextSequence);
       return nextSequence;
     } catch (error) {
       if (
@@ -111,6 +116,43 @@ export async function getNextSequence(streamId: string): Promise<number> {
   return maxSequence + 1;
 }
 
+async function appendStreamEventAtomically(
+  streamId: string,
+  eventType: StreamEventType,
+  data: unknown,
+  messageId?: string | null,
+): Promise<number> {
+  const eventId = createId();
+  let insertedSequence = 1;
+
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${STREAM_SEQUENCE_LOCK_NAMESPACE}), hashtext(${streamId}))`,
+    );
+
+    const result = await tx
+      .select({
+        maxSequence: sql<number>`COALESCE(MAX(${chatStreamEvents.sequence}), 0)`,
+      })
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, streamId));
+
+    insertedSequence = Number(result[0]?.maxSequence ?? 0) + 1;
+
+    await tx.insert(chatStreamEvents).values({
+      id: eventId,
+      messageId: messageId || null,
+      streamId,
+      eventType,
+      data,
+      sequence: insertedSequence,
+    });
+  });
+
+  await notifyStreamEvent(streamId, eventType, insertedSequence);
+  return insertedSequence;
+}
+
 type SequenceRetryDeps = {
   getNextSequenceFn?: (streamId: string) => Promise<number>;
   writeStreamEventFn?: (
@@ -136,7 +178,19 @@ export async function writeStreamEventWithSequenceRetry(
     deps?: SequenceRetryDeps;
   },
 ): Promise<number> {
-  const maxAttempts = Math.max(1, options?.maxAttempts ?? 4);
+  if (!options?.deps) {
+    return appendStreamEventAtomically(
+      streamId,
+      eventType,
+      data,
+      options?.messageId ?? null,
+    );
+  }
+
+  const maxAttempts = Math.max(
+    1,
+    options?.maxAttempts ?? DEFAULT_SEQUENCE_RETRY_ATTEMPTS,
+  );
   const getNextSequenceFn = options?.deps?.getNextSequenceFn ?? getNextSequence;
   const writeStreamEventFn = options?.deps?.writeStreamEventFn ?? writeStreamEvent;
   let attempt = 0;

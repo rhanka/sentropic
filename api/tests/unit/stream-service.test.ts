@@ -227,6 +227,23 @@ describe('Stream Service', () => {
   });
 
   describe('writeStreamEventWithSequenceRetry', () => {
+    it('serializes concurrent sequence allocation on the default database path', async () => {
+      const insertedSequences = await Promise.all(
+        Array.from({ length: 8 }, (_, index) =>
+          writeStreamEventWithSequenceRetry(
+            testStreamId,
+            'status',
+            { state: `steer_${index + 1}` },
+          ),
+        ),
+      );
+
+      expect([...insertedSequences].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+
+      const events = await readStreamEvents(testStreamId);
+      expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    });
+
     it('retries once on sequence conflict and then succeeds', async () => {
       let attempts = 0;
 

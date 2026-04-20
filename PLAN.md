@@ -163,6 +163,5 @@ User UAT on root workspace (`ENV=dev`). Branch dev in worktree or root workspace
 - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (residual)
 - `spec/SPEC_EVOL_BR15_AGENT_WORKFLOW_CONFIG_ROBUSTNESS.md` (deferred)
 - `spec/SPEC_EVOL_VSCODE_PLUGIN.md`
-- `spec/SPEC_EVOL_CHROME_UPSTREAM.md`
 - `spec/SPEC_EVOL_RELEASE_QA_PIPELINE.md`
 - `spec/SPEC_EVOL_MODEL_AUTH_PROVIDERS.md`

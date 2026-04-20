@@ -11,6 +11,13 @@ export type ExtensionAuthUiState = {
     | 'chat.extension.auth.logoutToken';
 };
 
+export type ExtensionChatGateState = {
+  blockChatPanel: boolean;
+  showLoadingState: boolean;
+  showAuthState: boolean;
+  shouldAutoOpenSettings: boolean;
+};
+
 export const resolveExtensionAuthUiState = (input: {
   usesTokenBootstrap: boolean;
   isExtensionConfigAvailable: boolean;
@@ -36,5 +43,31 @@ export const resolveExtensionAuthUiState = (input: {
     logoutLabelKey: input.usesTokenBootstrap
       ? 'chat.extension.auth.logoutToken'
       : 'chat.extension.auth.logout',
+  };
+};
+
+export const resolveExtensionChatGateState = (input: {
+  isExtensionConfigAvailable: boolean;
+  authStatusLoaded: boolean;
+  connected: boolean;
+  isVisible: boolean;
+}): ExtensionChatGateState => {
+  const shouldBlock =
+    input.isExtensionConfigAvailable &&
+    (!input.authStatusLoaded || !input.connected);
+
+  return {
+    blockChatPanel: shouldBlock,
+    showLoadingState:
+      input.isExtensionConfigAvailable && !input.authStatusLoaded,
+    showAuthState:
+      input.isExtensionConfigAvailable &&
+      input.authStatusLoaded &&
+      !input.connected,
+    shouldAutoOpenSettings:
+      input.isExtensionConfigAvailable &&
+      input.isVisible &&
+      input.authStatusLoaded &&
+      !input.connected,
   };
 };
