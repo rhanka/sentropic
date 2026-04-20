@@ -45,9 +45,37 @@ Actions with the following status should be included around tasks only if really
 - conductor agent or human brings response: `clarification` / `acknowledge` / `refuse`
 
 ## Questions / Notes
+- CHU-Q2: Minimum domain-level permission granularity for upstream control.
 - CHU-Q3: Conflict resolution when multiple tabs match intent.
 - CHU-Q4: Voice provider/runtime constraints for privacy and performance.
 - CHU-Q5: Session timeout and forced re-approval policy.
+
+## Target design (inherited from BR-06 evol spec)
+
+### Multi-tab orchestration (W2)
+- Extend BR-06 in-memory Tab Registry to tab-scoped execution contexts (per-tab session state, per-tab permission cache).
+- Arbitration rules for active vs background tabs (explicit `tab_id` targeting required, no implicit "active tab" fallback for non-trivial actions).
+- Batch/tab-sequence command support with rollback-safe checkpoints (tool chain can mark checkpoint after each successful step; failure reverts to last checkpoint).
+
+### Video stream proxy (W2)
+- Buffered frame capture from `chrome.tabs.captureVisibleTab` (ring buffer, n frames).
+- Live tab preview surface in the webapp UI (read-only stream, no navigation side effects).
+- Rate-limit capture and gate behind explicit user enable.
+
+### Voice controls (W2)
+- Voice capture pipeline: `chrome.tabCapture` or MediaRecorder → transcription adapter → intent/tool mapping.
+- Integrate voice events into the existing assistant stream timeline (alongside text, tool_call, tool_result events).
+- Explicit privacy UX: recording indicator, consent step before first capture, one-click stop.
+
+### Acceptance (W2)
+- Multi-tab execution works with explicit `tab_id` targeting; no collateral effects on non-targeted tabs.
+- Voice command flow can trigger safe tool actions (opt-in scope list, confirm before destructive actions).
+- Permission/consent checks enforced for sensitive actions (capture, cross-origin writes).
+
+### Risks
+- Security risk if upstream command scope is too broad.
+- Race conditions in multi-tab orchestration.
+- Voice UX reliability and false-positive commands.
 
 ## AI Flaky tests
 - Acceptance rule:

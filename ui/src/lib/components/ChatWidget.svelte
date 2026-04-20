@@ -39,7 +39,10 @@
     resolveCodeAgentPromptProfile,
     type CodeAgentPromptSource,
   } from '$lib/vscode/code-agent-profile';
-  import { resolveExtensionAuthUiState } from '$lib/utils/extension-auth-ui';
+  import {
+    resolveExtensionAuthUiState,
+    resolveExtensionChatGateState,
+  } from '$lib/utils/extension-auth-ui';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -216,6 +219,12 @@
     sessionToken: '',
     connected: false,
     loginUrl: null,
+  });
+  let extensionChatGateState = resolveExtensionChatGateState({
+    isExtensionConfigAvailable: false,
+    authStatusLoaded: false,
+    connected: false,
+    isVisible: false,
   });
   let extensionProviderReadiness: ProviderReadinessEntry[] = [];
   let extensionProviderReadinessLoading = false;
@@ -633,6 +642,18 @@
     event?.stopPropagation();
     extensionSettingsTab = resolveDefaultExtensionSettingsTab();
     showExtensionConfigMenu = true;
+  };
+
+  const openExtensionSettingsMenuIfAuthGateApplies = () => {
+    const gateState = resolveExtensionChatGateState({
+      isExtensionConfigAvailable: isExtensionConfigAvailable(),
+      authStatusLoaded: extensionAuthStatusLoaded,
+      connected: extensionAuthConnected,
+      isVisible,
+    });
+    if (gateState.shouldAutoOpenSettings) {
+      openExtensionSettingsMenu();
+    }
   };
 
   const toSessionUser = (payload: {
@@ -1126,6 +1147,7 @@
         extensionProviderReadinessError = '';
         clearUser();
         extensionAuthStatusLoaded = true;
+        openExtensionSettingsMenuIfAuthGateApplies();
         return;
       }
 
@@ -1142,6 +1164,7 @@
           'info',
         );
         extensionAuthStatusLoaded = true;
+        openExtensionSettingsMenuIfAuthGateApplies();
         return;
       }
 
@@ -1167,6 +1190,7 @@
       extensionProviderReadinessError = '';
       clearUser();
       extensionAuthStatusLoaded = true;
+      openExtensionSettingsMenuIfAuthGateApplies();
     } finally {
       extensionAuthLoading = false;
     }
@@ -1209,6 +1233,7 @@
         clearUser();
         setExtensionAuthStatus(reason, 'error');
         extensionAuthStatusLoaded = true;
+        openExtensionSettingsMenuIfAuthGateApplies();
         return;
       }
 
@@ -1234,6 +1259,7 @@
         'error',
       );
       extensionAuthStatusLoaded = true;
+      openExtensionSettingsMenuIfAuthGateApplies();
     } finally {
       extensionAuthConnecting = false;
     }
@@ -1257,6 +1283,7 @@
       clearUser();
       setExtensionAuthStatus($_('chat.extension.status.loggedOut'), 'ok');
       extensionAuthStatusLoaded = true;
+      openExtensionSettingsMenuIfAuthGateApplies();
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       setExtensionAuthStatus(
@@ -1483,6 +1510,13 @@
   });
 
   $: extensionAuthRequired = extensionAuthUi.extensionAuthRequired;
+
+  $: extensionChatGateState = resolveExtensionChatGateState({
+    isExtensionConfigAvailable: isExtensionConfigAvailable(),
+    authStatusLoaded: extensionAuthStatusLoaded,
+    connected: extensionAuthConnected,
+    isVisible,
+  });
 
   $: extensionWorkspaceOnboardingRequired =
     isExtensionConfigAvailable() &&
@@ -2967,7 +3001,18 @@
 
       <!-- Contenu (QueueMonitor inchangé hors header) -->
       <div class="flex-1 min-h-0">
-        {#if extensionAuthRequired}
+        {#if extensionChatGateState.showLoadingState}
+          <div class="h-full min-h-0 flex items-center justify-center px-4 py-6">
+            <div
+              class="w-full max-w-md rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 space-y-3"
+            >
+              <div>{$_('common.loading')}</div>
+              <div class="text-xs text-slate-500">
+                {extensionAuthStatus}
+              </div>
+            </div>
+          </div>
+        {:else if extensionChatGateState.showAuthState}
           <div class="h-full min-h-0 flex items-center justify-center px-4 py-6">
             <div
               class="w-full max-w-md rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 space-y-3"
@@ -3185,14 +3230,16 @@
               </div>
             {/if}
             <div class="flex-1 min-h-0 overflow-hidden">
-              <ChatPanel
-                bind:this={chatPanelRef}
-                bind:sessions={chatSessions}
-                bind:sessionId={chatSessionId}
-                bind:draft={chatDraft}
-                bind:loadingSessions={chatLoadingSessions}
-                {contextStore}
-              />
+              {#if !extensionChatGateState.blockChatPanel}
+                <ChatPanel
+                  bind:this={chatPanelRef}
+                  bind:sessions={chatSessions}
+                  bind:sessionId={chatSessionId}
+                  bind:draft={chatDraft}
+                  bind:loadingSessions={chatLoadingSessions}
+                  {contextStore}
+                />
+              {/if}
             </div>
           </div>
         {/if}

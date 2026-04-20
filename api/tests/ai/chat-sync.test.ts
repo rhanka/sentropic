@@ -101,13 +101,14 @@ describe('Chat AI - Complete Integration', () => {
       const chatData = await chatResponse.json();
       const { jobId, assistantMessageId, sessionId } = chatData;
 
-      // Attendre la complétion du job
+      // Poll frequently so CI can observe completion without burning the whole
+      // test timeout on coarse 5-second sleeps.
       let jobCompleted = false;
       let attempts = 0;
-      const maxAttempts = 5;
+      const maxAttempts = 20;
 
       while (!jobCompleted && attempts < maxAttempts) {
-        await sleep(5000);
+        await sleep(1000);
 
         const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
         expect(jobRes.status).toBe(200);
@@ -136,7 +137,7 @@ describe('Chat AI - Complete Integration', () => {
       // Il devrait y avoir des events (tool calls ou content)
       expect(assistantDetails).toBeDefined();
       expect(Array.isArray(assistantDetails)).toBe(true);
-    }, 15000);
+    }, 30000);
 
     it('should handle web_extract tool calls correctly (no empty URLs)', async () => {
       // Message simple - l'IA ne devrait pas appeler web_extract avec un array vide

@@ -471,6 +471,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             try {
                 const config = await loadExtensionConfig();
                 const result = await connectExtensionAuth(config);
+                if (result.ok) {
+                    await registerActiveTabFromCurrentWindow();
+                }
                 sendResponse({
                     ok: result.ok,
                     ...result,
@@ -975,3 +978,90 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
     .catch((error) => console.error(error));
 
 void bootstrapToolPermissionSync();
+
+// --- Tab registration for upstream tab_read/tab_action via webapp ---
+let registeredTabId: string | null = null;
+let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
+
+async function registerActiveTabFromCurrentWindow(): Promise<void> {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (tab && canInjectTabUrl(tab.url)) {
+        await registerTab(tab);
+    }
+}
+
+async function registerTab(tab: chrome.tabs.Tab): Promise<void> {
+    const config = await loadExtensionConfig();
+    if (!config.apiBaseUrl || !tab.id || !tab.url) return;
+    try {
+        const token = await getValidAccessToken(config, { allowRefresh: true });
+        if (!token) return;
+        const res = await fetch(`${config.apiBaseUrl}/chrome-extension/tabs/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ tab_id: `chrome_${tab.id}`, url: tab.url, title: tab.title || '', source: 'chrome_plugin' }),
+        });
+        if (res.ok) {
+            const data = await res.json();
+            registeredTabId = data.tab_id;
+            startKeepalive(config.apiBaseUrl);
+        }
+    } catch (e) {
+        console.error('[background] Tab register failed:', e);
+    }
+}
+
+function startKeepalive(apiBaseUrl: string): void {
+    if (keepaliveTimer) clearInterval(keepaliveTimer);
+    keepaliveTimer = setInterval(async () => {
+        if (!registeredTabId) return;
+        try {
+            const config = await loadExtensionConfig();
+            const token = await getValidAccessToken(config, { allowRefresh: true });
+            if (!token) return;
+            await fetch(`${apiBaseUrl}/chrome-extension/tabs/keepalive`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ tab_id: registeredTabId }),
+            });
+        } catch { /* keepalive failure is non-fatal */ }
+    }, 15_000);
+}
+
+async function unregisterTab(): Promise<void> {
+    if (!registeredTabId) return;
+    const config = await loadExtensionConfig();
+    if (!config.apiBaseUrl) return;
+    try {
+        const token = await getValidAccessToken(config, { allowRefresh: false });
+        if (!token) return;
+        await fetch(`${config.apiBaseUrl}/chrome-extension/tabs/${registeredTabId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+    } catch { /* cleanup failure is non-fatal */ }
+    registeredTabId = null;
+    if (keepaliveTimer) { clearInterval(keepaliveTimer); keepaliveTimer = null; }
+}
+
+// Register the active tab when side panel is opened or tab changes
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+    const tab = await chrome.tabs.get(activeInfo.tabId);
+    if (tab.url && !NON_INJECTABLE_URL_PREFIXES.some(p => tab.url!.startsWith(p))) {
+        await registerTab(tab);
+    }
+});
+
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'complete' && tab.active && tab.url) {
+        if (!NON_INJECTABLE_URL_PREFIXES.some(p => tab.url!.startsWith(p))) {
+            await registerTab(tab);
+        }
+    }
+});
+
+chrome.tabs.onRemoved.addListener(async () => {
+    await unregisterTab();
+});
+
+void registerActiveTabFromCurrentWindow();

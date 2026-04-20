@@ -10,8 +10,10 @@
   export let menuStyle = '';
   export let disabled = false;
   export let triggerRef: HTMLElement | null = null;
+  export let strategy: 'absolute' | 'fixed' = 'absolute';
 
   let menuRef: HTMLDivElement | null = null;
+  let fixedStyle = '';
 
   const dispatch = createEventDispatcher<{ open: void; close: void }>();
 
@@ -21,8 +23,28 @@
     dispatch('close');
   };
 
+  const computeFixedStyle = (): string => {
+    if (strategy !== 'fixed' || !triggerRef) return '';
+    const rect = triggerRef.getBoundingClientRect();
+    const styles: string[] = [];
+    if (placement === 'up') {
+      styles.push(`bottom: ${window.innerHeight - rect.top + 8}px`);
+    } else {
+      styles.push(`top: ${rect.bottom + 8}px`);
+    }
+    if (align === 'left') {
+      styles.push(`left: ${rect.left}px`);
+    } else {
+      styles.push(`right: ${window.innerWidth - rect.right}px`);
+    }
+    return styles.join('; ');
+  };
+
   const toggle = () => {
     if (disabled) return;
+    if (!open && strategy === 'fixed') {
+      fixedStyle = computeFixedStyle();
+    }
     open = !open;
     dispatch(open ? 'open' : 'close');
   };
@@ -56,15 +78,30 @@
   $: alignClass = align === 'right' ? 'right-0' : 'left-0';
 </script>
 
-<div class="relative">
-  <slot name="trigger" {toggle} {open} {disabled} />
+{#if strategy === 'fixed'}
+  <div>
+    <slot name="trigger" {toggle} {open} {disabled} />
+  </div>
   {#if open}
     <div
-      class={`absolute ${positionClass} ${alignClass} ${widthClass} rounded-lg border border-slate-200 bg-white shadow-lg z-20 ${menuPaddingClass} ${menuClass}`}
-      style={menuStyle}
+      class={`fixed ${widthClass} rounded-lg border border-slate-200 bg-white shadow-lg z-50 ${menuPaddingClass} ${menuClass}`}
+      style="{fixedStyle}{menuStyle ? '; ' + menuStyle : ''}"
       bind:this={menuRef}
     >
       <slot name="menu" {close} />
     </div>
   {/if}
-</div>
+{:else}
+  <div class="relative">
+    <slot name="trigger" {toggle} {open} {disabled} />
+    {#if open}
+      <div
+        class={`absolute ${positionClass} ${alignClass} ${widthClass} rounded-lg border border-slate-200 bg-white shadow-lg z-20 ${menuPaddingClass} ${menuClass}`}
+        style={menuStyle}
+        bind:this={menuRef}
+      >
+        <slot name="menu" {close} />
+      </div>
+    {/if}
+  </div>
+{/if}
