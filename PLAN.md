@@ -1,6 +1,6 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-04-17 — BR-06 merged (`62de15ad`). Active scoping: BR-14 (chat lib publishable), BR-16a (gdrive SSO + in-situ indexing). BR-16 split → BR-16a + BR-16b. See §5 Scheduling.
+Status: Updated 2026-04-20 — BR-06 merged (`62de15ad`). Active scoping: Entropic transition, BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16a (gdrive SSO + in-situ indexing). BR-14 split → BR-14a + BR-14b + BR-14c. BR-16 split → BR-16a + BR-16b. See §5 Scheduling and `TRANSITION.md`.
 
 ## 1) Current state
 
@@ -21,11 +21,12 @@ Status: Updated 2026-04-17 — BR-06 merged (`62de15ad`). Active scoping: BR-14 
 - BR-25 `chore/rules-skills-audit` — absorb BR-04B audit learnings. See `plan/25-BRANCH_chore-rules-skills-audit.md`.
 
 **Active scoping (Lot 0 in progress):**
-- BR-14 `feat/chat-modularization` — exit criteria redefined: chat publishable as npm lib (Vercel AI SDK benchmark). BR-14b handoff contract must be specified here.
+- BR-14c `feat/llm-mesh-sdk` — priority extraction: publishable npm lib `@entropic/llm-mesh`, Vercel AI SDK-like access to GPT/Claude/Gemini/Mistral/Cohere with token and Codex-account modes.
+- BR-14a `feat/chat-ui-sdk` — former BR-14, renamed: chat publishable as npm lib `@entropic/chat`, using the LLM mesh contract rather than application runtime internals.
 - BR-16a `feat/gdrive-sso-indexing` — Google Drive OAuth + in-situ indexing (chunks+embeddings in DB, docs stay in Drive). Split from former BR-16.
 
 **Pending branches (unblocked):**
-- BR-07, BR-10, BR-11, BR-12, BR-14b (after BR-14 exit criteria), BR-15, BR-16b, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22 — see §3 catalog for descriptions, dependencies, and priorities.
+- BR-07, BR-10, BR-11, BR-12, BR-14b (after BR-14c contract), BR-14d (infra rename, after repo/DNS decision), BR-15, BR-16b, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22 — see §3 catalog for descriptions, dependencies, and priorities.
 
 **Deferred:**
 - BR-09 `feat/sso-google` — deferred post-refacto (OOM resolution required before SSO Google work; exact target TBD by conductor).
@@ -76,7 +77,7 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-06  | feat/chrome-upstream-v1                          | Webapp dispatches tab_read/tab_action to Chrome tabs via   | done                 | BR-00                          |
 |        |                                                  | extension (in-memory Tab Registry).                        |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-07  | feat/release-ui-npm-and-pretest                  | UI npm publish + packaged debug assistant with CI          | plan                 | BR-00, BR-14                   |
+| BR-07  | feat/release-ui-npm-and-pretest                  | UI npm publish + packaged debug assistant with CI          | plan                 | BR-00, BR-14a                  |
 |        |                                                  | artifacts (screens/videos/logs).                           |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-08  | feat/model-runtime-claude-mistral-cohere         | Model runtime v2: Claude + Mistral + Cohere providers.     | done                 | BR-01                          |
@@ -96,12 +97,20 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-13  | feat/chrome-plugin-download-distribution         | Chrome extension build + download/distribution flow.       | done                 | BR-06                          |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-14  | feat/chat-modularization                         | Chat modularization with exit criteria = publishable npm  | scoping              | BR-04 (low)                    |
-|        |                                                  | lib (Vercel AI SDK benchmark). Must define BR-14b        |                      |                                |
-|        |                                                  | handoff contract (llm-runtime seam).                      |                      |                                |
+| BR-14c | feat/llm-mesh-sdk                                | Publish @entropic/llm-mesh: Vercel AI SDK-like access      | scoping (priority)   | BR-01, BR-08                   |
+|        |                                                  | to GPT/Claude/Gemini/Mistral/Cohere, token auth, Codex     |                      |                                |
+|        |                                                  | account mode, later Gemini Code Assist / Claude Code.      |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-14b | refacto/llm-runtime                              | Refactor monolithic LLM runtime into provider-agnostic     | plan (after BR-14)   | BR-08, BR-14 (exit criteria)   |
-|        |                                                  | architecture + per-model capability matrix.                |                      |                                |
+| BR-14b | refacto/llm-runtime-core                         | Migrate the application LLM runtime onto the mesh:          | plan (after BR-14c   | BR-08, BR-14c                  |
+|        |                                                  | provider contracts, capability matrix, streaming           | contract)            |                                |
+|        |                                                  | normalization, retries, quotas.                            |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-14a | feat/chat-ui-sdk                                 | Former BR-14. Extract @entropic/chat from web, Chrome,      | plan (after BR-14c,  | BR-04 (low), BR-14c            |
+|        |                                                  | and VSCode surfaces as publishable npm lib.                | can scope in parallel)|                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-14d | chore/entropic-infra-rename                      | Rename/alias repo-adjacent infra objects: Scaleway          | plan                 | TRANSITION, repo/DNS decision  |
+|        |                                                  | containers, registry images, secrets, workflow names,      |                      |                                |
+|        |                                                  | dashboards, and deployment metadata.                       |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-15  | feat/spectral-site-tools                         | HTTP traffic capture + LLM analysis -> auto-generated      | plan                 | BR-06, BR-19                   |
 |        |                                                  | per-site API tools (complement to DOM                      |                      |                                |
@@ -163,8 +172,10 @@ graph TD
   BR11[BR-11 chrome multitab+voice]
   BR12[BR-12 release chrome+vscode ci]
   BR13[BR-13 chrome download ✓]
-  BR14[BR-14 chat lib publishable ⚡]
-  BR14b[BR-14b llm-runtime refacto]
+  BR14c[BR-14c llm mesh sdk ⚡]
+  BR14b[BR-14b llm runtime core]
+  BR14a[BR-14a chat ui sdk]
+  BR14d[BR-14d infra rename]
   BR15[BR-15 spectral site tools]
   BR16a[BR-16a gdrive SSO + indexing ⚡]
   BR16b[BR-16b document connectors other]
@@ -185,7 +196,6 @@ graph TD
   BR03 --> BR05
   BR00 --> BR06
   BR00 --> BR07
-  BR14 --> BR07
   BR06 --> BR13
 
   BR01 --> BR08
@@ -199,9 +209,14 @@ graph TD
   BR06 --> BR12
   BR07 --> BR12
   BR13 --> BR12
-  BR04 -.->|low| BR14
-  BR14 --> BR14b
-  BR14 --> BR07
+  BR01 --> BR14c
+  BR08 --> BR14c
+  BR14c --> BR14b
+  BR14c --> BR14a
+  BR14b -.->|runtime handoff| BR14a
+  BR04 -.->|low| BR14a
+  BR14a --> BR07
+  BR14d -.->|ops rename| BR12
   BR04 -.->|low| BR16a
   BR08 -.->|Cohere embeddings| BR16a
   BR16a --> BR16b
@@ -217,11 +232,12 @@ graph TD
 
 ## 5) Scheduling post-BR-04
 
-**Wave in progress (2026-04-17)**: BR-14 Lot 0 (chat lib publishable scoping) ∥ BR-16a Lot 0 (gdrive SSO + indexing scoping). Both planning-only, agents scoping in parallel.
-**Wave next (after briefs)**: BR-14 Lot 1+ (impl) ∥ BR-16a Lot 1+ (impl, after Google Cloud app provisioning by user).
+**Wave in progress (2026-04-20)**: this transition branch (README pair, Entropic URL, repo/DNS/SCW plan, BR-14 split) ∥ BR-16a Lot 0 (gdrive SSO + indexing scoping). Planning-only.
+**Wave next (priority)**: BR-14c Lot 0/1 (`@entropic/llm-mesh`) before BR-14a implementation. BR-16a Lot 1+ can proceed after Google Cloud app provisioning by user.
+**Wave after BR-14c contract**: BR-14b (application LLM runtime migration to the mesh) ∥ BR-14a (chat UI SDK extraction), with BR-14a depending on the public mesh contract and BR-14b providing the internal runtime handoff.
 **Wave A2** (right after BR-04B merge — deferred behind current wave): BR-20 (entity/config refactor follow-up) + BR-22 (rich markdown list stabilization hotfix)
-**Wave B** (after BR-14 merge): BR-07 (UI npm, needs BR-14 lib) + BR-11 (Chrome multitab, after BR-06+BR-08) + BR-17 (RAG, after BR-16a + BR-08)
-**Wave B'** (after BR-14 merge, handoff validated): BR-14b (llm-runtime refacto, requires BR-14 exit criteria met)
+**Wave B** (after BR-14a merge): BR-07 (UI npm, needs chat lib) + BR-11 (Chrome multitab, after BR-06+BR-08) + BR-17 (RAG, after BR-16a + BR-08)
+**Wave Infra**: BR-14d (Scaleway/container/registry/secret/workflow rename) after the repository/DNS decision and after the package split is stable enough to avoid duplicate rename churn.
 **Wave C** (after BR-04 + BR-08): BR-10 (VSCode v2) + BR-21 (CV transpose & profiles)
 **Wave D** (after Wave B/C): BR-12 (CI publish, after BR-05+BR-06+BR-07+BR-13) + BR-16b (document connectors other, after BR-16a)
 **Wave E** (after BR-04): BR-19 (Agent sandbox + skill catalog — structural). Then BR-15 (spectral site tools — registers generated tools as skills in BR-19 catalog)
@@ -235,6 +251,7 @@ User UAT on root workspace (`ENV=dev`). Branch dev in worktree or root workspace
 
 ## 7) Source specifications
 
+- `TRANSITION.md` (Entropic repo/DNS/SCW transition and BR-14 split)
 - `spec/SPEC_EVOL_WORKSPACE_TYPES.md` (BR-04)
 - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (residual)
 - `spec/SPEC_EVOL_BR15_AGENT_WORKFLOW_CONFIG_ROBUSTNESS.md` (deferred)
