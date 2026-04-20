@@ -1,6 +1,6 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-04-20 — BR-06 merged (`62de15ad`). Active scoping: Entropic transition, BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16a (gdrive SSO + in-situ indexing). BR-14 split → BR-14a + BR-14b + BR-14c. BR-16 split → BR-16a + BR-16b. See §5 Scheduling and `TRANSITION.md`.
+Status: Updated 2026-04-20 — BR-06 merged (`62de15ad`). Active scoping: Entropic transition, BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16a (gdrive SSO + in-situ indexing). BR-14 split → BR-14a + BR-14b + BR-14c + BR-14d + BR-14e. Selected execution order: PR-117 transition ops → BR-14c → BR-14b → BR-14a → BR-14e → BR-14d. BR-16 split → BR-16a + BR-16b. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
 
 ## 1) Current state
 
@@ -26,10 +26,19 @@ Status: Updated 2026-04-20 — BR-06 merged (`62de15ad`). Active scoping: Entrop
 - BR-16a `feat/gdrive-sso-indexing` — Google Drive OAuth + in-situ indexing (chunks+embeddings in DB, docs stay in Drive). Split from former BR-16.
 
 **Pending branches (unblocked):**
-- BR-07, BR-10, BR-11, BR-12, BR-14b (after BR-14c contract), BR-14d (infra rename, after repo/DNS decision), BR-15, BR-16b, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22 — see §3 catalog for descriptions, dependencies, and priorities.
+- BR-07, BR-10, BR-11, BR-12, BR-14b (after BR-14c contract), BR-14e (codebase finalization after 14a/14b/14c), BR-14d (mandatory transition ops after PR-117 release and BR-14e), BR-15, BR-16b, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22 — see §3 catalog for descriptions, dependencies, and priorities.
 
 **Deferred:**
 - BR-09 `feat/sso-google` — deferred post-refacto (OOM resolution required before SSO Google work; exact target TBD by conductor).
+
+**BR-14 orchestration (selected):**
+- PR-117 release ops decide/execute repo rename + DNS/redirect, or hand off remaining operational work to BR-14d.
+- BR-14c is first because `@entropic/llm-mesh` owns the public model-access contract.
+- BR-14b migrates the application LLM runtime onto that contract.
+- BR-14a extracts `@entropic/chat` after the mesh contract; Lot 0 may scope in parallel only.
+- BR-14e performs the final non-chat/non-LLM codebase naming sweep and residual-name report.
+- BR-14d executes remaining transition ops and is mandatory unless all repo/DNS/Scaleway/workflow rename items are complete during PR-117 release.
+- Detailed branch contracts and rejected order options are in `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
 
 ## 2) BR-04/04B as structural branch
 
@@ -108,9 +117,13 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-14a | feat/chat-ui-sdk                                 | Former BR-14. Extract @entropic/chat from web, Chrome,      | plan (after BR-14c,  | BR-04 (low), BR-14c            |
 |        |                                                  | and VSCode surfaces as publishable npm lib.                | can scope in parallel)|                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-14d | chore/entropic-infra-rename                      | Rename/alias repo-adjacent infra objects: Scaleway          | plan                 | TRANSITION, repo/DNS decision  |
-|        |                                                  | containers, registry images, secrets, workflow names,      |                      |                                |
-|        |                                                  | dashboards, and deployment metadata.                       |                      |                                |
+| BR-14e | chore/entropic-codebase-finalization             | Final codebase naming sweep outside chat/LLM/ops: API/UI   | plan (mandatory)     | BR-14a, BR-14b, BR-14c         |
+|        |                                                  | packages, labels, tests, fixtures, exports, residual       |                      |                                |
+|        |                                                  | old-name allowlist and report.                             |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-14d | chore/entropic-transition-ops                    | Execute remaining transition ops: repo rename follow-up,    | plan (mandatory)     | TRANSITION, PR-117 release ops |
+|        |                                                  | DNS/redirect verification, Scaleway containers, registry   |                      | BR-14e                         |
+|        |                                                  | images, secrets, workflow names, dashboards, metadata.     |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-15  | feat/spectral-site-tools                         | HTTP traffic capture + LLM analysis -> auto-generated      | plan                 | BR-06, BR-19                   |
 |        |                                                  | per-site API tools (complement to DOM                      |                      |                                |
@@ -175,7 +188,8 @@ graph TD
   BR14c[BR-14c llm mesh sdk ⚡]
   BR14b[BR-14b llm runtime core]
   BR14a[BR-14a chat ui sdk]
-  BR14d[BR-14d infra rename]
+  BR14e[BR-14e codebase finalization]
+  BR14d[BR-14d transition ops]
   BR15[BR-15 spectral site tools]
   BR16a[BR-16a gdrive SSO + indexing ⚡]
   BR16b[BR-16b document connectors other]
@@ -215,8 +229,11 @@ graph TD
   BR14c --> BR14a
   BR14b -.->|runtime handoff| BR14a
   BR04 -.->|low| BR14a
+  BR14b --> BR14e
+  BR14a --> BR14e
+  BR14e --> BR14d
   BR14a --> BR07
-  BR14d -.->|ops rename| BR12
+  BR14d -.->|transition ops| BR12
   BR04 -.->|low| BR16a
   BR08 -.->|Cohere embeddings| BR16a
   BR16a --> BR16b
@@ -232,12 +249,14 @@ graph TD
 
 ## 5) Scheduling post-BR-04
 
-**Wave in progress (2026-04-20)**: this transition branch (README pair, Entropic URL, repo/DNS/SCW plan, BR-14 split) ∥ BR-16a Lot 0 (gdrive SSO + indexing scoping). Planning-only.
+**Wave in progress (2026-04-20)**: this transition branch (README pair, Entropic URL, repo/DNS/SCW plan, BR-14 split, PR-117 transition TODO) ∥ BR-16a Lot 0 (gdrive SSO + indexing scoping). Planning-only.
+**PR-117 release ops**: decide and execute repository rename + public DNS/redirect changes, or explicitly hand off each unchecked item to BR-14d with owner/date.
 **Wave next (priority)**: BR-14c Lot 0/1 (`@entropic/llm-mesh`) before BR-14a implementation. BR-16a Lot 1+ can proceed after Google Cloud app provisioning by user.
-**Wave after BR-14c contract**: BR-14b (application LLM runtime migration to the mesh) ∥ BR-14a (chat UI SDK extraction), with BR-14a depending on the public mesh contract and BR-14b providing the internal runtime handoff.
+**Wave after BR-14c contract**: BR-14b (application LLM runtime migration to the mesh), then BR-14a (chat UI SDK extraction). BR-14a Lot 0 may scope in parallel, but implementation must not define a separate provider/model abstraction.
+**Wave Code Finalization**: BR-14e (non-chat/non-LLM codebase naming sweep, residual-name allowlist, test fixture cleanup) after BR-14a/14b/14c and before BR-14d.
 **Wave A2** (right after BR-04B merge — deferred behind current wave): BR-20 (entity/config refactor follow-up) + BR-22 (rich markdown list stabilization hotfix)
 **Wave B** (after BR-14a merge): BR-07 (UI npm, needs chat lib) + BR-11 (Chrome multitab, after BR-06+BR-08) + BR-17 (RAG, after BR-16a + BR-08)
-**Wave Infra**: BR-14d (Scaleway/container/registry/secret/workflow rename) after the repository/DNS decision and after the package split is stable enough to avoid duplicate rename churn.
+**Wave Transition**: BR-14d (repo/DNS follow-up, Scaleway/container/registry/secret/workflow rename) is mandatory transition work after PR-117 release ops and BR-14e, when code names and package names are stable enough to avoid duplicate rename churn.
 **Wave C** (after BR-04 + BR-08): BR-10 (VSCode v2) + BR-21 (CV transpose & profiles)
 **Wave D** (after Wave B/C): BR-12 (CI publish, after BR-05+BR-06+BR-07+BR-13) + BR-16b (document connectors other, after BR-16a)
 **Wave E** (after BR-04): BR-19 (Agent sandbox + skill catalog — structural). Then BR-15 (spectral site tools — registers generated tools as skills in BR-19 catalog)
@@ -252,6 +271,12 @@ User UAT on root workspace (`ENV=dev`). Branch dev in worktree or root workspace
 ## 7) Source specifications
 
 - `TRANSITION.md` (Entropic repo/DNS/SCW transition and BR-14 split)
+- `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md` (BR-14 selected order, options considered, and branch contracts)
+- `plan/14a-BRANCH_feat-chat-ui-sdk.md` (BR-14a branch pointer)
+- `plan/14b-BRANCH_refacto-llm-runtime-core.md` (BR-14b branch pointer)
+- `plan/14c-BRANCH_feat-llm-mesh-sdk.md` (BR-14c branch pointer)
+- `plan/14d-BRANCH_chore-entropic-transition-ops.md` (BR-14d branch pointer)
+- `plan/14e-BRANCH_chore-entropic-codebase-finalization.md` (BR-14e branch pointer)
 - `spec/SPEC_EVOL_WORKSPACE_TYPES.md` (BR-04)
 - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (residual)
 - `spec/SPEC_EVOL_BR15_AGENT_WORKFLOW_CONFIG_ROBUSTNESS.md` (deferred)
