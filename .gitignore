@@ -44,6 +44,10 @@ pnpm-debug.log*
 # tmp workspace clones
 /tmp/
 
+# Graphify runtime state
+.graphify/
+graphify-out/
+
 # Security scan artifacts (keep vulnerability-register.yaml)
 .security/sast-*
 .security/sca-*
