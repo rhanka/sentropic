@@ -82,8 +82,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - 4A (selected): Dedicated connector account table for lifecycle/status/scopes plus encrypted token payload, linked to settings for global connector config and OAuth client configuration.
   - 4B: Reuse user-scoped `settings` keys and `secret-crypto` like current provider connections.
   - 4C: Access-token-only sessions with no stored refresh token; manual reconnect required for resync.
-- [ ] `attention` BR16a-Q5 — Document schema handling for non-local sources: **clarification needed**.
-  - 5A (recommended): Add `source_type` and make `storage_key` nullable for Google Drive rows.
+- [x] `clarification` BR16a-Q5 — Document schema handling for non-local sources: **5A selected**.
+  - 5A (selected): Add `source_type` and make `storage_key` nullable for Google Drive rows.
   - 5B: Keep `storage_key` required and store a guarded sentinel such as `gdrive://<fileId>`.
   - 5C: Keep `context_documents` local-only and add a separate linked Google document table.
 - [x] `clarification` BR16a-Q6 — Sync strategy: **6A selected for BR-16a**.
@@ -94,8 +94,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - 7A (recommended): Google Docs + PDFs first; Sheets/Slides deferred.
   - 7B (selected): Google Docs, Sheets, Slides, PDFs, and text-like files in BR-16a. Native Google Workspace files use Drive export APIs; binary files use transient Drive download plus the existing `extractDocumentInfoFromDocument` generalist parser.
   - 7C: Google Docs only.
-- [ ] `attention` BR16a-Q8 — Indexing depth: **question iterated after source review**.
-  - 8A (recommended revised): Extend the existing `document_summary` queue path to Google Drive sources. Store status, extracted metadata, summary, detailed summary, source refs, and sync metadata in/around `context_documents`. `documents.get_content` and `documents.analyze` load Drive content on demand and reuse existing runtime chunking for long documents. No stored embeddings in BR-16a.
+- [x] `clarification` BR16a-Q8 — Indexing depth: **8A revised selected**.
+  - 8A (selected revised): Extend the existing `document_summary` queue path to Google Drive sources. Store status, extracted metadata, summary, detailed summary, source refs, and sync metadata in/around `context_documents`. `documents.get_content` and `documents.analyze` load Drive content on demand and reuse existing runtime chunking for long documents. No stored embeddings in BR-16a.
   - 8B: Cache extracted full text or chunks in DB for Google Drive docs, but still no embeddings.
   - 8C: Full RAG retrieval with stored chunks/embeddings; defer to BR-17 or a later RAG branch.
 - [x] `clarification` BR16a-Q9 — UI entry point: **9A selected**.
@@ -142,7 +142,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [x] Read current local document upload/index/chat integration files.
   - [x] Read existing auth/settings/secret storage patterns.
   - [x] Create `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`.
-  - [ ] Finalize BR16a-Q5 and BR16a-Q8 before implementation.
+  - [x] Finalize BR16a-Q5 and BR16a-Q8 before implementation.
 
 - [ ] **Lot 1 — Google OAuth and connector account**
   - [ ] Define Google connector account data model.
