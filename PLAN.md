@@ -1,6 +1,6 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` launched to remove the current API HIGH dependency vulnerability blocking CI/security gates. Existing active scoping remains: Entropic transition, BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16a (gdrive SSO + in-situ indexing). BR-14 split → BR-14a + BR-14b + BR-14c + BR-14d + BR-14e. Selected execution order: PR-117 transition ops → BR-14c → BR-14b → BR-14a → BR-14e → BR-14d. BR-16 split → BR-16a + BR-16b. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
+Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` launched to remove the current API HIGH dependency vulnerability blocking CI/security gates. Existing active scoping remains: Entropic transition, BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16a (gdrive SSO + Picker search/selection + in-situ `document_summary` indexing). BR-14 split → BR-14a + BR-14b + BR-14c + BR-14d + BR-14e. Selected execution order: PR-117 transition ops → BR-14c → BR-14b → BR-14a → BR-14e → BR-14d. BR-16 split → BR-16a + BR-16b + BR-16c. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
 
 ## 1) Current state
 
@@ -24,11 +24,11 @@ Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` laun
 **Active scoping (Lot 0 in progress):**
 - BR-14c `feat/llm-mesh-sdk` — priority extraction: publishable npm lib `@entropic/llm-mesh`, Vercel AI SDK-like access to GPT/Claude/Gemini/Mistral/Cohere with token and Codex-account modes.
 - BR-14a `feat/chat-ui-sdk` — former BR-14, renamed: chat publishable as npm lib `@entropic/chat`, using the LLM mesh contract rather than application runtime internals.
-- BR-16a `feat/gdrive-sso-indexing` — Google Drive OAuth + in-situ indexing (chunks+embeddings in DB, docs stay in Drive). Split from former BR-16.
+- BR-16a `feat/gdrive-sso-indexing` — Google Drive OAuth + Picker search/selection + in-situ `document_summary` indexing (docs stay in Drive). Split from former BR-16.
 - `fix/high-vulnerabilities` — isolated remediation branch for the API HIGH dependency vulnerability currently failing `security-sast-sca` and API image audit gates.
 
 **Pending branches (unblocked):**
-- BR-07, BR-10, BR-11, BR-12, BR-14b (after BR-14c contract), BR-14e (codebase finalization after 14a/14b/14c), BR-14d (mandatory transition ops after PR-117 release and BR-14e), BR-15, BR-16b, BR-17, BR-18, BR-19, BR-20, BR-21a, BR-21, BR-22, BR-24 — see §3 catalog for descriptions, dependencies, and priorities.
+- BR-07, BR-10, BR-11, BR-12, BR-14b (after BR-14c contract), BR-14e (codebase finalization after 14a/14b/14c), BR-14d (mandatory transition ops after PR-117 release and BR-14e), BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-19, BR-20, BR-21a, BR-21, BR-22, BR-24 — see §3 catalog for descriptions, dependencies, and priorities.
 
 **Deferred:**
 - BR-09 `feat/sso-google` — deferred post-refacto (OOM resolution required before SSO Google work; exact target TBD by conductor).
@@ -131,14 +131,20 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 |        |                                                  | per-site API tools (complement to DOM                      |                      |                                |
 |        |                                                  | tab_read/tab_action).                                      |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-16a | feat/gdrive-sso-indexing                         | Google Drive OAuth (user-scoped) + in-situ indexing:       | scoping              | BR-04 (low), BR-08 (embeddings)|
-|        |                                                  | chunks + embeddings stored in DB, docs stay in Drive,      |                      |                                |
-|        |                                                  | retrieval via gdrive refs. Requires Google Cloud app       |                      |                                |
-|        |                                                  | (dev + prod) — USER-ACTION-REQUIRED.                       |                      |                                |
+| BR-16a | feat/gdrive-sso-indexing                         | Google Drive OAuth (per-user) + Picker search/selection +  | scoping              | BR-04 (low)                    |
+|        |                                                  | in-situ document_summary indexing: docs stay in Drive,     |                      |                                |
+|        |                                                  | summaries/detailed summaries stored in Entropic, retrieval |                      |                                |
+|        |                                                  | via gdrive refs. Google Cloud app provisioned by Codex     |                      |                                |
+|        |                                                  | through Playwright MCP + user CDP browser session.         |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-16b | feat/document-connectors-other                   | SharePoint/OneDrive connectors + local upload wiring +     | plan (after BR-16a)  | BR-16a (connector pattern)     |
 |        |                                                  | connector abstraction beyond Drive. Split from former      |                      |                                |
 |        |                                                  | BR-16.                                                     |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-16c | feat/gdrive-shared-edit-sync                     | Google Drive shared-doc collaboration follow-up: sharing    | plan (after BR-16a)  | BR-16a                         |
+|        |                                                  | assistance, change notifications/polling, queued summary   |                      |                                |
+|        |                                                  | regeneration, direct Google Docs editing tool, and Google  |                      |                                |
+|        |                                                  | Slides/PPT generation/editing tool.                        |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-17  | feat/rag-documents                               | RAG on context-attached documents: retrieve semantically   | plan                 | BR-16a (optional), BR-08       |
 |        |                                                  | relevant chunks instead of full-document summaries.        |                      | (Cohere embeddings)            |
@@ -203,6 +209,7 @@ graph TD
   BR15[BR-15 spectral site tools]
   BR16a[BR-16a gdrive SSO + indexing ⚡]
   BR16b[BR-16b document connectors other]
+  BR16c[BR-16c gdrive shared edit sync]
   BR17[BR-17 RAG documents]
   BR18[BR-18 sortable list views]
   BR19[BR-19 agent sandbox + skills]
@@ -247,9 +254,9 @@ graph TD
   BR14a --> BR07
   BR14d -.->|transition ops| BR12
   BR04 -.->|low| BR16a
-  BR08 -.->|Cohere embeddings| BR16a
   BR16a --> BR16b
-  BR16a -.->|embeddings feed RAG| BR17
+  BR16a --> BR16c
+  BR16a -.->|document refs feed RAG| BR17
   BR08 -.->|Cohere embeddings| BR17
   BR04 -.->|high| BR19
   BR19 --> BR15
@@ -264,9 +271,9 @@ graph TD
 
 ## 5) Scheduling post-BR-04
 
-**Wave in progress (2026-04-20)**: this transition branch (README pair, Entropic URL, repo/DNS/SCW plan, BR-14 split, PR-117 transition TODO) ∥ BR-16a Lot 0 (gdrive SSO + indexing scoping). Planning-only.
+**Wave in progress (2026-04-21)**: this transition branch (README pair, Entropic URL, repo/DNS/SCW plan, BR-14 split, PR-117 transition TODO) ∥ BR-16a Lot 0 (gdrive SSO + document_summary indexing scoping). Planning-only.
 **PR-117 release ops**: decide and execute repository rename + public DNS/redirect changes, or explicitly hand off each unchecked item to BR-14d with owner/date.
-**Wave next (priority)**: BR-14c Lot 0/1 (`@entropic/llm-mesh`) before BR-14a implementation. BR-16a Lot 1+ can proceed after Google Cloud app provisioning by user.
+**Wave next (priority)**: BR-14c Lot 0/1 (`@entropic/llm-mesh`) before BR-14a implementation. BR-16a Lot 1+ can proceed after Google Cloud app provisioning through Codex Playwright MCP attached to the user's Chromium CDP session.
 **Wave after BR-14c contract**: BR-14b (application LLM runtime migration to the mesh), then BR-14a (chat UI SDK extraction). BR-14a Lot 0 may scope in parallel, but implementation must not define a separate provider/model abstraction.
 **Wave Code Finalization**: BR-14e (non-chat/non-LLM codebase naming sweep, residual-name allowlist, test fixture cleanup) after BR-14a/14b/14c and before BR-14d.
 **Wave A2** (right after BR-04B merge — deferred behind current wave): BR-20 (entity/config refactor follow-up) + BR-22 (rich markdown list stabilization hotfix)
@@ -274,9 +281,9 @@ graph TD
 **Wave B** (after BR-14a merge): BR-07 (UI npm, needs chat lib) + BR-11 (Chrome multitab, after BR-06+BR-08) + BR-17 (RAG, after BR-16a + BR-08)
 **Wave Transition**: BR-14d (repo/DNS follow-up, Scaleway/container/registry/secret/workflow rename) is mandatory transition work after PR-117 release ops and BR-14e, when code names and package names are stable enough to avoid duplicate rename churn.
 **Wave C** (after BR-04 + BR-08): BR-10 (VSCode v2) + BR-21a (generic PptGenJS presentation tool). BR-21 CV transpose remains parked until explicitly relaunched.
-**Wave D** (after Wave B/C): BR-12 (CI publish, after BR-05+BR-06+BR-07+BR-13) + BR-16b (document connectors other, after BR-16a)
+**Wave D** (after Wave B/C): BR-12 (CI publish, after BR-05+BR-06+BR-07+BR-13) + BR-16b (document connectors other, after BR-16a) + BR-16c (Google Drive shared/edit/sync follow-up, after BR-16a)
 **Wave E** (after BR-04): BR-19 (Agent sandbox + skill catalog — structural). Then BR-15 (spectral site tools — registers generated tools as skills in BR-19 catalog)
-**Deferred**: BR-09 (SSO Google — pending OOM resolution; may be unblocked by BR-16a if shared Google OAuth client — decision pending BR-16a brief Q16a-1).
+**Deferred**: BR-09 (SSO Google — pending OOM resolution; may reuse Google OAuth setup after BR-16a but remains a separate authentication branch).
 **Scope note**: the generic executable workflow runtime is no longer tracked as a separate BR-23 line; it is reabsorbed into BR-04B Lot 12 and must be completed there for existing workflows.
 
 ## 6) Environment convention
