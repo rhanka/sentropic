@@ -6,6 +6,8 @@ graphify-out/
 .codex/
 .tmp/
 tmp/
+plan/ci-post-merge-audit.md
+e2e/tests/dev/_scratch*.spec.ts
 
 # Dependency and build outputs
 */node_modules/
