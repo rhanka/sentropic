@@ -187,11 +187,20 @@ UAT:
 
 ## Open Decisions Before Implementation
 
-- BR16a-Q1: Provide Google Cloud OAuth client ID/secret, redirect URI, consent screen mode, test users, and enabled APIs.
-- BR16a-Q2: Confirm default scope: recommended `drive.file` plus Picker. Escalate only if full Drive listing is required.
-- BR16a-Q3: Choose token storage: dedicated connector table with encrypted payload vs user-scoped `settings` keys. Recommendation: dedicated connector table for account lifecycle plus encrypted secret payload.
-- BR16a-Q4: Confirm sync strategy. Recommendation: manual/on-demand indexing plus explicit resync in MVP.
-- BR16a-Q5: Decide whether `storage_key` becomes nullable for `google_drive` source documents, or whether BR-16a uses a guarded sentinel strategy.
+Validation answer format: `1A 2A 3A 4A 5A 6A 7A 8A 9A 10A`.
+
+| Code | Decision | Options |
+| --- | --- | --- |
+| 1 | Drive selection and OAuth scope | 1A (recommended): Google Picker + `drive.file`, user-selected files only. 1B: server-side Drive browser with broader scopes. 1C: Picker now, browser later. |
+| 2 | Google Cloud provisioning | 2A (recommended): user provides OAuth client/app details before Lot 1 live OAuth. 2B: implement env placeholders and document provisioning. 2C: planning-only until provisioning is complete. |
+| 3 | Google account ownership | 3A (recommended): user-scoped connection only. 3B: workspace-managed shared connector. 3C: both, user-scoped first. |
+| 4 | Token storage | 4A (recommended): dedicated connector account table plus encrypted token payload. 4B: user-scoped `settings` keys via existing secret crypto. 4C: access-token-only sessions, no stored refresh token. |
+| 5 | Non-local document schema | 5A (recommended): add `source_type` and make `storage_key` nullable for Google Drive rows. 5B: keep required `storage_key` with `gdrive://` sentinel. 5C: separate linked Google document table. |
+| 6 | Sync strategy | 6A (recommended): manual/on-demand indexing plus explicit resync. 6B: scheduled polling. 6C: Google webhook/events sync. |
+| 7 | MVP formats | 7A (recommended): Google Docs + PDFs first. 7B: Docs, Sheets, Slides, PDFs, and text-like files. 7C: Google Docs only. |
+| 8 | Indexing depth | 8A (recommended): extraction + chunks + embedding hooks; run embeddings when provider/config is available. 8B: extraction + summary only. 8C: full semantic RAG retrieval/scoring in BR-16a. |
+| 9 | UI entry point | 9A (recommended): existing document panel plus minimal connection status. 9B: settings-only connector page. 9C: new full connector center UI. |
+| 10 | Local branch naming | 10A (recommended): keep `feat/gdrive-sso-indexing-16a`. 10B: clean stale pre-Entropic ref and reclaim `feat/gdrive-sso-indexing`. 10C: use another explicit branch name. |
 
 ## Current Recommendation
 
