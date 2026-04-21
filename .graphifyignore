@@ -1,0 +1,28 @@
+# Local Graphify state
+.graphify/
+graphify-out/
+
+# Local agent/runtime scratch
+.codex/
+.tmp/
+tmp/
+plan/ci-post-merge-audit.md
+e2e/tests/dev/_scratch*.spec.ts
+
+# Dependency and build outputs
+*/node_modules/
+.pnpm-store/
+ui/build/
+ui/.svelte-kit/
+ui/dist/
+ui/chrome-ext/dist/
+api/dist/
+
+# Test and scan artifacts
+e2e/test-results/
+e2e/.auth/
+e2e/playwright-report/
+.security/sast-*
+.security/sca-*
+.security/iac-*
+.security/container*
