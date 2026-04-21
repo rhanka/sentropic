@@ -1,0 +1,52 @@
+{
+  "runtime": "typescript",
+  "version": "0.4.24",
+  "node": "/usr/bin/node",
+  "script": "/home/antoinefa/.npm-global/lib/node_modules/graphifyy/dist/skill-runtime.js",
+  "module": "/home/antoinefa/.npm-global/lib/node_modules/graphifyy/dist/index.js",
+  "cli": "/home/antoinefa/.npm-global/lib/node_modules/graphifyy/dist/cli.js",
+  "paths": {
+    "root": "/home/antoinefa/src/entropic",
+    "stateDir": "/home/antoinefa/src/entropic/.graphify",
+    "graph": "/home/antoinefa/src/entropic/.graphify/graph.json",
+    "report": "/home/antoinefa/src/entropic/.graphify/GRAPH_REPORT.md",
+    "html": "/home/antoinefa/src/entropic/.graphify/graph.html",
+    "manifest": "/home/antoinefa/src/entropic/.graphify/manifest.json",
+    "cost": "/home/antoinefa/src/entropic/.graphify/cost.json",
+    "cacheDir": "/home/antoinefa/src/entropic/.graphify/cache",
+    "transcriptsDir": "/home/antoinefa/src/entropic/.graphify/transcripts",
+    "downloadsDir": "/home/antoinefa/src/entropic/.graphify/transcripts/downloads",
+    "convertedDir": "/home/antoinefa/src/entropic/.graphify/converted",
+    "memoryDir": "/home/antoinefa/src/entropic/.graphify/memory",
+    "wikiDir": "/home/antoinefa/src/entropic/.graphify/wiki",
+    "needsUpdate": "/home/antoinefa/src/entropic/.graphify/needs_update",
+    "scratch": {
+      "detect": "/home/antoinefa/src/entropic/.graphify/.graphify_detect.json",
+      "detectSemantic": "/home/antoinefa/src/entropic/.graphify/.graphify_detect_semantic.json",
+      "ast": "/home/antoinefa/src/entropic/.graphify/.graphify_ast.json",
+      "cached": "/home/antoinefa/src/entropic/.graphify/.graphify_cached.json",
+      "uncached": "/home/antoinefa/src/entropic/.graphify/.graphify_uncached.txt",
+      "semanticNew": "/home/antoinefa/src/entropic/.graphify/.graphify_semantic_new.json",
+      "semantic": "/home/antoinefa/src/entropic/.graphify/.graphify_semantic.json",
+      "extract": "/home/antoinefa/src/entropic/.graphify/.graphify_extract.json",
+      "analysis": "/home/antoinefa/src/entropic/.graphify/.graphify_analysis.json",
+      "labels": "/home/antoinefa/src/entropic/.graphify/.graphify_labels.json",
+      "transcripts": "/home/antoinefa/src/entropic/.graphify/.graphify_transcripts.json",
+      "pdfOcr": "/home/antoinefa/src/entropic/.graphify/.graphify_pdf_ocr.json",
+      "incremental": "/home/antoinefa/src/entropic/.graphify/.graphify_incremental.json",
+      "incrementalSemantic": "/home/antoinefa/src/entropic/.graphify/.graphify_incremental_semantic.json",
+      "oldGraph": "/home/antoinefa/src/entropic/.graphify/.graphify_old.json",
+      "runtime": "/home/antoinefa/src/entropic/.graphify/.graphify_runtime.json",
+      "node": "/home/antoinefa/src/entropic/.graphify/.graphify_node",
+      "runtimeScript": "/home/antoinefa/src/entropic/.graphify/.graphify_runtime_script"
+    },
+    "legacyRootScratch": {
+      "detect": "/home/antoinefa/src/entropic/.graphify_detect.json",
+      "extract": "/home/antoinefa/src/entropic/.graphify_extract.json",
+      "analysis": "/home/antoinefa/src/entropic/.graphify_analysis.json",
+      "labels": "/home/antoinefa/src/entropic/.graphify_labels.json",
+      "incremental": "/home/antoinefa/src/entropic/.graphify_incremental.json",
+      "oldGraph": "/home/antoinefa/src/entropic/.graphify_old.json"
+    }
+  }
+}
