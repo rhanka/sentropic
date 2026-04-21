@@ -8,9 +8,9 @@ Related roadmap entry: BR-16a `feat/gdrive-sso-indexing`.
 
 ## Objective
 
-Implement the first document connector slice for Google Drive: user-scoped Google OAuth, Drive file selection, in-situ indexing, and chat retrieval through existing document tooling.
+Implement the first document connector slice for Google Drive: user-scoped Google OAuth, Drive file search/selection, in-situ summarization/indexing through the current `document_summary` flow, and chat retrieval through existing document tooling.
 
-The source document remains in Google Drive. Entropic may store connector metadata, extracted text chunks, embeddings, sync status, and source references, but must not copy the original Drive binary into S3 as the canonical source.
+The source document remains in Google Drive. Entropic may store connector metadata, source references, sync status, extracted metadata, summaries, and detailed summaries, but must not copy the original Drive binary into S3 as the canonical source.
 
 ## Non-Goals
 
@@ -18,7 +18,8 @@ The source document remains in Google Drive. Entropic may store connector metada
 - Do not migrate local upload behavior away from S3-compatible storage.
 - Do not build automatic background sync, Google Workspace Events, or webhook handling in the MVP.
 - Do not request broad Drive scopes unless explicitly approved.
-- Do not implement full RAG product behavior outside the `documents` tool integration required for indexed Drive references.
+- Do not implement full RAG product behavior, stored embeddings, or semantic vector retrieval in BR-16a.
+- Do not implement Google Drive sharing assistance, shared-drive collaboration refinements, or direct Google Docs/Slides editing tools in BR-16a. BR-16c owns that follow-up.
 
 ## Current Local Baseline
 
@@ -26,14 +27,16 @@ Current local document flow:
 
 - `api/src/routes/api/documents.ts` accepts local file uploads, stores bytes in S3-compatible storage, inserts `context_documents`, and queues document summary work.
 - `api/src/db/schema.ts` defines `contextDocuments` with required `storageKey`, metadata/status, JSONB `data`, and optional `jobId`.
+- `api/src/services/queue-manager.ts` processes `document_summary` jobs by loading document bytes, calling `extractDocumentInfoFromDocument`, generating a summary, and storing `summary`, `summaryLang`, extracted metadata, and optional `detailedSummary` in `context_documents.data`.
 - `api/src/services/tool-service.ts` reads `contextDocuments`, fetches local bytes through `storage-s3`, extracts text, and exposes `documents.list`, `documents.get_summary`, `documents.get_content`, and `documents.analyze`.
+- For very long documents, `documents.analyze` uses runtime chunking and merge calls. It does not use stored embeddings.
 - `api/src/services/chat-service.ts` enables the `documents` tool when the active context has attached documents and enforces context matching when tool calls execute.
 - `ui/src/lib/utils/documents.ts` exposes list/upload/delete/download helpers for local documents.
 - Existing encrypted secret precedent is `api/src/services/provider-connections.ts` plus `api/src/services/secret-crypto.ts`, storing user-scoped encrypted payloads through `settingsService`.
 
 Implication:
 
-- BR-16a must introduce a source-aware document access path. Existing local documents keep `storageKey` and S3 behavior. Google Drive documents use a connector source reference and an extraction/indexing path that does not require a local binary copy.
+- BR-16a must introduce a source-aware document access path. Existing local documents keep `storageKey` and S3 behavior. Google Drive documents use a connector source reference and the same queue/tool semantics, with Drive export/download replacing S3 byte loading when the source is Google Drive.
 
 ## Official Google References
 
@@ -50,6 +53,7 @@ Implication:
 Recommended MVP:
 
 - Use Google Picker for user selection.
+- Use Google Picker's search/browse UI so the user can find Drive documents without Entropic implementing server-side Drive listing in BR-16a.
 - Request `https://www.googleapis.com/auth/drive.file` as the default Drive scope.
 - Use the OAuth web server flow with `access_type=offline` only if manual resync must work when the user is not actively connected.
 - Use `include_granted_scopes=true`.
@@ -64,6 +68,24 @@ Rationale:
 Open decision:
 
 - If the UX requires server-side browsing/listing without Picker, BR-16a must explicitly escalate scope review because metadata/listing scopes can become restricted.
+
+## Google Cloud Provisioning via Playwright MCP
+
+Decision BR16a-Q2: Codex performs Google Cloud provisioning through Playwright MCP attached to a user-launched Chromium CDP session.
+
+User command for a dedicated Chromium CDP session:
+
+```bash
+chromium --remote-debugging-port=9222 --user-data-dir=/tmp/entropic-google-cloud-cdp --no-first-run --no-default-browser-check
+```
+
+Fallback if the binary is named `google-chrome`:
+
+```bash
+google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/entropic-google-cloud-cdp --no-first-run --no-default-browser-check
+```
+
+Codex/Playwright should connect to `http://127.0.0.1:9222`, use the already authenticated Google session, and create/verify the OAuth app configuration with user approval.
 
 ## Proposed Data Model
 
@@ -81,6 +103,13 @@ Minimum durable objects:
   - `token_secret_ref` or encrypted token payload
   - `created_at`, `updated_at`, `last_error`
 
+Settings integration:
+
+- `document_connector_accounts` is the source of truth for per-user/per-workspace Google account state.
+- `settings` remains the place for global connector configuration and encrypted/admin-managed OAuth client configuration when not provided by environment variables.
+- Do not duplicate account lifecycle state in `settings`.
+- Account rows must reference the same workspace/user concepts already used by app settings, RBAC, and document contexts.
+
 - `context_documents` extensions for source-aware documents:
   - `source_type` = `local | google_drive`
   - `connector_account_id`
@@ -91,33 +120,44 @@ Minimum durable objects:
   - `sync_status` = `pending | indexed | stale | failed`
   - `last_synced_at`
 
-- `document_chunks`
-  - `id`
-  - `document_id`
-  - `chunk_index`
-  - `content`
-  - `embedding`
-  - `metadata`
-  - `created_at`
-
 Implementation note:
 
 - `context_documents.storage_key` is currently required. BR-16a must either make it nullable for non-local sources or introduce a compatible sentinel strategy with all S3 call sites guarded by `source_type`. Nullable `storage_key` is cleaner but has a wider migration/test surface.
+
+### Q5 Schema Clarification
+
+`context_documents.storage_key` currently means "object key in S3-compatible storage." Google Drive rows do not have an S3 object key if documents remain in situ.
+
+Options:
+
+- 5A: Add `source_type` and make `storage_key` nullable. This keeps one document table and makes the invariant honest: local docs have S3 keys; Drive docs have Drive refs. It requires auditing every S3 call site and guarding by source type.
+- 5B: Keep `storage_key` required and store a sentinel such as `gdrive://<fileId>`. This reduces migration shape but creates a misleading value and risks accidental S3 calls unless every path is guarded.
+- 5C: Keep `context_documents` local-only and add a separate linked Google document table. This avoids nullable `storage_key` but creates a split document model and more joins for the `documents` tool.
+
+Current recommendation remains 5A for BR-16a unless migration risk proves too high during implementation.
 
 ## Content Extraction Strategy
 
 Supported first pass:
 
-- Google Docs: export as Markdown or plain text, then extract text.
-- Google Sheets: export as CSV or XLSX depending on current parser support.
-- Google Slides: export as plain text or PDF depending on current parser support.
-- PDFs and uploaded Drive binaries: download transiently from Drive and extract text in memory; do not persist the binary to S3 as canonical storage.
+- Google Docs: use Drive `files.export` to Markdown or plain text, then pass text into the existing extraction/summarization path.
+- Google Sheets: use Drive `files.export` to CSV or XLSX depending on parser support; if multi-sheet export is needed, define sheet handling explicitly before implementation.
+- Google Slides: use Drive `files.export` to plain text or PDF depending on fidelity needs; text extraction is enough for BR-16a summarization.
+- PDFs, DOCX, PPTX, and other uploaded Drive binaries: use Drive download transiently, then pass bytes into `extractDocumentInfoFromDocument`. Do not persist the binary to S3 as canonical storage.
+- Text-like files: download transiently and decode like current text/markdown handling.
 
 Constraints:
 
 - `files.export` has export-size limits for Google Workspace documents; indexing must surface `failed` with a clear user-visible error if export is too large.
 - Exported/transient bytes should be discarded after extraction.
-- Stored chunks must include source metadata sufficient for citation/debug: file ID, name, MIME type, revision/version when available, export MIME, and sync timestamp.
+- Stored metadata must include source information sufficient for citation/debug: file ID, name, MIME type, revision/version when available, export MIME, and sync timestamp.
+
+Deferred to BR-16c:
+
+- Direct Google Docs editing tool equivalent to the current DOCX/freeform publishing path.
+- Google Slides/PPT generation or editing tool equivalent to `pptxgenjs`/presentation generation.
+- Workspace sharing assistance for Drive docs.
+- Change detection UX and automatic summary regeneration policies.
 
 ## API Surface
 
@@ -133,23 +173,32 @@ Candidate routes:
 
 The `documents` API should remain the unified document surface for chat contexts. Google-specific routes handle OAuth, account state, and Drive file metadata resolution.
 
+Search policy:
+
+- BR-16a search happens through Google Picker in the browser.
+- The backend resolves selected file IDs and verifies metadata/access.
+- Server-side Drive search/listing is not part of BR-16a unless the scope decision is reopened.
+
 ## Chat and Retrieval Integration
 
 MVP behavior:
 
 - `documents.list` includes local and Google Drive documents with `source_type`, `sync_status`, and source metadata.
-- `documents.get_summary` works after indexing has completed.
-- `documents.get_content` reads indexed extracted content/chunks for Google Drive docs instead of S3.
-- `documents.analyze` can use extracted indexed content for Google Drive docs.
+- `documents.get_summary` works after the existing `document_summary` queue has completed.
+- `documents.get_content` loads Drive content on demand through export/download when full content is needed.
+- `documents.analyze` loads Drive content on demand and uses existing runtime chunking/merge behavior for long documents.
 - Permission checks must preserve existing workspace/context restrictions and additionally verify that the document belongs to a connected account for the current user/workspace.
+
+No stored embeddings are introduced in BR-16a.
 
 ## UI Surface
 
 Minimum UI:
 
-- A Google Drive connection state in the document panel or settings-adjacent connector panel.
-- A "Connect Google Drive" action.
-- A Drive file selection action using Google Picker.
+- Google Drive actions next to the existing paperclip/document attach control.
+- If disconnected: "Connect Google Drive".
+- If connected: "Import from Google Drive" or "Attach from Google Drive" with a Google Drive icon.
+- Drive file search/selection uses Google Picker.
 - Selected Drive files appear alongside local documents with source and sync status.
 - Manual resync and disconnect states.
 
@@ -158,6 +207,7 @@ Avoid in BR-16a:
 - Full Drive folder browser.
 - Multi-account management UX beyond the current user connection.
 - Background sync configuration.
+- Direct Google Docs/Slides editing.
 
 ## Test Plan
 
@@ -187,29 +237,31 @@ UAT:
 
 ## Open Decisions Before Implementation
 
-Validation answer format: `1A 2A 3A 4A 5A 6A 7A 8A 9A 10A`.
+Current validation: `1A 2A 3C 4A 6A 7B 9A 10A`.
+
+Still open: `5? 8?`.
 
 | Code | Decision | Options |
 | --- | --- | --- |
-| 1 | Drive selection and OAuth scope | 1A (recommended): Google Picker + `drive.file`, user-selected files only. 1B: server-side Drive browser with broader scopes. 1C: Picker now, browser later. |
-| 2 | Google Cloud provisioning | 2A (recommended): user provides OAuth client/app details before Lot 1 live OAuth. 2B: implement env placeholders and document provisioning. 2C: planning-only until provisioning is complete. |
-| 3 | Google account ownership | 3A (recommended): user-scoped connection only. 3B: workspace-managed shared connector. 3C: both, user-scoped first. |
-| 4 | Token storage | 4A (recommended): dedicated connector account table plus encrypted token payload. 4B: user-scoped `settings` keys via existing secret crypto. 4C: access-token-only sessions, no stored refresh token. |
-| 5 | Non-local document schema | 5A (recommended): add `source_type` and make `storage_key` nullable for Google Drive rows. 5B: keep required `storage_key` with `gdrive://` sentinel. 5C: separate linked Google document table. |
-| 6 | Sync strategy | 6A (recommended): manual/on-demand indexing plus explicit resync. 6B: scheduled polling. 6C: Google webhook/events sync. |
-| 7 | MVP formats | 7A (recommended): Google Docs + PDFs first. 7B: Docs, Sheets, Slides, PDFs, and text-like files. 7C: Google Docs only. |
-| 8 | Indexing depth | 8A (recommended): extraction + chunks + embedding hooks; run embeddings when provider/config is available. 8B: extraction + summary only. 8C: full semantic RAG retrieval/scoring in BR-16a. |
-| 9 | UI entry point | 9A (recommended): existing document panel plus minimal connection status. 9B: settings-only connector page. 9C: new full connector center UI. |
-| 10 | Local branch naming | 10A (recommended): keep `feat/gdrive-sso-indexing-16a`. 10B: clean stale pre-Entropic ref and reclaim `feat/gdrive-sso-indexing`. 10C: use another explicit branch name. |
+| 1 | Drive selection and OAuth scope | 1A selected: Google Picker + `drive.file`, with search through Picker. |
+| 2 | Google Cloud provisioning | 2A selected: Codex provisions through Playwright MCP over user-launched Chromium CDP. |
+| 3 | Google account ownership | 3C selected: each user connects Google; shared files/drives respect the acting user's Google rights. Sharing assistance deferred to BR-16c. |
+| 4 | Token storage | 4A selected: dedicated connector account table plus encrypted token payload, linked to settings for global connector config. |
+| 5 | Non-local document schema | Open. 5A: nullable `storage_key` + `source_type`. 5B: `gdrive://` sentinel. 5C: separate Google document table. |
+| 6 | Sync strategy | 6A selected for BR-16a: manual/on-demand indexing + explicit resync. BR-16c refines notifications/polling and queued summary regeneration. |
+| 7 | MVP formats | 7B selected: Docs, Sheets, Slides, PDFs, and text-like files, with Google export for native files and current generalist parser for binaries. |
+| 8 | Indexing depth | Open after source review. 8A revised: extend current `document_summary` flow, no embeddings. 8B: cache extracted text/chunks, no embeddings. 8C: full RAG/embeddings deferred. |
+| 9 | UI entry point | 9A selected: Google Drive action next to paperclip in the existing document panel. |
+| 10 | Local branch naming | 10A selected: keep `feat/gdrive-sso-indexing-16a`. |
 
 ## Current Recommendation
 
 Build BR-16a as a narrow Google Drive connector:
 
-- OAuth + Picker + `drive.file`.
+- OAuth + Picker search + `drive.file`.
 - Dedicated connector account state.
 - Source-aware document rows.
-- In-situ extraction and chunk/index storage.
+- Source-aware `document_summary` indexing: extracted metadata, summary, detailed summary, sync status, and source refs.
 - Existing `documents` tool as the unified chat access path.
 
-Defer broad Drive scopes, automatic sync, SharePoint/OneDrive, and generic connector UI until the Google Drive slice is merged and validated.
+Defer broad Drive scopes, automatic sync, SharePoint/OneDrive, direct Google Docs/Slides editing, Google sharing assistance, and generic connector UI until the Google Drive slice is merged and validated.
