@@ -134,7 +134,7 @@ Options:
 - 5B: Keep `storage_key` required and store a sentinel such as `gdrive://<fileId>`. This reduces migration shape but creates a misleading value and risks accidental S3 calls unless every path is guarded.
 - 5C: Keep `context_documents` local-only and add a separate linked Google document table. This avoids nullable `storage_key` but creates a split document model and more joins for the `documents` tool.
 
-Current recommendation remains 5A for BR-16a unless migration risk proves too high during implementation.
+Decision: 5A selected for BR-16a.
 
 ## Content Extraction Strategy
 
@@ -237,9 +237,7 @@ UAT:
 
 ## Open Decisions Before Implementation
 
-Current validation: `1A 2A 3C 4A 6A 7B 9A 10A`.
-
-Still open: `5? 8?`.
+Current validation: `1A 2A 3C 4A 5A 6A 7B 8A-revised 9A 10A`.
 
 | Code | Decision | Options |
 | --- | --- | --- |
@@ -247,10 +245,10 @@ Still open: `5? 8?`.
 | 2 | Google Cloud provisioning | 2A selected: Codex provisions through Playwright MCP over user-launched Chromium CDP. |
 | 3 | Google account ownership | 3C selected: each user connects Google; shared files/drives respect the acting user's Google rights. Sharing assistance deferred to BR-16c. |
 | 4 | Token storage | 4A selected: dedicated connector account table plus encrypted token payload, linked to settings for global connector config. |
-| 5 | Non-local document schema | Open. 5A: nullable `storage_key` + `source_type`. 5B: `gdrive://` sentinel. 5C: separate Google document table. |
+| 5 | Non-local document schema | 5A selected: nullable `storage_key` + `source_type`. |
 | 6 | Sync strategy | 6A selected for BR-16a: manual/on-demand indexing + explicit resync. BR-16c refines notifications/polling and queued summary regeneration. |
 | 7 | MVP formats | 7B selected: Docs, Sheets, Slides, PDFs, and text-like files, with Google export for native files and current generalist parser for binaries. |
-| 8 | Indexing depth | Open after source review. 8A revised: extend current `document_summary` flow, no embeddings. 8B: cache extracted text/chunks, no embeddings. 8C: full RAG/embeddings deferred. |
+| 8 | Indexing depth | 8A revised selected: extend current `document_summary` flow, no embeddings. |
 | 9 | UI entry point | 9A selected: Google Drive action next to paperclip in the existing document panel. |
 | 10 | Local branch naming | 10A selected: keep `feat/gdrive-sso-indexing-16a`. |
 
