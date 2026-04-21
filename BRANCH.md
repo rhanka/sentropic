@@ -65,11 +65,46 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- [ ] `attention` BR16a-Q1 — Google Cloud app provisioning is required before live OAuth UAT: OAuth client ID, OAuth client secret, redirect URI, consent screen status, test users, and allowed scopes.
-- [ ] `attention` BR16a-Q2 — Decide initial OAuth scopes before implementation. Candidate minimum: Drive file metadata/listing and read-only content for selected files. Avoid broad Drive access unless explicitly required.
-- [ ] `attention` BR16a-Q3 — Decide token storage policy: encrypted user-scoped refresh token in existing settings/secrets model, or separate connector table with encrypted token fields.
-- [ ] `attention` BR16a-Q4 — Decide sync strategy for MVP: manual/on-demand indexing first vs polling/webhooks. Recommendation for MVP: on-demand indexing plus explicit resync action.
-- [ ] `attention` BR16a-Q5 — Decide schema handling for non-local documents. Recommendation: add `source_type` and make `storage_key` nullable for Google Drive rows rather than storing a fake S3 key, but this needs focused migration/test coverage.
+- [ ] `attention` BR16a-Q1 — Drive selection and OAuth scope.
+  - 1A (recommended): Google Picker + `drive.file`; Entropic only accesses files selected/opened by the user.
+  - 1B: Server-side Drive browser with broader Drive listing/read scopes; likely heavier Google verification/security review.
+  - 1C: Hybrid: Picker in BR-16a, server-side browser deferred to a later connector branch.
+- [ ] `attention` BR16a-Q2 — Google Cloud provisioning.
+  - 2A (recommended): User provides OAuth client ID/secret, redirect URI, consent screen mode, test users, and enabled APIs before Lot 1 live OAuth.
+  - 2B: BR-16a implements with env placeholders and documents provisioning; live OAuth waits.
+  - 2C: BR-16a stays planning-only until Google Cloud provisioning is complete.
+- [ ] `attention` BR16a-Q3 — Google account ownership.
+  - 3A (recommended): User-scoped Google connection only.
+  - 3B: Workspace-managed shared Google connector account.
+  - 3C: Both, with user-scoped MVP first and workspace connector deferred.
+- [ ] `attention` BR16a-Q4 — Token storage policy.
+  - 4A (recommended): Dedicated connector account table for lifecycle/status/scopes plus encrypted token payload.
+  - 4B: Reuse user-scoped `settings` keys and `secret-crypto` like current provider connections.
+  - 4C: Access-token-only sessions with no stored refresh token; manual reconnect required for resync.
+- [ ] `attention` BR16a-Q5 — Document schema handling for non-local sources.
+  - 5A (recommended): Add `source_type` and make `storage_key` nullable for Google Drive rows.
+  - 5B: Keep `storage_key` required and store a guarded sentinel such as `gdrive://<fileId>`.
+  - 5C: Keep `context_documents` local-only and add a separate linked Google document table.
+- [ ] `attention` BR16a-Q6 — Sync strategy.
+  - 6A (recommended): Manual/on-demand indexing plus explicit user-triggered resync.
+  - 6B: Scheduled polling.
+  - 6C: Google webhook/events-based sync in BR-16a.
+- [ ] `attention` BR16a-Q7 — Supported source formats in MVP.
+  - 7A (recommended): Google Docs + PDFs first; Sheets/Slides deferred.
+  - 7B: Google Docs, Sheets, Slides, PDFs, and text-like files in BR-16a.
+  - 7C: Google Docs only.
+- [ ] `attention` BR16a-Q8 — Indexing depth.
+  - 8A (recommended): Extraction + chunks + embedding hooks; run embeddings when current provider/config is available.
+  - 8B: Extraction + summary only; chunks/embeddings deferred.
+  - 8C: Full semantic RAG retrieval and scoring in BR-16a.
+- [ ] `attention` BR16a-Q9 — UI entry point.
+  - 9A (recommended): Add Google Drive actions to the existing document panel, with minimal connection status.
+  - 9B: Settings-only connector management page.
+  - 9C: New full connector center UI.
+- [ ] `attention` BR16a-Q10 — Local branch naming.
+  - 10A (recommended): Keep active branch `feat/gdrive-sso-indexing-16a` because the canonical local ref is stale.
+  - 10B: Clean stale pre-Entropic worktree/ref and reclaim `feat/gdrive-sso-indexing`.
+  - 10C: Create another explicit branch name for this iteration.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -105,7 +140,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [x] Read current local document upload/index/chat integration files.
   - [x] Read existing auth/settings/secret storage patterns.
   - [x] Create `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`.
-  - [ ] Finalize BR16a-Q1 to BR16a-Q5 before implementation.
+  - [ ] Finalize BR16a-Q1 to BR16a-Q10 before implementation.
 
 - [ ] **Lot 1 — Google OAuth and connector account**
   - [ ] Define Google connector account data model.
