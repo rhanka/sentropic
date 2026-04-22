@@ -107,6 +107,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - 10B: Clean stale pre-Entropic worktree/ref and reclaim `feat/gdrive-sso-indexing`.
   - 10C: Create another explicit branch name for this iteration.
 - [ ] `attention` BR16a-EX1 — Conditional roadmap updates are allowed for `PLAN.md` and `plan/16c-BRANCH_feat-gdrive-shared-edit-sync.md`. Reason: user split Google Drive sharing/sync/direct-edit follow-up into future BR-16c while scoping BR-16a. Impact: documentation only, no runtime behavior. Rollback: remove the BR-16c plan stub and revert BR-16c roadmap references.
+- [x] `clarification` BR16a-EX2 — Route registration uses `api/src/routes/api/index.ts`, which is outside the current Allowed Paths. Reason: the new Google Drive OAuth router can be implemented under `api/src/routes/api/**drive**`, but exposing `/api/v1/google-drive/*` in the main API router needs the central route index. Impact: route exposure only. Rollback: remove the route index import/use lines.
+- [x] `clarification` BR16a-EX3 — Drizzle migration metadata uses `api/drizzle/meta/_journal.json`, which is outside the explicit `api/drizzle/*.sql` Allowed Path. Reason: the new connector account SQL migration is not applied by Drizzle unless the journal includes the migration tag. Impact: migration metadata only. Rollback: remove the 0026 journal entry if the SQL migration is removed.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -145,16 +147,16 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [x] Finalize BR16a-Q5 and BR16a-Q8 before implementation.
 
 - [ ] **Lot 1 — Google OAuth and connector account**
-  - [ ] Define Google connector account data model.
-  - [ ] Add OAuth start/callback/disconnect/status API routes.
-  - [ ] Store refresh/access token material through encrypted storage.
+  - [x] Define Google connector account data model.
+  - [x] Add OAuth start/callback/disconnect/status API routes.
+  - [x] Store refresh/access token material through encrypted storage.
   - [ ] Add UI account connection surface.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] `make lint-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make typecheck-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make lint-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
     - [ ] **API tests**
-      - [ ] Add OAuth route tests for start/callback/status/disconnect.
-      - [ ] Add token storage unit tests with encrypted secret behavior mocked.
+      - [x] Add OAuth route tests for start/callback/status/disconnect.
+      - [x] Add token storage unit tests with encrypted secret behavior mocked.
     - [ ] **UI tests**
       - [ ] Add account connection state tests if UI surface is added.
 
