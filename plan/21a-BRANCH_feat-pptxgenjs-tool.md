@@ -8,7 +8,7 @@ Create a reusable PowerPoint generation primitive backed by `pptxgenjs`, equival
 - Branch name `feat/pptxgenjs-tool-21a`.
 - `ENV=feat-pptxgenjs-tool-21a` `API_PORT=8722` `UI_PORT=5122` `MAILDEV_UI_PORT=1022`.
 - Depends on BR-04B freeform DOCX patterns for the chat tool and download card contract.
-- BR-21b may later consume this capability for profile PPTX exports.
+- A future profile branch may later consume this capability for profile PPTX exports.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths**: `api/src/services/*pptx*`, `api/src/routes/api/pptx.ts`, `api/src/services/tools.ts`, `api/src/services/chat-service.ts`, `ui/src/lib/components/StreamMessage.svelte`, `ui/src/lib/utils/pptx.ts`, `api/tests/**/*pptx*.test.ts`, `ui/tests/**/*pptx*.test.ts`, `spec/SPEC_EVOL_PPTXGENJS_TOOL.md`, `spec/TOOLS.md`, `spec/SPEC_TEMPLATING.md`
@@ -17,6 +17,7 @@ Create a reusable PowerPoint generation primitive backed by `pptxgenjs`, equival
 
 ## Feedback Loop
 - [ ] `attention` BR21a-Q1 to BR21a-Q8 are tracked in `tmp/feat-pptxgenjs-tool-21a/BRANCH.md` and `spec/SPEC_EVOL_PPTXGENJS_TOOL.md`.
+- [ ] `attention` BR21a-Q0 — Q1-Q8 are proposals only and require user validation before implementation.
 
 ## Plan / Todo (lot-based)
 
@@ -24,6 +25,7 @@ Create a reusable PowerPoint generation primitive backed by `pptxgenjs`, equival
   - [x] Remove profile-export scope from BR-21a.
   - [x] Define generic PptGenJS tool questions.
   - [x] Create `spec/SPEC_EVOL_PPTXGENJS_TOOL.md`.
+  - [x] Mark the spec as not user-validated.
 
 - [ ] **Lot 1 — Contract**
   - [ ] Select Q1-Q8 answer block.

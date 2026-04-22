@@ -5,6 +5,7 @@ Create a generic PowerPoint generation tool backed by `pptxgenjs`, analogous to 
 
 ## Scope / Guardrails
 - Scope limited to a generic PptGenJS-based presentation generation tool and its technical contract.
+- Decision status: Q1-Q8 below are proposals only. Do not start implementation until the user validates or edits the answer block.
 - Branch development happens in isolated worktree `tmp/feat-pptxgenjs-tool-21a`.
 - Make-only workflow, no direct Docker commands.
 - Automated tests must use dedicated environments, never root `dev`.
@@ -12,7 +13,7 @@ Create a generic PowerPoint generation tool backed by `pptxgenjs`, analogous to 
 - Test mapping: `API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=test-feat-pptxgenjs-tool-21a`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
-- BR-21b may later consume this tool for profile exports, but BR-21a must stay profile-neutral.
+- A future profile branch may later consume this tool for profile exports, but BR-21a must stay profile-neutral.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -46,7 +47,7 @@ Create a generic PowerPoint generation tool backed by `pptxgenjs`, analogous to 
   - `spec/SPEC_EVOL_CV_TRANSPOSE_PROFILES.md`
   - `tmp/feat-llm-mesh-sdk/**`
   - `tmp/feat-gdrive-sso-indexing-16a/**`
-  - `tmp/feat-cv-transpose-profiles-21b/**`
+  - `tmp/feat-cv-transpose-profiles*/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
   - `TODO.md`
@@ -63,6 +64,7 @@ Create a generic PowerPoint generation tool backed by `pptxgenjs`, analogous to 
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
+- [ ] `attention` BR21a-Q0 — User validation required before implementation. The Q1-Q8 answer block is not selected yet; it is a proposal to review, not an approved spec.
 - [ ] `attention` BR21a-Q1 — Tool surface.
   - 1A (recommended): Add a dedicated `presentation_generate` chat tool, parallel to `document_generate`.
   - 1B: Extend `document_generate` with `format: "pptx"`.
@@ -107,6 +109,7 @@ Create a generic PowerPoint generation tool backed by `pptxgenjs`, analogous to 
   - [x] Define environment and test mappings.
   - [x] Locate the existing freeform DOCX tool and storage/download contract.
   - [x] Create `spec/SPEC_EVOL_PPTXGENJS_TOOL.md` as the launch brainstorming/spec file.
+  - [x] Mark Q1-Q8 as unvalidated proposals after user review concern.
   - [ ] Finalize BR21a-Q1 to BR21a-Q8 before implementation.
 
 - [ ] **Lot 1 — Presentation tool specification**
