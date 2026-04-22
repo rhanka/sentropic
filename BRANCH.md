@@ -112,6 +112,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - [x] `clarification` BR16a-EX3 — Drizzle migration metadata uses `api/drizzle/meta/_journal.json`, which is outside the explicit `api/drizzle/*.sql` Allowed Path. Reason: the new connector account SQL migration is not applied by Drizzle unless the journal includes the migration tag. Impact: migration metadata only. Rollback: remove the 0026 journal entry if the SQL migration is removed.
 - [x] `attention` BR16a-EX4 — Global workflow/testing/subagent rule updates are allowed for local SDLC and OAuth port-slot conventions. Reason: Google OAuth redirect URIs and Picker JavaScript origins must be exact, and BR-16a needs deterministic ports for up to five concurrent sub-agents without per-run console edits. Impact: documentation/rules only, no runtime behavior. Rollback: revert the `rules/*.md`, `PLAN.md`, and `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` documentation changes.
 - [x] `evidence` BR16a-GC1 — Google Cloud provisioning completed on 2026-04-22 for project `sent-tech`: Drive API and Picker API enabled, Auth Platform created, OAuth client `Entropic Web App` created, test user `fabien.antoine@gmail.com` added, and API key `Entropic Google Picker` created with HTTP referrer restrictions plus Drive/Picker API restrictions. Secret values are intentionally not recorded in repository docs.
+- [x] `evidence` BR16a-GC2 — Google Cloud cleanup completed on 2026-04-22: removed obsolete local origin `http://localhost:5116`, obsolete redirect URI `http://localhost:8716/api/v1/google-drive/oauth/callback`, and obsolete API key referrer `http://localhost:5116/*`.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -141,8 +142,9 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [x] Create isolated worktree `tmp/feat-gdrive-sso-indexing-16a` from current `main`.
   - [x] Copy root `.env` into the branch worktree.
   - [x] Confirm active branch `feat/gdrive-sso-indexing-16a`.
-  - [x] Define environment mapping: `API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=feat-gdrive-sso-indexing-16a`.
-  - [x] Define test mapping: `API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`.
+  - [x] Define environment mapping: `API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=feat-gdrive-sso-indexing-16a`.
+  - [x] Define test mapping: `API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`.
+  - [x] Define OAuth callback base URL for BR-16a slot 0: `GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL=http://localhost:9080`.
   - [x] Confirm BR-16a is Google Drive only and BR-16b owns SharePoint/OneDrive.
   - [x] Read current local document upload/index/chat integration files.
   - [x] Read existing auth/settings/secret storage patterns.
@@ -155,8 +157,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [x] Store refresh/access token material through encrypted storage.
   - [ ] Add UI account connection surface.
   - [ ] Lot gate:
-    - [x] `make typecheck-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [x] `make lint-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [ ] **API tests**
       - [x] Add OAuth route tests for start/callback/status/disconnect.
       - [x] Add token storage unit tests with encrypted secret behavior mocked.
@@ -171,8 +173,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [ ] Filter supported MIME types for Docs, Sheets, Slides, PDFs, and text-like files.
   - [ ] Attach selected file references to existing document/context surfaces.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] `make lint-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [ ] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [ ] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [ ] **API tests**
       - [ ] Add Drive client unit tests with mocked Google API responses.
       - [ ] Add document attach API tests for Google Drive refs.
@@ -187,8 +189,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [ ] Preserve existing local upload behavior.
   - [ ] Add manual resync path.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] `make lint-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [ ] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [ ] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [ ] **API tests**
       - [ ] Add indexing service tests for Google Drive source refs.
       - [ ] Add sync status transition tests.
@@ -200,8 +202,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [ ] Surface source metadata and stale/sync status in tool responses.
   - [ ] Ensure permission checks use the connected user/workspace context.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] `make lint-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [ ] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [ ] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [ ] **API tests**
       - [ ] Add deterministic chat documents tool tests with Google Drive indexed docs.
       - [ ] Add permission-denied tests for disconnected/unauthorized Google refs.
@@ -225,12 +227,12 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [ ] Update `BRANCH.md` feedback loop before final validation.
 
 - [ ] **Lot 7 — Final validation**
-  - [ ] `make typecheck-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
-  - [ ] `make lint-api API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
-  - [ ] `make test-api-unit API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
-  - [ ] `make test-api-endpoints API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
-  - [ ] `make typecheck-ui API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
-  - [ ] `make lint-ui API_PORT=8716 UI_PORT=5116 MAILDEV_UI_PORT=1016 ENV=test-feat-gdrive-sso-indexing-16a`
+  - [ ] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - [ ] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - [ ] `make test-api-unit API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - [ ] `make test-api-endpoints API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - [ ] `make typecheck-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - [ ] `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
   - [ ] Create/update PR using `BRANCH.md` text as PR body.
   - [ ] Verify branch CI and resolve blockers.
   - [ ] Once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
