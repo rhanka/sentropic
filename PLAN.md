@@ -27,7 +27,7 @@ Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` laun
 - `fix/high-vulnerabilities` — isolated remediation branch for the API HIGH dependency vulnerability currently failing `security-sast-sca` and API image audit gates.
 
 **Pending branches (unblocked):**
-- BR-07, BR-10, BR-11, BR-12, BR-14b (after BR-14c contract), BR-14e (codebase finalization after 14a/14b/14c), BR-14d (mandatory transition ops after PR-117 release and BR-14e), BR-15, BR-16b, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22 — see §3 catalog for descriptions, dependencies, and priorities.
+- BR-07, BR-10, BR-11, BR-12, BR-14b (after BR-14c contract), BR-14e (codebase finalization after 14a/14b/14c), BR-14d (mandatory transition ops after PR-117 release and BR-14e), BR-15, BR-16b, BR-17, BR-18, BR-19, BR-20, BR-21a, BR-21b, BR-22 — see §3 catalog for descriptions, dependencies, and priorities.
 
 **Deferred:**
 - BR-09 `feat/sso-google` — deferred post-refacto (OOM resolution required before SSO Google work; exact target TBD by conductor).
@@ -151,9 +151,13 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-20  | refacto/entity-page-neutral-config               | Neutral entity route + config-driven view templates        | plan                 | BR-04                          |
 |        |                                                  | (follow-up absorbing BR-04B learnings).                    |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-21  | feat/cv-transpose-profiles                       | CV transpose: upload -> extract profiles (officeparser +   | plan                 | BR-04                          |
-|        |                                                  | LLM) -> edit -> export DOCX/PPTX; proposal + staffing      |                      |                                |
-|        |                                                  | integration.                                               |                      |                                |
+| BR-21a | feat/pptxgenjs-tool                              | Generic PptGenJS presentation generation tool, analogous   | scoping              | BR-04B                         |
+|        |                                                  | to freeform DOCX: upskill, sandboxed generation, storage,  |                      |                                |
+|        |                                                  | download card. No profile-export ownership.                |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-21b | feat/cv-transpose-profiles                       | CV transpose: upload -> extract profiles (officeparser +   | plan                 | BR-04                          |
+|        |                                                  | LLM) -> edit -> export DOCX; proposal + staffing           |                      | BR-21a for PPTX consumption    |
+|        |                                                  | integration. Profile PPTX export consumes BR-21a later.    |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-22  | fix/rich-markdown-list-stabilization             | Stabilize rich markdown list rendering/editing (freeze on  | plan                 | BR-04                          |
 |        |                                                  | initiative cc884370... in constraints field).              |                      |                                |
@@ -198,7 +202,8 @@ graph TD
   BR18[BR-18 sortable list views]
   BR19[BR-19 agent sandbox + skills]
   BR20[BR-20 entity/config refactor]
-  BR21[BR-21 cv transpose + profiles]
+  BR21a[BR-21a pptxgenjs tool]
+  BR21b[BR-21b cv transpose + profiles]
   BR22[BR-22 rich markdown list stabilization]
 
   BR00 --> BR01
@@ -244,7 +249,9 @@ graph TD
   BR19 --> BR15
   BR19 -.->|skills replace tools| BR10
   BR04 --> BR20
-  BR04 --> BR21
+  BR04B --> BR21a
+  BR04 --> BR21b
+  BR21a -.->|presentation export primitive| BR21b
   BR04 --> BR22
 ```
 
@@ -258,7 +265,7 @@ graph TD
 **Wave A2** (right after BR-04B merge — deferred behind current wave): BR-20 (entity/config refactor follow-up) + BR-22 (rich markdown list stabilization hotfix)
 **Wave B** (after BR-14a merge): BR-07 (UI npm, needs chat lib) + BR-11 (Chrome multitab, after BR-06+BR-08) + BR-17 (RAG, after BR-16a + BR-08)
 **Wave Transition**: BR-14d (repo/DNS follow-up, Scaleway/container/registry/secret/workflow rename) is mandatory transition work after PR-117 release ops and BR-14e, when code names and package names are stable enough to avoid duplicate rename churn.
-**Wave C** (after BR-04 + BR-08): BR-10 (VSCode v2) + BR-21 (CV transpose & profiles)
+**Wave C** (after BR-04 + BR-08): BR-10 (VSCode v2) + BR-21a (generic PptGenJS presentation tool) + BR-21b (CV transpose & profiles, consuming BR-21a for PPTX later)
 **Wave D** (after Wave B/C): BR-12 (CI publish, after BR-05+BR-06+BR-07+BR-13) + BR-16b (document connectors other, after BR-16a)
 **Wave E** (after BR-04): BR-19 (Agent sandbox + skill catalog — structural). Then BR-15 (spectral site tools — registers generated tools as skills in BR-19 catalog)
 **Deferred**: BR-09 (SSO Google — pending OOM resolution; may be unblocked by BR-16a if shared Google OAuth client — decision pending BR-16a brief Q16a-1).
