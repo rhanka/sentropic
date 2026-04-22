@@ -1,6 +1,6 @@
 # SPEC EVOL - PptGenJS Presentation Tool
 
-Status: Draft for BR-21a Lot 0.
+Status: Draft for BR-21a Lot 0. Not user-validated. Do not implement from this spec until Q1-Q8 are explicitly selected or edited by the user.
 
 Owner branch: `feat/pptxgenjs-tool-21a`.
 
@@ -8,7 +8,7 @@ Owner branch: `feat/pptxgenjs-tool-21a`.
 
 BR-21a creates a reusable presentation generation capability backed by `pptxgenjs`. The target is the PowerPoint equivalent of the existing freeform DOCX system: a chat-callable tool can upskill the LLM, execute sandboxed generation code, store the resulting file, and return a download affordance.
 
-The branch is intentionally profile-neutral. CV transpose, profile entities, staffing, and profile export workflows belong to BR-21b or later consumers.
+The branch is intentionally profile-neutral. CV transpose, profile entities, staffing, and profile export workflows belong to a future profile branch or later consumers.
 
 ## Existing Reference: Freeform DOCX
 
@@ -212,10 +212,10 @@ UI tests if the card is generalized:
 
 ## Open Decisions
 
-The recommended launch bundle is:
+The proposed launch bundle is:
 
 ```text
 1A 2A 3A 4A 5A 6A 7A 8A
 ```
 
-Implementation should not start until the selected answer block is recorded in `BRANCH.md`.
+Implementation must not start until the selected answer block is recorded in `BRANCH.md` after user validation.
