@@ -99,12 +99,12 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
   - [x] Define the sandbox allowlist, error codes, and return type contract.
   - [x] Define expected `upskill` content and generation prompt boundaries.
 
-- [ ] **Lot 3 — PptGenJS generation engine**
+- [x] **Lot 3 — PptGenJS generation engine**
   - [x] Add `pptxgenjs` dependency through BR21a-EX1 if required.
   - [x] Implement `api/src/services/pptx-freeform-helpers.ts`.
   - [x] Implement `api/src/services/pptx-freeform-skill.ts`.
-  - [ ] Implement `api/src/services/pptx-generation.ts`.
-  - [ ] Gate: typecheck/lint/API unit tests.
+  - [x] Implement `api/src/services/pptx-generation.ts`.
+  - [x] Gate: typecheck/lint/API unit tests.
 
 - [ ] **Lot 4 — API and chat tool integration**
   - [ ] Add the chat tool surface selected in BR21a-Q1.
