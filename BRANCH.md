@@ -131,7 +131,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - Switch back to `tmp/feat-gdrive-sso-indexing-16a` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & connector scope**
+- [x] **Lot 0 — Baseline & connector scope**
   - [x] Read `rules/MASTER.md` and `rules/workflow.md`.
   - [x] Create isolated worktree `tmp/feat-gdrive-sso-indexing-16a` from current `main`.
   - [x] Copy root `.env` into the branch worktree.
