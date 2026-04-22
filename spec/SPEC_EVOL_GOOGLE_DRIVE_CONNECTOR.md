@@ -111,6 +111,20 @@ Remote UAT/staging uses hostnames, not local sub-agent ports. When a remote UAT 
 
 The branch-wide port-slot convention is defined in `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, and summarized in `PLAN.md`. New sub-agent launch packets must use the slot convention instead of inventing ad hoc ports.
 
+Provisioning result on 2026-04-22 for Google Cloud project `sent-tech`:
+
+- `picker.googleapis.com` enabled.
+- `drive.googleapis.com` enabled.
+- Google Auth Platform created for app `Entropic`.
+- Support email fallback used: `fabien.antoine@gmail.com`; the console support-email selector did not expose `admin@sent-tech.ca` because it only showed the acting user and no managed Google Group. `admin@sent-tech.ca` was used as the project contact email.
+- Audience: External / Testing.
+- Test user added: `fabien.antoine@gmail.com`.
+- OAuth web client created: `Entropic Web App`.
+- OAuth client ID: `924600787940-bc4tfvq52lseekjr090ic2e6k4gl4r8f.apps.googleusercontent.com`.
+- API key created: `Entropic Google Picker`; the key value is not recorded in repository docs.
+- API key restrictions: HTTP referrers `https://entropic.sent-tech.ca/*`, `http://localhost:5173/*`, `http://localhost:5116/*`, and `http://localhost:5280/*` through `http://localhost:5284/*`.
+- API key API restrictions: Google Drive API and Google Picker API.
+
 ## Proposed Data Model
 
 Minimum durable objects:
