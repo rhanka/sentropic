@@ -102,10 +102,9 @@ Use these Google Auth Platform values for BR-16a provisioning:
 - Production redirect URI: `https://entropic.sent-tech.ca/api/v1/google-drive/oauth/callback`.
 - Root local dev/UAT JavaScript origin: `http://localhost:5173`.
 - Root local dev/UAT redirect URI: `http://localhost:8787/api/v1/google-drive/oauth/callback`.
-- Current BR-16a legacy conductor JavaScript origin: `http://localhost:5116`.
-- Current BR-16a legacy conductor redirect URI: `http://localhost:8716/api/v1/google-drive/oauth/callback`.
 - BR-16a five-slot sub-agent JavaScript origins: `http://localhost:5280` through `http://localhost:5284`.
 - BR-16a five-slot sub-agent redirect URIs: `http://localhost:9080/api/v1/google-drive/oauth/callback` through `http://localhost:9084/api/v1/google-drive/oauth/callback`.
+- Every branch slot that starts the API for live OAuth must set `GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL=http://localhost:<API_PORT>` so the runtime emits the exact registered redirect URI. For BR-16a slot 0, use `GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL=http://localhost:9080`.
 
 Remote UAT/staging uses hostnames, not local sub-agent ports. When a remote UAT hostname exists, add its exact JavaScript origin and exact callback URI to the OAuth client once and keep local branch ports reserved for development/test lanes only.
 
@@ -122,8 +121,9 @@ Provisioning result on 2026-04-22 for Google Cloud project `sent-tech`:
 - OAuth web client created: `Entropic Web App`.
 - OAuth client ID: `924600787940-bc4tfvq52lseekjr090ic2e6k4gl4r8f.apps.googleusercontent.com`.
 - API key created: `Entropic Google Picker`; the key value is not recorded in repository docs.
-- API key restrictions: HTTP referrers `https://entropic.sent-tech.ca/*`, `http://localhost:5173/*`, `http://localhost:5116/*`, and `http://localhost:5280/*` through `http://localhost:5284/*`.
+- API key restrictions: HTTP referrers `https://entropic.sent-tech.ca/*`, `http://localhost:5173/*`, and `http://localhost:5280/*` through `http://localhost:5284/*`.
 - API key API restrictions: Google Drive API and Google Picker API.
+- Obsolete local port entries `http://localhost:5116`, `http://localhost:8716/api/v1/google-drive/oauth/callback`, and `http://localhost:5116/*` were removed from Google Cloud on 2026-04-22.
 
 ## Proposed Data Model
 
