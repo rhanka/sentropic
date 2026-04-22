@@ -28,6 +28,8 @@ import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
 import { pptxRouter } from './pptx';
+import { googleDriveRouter } from './google-drive';
+import { googleDriveRouter } from './google-drive';
 import { chromeExtensionRouter } from './chrome-extension';
 import { vscodeExtensionRouter } from './vscode-extension';
 import { solutionsRouter } from './solutions';
@@ -144,6 +146,10 @@ apiRouter.route('/chat', chatRouter);
 // Documents routes: allow reads for any authenticated user. Upload/delete are gated inside the router by workspace role.
 apiRouter.use('/documents/*', requireAuth);
 apiRouter.route('/documents', documentsRouter);
+
+// Google Drive connector routes: authenticated; workspace checks are enforced per endpoint.
+apiRouter.use('/google-drive/*', requireAuth);
+apiRouter.route('/google-drive', googleDriveRouter);
 
 // Comments routes: allow reads for any authenticated user. Mutations are gated inside the router by workspace role.
 apiRouter.use('/comments/*', requireAuth);
