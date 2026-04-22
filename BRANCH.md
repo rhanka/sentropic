@@ -101,8 +101,8 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
 
 - [ ] **Lot 3 — PptGenJS generation engine**
   - [x] Add `pptxgenjs` dependency through BR21a-EX1 if required.
-  - [ ] Implement `api/src/services/pptx-freeform-helpers.ts`.
-  - [ ] Implement `api/src/services/pptx-freeform-skill.ts`.
+  - [x] Implement `api/src/services/pptx-freeform-helpers.ts`.
+  - [x] Implement `api/src/services/pptx-freeform-skill.ts`.
   - [ ] Implement `api/src/services/pptx-generation.ts`.
   - [ ] Gate: typecheck/lint/API unit tests.
 
