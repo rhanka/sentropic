@@ -1,29 +1,39 @@
-# Feature: BR-21a Profile PPTX Export
+# Feature: BR-21a PptGenJS Presentation Tool
 
 ## Objective
-Extract the PPTX generation slice from BR-21 into a micro-branch. Implement the `pptxgenjs` profile presentation renderer for one-page CV/profile slides, without taking ownership of the full CV transpose workflow.
+Create a generic PowerPoint generation tool backed by `pptxgenjs`, analogous to the existing freeform DOCX `document_generate` tool. BR-21a owns the reusable presentation generation primitive only: sandboxed generation, skill/upskill guidance, storage/download contract, chat tool wiring, and focused tests. It does not implement profile exports, CV transpose, profile data models, proposal staffing, or profile-specific templates.
 
 ## Scope / Guardrails
-- Scope limited to the PPTX rendering/export slice described in `spec/SPEC_EVOL_CV_TRANSPOSE_PROFILES.md` §5b and `plan/21-BRANCH_feat-cv-transpose-profiles.md` Lot 4.
-- Branch development happens in isolated worktree `tmp/feat-profile-pptx-export-21a`.
+- Scope limited to a generic PptGenJS-based presentation generation tool and its technical contract.
+- Branch development happens in isolated worktree `tmp/feat-pptxgenjs-tool-21a`.
 - Make-only workflow, no direct Docker commands.
 - Automated tests must use dedicated environments, never root `dev`.
-- Environment mapping: `API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=feat-profile-pptx-export-21a`.
-- Test mapping: `API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=test-feat-profile-pptx-export-21a`.
+- Environment mapping: `API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=feat-pptxgenjs-tool-21a`.
+- Test mapping: `API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=test-feat-pptxgenjs-tool-21a`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
+- BR-21b may later consume this tool for profile exports, but BR-21a must stay profile-neutral.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `api/src/services/profile-pptx.ts`
-  - `api/src/services/profile-pptx/**`
-  - `api/src/routes/api/**profile**`
-  - `api/tests/unit/*profile*pptx*.test.ts`
-  - `api/tests/api/*profile*.test.ts`
-  - `api/assets/profile-templates/**`
-  - `plan/21a-BRANCH_feat-profile-pptx-export.md`
-  - `spec/SPEC_EVOL_CV_TRANSPOSE_PROFILES.md`
+  - `PLAN.md`
+  - `plan/21a-BRANCH_feat-pptxgenjs-tool.md`
+  - `spec/SPEC_EVOL_PPTXGENJS_TOOL.md`
+  - `spec/SPEC_TEMPLATING.md`
+  - `spec/TOOLS.md`
+  - `api/src/services/pptx-generation.ts`
+  - `api/src/services/pptx-freeform-helpers.ts`
+  - `api/src/services/pptx-freeform-skill.ts`
+  - `api/src/services/tools.ts`
+  - `api/src/services/chat-service.ts`
+  - `api/src/routes/api/pptx.ts`
+  - `api/src/routes/api/index.ts`
+  - `api/tests/unit/*pptx*.test.ts`
+  - `api/tests/api/*pptx*.test.ts`
+  - `ui/src/lib/utils/pptx.ts`
+  - `ui/src/lib/components/StreamMessage.svelte`
+  - `ui/tests/*pptx*.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `README.md`
   - `README.fr.md`
@@ -33,17 +43,18 @@ Extract the PPTX generation slice from BR-21 into a micro-branch. Implement the 
   - `.cursor/rules/**`
   - `packages/llm-mesh/**`
   - `spec/SPEC_EVOL_LLM_MESH.md`
+  - `spec/SPEC_EVOL_CV_TRANSPOSE_PROFILES.md`
   - `tmp/feat-llm-mesh-sdk/**`
   - `tmp/feat-gdrive-sso-indexing-16a/**`
-  - `tmp/feat-cv-transpose-profiles-21/**`
+  - `tmp/feat-cv-transpose-profiles-21b/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
-  - `PLAN.md`
   - `TODO.md`
   - `api/package.json`
   - `api/package-lock.json`
   - `api/src/db/schema.ts`
   - `api/drizzle/*.sql`
+  - `api/src/services/queue-manager.ts`
   - `ui/**`
   - `e2e/**`
   - `scripts/**`
@@ -52,53 +63,87 @@ Extract the PPTX generation slice from BR-21 into a micro-branch. Implement the 
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- [ ] `attention` BR21a-Q1 — Data dependency: should 21a define a minimal profile fixture/contract only, or wait for BR-21 data model and profile API?
-  - 1A (recommended): Define a minimal `ProfileData` fixture/contract in tests and keep runtime integration thin.
-  - 1B: Wait for BR-21 Lots 1-2 before implementing PPTX.
-  - 1C: Implement missing minimal profile API/model in 21a.
-- [ ] `attention` BR21a-Q2 — Initial PPTX target.
-  - 2A (recommended): Default one-page generated slide with deterministic layout.
-  - 2B: Template-from-example first.
-  - 2C: Both in 21a.
-- [ ] `attention` BR21a-Q3 — Integration endpoint.
-  - 3A (recommended): Implement renderer/service + tests first; endpoint wiring waits for BR-21 profile API.
-  - 3B: Add/extend `POST /profiles/:id/export?format=pptx` in 21a.
-  - 3C: Provide a dev/test-only export route.
+- [ ] `attention` BR21a-Q1 — Tool surface.
+  - 1A (recommended): Add a dedicated `presentation_generate` chat tool, parallel to `document_generate`.
+  - 1B: Extend `document_generate` with `format: "pptx"`.
+  - 1C: Backend route only, no chat tool in BR-21a.
+- [ ] `attention` BR21a-Q2 — Execution model.
+  - 2A (recommended): Synchronous freeform generation in the chat handler, matching freeform DOCX behavior.
+  - 2B: Queue all PPTX generation through `job_queue`.
+  - 2C: Synchronous for freeform, queued for future template/batch modes.
+- [ ] `attention` BR21a-Q3 — Output and download contract.
+  - 3A (recommended): Upload generated PPTX to S3-compatible storage, persist a completed `pptx_generate` job, and render an inline download card.
+  - 3B: Return a raw base64 PPTX payload in the tool result.
+  - 3C: Stream the generated file directly from the chat response path.
+- [ ] `attention` BR21a-Q4 — Upskill pattern.
+  - 4A (recommended): Require `presentation_generate({ action: "upskill" })` before first generation in a conversation.
+  - 4B: No upskill action; embed all instructions in the tool description.
+  - 4C: Use only external documentation links.
+- [ ] `attention` BR21a-Q5 — Data/context contract.
+  - 5A (recommended): Reuse the freeform DOCX context model: `entityType`, `entityId`, workspace-scoped data, and explicit user-provided content.
+  - 5B: No application context; only code-provided static data.
+  - 5C: Profile-specific context. Rejected for BR-21a because profiles do not exist yet.
+- [ ] `attention` BR21a-Q6 — Sandbox contract.
+  - 6A (recommended): Node VM sandbox with whitelisted PptGenJS exports and small helpers.
+  - 6B: Prompt-to-JSON slide DSL first, then renderer interprets the DSL.
+  - 6C: Unrestricted JavaScript execution. Rejected.
+- [ ] `attention` BR21a-Q7 — UI rendering.
+  - 7A (recommended): Generalize the current DOCX download card path into a file/download card that supports `.docx` and `.pptx`.
+  - 7B: Add a PPTX-specific card beside the DOCX card.
+  - 7C: No UI card; return only a textual download URL.
+- [ ] `attention` BR21a-Q8 — Public naming.
+  - 8A (recommended): Tool name `presentation_generate`, job type `pptx_generate`, route `/pptx/jobs/:id/download`.
+  - 8B: Tool name `pptx_generate`.
+  - 8C: Tool name `slide_generate`.
 - [ ] `attention` BR21a-EX1 — `api/package.json` and `api/package-lock.json` are conditionally allowed if `pptxgenjs` is not already installed. Reason: renderer dependency. Impact: dependency metadata only. Rollback: remove dependency and renderer import.
+- [ ] `attention` BR21a-EX2 — `api/src/services/queue-manager.ts` is conditionally allowed only if BR21a-Q2 selects a queued generation path. Reason: job processing integration. Impact: queue plumbing only. Rollback: keep synchronous freeform-only generation.
+- [ ] `attention` BR21a-EX3 — broader `ui/**` edits are conditionally allowed only if the download card cannot be generalized inside `StreamMessage.svelte` and `ui/src/lib/utils/pptx.ts`. Reason: UI download affordance. Impact: presentation of generated files only. Rollback: revert to text-only tool result.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline**
+- [x] **Lot 0 — Baseline and restart**
   - [x] Read `rules/MASTER.md` and `rules/workflow.md`.
-  - [x] Locate BR-21 PPTX scope in plan/spec.
-  - [x] Create isolated worktree `tmp/feat-profile-pptx-export-21a` from current `main`.
-  - [x] Copy root `.env` into the branch worktree.
-  - [x] Confirm active branch `feat/profile-pptx-export-21a`.
+  - [x] Rename branch/worktree to `feat/pptxgenjs-tool-21a` / `tmp/feat-pptxgenjs-tool-21a`.
+  - [x] Remove the previous profile-export scope from BR-21a.
   - [x] Define environment and test mappings.
-  - [ ] Finalize BR21a-Q1 to BR21a-Q3 before implementation.
+  - [x] Locate the existing freeform DOCX tool and storage/download contract.
+  - [x] Create `spec/SPEC_EVOL_PPTXGENJS_TOOL.md` as the launch brainstorming/spec file.
+  - [ ] Finalize BR21a-Q1 to BR21a-Q8 before implementation.
 
-- [ ] **Lot 1 — PPTX renderer contract**
-  - [ ] Define the profile-to-slide input contract.
-  - [ ] Define deterministic layout constraints for one-page profile slides.
-  - [ ] Add fixture profile data and snapshot-friendly assertions.
+- [ ] **Lot 1 — Presentation tool specification**
+  - [ ] Freeze the selected tool name, route name, job type, and UI download contract.
+  - [ ] Define the freeform PptGenJS helper API.
+  - [ ] Define the sandbox allowlist, error codes, and return type contract.
+  - [ ] Define expected `upskill` content and generation prompt boundaries.
 
-- [ ] **Lot 2 — `pptxgenjs` renderer**
-  - [ ] Add `pptxgenjs` dependency if required through BR21a-EX1.
-  - [ ] Implement `api/src/services/profile-pptx.ts`.
-  - [ ] Generate a one-page PPTX buffer for a structured profile fixture.
+- [ ] **Lot 2 — PptGenJS generation engine**
+  - [ ] Add `pptxgenjs` dependency through BR21a-EX1 if required.
+  - [ ] Implement `api/src/services/pptx-freeform-helpers.ts`.
+  - [ ] Implement `api/src/services/pptx-freeform-skill.ts`.
+  - [ ] Implement `api/src/services/pptx-generation.ts`.
   - [ ] Gate: typecheck/lint/API unit tests.
 
-- [ ] **Lot 3 — Integration seam**
-  - [ ] Provide integration seam for BR-21 profile export endpoint.
-  - [ ] Avoid owning full CV transpose data model unless explicitly approved.
-  - [ ] Gate: focused API tests where possible.
+- [ ] **Lot 3 — API and chat tool integration**
+  - [ ] Add the chat tool surface selected in BR21a-Q1.
+  - [ ] Add generation handling in `chat-service.ts`.
+  - [ ] Persist completed `pptx_generate` metadata compatible with download.
+  - [ ] Add `GET /pptx/jobs/:id/download`.
+  - [ ] Gate: typecheck/lint/API endpoint tests.
 
-- [ ] **Lot 4 — Docs consolidation**
-  - [ ] Update `spec/SPEC_EVOL_CV_TRANSPOSE_PROFILES.md` with final 21a boundaries.
-  - [ ] Update `plan/21-BRANCH_feat-cv-transpose-profiles.md` to mark PPTX renderer as delegated to BR-21a if needed.
+- [ ] **Lot 4 — UI download affordance**
+  - [ ] Reuse or generalize the current DOCX download card path according to BR21a-Q7.
+  - [ ] Add `.pptx` download helper if needed.
+  - [ ] Gate: UI typecheck/lint and focused UI tests where feasible.
 
-- [ ] **Lot 5 — Final validation**
-  - [ ] `make typecheck-api API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=test-feat-profile-pptx-export-21a`
-  - [ ] `make lint-api API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=test-feat-profile-pptx-export-21a`
-  - [ ] Focused API/unit tests for profile PPTX renderer.
-  - [ ] PR, CI, UAT if there is a user-visible export path.
+- [ ] **Lot 5 — Docs consolidation**
+  - [ ] Update `spec/TOOLS.md` with the final tool contract.
+  - [ ] Update `spec/SPEC_TEMPLATING.md` only for generic presentation generation behavior.
+  - [ ] Keep profile-specific PPTX export out of BR-21a docs.
+  - [ ] Update `BRANCH.md` feedback loop with final decisions.
+
+- [ ] **Lot 6 — Final validation**
+  - [ ] `make typecheck-api API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=test-feat-pptxgenjs-tool-21a`
+  - [ ] `make lint-api API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=test-feat-pptxgenjs-tool-21a`
+  - [ ] Focused API/unit tests for freeform PPTX generation.
+  - [ ] UI tests if the download card path changes.
+  - [ ] PR, CI, UAT if there is a user-visible chat generation path.
   - [ ] Remove `BRANCH.md` before merge once CI + UAT are both OK.
