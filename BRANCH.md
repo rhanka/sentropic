@@ -1,11 +1,11 @@
 # Feature: BR-21a PptGenJS Presentation Tool
 
 ## Objective
-Add one more chat tool call for PowerPoint generation, backed by `pptxgenjs`, with generated PPTX files handled in chat alongside generated DOCX files. BR-21a owns only the generic generated-presentation primitive and generated-file chat handling. It does not implement profile exports, CV transpose, profile data models, proposal staffing, or profile-specific templates.
+Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`, backed by `pptxgenjs` for PPTX generation, with generated PPTX files handled in chat alongside generated DOCX files. BR-21a owns only the generic generated-document primitive and generated-file chat handling. It does not implement profile exports, CV transpose, profile data models, proposal staffing, or profile-specific templates.
 
 ## Scope / Guardrails
 - Scope limited to a generic PptGenJS-based presentation generation tool and its technical contract.
-- Decision status: product principle accepted; Q&A must complete before writing the real spec. Do not start implementation yet.
+- Decision status: Q&A validated; implementation spec exists.
 - Branch development happens in isolated worktree `tmp/feat-pptxgenjs-tool-21a`.
 - Make-only workflow, no direct Docker commands.
 - Automated tests must use dedicated environments, never root `dev`.
@@ -21,17 +21,25 @@ Add one more chat tool call for PowerPoint generation, backed by `pptxgenjs`, wi
   - `PLAN.md`
   - `plan/21a-BRAINSTORM_pptxgenjs-tool.md`
   - `plan/21a-BRANCH_feat-pptxgenjs-tool.md`
+  - `spec/SPEC_EVOL_PPTXGENJS_TOOL.md`
   - `spec/SPEC_TEMPLATING.md`
   - `spec/TOOLS.md`
+  - `api/src/services/docx-generation.ts`
+  - `api/src/services/docx-freeform-helpers.ts`
+  - `api/src/services/docx-freeform-skill.ts`
   - `api/src/services/pptx-generation.ts`
   - `api/src/services/pptx-freeform-helpers.ts`
   - `api/src/services/pptx-freeform-skill.ts`
   - `api/src/services/tools.ts`
   - `api/src/services/chat-service.ts`
+  - `api/src/routes/api/docx.ts`
   - `api/src/routes/api/pptx.ts`
   - `api/src/routes/api/index.ts`
   - `api/tests/unit/*pptx*.test.ts`
+  - `api/tests/unit/*docx*.test.ts`
   - `api/tests/api/*pptx*.test.ts`
+  - `api/tests/api/*docx*.test.ts`
+  - `ui/src/lib/utils/docx.ts`
   - `ui/src/lib/utils/pptx.ts`
   - `ui/src/lib/components/StreamMessage.svelte`
   - `ui/tests/*pptx*.test.ts`
@@ -65,7 +73,7 @@ Add one more chat tool call for PowerPoint generation, backed by `pptxgenjs`, wi
 
 ## Feedback Loop
 - [x] `clarification` BR21a-Q0 — Product principle accepted: one additional chat tool call for PPTX generation, with generated PPTX files handled in chat alongside generated DOCX files.
-- [ ] `attention` BR21a-Q1-Q8 — Brainstorming/Q&A must be answered in `plan/21a-BRAINSTORM_pptxgenjs-tool.md` before creating `spec/SPEC_EVOL_PPTXGENJS_TOOL.md`.
+- [x] `clarification` BR21a-Q1-Q8 — Q&A selected: `1X 2B 3A 4A 5A 6A 7X 8A`. Keep `document_generate`, add `format: "docx" | "pptx"`, mutualize generated-file UI/download behavior, sandbox PptGenJS with exposed helpers, use an upskill action adapted from Anthropic `pptx` skill guidance.
 - [ ] `attention` BR21a-EX1 — `api/package.json` and `api/package-lock.json` are conditionally allowed if `pptxgenjs` is not already installed. Reason: renderer dependency. Impact: dependency metadata only. Rollback: remove dependency and renderer import.
 - [ ] `attention` BR21a-EX2 — `api/src/services/queue-manager.ts` is conditionally allowed only if BR21a-Q2 selects a queued generation path. Reason: job processing integration. Impact: queue plumbing only. Rollback: keep synchronous freeform-only generation.
 - [ ] `attention` BR21a-EX3 — broader `ui/**` edits are conditionally allowed only if the download card cannot be generalized inside `StreamMessage.svelte` and `ui/src/lib/utils/pptx.ts`. Reason: UI download affordance. Impact: presentation of generated files only. Rollback: revert to text-only tool result.
@@ -78,12 +86,12 @@ Add one more chat tool call for PowerPoint generation, backed by `pptxgenjs`, wi
   - [x] Define environment and test mappings.
   - [x] Locate the existing freeform DOCX tool and storage/download contract.
   - [x] Replace premature spec with `plan/21a-BRAINSTORM_pptxgenjs-tool.md`.
-  - [ ] Finalize BR21a-Q1-Q8 before writing the spec.
+  - [x] Finalize BR21a-Q1-Q8 before writing the spec.
 
-- [ ] **Lot 1 — Brainstorming and Q&A**
-  - [ ] Validate or edit answer block in `plan/21a-BRAINSTORM_pptxgenjs-tool.md`.
-  - [ ] Record the selected answer block in this file.
-  - [ ] Create `spec/SPEC_EVOL_PPTXGENJS_TOOL.md` only after Q&A is validated.
+- [x] **Lot 1 — Brainstorming and Q&A**
+  - [x] Validate or edit answer block in `plan/21a-BRAINSTORM_pptxgenjs-tool.md`.
+  - [x] Record the selected answer block in this file.
+  - [x] Create `spec/SPEC_EVOL_PPTXGENJS_TOOL.md` only after Q&A is validated.
 
 - [ ] **Lot 2 — Presentation tool specification**
   - [ ] Freeze the selected tool name, route name, job type, and UI download contract.
@@ -101,8 +109,8 @@ Add one more chat tool call for PowerPoint generation, backed by `pptxgenjs`, wi
 - [ ] **Lot 4 — API and chat tool integration**
   - [ ] Add the chat tool surface selected in BR21a-Q1.
   - [ ] Add generation handling in `chat-service.ts`.
-  - [ ] Persist completed `pptx_generate` metadata compatible with download.
-  - [ ] Add `GET /pptx/jobs/:id/download`.
+  - [ ] Persist format-aware generated-file metadata compatible with DOCX and PPTX downloads.
+  - [ ] Add or adapt shared generated-file download routing while preserving existing DOCX downloads.
   - [ ] Gate: typecheck/lint/API endpoint tests.
 
 - [ ] **Lot 5 — UI download affordance**
