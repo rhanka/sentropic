@@ -36,14 +36,17 @@ This document is the single checklist for **chat tools**: what is already implem
   - Actions: close thread, reassign, add note (batch-enabled)
   - Traceability: comments created by the tool include `tool_call_id`
 
-### Document generation tools (BR-04B)
+### Document generation tools (BR-04B, extended by BR-21a)
 - [x] `document_generate` (two-phase pattern: `action=upskill` then `action=generate`)
-  - **Upskill**: returns a self-contained DOCX skill document for the LLM to learn best practices before generating.
-  - **Generate (template mode)**: `action: "generate"` with `templateId` — resolves existing DOCX template + data, renders, stores to S3, returns download link.
-  - **Generate (freeform mode)**: `action: "generate"` with `code` — LLM-written `docx.js` code executed in VM sandbox, produces DOCX buffer, uploaded to S3, returns download link.
+  - **Format**: optional `format: "docx" | "pptx"`; missing format defaults to `docx`.
+  - **DOCX upskill**: returns a self-contained DOCX skill document for the LLM to learn best practices before generating.
+  - **PPTX upskill**: returns a compact Entropic PptGenJS skill document before freeform PPTX generation.
+  - **DOCX template mode**: `action: "generate"` with `format: "docx"` and `templateId` - resolves existing DOCX template + data, renders, stores to S3, returns download link.
+  - **DOCX freeform mode**: `action: "generate"` with `format: "docx"` and `code` - LLM-written `docx.js` code executed in VM sandbox, produces DOCX buffer, uploaded to S3, returns download link.
+  - **PPTX freeform mode**: `action: "generate"` with `format: "pptx"` and `code` - LLM-written PptGenJS code executed in VM sandbox, produces PPTX buffer, uploaded to S3, returns download link.
   - Freeform execution is synchronous inside the chat handler (not queued).
-  - Download card rendered inline in chat via `runtimeSummary.docxCards`.
-  - See `SPEC_EVOL_FREEFORM_DOCX.md` for full freeform specification.
+  - New generated-file results use the generic card contract (`format`, `mimeType`, `downloadUrl`); existing DOCX cards remain compatible.
+  - See `SPEC_EVOL_FREEFORM_DOCX.md` and `SPEC_EVOL_PPTXGENJS_TOOL.md` for full freeform specifications.
 
 ### Organization batch tools (BR-04B)
 - [x] `batch_create_organizations`

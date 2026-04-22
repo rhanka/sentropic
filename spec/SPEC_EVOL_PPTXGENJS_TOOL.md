@@ -1,6 +1,6 @@
 # SPEC EVOL - PptGenJS Format for `document_generate`
 
-Status: Draft from validated BR-21a Q&A.
+Status: Lot 2 contract frozen from validated BR-21a Q&A.
 
 Owner branch: `feat/pptxgenjs-tool-21a`.
 
@@ -68,7 +68,20 @@ Compatibility rules:
 - Missing `format` means `docx`.
 - Existing DOCX prompts and calls must continue working.
 - `format: "pptx"` selects the PptGenJS upskill/generate path.
+- `format` is accepted on both `upskill` and `generate`; unsupported values fail validation before generation.
+- PPTX generation is available only for `mode: "freeform"`/`code` generation in this branch.
+- Template-driven PPTX generation is explicitly out of scope for BR-21a.
 - Tool errors must be returned as `tool_call_result` errors, same as the DOCX freeform path.
+- The public chat tool name remains `document_generate`; BR-21a must not register `presentation_generate`, `pptx_generate`, or `slide_generate`.
+
+Frozen naming:
+
+- Public chat tool: `document_generate`
+- DOCX job type: existing `docx_generate`
+- PPTX job type: internal `pptx_generate`
+- Canonical generated-file download route: `GET /generated-files/jobs/:jobId/download`
+- DOCX compatibility route: `GET /docx/jobs/:jobId/download` remains valid for existing callers and persisted chat history
+- No public PPTX-only chat tool surface or PPTX-only user workflow is added in BR-21a
 
 ## Upskill Contract
 
@@ -81,6 +94,8 @@ The upskill content must be self-contained and fit the Entropic sandbox:
 - No network access.
 - No template editing/import in BR-21a.
 - Emphasize explicit slide dimensions, inches-based coordinates, text-box margins, font sizing, visual hierarchy, and non-text-only slides.
+- Encourage calling `document_generate({ action: "upskill", format: "pptx" })` before the first PPTX `generate` call in a conversation.
+- Avoid long vendored external text; keep the skill compact and Entropic-specific.
 
 ## Sandbox Contract
 
@@ -88,8 +103,17 @@ PPTX freeform generation executes JavaScript in a Node VM sandbox, parallel to f
 
 The sandbox exposes:
 
-- `pptxgenjs` or a local `pptx()` helper to create a presentation.
-- Layout helpers for title, section, bullet list, table, stat callout, footer, and visual placeholder patterns.
+- `pptxgenjs` advanced exports where safe for normal PptGenJS authoring.
+- `pptx(opts?)` to create a presentation with default wide layout and theme.
+- `titleSlide(presentation, title, subtitle?, opts?)`.
+- `sectionSlide(presentation, title, subtitle?, opts?)`.
+- `textBox(slide, text, opts)` for stable text boxes.
+- `bullets(slide, items, opts)` for bullet lists without hand-coded glyphs.
+- `table(slide, headers, rows, opts)` for table slides with consistent sizing.
+- `statCallout(slide, label, value, opts)` for metric cards.
+- `footer(slide, text, opts?)` for small footer text.
+- `visualPlaceholder(slide, label, opts)` for explicit image/diagram placeholders when no real asset is available.
+- `safeText(value, fallback?)` for defensive text coercion.
 - A readonly `context` object using the same entity context model as DOCX.
 
 The sandbox does not expose:
@@ -102,9 +126,21 @@ The sandbox does not expose:
 
 Return contract:
 
-- The code must return a PptGenJS presentation object or a service-approved wrapper result.
+- The code must return a PptGenJS presentation object created by `pptx()` or `new pptxgenjs()`.
+- A wrapper result may be accepted only if it has `{ presentation, fileName? }`.
 - The service writes the presentation to a PPTX buffer.
 - Invalid return values fail with a stable error code.
+- Execution is synchronous from the caller perspective, but writing the presentation buffer may await PptGenJS packaging.
+
+Stable error codes:
+
+- `code_syntax_error` for JavaScript syntax failures.
+- `code_runtime_error` for sandbox execution failures.
+- `code_timeout` for VM timeout.
+- `invalid_return_type` when the code does not return a presentation or approved wrapper.
+- `pptx_packaging_error` when PptGenJS cannot serialize the returned presentation.
+- `not_found` when the requested entity context cannot be loaded.
+- `storage_error` and `persistence_error` for later chat integration failures after the buffer is produced.
 
 ## Generated File Contract
 
@@ -125,7 +161,21 @@ The tool result should include a format-aware generated-file payload:
 }
 ```
 
-Route naming should be mutualized with DOCX where practical. The implementation must preserve existing DOCX downloads. If fully migrating DOCX to a generic route is too risky for BR-21a, keep DOCX compatibility and add the smallest shared adapter that lets the chat UI render both DOCX and PPTX through one generated-file card.
+Route naming is frozen as a generic generated-file route for new `document_generate` file results. Existing DOCX download URLs remain supported. The UI should prefer `downloadUrl` when present and otherwise derive the legacy DOCX URL from `jobId` for historical messages.
+
+Runtime summary/card contract:
+
+```ts
+type GeneratedFileCard = {
+  jobId: string;
+  fileName: string;
+  format: 'docx' | 'pptx';
+  mimeType?: string;
+  downloadUrl?: string;
+};
+```
+
+`runtimeSummary.generatedFileCards` is the target field for new history entries. Existing `runtimeSummary.docxCards` may be read only as a compatibility bridge for already persisted DOCX history until the UI migration is complete.
 
 ## Storage Contract
 
@@ -142,10 +192,11 @@ The job/result metadata must be sufficient for the download endpoint to enforce 
 Generalize the existing DOCX download card into a generated-file card:
 
 - Supports at least `docx` and `pptx`.
-- Displays filename and format.
+- Displays filename and an uppercase format label.
 - Uses the provided download URL or constructs it from `jobId` through the shared generated-file route.
 - Keeps current DOCX behavior unchanged.
 - Unknown generated formats must degrade safely.
+- The download button calls one shared generated-file helper, not a DOCX-specific helper.
 
 ## Implementation Lots
 
