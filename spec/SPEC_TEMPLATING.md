@@ -8,6 +8,8 @@ Provide a template-driven DOCX generation capability for business documents:
 - executive synthesis multipage report with annexed initiatives;
 - freeform DOCX generation via chat tool (`document_generate`).
 
+BR-21a extends the generic `document_generate` chat surface with `format: "pptx"` for freeform PptGenJS presentation generation. That PPTX path is generated-code based, not reusable template management, and is documented in `SPEC_EVOL_PPTXGENJS_TOOL.md`.
+
 The primary concern is functional templating (layout control, marker contract, lifecycle), not endpoint design alone.
 
 ### 1.2 Expected product behavior
@@ -25,6 +27,8 @@ The primary concern is functional templating (layout control, marker contract, l
 Out of scope in this spec:
 - UI template designer.
 - Full governance workflow (draft/approval/versioning UI) implementation.
+- Reusable PPTX template management.
+- PPTX parsing/import.
 
 ## 2. Functional model
 
@@ -41,6 +45,12 @@ Out of scope in this spec:
   - Output: LLM-generated DOCX via `docx.js` code execution in VM sandbox.
   - Triggered by the `document_generate` chat tool with `action: "generate"` and `code` payload.
   - See `SPEC_EVOL_FREEFORM_DOCX.md` for full specification.
+- Freeform PPTX (via chat tool, BR-21a)
+  - Source entity: the same entity context model as freeform DOCX.
+  - Output: LLM-generated PPTX via PptGenJS code execution in VM sandbox.
+  - Triggered by `document_generate` with `action: "generate"`, `format: "pptx"`, `mode: "freeform"`/`code`.
+  - Uses generated-file storage/download metadata, not a separate presentation tool.
+  - See `SPEC_EVOL_PPTXGENJS_TOOL.md` for full specification.
 
 ### 2.2 Functional sections
 - Initiative one-page sections (formerly "use case one-page"):
@@ -74,7 +84,7 @@ Rules:
 - Mapping should be "as-is first": prefer direct object paths over per-field remapping.
 - Include target context is the object passed in `WITH (...)` and becomes the root context of the included template.
 
-### 2.4 Freeform DOCX generation (BR-04B)
+### 2.4 Freeform generated documents (BR-04B and BR-21a)
 
 Freeform DOCX generation uses `docx.js` code executed in an isolated VM sandbox (`vm2` or Node `vm`). The LLM writes JavaScript code that imports `docx` to build a document programmatically.
 
@@ -87,6 +97,12 @@ Implementation: `api/src/services/docx-generation.ts` (generateFreeformDocx) + `
 Download card is rendered inline in chat via `runtimeSummary.docxCards` in `StreamMessage.svelte`.
 
 See `SPEC_EVOL_FREEFORM_DOCX.md` for the full specification.
+
+Freeform PPTX generation follows the same two-phase pattern with `format: "pptx"`:
+1. **Upskill**: LLM calls `document_generate({ action: "upskill", format: "pptx" })` to receive compact PptGenJS sandbox guidance.
+2. **Generate**: LLM calls `document_generate({ action: "generate", format: "pptx", code: "..." })`; the code returns a PptGenJS presentation object, which is packaged, stored, and exposed as a generated-file download.
+
+The public tool remains `document_generate`. BR-21a does not add reusable PPTX templates, PPTX import/parsing, or profile/CV export behavior.
 
 ## 3. Template lifecycle vs business objects
 
