@@ -93,11 +93,11 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
   - [x] Record the selected answer block in this file.
   - [x] Create `spec/SPEC_EVOL_PPTXGENJS_TOOL.md` only after Q&A is validated.
 
-- [ ] **Lot 2 — Presentation tool specification**
-  - [ ] Freeze the selected tool name, route name, job type, and UI download contract.
-  - [ ] Define the freeform PptGenJS helper API.
-  - [ ] Define the sandbox allowlist, error codes, and return type contract.
-  - [ ] Define expected `upskill` content and generation prompt boundaries.
+- [x] **Lot 2 — Presentation tool specification**
+  - [x] Freeze the selected tool name, route name, job type, and UI download contract.
+  - [x] Define the freeform PptGenJS helper API.
+  - [x] Define the sandbox allowlist, error codes, and return type contract.
+  - [x] Define expected `upskill` content and generation prompt boundaries.
 
 - [ ] **Lot 3 — PptGenJS generation engine**
   - [ ] Add `pptxgenjs` dependency through BR21a-EX1 if required.
