@@ -298,8 +298,8 @@ Branch/sub-agent port convention per branch index (`nn`) and slot `0..4`:
 
 Example: BR-16 slot `0..4` uses API `9080..9084`, UI `5280..5284`, Maildev UI `1180..1184`.
 
-Legacy branch plans may still show mnemonic ports `87nn/51nn/10nn`; do not copy them for new sub-agent launches when multiple agents or OAuth callback registration are involved.
-User UAT on root workspace (`ENV=dev`). Branch dev in worktree or root workspace.
+All active branch plans and new sub-agent launch packets must use this slot convention when multiple agents or OAuth callback registration are involved.
+User UAT on root workspace (`ENV=dev`). Branch development and automated tests run in isolated worktrees only.
 
 ## 7) Source specifications
 

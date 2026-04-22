@@ -56,7 +56,7 @@ Minimal, repeatable contract so each sub-agent delivers one orthogonal lot safel
 - Example: BR-16 slot `0..4` uses API `9080..9084`, UI `5280..5284`, Maildev `1180..1184`
 - Root dev/UAT remains reserved for the user on API `8787`, UI `5173`, Maildev `1080`; sub-agents never use those ports
 - Launch packets must name the assigned slot owner and exact ports before any `make` command
-- Existing branch files may contain legacy mnemonic ports such as `87nn/51nn/10nn`; do not copy those examples for new sub-agent launches when multiple agents or OAuth callback registration are involved
+- Active branch files and new sub-agent launch packets must use the slot convention when multiple agents or OAuth callback registration are involved
 
 ## Reporting Contract
 1. **Done**: concrete changes with file paths
