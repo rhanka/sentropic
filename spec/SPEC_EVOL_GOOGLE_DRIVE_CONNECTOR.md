@@ -87,6 +87,30 @@ google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/entropic-google-
 
 Codex/Playwright should connect to `http://127.0.0.1:9222`, use the already authenticated Google session, and create/verify the OAuth app configuration with user approval.
 
+### OAuth Client Ports and SDLC URLs
+
+Google OAuth redirect URIs are exact matches, including scheme, host, port, path, and trailing slash. Google Picker and OAuth JavaScript origins also require explicit origins; wildcard ports are not allowed. Local branch ports therefore need to be deterministic and recorded before provisioning.
+
+Use these Google Auth Platform values for BR-16a provisioning:
+
+- App name: `Entropic`.
+- Preferred support/contact email: `admin@sent-tech.ca`.
+- Temporary support email fallback only if the Google Console selector does not expose `admin@sent-tech.ca`: `fabien.antoine@gmail.com`.
+- Test user while the app is in Testing mode: `fabien.antoine@gmail.com`.
+- Authorized domain: `sent-tech.ca`.
+- Production JavaScript origin: `https://entropic.sent-tech.ca`.
+- Production redirect URI: `https://entropic.sent-tech.ca/api/v1/google-drive/oauth/callback`.
+- Root local dev/UAT JavaScript origin: `http://localhost:5173`.
+- Root local dev/UAT redirect URI: `http://localhost:8787/api/v1/google-drive/oauth/callback`.
+- Current BR-16a legacy conductor JavaScript origin: `http://localhost:5116`.
+- Current BR-16a legacy conductor redirect URI: `http://localhost:8716/api/v1/google-drive/oauth/callback`.
+- BR-16a five-slot sub-agent JavaScript origins: `http://localhost:5280` through `http://localhost:5284`.
+- BR-16a five-slot sub-agent redirect URIs: `http://localhost:9080/api/v1/google-drive/oauth/callback` through `http://localhost:9084/api/v1/google-drive/oauth/callback`.
+
+Remote UAT/staging uses hostnames, not local sub-agent ports. When a remote UAT hostname exists, add its exact JavaScript origin and exact callback URI to the OAuth client once and keep local branch ports reserved for development/test lanes only.
+
+The branch-wide port-slot convention is defined in `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`, and summarized in `PLAN.md`. New sub-agent launch packets must use the slot convention instead of inventing ad hoc ports.
+
 ## Proposed Data Model
 
 Minimum durable objects:

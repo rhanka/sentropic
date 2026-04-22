@@ -59,6 +59,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - `api/package-lock.json`
   - `ui/package.json`
   - `ui/package-lock.json`
+  - `rules/*.md`
   - `scripts/**`
 - **Exception process**:
   - Declare exception ID `BR16a-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
@@ -109,6 +110,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - [ ] `attention` BR16a-EX1 — Conditional roadmap updates are allowed for `PLAN.md` and `plan/16c-BRANCH_feat-gdrive-shared-edit-sync.md`. Reason: user split Google Drive sharing/sync/direct-edit follow-up into future BR-16c while scoping BR-16a. Impact: documentation only, no runtime behavior. Rollback: remove the BR-16c plan stub and revert BR-16c roadmap references.
 - [x] `clarification` BR16a-EX2 — Route registration uses `api/src/routes/api/index.ts`, which is outside the current Allowed Paths. Reason: the new Google Drive OAuth router can be implemented under `api/src/routes/api/**drive**`, but exposing `/api/v1/google-drive/*` in the main API router needs the central route index. Impact: route exposure only. Rollback: remove the route index import/use lines.
 - [x] `clarification` BR16a-EX3 — Drizzle migration metadata uses `api/drizzle/meta/_journal.json`, which is outside the explicit `api/drizzle/*.sql` Allowed Path. Reason: the new connector account SQL migration is not applied by Drizzle unless the journal includes the migration tag. Impact: migration metadata only. Rollback: remove the 0026 journal entry if the SQL migration is removed.
+- [x] `attention` BR16a-EX4 — Global workflow/testing/subagent rule updates are allowed for local SDLC and OAuth port-slot conventions. Reason: Google OAuth redirect URIs and Picker JavaScript origins must be exact, and BR-16a needs deterministic ports for up to five concurrent sub-agents without per-run console edits. Impact: documentation/rules only, no runtime behavior. Rollback: revert the `rules/*.md`, `PLAN.md`, and `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` documentation changes.
 
 ## AI Flaky tests
 - Acceptance rule:

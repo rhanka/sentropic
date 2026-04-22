@@ -288,7 +288,17 @@ graph TD
 
 ## 6) Environment convention
 
-Port convention per branch index (`nn`): `API_PORT=87nn`, `UI_PORT=51nn`, `MAILDEV_UI_PORT=10nn`.
+Root local dev/UAT is reserved for the user: `API_PORT=8787`, `UI_PORT=5173`, `MAILDEV_UI_PORT=1080`, `ENV=dev`.
+
+Branch/sub-agent port convention per branch index (`nn`) and slot `0..4`:
+
+- `API_PORT = 9000 + (nn * 5) + slot`
+- `UI_PORT = 5200 + (nn * 5) + slot`
+- `MAILDEV_UI_PORT = 1100 + (nn * 5) + slot`
+
+Example: BR-16 slot `0..4` uses API `9080..9084`, UI `5280..5284`, Maildev UI `1180..1184`.
+
+Legacy branch plans may still show mnemonic ports `87nn/51nn/10nn`; do not copy them for new sub-agent launches when multiple agents or OAuth callback registration are involved.
 User UAT on root workspace (`ENV=dev`). Branch dev in worktree or root workspace.
 
 ## 7) Source specifications
