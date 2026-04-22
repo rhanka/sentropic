@@ -74,7 +74,7 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
 ## Feedback Loop
 - [x] `clarification` BR21a-Q0 — Product principle accepted: one additional chat tool call for PPTX generation, with generated PPTX files handled in chat alongside generated DOCX files.
 - [x] `clarification` BR21a-Q1-Q8 — Q&A selected: `1X 2B 3A 4A 5A 6A 7X 8A`. Keep `document_generate`, add `format: "docx" | "pptx"`, mutualize generated-file UI/download behavior, sandbox PptGenJS with exposed helpers, use an upskill action adapted from Anthropic `pptx` skill guidance.
-- [ ] `attention` BR21a-EX1 — `api/package.json` and `api/package-lock.json` are conditionally allowed if `pptxgenjs` is not already installed. Reason: renderer dependency. Impact: dependency metadata only. Rollback: remove dependency and renderer import.
+- [x] `attention` BR21a-EX1 — Used for `api/package.json` and `api/package-lock.json` because `pptxgenjs` is not already installed. Reason: renderer dependency. Impact: dependency metadata only. Rollback: remove dependency and renderer import.
 - [ ] `attention` BR21a-EX2 — `api/src/services/queue-manager.ts` is conditionally allowed only if BR21a-Q2 selects a queued generation path. Reason: job processing integration. Impact: queue plumbing only. Rollback: keep synchronous freeform-only generation.
 - [ ] `attention` BR21a-EX3 — broader `ui/**` edits are conditionally allowed only if the download card cannot be generalized inside `StreamMessage.svelte` and `ui/src/lib/utils/pptx.ts`. Reason: UI download affordance. Impact: presentation of generated files only. Rollback: revert to text-only tool result.
 
@@ -100,7 +100,7 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
   - [x] Define expected `upskill` content and generation prompt boundaries.
 
 - [ ] **Lot 3 — PptGenJS generation engine**
-  - [ ] Add `pptxgenjs` dependency through BR21a-EX1 if required.
+  - [x] Add `pptxgenjs` dependency through BR21a-EX1 if required.
   - [ ] Implement `api/src/services/pptx-freeform-helpers.ts`.
   - [ ] Implement `api/src/services/pptx-freeform-skill.ts`.
   - [ ] Implement `api/src/services/pptx-generation.ts`.
