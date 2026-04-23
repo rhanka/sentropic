@@ -183,6 +183,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - [ ] **API tests**
       - [x] Add Drive client unit tests with mocked Google API responses.
       - [x] `make test-api-unit SCOPE=tests/unit/google-drive-client.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+      - [x] Add Picker selection resolve API tests with mocked Google Drive metadata.
+      - [x] `make test-api-endpoints SCOPE=tests/api/google-drive-files.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
       - [ ] Add document attach API tests for Google Drive refs.
     - [ ] **UI tests**
       - [ ] Add file picker/listing tests if UI surface is added.
