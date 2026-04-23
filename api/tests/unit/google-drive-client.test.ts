@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   GoogleDriveClientError,
   GOOGLE_WORKSPACE_MIME_TYPES,
+  isSupportedGoogleDriveMimeType,
   loadGoogleDriveFileContent,
   pickGoogleDriveExportMimeType,
   resolveGoogleDriveFileMetadata,
@@ -61,6 +62,13 @@ describe('google drive client', () => {
       'text/plain',
     );
     expect(pickGoogleDriveExportMimeType('application/pdf')).toBeNull();
+  });
+
+  it('identifies supported Google Drive source MIME types', () => {
+    expect(isSupportedGoogleDriveMimeType(GOOGLE_WORKSPACE_MIME_TYPES.presentation)).toBe(true);
+    expect(isSupportedGoogleDriveMimeType('application/pdf')).toBe(true);
+    expect(isSupportedGoogleDriveMimeType('text/markdown')).toBe(true);
+    expect(isSupportedGoogleDriveMimeType('application/vnd.google-apps.folder')).toBe(false);
   });
 
   it('exports native Google Workspace files instead of downloading media', async () => {

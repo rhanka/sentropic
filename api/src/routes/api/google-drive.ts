@@ -6,8 +6,15 @@ import {
   disconnectGoogleDriveConnectorAccount,
   getGoogleDriveConnection,
   markGoogleDriveConnectorError,
+  resolveGoogleDriveTokenSecret,
   storeGoogleDriveTokenMaterial,
 } from '../../services/google-drive-connector-accounts';
+import {
+  GoogleDriveClientError,
+  isSupportedGoogleDriveMimeType,
+  pickGoogleDriveExportMimeType,
+  resolveGoogleDriveFileMetadata,
+} from '../../services/google-drive-client';
 import {
   appendGoogleDriveOAuthResultToReturnPath,
   exchangeGoogleDriveOAuthCode,
@@ -21,6 +28,10 @@ export const googleDriveRouter = new Hono();
 
 const oauthStartSchema = z.object({
   returnPath: z.string().trim().max(512).optional().nullable(),
+});
+
+const resolvePickerSelectionSchema = z.object({
+  file_ids: z.array(z.string().trim().min(1)).min(1).max(20),
 });
 
 const getAuthenticatedUser = (user: AuthUser | undefined): AuthUser | null =>
@@ -44,6 +55,22 @@ const wantsJsonResponse = (request: Request, format: string | undefined): boolea
 const toErrorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
+const toDriveFileResponse = (file: Awaited<ReturnType<typeof resolveGoogleDriveFileMetadata>>) => ({
+  id: file.id,
+  name: file.name,
+  mime_type: file.mimeType,
+  web_view_link: file.webViewLink,
+  web_content_link: file.webContentLink,
+  icon_link: file.iconLink,
+  modified_time: file.modifiedTime,
+  version: file.version,
+  size: file.size,
+  md5_checksum: file.md5Checksum,
+  drive_id: file.driveId,
+  supported: isSupportedGoogleDriveMimeType(file.mimeType),
+  export_mime_type: pickGoogleDriveExportMimeType(file.mimeType),
+});
+
 googleDriveRouter.get('/connection', async (c) => {
   const user = getAuthenticatedUser(c.get('user'));
   if (!user) return c.json({ message: 'Authentication required' }, 401);
@@ -57,6 +84,52 @@ googleDriveRouter.get('/connection', async (c) => {
       workspaceId: user.workspaceId,
     }),
   });
+});
+
+googleDriveRouter.post('/files/resolve-picker-selection', async (c) => {
+  const user = getAuthenticatedUser(c.get('user'));
+  if (!user) return c.json({ message: 'Authentication required' }, 401);
+  if (!(await ensureWorkspace(user, user.workspaceId))) {
+    return c.json({ message: 'Workspace access required' }, 403);
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = resolvePickerSelectionSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ message: 'Invalid Google Drive file selection' }, 400);
+  }
+
+  const token = await resolveGoogleDriveTokenSecret({
+    userId: user.userId,
+    workspaceId: user.workspaceId,
+  });
+  if (!token?.accessToken) {
+    return c.json({ message: 'Google Drive account is not connected' }, 409);
+  }
+
+  try {
+    const files = [];
+    for (const fileId of parsed.data.file_ids) {
+      const file = await resolveGoogleDriveFileMetadata({
+        accessToken: token.accessToken,
+        fileId,
+      });
+      files.push(toDriveFileResponse(file));
+    }
+    return c.json({ files });
+  } catch (error) {
+    if (error instanceof GoogleDriveClientError) {
+      const payload = {
+        message: error.message,
+        code: error.code,
+        google_status: error.status ?? null,
+      };
+      if (error.status === 403) return c.json(payload, 403);
+      if (error.status === 404) return c.json(payload, 404);
+      return c.json(payload, 502);
+    }
+    return c.json({ message: toErrorMessage(error, 'Google Drive file resolution failed') }, 502);
+  }
 });
 
 googleDriveRouter.post('/oauth/start', async (c) => {

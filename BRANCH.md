@@ -174,8 +174,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [x] Add Drive API client wrapper.
   - [ ] Integrate Google Picker next to the existing document attachment control.
   - [ ] Preserve document search/browse UX through Picker under `drive.file`.
-  - [ ] Resolve selected file IDs server-side with metadata.
-  - [ ] Filter supported MIME types for Docs, Sheets, Slides, PDFs, and text-like files.
+  - [x] Resolve selected file IDs server-side with metadata.
+  - [x] Filter supported MIME types for Docs, Sheets, Slides, PDFs, and text-like files.
   - [ ] Attach selected file references to existing document/context surfaces.
   - [ ] Lot gate:
     - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
