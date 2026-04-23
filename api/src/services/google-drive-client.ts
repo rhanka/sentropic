@@ -6,6 +6,23 @@ export const GOOGLE_WORKSPACE_MIME_TYPES = {
   presentation: 'application/vnd.google-apps.presentation',
 } as const;
 
+const SUPPORTED_BINARY_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+
+const SUPPORTED_TEXT_MIME_TYPES = new Set([
+  'application/json',
+  'application/xml',
+  'text/csv',
+  'text/html',
+  'text/markdown',
+  'text/plain',
+  'text/xml',
+]);
+
 export type GoogleWorkspaceMimeType =
   (typeof GOOGLE_WORKSPACE_MIME_TYPES)[keyof typeof GOOGLE_WORKSPACE_MIME_TYPES];
 
@@ -138,6 +155,11 @@ const driveFetch = async (
 
 export const isGoogleWorkspaceMimeType = (mimeType: string): mimeType is GoogleWorkspaceMimeType =>
   Object.values(GOOGLE_WORKSPACE_MIME_TYPES).includes(mimeType as GoogleWorkspaceMimeType);
+
+export const isSupportedGoogleDriveMimeType = (mimeType: string): boolean =>
+  isGoogleWorkspaceMimeType(mimeType) ||
+  SUPPORTED_BINARY_MIME_TYPES.has(mimeType) ||
+  SUPPORTED_TEXT_MIME_TYPES.has(mimeType);
 
 export const pickGoogleDriveExportMimeType = (mimeType: string): string | null => {
   if (mimeType === GOOGLE_WORKSPACE_MIME_TYPES.document) return 'text/markdown';
