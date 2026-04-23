@@ -171,17 +171,18 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
       - [x] `make test-ui SCOPE=tests/utils/google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 
 - [ ] **Lot 2 — Drive file search and selection**
-  - [ ] Add Drive API client wrapper.
+  - [x] Add Drive API client wrapper.
   - [ ] Integrate Google Picker next to the existing document attachment control.
   - [ ] Preserve document search/browse UX through Picker under `drive.file`.
   - [ ] Resolve selected file IDs server-side with metadata.
   - [ ] Filter supported MIME types for Docs, Sheets, Slides, PDFs, and text-like files.
   - [ ] Attach selected file references to existing document/context surfaces.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [ ] **API tests**
-      - [ ] Add Drive client unit tests with mocked Google API responses.
+      - [x] Add Drive client unit tests with mocked Google API responses.
+      - [x] `make test-api-unit SCOPE=tests/unit/google-drive-client.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
       - [ ] Add document attach API tests for Google Drive refs.
     - [ ] **UI tests**
       - [ ] Add file picker/listing tests if UI surface is added.
