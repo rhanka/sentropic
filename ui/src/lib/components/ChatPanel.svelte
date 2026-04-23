@@ -37,8 +37,14 @@
     deleteDocument,
     listDocuments,
     uploadDocument,
-    type ContextDocumentItem
+    type ContextDocumentItem,
   } from '$lib/utils/documents';
+  import {
+    disconnectGoogleDrive,
+    fetchGoogleDriveConnection,
+    startGoogleDriveOAuth,
+    type GoogleDriveConnection,
+  } from '$lib/utils/google-drive';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
     decideLocalToolPermission,
@@ -89,6 +95,7 @@
     Terminal,
     Search,
     GitBranch,
+    Cloud,
   } from '@lucide/svelte';
   import { downloadGeneratedFile, type GeneratedFileCard } from '$lib/utils/docx';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
@@ -1363,6 +1370,11 @@
   let sessionDocs: ContextDocumentItem[] = [];
   let sessionDocsUploading = false;
   let sessionDocsError: string | null = null;
+  let googleDriveConnection: GoogleDriveConnection | null = null;
+  let googleDriveConnectionLoaded = false;
+  let googleDriveConnectionLoading = false;
+  let googleDriveActionInFlight = false;
+  let googleDriveConnectionError: string | null = null;
   let sessionCheckpoints: ChatCheckpoint[] = [];
   let checkpointsByAnchorMessageId = new Map<string, ChatCheckpoint>();
   let checkpointActionInFlight = false;
@@ -2918,6 +2930,61 @@
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       sessionDocsError = msg;
+    }
+  };
+
+  const googleDriveReturnPath = () => {
+    if (typeof window === 'undefined') return '/';
+    return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  };
+
+  const loadGoogleDriveConnection = async (opts?: { silent?: boolean }) => {
+    if (googleDriveConnectionLoading) return;
+    googleDriveConnectionLoading = true;
+    if (!opts?.silent) googleDriveConnectionError = null;
+    try {
+      googleDriveConnection = await fetchGoogleDriveConnection();
+      googleDriveConnectionLoaded = true;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      googleDriveConnectionError = msg || $_('chat.documents.googleDrive.loadError');
+      googleDriveConnectionLoaded = false;
+    } finally {
+      googleDriveConnectionLoading = false;
+    }
+  };
+
+  const connectGoogleDrive = async () => {
+    if (googleDriveActionInFlight) return;
+    googleDriveActionInFlight = true;
+    googleDriveConnectionError = null;
+    try {
+      const authorizationUrl = await startGoogleDriveOAuth({
+        returnPath: googleDriveReturnPath(),
+      });
+      if (typeof window !== 'undefined') {
+        window.location.assign(authorizationUrl);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      googleDriveConnectionError = msg || $_('chat.documents.googleDrive.connectError');
+    } finally {
+      googleDriveActionInFlight = false;
+    }
+  };
+
+  const disconnectGoogleDriveConnection = async () => {
+    if (googleDriveActionInFlight) return;
+    googleDriveActionInFlight = true;
+    googleDriveConnectionError = null;
+    try {
+      googleDriveConnection = await disconnectGoogleDrive();
+      googleDriveConnectionLoaded = true;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      googleDriveConnectionError = msg || $_('chat.documents.googleDrive.disconnectError');
+    } finally {
+      googleDriveActionInFlight = false;
     }
   };
 
@@ -4623,6 +4690,7 @@
       ensureDefaultToolToggles();
       updateContextFromRoute();
       void loadExtensionActiveTabContext();
+      void loadGoogleDriveConnection({ silent: true });
       handleUserAISettingsUpdated = (event: Event) => {
         const detail = (event as CustomEvent<UserAISettingsUpdatedPayload>)
           .detail;
@@ -4721,6 +4789,9 @@
 
   $: if (mode === 'ai' && showComposerMenu) {
     void loadExtensionActiveTabContext();
+    if (!googleDriveConnectionLoaded && !googleDriveConnectionLoading) {
+      void loadGoogleDriveConnection({ silent: true });
+    }
     // Compute dynamic max-heights for context/tool sections
     if (panelEl && composerMenuButtonRef) {
       const panelTop = panelEl.getBoundingClientRect().top;
@@ -4738,6 +4809,10 @@
       previousAiWorkspaceId = nextWorkspaceId;
     } else if (nextWorkspaceId !== previousAiWorkspaceId) {
       previousAiWorkspaceId = nextWorkspaceId;
+      googleDriveConnection = null;
+      googleDriveConnectionLoaded = false;
+      googleDriveConnectionError = null;
+      void loadGoogleDriveConnection({ silent: true });
       void rescopeSessionsForWorkspaceChange();
     }
   }
@@ -5653,6 +5728,13 @@
                 {sessionDocsError}
               </div>
             {/if}
+            {#if googleDriveConnectionError}
+              <div
+                class="mb-2 rounded bg-red-50 border border-red-200 px-2 py-1 text-[11px] text-red-700"
+              >
+                {googleDriveConnectionError}
+              </div>
+            {/if}
             {#if sessionDocs.length > 0}
               <div class="mb-2 flex flex-wrap gap-2">
                 {#each sessionDocs as doc (doc.id)}
@@ -5803,6 +5885,55 @@
                 <Paperclip class="w-4 h-4" />
                 <span>{$_('chat.documents.addFile')}</span>
               </label>
+              {#if googleDriveConnection?.connected}
+                <button
+                  class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-400 cursor-not-allowed"
+                  type="button"
+                  disabled
+                  aria-label={$_('chat.documents.googleDrive.import')}
+                  title={$_('chat.documents.googleDrive.importPending')}
+                >
+                  <Cloud class="w-4 h-4" />
+                  <span>{$_('chat.documents.googleDrive.import')}</span>
+                </button>
+                <div class="px-1 text-[10px] text-slate-500 truncate">
+                  {$_('chat.documents.googleDrive.connectedAs', {
+                    values: {
+                      email:
+                        googleDriveConnection.accountEmail ??
+                        googleDriveConnection.accountSubject ??
+                        $_('chat.documents.googleDrive.connectedAccount'),
+                    },
+                  })}
+                </div>
+                <button
+                  class={'flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 ' +
+                    (googleDriveActionInFlight ? 'opacity-50 pointer-events-none' : '')}
+                  type="button"
+                  disabled={googleDriveActionInFlight}
+                  on:click={disconnectGoogleDriveConnection}
+                >
+                  <Cloud class="w-4 h-4" />
+                  <span>{$_('chat.documents.googleDrive.disconnect')}</span>
+                </button>
+              {:else}
+                <button
+                  class={'flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 ' +
+                    (googleDriveConnectionLoading || googleDriveActionInFlight
+                      ? 'opacity-50 pointer-events-none'
+                      : '')}
+                  type="button"
+                  disabled={googleDriveConnectionLoading || googleDriveActionInFlight}
+                  on:click={connectGoogleDrive}
+                >
+                  <Cloud class="w-4 h-4" />
+                  <span>
+                    {googleDriveConnectionLoading || googleDriveActionInFlight
+                      ? $_('chat.documents.googleDrive.loading')
+                      : $_('chat.documents.googleDrive.connect')}
+                  </span>
+                </button>
+              {/if}
               <div class="border-t border-slate-100 pt-2"></div>
               <div class="text-xs font-semibold text-slate-600">
                 {$_('chat.contexts.title')}
