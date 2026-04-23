@@ -1117,6 +1117,18 @@
     },
     "documents": {
       "addFile": "Ajouter un fichier",
+      "googleDrive": {
+        "connect": "Connecter Google Drive",
+        "loading": "Chargement Google Drive…",
+        "import": "Importer depuis Google Drive",
+        "importPending": "L'import Google Drive sera activé dans le prochain lot BR-16a après l'intégration du Picker.",
+        "connectedAs": "Connecté avec {email}",
+        "connectedAccount": "Compte Google",
+        "disconnect": "Déconnecter Google Drive",
+        "loadError": "Impossible de charger la connexion Google Drive.",
+        "connectError": "Impossible de lancer la connexion Google Drive.",
+        "disconnectError": "Impossible de déconnecter Google Drive."
+      },
       "delete": {
         "ariaLabel": "Supprimer le document"
       },

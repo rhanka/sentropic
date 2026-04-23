@@ -111,6 +111,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - [x] `clarification` BR16a-EX2 — Route registration uses `api/src/routes/api/index.ts`, which is outside the current Allowed Paths. Reason: the new Google Drive OAuth router can be implemented under `api/src/routes/api/**drive**`, but exposing `/api/v1/google-drive/*` in the main API router needs the central route index. Impact: route exposure only. Rollback: remove the route index import/use lines.
 - [x] `clarification` BR16a-EX3 — Drizzle migration metadata uses `api/drizzle/meta/_journal.json`, which is outside the explicit `api/drizzle/*.sql` Allowed Path. Reason: the new connector account SQL migration is not applied by Drizzle unless the journal includes the migration tag. Impact: migration metadata only. Rollback: remove the 0026 journal entry if the SQL migration is removed.
 - [x] `attention` BR16a-EX4 — Global workflow/testing/subagent rule updates are allowed for local SDLC and OAuth port-slot conventions. Reason: Google OAuth redirect URIs and Picker JavaScript origins must be exact, and BR-16a needs deterministic ports for up to five concurrent sub-agents without per-run console edits. Impact: documentation/rules only, no runtime behavior. Rollback: revert the `rules/*.md`, `PLAN.md`, and `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` documentation changes.
+- [x] `attention` BR16a-EX5 — `ui/src/lib/components/ChatPanel.svelte` and `ui/src/locales/*.json` are allowed for the Google Drive composer connection surface. Reason: BR16a-Q9 explicitly places "Connect Google Drive" / "Import from Google Drive" next to the existing paperclip in the chat composer, and user-facing labels need locale entries. Impact: composer menu surface only; no Picker import flow in Lot 1. Rollback: remove the Google Drive menu entries, locale keys, and client utility imports.
+- [ ] `attention` BR16a-UI1 — `make typecheck-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a` fails before change-specific diagnostics because `.svelte-kit` is not synced and `$lib` aliases are unresolved across the app. Follow-up check `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a` passes with 0 errors and 6 existing warnings. Impact: target/config issue, not a Google Drive UI error. Rollback: none for BR-16a runtime; fix the make target separately if required.
 - [x] `evidence` BR16a-GC1 — Google Cloud provisioning completed on 2026-04-22 for project `sent-tech`: Drive API and Picker API enabled, Auth Platform created, OAuth client `Entropic Web App` created, test user `fabien.antoine@gmail.com` added, and API key `Entropic Google Picker` created with HTTP referrer restrictions plus Drive/Picker API restrictions. Secret values are intentionally not recorded in repository docs.
 - [x] `evidence` BR16a-GC2 — Google Cloud cleanup completed on 2026-04-22: removed obsolete local origin `http://localhost:5116`, obsolete redirect URI `http://localhost:8716/api/v1/google-drive/oauth/callback`, and obsolete API key referrer `http://localhost:5116/*`.
 
@@ -151,19 +153,22 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [x] Create `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`.
   - [x] Finalize BR16a-Q5 and BR16a-Q8 before implementation.
 
-- [ ] **Lot 1 — Google OAuth and connector account**
+- [x] **Lot 1 — Google OAuth and connector account**
   - [x] Define Google connector account data model.
   - [x] Add OAuth start/callback/disconnect/status API routes.
   - [x] Store refresh/access token material through encrypted storage.
-  - [ ] Add UI account connection surface.
-  - [ ] Lot gate:
+  - [x] Add UI account connection surface.
+  - [x] Lot gate:
     - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] **API tests**
+    - [x] `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] **API tests**
       - [x] Add OAuth route tests for start/callback/status/disconnect.
       - [x] Add token storage unit tests with encrypted secret behavior mocked.
-    - [ ] **UI tests**
-      - [ ] Add account connection state tests if UI surface is added.
+    - [x] **UI tests**
+      - [x] Add account connection state utility tests in `ui/tests/utils/google-drive.test.ts`.
+      - [x] `make test-ui SCOPE=tests/utils/google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 
 - [ ] **Lot 2 — Drive file search and selection**
   - [ ] Add Drive API client wrapper.
