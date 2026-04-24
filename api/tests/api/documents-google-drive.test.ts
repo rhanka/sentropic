@@ -51,6 +51,15 @@ const seedConnectedGoogleDriveAccount = async (user: Awaited<ReturnType<typeof c
     },
   });
 
+const getStoredGoogleDriveAccountId = async (user: Awaited<ReturnType<typeof createAuthenticatedUser>>) => {
+  const [row] = await db
+    .select({ id: documentConnectorAccounts.id })
+    .from(documentConnectorAccounts)
+    .where(eq(documentConnectorAccounts.workspaceId, String(user.workspaceId)))
+    .limit(1);
+  return row?.id ?? null;
+};
+
 describe('Documents API (Google Drive attach)', () => {
   let app: any;
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
@@ -197,5 +206,103 @@ describe('Documents API (Google Drive attach)', () => {
 
     expect(res.status).toBe(403);
   });
-});
 
+  it('requeues Google Drive documents for resync and refreshes stored metadata', async () => {
+    await seedConnectedGoogleDriveAccount(user);
+    const accountId = await getStoredGoogleDriveAccountId(user);
+    expect(accountId).toBeTruthy();
+
+    const docId = crypto.randomUUID();
+    createdDocIds.push(docId);
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId: String(user.workspaceId),
+      contextType: 'folder',
+      contextId: 'f_1',
+      filename: 'Roadmap.md',
+      mimeType: 'text/markdown',
+      sizeBytes: 0,
+      sourceType: 'google_drive',
+      storageKey: null,
+      status: 'ready',
+      data: {
+        summary: 'Old summary',
+        summaryLang: 'fr',
+        syncStatus: 'indexed',
+        lastSyncedAt: '2026-04-22T12:00:00.000Z',
+        source: {
+          kind: 'google_drive',
+          connectorAccountId: accountId,
+          fileId: 'file_1',
+          name: 'Roadmap',
+          mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+          exportMimeType: 'text/markdown',
+          modifiedTime: '2026-04-22T12:00:00.000Z',
+          version: '41',
+        },
+      } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          id: 'file_1',
+          name: 'Roadmap',
+          mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+          webViewLink: 'https://docs.google.com/document/d/file_1',
+          webContentLink: null,
+          iconLink: null,
+          modifiedTime: '2026-04-24T09:00:00.000Z',
+          version: '99',
+          size: null,
+          md5Checksum: null,
+          trashed: false,
+          driveId: null,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await app.request(`/api/v1/documents/${docId}/resync`, {
+      method: 'POST',
+      headers: {
+        Cookie: `session=${user.sessionToken}`,
+      },
+    });
+
+    expect(res.status).toBe(202);
+    await expect(res.json()).resolves.toMatchObject({
+      id: docId,
+      source_type: 'google_drive',
+      status: 'uploaded',
+      sync_status: 'pending',
+    });
+    expect(addJobSpy).toHaveBeenCalledTimes(1);
+    expect(addJobSpy.mock.calls[0]?.[0]).toBe('document_summary');
+    expect(addJobSpy.mock.calls[0]?.[1]).toMatchObject({ documentId: docId, lang: 'fr' });
+
+    const [row] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, docId)).limit(1);
+    expect(row?.status).toBe('uploaded');
+    expect(row?.jobId).toBeTruthy();
+    const data = (row?.data ?? {}) as any;
+    expect(data.summary).toBe('Old summary');
+    expect(data.syncStatus).toBe('pending');
+    expect(data.lastSyncError ?? null).toBeNull();
+    expect(data.source).toMatchObject({
+      kind: 'google_drive',
+      connectorAccountId: accountId,
+      fileId: 'file_1',
+      name: 'Roadmap',
+      mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+      exportMimeType: 'text/markdown',
+      modifiedTime: '2026-04-24T09:00:00.000Z',
+      version: '99',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mockPutObject).not.toHaveBeenCalled();
+  });
+});
