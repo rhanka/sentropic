@@ -27,6 +27,7 @@ import { locksRouter } from './locks';
 import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
+import { pptxRouter } from './pptx';
 import { chromeExtensionRouter } from './chrome-extension';
 import { vscodeExtensionRouter } from './vscode-extension';
 import { solutionsRouter } from './solutions';
@@ -76,6 +77,10 @@ apiRouter.route('/view-templates', viewTemplatesRouter);
 // DOCX export routes
 apiRouter.use('/docx/*', requireAuth);
 apiRouter.route('/', docxRouter);
+
+// PPTX export routes (BR-21a: generated via chat tool)
+apiRouter.use('/pptx/*', requireAuth);
+apiRouter.route('/', pptxRouter);
 
 apiRouter.use('/analytics/*', requireAuth);
 apiRouter.route('/analytics', analyticsRouter);
