@@ -423,7 +423,8 @@ export const contextDocuments = pgTable('context_documents', {
   filename: text('filename').notNull(),
   mimeType: text('mime_type').notNull(),
   sizeBytes: integer('size_bytes').notNull(),
-  storageKey: text('storage_key').notNull(), // object key in S3-compatible storage
+  sourceType: text('source_type').notNull().default('local'), // 'local' | 'google_drive' | 'sharepoint' | 'onedrive'
+  storageKey: text('storage_key'), // nullable for non-local sources (Decision 5A)
   status: text('status').notNull().default('uploaded'), // 'uploaded' | 'processing' | 'ready' | 'failed'
   // Document metadata / summaries are stored in JSONB to avoid schema churn (like organizations/use_cases)
   // Suggested structure:
@@ -442,6 +443,7 @@ export const contextDocuments = pgTable('context_documents', {
   workspaceIdIdx: index('context_documents_workspace_id_idx').on(table.workspaceId),
   contextIdx: index('context_documents_context_idx').on(table.contextType, table.contextId),
   statusIdx: index('context_documents_status_idx').on(table.status),
+  sourceTypeIdx: index('context_documents_source_type_idx').on(table.sourceType),
 }));
 
 // Optional: keep history of uploads/summaries per document.

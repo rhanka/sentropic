@@ -18,7 +18,7 @@ import {
   workspaceMemberships
 } from '../db/schema';
 import { createId } from '../utils/id';
-import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
+import { loadContextDocumentContent } from './context-document-source';
 import { extractDocumentInfoFromDocument } from './document-text';
 import { callLLM } from './llm-runtime';
 import { SHARED_AGENTS } from '../config/default-agents-shared';
@@ -1966,9 +1966,12 @@ export class ToolService {
     // If the document is not ready yet, allow get_content only for short docs.
     // Tools must remain read-only: job `document_summary` is the single writer for summaries.
     if (row.status !== 'ready') {
-      const bucket = getDocumentsBucketName();
-      const bytes = await getObjectBytes({ bucket, key: row.storageKey });
-      const extracted = await extractDocumentInfoFromDocument({ bytes, filename: row.filename, mimeType: row.mimeType });
+      const loaded = await loadContextDocumentContent({ document: row });
+      const extracted = await extractDocumentInfoFromDocument({
+        bytes: loaded.bytes,
+        filename: loaded.filename,
+        mimeType: loaded.mimeType,
+      });
       const full = (extracted.text || '').trim();
       const words = this.countWords(full);
       const isLong = words > WORDS_FULL_CONTENT_LIMIT;
@@ -2039,9 +2042,12 @@ export class ToolService {
       };
     }
 
-    const bucket = getDocumentsBucketName();
-    const bytes = await getObjectBytes({ bucket, key: row.storageKey });
-    const extracted = await extractDocumentInfoFromDocument({ bytes, filename: row.filename, mimeType: row.mimeType });
+    const loaded = await loadContextDocumentContent({ document: row });
+    const extracted = await extractDocumentInfoFromDocument({
+      bytes: loaded.bytes,
+      filename: loaded.filename,
+      mimeType: loaded.mimeType,
+    });
     const full = (extracted.text || '').trim();
     const words = this.countWords(full);
 
@@ -2130,9 +2136,12 @@ export class ToolService {
       throw new Error(`documents.get_summary: document not ready (status="${row.status}")`);
     }
 
-    const bucket = getDocumentsBucketName();
-    const bytes = await getObjectBytes({ bucket, key: row.storageKey });
-    const extracted = await extractDocumentInfoFromDocument({ bytes, filename: row.filename, mimeType: row.mimeType });
+    const loaded = await loadContextDocumentContent({ document: row });
+    const extracted = await extractDocumentInfoFromDocument({
+      bytes: loaded.bytes,
+      filename: loaded.filename,
+      mimeType: loaded.mimeType,
+    });
     const fullText = (extracted.text || '').trim();
     if (!fullText) throw new Error('No text extracted from document (empty or image-only PDF).');
     const fullWords = this.countWords(fullText);

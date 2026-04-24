@@ -264,3 +264,39 @@ export const resolveGoogleDriveTokenSecret = async (input: {
     return null;
   }
 };
+
+export const resolveGoogleDriveTokenSecretByAccountId = async (input: {
+  connectorAccountId: string;
+}): Promise<GoogleDriveTokenSecretPayload | null> => {
+  const id = (input.connectorAccountId || '').trim();
+  if (!id) return null;
+
+  const [row] = await db
+    .select()
+    .from(documentConnectorAccounts)
+    .where(eq(documentConnectorAccounts.id, id))
+    .limit(1);
+  if (!row || row.status !== 'connected') return null;
+
+  const decrypted = decryptSecretOrNull(row.tokenSecret);
+  if (!decrypted) return null;
+
+  try {
+    const parsed = JSON.parse(decrypted) as Partial<GoogleDriveTokenSecretPayload> | null;
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.accessToken !== 'string') {
+      return null;
+    }
+    return {
+      accessToken: parsed.accessToken,
+      refreshToken: typeof parsed.refreshToken === 'string' ? parsed.refreshToken : null,
+      idToken: typeof parsed.idToken === 'string' ? parsed.idToken : null,
+      tokenType: typeof parsed.tokenType === 'string' ? parsed.tokenType : 'Bearer',
+      scope: typeof parsed.scope === 'string' ? parsed.scope : null,
+      scopes: normalizeScopes(parsed.scopes),
+      obtainedAt: typeof parsed.obtainedAt === 'string' ? parsed.obtainedAt : '',
+      expiresAt: typeof parsed.expiresAt === 'string' ? parsed.expiresAt : null,
+    };
+  } catch {
+    return null;
+  }
+};

@@ -42,10 +42,10 @@ import type { StreamEventType } from './llm-runtime';
 import {
   deleteObject,
   getDocumentsBucketName,
-  getObjectBytes,
   headObject,
   putObject,
 } from './storage-s3';
+import { loadContextDocumentContent } from './context-document-source';
 import { extractDocumentInfoFromDocument } from './document-text';
 import { generateDocumentDetailedSummary, generateDocumentSummary, getDocumentDetailedSummaryPolicy } from './context-document';
 import { getNextSequence, writeStreamEvent } from './stream-service';
@@ -3291,15 +3291,18 @@ export class QueueManager {
         .set({ status: 'processing', jobId, updatedAt: new Date() })
         .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
 
-      const bucket = getDocumentsBucketName();
-      const bytes = await getObjectBytes({ bucket, key: doc.storageKey });
+      const loaded = await loadContextDocumentContent({ document: doc });
       let text: string;
       let extractedMetaTitle: string | undefined;
       let extractedMetaPages: number | undefined;
       let extractedMetaWords: number | undefined;
       try {
         await write('status', { state: 'extracting' });
-        const extracted = await extractDocumentInfoFromDocument({ bytes, filename: doc.filename, mimeType: doc.mimeType });
+        const extracted = await extractDocumentInfoFromDocument({
+          bytes: loaded.bytes,
+          filename: loaded.filename,
+          mimeType: loaded.mimeType,
+        });
         text = extracted.text;
         extractedMetaTitle = extracted.metadata.title;
         extractedMetaPages = extracted.metadata.pages;

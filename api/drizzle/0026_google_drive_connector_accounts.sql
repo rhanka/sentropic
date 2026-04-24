@@ -42,3 +42,11 @@ CREATE INDEX IF NOT EXISTS "document_connector_accounts_user_id_idx" ON "documen
 CREATE INDEX IF NOT EXISTS "document_connector_accounts_status_idx" ON "document_connector_accounts" USING btree ("status");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "document_connector_accounts_provider_idx" ON "document_connector_accounts" USING btree ("provider");
+
+-- Decision 5A: source-aware context documents (keep one table; no storage_key sentinel).
+--> statement-breakpoint
+ALTER TABLE "context_documents" ALTER COLUMN "storage_key" DROP NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "context_documents" ADD COLUMN IF NOT EXISTS "source_type" text NOT NULL DEFAULT 'local';
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "context_documents_source_type_idx" ON "context_documents" USING btree ("source_type");

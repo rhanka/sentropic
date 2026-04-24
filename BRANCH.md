@@ -115,6 +115,15 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - [ ] `attention` BR16a-UI1 — `make typecheck-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a` fails before change-specific diagnostics because `.svelte-kit` is not synced and `$lib` aliases are unresolved across the app. Follow-up check `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a` passes with 0 errors and 6 existing warnings. Impact: target/config issue, not a Google Drive UI error. Rollback: none for BR-16a runtime; fix the make target separately if required.
 - [x] `evidence` BR16a-GC1 — Google Cloud provisioning completed on 2026-04-22 for project `sent-tech`: Drive API and Picker API enabled, Auth Platform created, OAuth client `Entropic Web App` created, test user `fabien.antoine@gmail.com` added, and API key `Entropic Google Picker` created with HTTP referrer restrictions plus Drive/Picker API restrictions. Secret values are intentionally not recorded in repository docs.
 - [x] `evidence` BR16a-GC2 — Google Cloud cleanup completed on 2026-04-22: removed obsolete local origin `http://localhost:5116`, obsolete redirect URI `http://localhost:8716/api/v1/google-drive/oauth/callback`, and obsolete API key referrer `http://localhost:5116/*`.
+- [x] `attention` BR16a-EX1 — Scope expansion approved: implement Decision 5A (nullable `context_documents.storage_key` + source-aware documents) and introduce a minimal reusable document-source abstraction.
+  - Rationale: `tool-service`, `queue-manager` (document_summary), and `import-export` currently assume S3/local-only documents and will typecheck-fail and/or regress once Google Drive-backed documents are persisted.
+  - Intended abstraction outcome: a small document-access adapter layer that can load content for `local/S3` and `google_drive`, with explicit extension points for future `sharepoint`/`onedrive` sources (no provider-specific hacks, no `storage_key` sentinel).
+  - Approved additional paths for this exception:
+    - `api/src/services/tool-service.ts`
+    - `api/src/services/queue-manager.ts`
+    - `api/src/routes/api/import-export.ts`
+    - `api/tests/api/import-export.test.ts`
+    - plus minimal supporting `api/src/services/**document**` for the shared abstraction.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -176,7 +185,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [ ] Preserve document search/browse UX through Picker under `drive.file`.
   - [x] Resolve selected file IDs server-side with metadata.
   - [x] Filter supported MIME types for Docs, Sheets, Slides, PDFs, and text-like files.
-  - [ ] Attach selected file references to existing document/context surfaces.
+  - [x] Attach selected file references to existing document/context surfaces.
   - [ ] Lot gate:
     - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
@@ -185,7 +194,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
       - [x] `make test-api-unit SCOPE=tests/unit/google-drive-client.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
       - [x] Add Picker selection resolve API tests with mocked Google Drive metadata.
       - [x] `make test-api-endpoints SCOPE=tests/api/google-drive-files.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
-      - [ ] Add document attach API tests for Google Drive refs.
+      - [x] Add document attach API tests for Google Drive refs.
     - [ ] **UI tests**
       - [ ] Add file picker/listing tests if UI surface is added.
 
