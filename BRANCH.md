@@ -108,11 +108,11 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
   - [x] Gate: typecheck/lint/API unit tests.
 
 - [ ] **Lot 4 — API and chat tool integration**
-  - [ ] Add the chat tool surface selected in BR21a-Q1.
-  - [ ] Add generation handling in `chat-service.ts`.
-  - [ ] Persist format-aware generated-file metadata compatible with DOCX and PPTX downloads.
-  - [ ] Add or adapt shared generated-file download routing while preserving existing DOCX downloads.
-  - [ ] Gate: typecheck/lint/API endpoint tests.
+  - [x] Add the chat tool surface selected in BR21a-Q1.
+  - [x] Add generation handling in `chat-service.ts`.
+  - [x] Persist format-aware generated-file metadata compatible with DOCX and PPTX downloads.
+  - [x] Add or adapt shared generated-file download routing while preserving existing DOCX downloads.
+  - [x] Gate: typecheck/lint/API endpoint tests.
 
 - [ ] **Lot 5 — UI download affordance**
   - [ ] Reuse or generalize the current DOCX download card path according to BR21a-Q7.
