@@ -6,8 +6,11 @@ import { chatSessions, contextDocuments, contextModificationHistory, jobQueue } 
 import { createId } from '../../utils/id';
 import { deleteObject, getDocumentsBucketName, getObjectBodyStream, putObject } from '../../services/storage-s3';
 import { queueManager } from '../../services/queue-manager';
+import { loadContextDocumentContent } from '../../services/context-document-source';
 import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
 import { requireWorkspaceEditor } from '../../services/workspace-access';
+import { getGoogleDriveConnectorAccount, resolveGoogleDriveTokenSecret } from '../../services/google-drive-connector-accounts';
+import { isSupportedGoogleDriveMimeType, pickGoogleDriveExportMimeType, resolveGoogleDriveFileMetadata } from '../../services/google-drive-client';
 
 export const documentsRouter = new Hono();
 
@@ -178,6 +181,7 @@ documentsRouter.get('/', async (c) => {
           ? 'failed'
           : r.status,
       id: r.id,
+      source_type: r.sourceType,
       context_type: r.contextType,
       context_id: r.contextId,
       filename: r.filename,
@@ -212,6 +216,7 @@ documentsRouter.get('/:id', async (c) => {
 
   return c.json({
     id: doc.id,
+    source_type: doc.sourceType,
     context_type: doc.contextType,
     context_id: doc.contextId,
     filename: doc.filename,
@@ -244,12 +249,19 @@ documentsRouter.get('/:id/content', async (c) => {
     if (!ok) return c.json({ message: 'Not found' }, 404);
   }
 
-  const bucket = getDocumentsBucketName();
-  const stream = await getObjectBodyStream({ bucket, key: doc.storageKey });
+  if (doc.sourceType === 'local' && doc.storageKey) {
+    const bucket = getDocumentsBucketName();
+    const stream = await getObjectBodyStream({ bucket, key: doc.storageKey });
 
-  c.header('Content-Type', doc.mimeType || 'application/octet-stream');
-  c.header('Content-Disposition', `attachment; filename="${doc.filename.replace(/"/g, '')}"`);
-  return c.newResponse(stream, 200);
+    c.header('Content-Type', doc.mimeType || 'application/octet-stream');
+    c.header('Content-Disposition', `attachment; filename="${doc.filename.replace(/"/g, '')}"`);
+    return c.newResponse(stream, 200);
+  }
+
+  const loaded = await loadContextDocumentContent({ document: doc });
+  c.header('Content-Type', loaded.mimeType || 'application/octet-stream');
+  c.header('Content-Disposition', `attachment; filename="${loaded.filename.replace(/"/g, '')}"`);
+  return c.newResponse(loaded.bytes, 200);
 });
 
 documentsRouter.delete('/:id', requireWorkspaceAccessRole(), async (c) => {
@@ -276,11 +288,13 @@ documentsRouter.delete('/:id', requireWorkspaceAccessRole(), async (c) => {
   }
 
   // Delete object (best-effort) then DB record.
-  try {
-    const bucket = getDocumentsBucketName();
-    await deleteObject({ bucket, key: doc.storageKey });
-  } catch {
-    // ignore: S3 object may already be missing
+  if (doc.sourceType === 'local' && doc.storageKey) {
+    try {
+      const bucket = getDocumentsBucketName();
+      await deleteObject({ bucket, key: doc.storageKey });
+    } catch {
+      // ignore: S3 object may already be missing
+    }
   }
 
   await db
@@ -379,6 +393,7 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
       filename: safeName,
       mimeType,
       sizeBytes: file.size,
+      sourceType: 'local',
       storageKey,
       status: indexingSkipped ? 'ready' : 'uploaded',
       data: indexingSkipped
@@ -445,4 +460,160 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
       },
       201
     );
+});
+
+const attachGoogleDriveSchema = z.object({
+  context_type: contextTypeSchema,
+  context_id: z.string().min(1),
+  file_ids: z.array(z.string().trim().min(1)).min(1).max(20),
+});
+
+const extensionByExportMimeType: Record<string, string> = {
+  'text/markdown': 'md',
+  'text/plain': 'txt',
+  'text/csv': 'csv',
+};
+
+function withExportExtension(name: string, exportMimeType: string | null): string {
+  const ext = exportMimeType ? extensionByExportMimeType[exportMimeType] : null;
+  if (!ext) return name;
+  return name.toLowerCase().endsWith(`.${ext}`) ? name : `${name}.${ext}`;
+}
+
+documentsRouter.post('/google-drive', requireWorkspaceAccessRole(), async (c) => {
+  const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = attachGoogleDriveSchema.safeParse(body);
+  if (!parsed.success) return c.json({ message: 'Invalid Google Drive attach request' }, 400);
+
+  if (parsed.data.context_type === 'chat_session') {
+    const ok = await ensureChatSessionAccess({ sessionId: parsed.data.context_id, userId });
+    if (!ok) return c.json({ message: 'Not found' }, 404);
+  } else {
+    try {
+      await requireWorkspaceEditor(userId, workspaceId);
+    } catch {
+      return c.json({ message: 'Insufficient permissions' }, 403);
+    }
+  }
+
+  const [account, token] = await Promise.all([
+    getGoogleDriveConnectorAccount({ userId, workspaceId }),
+    resolveGoogleDriveTokenSecret({ userId, workspaceId }),
+  ]);
+  if (!account || account.status !== 'connected' || !token?.accessToken) {
+    return c.json({ message: 'Google Drive account is not connected' }, 409);
+  }
+
+  const resolved = [];
+  for (const fileId of parsed.data.file_ids) {
+    const file = await resolveGoogleDriveFileMetadata({ accessToken: token.accessToken, fileId });
+    resolved.push(file);
+  }
+
+  const unsupported = resolved.filter((file) => !isSupportedGoogleDriveMimeType(file.mimeType) || file.trashed);
+  if (unsupported.length > 0) {
+    return c.json(
+      {
+        message: 'Some selected Google Drive files are not supported',
+        unsupported: unsupported.map((f) => ({ id: f.id, name: f.name, mime_type: f.mimeType, trashed: f.trashed })),
+      },
+      400,
+    );
+  }
+
+  const created: Array<Record<string, unknown>> = [];
+  for (const file of resolved) {
+    const exportMimeType = pickGoogleDriveExportMimeType(file.mimeType);
+    const mimeType = exportMimeType ?? file.mimeType;
+    const safeName = withExportExtension((file.name || 'document').replace(/[^\w.\- ()]/g, '_'), exportMimeType);
+    const sizeBytes = (() => {
+      const parsed = file.size ? Number.parseInt(file.size, 10) : Number.NaN;
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+    })();
+
+    const docId = createId();
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType: parsed.data.context_type,
+      contextId: parsed.data.context_id,
+      filename: safeName,
+      mimeType,
+      sizeBytes,
+      sourceType: 'google_drive',
+      storageKey: null,
+      status: 'uploaded',
+      data: {
+        summaryLang: 'fr',
+        source: {
+          kind: 'google_drive',
+          connectorAccountId: account.id,
+          fileId: file.id,
+          name: file.name,
+          mimeType: file.mimeType,
+          exportMimeType,
+          webViewLink: file.webViewLink,
+          webContentLink: file.webContentLink,
+          iconLink: file.iconLink,
+          modifiedTime: file.modifiedTime,
+          version: file.version,
+          size: file.size,
+          md5Checksum: file.md5Checksum,
+          driveId: file.driveId,
+        },
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    // History: document_added
+    const seq = await getNextModificationSequence(parsed.data.context_type, parsed.data.context_id);
+    await db.insert(contextModificationHistory).values({
+      id: createId(),
+      contextType: parsed.data.context_type,
+      contextId: parsed.data.context_id,
+      sessionId: null,
+      messageId: null,
+      field: 'document_added',
+      oldValue: null,
+      newValue: {
+        documentId: docId,
+        sourceType: 'google_drive',
+        externalFileId: file.id,
+        filename: safeName,
+        mimeType,
+        sizeBytes,
+      },
+      toolCallId: null,
+      promptId: null,
+      promptType: null,
+      promptVersionId: null,
+      jobId: null,
+      sequence: seq,
+      createdAt: new Date(),
+    });
+
+    const jobId = await queueManager.addJob('document_summary', { documentId: docId, lang: 'fr' }, { workspaceId });
+    await db
+      .update(contextDocuments)
+      .set({ jobId, updatedAt: new Date() })
+      .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, workspaceId)));
+
+    created.push({
+      id: docId,
+      source_type: 'google_drive',
+      context_type: parsed.data.context_type,
+      context_id: parsed.data.context_id,
+      filename: safeName,
+      mime_type: mimeType,
+      size_bytes: sizeBytes,
+      storage_key: null,
+      status: 'uploaded',
+      job_id: jobId,
+    });
+  }
+
+  return c.json({ items: created }, 201);
 });
