@@ -77,7 +77,7 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
 - [x] `clarification` BR21a-Q9 — Anthropic `pptx` skill references are generation-only inspiration for BR-21a. Editing workflows, Python helper libraries, local filesystem workflows, and template import/repair flows are out of scope. Entropic must use the existing DOCX-style JavaScript VM sandbox pattern with approved PptGenJS helpers, not Claude's sandbox assumptions.
 - [x] `attention` BR21a-EX1 — Used for `api/package.json` and `api/package-lock.json` because `pptxgenjs` is not already installed. Reason: renderer dependency. Impact: dependency metadata only. Rollback: remove dependency and renderer import.
 - [ ] `attention` BR21a-EX2 — `api/src/services/queue-manager.ts` is conditionally allowed only if BR21a-Q2 selects a queued generation path. Reason: job processing integration. Impact: queue plumbing only. Rollback: keep synchronous freeform-only generation.
-- [ ] `attention` BR21a-EX3 — broader `ui/**` edits are conditionally allowed only if the download card cannot be generalized inside `StreamMessage.svelte` and `ui/src/lib/utils/pptx.ts`. Reason: UI download affordance. Impact: presentation of generated files only. Rollback: revert to text-only tool result.
+- [x] `acknowledge` BR21a-EX3 — Approved and used for `ui/src/lib/components/ChatPanel.svelte` plus aligned UI tests under `ui/**` because the visible generated-file card lives in `ChatPanel.svelte` (`docxCardsByMessageId`, hard-coded `DOCX` label, and `downloadCompletedDocxJob(...)` button), while `StreamMessage.svelte` only forwards tool results. Reason: PPTX label + route selection cannot be generalized correctly inside the original allowed files alone. Impact: presentation of generated files only. Rollback: revert the generalized chat card/download changes and keep the existing DOCX-only card path.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and restart**
@@ -107,17 +107,17 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
   - [x] Implement `api/src/services/pptx-generation.ts`.
   - [x] Gate: typecheck/lint/API unit tests.
 
-- [ ] **Lot 4 — API and chat tool integration**
+- [x] **Lot 4 — API and chat tool integration**
   - [x] Add the chat tool surface selected in BR21a-Q1.
   - [x] Add generation handling in `chat-service.ts`.
   - [x] Persist format-aware generated-file metadata compatible with DOCX and PPTX downloads.
   - [x] Add or adapt shared generated-file download routing while preserving existing DOCX downloads.
   - [x] Gate: typecheck/lint/API endpoint tests.
 
-- [ ] **Lot 5 — UI download affordance**
-  - [ ] Reuse or generalize the current DOCX download card path according to BR21a-Q7.
-  - [ ] Add `.pptx` download helper if needed.
-  - [ ] Gate: UI typecheck/lint and focused UI tests where feasible.
+- [x] **Lot 5 — UI download affordance**
+  - [x] Reuse or generalize the current DOCX download card path according to BR21a-Q7.
+  - [x] Add `.pptx` download helper if needed.
+  - [x] Gate: UI typecheck/lint and focused UI tests where feasible.
 
 - [ ] **Lot 6 — Docs consolidation**
   - [ ] Update `spec/TOOLS.md` with the final tool contract.

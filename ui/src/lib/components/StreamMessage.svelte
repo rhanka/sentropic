@@ -4,6 +4,7 @@
   import { ChevronDown, Loader2 } from '@lucide/svelte';
   import { Streamdown } from 'svelte-streamdown';
   import { _ } from 'svelte-i18n';
+  import type { GeneratedFileCard } from '$lib/utils/docx';
 
   export let streamId: string;
   export let status: string | undefined;
@@ -34,6 +35,7 @@
         contextBudgetPct: number | null;
         durationMs: number | null;
         reasoningEffortLabel: string | null;
+        generatedFileCards?: GeneratedFileCard[];
         docxCards?: Array<{ jobId: string; fileName: string }>;
       }
     | undefined = undefined;
@@ -42,7 +44,7 @@
   // eslint-disable-next-line no-unused-vars
   export let onStreamEvent: ((t: string) => void) | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
-  export let onDocxDownload: ((card: { jobId: string; fileName: string }) => void) | undefined = undefined;
+  export let onGeneratedFile: ((card: GeneratedFileCard) => void) | undefined = undefined;
   // eslint-disable-next-line no-unused-vars
   export let onTodoRuntime:
     | ((
@@ -561,7 +563,18 @@
         typeof data?.result?.jobId === 'string' &&
         typeof data?.result?.fileName === 'string'
       ) {
-        onDocxDownload?.({ jobId: data.result.jobId as string, fileName: data.result.fileName as string });
+        onGeneratedFile?.({
+          jobId: data.result.jobId as string,
+          fileName: data.result.fileName as string,
+          format:
+            typeof data?.result?.format === 'string' && data.result.format.trim().length > 0
+              ? data.result.format.trim().toLowerCase()
+              : 'docx',
+          mimeType:
+            typeof data?.result?.mimeType === 'string' ? data.result.mimeType : undefined,
+          downloadUrl:
+            typeof data?.result?.downloadUrl === 'string' ? data.result.downloadUrl : undefined,
+        });
       }
     } else if (eventType === 'content_delta') {
       st.sawStarted = false;
