@@ -45,7 +45,11 @@ import {
   headObject,
   putObject,
 } from './storage-s3';
-import { loadContextDocumentContent } from './context-document-source';
+import {
+  buildGoogleDriveSourceData,
+  loadContextDocumentContent,
+  updateContextDocumentSyncData,
+} from './context-document-source';
 import { extractDocumentInfoFromDocument } from './document-text';
 import { generateDocumentDetailedSummary, generateDocumentSummary, getDocumentDetailedSummaryPolicy } from './context-document';
 import { getNextSequence, writeStreamEvent } from './stream-service';
@@ -3286,12 +3290,28 @@ export class QueueManager {
     const workspaceId = doc.workspaceId;
 
     try {
+      const processingData =
+        doc.sourceType === 'google_drive'
+          ? updateContextDocumentSyncData({
+              data: doc.data,
+              syncStatus: 'pending',
+              lastSyncError: null,
+            })
+          : undefined;
       await db
         .update(contextDocuments)
-        .set({ status: 'processing', jobId, updatedAt: new Date() })
+        .set({
+          status: 'processing',
+          jobId,
+          data: processingData,
+          updatedAt: new Date(),
+        })
         .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
 
-      const loaded = await loadContextDocumentContent({ document: doc });
+      const loaded = await loadContextDocumentContent({
+        document: doc,
+        refreshSourceMetadata: doc.sourceType === 'google_drive',
+      });
       let text: string;
       let extractedMetaTitle: string | undefined;
       let extractedMetaPages: number | undefined;
@@ -3310,7 +3330,18 @@ export class QueueManager {
       } catch (e) {
         await db
           .update(contextDocuments)
-          .set({ status: 'failed', updatedAt: new Date() })
+          .set({
+            status: 'failed',
+            data:
+              doc.sourceType === 'google_drive'
+                ? updateContextDocumentSyncData({
+                    data: doc.data,
+                    syncStatus: 'failed',
+                    lastSyncError: e instanceof Error ? e.message : String(e),
+                  })
+                : undefined,
+            updatedAt: new Date(),
+          })
           .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
         const msg = e instanceof Error ? e.message : String(e);
         throw new Error(`Unsupported mime type for summarization: ${doc.mimeType}. ${msg}`);
@@ -3320,13 +3351,24 @@ export class QueueManager {
       if (trimmed.length < 80) {
         await db
           .update(contextDocuments)
-          .set({ status: 'failed', updatedAt: new Date() })
+          .set({
+            status: 'failed',
+            data:
+              doc.sourceType === 'google_drive'
+                ? updateContextDocumentSyncData({
+                    data: doc.data,
+                    syncStatus: 'failed',
+                    lastSyncError: 'No text extracted from document (empty or image-only PDF).',
+                  })
+                : undefined,
+            updatedAt: new Date(),
+          })
           .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
         throw new Error('No text extracted from document (empty or image-only PDF).');
       }
 
       const clipped = trimmed.length > 50_000 ? trimmed.slice(0, 50_000) : trimmed;
-      const docTitleRaw = (extractedMetaTitle || doc.filename || '-').trim() || '-';
+      const docTitleRaw = (extractedMetaTitle || loaded.filename || doc.filename || '-').trim() || '-';
       const docTitle = docTitleRaw === '-' ? 'Non précisé' : docTitleRaw;
       const nbPages =
         typeof extractedMetaPages === 'number' && extractedMetaPages > 0 ? String(extractedMetaPages) : 'Non précisé';
@@ -3361,7 +3403,7 @@ export class QueueManager {
         await write('status', { state: 'summarizing_detailed' });
         const detailed = await generateDocumentDetailedSummary({
           text,
-          filename: doc.filename,
+          filename: loaded.filename,
           lang: lang === 'en' ? 'en' : 'fr',
           streamId,
           signal,
@@ -3403,9 +3445,39 @@ export class QueueManager {
           }
         : nextData;
 
+      const nextSourceData =
+        loaded.source.kind === 'google_drive' && loaded.resolvedMetadata
+          ? buildGoogleDriveSourceData({
+              connectorAccountId: loaded.source.connectorAccountId,
+              file: loaded.resolvedMetadata,
+              exportMimeType: loaded.exportMimeType,
+            })
+          : null;
+      const resolvedSizeBytes =
+        loaded.resolvedMetadata?.size && Number.isFinite(Number.parseInt(loaded.resolvedMetadata.size, 10))
+          ? Number.parseInt(loaded.resolvedMetadata.size, 10)
+          : doc.sizeBytes;
+      const persistedData =
+        loaded.source.kind === 'google_drive'
+          ? updateContextDocumentSyncData({
+              data: dataWithDetailed,
+              syncStatus: 'indexed',
+              lastSyncedAt: new Date(),
+              lastSyncError: null,
+              source: nextSourceData,
+            })
+          : dataWithDetailed;
+
       await db
         .update(contextDocuments)
-        .set({ status: 'ready', data: dataWithDetailed, updatedAt: new Date() })
+        .set({
+          filename: loaded.filename,
+          mimeType: loaded.mimeType,
+          sizeBytes: resolvedSizeBytes,
+          status: 'ready',
+          data: persistedData,
+          updatedAt: new Date(),
+        })
         .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
 
       await write('done', { state: 'done' });
@@ -3415,13 +3487,22 @@ export class QueueManager {
       try {
         const msg = error instanceof Error ? error.message : String(error);
         const safe = this.sanitizePgText(`Échec: ${msg}`).slice(0, 5000);
-        await db.run(sql`
-          UPDATE context_documents
-          SET status = 'failed',
-              data = jsonb_set(coalesce(data, '{}'::jsonb), '{summary}', to_jsonb(${safe}), true),
-              updated_at = CURRENT_TIMESTAMP
-          WHERE id = ${documentId} AND workspace_id = ${workspaceId}
-        `);
+        const failedData = updateContextDocumentSyncData({
+          data: {
+            ...(doc.data && typeof doc.data === 'object' ? (doc.data as Record<string, unknown>) : {}),
+            summary: safe,
+          },
+          syncStatus: doc.sourceType === 'google_drive' ? 'failed' : null,
+          lastSyncError: doc.sourceType === 'google_drive' ? msg : null,
+        });
+        await db
+          .update(contextDocuments)
+          .set({
+            status: 'failed',
+            data: failedData,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(contextDocuments.id, documentId), eq(contextDocuments.workspaceId, workspaceId)));
       } catch {
         // ignore
       }

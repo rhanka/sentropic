@@ -199,9 +199,9 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
       - [ ] Add file picker/listing tests if UI surface is added.
 
 - [ ] **Lot 3 — In-situ indexing**
-  - [ ] Extract file content through Google APIs without copying source documents into Entropic storage.
-  - [ ] Route Google Drive rows through the existing `document_summary` queue behavior.
-  - [ ] Store source references, sync status, extracted metadata, summary, and detailed summary.
+  - [x] Extract file content through Google APIs without copying source documents into Entropic storage.
+  - [x] Route Google Drive rows through the existing `document_summary` queue behavior.
+  - [x] Store source references, sync status, extracted metadata, summary, and detailed summary.
   - [ ] Reuse existing runtime chunking for `documents.analyze`; do not add stored embeddings in BR-16a.
   - [ ] Preserve existing local upload behavior.
   - [ ] Add manual resync path.
@@ -209,8 +209,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - [ ] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [ ] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [ ] **API tests**
-      - [ ] Add indexing service tests for Google Drive source refs.
-      - [ ] Add sync status transition tests.
+      - [x] Add indexing service tests for Google Drive source refs.
+      - [x] Add sync status transition tests.
       - [ ] Add chunk storage tests.
 
 - [ ] **Lot 4 — Chat documents tool integration**
