@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_BASE_URL } from '../../src/lib/config';
 import { resetFetchMock } from '../test-setup';
+import * as docxUtils from '../../src/lib/utils/docx';
 
 const apiGetMock = vi.fn();
 const apiPostMock = vi.fn();
@@ -115,6 +116,68 @@ describe('docx utils', () => {
       expect(createdLink?.download).toBe('executive.docx');
       expect(createObjectURLMock).toHaveBeenCalledTimes(1);
       expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:test-url');
+    } finally {
+      if (originalCreateObjectURL) {
+        (URL as { createObjectURL?: (obj: Blob) => string }).createObjectURL = originalCreateObjectURL;
+      } else {
+        delete (URL as { createObjectURL?: (obj: Blob) => string }).createObjectURL;
+      }
+      if (originalRevokeObjectURL) {
+        (URL as { revokeObjectURL?: (url: string) => void }).revokeObjectURL = originalRevokeObjectURL;
+      } else {
+        delete (URL as { revokeObjectURL?: (url: string) => void }).revokeObjectURL;
+      }
+    }
+  });
+
+  it('downloadGeneratedFile prefers the provided downloadUrl for pptx cards', async () => {
+    scopedWorkspaceIdMock.mockReturnValue('ws-42');
+    const helper = (docxUtils as Record<string, unknown>).downloadGeneratedFile;
+    expect(typeof helper).toBe('function');
+    if (typeof helper !== 'function') return;
+
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValueOnce(
+      new Response(new Blob(['pptx']), {
+        status: 200,
+        headers: {
+          'content-disposition': 'attachment; filename="deck-from-header.pptx"',
+        },
+      })
+    );
+
+    const originalCreateObjectURL = (URL as { createObjectURL?: (obj: Blob) => string }).createObjectURL;
+    const originalRevokeObjectURL = (URL as { revokeObjectURL?: (url: string) => void }).revokeObjectURL;
+    const createObjectURLMock = vi.fn().mockReturnValue('blob:pptx-test');
+    const revokeObjectURLMock = vi.fn();
+    (URL as { createObjectURL?: (obj: Blob) => string }).createObjectURL = createObjectURLMock;
+    (URL as { revokeObjectURL?: (url: string) => void }).revokeObjectURL = revokeObjectURLMock;
+    const originalCreateElement = document.createElement.bind(document);
+    let createdLink: HTMLAnchorElement | null = null;
+    vi.spyOn(document, 'createElement').mockImplementation(((tagName: string): HTMLElement => {
+      const el = originalCreateElement(tagName) as HTMLElement;
+      if (tagName.toLowerCase() === 'a') {
+        createdLink = el as HTMLAnchorElement;
+        vi.spyOn(createdLink, 'click').mockImplementation(() => {});
+      }
+      return el;
+    }) as typeof document.createElement);
+
+    try {
+      await (helper as (card: Record<string, unknown>) => Promise<void>)({
+        jobId: 'job-pptx',
+        fileName: 'fallback.pptx',
+        format: 'pptx',
+        downloadUrl: '/pptx/jobs/job-pptx/download',
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `${API_BASE_URL}/pptx/jobs/job-pptx/download?workspace_id=ws-42`,
+        { method: 'GET', credentials: 'include' }
+      );
+      expect(createdLink?.download).toBe('deck-from-header.pptx');
+      expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:pptx-test');
     } finally {
       if (originalCreateObjectURL) {
         (URL as { createObjectURL?: (obj: Blob) => string }).createObjectURL = originalCreateObjectURL;
