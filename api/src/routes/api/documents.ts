@@ -6,7 +6,13 @@ import { chatSessions, contextDocuments, contextModificationHistory, jobQueue } 
 import { createId } from '../../utils/id';
 import { deleteObject, getDocumentsBucketName, getObjectBodyStream, putObject } from '../../services/storage-s3';
 import { queueManager } from '../../services/queue-manager';
-import { loadContextDocumentContent } from '../../services/context-document-source';
+import {
+  buildGoogleDriveSourceData,
+  loadContextDocumentContent,
+  readContextDocumentSyncData,
+  resolveContextDocumentSource,
+  updateContextDocumentSyncData,
+} from '../../services/context-document-source';
 import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
 import { requireWorkspaceEditor } from '../../services/workspace-access';
 import { getGoogleDriveConnectorAccount, resolveGoogleDriveTokenSecret } from '../../services/google-drive-connector-accounts';
@@ -74,6 +80,39 @@ function isDownloadOnlyArchive(fileName: string, mimeType: string): boolean {
 
 function isDownloadOnlyDocument(doc: { filename: string; mimeType: string; data: unknown }): boolean {
   return getDataBoolean(doc.data, 'indexingSkipped') || isDownloadOnlyArchive(doc.filename, doc.mimeType);
+}
+
+function getGoogleDriveFileSize(file: { size: string | null }): number {
+  const parsed = file.size ? Number.parseInt(file.size, 10) : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function buildDocumentResponse(input: {
+  doc: typeof contextDocuments.$inferSelect;
+  status?: string;
+  jobId?: string | null;
+}) {
+  const sync = readContextDocumentSyncData(input.doc.data);
+  return {
+    id: input.doc.id,
+    source_type: input.doc.sourceType,
+    context_type: input.doc.contextType,
+    context_id: input.doc.contextId,
+    filename: input.doc.filename,
+    mime_type: input.doc.mimeType,
+    size_bytes: input.doc.sizeBytes,
+    storage_key: input.doc.storageKey,
+    status: input.status ?? (isDownloadOnlyDocument(input.doc) ? 'ready' : input.doc.status),
+    sync_status: sync.syncStatus,
+    last_synced_at: sync.lastSyncedAt,
+    last_sync_error: sync.lastSyncError,
+    summary: getDataString(input.doc.data, 'summary'),
+    summary_lang: getDataString(input.doc.data, 'summaryLang'),
+    indexing_skipped: getDataBoolean(input.doc.data, 'indexingSkipped'),
+    job_id: input.jobId ?? input.doc.jobId,
+    created_at: input.doc.createdAt,
+    updated_at: input.doc.updatedAt,
+  };
 }
 
 const listQuerySchema = z.object({
@@ -169,31 +208,19 @@ documentsRouter.get('/', async (c) => {
   }
 
   return c.json({
-    items: rows.map((r) => ({
-      // Download-only archives are always effectively ready, even for legacy rows
-      // that were persisted before archive indexing was skipped.
-      status:
-        isDownloadOnlyDocument(r)
-          ? 'ready'
-          : (r.status === 'uploaded' || r.status === 'processing') &&
-              r.jobId &&
-              jobById.get(r.jobId)?.status === 'failed'
-          ? 'failed'
-          : r.status,
-      id: r.id,
-      source_type: r.sourceType,
-      context_type: r.contextType,
-      context_id: r.contextId,
-      filename: r.filename,
-      mime_type: r.mimeType,
-      size_bytes: r.sizeBytes,
-      summary: getDataString(r.data, 'summary'),
-      summary_lang: getDataString(r.data, 'summaryLang'),
-      indexing_skipped: getDataBoolean(r.data, 'indexingSkipped'),
-      job_id: r.jobId,
-      created_at: r.createdAt,
-      updated_at: r.updatedAt,
-    })),
+    items: rows.map((r) =>
+      buildDocumentResponse({
+        doc: r,
+        status:
+          isDownloadOnlyDocument(r)
+            ? 'ready'
+            : (r.status === 'uploaded' || r.status === 'processing') &&
+                r.jobId &&
+                jobById.get(r.jobId)?.status === 'failed'
+            ? 'failed'
+            : r.status,
+      }),
+    ),
   });
 });
 
@@ -214,23 +241,7 @@ documentsRouter.get('/:id', async (c) => {
     if (!ok) return c.json({ message: 'Not found' }, 404);
   }
 
-  return c.json({
-    id: doc.id,
-    source_type: doc.sourceType,
-    context_type: doc.contextType,
-    context_id: doc.contextId,
-    filename: doc.filename,
-    mime_type: doc.mimeType,
-    size_bytes: doc.sizeBytes,
-    storage_key: doc.storageKey,
-    status: isDownloadOnlyDocument(doc) ? 'ready' : doc.status,
-    summary: getDataString(doc.data, 'summary'),
-    summary_lang: getDataString(doc.data, 'summaryLang'),
-    indexing_skipped: getDataBoolean(doc.data, 'indexingSkipped'),
-    job_id: doc.jobId,
-    created_at: doc.createdAt,
-    updated_at: doc.updatedAt,
-  });
+  return c.json(buildDocumentResponse({ doc }));
 });
 
 documentsRouter.get('/:id/content', async (c) => {
@@ -322,6 +333,116 @@ documentsRouter.delete('/:id', requireWorkspaceAccessRole(), async (c) => {
   });
 
   return c.body(null, 204);
+});
+
+documentsRouter.post('/:id/resync', requireWorkspaceAccessRole(), async (c) => {
+  const user = c.get('user') as { role?: string; workspaceId: string; userId: string };
+  const workspaceId = user.workspaceId;
+  const id = c.req.param('id')!;
+
+  const [doc] = await db
+    .select()
+    .from(contextDocuments)
+    .where(and(eq(contextDocuments.id, id), eq(contextDocuments.workspaceId, workspaceId)))
+    .limit(1);
+  if (!doc) return c.json({ message: 'Not found' }, 404);
+
+  if (doc.contextType === 'chat_session') {
+    const ok = await ensureChatSessionAccess({ sessionId: doc.contextId, userId: user.userId });
+    if (!ok) return c.json({ message: 'Not found' }, 404);
+  } else {
+    try {
+      await requireWorkspaceEditor(user.userId, workspaceId);
+    } catch {
+      return c.json({ message: 'Insufficient permissions' }, 403);
+    }
+  }
+
+  const lang = getDataString(doc.data, 'summaryLang') || 'fr';
+  let nextFilename = doc.filename;
+  let nextMimeType = doc.mimeType;
+  let nextSizeBytes = doc.sizeBytes;
+  let nextData = updateContextDocumentSyncData({
+    data: doc.data,
+    syncStatus: null,
+    lastSyncError: null,
+  });
+
+  if (doc.sourceType === 'google_drive') {
+    let source;
+    try {
+      source = resolveContextDocumentSource(doc);
+    } catch (error) {
+      return c.json({ message: error instanceof Error ? error.message : 'Invalid Google Drive document source' }, 400);
+    }
+    if (source.kind !== 'google_drive') {
+      return c.json({ message: 'Invalid Google Drive document source' }, 400);
+    }
+
+    const [account, token] = await Promise.all([
+      getGoogleDriveConnectorAccount({ userId: user.userId, workspaceId }),
+      resolveGoogleDriveTokenSecret({ userId: user.userId, workspaceId }),
+    ]);
+    if (!account || account.status !== 'connected' || !token?.accessToken) {
+      return c.json({ message: 'Google Drive account is not connected' }, 409);
+    }
+
+    const file = await resolveGoogleDriveFileMetadata({
+      accessToken: token.accessToken,
+      fileId: source.fileId,
+    });
+    if (file.trashed || !isSupportedGoogleDriveMimeType(file.mimeType)) {
+      return c.json({ message: 'Google Drive file is not supported for indexing' }, 400);
+    }
+
+    const exportMimeType = pickGoogleDriveExportMimeType(file.mimeType);
+    nextFilename = withExportExtension((file.name || 'document').replace(/[^\w.\- ()]/g, '_'), exportMimeType);
+    nextMimeType = exportMimeType ?? file.mimeType;
+    nextSizeBytes = getGoogleDriveFileSize(file);
+    nextData = updateContextDocumentSyncData({
+      data: doc.data,
+      syncStatus: 'pending',
+      lastSyncError: null,
+      source: buildGoogleDriveSourceData({
+        connectorAccountId: account.id,
+        file,
+        exportMimeType,
+      }),
+    });
+  }
+
+  const jobId = await queueManager.addJob('document_summary', { documentId: doc.id, lang }, { workspaceId });
+  const now = new Date();
+
+  await db
+    .update(contextDocuments)
+    .set({
+      filename: nextFilename,
+      mimeType: nextMimeType,
+      sizeBytes: nextSizeBytes,
+      status: 'uploaded',
+      data: nextData,
+      jobId,
+      updatedAt: now,
+    })
+    .where(and(eq(contextDocuments.id, doc.id), eq(contextDocuments.workspaceId, workspaceId)));
+
+  return c.json(
+    buildDocumentResponse({
+      doc: {
+        ...doc,
+        filename: nextFilename,
+        mimeType: nextMimeType,
+        sizeBytes: nextSizeBytes,
+        status: 'uploaded',
+        data: nextData,
+        jobId,
+        updatedAt: now,
+      },
+      jobId,
+    }),
+    202,
+  );
 });
 
 const uploadFormSchema = z.object({
@@ -546,22 +667,12 @@ documentsRouter.post('/google-drive', requireWorkspaceAccessRole(), async (c) =>
       status: 'uploaded',
       data: {
         summaryLang: 'fr',
-        source: {
-          kind: 'google_drive',
+        syncStatus: 'pending',
+        source: buildGoogleDriveSourceData({
           connectorAccountId: account.id,
-          fileId: file.id,
-          name: file.name,
-          mimeType: file.mimeType,
+          file,
           exportMimeType,
-          webViewLink: file.webViewLink,
-          webContentLink: file.webContentLink,
-          iconLink: file.iconLink,
-          modifiedTime: file.modifiedTime,
-          version: file.version,
-          size: file.size,
-          md5Checksum: file.md5Checksum,
-          driveId: file.driveId,
-        },
+        }),
       },
       createdAt: new Date(),
       updatedAt: new Date(),
