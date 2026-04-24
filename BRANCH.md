@@ -203,11 +203,11 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [x] Route Google Drive rows through the existing `document_summary` queue behavior.
   - [x] Store source references, sync status, extracted metadata, summary, and detailed summary.
   - [ ] Reuse existing runtime chunking for `documents.analyze`; do not add stored embeddings in BR-16a.
-  - [ ] Preserve existing local upload behavior.
-  - [ ] Add manual resync path.
+  - [x] Preserve existing local upload behavior.
+  - [x] Add manual resync path.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [ ] **API tests**
       - [x] Add indexing service tests for Google Drive source refs.
       - [x] Add sync status transition tests.
