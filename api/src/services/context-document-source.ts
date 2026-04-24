@@ -40,7 +40,10 @@ export type LoadedContextDocumentContent = {
   mimeType: string;
   source: ContextDocumentSourceDescriptor;
   exportMimeType: string | null;
+  resolvedMetadata: GoogleDriveFileMetadata | null;
 };
+
+export type ContextDocumentSyncStatus = 'pending' | 'indexed' | 'stale' | 'failed';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -65,6 +68,87 @@ function inferSourceKind(value: unknown): ContextDocumentSourceKind {
   return normalized === 'google_drive' || normalized === 'sharepoint' || normalized === 'onedrive'
     ? normalized
     : 'local';
+}
+
+function toIsoString(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+export function buildGoogleDriveSourceData(input: {
+  connectorAccountId: string | null;
+  file: GoogleDriveFileMetadata;
+  exportMimeType: string | null;
+}): Record<string, unknown> {
+  return {
+    kind: 'google_drive',
+    connectorAccountId: input.connectorAccountId,
+    fileId: input.file.id,
+    name: input.file.name,
+    mimeType: input.file.mimeType,
+    exportMimeType: input.exportMimeType,
+    webViewLink: input.file.webViewLink,
+    webContentLink: input.file.webContentLink,
+    iconLink: input.file.iconLink,
+    modifiedTime: input.file.modifiedTime,
+    version: input.file.version,
+    size: input.file.size,
+    md5Checksum: input.file.md5Checksum,
+    driveId: input.file.driveId,
+  };
+}
+
+export function updateContextDocumentSyncData(input: {
+  data: unknown;
+  syncStatus?: ContextDocumentSyncStatus | null;
+  lastSyncedAt?: Date | string | null;
+  lastSyncError?: string | null;
+  source?: Record<string, unknown> | null;
+}): Record<string, unknown> {
+  const next = { ...asRecord(input.data) };
+
+  if (input.syncStatus !== undefined) {
+    if (input.syncStatus) next.syncStatus = input.syncStatus;
+    else delete next.syncStatus;
+  }
+
+  if (input.lastSyncedAt !== undefined) {
+    const iso = toIsoString(input.lastSyncedAt);
+    if (iso) next.lastSyncedAt = iso;
+    else delete next.lastSyncedAt;
+  }
+
+  if (input.lastSyncError !== undefined) {
+    const trimmed = typeof input.lastSyncError === 'string' ? input.lastSyncError.trim() : '';
+    if (trimmed) next.lastSyncError = trimmed;
+    else delete next.lastSyncError;
+  }
+
+  if (input.source !== undefined) {
+    if (input.source) next.source = input.source;
+    else delete next.source;
+  }
+
+  return next;
+}
+
+export function readContextDocumentSyncData(data: unknown): {
+  syncStatus: string | null;
+  lastSyncedAt: string | null;
+  lastSyncError: string | null;
+} {
+  const rec = asRecord(data);
+  const syncStatus =
+    typeof rec.syncStatus === 'string' && rec.syncStatus.trim().length > 0 ? rec.syncStatus.trim() : null;
+  const lastSyncedAt =
+    typeof rec.lastSyncedAt === 'string' && rec.lastSyncedAt.trim().length > 0 ? rec.lastSyncedAt.trim() : null;
+  const lastSyncError =
+    typeof rec.lastSyncError === 'string' && rec.lastSyncError.trim().length > 0
+      ? rec.lastSyncError.trim()
+      : null;
+  return { syncStatus, lastSyncedAt, lastSyncError };
 }
 
 export function resolveContextDocumentSource(doc: ContextDocumentRow): ContextDocumentSourceDescriptor {
@@ -147,6 +231,7 @@ export async function loadContextDocumentContent(input: {
   document: ContextDocumentRow;
   access?: ContextDocumentAccess | null;
   fetchImpl?: typeof fetch;
+  refreshSourceMetadata?: boolean;
 }): Promise<LoadedContextDocumentContent> {
   const source = resolveContextDocumentSource(input.document);
 
@@ -159,6 +244,7 @@ export async function loadContextDocumentContent(input: {
       mimeType: input.document.mimeType,
       source,
       exportMimeType: null,
+      resolvedMetadata: null,
     };
   }
 
@@ -166,12 +252,13 @@ export async function loadContextDocumentContent(input: {
     const accessToken = await resolveGoogleDriveAccessToken(source, input.access);
     const stored = toMinimalGoogleDriveFileMetadata(source);
     const file =
-      stored ??
-      (await resolveGoogleDriveFileMetadata({
-        accessToken,
-        fileId: source.fileId,
-        fetchImpl: input.fetchImpl,
-      }));
+      input.refreshSourceMetadata !== true && stored
+        ? stored
+        : await resolveGoogleDriveFileMetadata({
+            accessToken,
+            fileId: source.fileId,
+            fetchImpl: input.fetchImpl,
+          });
     const loaded = await loadGoogleDriveFileContent({
       accessToken,
       file,
@@ -183,6 +270,7 @@ export async function loadContextDocumentContent(input: {
       mimeType: loaded.mimeType,
       source,
       exportMimeType: loaded.exportMimeType,
+      resolvedMetadata: file,
     };
   }
 

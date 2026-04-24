@@ -28,6 +28,31 @@ vi.mock('../../src/services/storage-s3', async () => {
   };
 });
 
+const mockResolveGoogleDriveFileMetadata = vi.fn();
+const mockLoadGoogleDriveFileContent = vi.fn();
+vi.mock('../../src/services/google-drive-client', async () => {
+  const actual = await vi.importActual<typeof import('../../src/services/google-drive-client')>(
+    '../../src/services/google-drive-client',
+  );
+  return {
+    ...actual,
+    resolveGoogleDriveFileMetadata: (args: any) => mockResolveGoogleDriveFileMetadata(args),
+    loadGoogleDriveFileContent: (args: any) => mockLoadGoogleDriveFileContent(args),
+  };
+});
+
+const mockResolveGoogleDriveTokenSecretByAccountId = vi.fn();
+vi.mock('../../src/services/google-drive-connector-accounts', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../src/services/google-drive-connector-accounts')
+  >('../../src/services/google-drive-connector-accounts');
+  return {
+    ...actual,
+    resolveGoogleDriveTokenSecretByAccountId: (args: any) =>
+      mockResolveGoogleDriveTokenSecretByAccountId(args),
+  };
+});
+
 const mockExtract = vi.fn();
 vi.mock('../../src/services/document-text', async () => {
   return {
@@ -62,6 +87,9 @@ describe('Queue - document_summary', () => {
     streamEvents.length = 0;
     seqByStream = new Map<string, number>();
     mockGetObjectBytes.mockReset();
+    mockResolveGoogleDriveFileMetadata.mockReset();
+    mockLoadGoogleDriveFileContent.mockReset();
+    mockResolveGoogleDriveTokenSecretByAccountId.mockReset();
     mockExtract.mockReset();
     mockGenerateDocumentSummary.mockReset();
     mockGenerateDocumentDetailedSummary.mockReset();
@@ -174,6 +202,208 @@ describe('Queue - document_summary', () => {
     const [doc] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, docId)).limit(1);
     expect(doc?.status).toBe('failed');
   });
-});
 
+  it('processes Google Drive document_summary without S3 reads and refreshes sync metadata', async () => {
+    await db.insert(workspaces).values({
+      id: workspaceId,
+      ownerUserId: null,
+      name: 'WS Test Docs',
+      shareWithAdmin: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    docId = createId();
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType: 'folder',
+      contextId: 'f_1',
+      filename: 'Roadmap.md',
+      mimeType: 'text/markdown',
+      sizeBytes: 0,
+      sourceType: 'google_drive',
+      storageKey: null,
+      status: 'uploaded',
+      data: {
+        summaryLang: 'fr',
+        syncStatus: 'pending',
+        source: {
+          kind: 'google_drive',
+          connectorAccountId: 'gacc_1',
+          fileId: 'file_1',
+          name: 'Roadmap',
+          mimeType: 'application/vnd.google-apps.document',
+          exportMimeType: 'text/markdown',
+          modifiedTime: '2026-04-22T12:00:00.000Z',
+          version: '41',
+        },
+      } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    jobId = `job_${createId()}`;
+    await db.insert(jobQueue).values({
+      id: jobId,
+      type: 'document_summary',
+      status: 'pending',
+      workspaceId,
+      data: JSON.stringify({ documentId: docId, lang: 'fr' }),
+      createdAt: new Date(),
+    });
+
+    mockResolveGoogleDriveTokenSecretByAccountId.mockResolvedValueOnce({
+      accessToken: 'google-access-token',
+      refreshToken: 'google-refresh-token',
+      idToken: null,
+      tokenType: 'Bearer',
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      scopes: ['https://www.googleapis.com/auth/drive.file'],
+      obtainedAt: '2026-04-22T10:00:00.000Z',
+      expiresAt: '2026-04-22T11:00:00.000Z',
+    });
+    mockResolveGoogleDriveFileMetadata.mockResolvedValueOnce({
+      id: 'file_1',
+      name: 'Roadmap',
+      mimeType: 'application/vnd.google-apps.document',
+      webViewLink: 'https://docs.google.com/document/d/file_1',
+      webContentLink: null,
+      iconLink: null,
+      modifiedTime: '2026-04-23T12:30:00.000Z',
+      version: '42',
+      size: null,
+      md5Checksum: null,
+      trashed: false,
+      driveId: null,
+    });
+    mockLoadGoogleDriveFileContent.mockResolvedValueOnce({
+      bytes: new Uint8Array([10, 20, 30]),
+      fileName: 'Roadmap.md',
+      mimeType: 'text/markdown',
+      exportMimeType: 'text/markdown',
+    });
+    mockExtract.mockResolvedValueOnce({
+      text: 'mot '.repeat(500).trim(),
+      metadata: { pages: 2, title: 'Roadmap' },
+      headingsH1: [],
+    });
+    mockGenerateDocumentSummary.mockResolvedValueOnce('Résumé Drive');
+
+    await queueManager.processJobs();
+
+    expect(mockGetObjectBytes).not.toHaveBeenCalled();
+    expect(mockResolveGoogleDriveFileMetadata).toHaveBeenCalledTimes(1);
+    expect(mockLoadGoogleDriveFileContent).toHaveBeenCalledTimes(1);
+
+    const [doc] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, docId)).limit(1);
+    expect(doc?.status).toBe('ready');
+    const data = (doc?.data ?? {}) as any;
+    expect(data.syncStatus).toBe('indexed');
+    expect(typeof data.lastSyncedAt).toBe('string');
+    expect(data.lastSyncError ?? null).toBeNull();
+    expect(data.summary).toBe('Résumé Drive');
+    expect(data.source).toMatchObject({
+      kind: 'google_drive',
+      fileId: 'file_1',
+      connectorAccountId: 'gacc_1',
+      name: 'Roadmap',
+      mimeType: 'application/vnd.google-apps.document',
+      exportMimeType: 'text/markdown',
+      modifiedTime: '2026-04-23T12:30:00.000Z',
+      version: '42',
+    });
+  });
+
+  it('marks Google Drive sync as failed when extraction fails', async () => {
+    await db.insert(workspaces).values({
+      id: workspaceId,
+      ownerUserId: null,
+      name: 'WS Test Docs',
+      shareWithAdmin: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    docId = createId();
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType: 'folder',
+      contextId: 'f_1',
+      filename: 'Roadmap.md',
+      mimeType: 'text/markdown',
+      sizeBytes: 0,
+      sourceType: 'google_drive',
+      storageKey: null,
+      status: 'uploaded',
+      data: {
+        summaryLang: 'fr',
+        syncStatus: 'pending',
+        source: {
+          kind: 'google_drive',
+          connectorAccountId: 'gacc_1',
+          fileId: 'file_1',
+          name: 'Roadmap',
+          mimeType: 'application/vnd.google-apps.document',
+          exportMimeType: 'text/markdown',
+        },
+      } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    jobId = `job_${createId()}`;
+    await db.insert(jobQueue).values({
+      id: jobId,
+      type: 'document_summary',
+      status: 'pending',
+      workspaceId,
+      data: JSON.stringify({ documentId: docId, lang: 'fr' }),
+      createdAt: new Date(),
+    });
+
+    mockResolveGoogleDriveTokenSecretByAccountId.mockResolvedValueOnce({
+      accessToken: 'google-access-token',
+      refreshToken: 'google-refresh-token',
+      idToken: null,
+      tokenType: 'Bearer',
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      scopes: ['https://www.googleapis.com/auth/drive.file'],
+      obtainedAt: '2026-04-22T10:00:00.000Z',
+      expiresAt: '2026-04-22T11:00:00.000Z',
+    });
+    mockResolveGoogleDriveFileMetadata.mockResolvedValueOnce({
+      id: 'file_1',
+      name: 'Roadmap',
+      mimeType: 'application/vnd.google-apps.document',
+      webViewLink: null,
+      webContentLink: null,
+      iconLink: null,
+      modifiedTime: '2026-04-23T12:30:00.000Z',
+      version: '42',
+      size: null,
+      md5Checksum: null,
+      trashed: false,
+      driveId: null,
+    });
+    mockLoadGoogleDriveFileContent.mockResolvedValueOnce({
+      bytes: new Uint8Array([10, 20, 30]),
+      fileName: 'Roadmap.md',
+      mimeType: 'text/markdown',
+      exportMimeType: 'text/markdown',
+    });
+    mockExtract.mockRejectedValueOnce(new Error('extract failed'));
+
+    await queueManager.processJobs();
+
+    const [doc] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, docId)).limit(1);
+    expect(doc?.status).toBe('failed');
+    const data = (doc?.data ?? {}) as any;
+    expect(data.syncStatus).toBe('failed');
+    expect(String(data.lastSyncError || '')).toContain('extract failed');
+  });
+});
 
