@@ -121,6 +121,58 @@ describe('Documents API', () => {
     expect(jobOpts.workspaceId).toBeTruthy();
   });
 
+  it('POST /documents stores archive uploads as ready download-only docs without enqueueing summary jobs', async () => {
+    const form = new FormData();
+    form.set('context_type', 'folder');
+    form.set('context_id', 'f_1');
+    form.set(
+      'file',
+      new File([new Uint8Array([1, 2, 3])], 'bundle.tar.gz', {
+        type: 'application/octet-stream',
+      }),
+    );
+
+    const res = await authenticatedMultipartRequest(app, '/api/v1/documents', user.sessionToken!, form);
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data).toHaveProperty('id');
+    expect(data.status).toBe('ready');
+    expect(data.indexing_skipped).toBe(true);
+    expect(data.mime_type).toBe('application/gzip');
+    expect(data.job_id).toBeUndefined();
+
+    createdDocId = data.id;
+
+    expect(mockPutObject).toHaveBeenCalledTimes(1);
+    expect(mockPutObject.mock.calls[0]?.[0]?.contentType).toBe('application/gzip');
+    expect(addJobSpy).not.toHaveBeenCalled();
+
+    const meta = await app.request(`/api/v1/documents/${createdDocId}`, {
+      method: 'GET',
+      headers: { Cookie: `session=${user.sessionToken}` },
+    });
+    expect(meta.status).toBe(200);
+    const doc = await meta.json();
+    expect(doc.indexing_skipped).toBe(true);
+    expect(doc.status).toBe('ready');
+
+    mockGetObjectBodyStream.mockResolvedValueOnce(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([8, 8, 8]));
+        controller.close();
+      },
+    }));
+
+    const download = await app.request(`/api/v1/documents/${createdDocId}/content`, {
+      method: 'GET',
+      headers: { Cookie: `session=${user.sessionToken}` },
+    });
+    expect(download.status).toBe(200);
+    expect(download.headers.get('content-type')).toBe('application/gzip');
+    const bytes = new Uint8Array(await download.arrayBuffer());
+    expect(bytes.length).toBeGreaterThan(0);
+  });
+
   it('forbids viewers from uploading documents for non-chat contexts', async () => {
     const form = new FormData();
     form.set('context_type', 'folder');
@@ -386,5 +438,4 @@ describe('Documents API', () => {
     expect(list.status).toBe(404);
   });
 });
-
 
