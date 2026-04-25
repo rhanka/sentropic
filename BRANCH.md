@@ -120,7 +120,7 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
   - [x] Add `.pptx` download helper if needed.
   - [x] Gate: UI typecheck/lint and focused UI tests where feasible.
 
-- [ ] **Lot 6 — Docs consolidation**
+- [x] **Lot 6 — Docs consolidation**
   - [x] Update `spec/TOOLS.md` with the final tool contract.
   - [x] Update `spec/SPEC_TEMPLATING.md` only for generic presentation generation behavior.
   - [x] Keep profile-specific PPTX export out of BR-21a docs.
