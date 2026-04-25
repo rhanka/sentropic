@@ -2,6 +2,8 @@ import { API_BASE_URL } from '$lib/config';
 import { getApiAuthToken, getApiBaseUrl } from '$lib/core/api-client';
 
 export type DocumentContextType = 'organization' | 'folder' | 'initiative' | 'chat_session';
+export const DOCUMENT_UPLOAD_ACCEPT =
+  'application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json,.zip,.tar.gz,.tgz,application/zip,application/x-zip-compressed,application/gzip,application/x-gzip,application/x-tar,application/tar';
 
 function getUrlBaseForBrowser(): string {
   // In production Docker UI build, API_BASE_URL is typically "/api/v1" (relative)
@@ -36,6 +38,7 @@ export type ContextDocumentItem = {
   mime_type: string;
   size_bytes: number;
   status: 'uploaded' | 'processing' | 'ready' | 'failed';
+  indexing_skipped?: boolean;
   summary?: string | null;
   summary_lang?: string | null;
   created_at?: string;
@@ -94,4 +97,3 @@ export async function deleteDocument(params: { documentId: string; workspaceId?:
   const res = await fetch(url.toString(), withAuth({ method: 'DELETE' }));
   if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
 }
-

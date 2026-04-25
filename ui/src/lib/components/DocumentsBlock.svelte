@@ -6,7 +6,13 @@
   import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import type { ContextDocumentItem, DocumentContextType } from '$lib/utils/documents';
-  import { deleteDocument, getDownloadUrl, listDocuments, uploadDocument } from '$lib/utils/documents';
+  import {
+    DOCUMENT_UPLOAD_ACCEPT,
+    deleteDocument,
+    getDownloadUrl,
+    listDocuments,
+    uploadDocument
+  } from '$lib/utils/documents';
   import { Trash2, Download, Eye, EyeOff, CirclePlus, Loader2 } from '@lucide/svelte';
 
   const iconButtonPrimary = 'rounded p-1 transition text-primary hover:bg-slate-100';
@@ -199,7 +205,7 @@
           type="file"
           on:change={onPickFile}
           disabled={uploading}
-          accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json"
+          accept={DOCUMENT_UPLOAD_ACCEPT}
         />
         {#if uploading}
           <Loader2 class="w-5 h-5 animate-spin" />
@@ -239,7 +245,7 @@
             {#each items as doc (doc.id)}
               <tr class="align-top">
                 <td class="py-3 pr-2">
-                  {#if doc.status === 'ready' || doc.status === 'failed'}
+                  {#if (doc.status === 'ready' || doc.status === 'failed') && !doc.indexing_skipped}
                     <button
                       class={iconButtonPrimary}
                       on:click={() => toggleSummary(doc.id)}
@@ -317,4 +323,3 @@
     {/if}
   </div>
 </div>
-
