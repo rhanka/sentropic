@@ -55,7 +55,7 @@ Impact notes:
 - BR-14c depends on BR-14f for the thin API proof path only; the mesh contract still belongs to BR-14c.
 - BR-16a can continue in parallel, but will need a shallow rebase because its tests and local runtime rely on the same API/UI container wiring.
 - BR-21a is low-impact and should preferably merge before BR-14f to avoid needless rebase churn on a near-finished branch.
-- Current proof snapshot (2026-04-25): BR-14f local workspace gates are green on `ff6190cb`; BR-16a has its Google Picker slice green on `59dc47af` but has not yet been rebased onto the workspace baseline; BR-21a carries the PPTX runtime hardening fix on `b58763cf`, and its rebase decision should wait for mandatory root UAT.
+- Current proof snapshot (2026-04-25): BR-14f local workspace gates are green on `ff6190cb`; BR-14c (`813a4d3f`), BR-16a (`59dc47af`), and BR-21a (`df41d0ed`) all replay onto BR-14f with doc-only conflict resolution in rebase simulation; BR-16a still needs its own post-rebase branch gates/UAT on top of the workspace baseline, while BR-21a already has successful root UAT recorded on `df41d0ed` after the runtime hardening fix `b58763cf`.
 
 ## BR-14c — LLM Mesh SDK
 
