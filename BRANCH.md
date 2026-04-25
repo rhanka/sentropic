@@ -80,6 +80,7 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
 - [x] `acknowledge` BR21a-EX3 — Approved and used for `ui/src/lib/components/ChatPanel.svelte` plus aligned UI tests under `ui/**` because the visible generated-file card lives in `ChatPanel.svelte` (`docxCardsByMessageId`, hard-coded `DOCX` label, and `downloadCompletedDocxJob(...)` button), while `StreamMessage.svelte` only forwards tool results. Reason: PPTX label + route selection cannot be generalized correctly inside the original allowed files alone. Impact: presentation of generated files only. Rollback: revert the generalized chat card/download changes and keep the existing DOCX-only card path.
 - [x] `decision` BR21a-D1 — Final generated-file contract stays tool-neutral: `document_generate` returns generic generated-file metadata, chat runtime prefers `generatedFileCards`, and `runtimeSummary.docxCards` remains a DOCX-only backward-compatible alias during migration. Profile/CV export behavior stays out of scope for BR-21a.
 - [x] `attention` BR21a-UAT1 — Root UAT reproduced two blocking runtime issues on PPTX generation: repeated `code_runtime_error: pptxgenjs is not a constructor` failures and one retry without `entityId`. Fix on this branch: resolve a constructible PptGenJS export before exposing it to the sandbox, stop relying on constructor identity in PPTX result validation, prefer `pptx()` in PPTX guidance/prompting, and fall back `document_generate` to the active folder/initiative chat context when the model omits the current target. Impact: API-only hardening inside BR-21a scope. Rollback: revert the PPTX constructor resolver, presentation-shape validation, and document target fallback changes.
+- [x] `validation` BR21a-UAT2 — Root UAT rerun on 2026-04-25 from `http://localhost:5173/folders/623d703d-8d4f-4b19-a0bf-fef53d317f08` completed successfully after `b58763cf`: retry stream `ada485e5-bc11-4dc4-a399-bc8c6d217062` finished with `document_generate` result status `completed`, job `4f77a5db-f6ad-4220-8cd2-7df4fa75688b`, file `Presentation cas dusage Ellio.pptx`, and the chat UI rendered the PPTX card plus download link. No dedicated BR21a E2E test exists; branch proof is focused API/UI tests plus root UAT.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and restart**
@@ -132,5 +133,7 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
   - [x] `make lint-api API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=test-feat-pptxgenjs-tool-21a`
   - [x] Focused API/unit tests for freeform PPTX generation.
   - [x] UI tests if the download card path changes.
-  - [ ] PR, CI, UAT if there is a user-visible chat generation path.
+  - [x] Root UAT on the user-visible chat generation path.
+  - [ ] Create/update PR.
+  - [ ] Verify branch CI.
   - [ ] Remove `BRANCH.md` before merge once CI + UAT are both OK.
