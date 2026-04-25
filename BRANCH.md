@@ -63,7 +63,7 @@ Allow users to upload `.zip`, `.tar.gz`, and `.tgz` files as context documents. 
   - Switch back to `tmp/feat-archive-upload-23a` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md` and `rules/workflow.md`.
   - [x] Create isolated worktree `tmp/feat-archive-upload-23a`.
   - [x] Copy root `.env` into the branch worktree.
