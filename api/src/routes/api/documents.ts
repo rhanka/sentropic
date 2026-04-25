@@ -269,10 +269,25 @@ documentsRouter.get('/:id/content', async (c) => {
     return c.newResponse(stream, 200);
   }
 
-  const loaded = await loadContextDocumentContent({ document: doc });
-  c.header('Content-Type', loaded.mimeType || 'application/octet-stream');
-  c.header('Content-Disposition', `attachment; filename="${loaded.filename.replace(/"/g, '')}"`);
-  return c.newResponse(loaded.bytes, 200);
+  try {
+    const access =
+      doc.sourceType === 'google_drive'
+        ? { mode: 'user' as const, userId: user.userId, workspaceId: targetWorkspaceId }
+        : undefined;
+    const loaded = await loadContextDocumentContent({ document: doc, access });
+    c.header('Content-Type', loaded.mimeType || 'application/octet-stream');
+    c.header('Content-Disposition', `attachment; filename="${loaded.filename.replace(/"/g, '')}"`);
+    return c.newResponse(loaded.bytes, 200);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load document content';
+    if (
+      message === 'Google Drive account is not connected' ||
+      message === 'Google Drive connector account is not connected'
+    ) {
+      return c.json({ message: 'Google Drive account is not connected' }, 409);
+    }
+    throw error;
+  }
 });
 
 documentsRouter.delete('/:id', requireWorkspaceAccessRole(), async (c) => {
