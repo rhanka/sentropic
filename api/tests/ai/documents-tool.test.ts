@@ -341,6 +341,42 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
     expect(res.contentMode).toBe('full_text');
   });
 
+  it('documents.analyze (google drive): scans extracted content with connected user access', async () => {
+    await connectGoogleDriveUser();
+    await insertGoogleDriveDocument();
+
+    mockLoadGoogleDriveFileContent.mockResolvedValueOnce({
+      bytes: new Uint8Array([7, 8, 9]),
+      fileName: 'Roadmap.md',
+      mimeType: 'text/markdown',
+      exportMimeType: 'text/markdown',
+    });
+    mockExtract.mockResolvedValueOnce({
+      text: 'chiffres clés '.repeat(1200).trim(),
+      metadata: { pages: 3, title: 'Roadmap' },
+      headingsH1: [],
+    });
+    mockCallLLM.mockResolvedValueOnce({
+      choices: [{ message: { content: 'analyse sur le document Drive' } }],
+    });
+
+    const res = await toolService.analyzeDocument({
+      workspaceId,
+      contextType,
+      contextId,
+      documentId: docId,
+      userId: googleUserId,
+      prompt: 'Extraire les chiffres clés',
+      maxWords: 1200,
+    });
+
+    expect(mockLoadGoogleDriveFileContent).toHaveBeenCalledTimes(1);
+    expect(mockCallLLM).toHaveBeenCalledTimes(1);
+    expect(res.sourceType).toBe('google_drive');
+    expect(res.mode).toBe('full_text');
+    expect(res.analysis).toContain('analyse sur le document Drive');
+  });
+
   it('documents.analyze (google drive): rejects disconnected user access', async () => {
     await insertGoogleDriveDocument();
 
