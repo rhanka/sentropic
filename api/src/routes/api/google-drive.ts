@@ -15,6 +15,7 @@ import {
   pickGoogleDriveExportMimeType,
   resolveGoogleDriveFileMetadata,
 } from '../../services/google-drive-client';
+import { buildGoogleDrivePickerConfig } from '../../services/google-drive-picker';
 import {
   appendGoogleDriveOAuthResultToReturnPath,
   exchangeGoogleDriveOAuthCode,
@@ -84,6 +85,37 @@ googleDriveRouter.get('/connection', async (c) => {
       workspaceId: user.workspaceId,
     }),
   });
+});
+
+googleDriveRouter.get('/picker-config', async (c) => {
+  const user = getAuthenticatedUser(c.get('user'));
+  if (!user) return c.json({ message: 'Authentication required' }, 401);
+  if (!(await ensureWorkspace(user, user.workspaceId))) {
+    return c.json({ message: 'Workspace access required' }, 403);
+  }
+
+  const token = await resolveGoogleDriveTokenSecret({
+    userId: user.userId,
+    workspaceId: user.workspaceId,
+  });
+  if (!token?.accessToken) {
+    return c.json({ message: 'Google Drive account is not connected' }, 409);
+  }
+
+  try {
+    const picker = await buildGoogleDrivePickerConfig({ oauthToken: token.accessToken });
+    return c.json({
+      picker: {
+        client_id: picker.clientId,
+        developer_key: picker.developerKey,
+        app_id: picker.appId,
+        oauth_token: picker.oauthToken,
+        scope: picker.scope,
+      },
+    });
+  } catch (error) {
+    return c.json({ message: toErrorMessage(error, 'Google Drive Picker is not configured.') }, 503);
+  }
 });
 
 googleDriveRouter.post('/files/resolve-picker-selection', async (c) => {
