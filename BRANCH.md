@@ -71,27 +71,27 @@ Allow users to upload `.zip`, `.tar.gz`, and `.tgz` files as context documents. 
   - [x] Define test mapping: `API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-archive-upload-23a`.
   - [x] Confirm scope and guardrails.
 
-- [ ] **Lot 1 — Upload/download-only archives**
+- [x] **Lot 1 — Upload/download-only archives**
   - [x] Accept `.zip`, `.tar.gz`, and `.tgz` in document upload surfaces.
   - [x] Normalize archive MIME detection from filename/type.
   - [x] Store archives in document storage and skip `document_summary` enqueue.
   - [x] Keep archive documents downloadable through the existing `/documents/:id/content` route.
   - [x] Prevent `documents` tool exploration for download-only archives.
   - [x] Avoid misleading summary affordances for skipped-index docs in the documents block.
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make typecheck-api API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-archive-upload-23a`
     - [x] `make lint-api API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-archive-upload-23a`
     - [x] `make typecheck-ui API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-archive-upload-23a`
     - [x] `make lint-ui API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-archive-upload-23a`
-    - [ ] **API tests**
+    - [x] **API tests**
       - [x] `api/tests/api/documents.test.ts`
       - [x] `api/tests/unit/documents-tool-service.test.ts`
-      - [ ] Scoped runs:
+      - [x] Scoped runs:
         - [x] `make test-api-endpoints SCOPE=tests/api/documents.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-archive-upload-23a`
         - [x] `make test-api-unit SCOPE=tests/unit/documents-tool-service.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-archive-upload-23a`
-    - [ ] **UI tests**
+    - [x] **UI tests**
       - [x] `ui/tests/utils/documents.test.ts`
-      - [ ] Scoped run:
+      - [x] Scoped run:
         - [x] `make test-ui SCOPE=tests/utils/documents.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-archive-upload-23a`
 
 - [ ] **Lot 2 — Final validation**
