@@ -240,6 +240,12 @@ Minimum UI:
 - Selected Drive files appear alongside local documents with source and sync status.
 - Manual resync and disconnect states.
 
+Current BR-16a implementation status:
+
+- The composer connection surface is implemented: connection status fetch, OAuth start, and disconnect are wired in the existing chat composer menu.
+- The visible "Import from Google Drive" entry is intentionally still a disabled placeholder until the Picker selection flow is wired in a later BR-16a lot.
+- Therefore, live browser validation can currently prove only the connection/disconnection handshake, not end-to-end Drive file attachment/indexing.
+
 Avoid in BR-16a:
 
 - Full Drive folder browser.

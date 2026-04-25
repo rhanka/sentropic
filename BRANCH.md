@@ -127,6 +127,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - [x] `decision` BR16a-D1 — The `documents` tool now treats external sources as first-class document sources: list/read responses expose `sourceType` + sync metadata, and Google Drive `get_content` / `analyze` reads must use the connected user/workspace account when a user context is present. Background indexing/resync remains connector-account-driven.
 - [x] `decision` BR16a-D2 — Unified Google Drive content reads must stay user-scoped outside background jobs: `GET /documents/:id/content` now uses the acting user's connected Google account and returns `409` when that account is disconnected, instead of silently falling back to stored connector-account access.
 - [x] `attention` BR16a-T1 — Deterministic `documents` AI coverage now locks the Google Drive paths for connected `get_content`, connected `analyze`, and disconnected-user refusal.
+- [x] `attention` BR16a-U1 — Live browser validation is currently bounded to the OAuth connection surface. The composer already exposes Connect/Disconnect Google Drive, but the actual Picker-backed "Import from Google Drive" action remains a disabled placeholder until the next BR-16a lot wires the Picker selection flow. Impact: full Drive-file UAT cannot be claimed yet; only connection/disconnection can be validated once an authenticated app session is available. Rollback: remove the placeholder copy and restore a pure connection-only surface if the Picker lot is dropped.
 
 ## AI Flaky tests
 - Acceptance rule:
