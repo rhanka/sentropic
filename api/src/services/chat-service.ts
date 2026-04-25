@@ -80,6 +80,64 @@ function isChatContextType(value: unknown): value is ChatContextType {
   return typeof value === 'string' && (CHAT_CONTEXT_TYPES as readonly string[]).includes(value);
 }
 
+type DocumentGenerateEntityType = 'initiative' | 'folder';
+
+function isDocumentGenerateEntityType(value: unknown): value is DocumentGenerateEntityType {
+  return value === 'initiative' || value === 'folder';
+}
+
+function getDocumentGenerateFallbackTarget(
+  contextType: ChatContextType | null | undefined,
+  contextId: string | null | undefined,
+): { entityType: DocumentGenerateEntityType; entityId: string } | null {
+  const entityId = typeof contextId === 'string' ? contextId.trim() : '';
+  if (!entityId) return null;
+  if (contextType === 'initiative' || contextType === 'usecase') {
+    return { entityType: 'initiative', entityId };
+  }
+  if (contextType === 'folder' || contextType === 'executive_summary') {
+    return { entityType: 'folder', entityId };
+  }
+  return null;
+}
+
+function resolveDocumentGenerateTarget(input: {
+  entityType?: unknown;
+  entityId?: unknown;
+  primaryContextType: ChatContextType | null | undefined;
+  primaryContextId: string | null | undefined;
+}): { entityType: DocumentGenerateEntityType; entityId: string; usedFallback: boolean } {
+  const rawEntityType = typeof input.entityType === 'string' ? input.entityType.trim() : '';
+  if (rawEntityType && !isDocumentGenerateEntityType(rawEntityType)) {
+    throw new Error('document_generate: entityType must be "initiative" | "folder"');
+  }
+
+  const explicitEntityType = isDocumentGenerateEntityType(rawEntityType) ? rawEntityType : null;
+  const explicitEntityId = typeof input.entityId === 'string' ? input.entityId.trim() : '';
+  const fallback = getDocumentGenerateFallbackTarget(
+    input.primaryContextType,
+    input.primaryContextId,
+  );
+
+  const resolvedEntityType =
+    explicitEntityType ??
+    fallback?.entityType ??
+    'initiative';
+  const resolvedEntityId =
+    explicitEntityId ||
+    (fallback && (!explicitEntityType || fallback.entityType === explicitEntityType)
+      ? fallback.entityId
+      : '');
+
+  return {
+    entityType: resolvedEntityType,
+    entityId: resolvedEntityId,
+    usedFallback:
+      (!explicitEntityType && !!fallback) ||
+      (!explicitEntityId && !!fallback && (!explicitEntityType || fallback.entityType === explicitEntityType)),
+  };
+}
+
 export type CommentContextType = 'organization' | 'folder' | 'initiative' | 'matrix' | 'executive_summary';
 const COMMENT_CONTEXT_TYPES = ['organization', 'folder', 'initiative', 'matrix', 'executive_summary'] as const;
 function isCommentContextType(value: unknown): value is CommentContextType {
@@ -3044,10 +3102,19 @@ Règles :
     contextBlock += `\n\n${activeToolsBlock}`;
 
     if (activeToolNames.includes('document_generate')) {
+      const defaultDocumentTarget = getDocumentGenerateFallbackTarget(
+        primaryContextType,
+        primaryContextId,
+      );
+      const targetGuidance = defaultDocumentTarget
+        ? `Current chat context default target: \`${defaultDocumentTarget.entityType}:${defaultDocumentTarget.entityId}\`. You may omit \`entityType\` / \`entityId\` only when generating for this current target; specify both when targeting another entity.`
+        : 'Pass both `entityType` and `entityId` when generating a document.';
       contextBlock += `\n\n## Document generation
 You have the tool \`document_generate\`. It can generate \`format: "docx"\` (default) or \`format: "pptx"\`.
 Before generating your first document in this conversation, call it with \`action: "upskill"\` (optionally with \`format\`) to learn best practices.
-Then call with \`action: "generate"\`.`;
+Then call with \`action: "generate"\`.
+${targetGuidance}
+For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw constructor calls.`;
     }
 
     const vscodeCodeAgentPayload = this.normalizeVsCodeCodeAgentPayload(
@@ -4874,8 +4941,12 @@ Then call with \`action: "generate"\`.`;
               const templateId = typeof args.templateId === 'string' ? args.templateId : undefined;
               const code = typeof args.code === 'string' ? args.code : undefined;
               const title = typeof args.title === 'string' ? args.title : undefined;
-              const entityType = typeof args.entityType === 'string' ? args.entityType : 'initiative';
-              const entityId = typeof args.entityId === 'string' ? args.entityId : '';
+              const { entityType, entityId } = resolveDocumentGenerateTarget({
+                entityType: args.entityType,
+                entityId: args.entityId,
+                primaryContextType,
+                primaryContextId,
+              });
               if (!entityId) throw new Error('document_generate: entityId is required');
               if (templateId && code) throw new Error('document_generate: templateId and code are mutually exclusive');
               if (!templateId && !code) throw new Error('document_generate: either templateId or code is required');

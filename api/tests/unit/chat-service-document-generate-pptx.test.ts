@@ -261,4 +261,80 @@ describe('ChatService - document_generate tool (PPTX freeform)', () => {
     const putCallArg = putMock.mock.calls[0]?.[0] as any;
     expect(String(putCallArg?.key)).toContain('pptx-cache/');
   });
+
+  it('falls back to the primary folder context when pptx entity fields are omitted', async () => {
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+    const freeformMock = generateFreeformPptx as unknown as ReturnType<typeof vi.fn>;
+
+    mock.mockImplementation(() =>
+      stream([
+        { type: 'content_delta', data: { delta: 'OK' } },
+        { type: 'done', data: {} },
+      ]),
+    );
+
+    freeformMock.mockResolvedValueOnce({
+      buffer: Buffer.from('fake-pptx'),
+      mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      fileName: 'fallback-output.pptx',
+    });
+
+    mock.mockImplementationOnce(() =>
+      stream([
+        {
+          type: 'tool_call_start',
+          data: {
+            tool_call_id: 'tool_pptx_freeform_fallback',
+            name: 'document_generate',
+            args: JSON.stringify({
+              action: 'generate',
+              format: 'pptx',
+              code: 'return pptx({ title: "Fallback demo" })',
+              title: 'Fallback presentation',
+            }),
+          },
+        },
+        { type: 'done', data: {} },
+      ]),
+    );
+
+    const { sessionId, assistantMessageId, model } =
+      await chatService.createUserMessageWithAssistantPlaceholder({
+        userId,
+        workspaceId,
+        content: 'generate a pptx from the current folder',
+        primaryContextType: 'folder',
+        primaryContextId: folderId,
+        model: 'gpt-4.1-nano',
+      });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId,
+      assistantMessageId,
+      model,
+    });
+
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, assistantMessageId));
+
+    const resultEvent = events.find(
+      (e: any) =>
+        e.eventType === 'tool_call_result' &&
+        (e.data as any)?.tool_call_id === 'tool_pptx_freeform_fallback',
+    );
+    expect(resultEvent).toBeDefined();
+    expect((resultEvent!.data as any).result.status).toBe('completed');
+
+    expect(freeformMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entityType: 'folder',
+        entityId: folderId,
+        workspaceId,
+        title: 'Fallback presentation',
+      }),
+    );
+  });
 });
