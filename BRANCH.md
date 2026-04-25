@@ -125,6 +125,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - `api/tests/api/import-export.test.ts`
     - plus minimal supporting `api/src/services/**document**` for the shared abstraction.
 - [x] `decision` BR16a-D1 — The `documents` tool now treats external sources as first-class document sources: list/read responses expose `sourceType` + sync metadata, and Google Drive `get_content` / `analyze` reads must use the connected user/workspace account when a user context is present. Background indexing/resync remains connector-account-driven.
+- [x] `decision` BR16a-D2 — Unified Google Drive content reads must stay user-scoped outside background jobs: `GET /documents/:id/content` now uses the acting user's connected Google account and returns `409` when that account is disconnected, instead of silently falling back to stored connector-account access.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -224,7 +225,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [ ] **API tests**
       - [ ] Add deterministic chat documents tool tests with Google Drive indexed docs.
-      - [ ] Add permission-denied tests for disconnected/unauthorized Google refs.
+      - [x] Add permission-denied tests for disconnected/unauthorized Google refs.
     - [ ] **AI tests**
       - [ ] Run AI document tool tests only when credentials are available and record flaky signatures if any.
 

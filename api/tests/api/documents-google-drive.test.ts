@@ -207,6 +207,118 @@ describe('Documents API (Google Drive attach)', () => {
     expect(res.status).toBe(403);
   });
 
+  it('downloads Google Drive document content through the connected user account', async () => {
+    await seedConnectedGoogleDriveAccount(user);
+    const accountId = await getStoredGoogleDriveAccountId(user);
+    expect(accountId).toBeTruthy();
+
+    const docId = crypto.randomUUID();
+    createdDocIds.push(docId);
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId: String(user.workspaceId),
+      contextType: 'folder',
+      contextId: 'f_1',
+      filename: 'Roadmap.md',
+      mimeType: 'text/markdown',
+      sizeBytes: 0,
+      sourceType: 'google_drive',
+      storageKey: null,
+      status: 'ready',
+      data: {
+        summary: 'Old summary',
+        summaryLang: 'fr',
+        source: {
+          kind: 'google_drive',
+          connectorAccountId: accountId,
+          fileId: 'file_1',
+          name: 'Roadmap',
+          mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+          exportMimeType: 'text/markdown',
+          modifiedTime: '2026-04-22T12:00:00.000Z',
+          version: '41',
+        },
+      } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    const fetchMock = vi.fn(async () =>
+      new Response('# Roadmap\n\n- item 1\n- item 2', {
+        status: 200,
+        headers: { 'Content-Type': 'text/markdown; charset=utf-8' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await app.request(`/api/v1/documents/${docId}/content`, {
+      method: 'GET',
+      headers: {
+        Cookie: `session=${user.sessionToken}`,
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/markdown');
+    expect(res.headers.get('content-disposition') || '').toContain('Roadmap.md');
+    await expect(res.text()).resolves.toContain('# Roadmap');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/files/file_1/export');
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: 'GET',
+      headers: {
+        Authorization: 'Bearer google-access-token',
+      },
+    });
+  });
+
+  it('returns 409 when Google Drive content is requested without a connected user account', async () => {
+    const docId = crypto.randomUUID();
+    createdDocIds.push(docId);
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId: String(user.workspaceId),
+      contextType: 'folder',
+      contextId: 'f_1',
+      filename: 'Roadmap.md',
+      mimeType: 'text/markdown',
+      sizeBytes: 0,
+      sourceType: 'google_drive',
+      storageKey: null,
+      status: 'ready',
+      data: {
+        summary: 'Old summary',
+        summaryLang: 'fr',
+        source: {
+          kind: 'google_drive',
+          connectorAccountId: 'connector_missing',
+          fileId: 'file_1',
+          name: 'Roadmap',
+          mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+          exportMimeType: 'text/markdown',
+          modifiedTime: '2026-04-22T12:00:00.000Z',
+          version: '41',
+        },
+      } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    const res = await app.request(`/api/v1/documents/${docId}/content`, {
+      method: 'GET',
+      headers: {
+        Cookie: `session=${user.sessionToken}`,
+      },
+    });
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({
+      message: 'Google Drive account is not connected',
+    });
+  });
+
   it('requeues Google Drive documents for resync and refreshes stored metadata', async () => {
     await seedConnectedGoogleDriveAccount(user);
     const accountId = await getStoredGoogleDriveAccountId(user);
