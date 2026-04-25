@@ -263,6 +263,11 @@ Roadmap specifications:
 - [ ] **BR-25** `chore/rules-skills-audit`
   - [ ] Absorb BR-04B audit learnings (400+ incidents) into rules and hooks. Mechanical enforcement. See `plan/25-BRANCH_chore-rules-skills-audit.md`.
 
+- [ ] **Fix** `fix/high-vulnerabilities`
+  - [ ] Remove the current API HIGH dependency vulnerability with a real package update on an isolated fix branch.
+  - [ ] Verify `make build-api-image`, `make test-api-security-sca`, and `make test-api-security-container` on `ENV=test-fix-high-vulnerabilities`.
+  - [ ] Record impact on the blocked branches and PRs once validated.
+
 #### Branch closure rules for this roadmap
 
 - [ ] Branches must stay orthogonal and independently mergeable.

@@ -5,7 +5,7 @@
   "overrides": {
     "glob": "^11.1.0",
     "fast-xml-parser": "^5.3.6",
-    "@xmldom/xmldom": ">=0.8.12"
+    "@xmldom/xmldom": "0.9.10"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -48,6 +48,7 @@
     "@hono/zod-validator": "^0.7.6",
     "@mistralai/mistralai": "^1.15.1",
     "@simplewebauthn/server": "^13.2.2",
+    "@xmldom/xmldom": "0.9.10",
     "better-queue": "^3.8.12",
     "cohere-ai": "^7.20.0",
     "docx": "^9.5.1",
@@ -58,7 +59,7 @@
     "marked": "^17.0.1",
     "node-fetch": "^3.3.2",
     "nodemailer": "^8.0.4",
-    "officeparser": "^6.0.1",
+    "officeparser": "6.1.0",
     "openai": "^6.1.0",
     "pg": "^8.12.0",
     "pino": "^9.1.0",
@@ -72,13 +73,13 @@
     "@types/pg": "^8.15.5",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
-    "@vitest/ui": "^4.0.18",
+    "@vitest/ui": "4.1.5",
     "drizzle-kit": "^0.28.1",
     "eslint": "^10.0.2",
     "hono": "^4.12.8",
     "prettier": "^3.2.5",
     "tsx": "^4.7.2",
     "typescript": "^5.4.5",
-    "vitest": "^4.0.18"
+    "vitest": "4.1.5"
   }
 }
