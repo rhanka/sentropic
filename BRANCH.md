@@ -124,6 +124,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - `api/src/routes/api/import-export.ts`
     - `api/tests/api/import-export.test.ts`
     - plus minimal supporting `api/src/services/**document**` for the shared abstraction.
+- [x] `decision` BR16a-D1 — The `documents` tool now treats external sources as first-class document sources: list/read responses expose `sourceType` + sync metadata, and Google Drive `get_content` / `analyze` reads must use the connected user/workspace account when a user context is present. Background indexing/resync remains connector-account-driven.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -214,13 +215,13 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
       - [ ] Add chunk storage tests.
 
 - [ ] **Lot 4 — Chat documents tool integration**
-  - [ ] Make `documents` tool list and read Google Drive documents through existing context document paths.
-  - [ ] Make `documents.get_content` and `documents.analyze` load Drive content on demand when needed.
-  - [ ] Surface source metadata and stale/sync status in tool responses.
-  - [ ] Ensure permission checks use the connected user/workspace context.
+  - [x] Make `documents` tool list and read Google Drive documents through existing context document paths.
+  - [x] Make `documents.get_content` and `documents.analyze` load Drive content on demand when needed.
+  - [x] Surface source metadata and stale/sync status in tool responses.
+  - [x] Ensure permission checks use the connected user/workspace context.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [ ] **API tests**
       - [ ] Add deterministic chat documents tool tests with Google Drive indexed docs.
       - [ ] Add permission-denied tests for disconnected/unauthorized Google refs.

@@ -18,7 +18,11 @@ import {
   workspaceMemberships
 } from '../db/schema';
 import { createId } from '../utils/id';
-import { loadContextDocumentContent } from './context-document-source';
+import {
+  loadContextDocumentContent,
+  readContextDocumentSyncData,
+  type ContextDocumentSourceKind,
+} from './context-document-source';
 import { extractDocumentInfoFromDocument } from './document-text';
 import { callLLM } from './llm-runtime';
 import { SHARED_AGENTS } from '../config/default-agents-shared';
@@ -1632,6 +1636,94 @@ export class ToolService {
     }
   }
 
+  private getDataNullableString(data: unknown, key: string): string | null {
+    const rec = this.asRecord(data);
+    const v = rec[key];
+    if (v === null) return null;
+    return typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+  }
+
+  private getDocumentSourceInfo(row: typeof contextDocuments.$inferSelect): {
+    sourceType: ContextDocumentSourceKind;
+    syncStatus: string | null;
+    lastSyncedAt: string | null;
+    lastSyncError: string | null;
+    source:
+      | { kind: 'local' }
+      | {
+          kind: 'google_drive';
+          fileId: string | null;
+          name: string | null;
+          mimeType: string | null;
+          exportMimeType: string | null;
+          webViewLink: string | null;
+          modifiedTime: string | null;
+          version: string | null;
+        }
+      | { kind: 'sharepoint' }
+      | { kind: 'onedrive' };
+  } {
+    const sourceType =
+      row.sourceType === 'google_drive' || row.sourceType === 'sharepoint' || row.sourceType === 'onedrive'
+        ? row.sourceType
+        : 'local';
+    const syncData = readContextDocumentSyncData(row.data);
+    const source = this.asRecord(this.asRecord(row.data).source);
+
+    if (sourceType === 'google_drive') {
+      return {
+        sourceType,
+        syncStatus: syncData.syncStatus,
+        lastSyncedAt: syncData.lastSyncedAt,
+        lastSyncError: syncData.lastSyncError,
+        source: {
+          kind: 'google_drive',
+          fileId: this.getDataNullableString(source, 'fileId') ?? this.getDataNullableString(source, 'file_id'),
+          name: this.getDataNullableString(source, 'name'),
+          mimeType: this.getDataNullableString(source, 'mimeType') ?? this.getDataNullableString(source, 'mime_type'),
+          exportMimeType:
+            this.getDataNullableString(source, 'exportMimeType') ??
+            this.getDataNullableString(source, 'export_mime_type'),
+          webViewLink:
+            this.getDataNullableString(source, 'webViewLink') ??
+            this.getDataNullableString(source, 'web_view_link'),
+          modifiedTime:
+            this.getDataNullableString(source, 'modifiedTime') ??
+            this.getDataNullableString(source, 'modified_time'),
+          version: this.getDataNullableString(source, 'version'),
+        },
+      };
+    }
+
+    if (sourceType === 'sharepoint') {
+      return {
+        sourceType,
+        syncStatus: syncData.syncStatus,
+        lastSyncedAt: syncData.lastSyncedAt,
+        lastSyncError: syncData.lastSyncError,
+        source: { kind: 'sharepoint' },
+      };
+    }
+
+    if (sourceType === 'onedrive') {
+      return {
+        sourceType,
+        syncStatus: syncData.syncStatus,
+        lastSyncedAt: syncData.lastSyncedAt,
+        lastSyncError: syncData.lastSyncError,
+        source: { kind: 'onedrive' },
+      };
+    }
+
+    return {
+      sourceType: 'local',
+      syncStatus: syncData.syncStatus,
+      lastSyncedAt: syncData.lastSyncedAt,
+      lastSyncError: syncData.lastSyncError,
+      source: { kind: 'local' },
+    };
+  }
+
   private countWords(text: string): number {
     const t = (text || '').trim();
     if (!t) return 0;
@@ -1857,6 +1949,24 @@ export class ToolService {
       mimeType: string;
       sizeBytes: number;
       status: string;
+      sourceType: ContextDocumentSourceKind;
+      syncStatus: string | null;
+      lastSyncedAt: string | null;
+      lastSyncError: string | null;
+      source:
+        | { kind: 'local' }
+        | {
+            kind: 'google_drive';
+            fileId: string | null;
+            name: string | null;
+            mimeType: string | null;
+            exportMimeType: string | null;
+            webViewLink: string | null;
+            modifiedTime: string | null;
+            version: string | null;
+          }
+        | { kind: 'sharepoint' }
+        | { kind: 'onedrive' };
       summaryAvailable: boolean;
       createdAt: Date;
       updatedAt: Date | null;
@@ -1881,6 +1991,7 @@ export class ToolService {
         mimeType: r.mimeType,
         sizeBytes: r.sizeBytes,
         status: r.status,
+        ...this.getDocumentSourceInfo(r),
         summaryAvailable: !!(this.getDataString(r.data, 'summary')?.trim()),
         createdAt: r.createdAt,
         updatedAt: r.updatedAt ?? null,
@@ -1896,6 +2007,24 @@ export class ToolService {
   }): Promise<{
     documentId: string;
     documentStatus: string;
+    sourceType: ContextDocumentSourceKind;
+    syncStatus: string | null;
+    lastSyncedAt: string | null;
+    lastSyncError: string | null;
+    source:
+      | { kind: 'local' }
+      | {
+          kind: 'google_drive';
+          fileId: string | null;
+          name: string | null;
+          mimeType: string | null;
+          exportMimeType: string | null;
+          webViewLink: string | null;
+          modifiedTime: string | null;
+          version: string | null;
+        }
+      | { kind: 'sharepoint' }
+      | { kind: 'onedrive' };
     summary: string | null;
   }> {
     const [row] = await db
@@ -1914,6 +2043,7 @@ export class ToolService {
     return {
       documentId: row.id,
       documentStatus: row.status,
+      ...this.getDocumentSourceInfo(row),
       summary: this.getDataString(row.data, 'summary'),
     };
   }
@@ -1924,9 +2054,28 @@ export class ToolService {
     contextId: string;
     documentId: string;
     maxChars?: number | null;
+    userId?: string | null;
   }): Promise<{
     documentId: string;
     documentStatus: string;
+    sourceType: ContextDocumentSourceKind;
+    syncStatus: string | null;
+    lastSyncedAt: string | null;
+    lastSyncError: string | null;
+    source:
+      | { kind: 'local' }
+      | {
+          kind: 'google_drive';
+          fileId: string | null;
+          name: string | null;
+          mimeType: string | null;
+          exportMimeType: string | null;
+          webViewLink: string | null;
+          modifiedTime: string | null;
+          version: string | null;
+        }
+      | { kind: 'sharepoint' }
+      | { kind: 'onedrive' };
     filename: string;
     mimeType: string;
     pages: number | null;
@@ -1951,6 +2100,11 @@ export class ToolService {
 
     // Security / spec: do NOT return full content if doc is larger than 10k words.
     const WORDS_FULL_CONTENT_LIMIT = 10_000;
+    const sourceInfo = this.getDocumentSourceInfo(row);
+    const access =
+      typeof opts.userId === 'string' && opts.userId.trim().length > 0
+        ? { mode: 'user' as const, userId: opts.userId, workspaceId: opts.workspaceId }
+        : undefined;
 
     const storedWords = (() => {
       const extracted = this.asRecord(this.asRecord(row.data).extracted);
@@ -1966,7 +2120,7 @@ export class ToolService {
     // If the document is not ready yet, allow get_content only for short docs.
     // Tools must remain read-only: job `document_summary` is the single writer for summaries.
     if (row.status !== 'ready') {
-      const loaded = await loadContextDocumentContent({ document: row });
+      const loaded = await loadContextDocumentContent({ document: row, access });
       const extracted = await extractDocumentInfoFromDocument({
         bytes: loaded.bytes,
         filename: loaded.filename,
@@ -1980,6 +2134,7 @@ export class ToolService {
         return {
           documentId: row.id,
           documentStatus: row.status,
+          ...sourceInfo,
           filename: row.filename,
           mimeType: row.mimeType,
           pages: typeof extracted.metadata?.pages === 'number' ? extracted.metadata.pages : null,
@@ -2007,6 +2162,7 @@ export class ToolService {
       return {
         documentId: row.id,
         documentStatus: row.status,
+        ...sourceInfo,
         filename: row.filename,
         mimeType: row.mimeType,
         pages: typeof extracted.metadata?.pages === 'number' ? extracted.metadata.pages : null,
@@ -2029,6 +2185,7 @@ export class ToolService {
       return {
         documentId: row.id,
         documentStatus: row.status,
+        ...sourceInfo,
         filename: row.filename,
         mimeType: row.mimeType,
         pages: typeof extracted.pages === 'number' ? extracted.pages : null,
@@ -2042,7 +2199,7 @@ export class ToolService {
       };
     }
 
-    const loaded = await loadContextDocumentContent({ document: row });
+    const loaded = await loadContextDocumentContent({ document: row, access });
     const extracted = await extractDocumentInfoFromDocument({
       bytes: loaded.bytes,
       filename: loaded.filename,
@@ -2081,6 +2238,7 @@ export class ToolService {
     return {
       documentId: row.id,
       documentStatus: row.status,
+      ...sourceInfo,
       filename: row.filename,
       mimeType: row.mimeType,
       pages: typeof extracted.metadata.pages === 'number' ? extracted.metadata.pages : null,
@@ -2101,10 +2259,29 @@ export class ToolService {
     documentId: string;
     prompt: string;
     maxWords?: number | null;
+    userId?: string | null;
     signal?: AbortSignal;
   }): Promise<{
     documentId: string;
     documentStatus: string;
+    sourceType: ContextDocumentSourceKind;
+    syncStatus: string | null;
+    lastSyncedAt: string | null;
+    lastSyncError: string | null;
+    source:
+      | { kind: 'local' }
+      | {
+          kind: 'google_drive';
+          fileId: string | null;
+          name: string | null;
+          mimeType: string | null;
+          exportMimeType: string | null;
+          webViewLink: string | null;
+          modifiedTime: string | null;
+          version: string | null;
+        }
+      | { kind: 'sharepoint' }
+      | { kind: 'onedrive' };
     filename: string;
     mode: 'full_text' | 'detailed_summary';
     analysis: string;
@@ -2135,8 +2312,13 @@ export class ToolService {
     if (row.status !== 'ready') {
       throw new Error(`documents.get_summary: document not ready (status="${row.status}")`);
     }
+    const sourceInfo = this.getDocumentSourceInfo(row);
+    const access =
+      typeof opts.userId === 'string' && opts.userId.trim().length > 0
+        ? { mode: 'user' as const, userId: opts.userId, workspaceId: opts.workspaceId }
+        : undefined;
 
-    const loaded = await loadContextDocumentContent({ document: row });
+    const loaded = await loadContextDocumentContent({ document: row, access });
     const extracted = await extractDocumentInfoFromDocument({
       bytes: loaded.bytes,
       filename: loaded.filename,
@@ -2178,6 +2360,7 @@ export class ToolService {
     return {
       documentId: row.id,
       documentStatus: row.status,
+      ...sourceInfo,
       filename: row.filename,
       mode: 'full_text',
       analysis: analyzed.analysis,
