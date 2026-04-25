@@ -126,6 +126,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - plus minimal supporting `api/src/services/**document**` for the shared abstraction.
 - [x] `decision` BR16a-D1 — The `documents` tool now treats external sources as first-class document sources: list/read responses expose `sourceType` + sync metadata, and Google Drive `get_content` / `analyze` reads must use the connected user/workspace account when a user context is present. Background indexing/resync remains connector-account-driven.
 - [x] `decision` BR16a-D2 — Unified Google Drive content reads must stay user-scoped outside background jobs: `GET /documents/:id/content` now uses the acting user's connected Google account and returns `409` when that account is disconnected, instead of silently falling back to stored connector-account access.
+- [x] `attention` BR16a-T1 — Deterministic `documents` AI coverage now includes Google Drive `get_content` with a connected user account and an explicit disconnected-user refusal path. The connected `documents.analyze` success path remains to be locked before closing the Lot 4 deterministic-test item.
 
 ## AI Flaky tests
 - Acceptance rule:
