@@ -7,19 +7,21 @@ This spec supersedes the old single-branch BR-14 plans. BR-14 is now a coordinat
 Execution order is not alphabetical:
 
 1. **PR-117 release actions** — confirm and execute the repository rename and public DNS/redirect plan, or explicitly defer execution to BR-14d with an owner and date.
-2. **BR-14c `feat/llm-mesh-sdk`** — first implementation branch. Publish the standalone LLM mesh library contract.
-3. **BR-14b `refacto/llm-runtime-core`** — migrate the application LLM runtime onto the BR-14c mesh contract.
-4. **BR-14a `feat/chat-ui-sdk`** — extract the chat UI SDK after the mesh contract is frozen. Lot 0 may scope in parallel, but implementation must not invent a separate provider abstraction.
-5. **BR-14e `chore/entropic-codebase-finalization`** — final codebase sweep for non-chat and non-LLM application names, tests, public API labels, and compatibility decisions.
-6. **BR-14d `chore/entropic-transition-ops`** — real transition branch for remaining repo/DNS/redirect/Scaleway/container/registry/secret/workflow rename work. This branch is mandatory unless every operational item is completed during PR-117 release.
+2. **BR-14f `chore/node-workspace-monorepo-14f`** — introduce the root Node workspace and full-repo container mounts if the repo still isolates `api` and `ui` from future internal packages. This branch owns the repo/tooling baseline only, not the LLM mesh contract itself.
+3. **BR-14c `feat/llm-mesh-sdk`** — first package/product branch. Publish the standalone LLM mesh library contract and consume the BR-14f baseline for the thin API proof path.
+4. **BR-14b `refacto/llm-runtime-core`** — migrate the application LLM runtime onto the BR-14c mesh contract.
+5. **BR-14a `feat/chat-ui-sdk`** — extract the chat UI SDK after the mesh contract is frozen. Lot 0 may scope in parallel, but implementation must not invent a separate provider abstraction.
+6. **BR-14e `chore/entropic-codebase-finalization`** — final codebase sweep for non-chat and non-LLM application names, tests, public API labels, and compatibility decisions.
+7. **BR-14d `chore/entropic-transition-ops`** — real transition branch for remaining repo/DNS/redirect/Scaleway/container/registry/secret/workflow rename work. This branch is mandatory unless every operational item is completed during PR-117 release.
 
 ## Options Considered
 
 | Option | Order | Decision | Rationale |
 | --- | --- | --- | --- |
-| A | BR-14c -> BR-14b -> BR-14a -> BR-14e -> BR-14d | Selected | Builds the model-access SDK first, migrates the app runtime, extracts chat on a stable mesh contract, then performs a final code sweep before operational transition. |
-| B | BR-14a -> BR-14b -> BR-14c -> BR-14e -> BR-14d | Rejected | Repeats the current problem: chat SDK would define transport/provider seams before the reusable LLM mesh contract exists. |
-| C | BR-14d -> BR-14c -> BR-14b -> BR-14a -> BR-14e | Rejected as default | Renaming all operational objects before package boundaries and code names are stable creates repeated DNS/container/secret churn. Can be used only if repo/DNS changes block development. |
+| A | BR-14f -> BR-14c -> BR-14b -> BR-14a -> BR-14e -> BR-14d | Selected | Adds the minimal repo/tooling baseline first when internal packages cannot yet be consumed from API/UI containers, then keeps the original contract-first ordering for extracted packages. |
+| B | BR-14c -> BR-14b -> BR-14a -> BR-14e -> BR-14d | Rejected as current-state default | This was correct only if the existing repo already behaved like a Node workspace monorepo. It does not when `api`/`ui` are mounted as isolated containers, so BR-14c cannot prove a thin app consumption path cleanly. |
+| C | BR-14a -> BR-14b -> BR-14c -> BR-14e -> BR-14d | Rejected | Repeats the current problem: chat SDK would define transport/provider seams before the reusable LLM mesh contract exists. |
+| D | BR-14d -> BR-14f -> BR-14c -> BR-14b -> BR-14a -> BR-14e | Rejected as default | Renaming all operational objects before package boundaries and code names are stable creates repeated DNS/container/secret churn. Can be used only if repo/DNS changes block development. |
 
 ## Audit Finding — BR-14e Required
 
@@ -33,6 +35,26 @@ The initial inventory is broader than chat, LLM runtime, or operational objects.
 - Shared `topai` prefixes and event names that are not strictly owned by the chat SDK extraction.
 
 BR-14e is therefore required unless an implementation branch proves, with an inventory report, that every non-owned occurrence was already intentionally handled.
+
+## BR-14f — Node Workspace Monorepo Infra
+
+Branch: `chore/node-workspace-monorepo-14f`
+
+Goal: make the repo behave like a real Node workspace monorepo for `api`, `ui`, and future internal packages without replacing `make` as the top-level orchestrator.
+
+Minimum contract:
+
+- Add a private root `package.json` with Node workspace metadata.
+- Move container mounts from per-app subdirectories to the repo root with explicit working directories for `api` and `ui`.
+- Keep `make` as the entrypoint; do not introduce Nx as a required orchestrator.
+- Prepare clean consumption of future internal packages such as `@entropic/llm-mesh` and `@entropic/chat`.
+- Do not move `api/` and `ui/` into `packages/`; the target layout remains app roots plus reusable packages.
+
+Impact notes:
+
+- BR-14c depends on BR-14f for the thin API proof path only; the mesh contract still belongs to BR-14c.
+- BR-16a can continue in parallel, but will need a shallow rebase because its tests and local runtime rely on the same API/UI container wiring.
+- BR-21a is low-impact and should preferably merge before BR-14f to avoid needless rebase churn on a near-finished branch.
 
 ## BR-14c — LLM Mesh SDK
 
@@ -147,6 +169,7 @@ Exit criteria:
 
 ## Coordination Rules
 
+- BR-14f owns the repo/tooling baseline required for internal Node packages to be consumable from `api` and `ui`.
 - BR-14c owns the public model-access contract.
 - BR-14b owns application runtime migration to that contract.
 - BR-14a owns chat UI/package extraction and must not redefine provider/model access.
