@@ -39,6 +39,10 @@ const seedConnectedGoogleDriveAccount = (user: TestUser) =>
 describe('Google Drive file selection API', () => {
   let app: Hono;
   let user: TestUser;
+  const originalPickerApiKey = process.env.GOOGLE_DRIVE_PICKER_API_KEY;
+  const originalClientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
+  const originalClientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+  const originalCallbackBaseUrl = process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL;
 
   beforeEach(async () => {
     app = await createMountedGoogleDriveApp();
@@ -57,8 +61,40 @@ describe('Google Drive file selection API', () => {
           ),
         );
     }
+    process.env.GOOGLE_DRIVE_PICKER_API_KEY = originalPickerApiKey;
+    process.env.GOOGLE_DRIVE_CLIENT_ID = originalClientId;
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET = originalClientSecret;
+    process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL = originalCallbackBaseUrl;
     vi.unstubAllGlobals();
     await cleanupAuthData();
+  });
+
+  it('returns picker config for a connected Google Drive account', async () => {
+    await seedConnectedGoogleDriveAccount(user);
+    process.env.GOOGLE_DRIVE_PICKER_API_KEY = 'picker-key-123';
+    process.env.GOOGLE_DRIVE_CLIENT_ID =
+      '924600787940-bc4tfvq52lseekjr090ic2e6k4gl4r8f.apps.googleusercontent.com';
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET = 'picker-client-secret';
+    process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL = 'http://localhost:9080';
+
+    const res = await app.request('/api/v1/google-drive/picker-config', {
+      method: 'GET',
+      headers: {
+        Cookie: `session=${user.sessionToken}`,
+      },
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      picker: {
+        client_id:
+          '924600787940-bc4tfvq52lseekjr090ic2e6k4gl4r8f.apps.googleusercontent.com',
+        developer_key: 'picker-key-123',
+        app_id: '924600787940',
+        oauth_token: 'google-access-token',
+        scope: 'https://www.googleapis.com/auth/drive.file',
+      },
+    });
   });
 
   it('rejects picker selection resolution when Google Drive is disconnected', async () => {

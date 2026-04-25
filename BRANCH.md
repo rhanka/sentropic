@@ -127,7 +127,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - [x] `decision` BR16a-D1 — The `documents` tool now treats external sources as first-class document sources: list/read responses expose `sourceType` + sync metadata, and Google Drive `get_content` / `analyze` reads must use the connected user/workspace account when a user context is present. Background indexing/resync remains connector-account-driven.
 - [x] `decision` BR16a-D2 — Unified Google Drive content reads must stay user-scoped outside background jobs: `GET /documents/:id/content` now uses the acting user's connected Google account and returns `409` when that account is disconnected, instead of silently falling back to stored connector-account access.
 - [x] `attention` BR16a-T1 — Deterministic `documents` AI coverage now locks the Google Drive paths for connected `get_content`, connected `analyze`, and disconnected-user refusal.
-- [x] `attention` BR16a-U1 — Live browser validation is currently bounded to the OAuth connection surface. The composer already exposes Connect/Disconnect Google Drive, but the actual Picker-backed "Import from Google Drive" action remains a disabled placeholder until the next BR-16a lot wires the Picker selection flow. Impact: full Drive-file UAT cannot be claimed yet; only connection/disconnection can be validated once an authenticated app session is available. Rollback: remove the placeholder copy and restore a pure connection-only surface if the Picker lot is dropped.
+- [x] `attention` BR16a-U1 — The composer Google Drive import surface is now real: the paperclip-adjacent action fetches picker config, opens Google Picker, resolves the selected IDs server-side, attaches them through `/api/v1/documents/google-drive`, and refreshes the session document list. Impact: the disabled placeholder is removed; live browser/UAT validation is still pending because this lot only ran focused automated checks. Rollback: remove the Picker wiring and restore a connection-only composer surface.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -183,24 +183,29 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
       - [x] Add account connection state utility tests in `ui/tests/utils/google-drive.test.ts`.
       - [x] `make test-ui SCOPE=tests/utils/google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 
-- [ ] **Lot 2 — Drive file search and selection**
+- [x] **Lot 2 — Drive file search and selection**
   - [x] Add Drive API client wrapper.
-  - [ ] Integrate Google Picker next to the existing document attachment control.
-  - [ ] Preserve document search/browse UX through Picker under `drive.file`.
+  - [x] Integrate Google Picker next to the existing document attachment control.
+  - [x] Preserve document search/browse UX through Picker under `drive.file`.
   - [x] Resolve selected file IDs server-side with metadata.
   - [x] Filter supported MIME types for Docs, Sheets, Slides, PDFs, and text-like files.
   - [x] Attach selected file references to existing document/context surfaces.
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] **API tests**
+    - [x] **API tests**
       - [x] Add Drive client unit tests with mocked Google API responses.
       - [x] `make test-api-unit SCOPE=tests/unit/google-drive-client.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
       - [x] Add Picker selection resolve API tests with mocked Google Drive metadata.
       - [x] `make test-api-endpoints SCOPE=tests/api/google-drive-files.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
       - [x] Add document attach API tests for Google Drive refs.
-    - [ ] **UI tests**
-      - [ ] Add file picker/listing tests if UI surface is added.
+    - [x] **UI tests**
+      - [x] Add Google Drive picker helper tests in `ui/tests/utils/google-drive-picker.test.ts`.
+      - [x] Extend Google Drive API helper tests in `ui/tests/utils/google-drive.test.ts`.
+      - [x] `make test-ui SCOPE=tests/utils/google-drive-picker.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+      - [x] `make test-ui SCOPE=tests/utils/google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+      - [x] `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+      - [x] `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 
 - [ ] **Lot 3 — In-situ indexing**
   - [x] Extract file content through Google APIs without copying source documents into Entropic storage.

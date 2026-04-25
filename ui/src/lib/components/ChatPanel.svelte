@@ -40,11 +40,15 @@
     type ContextDocumentItem,
   } from '$lib/utils/documents';
   import {
+    attachGoogleDriveDocuments,
     disconnectGoogleDrive,
+    fetchGoogleDrivePickerConfig,
     fetchGoogleDriveConnection,
+    resolveGoogleDrivePickerSelection,
     startGoogleDriveOAuth,
     type GoogleDriveConnection,
   } from '$lib/utils/google-drive';
+  import { openGoogleDrivePicker as openGoogleDrivePickerDialog } from '$lib/utils/google-drive-picker';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
     decideLocalToolPermission,
@@ -2988,6 +2992,50 @@
     }
   };
 
+  const ensureSessionDocumentTarget = async (): Promise<string> => {
+    if (sessionId) return sessionId;
+
+    const context = detectContextFromRoute();
+    const res = await apiPost<{ sessionId: string }>('/chat/sessions', {
+      primaryContextType: context?.primaryContextType,
+      primaryContextId: context?.primaryContextId,
+    });
+    sessionId = res.sessionId;
+    await loadSessions();
+    await loadMessages(res.sessionId, { scrollToBottom: true });
+    return res.sessionId;
+  };
+
+  const importSessionDocsFromGoogleDrive = async () => {
+    if (googleDriveActionInFlight) return;
+    googleDriveActionInFlight = true;
+    googleDriveConnectionError = null;
+    showComposerMenu = false;
+
+    try {
+      const targetSessionId = await ensureSessionDocumentTarget();
+      const picker = await fetchGoogleDrivePickerConfig();
+      const fileIds = await openGoogleDrivePickerDialog({
+        ...picker,
+        locale: $locale,
+      });
+      if (fileIds.length === 0) return;
+
+      await resolveGoogleDrivePickerSelection({ fileIds });
+      await attachGoogleDriveDocuments({
+        contextType: 'chat_session',
+        contextId: targetSessionId,
+        fileIds,
+      });
+      await loadSessionDocs();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      googleDriveConnectionError = msg || $_('chat.documents.googleDrive.importError');
+    } finally {
+      googleDriveActionInFlight = false;
+    }
+  };
+
   const onPickSessionDoc = async (e: Event) => {
     const inputEl = e.target as HTMLInputElement;
     const file = inputEl.files?.[0];
@@ -2998,20 +3046,11 @@
     sessionDocsUploading = true;
     sessionDocsError = null;
     try {
-      if (!sessionId) {
-        const context = detectContextFromRoute();
-        const res = await apiPost<{ sessionId: string }>('/chat/sessions', {
-          primaryContextType: context?.primaryContextType,
-          primaryContextId: context?.primaryContextId,
-        });
-        sessionId = res.sessionId;
-        await loadSessions();
-        await loadMessages(res.sessionId, { scrollToBottom: true });
-      }
+      const targetSessionId = await ensureSessionDocumentTarget();
       const scopedWs = getScopedWorkspaceIdForUser();
       await uploadDocument({
         contextType: 'chat_session',
-        contextId: sessionId!,
+        contextId: targetSessionId,
         file,
         workspaceId: scopedWs,
       });
@@ -5887,14 +5926,20 @@
               </label>
               {#if googleDriveConnection?.connected}
                 <button
-                  class="flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-400 cursor-not-allowed"
+                  class={'flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 ' +
+                    (googleDriveActionInFlight ? 'opacity-50 pointer-events-none' : '')}
                   type="button"
-                  disabled
+                  disabled={googleDriveActionInFlight}
                   aria-label={$_('chat.documents.googleDrive.import')}
-                  title={$_('chat.documents.googleDrive.importPending')}
+                  title={$_('chat.documents.googleDrive.import')}
+                  on:click={importSessionDocsFromGoogleDrive}
                 >
                   <Cloud class="w-4 h-4" />
-                  <span>{$_('chat.documents.googleDrive.import')}</span>
+                  <span>
+                    {googleDriveActionInFlight
+                      ? $_('chat.documents.googleDrive.loading')
+                      : $_('chat.documents.googleDrive.import')}
+                  </span>
                 </button>
                 <div class="px-1 text-[10px] text-slate-500 truncate">
                   {$_('chat.documents.googleDrive.connectedAs', {

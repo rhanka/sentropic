@@ -1121,13 +1121,13 @@
         "connect": "Connect Google Drive",
         "loading": "Loading Google Drive…",
         "import": "Import from Google Drive",
-        "importPending": "Google Drive import is enabled in the next BR-16a lot after Picker integration.",
         "connectedAs": "Connected as {email}",
         "connectedAccount": "Google account",
         "disconnect": "Disconnect Google Drive",
         "loadError": "Unable to load Google Drive connection.",
         "connectError": "Unable to start Google Drive connection.",
-        "disconnectError": "Unable to disconnect Google Drive."
+        "disconnectError": "Unable to disconnect Google Drive.",
+        "importError": "Unable to import files from Google Drive."
       },
       "delete": {
         "ariaLabel": "Delete document"
