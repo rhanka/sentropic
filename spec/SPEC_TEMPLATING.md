@@ -94,7 +94,7 @@ Two-phase pattern:
 
 Implementation: `api/src/services/docx-generation.ts` (generateFreeformDocx) + `api/src/services/docx-freeform-helpers.ts` (VM sandbox helpers). Execution is synchronous inside `chat-service.ts` (not queued via `job_queue`).
 
-Download card is rendered inline in chat via `runtimeSummary.docxCards` in `StreamMessage.svelte`.
+Generated-file download cards are rendered inline in chat through the shared chat message path (`StreamMessage.svelte` event forwarding + `ChatPanel.svelte` card rendering). The preferred runtime contract is `generatedFileCards`; legacy `runtimeSummary.docxCards` remains accepted as a DOCX-only alias for backward compatibility.
 
 See `SPEC_EVOL_FREEFORM_DOCX.md` for the full specification.
 
@@ -102,7 +102,7 @@ Freeform PPTX generation follows the same two-phase pattern with `format: "pptx"
 1. **Upskill**: LLM calls `document_generate({ action: "upskill", format: "pptx" })` to receive compact PptGenJS sandbox guidance.
 2. **Generate**: LLM calls `document_generate({ action: "generate", format: "pptx", code: "..." })`; the code returns a PptGenJS presentation object, which is packaged, stored, and exposed as a generated-file download.
 
-The public tool remains `document_generate`. BR-21a does not add reusable PPTX templates, PPTX import/parsing, or profile/CV export behavior.
+The public tool remains `document_generate`. BR-21a does not add reusable PPTX templates, PPTX import/parsing, or profile/CV export behavior. The visible chat affordance is shared with DOCX: format label, download action, and generated-file metadata travel through the same generic card contract.
 
 ## 3. Template lifecycle vs business objects
 
