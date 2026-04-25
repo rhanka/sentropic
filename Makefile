@@ -413,6 +413,11 @@ lock-api: ## Update API package-lock.json using Node container (sync deps)
 	@echo "🔒 Updating API package-lock.json..."
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "npm install --package-lock-only"
 
+.PHONY: lock-root
+lock-root: ## Update root package-lock.json using Node container (workspace root)
+	@echo "🔒 Updating root package-lock.json..."
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "cd /workspace && npm install --package-lock-only --workspaces --include-workspace-root"
+
 .PHONY: save-ui
 save-ui: ## Save UI Docker image as tar artifact
 	@echo "💾 Saving UI image as artifact..."
