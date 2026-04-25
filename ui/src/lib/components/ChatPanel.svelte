@@ -32,7 +32,13 @@
   import { organizationsStore } from '$lib/stores/organizations';
   import { initiativesStore } from '$lib/stores/initiatives';
   import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
-  import { deleteDocument, listDocuments, uploadDocument, type ContextDocumentItem } from '$lib/utils/documents';
+  import {
+    DOCUMENT_UPLOAD_ACCEPT,
+    deleteDocument,
+    listDocuments,
+    uploadDocument,
+    type ContextDocumentItem
+  } from '$lib/utils/documents';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
     decideLocalToolPermission,
@@ -5792,7 +5798,7 @@
                   type="file"
                   on:change={onPickSessionDoc}
                   disabled={sessionDocsUploading}
-                  accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown,text/plain,application/json"
+                  accept={DOCUMENT_UPLOAD_ACCEPT}
                 />
                 <Paperclip class="w-4 h-4" />
                 <span>{$_('chat.documents.addFile')}</span>
