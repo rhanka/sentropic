@@ -49,9 +49,12 @@ Introduce the minimal repo/tooling baseline required for `api`, `ui`, and future
 ## Feedback Loop
 - [x] `clarification` BR14f-D1 — Keep `make` as the top-level orchestrator. This branch adds a root Node workspace baseline only; it does not switch the repo to Nx.
 - [x] `clarification` BR14f-D2 — Keep `api/` and `ui/` at repo root as application roots. The target layout is app roots plus reusable `packages/*`, not `packages/api` and `packages/ui`.
+- [x] `clarification` BR14f-D3 — Root workspace lockfile strategy: keep per-app lockfiles intact for now and add a root `package.json` workspace immediately; generate/commit a root `package-lock.json` through `make lock-root` once the workspace-aware containers boot successfully.
+- [x] `clarification` BR14f-D4 — Pin the UI-side Svelte workspace resolution explicitly (`@sveltejs/kit` + `@sveltejs/vite-plugin-svelte`) so root workspace installs resolve to the already-known compatible line instead of drifting to a newer peer set during Docker builds.
 - [x] `attention` BR14f-I1 — BR-14c depends on BR-14f for the thin API proof path only. BR-14f must not absorb the mesh contract or product behavior.
 - [x] `attention` BR14f-I2 — BR-16a can continue in parallel, but will need a shallow rebase after BR-14f lands because its test/runtime paths depend on the same `api`/`ui` container wiring.
 - [x] `attention` BR14f-I3 — BR-21a is low-impact and should preferably merge before BR-14f to avoid needless rebase churn on a near-finished branch.
+- [x] `attention` BR14f-T1 — `npm run typecheck` in the `api` workspace now boots from the root-mounted container but no longer returns in a reasonable time, while `tsc --showConfig` and service startup remain healthy. Treat this as a real follow-up blocker before merge rather than masking it with looser flags.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -87,31 +90,31 @@ Introduce the minimal repo/tooling baseline required for `api`, `ui`, and future
   - [x] Update orchestration docs (`PLAN.md`, `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`) to include BR-14f and branch impact.
 
 - [ ] **Lot 1 — Root Node workspace baseline**
-  - [ ] Add a private root `package.json` with workspace metadata for `api`, `ui`, and `packages/*`.
-  - [ ] Decide lockfile strategy for the root workspace without breaking current `api`/`ui` flows.
-  - [ ] Keep `make` as the only supported entrypoint.
+  - [x] Add a private root `package.json` with workspace metadata for `api`, `ui`, and `packages/*`.
+  - [x] Decide lockfile strategy for the root workspace without breaking current `api`/`ui` flows.
+  - [x] Keep `make` as the only supported entrypoint.
   - [ ] Lot gate:
     - [ ] `make typecheck-api API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
     - [ ] `make typecheck-ui API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
 
 - [ ] **Lot 2 — Container and make wiring**
-  - [ ] Move `api`/`ui` container mounts to the repo root with explicit working directories.
-  - [ ] Adjust `make` / compose commands so workspace installs and service runs still work through `make`.
-  - [ ] Keep the resulting setup polyglot-ready: Node workspace for Node projects, no assumption that future Python services must join the same toolchain.
+  - [x] Move `api`/`ui` container mounts to the repo root with explicit working directories.
+  - [x] Adjust `make` / compose commands so workspace installs and service runs still work through `make`.
+  - [x] Keep the resulting setup polyglot-ready: Node workspace for Node projects, no assumption that future Python services must join the same toolchain.
   - [ ] Lot gate:
-    - [ ] `make up-api-test API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
+    - [x] `make up-api-test API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
     - [ ] `make typecheck-api API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
     - [ ] `make lint-api API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
     - [ ] `make typecheck-ui API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
     - [ ] `make lint-ui API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
 
 - [ ] **Lot 3 — Compatibility proof and branch impact**
-  - [ ] Prove the workspace baseline is sufficient for BR-14c to consume internal packages after rebase, without adding the `@entropic/llm-mesh` package itself in BR-14f.
-  - [ ] Record exact rebase impact and required follow-up for BR-14c, BR-16a, and BR-21a.
+  - [x] Prove the workspace baseline is sufficient for BR-14c to consume internal packages after rebase, without adding the `@entropic/llm-mesh` package itself in BR-14f.
+  - [x] Record exact rebase impact and required follow-up for BR-14c, BR-16a, and BR-21a.
   - [ ] Keep BR-16a and BR-21a behavior stable under the new container/runtime wiring.
   - [ ] Lot gate:
-    - [ ] `make ps API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
-    - [ ] `make down API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
+    - [x] `make ps API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
+    - [x] `make down API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
 
 - [ ] **Lot 4 — Docs consolidation**
   - [ ] Consolidate final ordering and branch-contract notes in `PLAN.md` and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
