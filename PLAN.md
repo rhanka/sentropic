@@ -43,7 +43,7 @@ Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` laun
 - BR-14e performs the final non-chat/non-LLM codebase naming sweep and residual-name report.
 - BR-14d executes remaining transition ops and is mandatory unless all repo/DNS/Scaleway/workflow rename items are complete during PR-117 release.
 - BR-14f now rebases on a baseline where BR-16a and BR-21a are already merged, so its local workspace gates must be rerun on that post-merge state.
-- Historical proof snapshot (2026-04-25): BR-14f local workspace gates were green on `ff6190cb` before the post-BR16a/BR21a rebase.
+- Historical proof snapshot (2026-04-25): BR-14f local workspace gates were green on `ff6190cb`; BR-14c, BR-16a, and BR-21a rebase simulations were doc-conflict only before BR-16a/BR21a merged.
 - Detailed branch contracts and rejected order options are in `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
 
 ## 2) BR-04/04B as structural branch
