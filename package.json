@@ -1,0 +1,9 @@
+{
+  "name": "entropic-workspace",
+  "private": true,
+  "workspaces": [
+    "api",
+    "ui",
+    "packages/*"
+  ]
+}

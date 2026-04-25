@@ -1,20 +1,22 @@
 # syntax=docker/dockerfile:1.4
 FROM node:24-alpine AS base
-WORKDIR /app
+WORKDIR /workspace
 RUN apk add --no-cache zip
-COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
-RUN if [ -f package-lock.json ]; then npm ci; \
-    elif [ -f pnpm-lock.yaml ]; then npm install -g pnpm && pnpm install --frozen-lockfile; \
-    elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; \
-    else npm install; fi
+COPY package.json package-lock.json* ./
+COPY api/package.json ./api/package.json
+COPY ui/package.json ./ui/package.json
+RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-root; \
+    else npm install --workspaces --include-workspace-root; fi
 # Security: Audit production dependencies for HIGH/CRITICAL vulnerabilities
-RUN npm audit --audit-level=high --omit=dev
+RUN npm audit --audit-level=high --omit=dev --workspaces --include-workspace-root
 COPY . .
 
 FROM base AS development
+WORKDIR /workspace/ui
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
 
 FROM base AS build
+WORKDIR /workspace/ui
 ARG VITE_API_BASE_URL=/api/v1
 ARG VITE_EXTENSION_PROFILE
 ARG VITE_EXTENSION_API_BASE_URL
@@ -34,7 +36,7 @@ CMD ["npm", "run", "build"]
 
 FROM nginx:1.29-alpine AS production
 RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
-COPY --from=build /app/build /usr/share/nginx/html
+COPY --from=build /workspace/ui/build /usr/share/nginx/html
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 EXPOSE 5173
 CMD ["nginx", "-g", "daemon off;"]
