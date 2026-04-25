@@ -9,6 +9,7 @@ import pptxgenjs from 'pptxgenjs';
 
 export type PptxPresentation = InstanceType<typeof pptxgenjs>;
 export type PptxSlide = ReturnType<PptxPresentation['addSlide']>;
+type PptxConstructor = new () => PptxPresentation;
 
 type AddTextOptions = NonNullable<Parameters<PptxSlide['addText']>[1]>;
 type ShapeName = Parameters<PptxSlide['addShape']>[0];
@@ -76,6 +77,45 @@ const DEFAULT_MUTED = '475569';
 const DEFAULT_ACCENT = '2563EB';
 const RECT: ShapeName = 'rect';
 
+function isPptxConstructor(value: unknown): value is PptxConstructor {
+  if (typeof value !== 'function') return false;
+  const prototype = (value as { prototype?: Record<string, unknown> }).prototype;
+  return (
+    !!prototype &&
+    typeof prototype === 'object' &&
+    typeof prototype.addSlide === 'function' &&
+    typeof prototype.write === 'function'
+  );
+}
+
+export function resolvePptxGenJSConstructor(source: unknown): PptxConstructor {
+  const visited = new Set<unknown>();
+  const queue: unknown[] = [source];
+
+  while (queue.length > 0) {
+    const candidate = queue.shift();
+    if (!candidate || visited.has(candidate)) continue;
+    visited.add(candidate);
+
+    if (isPptxConstructor(candidate)) {
+      return candidate;
+    }
+
+    if (typeof candidate === 'object' || typeof candidate === 'function') {
+      const record = candidate as {
+        default?: unknown;
+        PptxGenJS?: unknown;
+        pptxgenjs?: unknown;
+      };
+      queue.push(record.default, record.PptxGenJS, record.pptxgenjs);
+    }
+  }
+
+  throw new Error('pptxgenjs_export_error: Could not resolve a constructible PptGenJS export');
+}
+
+export const PptxGenJS = resolvePptxGenJSConstructor(pptxgenjs);
+
 export const WIDE_SLIDE = {
   width: 13.333,
   height: 7.5,
@@ -122,7 +162,7 @@ function textOptions(opts: SlideTextOpts = {}): AddTextOptions {
 }
 
 export function pptx(opts: PresentationOpts = {}): PptxPresentation {
-  const presentation = new pptxgenjs();
+  const presentation = new PptxGenJS();
   presentation.layout = opts.layout ?? 'LAYOUT_WIDE';
   presentation.author = safeText(opts.author, 'Entropic');
   presentation.company = safeText(opts.company, 'Entropic');
@@ -404,8 +444,8 @@ export function getSandboxGlobals(context: PptxFreeformContext): Record<string, 
     footer,
     visualPlaceholder,
     safeText,
-    pptxgenjs,
-    PptxGenJS: pptxgenjs,
+    pptxgenjs: PptxGenJS,
+    PptxGenJS,
     WIDE_SLIDE,
     context: readonlyContext(context),
     Math,

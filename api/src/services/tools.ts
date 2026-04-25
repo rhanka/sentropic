@@ -892,17 +892,19 @@ export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = 
         entityType: {
           type: 'string',
           enum: ['initiative', 'folder'],
-          description: 'Type of entity to generate the document for. Only for action "generate".',
+          description:
+            'Type of entity to generate the document for. Only for action "generate". Optional when the current chat context already focuses an initiative or folder.',
         },
         entityId: {
           type: 'string',
-          description: 'ID of the entity (initiative ID or folder ID). Only for action "generate".',
+          description:
+            'ID of the entity (initiative ID or folder ID). Only for action "generate". Optional when the current chat context already focuses the target initiative/folder.',
         },
         code: {
           type: 'string',
           description:
             'Freeform JavaScript code. For format "docx": use docx helpers (doc, h, p, bold, italic, list, table, pageBreak, hr) ' +
-            'and return a Document object. For format "pptx": use PptGenJS helpers and return a presentation object. ' +
+            'and return a Document object. For format "pptx": prefer pptx() plus the provided PptGenJS helpers and return a presentation object. ' +
             'Available data: context.entity, context.initiatives, context.matrix, context.workspace. ' +
             'Mutually exclusive with templateId. Only for action "generate".',
         },

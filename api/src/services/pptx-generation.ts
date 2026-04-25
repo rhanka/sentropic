@@ -1,6 +1,5 @@
 import vm from 'node:vm';
 import { and, asc, eq } from 'drizzle-orm';
-import pptxgenjs from 'pptxgenjs';
 import { db } from '../db/client';
 import { folders, initiatives } from '../db/schema';
 import type { MatrixConfig } from '../types/matrix';
@@ -255,7 +254,8 @@ async function loadFreeformContext(
 
 export function isPptxPresentation(value: unknown): value is PptxPresentation {
   return (
-    value instanceof pptxgenjs &&
+    !!value &&
+    typeof value === 'object' &&
     typeof (value as { addSlide?: unknown }).addSlide === 'function' &&
     typeof (value as { write?: unknown }).write === 'function'
   );
