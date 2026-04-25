@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
+import { describe, expect, it } from 'vitest';
 import pptxgenjs from 'pptxgenjs';
 import {
   bullets,
   footer,
   getSandboxGlobals,
   pptx,
+  resolvePptxGenJSConstructor,
   safeText,
   sectionSlide,
   statCallout,
@@ -56,6 +58,36 @@ describe('pptx-freeform helpers', () => {
     expect(buffer.byteLength).toBeGreaterThan(0);
     expect(buffer[0]).toBe(0x50);
     expect(buffer[1]).toBe(0x4b);
+  });
+
+  it('should accept a valid presentation created from a different pptxgenjs module instance', () => {
+    const require = createRequire(import.meta.url);
+    const cjsPptxGenJS = require('pptxgenjs') as typeof pptxgenjs;
+    const deck = new cjsPptxGenJS();
+
+    expect(deck).not.toBeInstanceOf(pptxgenjs);
+    expect(isPptxPresentation(deck)).toBe(true);
+  });
+
+  it('should resolve a constructible pptxgenjs class from nested default exports', () => {
+    class FakePptxGenJS {
+      addSlide() {
+        return {
+          addText() {},
+          addShape() {},
+          addTable() {},
+          background: undefined,
+        };
+      }
+
+      async write() {
+        return Buffer.from('PK');
+      }
+    }
+
+    expect(resolvePptxGenJSConstructor({ default: { default: FakePptxGenJS } })).toBe(
+      FakePptxGenJS,
+    );
   });
 
   it('should expose sandbox helpers and hide Node runtime globals', () => {

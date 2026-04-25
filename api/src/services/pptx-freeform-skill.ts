@@ -11,7 +11,8 @@ export function getPptxFreeformSkill(): string {
 ## 1. Execution model
 
 Your code runs inside a sandboxed Node VM with PptGenJS helpers.
-- Return a PptGenJS presentation object from \`pptx()\` or \`new pptxgenjs()\`.
+- Return a PptGenJS presentation object from \`pptx()\`.
+- Prefer \`pptx()\` over raw constructor calls; use \`PptxGenJS\` / \`pptxgenjs\` only for advanced APIs not covered by the helpers.
 - You may also return \`{ presentation, fileName }\`.
 - Available data: \`context.entity\`, \`context.initiatives\`, \`context.matrix\`, \`context.workspace\`.
 - Timeout: 30 seconds for code execution.
@@ -30,7 +31,7 @@ Your code runs inside a sandboxed Node VM with PptGenJS helpers.
 
 | Helper | Purpose |
 | --- | --- |
-| \`pptx(opts?)\` | Presentation with wide layout, default fonts, metadata |
+| \`pptx(opts?)\` | Preferred presentation factory with wide layout, default fonts, metadata |
 | \`titleSlide(deck, title, subtitle?, opts?)\` | Cover slide |
 | \`sectionSlide(deck, title, subtitle?, opts?)\` | Section divider |
 | \`textBox(slide, text, opts)\` | Stable text box with shrink fit |
@@ -41,7 +42,7 @@ Your code runs inside a sandboxed Node VM with PptGenJS helpers.
 | \`visualPlaceholder(slide, label, opts)\` | Explicit image/diagram placeholder |
 | \`safeText(value, fallback?)\` | Defensive text coercion |
 
-Raw \`pptxgenjs\` is also available for advanced PptGenJS APIs.
+Raw \`PptxGenJS\` / \`pptxgenjs\` is also available for advanced PptGenJS APIs, but prefer \`pptx()\` first.
 
 ## 4. Layout rules
 
