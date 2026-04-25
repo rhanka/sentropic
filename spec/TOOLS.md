@@ -45,7 +45,8 @@ This document is the single checklist for **chat tools**: what is already implem
   - **DOCX freeform mode**: `action: "generate"` with `format: "docx"` and `code` - LLM-written `docx.js` code executed in VM sandbox, produces DOCX buffer, uploaded to S3, returns download link.
   - **PPTX freeform mode**: `action: "generate"` with `format: "pptx"` and `code` - LLM-written PptGenJS code executed in VM sandbox, produces PPTX buffer, uploaded to S3, returns download link.
   - Freeform execution is synchronous inside the chat handler (not queued).
-  - New generated-file results use the generic card contract (`format`, `mimeType`, `downloadUrl`); existing DOCX cards remain compatible.
+  - New generated-file results use the generic card contract (`jobId`, `fileName`, `format`, `mimeType`, `downloadUrl`).
+  - Chat runtime prefers `generatedFileCards`; legacy `runtimeSummary.docxCards` remains accepted as a DOCX-only backward-compatible alias until old producers are removed.
   - See `SPEC_EVOL_FREEFORM_DOCX.md` and `SPEC_EVOL_PPTXGENJS_TOOL.md` for full freeform specifications.
 
 ### Organization batch tools (BR-04B)

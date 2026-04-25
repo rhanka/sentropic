@@ -78,6 +78,7 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
 - [x] `attention` BR21a-EX1 — Used for `api/package.json` and `api/package-lock.json` because `pptxgenjs` is not already installed. Reason: renderer dependency. Impact: dependency metadata only. Rollback: remove dependency and renderer import.
 - [ ] `attention` BR21a-EX2 — `api/src/services/queue-manager.ts` is conditionally allowed only if BR21a-Q2 selects a queued generation path. Reason: job processing integration. Impact: queue plumbing only. Rollback: keep synchronous freeform-only generation.
 - [x] `acknowledge` BR21a-EX3 — Approved and used for `ui/src/lib/components/ChatPanel.svelte` plus aligned UI tests under `ui/**` because the visible generated-file card lives in `ChatPanel.svelte` (`docxCardsByMessageId`, hard-coded `DOCX` label, and `downloadCompletedDocxJob(...)` button), while `StreamMessage.svelte` only forwards tool results. Reason: PPTX label + route selection cannot be generalized correctly inside the original allowed files alone. Impact: presentation of generated files only. Rollback: revert the generalized chat card/download changes and keep the existing DOCX-only card path.
+- [x] `decision` BR21a-D1 — Final generated-file contract stays tool-neutral: `document_generate` returns generic generated-file metadata, chat runtime prefers `generatedFileCards`, and `runtimeSummary.docxCards` remains a DOCX-only backward-compatible alias during migration. Profile/CV export behavior stays out of scope for BR-21a.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and restart**
@@ -120,15 +121,15 @@ Extend the existing `document_generate` chat tool with `format: "docx" | "pptx"`
   - [x] Gate: UI typecheck/lint and focused UI tests where feasible.
 
 - [ ] **Lot 6 — Docs consolidation**
-  - [ ] Update `spec/TOOLS.md` with the final tool contract.
-  - [ ] Update `spec/SPEC_TEMPLATING.md` only for generic presentation generation behavior.
-  - [ ] Keep profile-specific PPTX export out of BR-21a docs.
-  - [ ] Update `BRANCH.md` feedback loop with final decisions.
+  - [x] Update `spec/TOOLS.md` with the final tool contract.
+  - [x] Update `spec/SPEC_TEMPLATING.md` only for generic presentation generation behavior.
+  - [x] Keep profile-specific PPTX export out of BR-21a docs.
+  - [x] Update `BRANCH.md` feedback loop with final decisions.
 
 - [ ] **Lot 7 — Final validation**
-  - [ ] `make typecheck-api API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=test-feat-pptxgenjs-tool-21a`
-  - [ ] `make lint-api API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=test-feat-pptxgenjs-tool-21a`
-  - [ ] Focused API/unit tests for freeform PPTX generation.
-  - [ ] UI tests if the download card path changes.
+  - [x] `make typecheck-api API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=test-feat-pptxgenjs-tool-21a`
+  - [x] `make lint-api API_PORT=8722 UI_PORT=5122 MAILDEV_UI_PORT=1022 ENV=test-feat-pptxgenjs-tool-21a`
+  - [x] Focused API/unit tests for freeform PPTX generation.
+  - [x] UI tests if the download card path changes.
   - [ ] PR, CI, UAT if there is a user-visible chat generation path.
   - [ ] Remove `BRANCH.md` before merge once CI + UAT are both OK.
