@@ -118,8 +118,8 @@ Introduce the minimal repo/tooling baseline required for `api`, `ui`, and future
     - [x] `make ps API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
     - [x] `make down API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
 
-- [ ] **Lot 4 — Docs consolidation**
-  - [ ] Consolidate final ordering and branch-contract notes in `PLAN.md` and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
+- [x] **Lot 4 — Docs consolidation**
+  - [x] Consolidate final ordering and branch-contract notes in `PLAN.md` and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
   - [x] Update `BRANCH.md` feedback loop before final validation.
 
 - [ ] **Lot 5 — Final validation**

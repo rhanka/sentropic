@@ -1,6 +1,6 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` launched to remove the current API HIGH dependency vulnerability blocking CI/security gates. Existing active scoping remains: Entropic transition, BR-14f (Node workspace monorepo infra), BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16a (gdrive SSO + Picker search/selection + in-situ `document_summary` indexing). BR-14 split → BR-14a + BR-14b + BR-14c + BR-14d + BR-14e + BR-14f. Selected execution order: PR-117 transition ops → BR-14f → BR-14c → BR-14b → BR-14a → BR-14e → BR-14d. BR-16 split → BR-16a + BR-16b + BR-16c. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
+Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` launched to remove the current API HIGH dependency vulnerability blocking CI/security gates. Existing active scoping remains: Entropic transition, BR-14f (Node workspace monorepo infra, local proof green on `ff6190cb` before rebase), BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16a (gdrive SSO + Picker search/selection + in-situ `document_summary` indexing). BR-14 split → BR-14a + BR-14b + BR-14c + BR-14d + BR-14e + BR-14f. Selected execution order: PR-117 transition ops → BR-14f → BR-14c → BR-14b → BR-14a → BR-14e → BR-14d. BR-16 split → BR-16a + BR-16b + BR-16c. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
 
 ## 1) Current state
 
@@ -42,8 +42,8 @@ Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` laun
 - BR-14a extracts `@entropic/chat` after the mesh contract; Lot 0 may scope in parallel only.
 - BR-14e performs the final non-chat/non-LLM codebase naming sweep and residual-name report.
 - BR-14d executes remaining transition ops and is mandatory unless all repo/DNS/Scaleway/workflow rename items are complete during PR-117 release.
-- BR-16a can continue in parallel but must expect a shallow rebase once BR-14f lands because its test/runtime paths depend on the same API/UI container wiring.
-- BR-21a is low-impact: finish/merge before BR-14f if possible; otherwise rebase should stay mechanical because the branch is already doc/test heavy and near completion.
+- BR-14f now rebases on a baseline where BR-16a and BR-21a are already merged, so its local workspace gates must be rerun on that post-merge state.
+- Historical proof snapshot (2026-04-25): BR-14f local workspace gates were green on `ff6190cb` before the post-BR16a/BR21a rebase.
 - Detailed branch contracts and rejected order options are in `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
 
 ## 2) BR-04/04B as structural branch
