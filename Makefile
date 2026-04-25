@@ -548,8 +548,8 @@ typecheck-ui: up-ui ## Run UI type checks
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run check
 
 .PHONY: typecheck-api
-typecheck-api: up-api ## Run API type checks
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T api npm run typecheck
+typecheck-api: ## Run API type checks
+	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps api npm run typecheck
 
 .PHONY: lint
 lint: lint-ui lint-api ## Run all linters
@@ -559,8 +559,8 @@ lint-ui: up-ui ## Run UI linter
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run lint
 
 .PHONY: lint-api
-lint-api: up-api ## Run API linter
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T api npm run lint
+lint-api: ## Run API linter
+	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps api npm run lint
 
 .PHONY: format
 format:

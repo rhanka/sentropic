@@ -55,6 +55,7 @@ Introduce the minimal repo/tooling baseline required for `api`, `ui`, and future
 - [x] `attention` BR14f-I2 — BR-16a can continue in parallel, but will need a shallow rebase after BR-14f lands because its test/runtime paths depend on the same `api`/`ui` container wiring.
 - [x] `attention` BR14f-I3 — BR-21a is low-impact and should preferably merge before BR-14f to avoid needless rebase churn on a near-finished branch.
 - [x] `attention` BR14f-T1 — `npm run typecheck` in the `api` workspace now boots from the root-mounted container but no longer returns in a reasonable time, while `tsc --showConfig` and service startup remain healthy. Treat this as a real follow-up blocker before merge rather than masking it with looser flags.
+- [x] `fix` BR14f-F1 — Root workspace hoisting made API typecheck resolve the UI-pinned `typescript@5.9.3` from `/workspace/node_modules` instead of the API-intended `5.4.5`, and `make typecheck-api`/`make lint-api` were running inside the long-lived dev container path. Pin root `typescript` to `5.4.5`, keep UI on its own `5.9.3`, and route API typecheck/lint through ephemeral image-backed `docker compose run --rm --no-deps api ...` so the command uses the deterministic workspace lockfile toolchain and returns.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -94,8 +95,8 @@ Introduce the minimal repo/tooling baseline required for `api`, `ui`, and future
   - [x] Decide lockfile strategy for the root workspace without breaking current `api`/`ui` flows.
   - [x] Keep `make` as the only supported entrypoint.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
-    - [ ] `make typecheck-ui API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
+    - [x] `make typecheck-api API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
+    - [x] `make typecheck-ui API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
 
 - [ ] **Lot 2 — Container and make wiring**
   - [x] Move `api`/`ui` container mounts to the repo root with explicit working directories.
@@ -103,9 +104,9 @@ Introduce the minimal repo/tooling baseline required for `api`, `ui`, and future
   - [x] Keep the resulting setup polyglot-ready: Node workspace for Node projects, no assumption that future Python services must join the same toolchain.
   - [ ] Lot gate:
     - [x] `make up-api-test API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
-    - [ ] `make typecheck-api API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
-    - [ ] `make lint-api API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
-    - [ ] `make typecheck-ui API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
+    - [x] `make typecheck-api API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
+    - [x] `make lint-api API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
+    - [x] `make typecheck-ui API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
     - [ ] `make lint-ui API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
 
 - [ ] **Lot 3 — Compatibility proof and branch impact**
