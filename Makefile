@@ -795,7 +795,7 @@ up-api-test: ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=tru
 .PHONY: up-api-test-ci
 up-api-test-ci: ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d api --wait api
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml up -d api --wait api
 
 .PHONY: up-ui
 up-ui: ## Start the ui stack in detached mode
