@@ -18,6 +18,7 @@ Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` laun
 
 **Next branches (explicitly queued):**
 - BR-23 `feat/multi-agent-framework-comparison` — compare LangGraph/Agno/Temporal. See `plan/23-BRANCH_feat-multi-agent-framework-comparison.md`.
+- BR-24 `chore/node24-actions-upgrade` — upgrade GitHub Actions workflows and third-party actions for Node 24 compatibility before the runner cutover; verify CI/CD and Scaleway deploy lanes end-to-end.
 - BR-25 `chore/rules-skills-audit` — absorb BR-04B audit learnings. See `plan/25-BRANCH_chore-rules-skills-audit.md`.
 
 **Active scoping (Lot 0 in progress):**
@@ -27,7 +28,7 @@ Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` laun
 - `fix/high-vulnerabilities` — isolated remediation branch for the API HIGH dependency vulnerability currently failing `security-sast-sca` and API image audit gates.
 
 **Pending branches (unblocked):**
-- BR-07, BR-10, BR-11, BR-12, BR-14b (after BR-14c contract), BR-14e (codebase finalization after 14a/14b/14c), BR-14d (mandatory transition ops after PR-117 release and BR-14e), BR-15, BR-16b, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22 — see §3 catalog for descriptions, dependencies, and priorities.
+- BR-07, BR-10, BR-11, BR-12, BR-14b (after BR-14c contract), BR-14e (codebase finalization after 14a/14b/14c), BR-14d (mandatory transition ops after PR-117 release and BR-14e), BR-15, BR-16b, BR-17, BR-18, BR-19, BR-20, BR-21a, BR-21, BR-22, BR-24 — see §3 catalog for descriptions, dependencies, and priorities.
 
 **Deferred:**
 - BR-09 `feat/sso-google` — deferred post-refacto (OOM resolution required before SSO Google work; exact target TBD by conductor).
@@ -151,15 +152,23 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-20  | refacto/entity-page-neutral-config               | Neutral entity route + config-driven view templates        | plan                 | BR-04                          |
 |        |                                                  | (follow-up absorbing BR-04B learnings).                    |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-21  | feat/cv-transpose-profiles                       | CV transpose: upload -> extract profiles (officeparser +   | plan                 | BR-04                          |
-|        |                                                  | LLM) -> edit -> export DOCX/PPTX; proposal + staffing      |                      |                                |
-|        |                                                  | integration.                                               |                      |                                |
+| BR-21a | feat/pptxgenjs-tool                              | Generic PptGenJS presentation generation tool, analogous   | scoping              | BR-04B                         |
+|        |                                                  | to freeform DOCX: upskill, sandboxed generation, storage,  |                      |                                |
+|        |                                                  | download card. No profile-export ownership.                |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-21  | feat/cv-transpose-profiles                       | CV transpose: upload -> extract profiles (officeparser +   | parked               | BR-04                          |
+|        |                                                  | LLM) -> edit -> export DOCX; proposal + staffing           | (not launched)       | BR-21a optional for PPTX later |
+|        |                                                  | integration. No BR-21 worktree is active.                  |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-22  | fix/rich-markdown-list-stabilization             | Stabilize rich markdown list rendering/editing (freeze on  | plan                 | BR-04                          |
 |        |                                                  | initiative cc884370... in constraints field).              |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-23  | feat/multi-agent-framework-comparison            | Compare LangGraph / Agno / Temporal; recommendation +      | plan                 | BR-04B                         |
 |        |                                                  | runtime extension plan.                                    |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-24  | chore/node24-actions-upgrade                     | Update GitHub Actions workflows and third-party actions    | plan                 | BR-00                          |
+|        |                                                  | to Node 24-compatible versions, then re-verify CI/CD       |                      |                                |
+|        |                                                  | including Scaleway deploy lanes.                           |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-25  | chore/rules-skills-audit                         | Absorb BR-04B audit learnings (2 agents, 13 sessions, 400+ | plan                 | BR-04B                         |
 |        |                                                  | incidents) into rules + skills. Mechanical enforcement     |                      |                                |
@@ -198,8 +207,10 @@ graph TD
   BR18[BR-18 sortable list views]
   BR19[BR-19 agent sandbox + skills]
   BR20[BR-20 entity/config refactor]
-  BR21[BR-21 cv transpose + profiles]
+  BR21a[BR-21a pptxgenjs tool]
+  BR21[BR-21 cv transpose + profiles parked]
   BR22[BR-22 rich markdown list stabilization]
+  BR24[BR-24 node24 actions upgrade]
 
   BR00 --> BR01
   BR00 --> BR02
@@ -244,8 +255,11 @@ graph TD
   BR19 --> BR15
   BR19 -.->|skills replace tools| BR10
   BR04 --> BR20
+  BR04B --> BR21a
   BR04 --> BR21
+  BR21a -.->|optional presentation export primitive| BR21
   BR04 --> BR22
+  BR00 --> BR24
 ```
 
 ## 5) Scheduling post-BR-04
@@ -256,9 +270,10 @@ graph TD
 **Wave after BR-14c contract**: BR-14b (application LLM runtime migration to the mesh), then BR-14a (chat UI SDK extraction). BR-14a Lot 0 may scope in parallel, but implementation must not define a separate provider/model abstraction.
 **Wave Code Finalization**: BR-14e (non-chat/non-LLM codebase naming sweep, residual-name allowlist, test fixture cleanup) after BR-14a/14b/14c and before BR-14d.
 **Wave A2** (right after BR-04B merge — deferred behind current wave): BR-20 (entity/config refactor follow-up) + BR-22 (rich markdown list stabilization hotfix)
+**Platform wave**: BR-24 (Node 24 GitHub Actions compatibility) should run before the GitHub-hosted runner Node 24 cutover and can proceed in parallel with product work because it is workflow/infra-only.
 **Wave B** (after BR-14a merge): BR-07 (UI npm, needs chat lib) + BR-11 (Chrome multitab, after BR-06+BR-08) + BR-17 (RAG, after BR-16a + BR-08)
 **Wave Transition**: BR-14d (repo/DNS follow-up, Scaleway/container/registry/secret/workflow rename) is mandatory transition work after PR-117 release ops and BR-14e, when code names and package names are stable enough to avoid duplicate rename churn.
-**Wave C** (after BR-04 + BR-08): BR-10 (VSCode v2) + BR-21 (CV transpose & profiles)
+**Wave C** (after BR-04 + BR-08): BR-10 (VSCode v2) + BR-21a (generic PptGenJS presentation tool). BR-21 CV transpose remains parked until explicitly relaunched.
 **Wave D** (after Wave B/C): BR-12 (CI publish, after BR-05+BR-06+BR-07+BR-13) + BR-16b (document connectors other, after BR-16a)
 **Wave E** (after BR-04): BR-19 (Agent sandbox + skill catalog — structural). Then BR-15 (spectral site tools — registers generated tools as skills in BR-19 catalog)
 **Deferred**: BR-09 (SSO Google — pending OOM resolution; may be unblocked by BR-16a if shared Google OAuth client — decision pending BR-16a brief Q16a-1).
