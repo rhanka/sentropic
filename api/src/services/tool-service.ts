@@ -1619,6 +1619,19 @@ export class ToolService {
     return typeof v === 'number' && Number.isFinite(v) ? v : null;
   }
 
+  private isDownloadOnlyDocument(data: unknown): boolean {
+    const rec = this.asRecord(data);
+    return rec.indexingSkipped === true;
+  }
+
+  private assertDocumentExplorable(data: unknown): void {
+    if (this.isDownloadOnlyDocument(data)) {
+      throw new Error(
+        'This document type is stored for download only and is not indexed yet.',
+      );
+    }
+  }
+
   private countWords(text: string): number {
     const t = (text || '').trim();
     if (!t) return 0;
@@ -1894,6 +1907,7 @@ export class ToolService {
     if (row.contextType !== opts.contextType || row.contextId !== opts.contextId) {
       throw new Error('Security: document does not match context');
     }
+    this.assertDocumentExplorable(row.data);
     if (row.status !== 'ready') {
       throw new Error(`documents.get_summary: document not ready (status="${row.status}")`);
     }
@@ -1933,6 +1947,7 @@ export class ToolService {
     if (row.contextType !== opts.contextType || row.contextId !== opts.contextId) {
       throw new Error('Security: document does not match context');
     }
+    this.assertDocumentExplorable(row.data);
 
     // Security / spec: do NOT return full content if doc is larger than 10k words.
     const WORDS_FULL_CONTENT_LIMIT = 10_000;
@@ -2110,6 +2125,7 @@ export class ToolService {
     if (row.contextType !== opts.contextType || row.contextId !== opts.contextId) {
       throw new Error('Security: document does not match context');
     }
+    this.assertDocumentExplorable(row.data);
     if (row.status !== 'ready') {
       throw new Error(`documents.get_summary: document not ready (status="${row.status}")`);
     }
