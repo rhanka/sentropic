@@ -107,7 +107,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - 10A (selected): Keep active branch `feat/gdrive-sso-indexing-16a` because the canonical local ref is stale.
   - 10B: Clean stale pre-Entropic worktree/ref and reclaim `feat/gdrive-sso-indexing`.
   - 10C: Create another explicit branch name for this iteration.
-- [ ] `attention` BR16a-EX1 — Conditional roadmap updates are allowed for `PLAN.md` and `plan/16c-BRANCH_feat-gdrive-shared-edit-sync.md`. Reason: user split Google Drive sharing/sync/direct-edit follow-up into future BR-16c while scoping BR-16a. Impact: documentation only, no runtime behavior. Rollback: remove the BR-16c plan stub and revert BR-16c roadmap references.
+- [x] `attention` BR16a-EX1 — Conditional roadmap updates are allowed for `PLAN.md` and `plan/16c-BRANCH_feat-gdrive-shared-edit-sync.md`. Reason: user split Google Drive sharing/sync/direct-edit follow-up into future BR-16c while scoping BR-16a. Impact: documentation only, no runtime behavior. Rollback: remove the BR-16c plan stub and revert BR-16c roadmap references.
 - [x] `clarification` BR16a-EX2 — Route registration uses `api/src/routes/api/index.ts`, which is outside the current Allowed Paths. Reason: the new Google Drive OAuth router can be implemented under `api/src/routes/api/**drive**`, but exposing `/api/v1/google-drive/*` in the main API router needs the central route index. Impact: route exposure only. Rollback: remove the route index import/use lines.
 - [x] `clarification` BR16a-EX3 — Drizzle migration metadata uses `api/drizzle/meta/_journal.json`, which is outside the explicit `api/drizzle/*.sql` Allowed Path. Reason: the new connector account SQL migration is not applied by Drizzle unless the journal includes the migration tag. Impact: migration metadata only. Rollback: remove the 0026 journal entry if the SQL migration is removed.
 - [x] `attention` BR16a-EX4 — Global workflow/testing/subagent rule updates are allowed for local SDLC and OAuth port-slot conventions. Reason: Google OAuth redirect URIs and Picker JavaScript origins must be exact, and BR-16a needs deterministic ports for up to five concurrent sub-agents without per-run console edits. Impact: documentation/rules only, no runtime behavior. Rollback: revert the `rules/*.md`, `PLAN.md`, and `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` documentation changes.
@@ -207,20 +207,20 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
       - [x] `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
       - [x] `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 
-- [ ] **Lot 3 — In-situ indexing**
+- [x] **Lot 3 — In-situ indexing**
   - [x] Extract file content through Google APIs without copying source documents into Entropic storage.
   - [x] Route Google Drive rows through the existing `document_summary` queue behavior.
   - [x] Store source references, sync status, extracted metadata, summary, and detailed summary.
-  - [ ] Reuse existing runtime chunking for `documents.analyze`; do not add stored embeddings in BR-16a.
+  - [x] Reuse existing runtime chunking for `documents.analyze`; do not add stored embeddings in BR-16a.
   - [x] Preserve existing local upload behavior.
   - [x] Add manual resync path.
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] **API tests**
+    - [x] **API tests**
       - [x] Add indexing service tests for Google Drive source refs.
       - [x] Add sync status transition tests.
-      - [ ] Add chunk storage tests.
+      - [x] Add long-document Google Drive chunked analyze tests.
 
 - [ ] **Lot 4 — Chat documents tool integration**
   - [x] Make `documents` tool list and read Google Drive documents through existing context document paths.
