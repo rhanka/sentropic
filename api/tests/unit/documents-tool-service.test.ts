@@ -329,6 +329,63 @@ describe('ToolService (documents) - unit', () => {
     ).rejects.toThrow(/does not match context/i);
   });
 
+  it('rejects download-only archive docs from exploration tools', async () => {
+    docId = createId();
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType,
+      contextId,
+      filename: 'bundle.zip',
+      mimeType: 'application/zip',
+      sizeBytes: 10,
+      storageKey: 'documents/test/bundle.zip',
+      status: 'ready',
+      data: {
+        summaryLang: 'fr',
+        indexingSkipped: true,
+        indexingSkipReason: 'archive_download_only',
+      } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    await expect(
+      toolService.getDocumentSummary({
+        workspaceId,
+        contextType,
+        contextId,
+        documentId: docId,
+      }),
+    ).rejects.toThrow(
+      'This document type is stored for download only and is not indexed yet.',
+    );
+
+    await expect(
+      toolService.getDocumentContent({
+        workspaceId,
+        contextType,
+        contextId,
+        documentId: docId,
+      }),
+    ).rejects.toThrow(
+      'This document type is stored for download only and is not indexed yet.',
+    );
+
+    await expect(
+      toolService.analyzeDocument({
+        workspaceId,
+        contextType,
+        contextId,
+        documentId: docId,
+        prompt: 'Summarize',
+      }),
+    ).rejects.toThrow(
+      'This document type is stored for download only and is not indexed yet.',
+    );
+  });
+
   it('analyzeDocument: very long doc uses scan-all-chunks path (no retrieval) and merges', async () => {
     // Force the "very long doc" branch without creating a multi-million char payload.
     const estimateSpy = vi.spyOn(toolService as any, 'estimateTokensFromText').mockReturnValue(700_001);
@@ -382,5 +439,4 @@ describe('ToolService (documents) - unit', () => {
     chunkSpy.mockRestore();
   });
 });
-
 

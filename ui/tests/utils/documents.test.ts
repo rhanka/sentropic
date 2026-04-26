@@ -1,11 +1,23 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { resetFetchMock, mockFetchJsonOnce } from '../test-setup';
-import { deleteDocument, getDownloadUrl, listDocuments, uploadDocument } from '../../src/lib/utils/documents';
+import {
+  DOCUMENT_UPLOAD_ACCEPT,
+  deleteDocument,
+  getDownloadUrl,
+  listDocuments,
+  uploadDocument,
+} from '../../src/lib/utils/documents';
 import { API_BASE_URL } from '../../src/lib/config';
 
 describe('documents utils', () => {
   beforeEach(() => {
     resetFetchMock();
+  });
+
+  it('includes archive formats in upload accept list', () => {
+    expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.zip');
+    expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.tar.gz');
+    expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.tgz');
   });
 
   describe('listDocuments', () => {
@@ -114,4 +126,3 @@ describe('documents utils', () => {
     });
   });
 });
-

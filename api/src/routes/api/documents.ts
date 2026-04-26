@@ -13,6 +13,23 @@ export const documentsRouter = new Hono();
 
 const contextTypeSchema = z.enum(['organization', 'folder', 'initiative', 'usecase', 'chat_session']); // TODO Lot 10: remove 'usecase'
 
+const DOWNLOAD_ONLY_ARCHIVE_REASON = 'archive_download_only';
+const ZIP_MIME_TYPES = new Set([
+  'application/zip',
+  'application/x-zip-compressed',
+  'multipart/x-zip',
+]);
+const GZIP_MIME_TYPES = new Set([
+  'application/gzip',
+  'application/x-gzip',
+]);
+const TAR_MIME_TYPES = new Set([
+  'application/tar',
+  'application/x-tar',
+  'application/x-gtar',
+]);
+const MAX_DOCUMENT_UPLOAD_BYTES = 100 * 1024 * 1024;
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
@@ -21,6 +38,39 @@ function getDataString(data: unknown, key: string): string | null {
   const rec = asRecord(data);
   const v = rec[key];
   return typeof v === 'string' ? v : null;
+}
+
+function getDataBoolean(data: unknown, key: string): boolean {
+  const rec = asRecord(data);
+  return rec[key] === true;
+}
+
+function normalizeDocumentMimeType(fileName: string, rawMimeType: string | null | undefined): string {
+  const lowerName = fileName.trim().toLowerCase();
+  const mime = (rawMimeType || '').trim().toLowerCase();
+
+  if (lowerName.endsWith('.zip')) return 'application/zip';
+  if (lowerName.endsWith('.tar.gz') || lowerName.endsWith('.tgz')) return 'application/gzip';
+  if (lowerName.endsWith('.tar')) return 'application/x-tar';
+
+  return mime || 'application/octet-stream';
+}
+
+function isDownloadOnlyArchive(fileName: string, mimeType: string): boolean {
+  const lowerName = fileName.trim().toLowerCase();
+  const lowerMime = mimeType.trim().toLowerCase();
+
+  if (lowerName.endsWith('.zip') || lowerName.endsWith('.tar.gz') || lowerName.endsWith('.tgz')) {
+    return true;
+  }
+  if (ZIP_MIME_TYPES.has(lowerMime)) return true;
+  if (GZIP_MIME_TYPES.has(lowerMime)) return true;
+  if (TAR_MIME_TYPES.has(lowerMime)) return true;
+  return false;
+}
+
+function isDownloadOnlyDocument(doc: { filename: string; mimeType: string; data: unknown }): boolean {
+  return getDataBoolean(doc.data, 'indexingSkipped') || isDownloadOnlyArchive(doc.filename, doc.mimeType);
 }
 
 const listQuerySchema = z.object({
@@ -80,11 +130,26 @@ documentsRouter.get('/', async (c) => {
     }
   }
 
+  const idsToMarkReady: string[] = [];
   const idsToMarkFailed: string[] = [];
   for (const r of rows) {
+    if (isDownloadOnlyDocument(r)) {
+      if (r.status !== 'ready') idsToMarkReady.push(r.id);
+      continue;
+    }
     if ((r.status === 'uploaded' || r.status === 'processing') && r.jobId) {
       const j = jobById.get(r.jobId);
       if (j?.status === 'failed') idsToMarkFailed.push(r.id);
+    }
+  }
+  if (idsToMarkReady.length > 0) {
+    try {
+      await db
+        .update(contextDocuments)
+        .set({ status: 'ready', updatedAt: new Date() })
+        .where(and(eq(contextDocuments.workspaceId, targetWorkspaceId), inArray(contextDocuments.id, idsToMarkReady)));
+    } catch {
+      // ignore
     }
   }
   if (idsToMarkFailed.length > 0) {
@@ -102,9 +167,14 @@ documentsRouter.get('/', async (c) => {
 
   return c.json({
     items: rows.map((r) => ({
-      // Override status for response if job has failed (even if DB heal failed).
+      // Download-only archives are always effectively ready, even for legacy rows
+      // that were persisted before archive indexing was skipped.
       status:
-        (r.status === 'uploaded' || r.status === 'processing') && r.jobId && jobById.get(r.jobId)?.status === 'failed'
+        isDownloadOnlyDocument(r)
+          ? 'ready'
+          : (r.status === 'uploaded' || r.status === 'processing') &&
+              r.jobId &&
+              jobById.get(r.jobId)?.status === 'failed'
           ? 'failed'
           : r.status,
       id: r.id,
@@ -115,6 +185,7 @@ documentsRouter.get('/', async (c) => {
       size_bytes: r.sizeBytes,
       summary: getDataString(r.data, 'summary'),
       summary_lang: getDataString(r.data, 'summaryLang'),
+      indexing_skipped: getDataBoolean(r.data, 'indexingSkipped'),
       job_id: r.jobId,
       created_at: r.createdAt,
       updated_at: r.updatedAt,
@@ -147,9 +218,10 @@ documentsRouter.get('/:id', async (c) => {
     mime_type: doc.mimeType,
     size_bytes: doc.sizeBytes,
     storage_key: doc.storageKey,
-    status: doc.status,
+    status: isDownloadOnlyDocument(doc) ? 'ready' : doc.status,
     summary: getDataString(doc.data, 'summary'),
     summary_lang: getDataString(doc.data, 'summaryLang'),
+    indexing_skipped: getDataBoolean(doc.data, 'indexingSkipped'),
     job_id: doc.jobId,
     created_at: doc.createdAt,
     updated_at: doc.updatedAt,
@@ -281,8 +353,7 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
       return c.json({ message: 'Missing file' }, 400);
     }
 
-    const maxBytes = 25 * 1024 * 1024;
-    if (file.size > maxBytes) return c.json({ message: 'File too large' }, 413);
+    if (file.size > MAX_DOCUMENT_UPLOAD_BYTES) return c.json({ message: 'File too large' }, 413);
 
     const docId = createId();
     const safeName = (file.name || 'document').replace(/[^\w.\- ()]/g, '_');
@@ -290,11 +361,14 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
 
     const bucket = getDocumentsBucketName();
     const bytes = new Uint8Array(await file.arrayBuffer());
+    const mimeType = normalizeDocumentMimeType(safeName, file.type);
+    const indexingSkipped = isDownloadOnlyArchive(safeName, mimeType);
+
     await putObject({
       bucket,
       key: storageKey,
       body: bytes,
-      contentType: file.type || 'application/octet-stream',
+      contentType: mimeType,
     });
 
     await db.insert(contextDocuments).values({
@@ -303,11 +377,17 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
       contextType: parsed.data.context_type,
       contextId: parsed.data.context_id,
       filename: safeName,
-      mimeType: file.type || 'application/octet-stream',
+      mimeType,
       sizeBytes: file.size,
       storageKey,
-      status: 'uploaded',
-      data: { summaryLang: 'fr' },
+      status: indexingSkipped ? 'ready' : 'uploaded',
+      data: indexingSkipped
+        ? {
+            summaryLang: 'fr',
+            indexingSkipped: true,
+            indexingSkipReason: DOWNLOAD_ONLY_ARCHIVE_REASON,
+          }
+        : { summaryLang: 'fr' },
       createdAt: new Date(),
       updatedAt: new Date(),
       version: 1,
@@ -326,9 +406,10 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
       newValue: {
         documentId: docId,
         filename: safeName,
-        mimeType: file.type || 'application/octet-stream',
+        mimeType,
         sizeBytes: file.size,
         storageKey,
+        indexingSkipped,
       },
       toolCallId: null,
       promptId: null,
@@ -340,11 +421,14 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
     });
 
     // Enqueue summarization job (async)
-    const jobId = await queueManager.addJob('document_summary', { documentId: docId, lang: 'fr' }, { workspaceId });
-    await db
-      .update(contextDocuments)
-      .set({ jobId, updatedAt: new Date() })
-      .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, workspaceId)));
+    let jobId: string | null = null;
+    if (!indexingSkipped) {
+      jobId = await queueManager.addJob('document_summary', { documentId: docId, lang: 'fr' }, { workspaceId });
+      await db
+        .update(contextDocuments)
+        .set({ jobId, updatedAt: new Date() })
+        .where(and(eq(contextDocuments.id, docId), eq(contextDocuments.workspaceId, workspaceId)));
+    }
 
     return c.json(
       {
@@ -352,13 +436,13 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
         context_type: parsed.data.context_type,
         context_id: parsed.data.context_id,
         filename: safeName,
-        mime_type: file.type || 'application/octet-stream',
+        mime_type: mimeType,
         size_bytes: file.size,
         storage_key: storageKey,
-        status: 'uploaded',
-        job_id: jobId,
+        status: indexingSkipped ? 'ready' : 'uploaded',
+        indexing_skipped: indexingSkipped,
+        ...(jobId ? { job_id: jobId } : {}),
       },
       201
     );
 });
-
