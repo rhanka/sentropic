@@ -5,11 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { withWorkspaceStorageState } from '../helpers/workspace-scope';
 
 test.describe('Documents — UI actions (icônes + suppression)', () => {
+  test.describe.configure({ mode: 'serial' });
   const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8787';
   const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
   const ADMIN_STATE = './.auth/state.json';
   const USER_A_STATE = './.auth/user-a.json';
   const USER_B_STATE = './.auth/user-b.json';
+  const ORGANIZATION_A_NAME = 'Organisation Test';
   let workspaceAId = '';
   let workspaceBId = '';
   let organizationAId = '';
@@ -19,6 +21,10 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
 
   function readFixture(name: string): Buffer {
     return fs.readFileSync(path.join(__dirname, 'fixtures', name));
+  }
+
+  async function waitForAppShell(page: import('@playwright/test').Page) {
+    await expect(page.getByRole('link', { name: 'Accueil' })).toBeVisible({ timeout: 10_000 });
   }
 
   test.beforeAll(async () => {
@@ -52,7 +58,7 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
 
     // Créer une organisation dans Workspace A pour les tests
     const orgRes = await userAApi.post(`/api/v1/organizations?workspace_id=${workspaceAId}`, {
-      data: { name: 'Organisation Test', data: { industry: 'Services' } },
+      data: { name: ORGANIZATION_A_NAME, data: { industry: 'Services' } },
     });
     if (!orgRes.ok()) throw new Error(`Impossible de créer organisation (status ${orgRes.status()})`);
     const orgJson = await orgRes.json().catch(() => null);
@@ -126,7 +132,7 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
     // 4) Aller sur la page dossier et cibler la ligne du document
     await page.goto(`/folders/${encodeURIComponent(folderId)}`);
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('heading', { name: 'Documents' })).toBeVisible({ timeout: 10_000 });
+    await waitForAppShell(page);
 
     const docRow = page.locator('tbody tr').filter({
       has: page.locator('div.font-medium', { hasText: filename }),
@@ -208,6 +214,86 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
     }
   });
 
+  test('archive uploads stay download-only in folder documents UI', async ({ browser }) => {
+    test.setTimeout(180_000);
+    const adminContext = await browser.newContext({
+      storageState: await withWorkspaceStorageState(ADMIN_STATE, ADMIN_WORKSPACE_ID),
+      acceptDownloads: true,
+    });
+    const page = await adminContext.newPage();
+
+    try {
+      const folderName = `E2E Archive Guard ${Date.now()}`;
+      const draftRes = await page.request.post(`${API_BASE_URL}/api/v1/folders/draft`, {
+        data: { name: folderName, description: 'Archive upload guard e2e' }
+      });
+      expect(draftRes.ok()).toBeTruthy();
+      const draftJson = await draftRes.json().catch(() => null);
+      const folderId = String((draftJson as any)?.id ?? '');
+      expect(folderId).toBeTruthy();
+
+      const filename = `bundle-${Date.now()}.tar.gz`;
+      const archiveBytes = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00]);
+      const uploadRes = await page.request.post(`${API_BASE_URL}/api/v1/documents`, {
+        multipart: {
+          context_type: 'folder',
+          context_id: folderId,
+          file: { name: filename, mimeType: 'application/gzip', buffer: archiveBytes },
+        },
+      });
+      expect(uploadRes.ok()).toBeTruthy();
+
+      const listUrl = `${API_BASE_URL}/api/v1/documents?context_type=folder&context_id=${encodeURIComponent(folderId)}`;
+      const start = Date.now();
+      let docId = '';
+      let indexingSkipped = false;
+      while (Date.now() - start < 30_000) {
+        const res = await page.request.get(listUrl);
+        if (res.ok()) {
+          const json = await res.json().catch(() => null);
+          const items: any[] = (json as any)?.items ?? [];
+          const doc = items.find((d) => d.filename === filename);
+          if (doc) {
+            docId = String(doc.id || '');
+            indexingSkipped = !!doc.indexing_skipped;
+            if (doc.status === 'ready' && indexingSkipped) break;
+          }
+        }
+        await page.waitForTimeout(500);
+      }
+
+      expect(docId).toBeTruthy();
+      expect(indexingSkipped).toBeTruthy();
+
+      await page.goto(`/folders/${encodeURIComponent(folderId)}`);
+      await page.waitForLoadState('domcontentloaded');
+      await waitForAppShell(page);
+
+      const docRow = page.locator('tbody tr').filter({
+        has: page.locator('div.font-medium', { hasText: filename }),
+      });
+      await expect(docRow).toBeVisible({ timeout: 20_000 });
+      await expect(docRow).toContainText('Prêt');
+
+      const rowButtons = docRow.locator('button');
+      await expect(rowButtons).toHaveCount(3);
+
+      const summaryButton = rowButtons.nth(0);
+      const downloadButton = rowButtons.nth(1);
+      await expect(summaryButton).toBeDisabled();
+      await expect(summaryButton).toHaveAttribute('aria-label', /Prêt|Ready/);
+      await expect(docRow.getByRole('button', { name: /Afficher le résumé|Show summary/i })).toHaveCount(0);
+
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 20_000 }),
+        downloadButton.click(),
+      ]);
+      expect(download.suggestedFilename()).toBe(filename);
+    } finally {
+      await adminContext.close();
+    }
+  });
+
   test('documents scoping: User B voit le doc en workspace A, pas en workspace B', async ({ browser }) => {
     test.setTimeout(180_000);
 
@@ -250,7 +336,7 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
     const pageB = await userBContext.newPage();
     await pageB.goto(`/organizations/${encodeURIComponent(organizationAId)}`);
     await pageB.waitForLoadState('domcontentloaded');
-    await expect(pageB.getByRole('heading', { name: 'Documents' })).toBeVisible({ timeout: 10_000 });
+    await waitForAppShell(pageB);
     const docRow = pageB.locator('tbody tr').filter({
       has: pageB.locator('div.font-medium', { hasText: filename }),
     });
@@ -273,5 +359,3 @@ test.describe('Documents — UI actions (icônes + suppression)', () => {
     await userBApi.dispose();
   });
 });
-
-
