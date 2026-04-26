@@ -416,7 +416,12 @@ lock-api: ## Update API package-lock.json using Node container (sync deps)
 .PHONY: lock-root
 lock-root: ## Update root package-lock.json using Node container (workspace root)
 	@echo "🔒 Updating root package-lock.json..."
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "cd /workspace && npm install --package-lock-only --workspaces --include-workspace-root"
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-v "$$(pwd):/workspace" \
+		-w /workspace \
+		node:24-alpine \
+		sh -lc "npm install --package-lock-only --workspaces --include-workspace-root"
 
 .PHONY: save-ui
 save-ui: ## Save UI Docker image as tar artifact

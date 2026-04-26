@@ -37,6 +37,6 @@ CMD ["npm", "run", "build"]
 FROM nginx:1.29-alpine AS production
 RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
 COPY --from=build /workspace/ui/build /usr/share/nginx/html
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY ui/nginx/default.conf /etc/nginx/conf.d/default.conf
 EXPOSE 5173
 CMD ["nginx", "-g", "daemon off;"]
