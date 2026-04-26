@@ -1111,7 +1111,7 @@ db-seed:
 
 .PHONY: db-seed-test
 db-seed-test: ## Seed database with test data for E2E tests
-	$(DOCKER_COMPOSE) exec api sh -lc "npx tsx tests/utils/seed-test-data.ts"
+	$(DOCKER_COMPOSE) exec api sh -lc 'if [ -f dist/tests/utils/seed-test-data.js ]; then node dist/tests/utils/seed-test-data.js; else npx tsx tests/utils/seed-test-data.ts; fi'
 
 .PHONY: db-migrate-data
 db-migrate-data: ## Migrate initiatives data to JSONB data field
