@@ -128,6 +128,12 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - [x] `decision` BR16a-D2 — Unified Google Drive content reads must stay user-scoped outside background jobs: `GET /documents/:id/content` now uses the acting user's connected Google account and returns `409` when that account is disconnected, instead of silently falling back to stored connector-account access.
 - [x] `attention` BR16a-T1 — Deterministic `documents` AI coverage now locks the Google Drive paths for connected `get_content`, connected `analyze`, and disconnected-user refusal.
 - [x] `attention` BR16a-U1 — The composer Google Drive import surface is now real: the paperclip-adjacent action fetches picker config, opens Google Picker, resolves the selected IDs server-side, attaches them through `/api/v1/documents/google-drive`, and refreshes the session document list. Impact: the disabled placeholder is removed; live browser/UAT validation is still pending because this lot only ran focused automated checks. Rollback: remove the Picker wiring and restore a connection-only composer surface.
+- [x] `attention` BR16a-R1 — Post-rebase verification exposed a duplicate `googleDriveRouter` import in `api/src/routes/api/index.ts`, which broke endpoint compilation before document logic executed. Fix: remove the duplicate import and rerun focused document suites on the rebased head. Impact: route index compile-time only; no runtime contract change. Rollback: revert the single-line import deduplication.
+- [x] `validation` BR16a-T2 — Focused Lot 4 / Lot 5 regression checks passed on the rebased head with no AI flaky signature:
+  - `make test-api-endpoints SCOPE=tests/api/documents.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-api-ai SCOPE=tests/ai/documents-tool.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `attention` BR16a-U2 — Formal Lot 5 webapp UAT remains pending because this worker run must not push and must not touch the root workspace. In-worktree focused regression checks were run instead so the live OAuth/Picker flow can be resumed later from the branch head. Impact: Lot 5 browser steps stay open. Rollback: none.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -222,19 +228,19 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
       - [x] Add sync status transition tests.
       - [x] Add long-document Google Drive chunked analyze tests.
 
-- [ ] **Lot 4 — Chat documents tool integration**
+- [x] **Lot 4 — Chat documents tool integration**
   - [x] Make `documents` tool list and read Google Drive documents through existing context document paths.
   - [x] Make `documents.get_content` and `documents.analyze` load Drive content on demand when needed.
   - [x] Surface source metadata and stale/sync status in tool responses.
   - [x] Ensure permission checks use the connected user/workspace context.
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] **API tests**
+    - [x] **API tests**
       - [x] Add deterministic chat documents tool tests with Google Drive indexed docs.
       - [x] Add permission-denied tests for disconnected/unauthorized Google refs.
-    - [ ] **AI tests**
-      - [ ] Run AI document tool tests only when credentials are available and record flaky signatures if any.
+    - [x] **AI tests**
+      - [x] Run AI document tool tests only when credentials are available and record flaky signatures if any.
 
 - [ ] **Lot 5 — UAT**
   - [ ] Web app:
@@ -244,8 +250,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - [ ] Ask chat to retrieve document facts.
     - [ ] Disconnect account and verify access is revoked.
   - [ ] Non-regression:
-    - [ ] Local document upload still works.
-    - [ ] Existing chat documents tool still works for local docs.
+    - [x] Local document upload still works.
+    - [x] Existing chat documents tool still works for local docs.
 
 - [ ] **Lot 6 — Docs consolidation**
   - [ ] Consolidate final connector contract into `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`.
