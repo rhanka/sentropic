@@ -2,6 +2,16 @@ import { API_BASE_URL } from '$lib/config';
 import { apiGet, apiPost } from '$lib/utils/api';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
 
+export type GeneratedFileFormat = 'docx' | 'pptx';
+
+export type GeneratedFileCard = {
+  jobId: string;
+  fileName: string;
+  format?: GeneratedFileFormat | string;
+  mimeType?: string;
+  downloadUrl?: string;
+};
+
 type DocxGeneratePayload = {
   templateId: 'usecase-onepage' | 'executive-synthesis-multipage';
   entityType: 'initiative' | 'folder';
@@ -32,6 +42,15 @@ function withWorkspaceScope(path: string): string {
   return `${path}${hasQuery ? '&' : '?'}workspace_id=${encodeURIComponent(scopedWorkspaceId)}`;
 }
 
+export function resolveGeneratedFileDownloadPath(
+  card: Pick<GeneratedFileCard, 'jobId' | 'format' | 'downloadUrl'>
+): string {
+  const rawDownloadUrl = typeof card.downloadUrl === 'string' ? card.downloadUrl.trim() : '';
+  if (rawDownloadUrl) return withWorkspaceScope(rawDownloadUrl);
+  const format = card.format === 'pptx' ? 'pptx' : 'docx';
+  return withWorkspaceScope(`/${format}/jobs/${card.jobId}/download`);
+}
+
 export async function waitForDocxJobCompletion(
   jobId: string,
   opts?: { timeoutMs?: number; intervalMs?: number }
@@ -51,11 +70,8 @@ export async function waitForDocxJobCompletion(
   throw new Error('DOCX generation timed out');
 }
 
-export async function downloadCompletedDocxJob(
-  jobId: string,
-  fallbackFileName: string
-): Promise<void> {
-  const scopedPath = withWorkspaceScope(`/docx/jobs/${jobId}/download`);
+export async function downloadGeneratedFile(card: GeneratedFileCard): Promise<void> {
+  const scopedPath = resolveGeneratedFileDownloadPath(card);
   const url = new URL(`${API_BASE_URL}${scopedPath}`, window.location.origin);
 
   const response = await fetch(url.toString(), {
@@ -75,11 +91,18 @@ export async function downloadCompletedDocxJob(
   const disposition = response.headers.get('content-disposition') || '';
   const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
   link.href = objectUrl;
-  link.download = fileNameMatch?.[1] || fallbackFileName;
+  link.download = fileNameMatch?.[1] || card.fileName;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(objectUrl);
+}
+
+export async function downloadCompletedDocxJob(
+  jobId: string,
+  fallbackFileName: string
+): Promise<void> {
+  await downloadGeneratedFile({ jobId, fileName: fallbackFileName, format: 'docx' });
 }
 
 export async function startDocxGeneration(payload: DocxGeneratePayload): Promise<GenerateDocxResponse> {
