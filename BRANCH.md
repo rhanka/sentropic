@@ -39,6 +39,8 @@ Allow users to upload `.zip`, `.tar.gz`, and `.tgz` files as context documents. 
 
 ## Feedback Loop
 - [x] `clarification` BR23a-D1 — Scope is strictly download-only archive support. No archive extraction, no indexing, no summarization, no archive browsing in this branch.
+- [x] `attention` BR23a-EX1 — Use `e2e/tests/04-documents-ui-actions.spec.ts` for a non-component guard proof that archive uploads stay download-only in the folder documents UI. Reason: the remaining hole is UI/runtime behavior (disabled summary affordance + download still works), and the user explicitly rejected component-UI coverage for this gap. Impact: one scoped E2E file only. Rollback: remove the archive-specific E2E case and its checklist entry.
+- [x] `attention` BR23a-EX2 — Touch `Makefile` only to make `db-seed-test` execute `tests/utils/seed-test-data.ts` through `tsx` inside the dev-mounted API container instead of assuming a prebuilt `dist/tests/utils/seed-test-data.js` artifact. Reason: BR23a's new scoped E2E exposed that fresh E2E lanes fail before running any test when `/app/dist/tests/...` is absent. Impact: E2E seeding only; no product/runtime behavior change. Rollback: restore the old `node dist/tests/utils/seed-test-data.js` command if the test harness is later refactored around prebuilt artifacts.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -102,5 +104,6 @@ Allow users to upload `.zip`, `.tar.gz`, and `.tgz` files as context documents. 
   - [ ] `make test-api-unit API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-archive-upload-23a`
   - [ ] `make test-api-endpoints API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-archive-upload-23a`
   - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-archive-upload-23a`
+  - [ ] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=e2e-feat-archive-upload-23a`
   - [ ] Create/update PR using `BRANCH.md` as PR body.
   - [ ] Verify branch CI and resolve blockers.
