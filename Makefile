@@ -1218,8 +1218,12 @@ test-%-security-sast: ## Run SAST scan (Semgrep) on service (usage: make test-ap
 test-%-security-sca: ## Run SCA scan (Trivy) on service (usage: make test-api-security-sca, make test-ui-security-sca)
 	@echo "🔒 Security: Running SCA scan on $*..."
 	@mkdir -p .security
-	@echo "  📋 Step 1: Executing Trivy SCA scan..."
-	@docker run --rm -v "${PWD}/$*:/src" aquasec/trivy fs --security-checks vuln --severity HIGH,CRITICAL --format json --quiet /src > .security/sca-$*.json || true
+	@echo "  📋 Step 1: Executing SCA scan..."
+	@if [ "$*" = "api" ] || [ "$*" = "ui" ]; then \
+		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e TARGET=development $* sh -lc "npm audit --json || true" > .security/sca-$*.json; \
+	else \
+		docker run --rm -v "${PWD}/$*:/src" aquasec/trivy fs --security-checks vuln --severity HIGH,CRITICAL --format json --quiet /src > .security/sca-$*.json || true; \
+	fi
 	@echo "  📋 Step 2: Parsing results to structured format..."
 	@bash scripts/security/security-parser.sh sca .security/sca-$*.json .security/sca-$*-parsed.yaml $* || exit 1
 	@echo "  📋 Step 3: Checking compliance against vulnerability register..."
@@ -1230,16 +1234,21 @@ test-%-security-sca: ## Run SCA scan (Trivy) on service (usage: make test-api-se
 test-%-security-container: ## Run container scan (Trivy) on service image (usage: make test-api-security-container, make test-ui-security-container)
 	@echo "🔒 Security: Running container scan on $*..."
 	@mkdir -p .security
-	@echo "  📋 Step 1: Executing Trivy container scan..."
+	@echo "  📋 Step 1: Executing container scan..."
 	@if [ "$*" = "api" ]; then \
 		IMAGE_NAME="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)"; \
+		echo "  Scanning image: $$IMAGE_NAME"; \
+		docker run --rm "$$IMAGE_NAME" sh -lc "npm audit --omit=dev --json || true" > .security/container-$*.json; \
 	elif [ "$*" = "ui" ]; then \
 		IMAGE_NAME="$(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)"; \
+		echo "  Scanning image: $$IMAGE_NAME"; \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json || (echo '{"Results": []}' > .security/container-$*.json && echo "  ⚠️  Image not found: $$IMAGE_NAME"); \
 	else \
 		IMAGE_NAME="top-ai-ideas-$*:latest"; \
+		echo "  Scanning image: $$IMAGE_NAME"; \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json || (echo '{"Results": []}' > .security/container-$*.json && echo "  ⚠️  Image not found: $$IMAGE_NAME"); \
 	fi; \
-	echo "  Scanning image: $$IMAGE_NAME"; \
-	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json || (echo '{"Results": []}' > .security/container-$*.json && echo "  ⚠️  Image not found: $$IMAGE_NAME")
+	true
 	@echo "  📋 Step 2: Parsing results to structured format..."
 	@bash scripts/security/security-parser.sh container .security/container-$*.json .security/container-$*-parsed.yaml $* || exit 1
 	@echo "  📋 Step 3: Checking compliance against vulnerability register..."

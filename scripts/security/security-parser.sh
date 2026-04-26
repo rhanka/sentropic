@@ -110,8 +110,69 @@ case "$SCAN_TYPE" in
     "sca"|"container"|"iac")
         # Parse Trivy JSON output
         if command -v jq >/dev/null 2>&1; then
+            # Parse npm audit JSON for Node dependency scans
+            if jq -e 'has("auditReportVersion") and has("vulnerabilities")' "$INPUT_FILE" >/dev/null 2>&1; then
+                FINDINGS_COUNT=$(jq '[.vulnerabilities | to_entries[] | select((.value.severity // "") == "high" or (.value.severity // "") == "critical")] | length' "$INPUT_FILE" 2>/dev/null || echo "0")
+
+                if [ "$FINDINGS_COUNT" -gt 0 ] && [ "$FINDINGS_COUNT" != "null" ] && [ "$FINDINGS_COUNT" != "" ]; then
+                    echo "Found $FINDINGS_COUNT findings"
+
+                    jq -r --arg service "$SERVICE_NAME" '{
+                        scan_type: "'$SCAN_TYPE'",
+                        timestamp: now,
+                        findings_count: ([.vulnerabilities | to_entries[] | select((.value.severity // "") == "high" or (.value.severity // "") == "critical")] | length),
+                        findings: [.vulnerabilities | to_entries[] | select((.value.severity // "") == "high" or (.value.severity // "") == "critical") | {
+                            id: ("npm_audit_" + $service + "_" + (.key | gsub("/"; "_") | gsub("\\."; "_")) + "_" + (.value.severity // "unknown")),
+                            rule_id: ("npm-audit:" + .key),
+                            severity: (.value.severity // "unknown" | ascii_upcase),
+                            file: "package-lock.json",
+                            line: 1,
+                            message: (.value.name + " vulnerability"),
+                            fix: (
+                                if (.value.fixAvailable | type) == "object" then
+                                    (.value.fixAvailable.name + "@" + .value.fixAvailable.version)
+                                elif (.value.fixAvailable | type) == "string" then
+                                    .value.fixAvailable
+                                elif (.value.fixAvailable == true) then
+                                    "fix available"
+                                else
+                                    null
+                                end
+                            ),
+                            cwe: [],
+                            owasp: [],
+                            category: "vulnerability",
+                            confidence: "HIGH"
+                        }]
+                    }' "$INPUT_FILE" > "${OUTPUT_FILE%.yaml}.json"
+
+                    if [[ "$OUTPUT_FILE" == *.yaml ]] || [[ "$OUTPUT_FILE" == *.yml ]]; then
+                        echo "🔄 Converting to YAML format..."
+                        if command -v yq >/dev/null 2>&1; then
+                            yq eval -P '.' "${OUTPUT_FILE%.yaml}.json" > "$OUTPUT_FILE"
+                        else
+                            echo "⚠️  yq not found - keeping JSON format"
+                            cp "${OUTPUT_FILE%.yaml}.json" "$OUTPUT_FILE"
+                        fi
+                    fi
+
+                    echo "✅ Parsed findings to $OUTPUT_FILE"
+                else
+                    echo "No findings found"
+                    echo '{"findings_count": 0, "findings": []}' > "${OUTPUT_FILE%.yaml}.json"
+                    if [[ "$OUTPUT_FILE" == *.yaml ]] || [[ "$OUTPUT_FILE" == *.yml ]]; then
+                        if command -v yq >/dev/null 2>&1; then
+                            echo '{"findings_count": 0, "findings": []}' | yq eval -P '.' > "$OUTPUT_FILE"
+                        else
+                            echo 'findings_count: 0' > "$OUTPUT_FILE"
+                            echo 'findings: []' >> "$OUTPUT_FILE"
+                        fi
+                    else
+                        cp "${OUTPUT_FILE%.yaml}.json" "$OUTPUT_FILE"
+                    fi
+                fi
             # For IaC, handle multiple JSON objects (one per file scanned)
-            if [ "$SCAN_TYPE" = "iac" ]; then
+            elif [ "$SCAN_TYPE" = "iac" ]; then
                 # Merge multiple JSON objects into array and extract findings
                 FINDINGS_COUNT=$(jq -s '[.[] | .Results[]?.Misconfigurations[]?] | length' "$INPUT_FILE" 2>/dev/null || echo "0")
             else
