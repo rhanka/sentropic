@@ -29,6 +29,7 @@ Introduce the minimal repo/tooling baseline required for `api`, `ui`, and future
   - `api/package-lock.json`
   - `ui/package.json`
   - `ui/package-lock.json`
+  - `ui/Dockerfile`
 - **Forbidden Paths (must not change in this branch)**:
   - `README.md`
   - `README.fr.md`
@@ -60,6 +61,9 @@ Introduce the minimal repo/tooling baseline required for `api`, `ui`, and future
 - [x] `validation` BR14f-V1 — Fresh proof on commit `3ddb6d71`: `make typecheck-api`, `make lint-api`, `make typecheck-ui`, and `make lint-ui` all return under `ENV=test-chore-node-workspace-monorepo-14f`. API lint still reports the existing 184 `no-console`-heavy warnings with 0 errors, and UI typecheck still reports the existing 6 Svelte warnings with 0 errors.
 - [x] `validation` BR14f-V2 — Rebase simulations on 2026-04-25 show BR-14c (`813a4d3f`), BR-16a (`59dc47af`), and BR-21a (`df41d0ed`) replay onto BR14f after resolving only branch-tracker docs (`BRANCH.md`, plus `PLAN.md` for BR-16a). No workspace, compose, lockfile, or runtime code conflicts surfaced in the simulated rebases.
 - [x] `validation` BR14f-V3 — Fresh CI-path proof on 2026-04-25: `make build-ext-chrome`, `make build-ext-vscode`, and `make up-api-test-ci` all complete under `ENV=test-chore-node-workspace-monorepo-14f` with the workspace-root mounts and the updated artifact paths.
+- [x] `attention` BR14f-EX1 — `ui/Dockerfile` joins BR14f scope because the branch moved the UI image build context to repo root. The production stage still copied `nginx/default.conf` as if the context were `ui/`, which breaks `make build-ui-image` after the workspace baseline rebase. Impact: packaging path only. Rollback: revert the Dockerfile path change and restore the previous UI-only build context strategy.
+- [x] `validation` BR14f-V4 — Rebasing BR14f onto `origin/main` on 2026-04-25 surfaced one real workspace follow-up: `make build-ui-image` failed because `ui/Dockerfile` still used the pre-workspace `nginx/default.conf` path, and the rebased root workspace lockfile no longer included newer `main` dependencies such as `pptxgenjs`. After correcting the root-relative nginx path and making `make lock-root` refresh the root lockfile through an ephemeral Node container, local CI-targeted proofs all passed again under `ENV=test-chore-node-workspace-monorepo-14f`: `make lock-root`, `make build-ui-image`, `make up-api-test-ci`, `make test-api-unit`, and `make test-api-smoke`.
+- [ ] `attention` BR14f-T3 — PR `#125` still points to the pre-rebase remote head `9090c9d6`, where GitHub Actions run `24946559059` failed in `build-ui` (at `make build-ui-image`) and all `test-api-unit-integration` shards. Local post-rebase validation is now green for the repaired workspace/bootstrap lanes, but branch CI cannot be rerun until the rebased branch is pushed. Push is intentionally deferred in this worker mission.
 - [ ] `attention` BR14f-T2 — Stability proof is still incomplete for BR-16a under the new workspace wiring. The branch rebases mechanically, but its Google Drive flows have not rerun their own branch gates or UAT on top of BR14f yet. BR-21a no longer has this blocker: root UAT is recorded on `df41d0ed` after the runtime hardening fix `b58763cf`.
 
 ## AI Flaky tests
@@ -131,6 +135,6 @@ Introduce the minimal repo/tooling baseline required for `api`, `ui`, and future
   - [x] `make lint-api API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
   - [x] `make typecheck-ui API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
   - [x] `make lint-ui API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
-  - [ ] Create/update PR using `BRANCH.md` text as PR body.
+  - [x] Create/update PR using `BRANCH.md` text as PR body.
   - [ ] Verify branch CI and resolve blockers.
   - [ ] Once CI is `OK`, rebase BR-14c, then assess whether BR-16a and BR-21a also need rebases.
