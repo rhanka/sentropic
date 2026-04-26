@@ -28,6 +28,7 @@ const TAR_MIME_TYPES = new Set([
   'application/x-tar',
   'application/x-gtar',
 ]);
+const MAX_DOCUMENT_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -66,6 +67,10 @@ function isDownloadOnlyArchive(fileName: string, mimeType: string): boolean {
   if (GZIP_MIME_TYPES.has(lowerMime)) return true;
   if (TAR_MIME_TYPES.has(lowerMime)) return true;
   return false;
+}
+
+function isDownloadOnlyDocument(doc: { filename: string; mimeType: string; data: unknown }): boolean {
+  return getDataBoolean(doc.data, 'indexingSkipped') || isDownloadOnlyArchive(doc.filename, doc.mimeType);
 }
 
 const listQuerySchema = z.object({
@@ -125,11 +130,26 @@ documentsRouter.get('/', async (c) => {
     }
   }
 
+  const idsToMarkReady: string[] = [];
   const idsToMarkFailed: string[] = [];
   for (const r of rows) {
+    if (isDownloadOnlyDocument(r)) {
+      if (r.status !== 'ready') idsToMarkReady.push(r.id);
+      continue;
+    }
     if ((r.status === 'uploaded' || r.status === 'processing') && r.jobId) {
       const j = jobById.get(r.jobId);
       if (j?.status === 'failed') idsToMarkFailed.push(r.id);
+    }
+  }
+  if (idsToMarkReady.length > 0) {
+    try {
+      await db
+        .update(contextDocuments)
+        .set({ status: 'ready', updatedAt: new Date() })
+        .where(and(eq(contextDocuments.workspaceId, targetWorkspaceId), inArray(contextDocuments.id, idsToMarkReady)));
+    } catch {
+      // ignore
     }
   }
   if (idsToMarkFailed.length > 0) {
@@ -147,9 +167,14 @@ documentsRouter.get('/', async (c) => {
 
   return c.json({
     items: rows.map((r) => ({
-      // Override status for response if job has failed (even if DB heal failed).
+      // Download-only archives are always effectively ready, even for legacy rows
+      // that were persisted before archive indexing was skipped.
       status:
-        (r.status === 'uploaded' || r.status === 'processing') && r.jobId && jobById.get(r.jobId)?.status === 'failed'
+        isDownloadOnlyDocument(r)
+          ? 'ready'
+          : (r.status === 'uploaded' || r.status === 'processing') &&
+              r.jobId &&
+              jobById.get(r.jobId)?.status === 'failed'
           ? 'failed'
           : r.status,
       id: r.id,
@@ -193,7 +218,7 @@ documentsRouter.get('/:id', async (c) => {
     mime_type: doc.mimeType,
     size_bytes: doc.sizeBytes,
     storage_key: doc.storageKey,
-    status: doc.status,
+    status: isDownloadOnlyDocument(doc) ? 'ready' : doc.status,
     summary: getDataString(doc.data, 'summary'),
     summary_lang: getDataString(doc.data, 'summaryLang'),
     indexing_skipped: getDataBoolean(doc.data, 'indexingSkipped'),
@@ -328,8 +353,7 @@ documentsRouter.post('/', requireWorkspaceAccessRole(), async (c) => {
       return c.json({ message: 'Missing file' }, 400);
     }
 
-    const maxBytes = 25 * 1024 * 1024;
-    if (file.size > maxBytes) return c.json({ message: 'File too large' }, 413);
+    if (file.size > MAX_DOCUMENT_UPLOAD_BYTES) return c.json({ message: 'File too large' }, 413);
 
     const docId = createId();
     const safeName = (file.name || 'document').replace(/[^\w.\- ()]/g, '_');
