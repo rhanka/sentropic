@@ -84,7 +84,7 @@
     Search,
     GitBranch,
   } from '@lucide/svelte';
-  import { downloadCompletedDocxJob } from '$lib/utils/docx';
+  import { downloadGeneratedFile, type GeneratedFileCard } from '$lib/utils/docx';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { generateInjectedScript } from '$lib/upstream/injected-script';
   import { postChatSteer } from '$lib/utils/chat-steer';
@@ -174,6 +174,7 @@
     contextBudgetPct: number | null;
     durationMs: number | null;
     reasoningEffortLabel: string | null;
+    generatedFileCards?: GeneratedFileCard[];
     docxCards?: Array<{ jobId: string; fileName: string }>;
   };
   type ProjectedTimelineItem =
@@ -769,7 +770,7 @@
   let historyHydrationSwapPending = false;
   let historyHydrationStickBottom = false;
   let optimisticSteerMessages: LocalMessage[] = [];
-  let docxCardsByMessageId = new Map<string, { jobId: string; fileName: string }[]>();
+  let generatedFileCardsByMessageId = new Map<string, GeneratedFileCard[]>();
   let previousAiWorkspaceId: string | null | undefined = undefined;
   let workspaceSessionRescopeInFlight = false;
 
@@ -1595,7 +1596,7 @@
             collectedEvents,
           ),
         );
-        scanEventsForDocxCards(messageId, collectedEvents);
+        scanEventsForGeneratedFileCards(messageId, collectedEvents);
         projectedAssistantComputationByMessageId = new Map(
           projectedAssistantComputationByMessageId,
         );
@@ -3426,24 +3427,49 @@
     }
   };
 
-  const handleDocxDownload = (messageId: string, card: { jobId: string; fileName: string }) => {
-    const existing = docxCardsByMessageId.get(messageId) ?? [];
+  const normalizeGeneratedFileCard = (
+    card: Partial<GeneratedFileCard> & Pick<GeneratedFileCard, 'jobId' | 'fileName'>
+  ): GeneratedFileCard => ({
+    jobId: card.jobId,
+    fileName: card.fileName,
+    format:
+      typeof card.format === 'string' && card.format.trim().length > 0
+        ? card.format.trim().toLowerCase()
+        : 'docx',
+    mimeType:
+      typeof card.mimeType === 'string' && card.mimeType.trim().length > 0
+        ? card.mimeType.trim()
+        : undefined,
+    downloadUrl:
+      typeof card.downloadUrl === 'string' && card.downloadUrl.trim().length > 0
+        ? card.downloadUrl.trim()
+        : undefined,
+  });
+
+  const handleGeneratedFileCard = (messageId: string, card: GeneratedFileCard) => {
+    const existing = generatedFileCardsByMessageId.get(messageId) ?? [];
     if (existing.some(c => c.jobId === card.jobId)) return;
-    docxCardsByMessageId = new Map(docxCardsByMessageId);
-    docxCardsByMessageId.set(messageId, [...existing, card]);
+    generatedFileCardsByMessageId = new Map(generatedFileCardsByMessageId);
+    generatedFileCardsByMessageId.set(messageId, [...existing, normalizeGeneratedFileCard(card)]);
   };
 
-  const extractDocxCardsFromRuntimeSummary = (
+  const extractGeneratedFileCardsFromRuntimeSummary = (
     messageId: string,
-    summary: { docxCards?: Array<{ jobId: string; fileName: string }> } | undefined,
+    summary: RuntimeSegmentSummary | undefined,
   ) => {
+    if (summary?.generatedFileCards && summary.generatedFileCards.length > 0) {
+      for (const card of summary.generatedFileCards) {
+        handleGeneratedFileCard(messageId, card);
+      }
+      return;
+    }
     if (!summary?.docxCards || summary.docxCards.length === 0) return;
     for (const card of summary.docxCards) {
-      handleDocxDownload(messageId, card);
+      handleGeneratedFileCard(messageId, { ...card, format: 'docx' });
     }
   };
 
-  const scanEventsForDocxCards = (messageId: string, events: readonly { eventType: string; data: any }[]) => {
+  const scanEventsForGeneratedFileCards = (messageId: string, events: readonly { eventType: string; data: any }[]) => {
     const toolNames: Record<string, string> = {};
     for (const ev of events) {
       if (ev.eventType === 'tool_call_start' && ev.data?.tool_call_id && ev.data?.name) {
@@ -3458,10 +3484,32 @@
           typeof ev.data?.result?.jobId === 'string' &&
           typeof ev.data?.result?.fileName === 'string'
         ) {
-          handleDocxDownload(messageId, { jobId: ev.data.result.jobId, fileName: ev.data.result.fileName });
+          handleGeneratedFileCard(messageId, {
+            jobId: ev.data.result.jobId,
+            fileName: ev.data.result.fileName,
+            format:
+              typeof ev.data?.result?.format === 'string'
+                ? ev.data.result.format
+                : 'docx',
+            mimeType:
+              typeof ev.data?.result?.mimeType === 'string'
+                ? ev.data.result.mimeType
+                : undefined,
+            downloadUrl:
+              typeof ev.data?.result?.downloadUrl === 'string'
+                ? ev.data.result.downloadUrl
+                : undefined,
+          });
         }
       }
     }
+  };
+
+  const getGeneratedFileFormatLabel = (format: GeneratedFileCard['format']): string => {
+    if (typeof format === 'string' && format.trim().length > 0) {
+      return format.trim().toUpperCase();
+    }
+    return 'FILE';
   };
 
   const handleTodoRuntimeToolResult = (update: TodoRuntimeToolResultEvent) => {
@@ -3578,7 +3626,7 @@
       mergeProjectionHistoryEvents(next.get(normalizedId) ?? [], events),
     );
     initialEventsByMessageId = next;
-    scanEventsForDocxCards(normalizedId, events);
+    scanEventsForGeneratedFileCards(normalizedId, events);
   };
 
   const ingestSessionHistoryMeta = (line: SessionHistoryMetaLine) => {
@@ -3817,7 +3865,7 @@
         runtimeSummaryByMessageId.set(item.message.id, item.segment.runtimeSummary);
       }
       if (item.kind === 'runtime-segment' && item.segment.runtimeSummary) {
-        extractDocxCardsFromRuntimeSummary(item.message.id, item.segment.runtimeSummary);
+        extractGeneratedFileCardsFromRuntimeSummary(item.message.id, item.segment.runtimeSummary);
       }
 
       const existingTimelineIndex = nextHistory.findIndex(
@@ -3836,7 +3884,7 @@
     messages = nextMessages;
     initialEventsByMessageId = nextInitialEvents;
     for (const [msgId, events] of nextInitialEvents) {
-      scanEventsForDocxCards(msgId, events);
+      scanEventsForGeneratedFileCards(msgId, events);
     }
     historyTimelineItems = nextHistory;
     stagedHistoryTimelineItems = [];
@@ -4066,11 +4114,11 @@
     historyTimelineSessionId = snapshot.sessionId;
     initialEventsByMessageId = snapshot.initialEvents;
     for (const [msgId, events] of snapshot.initialEvents) {
-      scanEventsForDocxCards(msgId, events);
+      scanEventsForGeneratedFileCards(msgId, events);
     }
     runtimeSummaryByMessageId = snapshot.runtimeSummaries;
     for (const [msgId, summary] of snapshot.runtimeSummaries) {
-      extractDocxCardsFromRuntimeSummary(msgId, summary);
+      extractGeneratedFileCardsFromRuntimeSummary(msgId, summary);
     }
     applySessionCheckpoints(snapshot.checkpoints);
     sessionDocs = snapshot.documents;
@@ -5194,22 +5242,22 @@
                     initialEvents={item.segment.events}
                     initiallyExpanded={false}
                     deferCollapsedDetails={!useUnifiedActiveRunPresentation(item.message)}
-                    onDocxDownload={(card) => handleDocxDownload(m.id, card)}
+                    onGeneratedFile={(card) => handleGeneratedFileCard(m.id, card)}
                   />
                   {#if item.isTerminal && item.isLastAssistantSegment}
-                    {@const docxCards = docxCardsByMessageId.get(m.id) ?? []}
-                    {#each docxCards as card (card.jobId)}
+                    {@const generatedFileCards = generatedFileCardsByMessageId.get(m.id) ?? []}
+                    {#each generatedFileCards as card (card.jobId)}
                       <div class="rounded border border-slate-200 bg-white px-2 py-1.5 flex items-center gap-2 max-w-[14rem] mt-1">
                         <FileText class="w-4 h-4 text-primary shrink-0" />
                         <div class="min-w-0 flex-1">
                           <div class="text-xs font-medium text-slate-900 truncate">{card.fileName}</div>
-                          <div class="text-[10px] text-slate-500">DOCX</div>
+                          <div class="text-[10px] text-slate-500">{getGeneratedFileFormatLabel(card.format)}</div>
                         </div>
                         <button
                           class="ml-auto text-primary hover:bg-slate-100 rounded p-1"
                           type="button"
-                          aria-label={$_('common.downloadDocx')}
-                          on:click={() => downloadCompletedDocxJob(card.jobId, card.fileName)}
+                          aria-label={$_('common.download')}
+                          on:click={() => downloadGeneratedFile(card)}
                         >
                           <Download class="w-3.5 h-3.5" />
                         </button>
@@ -5300,7 +5348,7 @@
                     showRuntimeInlinePreview={item.isActiveRuntimeSegment}
                     acknowledgementText={item.acknowledgementText}
                     onTodoRuntime={handleTodoRuntimeToolResult}
-                    onDocxDownload={(card) => handleDocxDownload(item.message.id, card)}
+                    onGeneratedFile={(card) => handleGeneratedFileCard(item.message.id, card)}
                   />
                 </div>
               </div>

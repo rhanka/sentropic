@@ -847,18 +847,26 @@ export const taskDispatchTool: OpenAI.Chat.Completions.ChatCompletionTool = {
 };
 
 /**
- * Tool for generating a DOCX document from the current context.
- * Enqueues a document generation job via queue-manager.
+ * Tool for generating a document (DOCX or PPTX) from the current context.
+ *
+ * DOCX supports:
+ * - async template generation via queue-manager
+ * - synchronous freeform generation in chat (sandboxed code)
+ *
+ * PPTX supports (BR-21a):
+ * - synchronous freeform generation in chat (sandboxed PptGenJS code)
  */
 export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: 'function',
   function: {
     name: 'document_generate',
     description:
-      'Generate a DOCX document from the current context (initiative, folder/dashboard, etc.). ' +
-      'Before generating your first document in a conversation, call this tool with `action: "upskill"` to learn DOCX best practices. ' +
-      'Then call with `action: "generate"` with your code. ' +
-      'For generate: two sub-modes — (1) Template mode with templateId, (2) Freeform mode with code (mutually exclusive).',
+      'Generate a document from the current context (initiative, folder/dashboard, etc.). ' +
+      'Formats: "docx" (default) or "pptx". ' +
+      'Before generating your first document in a conversation, call this tool with `action: "upskill"` (optionally with format) to learn best practices. ' +
+      'Then call with `action: "generate"`. ' +
+      'DOCX supports two sub-modes — (1) Template mode with templateId, (2) Freeform mode with code (mutually exclusive). ' +
+      'PPTX supports freeform code only.',
     parameters: {
       type: 'object',
       properties: {
@@ -868,28 +876,37 @@ export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = 
           description:
             'Action to perform. Call "upskill" first to learn DOCX creation best practices, then "generate" with your code.',
         },
+        format: {
+          type: 'string',
+          enum: ['docx', 'pptx'],
+          description:
+            'Output format. Defaults to "docx". Use "pptx" for freeform presentation generation (PptGenJS code).',
+        },
         templateId: {
           type: 'string',
           description:
             'Document template identifier. Examples: "usecase-onepage" for initiative one-pager, ' +
             '"executive-synthesis-multipage" for folder executive summary report. ' +
-            'Mutually exclusive with code. Only for action "generate".',
+            'Mutually exclusive with code. Only for action "generate" and format "docx".',
         },
         entityType: {
           type: 'string',
           enum: ['initiative', 'folder'],
-          description: 'Type of entity to generate the document for. Only for action "generate".',
+          description:
+            'Type of entity to generate the document for. Only for action "generate". Optional when the current chat context already focuses an initiative or folder.',
         },
         entityId: {
           type: 'string',
-          description: 'ID of the entity (initiative ID or folder ID). Only for action "generate".',
+          description:
+            'ID of the entity (initiative ID or folder ID). Only for action "generate". Optional when the current chat context already focuses the target initiative/folder.',
         },
         code: {
           type: 'string',
           description:
-            'JavaScript code using docx helpers (doc, h, p, bold, italic, list, table, pageBreak, hr) ' +
-            'that returns a Document object. Available data: context.entity, context.initiatives, ' +
-            'context.matrix, context.workspace. Mutually exclusive with templateId. Only for action "generate".',
+            'Freeform JavaScript code. For format "docx": use docx helpers (doc, h, p, bold, italic, list, table, pageBreak, hr) ' +
+            'and return a Document object. For format "pptx": prefer pptx() plus the provided PptGenJS helpers and return a presentation object. ' +
+            'Available data: context.entity, context.initiatives, context.matrix, context.workspace. ' +
+            'Mutually exclusive with templateId. Only for action "generate".',
         },
         title: {
           type: 'string',
