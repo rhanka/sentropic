@@ -1,6 +1,6 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-04-20 — BR-06 merged (`62de15ad`). Active scoping: Entropic transition, BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16a (gdrive SSO + in-situ indexing). BR-14 split → BR-14a + BR-14b + BR-14c + BR-14d + BR-14e. Selected execution order: PR-117 transition ops → BR-14c → BR-14b → BR-14a → BR-14e → BR-14d. BR-16 split → BR-16a + BR-16b. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
+Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` launched to remove the current API HIGH dependency vulnerability blocking CI/security gates. Existing active scoping remains: Entropic transition, BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16a (gdrive SSO + in-situ indexing). BR-14 split → BR-14a + BR-14b + BR-14c + BR-14d + BR-14e. Selected execution order: PR-117 transition ops → BR-14c → BR-14b → BR-14a → BR-14e → BR-14d. BR-16 split → BR-16a + BR-16b. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
 
 ## 1) Current state
 
@@ -24,6 +24,7 @@ Status: Updated 2026-04-20 — BR-06 merged (`62de15ad`). Active scoping: Entrop
 - BR-14c `feat/llm-mesh-sdk` — priority extraction: publishable npm lib `@entropic/llm-mesh`, Vercel AI SDK-like access to GPT/Claude/Gemini/Mistral/Cohere with token and Codex-account modes.
 - BR-14a `feat/chat-ui-sdk` — former BR-14, renamed: chat publishable as npm lib `@entropic/chat`, using the LLM mesh contract rather than application runtime internals.
 - BR-16a `feat/gdrive-sso-indexing` — Google Drive OAuth + in-situ indexing (chunks+embeddings in DB, docs stay in Drive). Split from former BR-16.
+- `fix/high-vulnerabilities` — isolated remediation branch for the API HIGH dependency vulnerability currently failing `security-sast-sca` and API image audit gates.
 
 **Pending branches (unblocked):**
 - BR-07, BR-10, BR-11, BR-12, BR-14b (after BR-14c contract), BR-14e (codebase finalization after 14a/14b/14c), BR-14d (mandatory transition ops after PR-117 release and BR-14e), BR-15, BR-16b, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22 — see §3 catalog for descriptions, dependencies, and priorities.
