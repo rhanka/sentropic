@@ -36,6 +36,13 @@ This document is the single checklist for **chat tools**: what is already implem
   - Actions: close thread, reassign, add note (batch-enabled)
   - Traceability: comments created by the tool include `tool_call_id`
 
+### Documents tool
+- [x] `documents`
+  - `action: "list" | "get_summary" | "get_content" | "analyze"`
+  - Reads documents attached to `organization`, `folder`, `initiative`, and `chat_session` contexts.
+  - Download-only archives (`.zip`, `.tar.gz`, `.tgz`) stay listable/downloadable in the product surface.
+  - Download-only archives are intentionally non-explorable for the tool: `get_summary`, `get_content`, and `analyze` are blocked when `indexingSkipped=true` / `archive_download_only`.
+
 ### Document generation tools (BR-04B, extended by BR-21a)
 - [x] `document_generate` (two-phase pattern: `action=upskill` then `action=generate`)
   - **Format**: optional `format: "docx" | "pptx"`; missing format defaults to `docx`.
