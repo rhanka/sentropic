@@ -357,7 +357,7 @@ The chatbot data model enables:
 - Stream responses in real time via PostgreSQL LISTEN/NOTIFY
 
 #### Context document tables (to add)
-- `context_documents`: id, context_type (organization|folder|usecase), context_id, filename, mime_type, size_bytes, storage_key (S3/MinIO), status (`uploaded|processing|ready|failed`), summary, summary_lang, prompt_id/prompt_version_id for the summary, created_at/updated_at, version.
+- `context_documents`: id, context_type (organization|folder|usecase), context_id, filename, mime_type, size_bytes, storage_key (S3/MinIO), status (`uploaded|processing|ready|failed`), summary, summary_lang, prompt_id/prompt_version_id for the summary, optional `data.indexingSkipped` / `data.indexingSkipReason` flags for download-only archives, created_at/updated_at, version.
 - `context_document_versions` (optional): file/summary history (document_id, version, summary, storage_key, created_at).
 - Traceability: `document_added` / `document_summarized` events in `context_modification_history` (with summary prompt_version_id and summary job_id).
 
@@ -641,10 +641,10 @@ const replay = await replayChatSession('session-789');
 7. **History** → `context_modification_history` for all modifications (structured calls + sessions)
 
 #### Context documents
-1. **Upload** → POST `/api/documents` (context_type/id, file) → S3/MinIO storage, `context_documents` record (status=uploaded)
-2. **Auto summary** → “document_summary” queue job launched immediately (versioned summary prompt, 0.1k token/page, configurable language, default FR) → update `context_documents` (status=processing→ready/failed, summary, prompt_version_id, job_id) + event `document_summarized`
-3. **Consultation** → GET `/api/documents?context_type=&context_id=` + GET `/api/documents/:id` (metadata + summary); no rich viewer (simple download via GET `/api/documents/:id/content` if needed)
-4. **Notifications** → AI is notified on upload for acknowledgement; any use‑case processing depending on the doc waits for status ready (summary available)
+1. **Upload** → POST `/api/documents` (context_type/id, file) → S3/MinIO storage, `context_documents` record. Standard explorable documents start at `status=uploaded`; download-only archives (`.zip`, `.tar.gz`, `.tgz`) are persisted directly as `status=ready` with `data.indexingSkipped=true`.
+2. **Auto summary** → “document_summary” queue job launched immediately only for explorable documents (versioned summary prompt, 0.1k token/page, configurable language, default FR) → update `context_documents` (status=processing→ready/failed, summary, prompt_version_id, job_id) + event `document_summarized`
+3. **Consultation** → GET `/api/documents?context_type=&context_id=` + GET `/api/documents/:id` (metadata + summary). Download-only archives remain listed and downloadable through GET `/api/documents/:id/content`, but expose no summary affordance and must resolve to an effective `ready` status even for legacy skipped-index rows.
+4. **Notifications** → AI is notified on upload for acknowledgement; any use‑case processing depending on the doc waits for status ready only for explorable documents. Download-only archives do not enter indexing/exploration flows.
 5. **Traceability** → `context_modification_history` events `document_added` / `document_summarized` with `prompt_version_id` and `job_id`
 
 ## Technical impact study (API/UI/DB/queue anchor)
@@ -717,6 +717,7 @@ const replay = await replayChatSession('session-789');
 
 **Implemented (partial)**:
 - [x] Chat session documents (upload/list/delete, auto summary, tool `documents`).
+- [x] Download-only archive uploads (`.zip`, `.tar.gz`, `.tgz`) on object documents blocks: stored like standard documents, downloadable, excluded from summary/indexing/tool exploration, and surfaced as `ready`.
 
 **To implement**:
 - [ ] API: POST `/api/documents` (upload + context_type/id); GET `/api/documents?context_type=&context_id=` (list); GET `/api/documents/:id` (meta+summary); GET `/api/documents/:id/content` (download)
