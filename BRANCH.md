@@ -134,6 +134,8 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
   - `make test-api-ai SCOPE=tests/ai/documents-tool.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 - [x] `attention` BR16a-U2 — Formal Lot 5 webapp UAT remains pending because this worker run must not push and must not touch the root workspace. In-worktree focused regression checks were run instead so the live OAuth/Picker flow can be resumed later from the branch head. Impact: Lot 5 browser steps stay open. Rollback: none.
+- [x] `validation` BR16a-U3 — Mocked browser UX validation now covers the full composer flow without live Google secrets: magic-link-authenticated Playwright opens the chat composer, exercises the Google Drive connect redirect, imports a mocked picker selection, refreshes attached session documents, disconnects the account, and verifies the backend config error path inline.
+- [x] `attention` BR16a-U4 — Live OAuth/Picker root UAT is still open because the runtime Google Drive secrets are not present in this environment. Browser-grade UX proof is therefore split into: mocked E2E/browser validation done on the branch lane, live OAuth validation pending on root once secrets are injected.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -243,6 +245,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
       - [x] Run AI document tool tests only when credentials are available and record flaky signatures if any.
 
 - [ ] **Lot 5 — UAT**
+  - [x] Mocked web app UX validation covers connect/import/disconnect plus OAuth-config error handling via `e2e/tests/04-google-drive-composer.spec.ts`.
   - [ ] Web app:
     - [ ] Connect Google account.
     - [ ] List/select Drive file.
