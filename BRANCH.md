@@ -136,6 +136,17 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - [x] `attention` BR16a-U2 — Formal Lot 5 webapp UAT remains pending because this worker run must not push and must not touch the root workspace. In-worktree focused regression checks were run instead so the live OAuth/Picker flow can be resumed later from the branch head. Impact: Lot 5 browser steps stay open. Rollback: none.
 - [x] `validation` BR16a-U3 — Mocked browser UX validation now covers the full composer flow without live Google secrets: magic-link-authenticated Playwright opens the chat composer, exercises the Google Drive connect redirect, imports a mocked picker selection, refreshes attached session documents, disconnects the account, and verifies the backend config error path inline.
 - [x] `attention` BR16a-U4 — Live OAuth/Picker root UAT is still open because the runtime Google Drive secrets are not present in this environment. Browser-grade UX proof is therefore split into: mocked E2E/browser validation done on the branch lane, live OAuth validation pending on root once secrets are injected.
+- [x] `validation` BR16a-U5 — Traceable dev-lane live-readiness now has real execution proof on 2026-04-27 using a verified seeded user. Evidence:
+  - `make exec-playwright-dev CMD="DEV_PLAYWRIGHT_AUTH_EMAIL=e2e-user-a@example.com npx playwright test --config playwright.dev.config.ts tests/dev/00-record-auth.spec.ts --workers=1 --retries=0 --reporter=list --grep 'e2e-user-a@example.com'" PLAYWRIGHT_DEV_UI_PORT=5280 API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-e2e-dev E2E_SPEC=e2e/tests/dev/01-google-drive-live-readiness.spec.ts PLAYWRIGHT_DEV_UI_PORT=5280 API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - Both commands passed. On the current lane, the readiness probe proves the missing-credential branch and the inline composer error path, not a live Google redirect.
+- [x] `attention` BR16a-U6 — `record-dev-playwright-auth` does not currently give a trustworthy BR16a proof with its default lane user. The helper defaults to `admin@sent-tech.ca`, and on this seeded test lane that account still has `users.email_verified=false`, so the recorded cookie yields `401 Invalid or expired session` on authenticated API calls. Use the verified seeded user command from BR16a-U5 for branch-lane proof until root runtime credentials + real user UAT are available. Rollback: none; this is documentation of current lane constraints, not a product behavior change.
+- [ ] `blocker` BR16a-LIVE1 — Live runtime credential bootstrap is still missing on the tested environments.
+  - Missing or unproven until traced on the target runtime: `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL`, `GOOGLE_DRIVE_PICKER_API_KEY`. `GOOGLE_DRIVE_PICKER_APP_ID` is optional because the backend derives it from the OAuth client ID when omitted.
+  - Traceable proof path added in this branch:
+    - `make exec-playwright-dev CMD="DEV_PLAYWRIGHT_AUTH_EMAIL=<verified-user> npx playwright test --config playwright.dev.config.ts tests/dev/00-record-auth.spec.ts --workers=1 --retries=0 --reporter=list --grep '<verified-user>'" PLAYWRIGHT_DEV_UI_PORT=<port> API_PORT=<api> UI_PORT=<ui> MAILDEV_UI_PORT=<maildev> ENV=<env>`
+    - `make test-e2e-dev E2E_SPEC=e2e/tests/dev/01-google-drive-live-readiness.spec.ts PLAYWRIGHT_DEV_UI_PORT=<port> API_PORT=<api> UI_PORT=<ui> MAILDEV_UI_PORT=<maildev> ENV=<env>`
+  - Close this blocker only when the readiness spec proves either a real Google OAuth redirect or a connected account + picker readiness on the target runtime, then root UAT completes the end-to-end flow.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -246,6 +257,10 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 
 - [ ] **Lot 5 — UAT**
   - [x] Mocked web app UX validation covers connect/import/disconnect plus OAuth-config error handling via `e2e/tests/04-google-drive-composer.spec.ts`.
+  - [ ] Traceable live readiness:
+    - [x] Record authenticated Playwright `dev-state.json` on the branch dev lane with a verified seeded user via `make exec-playwright-dev ... tests/dev/00-record-auth.spec.ts ...`.
+    - [x] Run `e2e/tests/dev/01-google-drive-live-readiness.spec.ts` on the branch dev lane with `make test-e2e-dev ...`.
+    - [ ] Inject/prove runtime Google Drive credentials (`client_id`, `client_secret`, `callback_base_url`, `picker_api_key`, `picker_app_id`) on the target runtime.
   - [ ] Web app:
     - [ ] Connect Google account.
     - [ ] List/select Drive file.
@@ -268,6 +283,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - [ ] `make test-api-endpoints API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
   - [ ] `make typecheck-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
   - [ ] `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - [ ] Rerun dev-lane live-readiness proof (`00-record-auth.spec.ts` with a verified user + `01-google-drive-live-readiness.spec.ts`) after any credential/bootstrap change.
   - [ ] Create/update PR using `BRANCH.md` text as PR body.
   - [ ] Verify branch CI and resolve blockers.
   - [ ] Once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
