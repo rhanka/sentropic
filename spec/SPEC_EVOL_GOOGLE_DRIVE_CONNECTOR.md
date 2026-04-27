@@ -125,6 +125,41 @@ Provisioning result on 2026-04-22 for Google Cloud project `sent-tech`:
 - API key API restrictions: Google Drive API and Google Picker API.
 - Obsolete local port entries `http://localhost:5116`, `http://localhost:8716/api/v1/google-drive/oauth/callback`, and `http://localhost:5116/*` were removed from Google Cloud on 2026-04-22.
 
+### Runtime Credential Bootstrap (traceable)
+
+Provisioning in Google Cloud is not enough. The target runtime must also expose or store these values so BR-16a can run live:
+
+- `GOOGLE_DRIVE_CLIENT_ID` or setting `google_drive_oauth_client_id`
+- `GOOGLE_DRIVE_CLIENT_SECRET` or setting `google_drive_oauth_client_secret`
+- `GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL` or setting `google_drive_oauth_callback_base_url`
+- `GOOGLE_DRIVE_PICKER_API_KEY` or setting `google_drive_picker_api_key`
+- optional `GOOGLE_DRIVE_PICKER_APP_ID` or setting `google_drive_picker_app_id` (the backend derives the Google Cloud numeric app ID from the OAuth client ID when omitted)
+
+Traceable proof commands on a target runtime:
+
+1. Record authenticated Playwright state against the runtime with a verified user:
+
+```bash
+make exec-playwright-dev CMD="DEV_PLAYWRIGHT_AUTH_EMAIL=<verified-user-email> npx playwright test --config playwright.dev.config.ts tests/dev/00-record-auth.spec.ts --workers=1 --retries=0 --reporter=list --grep '<verified-user-email>'" PLAYWRIGHT_DEV_UI_PORT=<playwright-ui-port> API_PORT=<api-port> UI_PORT=<ui-port> MAILDEV_UI_PORT=<maildev-port> ENV=<env>
+```
+
+2. Run the live-readiness browser/API probe:
+
+```bash
+make test-e2e-dev E2E_SPEC=e2e/tests/dev/01-google-drive-live-readiness.spec.ts PLAYWRIGHT_DEV_UI_PORT=<playwright-ui-port> API_PORT=<api-port> UI_PORT=<ui-port> MAILDEV_UI_PORT=<maildev-port> ENV=<env>
+```
+
+Expected outcomes:
+
+- If credentials are still missing, the spec proves the current UX branch by asserting the inline error `Google Drive OAuth is not configured.` after clicking `Connect Google Drive`.
+- If OAuth credentials are present, the spec proves readiness by asserting that the connect action leaves the current page and targets Google OAuth.
+- If an account is already connected, the spec proves the connected branch and picker readiness probe (`200` with picker config, or `503` with explicit picker misconfiguration).
+
+Observed lane caveat on 2026-04-27:
+
+- The generic helper target `make record-dev-playwright-auth ...` is not sufficient evidence on the BR-16a seeded lane because its default lane user `admin@sent-tech.ca` currently has `users.email_verified=false`, which produces a session cookie later rejected by `validateSession()`.
+- The verified seeded user `e2e-user-a@example.com` is suitable for branch-lane traceable proof. This is only for branch-lane validation; root UAT must still use the real target user/session after live Google credentials are injected.
+
 ## Proposed Data Model
 
 Minimum durable objects:
