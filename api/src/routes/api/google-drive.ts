@@ -20,12 +20,21 @@ import {
   appendGoogleDriveOAuthResultToReturnPath,
   exchangeGoogleDriveOAuthCode,
   resolveGoogleDriveAccountIdentity,
+  resolveGoogleDriveAppReturnBaseUrl,
   resolveGoogleDriveOAuthConfig,
   startGoogleDriveOAuth,
   verifyGoogleDriveOAuthState,
 } from '../../services/google-drive-oauth';
 
 export const googleDriveRouter = new Hono();
+
+const googleDriveReturnRedirect = (
+  returnPath: string,
+  params: Record<string, string>,
+): string =>
+  appendGoogleDriveOAuthResultToReturnPath(returnPath, params, {
+    baseUrl: resolveGoogleDriveAppReturnBaseUrl(),
+  });
 
 const oauthStartSchema = z.object({
   returnPath: z.string().trim().max(512).optional().nullable(),
@@ -215,11 +224,7 @@ googleDriveRouter.get('/oauth/callback', async (c) => {
       message: googleError,
     });
     if (json) return c.json({ account, message: googleError }, 400);
-    return c.redirect(
-      appendGoogleDriveOAuthResultToReturnPath(state.returnPath, {
-        google_drive: 'error',
-      }),
-    );
+    return c.redirect(googleDriveReturnRedirect(state.returnPath, { google_drive: 'error' }));
   }
 
   const code = c.req.query('code')?.trim();
@@ -239,11 +244,7 @@ googleDriveRouter.get('/oauth/callback', async (c) => {
     });
 
     if (json) return c.json({ account, returnPath: state.returnPath });
-    return c.redirect(
-      appendGoogleDriveOAuthResultToReturnPath(state.returnPath, {
-        google_drive: 'connected',
-      }),
-    );
+    return c.redirect(googleDriveReturnRedirect(state.returnPath, { google_drive: 'connected' }));
   } catch (error) {
     const message = toErrorMessage(error, 'Google Drive OAuth callback failed');
     const account = await markGoogleDriveConnectorError({
@@ -252,11 +253,7 @@ googleDriveRouter.get('/oauth/callback', async (c) => {
       message,
     });
     if (json) return c.json({ account, message }, 400);
-    return c.redirect(
-      appendGoogleDriveOAuthResultToReturnPath(state.returnPath, {
-        google_drive: 'error',
-      }),
-    );
+    return c.redirect(googleDriveReturnRedirect(state.returnPath, { google_drive: 'error' }));
   }
 });
 
