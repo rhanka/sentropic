@@ -135,6 +135,10 @@ Provisioning in Google Cloud is not enough. The target runtime must also expose 
 - `GOOGLE_DRIVE_PICKER_API_KEY` or setting `google_drive_picker_api_key`
 - optional `GOOGLE_DRIVE_PICKER_APP_ID` or setting `google_drive_picker_app_id` (the backend derives the Google Cloud numeric app ID from the OAuth client ID when omitted)
 
+Local runtime note:
+
+- The live UAT runtime must pass these values into the API container explicitly. In the current local setup, that means `docker-compose.yml` must forward `GOOGLE_DRIVE_*` plus `AUTH_CALLBACK_BASE_URL`; otherwise the branch code compiles but the live OAuth/Pickers paths stay untestable.
+
 Traceable proof commands on a target runtime:
 
 1. Record authenticated Playwright state against the runtime with a verified user:
@@ -154,6 +158,11 @@ Expected outcomes:
 - If credentials are still missing, the spec proves the current UX branch by asserting the inline error `Google Drive OAuth is not configured.` after clicking `Connect Google Drive`.
 - If OAuth credentials are present, the spec proves readiness by asserting that the connect action leaves the current page and targets Google OAuth.
 - If an account is already connected, the spec proves the connected branch and picker readiness probe (`200` with picker config, or `503` with explicit picker misconfiguration).
+
+Validation boundary:
+
+- This traceable readiness flow proves credential/bootstrap correctness, connected-account persistence, and whether the chat composer can leave the app toward Google or surface a deterministic inline error.
+- It does not replace the final Lot 5 product UAT for selecting a real Drive file, indexing it, and retrieving facts through chat.
 
 Observed lane caveat on 2026-04-27:
 
