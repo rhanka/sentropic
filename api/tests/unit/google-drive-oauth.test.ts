@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  appendGoogleDriveOAuthResultToReturnPath,
   buildGoogleDriveAuthorizationUrl,
   createGoogleDriveOAuthState,
   exchangeGoogleDriveOAuthCode,
@@ -14,6 +15,16 @@ const config: GoogleDriveOAuthConfig = {
 };
 
 describe('Google Drive OAuth helpers', () => {
+  it('builds an absolute UI redirect URL when a frontend base URL is provided', () => {
+    expect(
+      appendGoogleDriveOAuthResultToReturnPath(
+        '/folders?view=grid',
+        { google_drive: 'connected' },
+        { baseUrl: 'http://localhost:5173/' },
+      ),
+    ).toBe('http://localhost:5173/folders?view=grid&google_drive=connected');
+  });
+
   it('builds an authorization URL with narrow Drive scope and offline access', () => {
     const { state } = createGoogleDriveOAuthState({
       userId: 'user-1',
