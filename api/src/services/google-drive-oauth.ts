@@ -100,6 +100,13 @@ const resolveCallbackBaseUrl = async (): Promise<string | null> => {
   return raw ? trimTrailingSlash(raw) : null;
 };
 
+export const resolveGoogleDriveAppReturnBaseUrl = (): string | null => {
+  const raw =
+    normalizeOptionalText(process.env.AUTH_CALLBACK_BASE_URL) ||
+    normalizeOptionalText(env.AUTH_CALLBACK_BASE_URL);
+  return raw ? trimTrailingSlash(raw) : null;
+};
+
 const resolveClientSecret = async (): Promise<string | null> => {
   const envSecret =
     normalizeOptionalText(process.env.GOOGLE_DRIVE_CLIENT_SECRET) ||
@@ -345,11 +352,15 @@ export const resolveGoogleDriveAccountIdentity = async (input: {
 export const appendGoogleDriveOAuthResultToReturnPath = (
   returnPath: string,
   params: Record<string, string>,
+  options: { baseUrl?: string | null } = {},
 ): string => {
   const path = normalizeReturnPath(returnPath);
   const url = new URL(path, 'http://local');
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
-  return `${url.pathname}${url.search}${url.hash}`;
+  const relativePath = `${url.pathname}${url.search}${url.hash}`;
+  const baseUrl = normalizeOptionalText(options.baseUrl);
+  if (!baseUrl) return relativePath;
+  return new URL(relativePath, trimTrailingSlash(baseUrl)).toString();
 };

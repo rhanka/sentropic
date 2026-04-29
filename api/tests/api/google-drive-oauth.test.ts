@@ -58,10 +58,12 @@ describe('Google Drive OAuth API router', () => {
       GOOGLE_DRIVE_CLIENT_ID: process.env.GOOGLE_DRIVE_CLIENT_ID,
       GOOGLE_DRIVE_CLIENT_SECRET: process.env.GOOGLE_DRIVE_CLIENT_SECRET,
       GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL: process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL,
+      AUTH_CALLBACK_BASE_URL: process.env.AUTH_CALLBACK_BASE_URL,
     };
     process.env.GOOGLE_DRIVE_CLIENT_ID = 'test-google-client-id';
     process.env.GOOGLE_DRIVE_CLIENT_SECRET = 'test-google-client-secret';
     process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL = 'https://api.example.test';
+    process.env.AUTH_CALLBACK_BASE_URL = 'https://app.example.test';
     app = await createMountedGoogleDriveApp();
     user = await createAuthenticatedUser('editor');
     await seedGoogleDriveOAuthConfig();
@@ -230,6 +232,54 @@ describe('Google Drive OAuth API router', () => {
     });
     expect(token?.accessToken).toBe('google-access-token');
     expect(token?.refreshToken).toBe('google-refresh-token');
+  });
+
+  it('redirects OAuth callback completions back to the frontend origin', async () => {
+    const idToken = encodeJwtPayload({
+      sub: 'google-subject-2',
+      email: 'redirect@example.com',
+    });
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          access_token: 'google-access-token-2',
+          refresh_token: 'google-refresh-token-2',
+          token_type: 'Bearer',
+          expires_in: 3600,
+          scope: 'openid email profile https://www.googleapis.com/auth/drive.file',
+          id_token: idToken,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const start = await app.request('/api/v1/google-drive/oauth/start', {
+      method: 'POST',
+      headers: {
+        Cookie: `session=${user.sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ returnPath: '/folders?view=grid' }),
+    });
+    const startPayload = await start.json();
+    const state = new URL(startPayload.authorizationUrl).searchParams.get('state');
+
+    const callback = await app.request(
+      `/api/v1/google-drive/oauth/callback?state=${encodeURIComponent(String(state))}&code=google-code`,
+      {
+        method: 'GET',
+        headers: {
+          Cookie: `session=${user.sessionToken}`,
+        },
+        redirect: 'manual',
+      },
+    );
+
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get('location')).toBe(
+      'https://app.example.test/folders?view=grid&google_drive=connected',
+    );
   });
 
   it('disconnects an existing Google Drive account and clears encrypted tokens', async () => {
