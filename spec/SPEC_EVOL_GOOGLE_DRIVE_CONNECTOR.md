@@ -280,7 +280,7 @@ Current BR-16a implementation status:
 - The composer connection surface is implemented: connection status fetch, OAuth start, disconnect, Picker config fetch, picker selection resolution, and Drive document attachment are wired in the existing chat composer menu.
 - The visible "Import from Google Drive" entry is live and attaches Drive selections to the chat session document list.
 - Deterministic browser validation now exists without live Google secrets: Playwright uses magic-link auth plus browser/API mocks for Picker/OAuth endpoints to exercise connect, import, disconnect, and inline error handling.
-- Live root/UAT validation is still required once Google Drive secrets are present in the runtime environment so the real OAuth/Pickers paths can be exercised end to end.
+- Live root/UAT validation is now completed on the target runtime. The real Google OAuth path was exercised end to end with a connected user account, working picker config, and a final redirect back to the root UI host.
 
 Avoid in BR-16a:
 
@@ -311,6 +311,7 @@ UI tests:
 UAT:
 
 - Connect Google account.
+- Confirm the callback returns to the UI host, not the API host.
 - Select one Google Doc through Picker.
 - Index it.
 - Ask chat a factual question whose answer is present in the selected Drive document.
