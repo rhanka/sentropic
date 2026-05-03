@@ -617,6 +617,23 @@
         "missingEnrollment": "No pending Codex enrollment found. Start sign-in first."
       }
     },
+    "connectors": {
+      "title": "Connectors",
+      "description": "Manage the document connectors available to your current account.",
+      "status": {
+        "connected": "Connected",
+        "disconnected": "Disconnected"
+      },
+      "googleDrive": {
+        "title": "Google Drive",
+        "subtitle": "Use Drive files directly in chat and document contexts.",
+        "connect": "Connect Google Drive",
+        "disconnect": "Disconnect Google Drive",
+        "connectedAs": "Connected as {email}",
+        "disconnectedHint": "Connect your Google account here before importing Drive files elsewhere in the app.",
+        "disconnectedToast": "Google Drive disconnected."
+      }
+    },
     "chromeExtension": {
       "title": "Chrome extension",
       "description": "Download the latest Chrome extension package configured for this instance.",
@@ -1334,6 +1351,11 @@
       "cta": "Add document",
       "loading": "Uploading…",
       "success": "Document uploaded. Summary will be generated."
+    },
+    "googleDrive": {
+      "manageInSettings": "Manage Google Drive in Settings",
+      "manageHint": "Connect or disconnect Google Drive from Settings, then return here to import files.",
+      "importSuccess": "Google Drive files attached. Summary will be generated."
     },
     "action": {
       "download": "Download",
