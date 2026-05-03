@@ -237,7 +237,7 @@ Constraints:
   - filename = Drive source name
   - type label = source Drive MIME / Google Workspace type
   - export suffixes such as `.md`, `.csv`, and `.txt` must not leak into list surfaces
-- For native Google Docs / Sheets / Slides, Drive's reported `size` reflects the exported artifact rather than a meaningful canonical source size. Entity list surfaces should hide that size instead of presenting it as if it were the source-file size.
+- `files.size` from the Drive file resource should be treated as the official visible size when Google provides it, including for native Google Workspace files; the exported Markdown / CSV / plain-text artifact remains internal and must not replace the source-facing size in list surfaces.
 
 Deferred to BR-16c:
 
