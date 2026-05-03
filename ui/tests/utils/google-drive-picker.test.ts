@@ -28,6 +28,8 @@ describe('google drive picker utils', () => {
       setAppId: vi.fn().mockReturnThis(),
       setOAuthToken: vi.fn().mockReturnThis(),
       setLocale: vi.fn().mockReturnThis(),
+      setOrigin: vi.fn().mockReturnThis(),
+      setRelayUrl: vi.fn().mockReturnThis(),
       addView: vi.fn().mockReturnThis(),
       enableFeature: vi.fn().mockReturnThis(),
       setCallback: vi.fn().mockImplementation((next) => {
@@ -82,6 +84,8 @@ describe('google drive picker utils', () => {
     expect(builder.setAppId).toHaveBeenCalledWith('924600787940');
     expect(builder.setOAuthToken).toHaveBeenCalledWith('oauth-token-1');
     expect(builder.setLocale).toHaveBeenCalledWith('en');
+    expect(builder.setOrigin).toHaveBeenCalledWith(window.location.origin);
+    expect(builder.setRelayUrl).toHaveBeenCalledWith(`${window.location.origin}/`);
     expect(builder.enableFeature).toHaveBeenCalledWith('MULTISELECT_ENABLED');
     expect(builder.enableFeature).toHaveBeenCalledWith('SUPPORT_DRIVES');
   });
@@ -93,6 +97,8 @@ describe('google drive picker utils', () => {
       setAppId: vi.fn().mockReturnThis(),
       setOAuthToken: vi.fn().mockReturnThis(),
       setLocale: vi.fn().mockReturnThis(),
+      setOrigin: vi.fn().mockReturnThis(),
+      setRelayUrl: vi.fn().mockReturnThis(),
       addView: vi.fn().mockReturnThis(),
       enableFeature: vi.fn().mockReturnThis(),
       setCallback: vi.fn().mockImplementation((next) => {
@@ -141,5 +147,7 @@ describe('google drive picker utils', () => {
 
     expect(result).toEqual([]);
     expect(builder.setAppId).not.toHaveBeenCalled();
+    expect(builder.setOrigin).toHaveBeenCalledWith(window.location.origin);
+    expect(builder.setRelayUrl).toHaveBeenCalledWith(`${window.location.origin}/`);
   });
 });
