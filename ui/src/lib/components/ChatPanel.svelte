@@ -30,6 +30,10 @@
   import EditableInput from '$lib/components/EditableInput.svelte';
   import DocumentSourceMenu from '$lib/components/DocumentSourceMenu.svelte';
   import MenuPopover from '$lib/components/MenuPopover.svelte';
+  import {
+    GOOGLE_DRIVE_CONNECTION_UPDATED_EVENT,
+    GOOGLE_DRIVE_CONNECTORS_ROUTE,
+  } from '$lib/utils/google-drive-connectors';
   import { currentFolderId, foldersStore } from '$lib/stores/folders';
   import { organizationsStore } from '$lib/stores/organizations';
   import { initiativesStore } from '$lib/stores/initiatives';
@@ -1385,6 +1389,7 @@
   let sessionTitlesSseKey = '';
   let sessionDocsReloadTimer: ReturnType<typeof setTimeout> | null = null;
   let showComposerMenu = false;
+  let previousComposerMenuOpen = false;
   let composerMenuButtonRef: HTMLButtonElement | null = null;
   let composerMenuContextsMaxH = '';
   let composerMenuToolsMaxH = '';
@@ -1393,6 +1398,7 @@
   let handleDocumentClick: ((_: MouseEvent) => void) | null = null;
   // eslint-disable-next-line no-unused-vars
   let handleUserAISettingsUpdated: ((_: Event) => void) | null = null;
+  let handleGoogleDriveConnectionUpdated: ((_: Event) => void) | null = null;
   let contextEntries: ChatContextEntry[] = [];
   let sortedContexts: ChatContextEntry[] = [];
   let toolEnabledById: Record<string, boolean> = {};
@@ -2950,9 +2956,15 @@
     }
   };
 
+  const refreshGoogleDriveConnection = async (opts?: { silent?: boolean }) => {
+    if (googleDriveConnectionLoading) return;
+    googleDriveConnectionLoaded = false;
+    await loadGoogleDriveConnection(opts);
+  };
+
   const openGoogleDriveSettings = () => {
     showComposerMenu = false;
-    getNavigation().goto('/settings');
+    getNavigation().goto(GOOGLE_DRIVE_CONNECTORS_ROUTE);
   };
 
   const ensureSessionDocumentTarget = async (): Promise<string> => {
@@ -4693,7 +4705,7 @@
       ensureDefaultToolToggles();
       updateContextFromRoute();
       void loadExtensionActiveTabContext();
-      void loadGoogleDriveConnection({ silent: true });
+      void refreshGoogleDriveConnection({ silent: true });
       handleUserAISettingsUpdated = (event: Event) => {
         const detail = (event as CustomEvent<UserAISettingsUpdatedPayload>)
           .detail;
@@ -4706,6 +4718,13 @@
       window.addEventListener(
         USER_AI_SETTINGS_UPDATED_EVENT,
         handleUserAISettingsUpdated,
+      );
+      handleGoogleDriveConnectionUpdated = () => {
+        void refreshGoogleDriveConnection({ silent: true });
+      };
+      window.addEventListener(
+        GOOGLE_DRIVE_CONNECTION_UPDATED_EVENT,
+        handleGoogleDriveConnectionUpdated,
       );
     }
     handleDocumentClick = (event: MouseEvent) => {
@@ -4792,8 +4811,9 @@
 
   $: if (mode === 'ai' && showComposerMenu) {
     void loadExtensionActiveTabContext();
-    if (!googleDriveConnectionLoaded && !googleDriveConnectionLoading) {
-      void loadGoogleDriveConnection({ silent: true });
+    if (!previousComposerMenuOpen) {
+      previousComposerMenuOpen = true;
+      void refreshGoogleDriveConnection({ silent: true });
     }
     // Compute dynamic max-heights for context/tool sections
     if (panelEl && composerMenuButtonRef) {
@@ -4804,6 +4824,8 @@
       composerMenuContextsMaxH = 'max-height:' + halfH + 'px';
       composerMenuToolsMaxH = 'max-height:' + halfH + 'px';
     }
+  } else if (previousComposerMenuOpen) {
+    previousComposerMenuOpen = false;
   }
 
   $: if (mode === 'ai' && $workspaceScopeHydrated) {
@@ -4867,6 +4889,12 @@
       window.removeEventListener(
         USER_AI_SETTINGS_UPDATED_EVENT,
         handleUserAISettingsUpdated,
+      );
+    }
+    if (handleGoogleDriveConnectionUpdated) {
+      window.removeEventListener(
+        GOOGLE_DRIVE_CONNECTION_UPDATED_EVENT,
+        handleGoogleDriveConnectionUpdated,
       );
     }
   });

@@ -10,7 +10,7 @@ test.describe('Google Drive settings and entity document surfaces', () => {
   const CONNECT_BUTTON_LABEL = /Connect Google Drive|Connecter Google Drive/i;
   const DISCONNECT_BUTTON_LABEL = /Disconnect Google Drive|Déconnecter Google Drive/i;
   const SETTINGS_BUTTON_LABEL =
-    /Manage Google Drive in Settings|Gérer Google Drive dans Paramètres/i;
+    /Connect Google Drive in Settings|Connecter Google Drive dans Paramètres/i;
   const IMPORT_BUTTON_LABEL = /Import from Google Drive|Importer depuis Google Drive/i;
 
   async function createScopedPage(browser: Browser, workspaceId: string) {
@@ -96,7 +96,7 @@ test.describe('Google Drive settings and entity document surfaces', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          authorizationUrl: '/settings?google_drive=connected',
+          authorizationUrl: '/settings?google_drive=connected#google-drive-connectors',
         }),
       });
     });
@@ -137,7 +137,9 @@ test.describe('Google Drive settings and entity document surfaces', () => {
 
       await page.getByRole('button', { name: CONNECT_BUTTON_LABEL }).click();
       await expect.poll(() => oauthStartCount).toBe(1);
-      await expect(page).toHaveURL(/\/settings\?google_drive=connected$/);
+      await expect(page).toHaveURL(
+        /\/settings\?google_drive=connected#google-drive-connectors$/,
+      );
       await expect(page.getByText(/Connected as mock-drive-user@example.com|Connecté avec mock-drive-user@example.com/i)).toBeVisible({
         timeout: 10_000,
       });
@@ -183,10 +185,13 @@ test.describe('Google Drive settings and entity document surfaces', () => {
       await expect(page.getByRole('button', { name: SETTINGS_BUTTON_LABEL })).toBeVisible({
         timeout: 10_000,
       });
-      await expect(page.getByText(/Manage Google Drive in Settings|Gérer Google Drive dans Paramètres/i)).toBeVisible();
+      await expect(page.getByText(/Connect Google Drive in Settings|Connecter Google Drive dans Paramètres/i)).toBeVisible();
 
       await page.getByRole('button', { name: SETTINGS_BUTTON_LABEL }).click();
-      await expect(page).toHaveURL(/\/settings$/);
+      await expect(page).toHaveURL(/\/settings#google-drive-connectors$/);
+      await expect(page.getByTestId('google-drive-connectors-card')).toBeVisible({
+        timeout: 10_000,
+      });
 
       googleDriveState.connected = true;
       await page.goto(`/folders/${folderId}`);

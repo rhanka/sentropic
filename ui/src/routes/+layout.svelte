@@ -11,6 +11,10 @@
   import NavigationGuard from '$lib/components/NavigationGuard.svelte';
   import ChatWidget from '$lib/components/ChatWidget.svelte';
   import { createSvelteKitContextProvider } from '$lib/core/context-provider';
+  import {
+    createSvelteKitNavigation,
+    initNavigation,
+  } from '$lib/core/navigation-adapter';
 
   const contextProvider = createSvelteKitContextProvider(page, browser);
   import '$lib/i18n';
@@ -179,6 +183,7 @@
   // Initialize session on app mount
   onMount(async () => {
     themePreference.init();
+    initNavigation(createSvelteKitNavigation(goto));
     await initializeSession();
     loadModelCatalog();
   });
