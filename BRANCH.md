@@ -195,6 +195,21 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-composer.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-settings-documents.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make build-ext-chrome API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `validation` BR16a-T6 — Root pre-UAT also surfaced a Google Workspace metadata leak on document lists, and the branch now keeps export formats internal:
+  - Root cause: the attach/resync routes persisted the export representation (`text/markdown`, `.md`, etc.) directly into `context_documents.filename` / `mimeType`, and list surfaces rendered those fields verbatim for both new and legacy rows.
+  - Resolution: attach/resync now persist source-visible filename/MIME, `documents.list` derives visible metadata from `data.source` for legacy rows, and `DocumentsBlock` hides size for native Google Docs / Sheets / Slides because Drive exposes an export-oriented size that is not a trustworthy canonical source size.
+  - Verified commands:
+    - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-unit SCOPE=tests/unit/documents-tool-service.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-ai SCOPE=tests/ai/documents-tool.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-queue SCOPE=tests/queue/document-summary.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-ui SCOPE=tests/utils/documents.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-composer.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-settings-documents.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make typecheck-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -331,6 +346,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - [x] List/select Drive file from the chat composer.
     - [ ] Verify the same local/GDrive source menu on one entity `DocumentsBlock` surface.
     - [ ] List/select Drive file from an entity `DocumentsBlock` surface.
+    - [ ] Verify native Google Workspace files keep the source filename/type in lists (no `.md/.csv/.txt` suffix leakage) and hide ambiguous size on `DocumentsBlock`.
     - [ ] Index selected file.
     - [ ] Ask chat to retrieve document facts.
     - [ ] Disconnect account from Settings and verify access is revoked.

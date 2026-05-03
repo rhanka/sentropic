@@ -15,8 +15,10 @@
   } from '$lib/utils/google-drive-connectors';
   import {
     deleteDocument,
+    getDocumentMimeLabel,
     getDownloadUrl,
     listDocuments,
+    shouldHideDocumentSize,
     uploadDocument
   } from '$lib/utils/documents';
   import {
@@ -409,9 +411,11 @@
 
                 <td class="py-3 pr-4">
                   <div class="font-medium text-slate-900">{doc.filename}</div>
-                  <div class="text-xs text-slate-500">{doc.mime_type}</div>
+                  <div class="text-xs text-slate-500">{getDocumentMimeLabel(doc.mime_type)}</div>
                 </td>
-                <td class="py-3 pr-4 text-slate-700 text-center">{formatBytes(doc.size_bytes)}</td>
+                <td class="py-3 pr-4 text-slate-700 text-center">
+                  {shouldHideDocumentSize(doc) ? '-' : formatBytes(doc.size_bytes)}
+                </td>
                 <td class="py-3 pr-4 whitespace-nowrap text-center">
                   <span class={"inline-flex items-center rounded-full border px-2 py-1 text-xs " + statusPillClass(doc.status)}>
                     {$_(statusLabelKey(doc.status))}
