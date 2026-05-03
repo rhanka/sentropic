@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
   import { onDestroy, onMount, tick } from 'svelte';
   import type { Readable } from 'svelte/store';
   import type { AppContext } from '$lib/core/context-provider';
+  import { getNavigation } from '$lib/core/navigation-adapter';
   import { _, locale } from 'svelte-i18n';
   import {
     apiFetch,
@@ -2950,9 +2950,9 @@
     }
   };
 
-  const openGoogleDriveSettings = async () => {
+  const openGoogleDriveSettings = () => {
     showComposerMenu = false;
-    await goto('/settings');
+    getNavigation().goto('/settings');
   };
 
   const ensureSessionDocumentTarget = async (): Promise<string> => {
