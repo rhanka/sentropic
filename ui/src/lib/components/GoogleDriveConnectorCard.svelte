@@ -23,7 +23,12 @@
     : 'bg-slate-50 text-slate-700 border-slate-200';
 </script>
 
-<div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="google-drive-connectors-card">
+<div
+  id="google-drive-connectors"
+  class="space-y-4 rounded border border-slate-200 bg-white p-6"
+  data-testid="google-drive-connectors-card"
+  tabindex="-1"
+>
   <div>
     <h2 class="text-lg font-semibold text-slate-800">{$_('settings.connectors.title')}</h2>
     <p class="mt-1 text-sm text-slate-600">{$_('settings.connectors.description')}</p>

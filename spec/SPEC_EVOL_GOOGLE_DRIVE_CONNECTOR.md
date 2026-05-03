@@ -315,11 +315,16 @@ Implemented UX delta for BR-16a:
   - The chat composer now keeps Google Drive import only.
   - `Disconnect Google Drive` is removed from the chat composer menu.
   - When disconnected, Google Drive import actions remain discoverable and route the user toward the settings connector surface instead of embedding lifecycle controls inline in the chat menu.
+  - The disconnected CTA copy is explicit (`Connect Google Drive in Settings`) and deep-links to the connector card anchor (`/settings#google-drive-connectors`) instead of a generic Settings landing.
 - Generalize the `+` document affordance across chat and entity document surfaces.
   - Chat composer and `DocumentsBlock` now expose the same source choices: `From computer` and `From Google Drive`.
   - `MenuPopover` is reused for this source chooser.
   - BR-16a now uses a thin shared `DocumentSourceMenu.svelte` wrapper on top of `MenuPopover`; `FileMenu.svelte` remains untouched.
   - Keep backend contracts unchanged at the transport level: local upload continues through `/documents`, Google Drive attach continues through `/documents/google-drive`.
+  - Both surfaces must refresh Google Drive connection state when the source menu opens, so a reconnect performed in Settings is reflected immediately without a root reload.
+- Navigation implementation detail for the web app:
+  - Shared surfaces (`ChatPanel`, `DocumentsBlock`) keep using the repo navigation adapter, not direct `$app/navigation` imports, so the Chrome extension build remains unaffected.
+  - The SvelteKit root layout must initialize that adapter so web-app deep-links use client-side `goto` instead of `window.location.href`.
 
 Avoid in BR-16a:
 
@@ -356,6 +361,7 @@ UAT:
 - Confirm the callback returns to the UI host, not the API host.
 - Return to Settings and verify connected state plus account label/email.
 - Open the chat composer and confirm Google Drive import is available there without any disconnect action.
+- When disconnected, click the chat/DocumentsBlock CTA and confirm the app lands directly on `Settings > Google Drive`, without a full-page reload blink.
 - Select one Google file through Picker from the chat composer and attach it.
 - Open one entity document surface (`DocumentsBlock` on folder, organization, or initiative) and verify the `+` affordance exposes both local upload and Google Drive import.
 - Select one Google file through Picker from an entity document surface and attach it.

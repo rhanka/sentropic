@@ -1353,8 +1353,8 @@
       "success": "Document envoyé. Le résumé va être généré."
     },
     "googleDrive": {
-      "manageInSettings": "Gérer Google Drive dans Paramètres",
-      "manageHint": "Connectez ou déconnectez Google Drive depuis Paramètres, puis revenez ici pour importer des fichiers.",
+      "manageInSettings": "Connecter Google Drive dans Paramètres",
+      "manageHint": "Connectez Google Drive depuis Paramètres, puis revenez ici pour importer des fichiers.",
       "importSuccess": "Fichiers Google Drive attachés. Le résumé va être généré."
     },
     "action": {
