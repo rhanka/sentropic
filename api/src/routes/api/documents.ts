@@ -309,7 +309,7 @@ documentsRouter.get('/:id/content', async (c) => {
       doc.sourceType === 'google_drive'
         ? { mode: 'user' as const, userId: user.userId, workspaceId: targetWorkspaceId }
         : undefined;
-    const loaded = await loadContextDocumentContent({ document: doc, access });
+    const loaded = await loadContextDocumentContent({ document: doc, access, purpose: 'download' });
     c.header('Content-Type', loaded.mimeType || 'application/octet-stream');
     c.header('Content-Disposition', `attachment; filename="${loaded.filename.replace(/"/g, '')}"`);
     return c.newResponse(loaded.bytes, 200);

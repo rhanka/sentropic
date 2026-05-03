@@ -303,9 +303,12 @@ describe('Documents API (Google Drive attach)', () => {
     });
 
     const fetchMock = vi.fn(async () =>
-      new Response('# Roadmap\n\n- item 1\n- item 2', {
+      new Response(new Uint8Array([80, 75, 3, 4]), {
         status: 200,
-        headers: { 'Content-Type': 'text/markdown; charset=utf-8' },
+        headers: {
+          'Content-Type':
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        },
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -318,11 +321,16 @@ describe('Documents API (Google Drive attach)', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toContain('text/markdown');
-    expect(res.headers.get('content-disposition') || '').toContain('Roadmap.md');
-    await expect(res.text()).resolves.toContain('# Roadmap');
+    expect(res.headers.get('content-type')).toContain(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    expect(res.headers.get('content-disposition') || '').toContain('Roadmap.docx');
+    expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([80, 75, 3, 4]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/files/file_1/export');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      'mimeType=application%2Fvnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
       method: 'GET',
       headers: {
