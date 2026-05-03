@@ -197,7 +197,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - `make build-ext-chrome API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 - [x] `validation` BR16a-T6 — Root pre-UAT also surfaced a Google Workspace metadata leak on document lists, and the branch now keeps export formats internal:
   - Root cause: the attach/resync routes persisted the export representation (`text/markdown`, `.md`, etc.) directly into `context_documents.filename` / `mimeType`, and list surfaces rendered those fields verbatim for both new and legacy rows.
-  - Resolution: attach/resync now persist source-visible filename/MIME, `documents.list` derives visible metadata from `data.source` for legacy rows, and `DocumentsBlock` hides size for native Google Docs / Sheets / Slides because Drive exposes an export-oriented size that is not a trustworthy canonical source size.
+  - Resolution: attach/resync now persist source-visible filename/MIME, `documents.list` derives visible metadata from `data.source` for legacy rows, and `DocumentsBlock` displays the official Drive `size` value when Google provides one while still keeping export MIME/extensions internal.
   - Verified commands:
     - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make test-api-unit SCOPE=tests/unit/documents-tool-service.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
@@ -346,7 +346,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - [x] List/select Drive file from the chat composer.
     - [ ] Verify the same local/GDrive source menu on one entity `DocumentsBlock` surface.
     - [ ] List/select Drive file from an entity `DocumentsBlock` surface.
-    - [ ] Verify native Google Workspace files keep the source filename/type in lists (no `.md/.csv/.txt` suffix leakage) and hide ambiguous size on `DocumentsBlock`.
+    - [ ] Verify native Google Workspace files keep the source filename/type in lists (no `.md/.csv/.txt` suffix leakage) and show the Drive-reported size on `DocumentsBlock`.
     - [ ] Index selected file.
     - [ ] Ask chat to retrieve document facts.
     - [ ] Disconnect account from Settings and verify access is revoked.

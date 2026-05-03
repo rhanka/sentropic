@@ -57,12 +57,6 @@ export function getDocumentMimeLabel(mimeType: string): string {
   return GOOGLE_WORKSPACE_MIME_LABELS[mimeType] ?? mimeType;
 }
 
-export function shouldHideDocumentSize(
-  item: Pick<ContextDocumentItem, 'source_type' | 'mime_type'>,
-): boolean {
-  return item.source_type === 'google_drive' && item.mime_type in GOOGLE_WORKSPACE_MIME_LABELS;
-}
-
 export async function listDocuments(params: {
   contextType: DocumentContextType;
   contextId: string;
