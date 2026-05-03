@@ -3,8 +3,10 @@ import { resetFetchMock, mockFetchJsonOnce } from '../test-setup';
 import {
   DOCUMENT_UPLOAD_ACCEPT,
   deleteDocument,
+  getDocumentMimeLabel,
   getDownloadUrl,
   listDocuments,
+  shouldHideDocumentSize,
   uploadDocument,
 } from '../../src/lib/utils/documents';
 import { API_BASE_URL } from '../../src/lib/config';
@@ -18,6 +20,41 @@ describe('documents utils', () => {
     expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.zip');
     expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.tar.gz');
     expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.tgz');
+  });
+
+  it('maps Google Workspace MIME types to user-facing labels', () => {
+    expect(getDocumentMimeLabel('application/vnd.google-apps.document')).toBe('Google Docs');
+    expect(getDocumentMimeLabel('application/vnd.google-apps.spreadsheet')).toBe('Google Sheets');
+    expect(getDocumentMimeLabel('application/vnd.google-apps.presentation')).toBe('Google Slides');
+    expect(getDocumentMimeLabel('application/pdf')).toBe('application/pdf');
+  });
+
+  it('hides size for native Google Drive documents only', () => {
+    expect(
+      shouldHideDocumentSize({
+        id: 'doc_google',
+        context_type: 'folder',
+        context_id: 'f_1',
+        filename: 'Roadmap',
+        mime_type: 'application/vnd.google-apps.document',
+        size_bytes: 1049,
+        source_type: 'google_drive',
+        status: 'ready',
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldHideDocumentSize({
+        id: 'doc_drive_pdf',
+        context_type: 'folder',
+        context_id: 'f_1',
+        filename: 'Roadmap.pdf',
+        mime_type: 'application/pdf',
+        size_bytes: 1049,
+        source_type: 'google_drive',
+        status: 'ready',
+      }),
+    ).toBe(false);
   });
 
   describe('listDocuments', () => {

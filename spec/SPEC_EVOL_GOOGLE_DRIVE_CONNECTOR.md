@@ -233,6 +233,11 @@ Constraints:
 - `files.export` has export-size limits for Google Workspace documents; indexing must surface `failed` with a clear user-visible error if export is too large.
 - Exported/transient bytes should be discarded after extraction.
 - Stored metadata must include source information sufficient for citation/debug: file ID, name, MIME type, revision/version when available, export MIME, and sync timestamp.
+- User-visible document lists must keep source-facing metadata, not export-facing metadata:
+  - filename = Drive source name
+  - type label = source Drive MIME / Google Workspace type
+  - export suffixes such as `.md`, `.csv`, and `.txt` must not leak into list surfaces
+- For native Google Docs / Sheets / Slides, Drive's reported `size` reflects the exported artifact rather than a meaningful canonical source size. Entity list surfaces should hide that size instead of presenting it as if it were the source-file size.
 
 Deferred to BR-16c:
 
