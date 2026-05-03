@@ -14,9 +14,9 @@
     GOOGLE_DRIVE_CONNECTORS_ROUTE,
   } from '$lib/utils/google-drive-connectors';
   import {
+    downloadDocument,
     deleteDocument,
     getDocumentMimeLabel,
-    getDownloadUrl,
     listDocuments,
     uploadDocument
   } from '$lib/utils/documents';
@@ -270,10 +270,18 @@
     expandedSummaryById = { ...expandedSummaryById, [id]: !expandedSummaryById[id] };
   };
 
-  const download = (docId: string) => {
+  const download = async (docId: string, fallbackFileName: string) => {
     const scopedWs = getScopedWorkspaceIdForUser();
-    const url = getDownloadUrl({ documentId: docId, workspaceId: scopedWs });
-    window.open(url, '_blank', 'noopener,noreferrer');
+    try {
+      await downloadDocument({
+        documentId: docId,
+        workspaceId: scopedWs,
+        fallbackFileName,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      addToast({ type: 'error', message: msg });
+    }
   };
 
   const remove = async (doc: ContextDocumentItem) => {
@@ -400,7 +408,7 @@
                 <td class="py-3 pr-2">
                   <button
                     class={iconButtonPrimary}
-                    on:click={() => download(doc.id)}
+                    on:click={() => download(doc.id, doc.filename)}
                     title={$_('documents.action.download')}
                     aria-label={$_('documents.action.download')}
                   >

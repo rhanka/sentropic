@@ -3,6 +3,7 @@ import { getDocumentsBucketName, getObjectBytes } from './storage-s3';
 import {
   loadGoogleDriveFileContent,
   resolveGoogleDriveFileMetadata,
+  type GoogleDriveContentPurpose,
   type GoogleDriveFileMetadata,
 } from './google-drive-client';
 import {
@@ -232,6 +233,7 @@ export async function loadContextDocumentContent(input: {
   access?: ContextDocumentAccess | null;
   fetchImpl?: typeof fetch;
   refreshSourceMetadata?: boolean;
+  purpose?: GoogleDriveContentPurpose;
 }): Promise<LoadedContextDocumentContent> {
   const source = resolveContextDocumentSource(input.document);
 
@@ -262,6 +264,7 @@ export async function loadContextDocumentContent(input: {
     const loaded = await loadGoogleDriveFileContent({
       accessToken,
       file,
+      purpose: input.purpose,
       fetchImpl: input.fetchImpl,
     });
     return {
