@@ -2,7 +2,8 @@
   import { addToast } from '$lib/stores/toast';
   import { apiDelete, apiGet, apiPost, apiPut } from '$lib/utils/api';
   import { goto } from '$app/navigation';
-  import { onDestroy, onMount } from 'svelte';
+  import { page } from '$app/stores';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
   import { session } from '$lib/stores/session';
@@ -29,6 +30,12 @@
     startGoogleDriveOAuth,
     type GoogleDriveConnection,
   } from '$lib/utils/google-drive';
+  import {
+    emitGoogleDriveConnectionUpdated,
+    GOOGLE_DRIVE_CONNECTORS_HASH,
+    GOOGLE_DRIVE_CONNECTORS_ROUTE,
+    scrollToGoogleDriveConnectors,
+  } from '$lib/utils/google-drive-connectors';
   import { emitUserAISettingsUpdated } from '$lib/utils/user-ai-settings-events';
   import {
     themePreference,
@@ -170,7 +177,8 @@
     await loadVsCodeExtensionDownloadMetadata();
     await loadModelCatalog();
     await loadUserAISettings();
-    await loadGoogleDriveConnection();
+    await syncGoogleDriveConnection();
+    await revealGoogleDriveConnectors();
     if (isAdmin()) {
       await loadAISettings();
       await loadQueueStats();
@@ -215,8 +223,7 @@
   const settingsDangerButtonClass = `${settingsButtonBaseClass} bg-rose-700 text-white hover:bg-rose-800`;
 
   const googleDriveReturnPath = () => {
-    if (typeof window === 'undefined') return '/settings';
-    return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    return GOOGLE_DRIVE_CONNECTORS_ROUTE;
   };
 
   const loadGoogleDriveConnection = async () => {
@@ -232,6 +239,19 @@
     } finally {
       isLoadingGoogleDriveConnection = false;
     }
+  };
+
+  const syncGoogleDriveConnection = async () => {
+    await loadGoogleDriveConnection();
+    emitGoogleDriveConnectionUpdated({
+      connected: Boolean(googleDriveConnection?.connected),
+    });
+  };
+
+  const revealGoogleDriveConnectors = async () => {
+    if (get(page).url.hash !== GOOGLE_DRIVE_CONNECTORS_HASH) return;
+    await tick();
+    scrollToGoogleDriveConnectors();
   };
 
   const connectGoogleDriveFromSettings = async () => {
@@ -260,6 +280,7 @@
     googleDriveConnectionError = '';
     try {
       googleDriveConnection = await disconnectGoogleDrive();
+      emitGoogleDriveConnectionUpdated({ connected: false });
       addToast({
         type: 'success',
         message: get(_)('settings.connectors.googleDrive.disconnectedToast'),
@@ -271,6 +292,10 @@
       isSavingGoogleDriveConnection = false;
     }
   };
+
+  $: if ($page.url.hash === GOOGLE_DRIVE_CONNECTORS_HASH) {
+    void revealGoogleDriveConnectors();
+  }
 
   let codexProviderConnection: ProviderConnectionState | null = null;
   $: codexProviderConnection =

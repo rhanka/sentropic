@@ -1353,8 +1353,8 @@
       "success": "Document uploaded. Summary will be generated."
     },
     "googleDrive": {
-      "manageInSettings": "Manage Google Drive in Settings",
-      "manageHint": "Connect or disconnect Google Drive from Settings, then return here to import files.",
+      "manageInSettings": "Connect Google Drive in Settings",
+      "manageHint": "Connect Google Drive in Settings, then return here to import files.",
       "importSuccess": "Google Drive files attached. Summary will be generated."
     },
     "action": {

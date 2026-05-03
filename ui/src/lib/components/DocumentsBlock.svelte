@@ -10,6 +10,10 @@
   import MenuPopover from '$lib/components/MenuPopover.svelte';
   import type { ContextDocumentItem, DocumentContextType } from '$lib/utils/documents';
   import {
+    GOOGLE_DRIVE_CONNECTION_UPDATED_EVENT,
+    GOOGLE_DRIVE_CONNECTORS_ROUTE,
+  } from '$lib/utils/google-drive-connectors';
+  import {
     deleteDocument,
     getDownloadUrl,
     listDocuments,
@@ -39,11 +43,13 @@
   let expandedSummaryById: Record<string, boolean> = {};
   let showSourceMenu = false;
   let sourceMenuTriggerRef: HTMLButtonElement | null = null;
+  let previousSourceMenuOpen = false;
   let googleDriveConnection: GoogleDriveConnection | null = null;
   let googleDriveConnectionLoading = false;
   let googleDriveConnectionLoaded = false;
   let googleDriveActionInFlight = false;
   let googleDriveConnectionError: string | null = null;
+  let handleGoogleDriveConnectionUpdated: ((_: Event) => void) | null = null;
 
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let lastContextKey = '';
@@ -144,7 +150,14 @@
       }, 150);
     });
     void load();
-    void loadGoogleDriveConnection({ silent: true });
+    void refreshGoogleDriveConnection({ silent: true });
+    handleGoogleDriveConnectionUpdated = () => {
+      void refreshGoogleDriveConnection({ silent: true });
+    };
+    window.addEventListener(
+      GOOGLE_DRIVE_CONNECTION_UPDATED_EVENT,
+      handleGoogleDriveConnectionUpdated,
+    );
   });
 
   onDestroy(() => {
@@ -154,6 +167,12 @@
     sseReloadTimer = null;
     if (sseKey) streamHub.delete(sseKey);
     sseKey = '';
+    if (handleGoogleDriveConnectionUpdated) {
+      window.removeEventListener(
+        GOOGLE_DRIVE_CONNECTION_UPDATED_EVENT,
+        handleGoogleDriveConnectionUpdated,
+      );
+    }
   });
 
   const uploadPickedFile = async (file: File | null | undefined) => {
@@ -197,6 +216,19 @@
     }
   };
 
+  const refreshGoogleDriveConnection = async (opts?: { silent?: boolean }) => {
+    if (googleDriveConnectionLoading) return;
+    googleDriveConnectionLoaded = false;
+    await loadGoogleDriveConnection(opts);
+  };
+
+  $: if (showSourceMenu && !previousSourceMenuOpen) {
+    previousSourceMenuOpen = true;
+    void refreshGoogleDriveConnection({ silent: true });
+  } else if (!showSourceMenu && previousSourceMenuOpen) {
+    previousSourceMenuOpen = false;
+  }
+
   const importFromGoogleDrive = async () => {
     if (googleDriveActionInFlight || !googleDriveConnection?.connected) return;
     googleDriveActionInFlight = true;
@@ -230,7 +262,7 @@
 
   const openConnectors = () => {
     showSourceMenu = false;
-    getNavigation().goto('/settings');
+    getNavigation().goto(GOOGLE_DRIVE_CONNECTORS_ROUTE);
   };
 
   const toggleSummary = (id: string) => {
