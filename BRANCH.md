@@ -4,7 +4,7 @@
 Implement the Google Drive first slice of document connectors: user-scoped Google OAuth, Drive file search/selection, in-situ document summarization/indexing through the existing `document_summary` pipeline, and chat retrieval through stored references. Documents must stay in Google Drive; Entropic stores connector metadata, source references, sync status, extracted metadata, summaries, and detailed summaries.
 
 ## Scope / Guardrails
-- Scope limited to Google Drive OAuth, Google Drive connector metadata, Drive Picker search/selection, Drive export/download adapters, source-aware document summarization, manual resync, and chat `documents` tool integration.
+- Scope limited to Google Drive OAuth, Google Drive connector metadata, Drive Picker search/selection, Drive export/download adapters, source-aware document summarization, manual resync, user-scoped settings connector management, and document import integration across chat plus existing `DocumentsBlock` surfaces.
 - SharePoint, OneDrive, and generic connector expansion are deferred to BR-16b.
 - Google Drive sharing assistance, change notifications/polling, shared Drive collaboration refinements, and direct Google Docs/Slides editing tools are deferred to BR-16c.
 - One migration max in `api/drizzle/*.sql` if the schema needs connector metadata.
@@ -32,9 +32,12 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - `api/tests/unit/**document**`
   - `ui/src/lib/**drive**`
   - `ui/src/lib/**document**`
+  - `ui/src/lib/components/DocumentsBlock.svelte`
   - `ui/src/routes/**documents**`
+  - `ui/src/routes/settings/+page.svelte`
   - `ui/tests/**drive**`
   - `ui/tests/**document**`
+  - `ui/tests/**settings**`
   - `e2e/tests/**document**`
   - `e2e/tests/**drive**`
   - `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`
@@ -107,12 +110,17 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - 10A (selected): Keep active branch `feat/gdrive-sso-indexing-16a` because the canonical local ref is stale.
   - 10B: Clean stale pre-Entropic worktree/ref and reclaim `feat/gdrive-sso-indexing`.
   - 10C: Create another explicit branch name for this iteration.
+- [x] `clarification` BR16a-Q11 — Post pre-UAT connector UX ownership: **11A selected**.
+  - 11A (selected): Settings owns Google Drive lifecycle (`Connect` / `Disconnect`). Chat and entity document surfaces own import only, through a shared local/GDrive source chooser.
+  - 11B: Keep connection lifecycle in the chat composer and add a redundant settings status card.
+  - 11C: Move both lifecycle and import entirely into settings.
 - [x] `attention` BR16a-EX1 — Conditional roadmap updates are allowed for `PLAN.md` and `plan/16c-BRANCH_feat-gdrive-shared-edit-sync.md`. Reason: user split Google Drive sharing/sync/direct-edit follow-up into future BR-16c while scoping BR-16a. Impact: documentation only, no runtime behavior. Rollback: remove the BR-16c plan stub and revert BR-16c roadmap references.
 - [x] `clarification` BR16a-EX2 — Route registration uses `api/src/routes/api/index.ts`, which is outside the current Allowed Paths. Reason: the new Google Drive OAuth router can be implemented under `api/src/routes/api/**drive**`, but exposing `/api/v1/google-drive/*` in the main API router needs the central route index. Impact: route exposure only. Rollback: remove the route index import/use lines.
 - [x] `clarification` BR16a-EX3 — Drizzle migration metadata uses `api/drizzle/meta/_journal.json`, which is outside the explicit `api/drizzle/*.sql` Allowed Path. Reason: the new connector account SQL migration is not applied by Drizzle unless the journal includes the migration tag. Impact: migration metadata only. Rollback: remove the 0026 journal entry if the SQL migration is removed.
 - [x] `attention` BR16a-EX4 — Global workflow/testing/subagent rule updates are allowed for local SDLC and OAuth port-slot conventions. Reason: Google OAuth redirect URIs and Picker JavaScript origins must be exact, and BR-16a needs deterministic ports for up to five concurrent sub-agents without per-run console edits. Impact: documentation/rules only, no runtime behavior. Rollback: revert the `rules/*.md`, `PLAN.md`, and `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` documentation changes.
 - [x] `attention` BR16a-EX5 — `ui/src/lib/components/ChatPanel.svelte` and `ui/src/locales/*.json` are allowed for the Google Drive composer connection surface. Reason: BR16a-Q9 explicitly places "Connect Google Drive" / "Import from Google Drive" next to the existing paperclip in the chat composer, and user-facing labels need locale entries. Impact: composer menu surface only; no Picker import flow in Lot 1. Rollback: remove the Google Drive menu entries, locale keys, and client utility imports.
 - [x] `clarification` BR16a-EX6 — `docker-compose.yml` is allowed for local Google Drive runtime wiring. Reason: live OAuth/Pickers UAT requires the API container to receive `GOOGLE_DRIVE_*` credentials plus `AUTH_CALLBACK_BASE_URL`; without explicit compose wiring, the branch code cannot be exercised on root or isolated lanes. Impact: local/runtime environment wiring only; no API contract or product behavior beyond enabling configured credentials. Rollback: remove the added environment pass-through once a central secret/config injection path replaces local compose wiring.
+- [x] `attention` BR16a-EX7 — `ui/src/routes/settings/+page.svelte`, `ui/src/lib/components/DocumentsBlock.svelte`, optional shared source-menu UI under `ui/src/lib/components/**document**`, `ui/tests/**settings**`, `ui/tests/**document**`, and `ui/src/locales/*.json` are allowed for the post-pre-UAT connector UX alignment lot. Reason: the user requested that Google Drive connection lifecycle move into Settings and that existing entity document surfaces expose the same local/GDrive source menu as chat. Impact: UI/documentation/test surface only; backend Drive contracts stay unchanged. Rollback: remove the settings connector card and restore the previous local-only `DocumentsBlock` plus chat-only Google Drive lifecycle UI.
 - [ ] `attention` BR16a-UI1 — `make typecheck-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a` fails before change-specific diagnostics because `.svelte-kit` is not synced and `$lib` aliases are unresolved across the app. Follow-up check `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a` passes with 0 errors and 6 existing warnings. Impact: target/config issue, not a Google Drive UI error. Rollback: none for BR-16a runtime; fix the make target separately if required.
 - [x] `evidence` BR16a-GC1 — Google Cloud provisioning completed on 2026-04-22 for project `sent-tech`: Drive API and Picker API enabled, Auth Platform created, OAuth client `Entropic Web App` created, test user `fabien.antoine@gmail.com` added, and API key `Entropic Google Picker` created with HTTP referrer restrictions plus Drive/Picker API restrictions. Secret values are intentionally not recorded in repository docs.
 - [x] `evidence` BR16a-GC2 — Google Cloud cleanup completed on 2026-04-22: removed obsolete local origin `http://localhost:5116`, obsolete redirect URI `http://localhost:8716/api/v1/google-drive/oauth/callback`, and obsolete API key referrer `http://localhost:5116/*`.
@@ -149,6 +157,11 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - [x] `validation` BR16a-LIVE1 — Live runtime credential bootstrap is complete on the tested environments.
   - Proven on root `ENV=dev`: `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL`, `GOOGLE_DRIVE_PICKER_API_KEY`, derived `GOOGLE_DRIVE_PICKER_APP_ID`, and `AUTH_CALLBACK_BASE_URL`.
   - Proven outcomes: real Google OAuth redirect, connected account persistence, `GET /api/v1/google-drive/connection` => connected, `GET /api/v1/google-drive/picker-config` => ready, and final browser redirect to the root UI host.
+- [x] `attention` BR16a-U7 — Root pre-UAT review confirmed the live connector works technically but surfaced product UX gaps that block user UAT sign-off:
+  - there is no Google Drive connector card in Settings;
+  - `Disconnect Google Drive` still lives in the chat composer menu;
+  - entity document surfaces (`DocumentsBlock`) still expose local upload only instead of the same local/GDrive source chooser.
+  - Resolution is tracked as the complementary UX lot inserted before user UAT.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -257,28 +270,48 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - [x] **AI tests**
       - [x] Run AI document tool tests only when credentials are available and record flaky signatures if any.
 
-- [ ] **Lot 5 — UAT**
+- [ ] **Lot 5 — Complementary UX alignment before user UAT**
+  - [ ] Add a user-scoped `Connectors` section to Settings using the existing settings card style.
+  - [ ] Move Google Drive lifecycle ownership to Settings (`Connect` / `Disconnect`).
+  - [ ] Remove `Disconnect Google Drive` from the chat composer menu; chat keeps import only.
+  - [ ] Extend `DocumentsBlock` surfaces to expose the same document-source choices as chat (`From computer` / `From Google Drive`).
+  - [ ] Reuse `MenuPopover` and keep one shared source-menu contract between chat and entity document surfaces; only extract a thin shared menu component if duplication justifies it.
+  - [ ] Update `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` for the connector/settings/source-menu contract before user UAT.
+  - [ ] Lot gate:
+    - [ ] `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [ ] `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [ ] **UI tests**
+      - [ ] Add/update settings connector tests.
+      - [ ] Add/update `DocumentsBlock` source-menu tests.
+      - [ ] Add/update chat composer source-menu tests.
+
+- [ ] **Lot 6 — UAT**
   - [x] Mocked web app UX validation covers connect/import/disconnect plus OAuth-config error handling via `e2e/tests/04-google-drive-composer.spec.ts`.
   - [ ] Traceable live readiness:
     - [x] Record authenticated Playwright `dev-state.json` on the branch dev lane with a verified seeded user via `make exec-playwright-dev ... tests/dev/00-record-auth.spec.ts ...`.
     - [x] Run `e2e/tests/dev/01-google-drive-live-readiness.spec.ts` on the branch dev lane with `make test-e2e-dev ...`.
     - [x] Inject/prove runtime Google Drive credentials (`client_id`, `client_secret`, `callback_base_url`, `picker_api_key`, `picker_app_id`) on the target runtime.
   - [ ] Web app:
-    - [x] Connect Google account.
-    - [ ] List/select Drive file.
+    - [ ] Open Settings and verify the new `Connectors` section matches the settings card style.
+    - [ ] Connect Google account from Settings.
+    - [ ] Confirm the chat composer exposes Google Drive import without any lifecycle CTA.
+    - [x] List/select Drive file from the chat composer.
+    - [ ] Verify the same local/GDrive source menu on one entity `DocumentsBlock` surface.
+    - [ ] List/select Drive file from an entity `DocumentsBlock` surface.
     - [ ] Index selected file.
     - [ ] Ask chat to retrieve document facts.
-    - [ ] Disconnect account and verify access is revoked.
+    - [ ] Disconnect account from Settings and verify access is revoked.
   - [ ] Non-regression:
     - [x] Local document upload still works.
     - [x] Existing chat documents tool still works for local docs.
+    - [ ] Local document upload and Google Drive import both work on at least one entity `DocumentsBlock` surface.
 
-- [ ] **Lot 6 — Docs consolidation**
+- [ ] **Lot 7 — Docs consolidation**
   - [ ] Consolidate final connector contract into `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`.
   - [ ] Update existing document connector/RAG specs only if behavior changes.
   - [ ] Update `BRANCH.md` feedback loop before final validation.
 
-- [ ] **Lot 7 — Final validation**
+- [ ] **Lot 8 — Final validation**
   - [ ] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
   - [ ] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
   - [ ] `make test-api-unit API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
