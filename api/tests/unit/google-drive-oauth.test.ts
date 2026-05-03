@@ -4,6 +4,7 @@ import {
   buildGoogleDriveAuthorizationUrl,
   createGoogleDriveOAuthState,
   exchangeGoogleDriveOAuthCode,
+  refreshGoogleDriveAccessToken,
   verifyGoogleDriveOAuthState,
   type GoogleDriveOAuthConfig,
 } from '../../src/services/google-drive-oauth';
@@ -67,6 +68,35 @@ describe('Google Drive OAuth helpers', () => {
     expect(() =>
       verifyGoogleDriveOAuthState(state, { now: new Date('2026-04-21T10:11:00.000Z') }),
     ).toThrow('Expired Google Drive OAuth state.');
+  });
+
+  it('refreshes an access token through the Google token endpoint', async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          access_token: 'refreshed-access-token',
+          token_type: 'Bearer',
+          expires_in: 1800,
+          scope: 'openid email profile https://www.googleapis.com/auth/drive.file',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+
+    const token = await refreshGoogleDriveAccessToken({
+      refreshToken: 'refresh-token-1',
+      config,
+      fetchImpl: fetchMock as typeof fetch,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init?.method).toBe('POST');
+    expect(String(init?.body)).toContain('grant_type=refresh_token');
+    expect(String(init?.body)).toContain('refresh_token=refresh-token-1');
+    expect(token.accessToken).toBe('refreshed-access-token');
+    expect(token.refreshToken).toBe('refresh-token-1');
+    expect(token.scopes).toContain('https://www.googleapis.com/auth/drive.file');
   });
 
   it('exchanges an OAuth code through the Google token endpoint', async () => {

@@ -312,6 +312,60 @@ export const exchangeGoogleDriveOAuthCode = async (input: {
   };
 };
 
+
+export const refreshGoogleDriveAccessToken = async (input: {
+  refreshToken: string;
+  config: GoogleDriveOAuthConfig;
+  fetchImpl?: FetchImpl;
+}): Promise<GoogleDriveTokenResponse> => {
+  const fetcher = input.fetchImpl ?? fetch;
+  const body = new URLSearchParams({
+    refresh_token: input.refreshToken,
+    client_id: input.config.clientId,
+    client_secret: input.config.clientSecret,
+    grant_type: 'refresh_token',
+  });
+
+  const response = await fetcher(GOOGLE_TOKEN_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok) {
+    const description =
+      normalizeOptionalText(payload.error_description) ||
+      normalizeOptionalText(payload.error) ||
+      'Google token refresh failed.';
+    throw new Error(description);
+  }
+
+  const accessToken = normalizeOptionalText(payload.access_token);
+  if (!accessToken) {
+    throw new Error('Google token refresh response did not include an access token.');
+  }
+
+  const expiresIn =
+    typeof payload.expires_in === 'number' && Number.isFinite(payload.expires_in)
+      ? Math.max(0, Math.floor(payload.expires_in))
+      : null;
+  const obtainedAt = new Date();
+  const expiresAt = expiresIn === null ? null : new Date(obtainedAt.getTime() + expiresIn * 1000);
+  const scope = normalizeOptionalText(payload.scope);
+
+  return {
+    accessToken,
+    refreshToken: normalizeOptionalText(payload.refresh_token) ?? input.refreshToken,
+    idToken: normalizeOptionalText(payload.id_token),
+    tokenType: normalizeOptionalText(payload.token_type) || 'Bearer',
+    expiresIn,
+    scope,
+    scopes: splitScopes(scope),
+    obtainedAt: obtainedAt.toISOString(),
+    expiresAt: expiresAt?.toISOString() ?? null,
+  };
+};
+
 const decodeJwtPayload = (jwt: string | null): Record<string, unknown> | null => {
   if (!jwt) return null;
   const [, payload] = jwt.split('.');
