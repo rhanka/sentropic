@@ -36,9 +36,9 @@ test.describe('Google Drive composer integration (mocked browser UX)', () => {
     await menuButton.click();
   }
 
-  const CONNECT_BUTTON_LABEL = /Connect Google Drive|Connecter Google Drive/i;
   const IMPORT_BUTTON_LABEL = /Import from Google Drive|Importer depuis Google Drive/i;
-  const DISCONNECT_BUTTON_LABEL = /Disconnect Google Drive|Déconnecter Google Drive/i;
+  const SETTINGS_BUTTON_LABEL =
+    /Manage Google Drive in Settings|Gérer Google Drive dans Paramètres/i;
 
   async function installGooglePickerMock(page: Page, pickedFileIds: string[]) {
     await page.addInitScript((fileIds: string[]) => {
@@ -81,6 +81,14 @@ test.describe('Google Drive composer integration (mocked browser UX)', () => {
         }
 
         setLocale(_locale: string) {
+          return this;
+        }
+
+        setOrigin(_origin: string) {
+          return this;
+        }
+
+        setRelayUrl(_relayUrl: string) {
           return this;
         }
 
@@ -138,7 +146,7 @@ test.describe('Google Drive composer integration (mocked browser UX)', () => {
     }, pickedFileIds);
   }
 
-  test('connects, imports, and disconnects Google Drive through the composer with browser mocks', async ({
+  test('imports Google Drive files through the composer with browser mocks', async ({
     browser,
   }) => {
     test.setTimeout(180_000);
@@ -155,11 +163,8 @@ test.describe('Google Drive composer integration (mocked browser UX)', () => {
 
     const pickedFileId = `mock-drive-file-${Date.now()}`;
     const pickedFileName = `Google Drive facts ${Date.now()}.md`;
-    let googleDriveConnected = false;
-    let oauthStartCount = 0;
+    let googleDriveConnected = true;
     let pickerConfigCount = 0;
-    let disconnectCount = 0;
-    let lastOAuthReturnPath: string | null = null;
     let lastResolvedFileIds: string[] = [];
     let lastAttachContextId: string | null = null;
     let lastAttachContextType: string | null = null;
@@ -186,20 +191,6 @@ test.describe('Google Drive composer integration (mocked browser UX)', () => {
             lastError: null,
             updatedAt: '2026-04-27T10:00:00.000Z',
           },
-        }),
-      });
-    });
-
-    await page.route(/\/api\/v1\/google-drive\/oauth\/start(?:\?.*)?$/, async (route) => {
-      oauthStartCount += 1;
-      const body = JSON.parse(route.request().postData() || '{}') as { returnPath?: string | null };
-      lastOAuthReturnPath = body.returnPath ?? null;
-      googleDriveConnected = true;
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          authorizationUrl: '/folders?google_drive=connected',
         }),
       });
     });
@@ -314,51 +305,16 @@ test.describe('Google Drive composer integration (mocked browser UX)', () => {
       });
     });
 
-    await page.route(/\/api\/v1\/google-drive\/disconnect(?:\?.*)?$/, async (route) => {
-      disconnectCount += 1;
-      googleDriveConnected = false;
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          account: {
-            id: null,
-            provider: 'google_drive',
-            status: 'disconnected',
-            connected: false,
-            accountEmail: null,
-            accountSubject: null,
-            scopes: [],
-            tokenExpiresAt: null,
-            connectedAt: null,
-            disconnectedAt: '2026-04-27T10:10:00.000Z',
-            lastError: null,
-            updatedAt: '2026-04-27T10:10:00.000Z',
-          },
-        }),
-      });
-    });
-
     try {
       await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
       await openChat(page);
       await openComposerMenu(page);
 
-      const connectButton = page.getByRole('button', { name: CONNECT_BUTTON_LABEL });
-      await expect(connectButton).toBeVisible({ timeout: 10_000 });
-      await connectButton.click();
-
-      await expect.poll(() => oauthStartCount).toBe(1);
-      await expect(page).toHaveURL(/google_drive=connected/);
-      expect(lastOAuthReturnPath).toBe('/folders');
-
-      await openChat(page);
-      await openComposerMenu(page);
-
       const importButton = page.getByRole('button', { name: IMPORT_BUTTON_LABEL });
       await expect(importButton).toBeVisible({ timeout: 10_000 });
       await expect(page.locator('#chat-widget-dialog')).toContainText('mock-drive-user@example.com');
+      await expect(page.getByRole('button', { name: SETTINGS_BUTTON_LABEL })).toHaveCount(0);
 
       await importButton.click();
 
@@ -373,22 +329,13 @@ test.describe('Google Drive composer integration (mocked browser UX)', () => {
       await expect(page.locator('#chat-widget-dialog')).toContainText(/Summary ready|Résumé prêt/, {
         timeout: 10_000,
       });
-
-      await openComposerMenu(page);
-      const disconnectButton = page.getByRole('button', { name: DISCONNECT_BUTTON_LABEL });
-      await expect(disconnectButton).toBeVisible({ timeout: 10_000 });
-      await disconnectButton.click();
-      await expect.poll(() => disconnectCount).toBe(1);
-      await expect(page.getByRole('button', { name: CONNECT_BUTTON_LABEL })).toBeVisible({
-        timeout: 10_000,
-      });
     } finally {
       await context.close();
       await userApi.dispose();
     }
   });
 
-  test('shows the backend configuration error inline when Google Drive OAuth cannot start', async ({
+  test('routes disconnected users to Settings from the composer menu', async ({
     browser,
   }) => {
     test.setTimeout(180_000);
@@ -426,32 +373,15 @@ test.describe('Google Drive composer integration (mocked browser UX)', () => {
       });
     });
 
-    await page.route(/\/api\/v1\/google-drive\/oauth\/start(?:\?.*)?$/, async (route) => {
-      await route.fulfill({
-        status: 503,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          message: 'Google Drive OAuth is not configured.',
-        }),
-      });
-    });
-
     try {
       await page.goto('/folders');
       await page.waitForLoadState('domcontentloaded');
       await openChat(page);
       await openComposerMenu(page);
 
-      await page.getByRole('button', { name: CONNECT_BUTTON_LABEL }).click();
+      await page.getByRole('button', { name: SETTINGS_BUTTON_LABEL }).click();
 
-      const errorBanner = page.locator('#chat-widget-dialog').getByText(
-        'Google Drive OAuth is not configured.',
-      );
-      await expect(errorBanner).toBeVisible({ timeout: 10_000 });
-      await expect(page).toHaveURL(/\/folders$/);
-      await expect(page.getByRole('button', { name: CONNECT_BUTTON_LABEL })).toBeVisible({
-        timeout: 10_000,
-      });
+      await expect(page).toHaveURL(/\/settings$/);
     } finally {
       await context.close();
       await userApi.dispose();
