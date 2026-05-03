@@ -163,6 +163,11 @@ describe('Documents API (Google Drive attach)', () => {
     const payload = await res.json();
     expect(Array.isArray(payload.items)).toBe(true);
     expect(payload.items).toHaveLength(1);
+    expect(payload.items[0]).toMatchObject({
+      filename: 'Roadmap',
+      mime_type: GOOGLE_WORKSPACE_MIME_TYPES.document,
+      size_bytes: 0,
+    });
     const docId = payload.items[0].id as string;
     createdDocIds.push(docId);
 
@@ -173,6 +178,9 @@ describe('Documents API (Google Drive attach)', () => {
     expect(row).toBeTruthy();
     expect(row.sourceType).toBe('google_drive');
     expect(row.storageKey).toBeNull();
+    expect(row.filename).toBe('Roadmap');
+    expect(row.mimeType).toBe(GOOGLE_WORKSPACE_MIME_TYPES.document);
+    expect(row.sizeBytes).toBe(0);
     const source = (row.data as any)?.source;
     expect(source).toMatchObject({
       kind: 'google_drive',
@@ -199,7 +207,7 @@ describe('Documents API (Google Drive attach)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('downloads Google Drive document content through the connected user account', async () => {
+  it('lists legacy Google Drive rows with source-visible metadata instead of export metadata', async () => {
     await seedConnectedGoogleDriveAccount(user);
     const accountId = await getStoredGoogleDriveAccountId(user);
     expect(accountId).toBeTruthy();
@@ -213,6 +221,64 @@ describe('Documents API (Google Drive attach)', () => {
       contextId: 'f_1',
       filename: 'Roadmap.md',
       mimeType: 'text/markdown',
+      sizeBytes: 1049,
+      sourceType: 'google_drive',
+      storageKey: null,
+      status: 'ready',
+      data: {
+        summaryLang: 'fr',
+        source: {
+          kind: 'google_drive',
+          connectorAccountId: accountId,
+          fileId: 'file_1',
+          name: 'Roadmap',
+          mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+          exportMimeType: 'text/markdown',
+          size: '1049',
+          modifiedTime: '2026-04-22T12:00:00.000Z',
+          version: '41',
+        },
+      } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    const res = await app.request('/api/v1/documents?context_type=folder&context_id=f_1', {
+      method: 'GET',
+      headers: {
+        Cookie: `session=${user.sessionToken}`,
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const payload = await res.json();
+    expect(payload.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: docId,
+          filename: 'Roadmap',
+          mime_type: GOOGLE_WORKSPACE_MIME_TYPES.document,
+          size_bytes: 1049,
+        }),
+      ]),
+    );
+  });
+
+  it('downloads Google Drive document content through the connected user account', async () => {
+    await seedConnectedGoogleDriveAccount(user);
+    const accountId = await getStoredGoogleDriveAccountId(user);
+    expect(accountId).toBeTruthy();
+
+    const docId = crypto.randomUUID();
+    createdDocIds.push(docId);
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId: String(user.workspaceId),
+      contextType: 'folder',
+      contextId: 'f_1',
+      filename: 'Roadmap',
+      mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
       sizeBytes: 0,
       sourceType: 'google_drive',
       storageKey: null,
@@ -273,8 +339,8 @@ describe('Documents API (Google Drive attach)', () => {
       workspaceId: String(user.workspaceId),
       contextType: 'folder',
       contextId: 'f_1',
-      filename: 'Roadmap.md',
-      mimeType: 'text/markdown',
+      filename: 'Roadmap',
+      mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
       sizeBytes: 0,
       sourceType: 'google_drive',
       storageKey: null,
@@ -323,8 +389,8 @@ describe('Documents API (Google Drive attach)', () => {
       workspaceId: String(user.workspaceId),
       contextType: 'folder',
       contextId: 'f_1',
-      filename: 'Roadmap.md',
-      mimeType: 'text/markdown',
+      filename: 'Roadmap',
+      mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
       sizeBytes: 0,
       sourceType: 'google_drive',
       storageKey: null,
@@ -392,6 +458,9 @@ describe('Documents API (Google Drive attach)', () => {
     const [row] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, docId)).limit(1);
     expect(row?.status).toBe('uploaded');
     expect(row?.jobId).toBeTruthy();
+    expect(row?.filename).toBe('Roadmap');
+    expect(row?.mimeType).toBe(GOOGLE_WORKSPACE_MIME_TYPES.document);
+    expect(row?.sizeBytes).toBe(0);
     const data = (row?.data ?? {}) as any;
     expect(data.summary).toBe('Old summary');
     expect(data.syncStatus).toBe('pending');
