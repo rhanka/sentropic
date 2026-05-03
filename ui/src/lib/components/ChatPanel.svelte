@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { onDestroy, onMount, tick } from 'svelte';
   import type { Readable } from 'svelte/store';
   import type { AppContext } from '$lib/core/context-provider';
@@ -27,13 +28,13 @@
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { Streamdown } from 'svelte-streamdown';
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import DocumentSourceMenu from '$lib/components/DocumentSourceMenu.svelte';
   import MenuPopover from '$lib/components/MenuPopover.svelte';
   import { currentFolderId, foldersStore } from '$lib/stores/folders';
   import { organizationsStore } from '$lib/stores/organizations';
   import { initiativesStore } from '$lib/stores/initiatives';
   import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import {
-    DOCUMENT_UPLOAD_ACCEPT,
     deleteDocument,
     listDocuments,
     uploadDocument,
@@ -41,11 +42,9 @@
   } from '$lib/utils/documents';
   import {
     attachGoogleDriveDocuments,
-    disconnectGoogleDrive,
     fetchGoogleDrivePickerConfig,
     fetchGoogleDriveConnection,
     resolveGoogleDrivePickerSelection,
-    startGoogleDriveOAuth,
     type GoogleDriveConnection,
   } from '$lib/utils/google-drive';
   import { openGoogleDrivePicker as openGoogleDrivePickerDialog } from '$lib/utils/google-drive-picker';
@@ -70,7 +69,6 @@
     RotateCcw,
     UndoDot,
     Check,
-    Paperclip,
     X,
     Plus,
     Download,
@@ -99,7 +97,6 @@
     Terminal,
     Search,
     GitBranch,
-    Cloud,
   } from '@lucide/svelte';
   import { downloadGeneratedFile, type GeneratedFileCard } from '$lib/utils/docx';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
@@ -2937,11 +2934,6 @@
     }
   };
 
-  const googleDriveReturnPath = () => {
-    if (typeof window === 'undefined') return '/';
-    return `${window.location.pathname}${window.location.search}${window.location.hash}`;
-  };
-
   const loadGoogleDriveConnection = async (opts?: { silent?: boolean }) => {
     if (googleDriveConnectionLoading) return;
     googleDriveConnectionLoading = true;
@@ -2958,38 +2950,9 @@
     }
   };
 
-  const connectGoogleDrive = async () => {
-    if (googleDriveActionInFlight) return;
-    googleDriveActionInFlight = true;
-    googleDriveConnectionError = null;
-    try {
-      const authorizationUrl = await startGoogleDriveOAuth({
-        returnPath: googleDriveReturnPath(),
-      });
-      if (typeof window !== 'undefined') {
-        window.location.assign(authorizationUrl);
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      googleDriveConnectionError = msg || $_('chat.documents.googleDrive.connectError');
-    } finally {
-      googleDriveActionInFlight = false;
-    }
-  };
-
-  const disconnectGoogleDriveConnection = async () => {
-    if (googleDriveActionInFlight) return;
-    googleDriveActionInFlight = true;
-    googleDriveConnectionError = null;
-    try {
-      googleDriveConnection = await disconnectGoogleDrive();
-      googleDriveConnectionLoaded = true;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      googleDriveConnectionError = msg || $_('chat.documents.googleDrive.disconnectError');
-    } finally {
-      googleDriveActionInFlight = false;
-    }
+  const openGoogleDriveSettings = async () => {
+    showComposerMenu = false;
+    await goto('/settings');
   };
 
   const ensureSessionDocumentTarget = async (): Promise<string> => {
@@ -3036,10 +2999,7 @@
     }
   };
 
-  const onPickSessionDoc = async (e: Event) => {
-    const inputEl = e.target as HTMLInputElement;
-    const file = inputEl.files?.[0];
-    inputEl.value = '';
+  const uploadSessionDoc = async (file: File | null | undefined) => {
     if (!file) return;
     showComposerMenu = false;
 
@@ -3061,6 +3021,10 @@
     } finally {
       sessionDocsUploading = false;
     }
+  };
+
+  const onPickSessionDoc = async (event: CustomEvent<{ file: File }>) => {
+    await uploadSessionDoc(event.detail.file);
   };
 
   const removeSessionDoc = async (doc: ContextDocumentItem) => {
@@ -5908,77 +5872,17 @@
               </button>
             </svelte:fragment>
             <svelte:fragment slot="menu">
-              <label
-                class={'flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 ' +
-                  (sessionDocsUploading ? 'opacity-50 pointer-events-none' : '')}
-                aria-label={$_('chat.documents.addFile')}
-                title={$_('chat.documents.addFile')}
-              >
-                <input
-                  class="hidden"
-                  type="file"
-                  on:change={onPickSessionDoc}
-                  disabled={sessionDocsUploading}
-                  accept={DOCUMENT_UPLOAD_ACCEPT}
-                />
-                <Paperclip class="w-4 h-4" />
-                <span>{$_('chat.documents.addFile')}</span>
-              </label>
-              {#if googleDriveConnection?.connected}
-                <button
-                  class={'flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 ' +
-                    (googleDriveActionInFlight ? 'opacity-50 pointer-events-none' : '')}
-                  type="button"
-                  disabled={googleDriveActionInFlight}
-                  aria-label={$_('chat.documents.googleDrive.import')}
-                  title={$_('chat.documents.googleDrive.import')}
-                  on:click={importSessionDocsFromGoogleDrive}
-                >
-                  <Cloud class="w-4 h-4" />
-                  <span>
-                    {googleDriveActionInFlight
-                      ? $_('chat.documents.googleDrive.loading')
-                      : $_('chat.documents.googleDrive.import')}
-                  </span>
-                </button>
-                <div class="px-1 text-[10px] text-slate-500 truncate">
-                  {$_('chat.documents.googleDrive.connectedAs', {
-                    values: {
-                      email:
-                        googleDriveConnection.accountEmail ??
-                        googleDriveConnection.accountSubject ??
-                        $_('chat.documents.googleDrive.connectedAccount'),
-                    },
-                  })}
-                </div>
-                <button
-                  class={'flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 ' +
-                    (googleDriveActionInFlight ? 'opacity-50 pointer-events-none' : '')}
-                  type="button"
-                  disabled={googleDriveActionInFlight}
-                  on:click={disconnectGoogleDriveConnection}
-                >
-                  <Cloud class="w-4 h-4" />
-                  <span>{$_('chat.documents.googleDrive.disconnect')}</span>
-                </button>
-              {:else}
-                <button
-                  class={'flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 ' +
-                    (googleDriveConnectionLoading || googleDriveActionInFlight
-                      ? 'opacity-50 pointer-events-none'
-                      : '')}
-                  type="button"
-                  disabled={googleDriveConnectionLoading || googleDriveActionInFlight}
-                  on:click={connectGoogleDrive}
-                >
-                  <Cloud class="w-4 h-4" />
-                  <span>
-                    {googleDriveConnectionLoading || googleDriveActionInFlight
-                      ? $_('chat.documents.googleDrive.loading')
-                      : $_('chat.documents.googleDrive.connect')}
-                  </span>
-                </button>
-              {/if}
+              <DocumentSourceMenu
+                localActionLabel={$_('chat.documents.addFile')}
+                localUploading={sessionDocsUploading}
+                googleDriveReady={googleDriveConnectionLoaded}
+                googleDriveConnected={Boolean(googleDriveConnection?.connected)}
+                googleDriveBusy={googleDriveConnectionLoading || googleDriveActionInFlight}
+                googleDriveAccountLabel={googleDriveConnection?.accountEmail ?? googleDriveConnection?.accountSubject ?? null}
+                on:pickLocal={onPickSessionDoc}
+                on:importGoogleDrive={importSessionDocsFromGoogleDrive}
+                on:openConnectors={openGoogleDriveSettings}
+              />
               <div class="border-t border-slate-100 pt-2"></div>
               <div class="text-xs font-semibold text-slate-600">
                 {$_('chat.contexts.title')}
