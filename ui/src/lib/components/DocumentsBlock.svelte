@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { createEventDispatcher } from 'svelte';
-  import { goto } from '$app/navigation';
   import { _, locale } from 'svelte-i18n';
   import { addToast } from '$lib/stores/toast';
+  import { getNavigation } from '$lib/core/navigation-adapter';
   import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import DocumentSourceMenu from '$lib/components/DocumentSourceMenu.svelte';
@@ -228,9 +228,9 @@
     }
   };
 
-  const openConnectors = async () => {
+  const openConnectors = () => {
     showSourceMenu = false;
-    await goto('/settings');
+    getNavigation().goto('/settings');
   };
 
   const toggleSummary = (id: string) => {
