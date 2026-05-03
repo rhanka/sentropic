@@ -210,6 +210,17 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make typecheck-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `validation` BR16a-T7 — Root pre-UAT surfaced a second export leak on downloads, and the branch now separates internal ingestion artifacts from user-facing downloads:
+  - Root causes: `GET /documents/:id/content` reused the same Google Workspace export path as summarization (`Markdown/CSV/plain-text`), and `DocumentsBlock` delegated downloads to `window.open`, which left filename control to the browser.
+  - Resolution: native Google Workspace downloads now use reusable Office exports (`Docs -> DOCX`, `Sheets -> XLSX`, `Slides -> PPTX`) while ingestion stays text-first for RAG, and the UI now downloads through `fetch + blob + Content-Disposition` so the saved filename matches the server response instead of a hash-like browser fallback.
+  - Verified commands:
+    - `make test-api-unit SCOPE=tests/unit/google-drive-client.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-ui SCOPE=tests/utils/documents.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -347,6 +358,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - [ ] Verify the same local/GDrive source menu on one entity `DocumentsBlock` surface.
     - [ ] List/select Drive file from an entity `DocumentsBlock` surface.
     - [ ] Verify native Google Workspace files keep the source filename/type in lists (no `.md/.csv/.txt` suffix leakage) and show the Drive-reported size on `DocumentsBlock`.
+    - [ ] Download a native Google Workspace document and verify the saved file uses the source name with a reusable Office extension (`.docx`, `.xlsx`, `.pptx`), not a hash-like fallback or an internal `.md/.csv/.txt` export.
     - [ ] Index selected file.
     - [ ] Ask chat to retrieve document facts.
     - [ ] Disconnect account from Settings and verify access is revoked.

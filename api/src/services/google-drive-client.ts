@@ -48,6 +48,8 @@ export type GoogleDriveFileContent = {
   exportMimeType: string | null;
 };
 
+export type GoogleDriveContentPurpose = 'ingest' | 'download';
+
 export class GoogleDriveClientError extends Error {
   constructor(
     message: string,
@@ -78,6 +80,24 @@ const extensionByExportMimeType: Record<string, string> = {
   'text/markdown': 'md',
   'text/plain': 'txt',
   'text/csv': 'csv',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+};
+
+const ingestExportMimeTypeBySourceMimeType: Record<GoogleWorkspaceMimeType, string> = {
+  [GOOGLE_WORKSPACE_MIME_TYPES.document]: 'text/markdown',
+  [GOOGLE_WORKSPACE_MIME_TYPES.spreadsheet]: 'text/csv',
+  [GOOGLE_WORKSPACE_MIME_TYPES.presentation]: 'text/plain',
+};
+
+const downloadExportMimeTypeBySourceMimeType: Record<GoogleWorkspaceMimeType, string> = {
+  [GOOGLE_WORKSPACE_MIME_TYPES.document]:
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  [GOOGLE_WORKSPACE_MIME_TYPES.spreadsheet]:
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  [GOOGLE_WORKSPACE_MIME_TYPES.presentation]:
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 };
 
 const driveUrl = (path: string, params?: Record<string, string>) => {
@@ -161,11 +181,14 @@ export const isSupportedGoogleDriveMimeType = (mimeType: string): boolean =>
   SUPPORTED_BINARY_MIME_TYPES.has(mimeType) ||
   SUPPORTED_TEXT_MIME_TYPES.has(mimeType);
 
-export const pickGoogleDriveExportMimeType = (mimeType: string): string | null => {
-  if (mimeType === GOOGLE_WORKSPACE_MIME_TYPES.document) return 'text/markdown';
-  if (mimeType === GOOGLE_WORKSPACE_MIME_TYPES.spreadsheet) return 'text/csv';
-  if (mimeType === GOOGLE_WORKSPACE_MIME_TYPES.presentation) return 'text/plain';
-  return null;
+export const pickGoogleDriveExportMimeType = (
+  mimeType: string,
+  purpose: GoogleDriveContentPurpose = 'ingest',
+): string | null => {
+  if (!isGoogleWorkspaceMimeType(mimeType)) return null;
+  return purpose === 'download'
+    ? downloadExportMimeTypeBySourceMimeType[mimeType]
+    : ingestExportMimeTypeBySourceMimeType[mimeType];
 };
 
 export const resolveGoogleDriveFileMetadata = async (input: {
@@ -191,10 +214,11 @@ export const resolveGoogleDriveFileMetadata = async (input: {
 export const loadGoogleDriveFileContent = async (input: {
   accessToken: string;
   file: GoogleDriveFileMetadata;
+  purpose?: GoogleDriveContentPurpose;
   fetchImpl?: typeof fetch;
 }): Promise<GoogleDriveFileContent> => {
   const fetchImpl = input.fetchImpl ?? fetch;
-  const exportMimeType = pickGoogleDriveExportMimeType(input.file.mimeType);
+  const exportMimeType = pickGoogleDriveExportMimeType(input.file.mimeType, input.purpose ?? 'ingest');
   const response = await driveFetch(
     {
       accessToken: input.accessToken,

@@ -61,6 +61,15 @@ describe('google drive client', () => {
     expect(pickGoogleDriveExportMimeType(GOOGLE_WORKSPACE_MIME_TYPES.presentation)).toBe(
       'text/plain',
     );
+    expect(
+      pickGoogleDriveExportMimeType(GOOGLE_WORKSPACE_MIME_TYPES.document, 'download'),
+    ).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    expect(
+      pickGoogleDriveExportMimeType(GOOGLE_WORKSPACE_MIME_TYPES.spreadsheet, 'download'),
+    ).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    expect(
+      pickGoogleDriveExportMimeType(GOOGLE_WORKSPACE_MIME_TYPES.presentation, 'download'),
+    ).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation');
     expect(pickGoogleDriveExportMimeType('application/pdf')).toBeNull();
   });
 
@@ -105,6 +114,51 @@ describe('google drive client', () => {
     expect(content.mimeType).toBe('text/markdown');
     expect(content.exportMimeType).toBe('text/markdown');
     expect(new TextDecoder().decode(content.bytes)).toContain('Milestone');
+  });
+
+  it('exports native Google Workspace files to Office formats for user downloads', async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(new Uint8Array([80, 75, 3, 4]), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        },
+      }),
+    );
+
+    const content = await loadGoogleDriveFileContent({
+      accessToken: 'access-token',
+      purpose: 'download',
+      file: {
+        id: 'file_1',
+        name: 'Roadmap',
+        mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+        webViewLink: null,
+        webContentLink: null,
+        iconLink: null,
+        modifiedTime: null,
+        version: null,
+        size: null,
+        md5Checksum: null,
+        trashed: false,
+        driveId: null,
+      },
+      fetchImpl,
+    });
+
+    const [url] = fetchImpl.mock.calls[0];
+    expect(String(url)).toContain('/drive/v3/files/file_1/export?');
+    expect(String(url)).toContain(
+      'mimeType=application%2Fvnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    expect(content.fileName).toBe('Roadmap.docx');
+    expect(content.mimeType).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    expect(content.exportMimeType).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    expect([...content.bytes]).toEqual([80, 75, 3, 4]);
   });
 
   it('downloads non-native files as transient media bytes', async () => {
