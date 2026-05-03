@@ -6,6 +6,7 @@ import { createId } from '../../src/utils/id';
 import { eq } from 'drizzle-orm';
 import { storeGoogleDriveTokenMaterial } from '../../src/services/google-drive-connector-accounts';
 import { GOOGLE_WORKSPACE_MIME_TYPES } from '../../src/services/google-drive-client';
+import { createConnectedGoogleDriveToken } from '../utils/google-drive-helper';
 
 vi.mock('../../src/services/storage-s3', async () => {
   return {
@@ -474,16 +475,7 @@ describe('ToolService (documents) - unit', () => {
     await storeGoogleDriveTokenMaterial({
       userId: googleUserId,
       workspaceId,
-      token: {
-        accessToken: 'google-access-token',
-        refreshToken: 'google-refresh-token',
-        idToken: null,
-        tokenType: 'Bearer',
-        scope: 'https://www.googleapis.com/auth/drive.file',
-        scopes: ['https://www.googleapis.com/auth/drive.file'],
-        obtainedAt: '2026-04-22T10:00:00.000Z',
-        expiresAt: '2026-04-22T11:00:00.000Z',
-      },
+      token: createConnectedGoogleDriveToken(),
       identity: {
         accountEmail: 'user@example.com',
         accountSubject: 'google-subject-1',
@@ -578,16 +570,7 @@ describe('ToolService (documents) - unit', () => {
     await storeGoogleDriveTokenMaterial({
       userId: googleUserId,
       workspaceId,
-      token: {
-        accessToken: 'google-access-token',
-        refreshToken: 'google-refresh-token',
-        idToken: null,
-        tokenType: 'Bearer',
-        scope: 'https://www.googleapis.com/auth/drive.file',
-        scopes: ['https://www.googleapis.com/auth/drive.file'],
-        obtainedAt: '2026-04-22T10:00:00.000Z',
-        expiresAt: '2026-04-22T11:00:00.000Z',
-      },
+      token: createConnectedGoogleDriveToken(),
       identity: {
         accountEmail: 'user@example.com',
         accountSubject: 'google-subject-1',

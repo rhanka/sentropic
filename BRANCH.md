@@ -176,6 +176,15 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - `make test-ui SCOPE=tests/utils/google-drive-picker.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
   - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-composer.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
   - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-settings-documents.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `validation` BR16a-T4 — Post-Lot 5 connected-account regressions are now aligned with the stricter Drive access contract:
+  - Root cause: the focused API/unit fixtures still seeded Google Drive tokens with a fixed April 2026 expiry, which now routes the branch through the refresh path and correctly yields `Google Drive account is not connected` when no OAuth config exists on the isolated test lane.
+  - Resolution: the affected tests now use a relative future `expiresAt` helper (`api/tests/utils/google-drive-helper.ts`) so a seeded “connected account” remains connected at runtime without weakening the production code path.
+  - Verified commands:
+    - `make test-api-unit SCOPE=tests/unit/documents-tool-service.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-ai SCOPE=tests/ai/documents-tool.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-endpoints SCOPE=tests/api/google-drive-files.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 
 ## AI Flaky tests
 - Acceptance rule:

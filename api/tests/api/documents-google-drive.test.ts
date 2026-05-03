@@ -5,6 +5,7 @@ import { db } from '../../src/db/client';
 import { contextDocuments, documentConnectorAccounts, jobQueue } from '../../src/db/schema';
 import { storeGoogleDriveTokenMaterial } from '../../src/services/google-drive-connector-accounts';
 import { GOOGLE_WORKSPACE_MIME_TYPES } from '../../src/services/google-drive-client';
+import { createConnectedGoogleDriveToken } from '../utils/google-drive-helper';
 
 const mockPutObject = vi.fn();
 const mockDeleteObject = vi.fn();
@@ -35,16 +36,7 @@ const seedConnectedGoogleDriveAccount = async (user: Awaited<ReturnType<typeof c
   storeGoogleDriveTokenMaterial({
     userId: user.id,
     workspaceId: String(user.workspaceId),
-    token: {
-      accessToken: 'google-access-token',
-      refreshToken: 'google-refresh-token',
-      idToken: null,
-      tokenType: 'Bearer',
-      scope: 'https://www.googleapis.com/auth/drive.file',
-      scopes: ['https://www.googleapis.com/auth/drive.file'],
-      obtainedAt: '2026-04-22T10:00:00.000Z',
-      expiresAt: '2026-04-22T11:00:00.000Z',
-    },
+    token: createConnectedGoogleDriveToken(),
     identity: {
       accountEmail: 'user@example.com',
       accountSubject: 'google-subject-1',
