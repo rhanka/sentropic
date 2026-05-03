@@ -54,6 +54,11 @@ function getDataBoolean(data: unknown, key: string): boolean {
   return rec[key] === true;
 }
 
+function sanitizeDocumentName(name: string | null | undefined): string {
+  const normalized = typeof name === 'string' ? name.trim() : '';
+  return (normalized || 'document').replace(/[^\w.\- ()]/g, '_');
+}
+
 function normalizeDocumentMimeType(fileName: string, rawMimeType: string | null | undefined): string {
   const lowerName = fileName.trim().toLowerCase();
   const mime = (rawMimeType || '').trim().toLowerCase();
@@ -87,20 +92,50 @@ function getGoogleDriveFileSize(file: { size: string | null }): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
+function getVisibleDocumentFields(doc: {
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  sourceType: string | null;
+  data: unknown;
+}): { filename: string; mimeType: string; sizeBytes: number } {
+  if (doc.sourceType !== 'google_drive') {
+    return {
+      filename: doc.filename,
+      mimeType: doc.mimeType,
+      sizeBytes: doc.sizeBytes,
+    };
+  }
+
+  const source = asRecord(asRecord(doc.data).source);
+  const sourceName = sanitizeDocumentName(getDataString(source, 'name') ?? doc.filename);
+  const sourceMimeType =
+    getDataString(source, 'mimeType') ?? getDataString(source, 'mime_type') ?? doc.mimeType;
+  const sourceSize = getDataString(source, 'size');
+  const parsedSourceSize = sourceSize ? Number.parseInt(sourceSize, 10) : Number.NaN;
+
+  return {
+    filename: sourceName,
+    mimeType: sourceMimeType,
+    sizeBytes: Number.isFinite(parsedSourceSize) && parsedSourceSize >= 0 ? parsedSourceSize : doc.sizeBytes,
+  };
+}
+
 function buildDocumentResponse(input: {
   doc: typeof contextDocuments.$inferSelect;
   status?: string;
   jobId?: string | null;
 }) {
   const sync = readContextDocumentSyncData(input.doc.data);
+  const visible = getVisibleDocumentFields(input.doc);
   return {
     id: input.doc.id,
     source_type: input.doc.sourceType,
     context_type: input.doc.contextType,
     context_id: input.doc.contextId,
-    filename: input.doc.filename,
-    mime_type: input.doc.mimeType,
-    size_bytes: input.doc.sizeBytes,
+    filename: visible.filename,
+    mime_type: visible.mimeType,
+    size_bytes: visible.sizeBytes,
     storage_key: input.doc.storageKey,
     status: input.status ?? (isDownloadOnlyDocument(input.doc) ? 'ready' : input.doc.status),
     sync_status: sync.syncStatus,
@@ -411,8 +446,8 @@ documentsRouter.post('/:id/resync', requireWorkspaceAccessRole(), async (c) => {
     }
 
     const exportMimeType = pickGoogleDriveExportMimeType(file.mimeType);
-    nextFilename = withExportExtension((file.name || 'document').replace(/[^\w.\- ()]/g, '_'), exportMimeType);
-    nextMimeType = exportMimeType ?? file.mimeType;
+    nextFilename = sanitizeDocumentName(file.name);
+    nextMimeType = file.mimeType;
     nextSizeBytes = getGoogleDriveFileSize(file);
     nextData = updateContextDocumentSyncData({
       data: doc.data,
@@ -604,18 +639,6 @@ const attachGoogleDriveSchema = z.object({
   file_ids: z.array(z.string().trim().min(1)).min(1).max(20),
 });
 
-const extensionByExportMimeType: Record<string, string> = {
-  'text/markdown': 'md',
-  'text/plain': 'txt',
-  'text/csv': 'csv',
-};
-
-function withExportExtension(name: string, exportMimeType: string | null): string {
-  const ext = exportMimeType ? extensionByExportMimeType[exportMimeType] : null;
-  if (!ext) return name;
-  return name.toLowerCase().endsWith(`.${ext}`) ? name : `${name}.${ext}`;
-}
-
 documentsRouter.post('/google-drive', requireWorkspaceAccessRole(), async (c) => {
   const { workspaceId, userId } = c.get('user') as { workspaceId: string; userId: string };
   const body = await c.req.json().catch(() => ({}));
@@ -661,12 +684,9 @@ documentsRouter.post('/google-drive', requireWorkspaceAccessRole(), async (c) =>
   const created: Array<Record<string, unknown>> = [];
   for (const file of resolved) {
     const exportMimeType = pickGoogleDriveExportMimeType(file.mimeType);
-    const mimeType = exportMimeType ?? file.mimeType;
-    const safeName = withExportExtension((file.name || 'document').replace(/[^\w.\- ()]/g, '_'), exportMimeType);
-    const sizeBytes = (() => {
-      const parsed = file.size ? Number.parseInt(file.size, 10) : Number.NaN;
-      return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-    })();
+    const mimeType = file.mimeType;
+    const safeName = sanitizeDocumentName(file.name);
+    const sizeBytes = getGoogleDriveFileSize(file);
 
     const docId = createId();
     await db.insert(contextDocuments).values({
