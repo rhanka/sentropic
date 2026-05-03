@@ -617,6 +617,23 @@
         "missingEnrollment": "Aucune connexion Codex en attente. Démarrez d’abord la connexion."
       }
     },
+    "connectors": {
+      "title": "Connecteurs",
+      "description": "Gérez les connecteurs documentaires disponibles pour votre compte courant.",
+      "status": {
+        "connected": "Connecté",
+        "disconnected": "Déconnecté"
+      },
+      "googleDrive": {
+        "title": "Google Drive",
+        "subtitle": "Utilisez directement les fichiers Drive dans le chat et les contextes documentaires.",
+        "connect": "Connecter Google Drive",
+        "disconnect": "Déconnecter Google Drive",
+        "connectedAs": "Connecté avec {email}",
+        "disconnectedHint": "Connectez votre compte Google ici avant d’importer des fichiers Drive ailleurs dans l’application.",
+        "disconnectedToast": "Google Drive déconnecté."
+      }
+    },
     "chromeExtension": {
       "title": "Extension Chrome",
       "description": "Téléchargez le dernier package de l'extension Chrome configuré pour cette instance.",
@@ -1334,6 +1351,11 @@
       "cta": "Ajouter un document",
       "loading": "Upload…",
       "success": "Document envoyé. Le résumé va être généré."
+    },
+    "googleDrive": {
+      "manageInSettings": "Gérer Google Drive dans Paramètres",
+      "manageHint": "Connectez ou déconnectez Google Drive depuis Paramètres, puis revenez ici pour importer des fichiers.",
+      "importSuccess": "Fichiers Google Drive attachés. Le résumé va être généré."
     },
     "action": {
       "download": "Télécharger",

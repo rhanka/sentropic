@@ -23,12 +23,19 @@
     startCodexProviderEnrollment,
     type ProviderConnectionState,
   } from '$lib/utils/provider-connections-api';
+  import {
+    disconnectGoogleDrive,
+    fetchGoogleDriveConnection,
+    startGoogleDriveOAuth,
+    type GoogleDriveConnection,
+  } from '$lib/utils/google-drive';
   import { emitUserAISettingsUpdated } from '$lib/utils/user-ai-settings-events';
   import {
     themePreference,
     type ThemePreference,
   } from '$lib/stores/themePreference';
   import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
+  import GoogleDriveConnectorCard from '$lib/components/GoogleDriveConnectorCard.svelte';
   import WorkspaceSettingsPanel from '$lib/components/WorkspaceSettingsPanel.svelte';
   import TodoRuntimeConfigPanel from '$lib/components/TodoRuntimeConfigPanel.svelte';
   import ViewTemplateCatalog from '$lib/components/ViewTemplateCatalog.svelte';
@@ -99,6 +106,10 @@
   let providerConnections: ProviderConnectionState[] = [], openaiTransportMode: 'codex' | 'token' = 'token';
   let codexConnectionAccountLabel = '';
   let codexPollingTimer: ReturnType<typeof setTimeout> | null = null;
+  let isLoadingGoogleDriveConnection = false;
+  let isSavingGoogleDriveConnection = false;
+  let googleDriveConnectionError = '';
+  let googleDriveConnection: GoogleDriveConnection | null = null;
   
   // Configuration IA
   let aiSettings = {
@@ -159,6 +170,7 @@
     await loadVsCodeExtensionDownloadMetadata();
     await loadModelCatalog();
     await loadUserAISettings();
+    await loadGoogleDriveConnection();
     if (isAdmin()) {
       await loadAISettings();
       await loadQueueStats();
@@ -201,6 +213,64 @@
   const settingsSecondaryButtonClass = `${settingsButtonBaseClass} border border-slate-300 bg-white text-slate-700 hover:bg-slate-100`;
   const settingsWarningButtonClass = `${settingsButtonBaseClass} bg-amber-700 text-white hover:bg-amber-800`;
   const settingsDangerButtonClass = `${settingsButtonBaseClass} bg-rose-700 text-white hover:bg-rose-800`;
+
+  const googleDriveReturnPath = () => {
+    if (typeof window === 'undefined') return '/settings';
+    return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  };
+
+  const loadGoogleDriveConnection = async () => {
+    if (isLoadingGoogleDriveConnection) return;
+    isLoadingGoogleDriveConnection = true;
+    googleDriveConnectionError = '';
+    try {
+      googleDriveConnection = await fetchGoogleDriveConnection();
+    } catch (error) {
+      googleDriveConnection = null;
+      googleDriveConnectionError =
+        error instanceof Error ? error.message : get(_)('chat.documents.googleDrive.loadError');
+    } finally {
+      isLoadingGoogleDriveConnection = false;
+    }
+  };
+
+  const connectGoogleDriveFromSettings = async () => {
+    if (isSavingGoogleDriveConnection) return;
+    isSavingGoogleDriveConnection = true;
+    googleDriveConnectionError = '';
+    try {
+      const authorizationUrl = await startGoogleDriveOAuth({
+        returnPath: googleDriveReturnPath(),
+      });
+      if (typeof window !== 'undefined') {
+        window.location.assign(authorizationUrl);
+      }
+    } catch (error) {
+      googleDriveConnectionError =
+        error instanceof Error ? error.message : get(_)('chat.documents.googleDrive.connectError');
+      isSavingGoogleDriveConnection = false;
+      return;
+    }
+    isSavingGoogleDriveConnection = false;
+  };
+
+  const disconnectGoogleDriveFromSettings = async () => {
+    if (isSavingGoogleDriveConnection) return;
+    isSavingGoogleDriveConnection = true;
+    googleDriveConnectionError = '';
+    try {
+      googleDriveConnection = await disconnectGoogleDrive();
+      addToast({
+        type: 'success',
+        message: get(_)('settings.connectors.googleDrive.disconnectedToast'),
+      });
+    } catch (error) {
+      googleDriveConnectionError =
+        error instanceof Error ? error.message : get(_)('chat.documents.googleDrive.disconnectError');
+    } finally {
+      isSavingGoogleDriveConnection = false;
+    }
+  };
 
   let codexProviderConnection: ProviderConnectionState | null = null;
   $: codexProviderConnection =
@@ -1191,6 +1261,15 @@
       </div>
     {/if}
   </div>
+
+  <GoogleDriveConnectorCard
+    connection={googleDriveConnection}
+    loading={isLoadingGoogleDriveConnection}
+    actionInFlight={isSavingGoogleDriveConnection}
+    error={googleDriveConnectionError}
+    on:connect={connectGoogleDriveFromSettings}
+    on:disconnect={disconnectGoogleDriveFromSettings}
+  />
 
   {#if !isAdmin()}
     <div class="rounded border border-slate-200 bg-white p-6">
