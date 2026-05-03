@@ -5,6 +5,8 @@ import { createId } from '../utils/id';
 import { decryptSecretOrNull, encryptSecret } from './secret-crypto';
 import {
   GOOGLE_DRIVE_PROVIDER,
+  refreshGoogleDriveAccessToken,
+  resolveGoogleDriveOAuthConfig,
   type GoogleDriveAccountIdentity,
   type GoogleDriveTokenResponse,
 } from './google-drive-oauth';
@@ -49,6 +51,60 @@ const toIso = (value: Date | string | null | undefined): string | null => {
   if (value instanceof Date) return value.toISOString();
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+};
+
+
+const GOOGLE_DRIVE_TOKEN_REFRESH_SKEW_MS = 60 * 1000;
+
+const isGoogleDriveTokenExpired = (expiresAt: string | null | undefined, nowMs = Date.now()): boolean => {
+  if (!expiresAt) return false;
+  const parsed = new Date(expiresAt);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.getTime() <= nowMs + GOOGLE_DRIVE_TOKEN_REFRESH_SKEW_MS;
+};
+
+const refreshStoredGoogleDriveTokenSecret = async (input: {
+  accountId: string;
+  token: GoogleDriveTokenSecretPayload;
+}): Promise<GoogleDriveTokenSecretPayload | null> => {
+  if (!isGoogleDriveTokenExpired(input.token.expiresAt)) return input.token;
+  if (!input.token.refreshToken) return null;
+
+  const config = await resolveGoogleDriveOAuthConfig();
+  if (!config) return null;
+
+  try {
+    const refreshed = await refreshGoogleDriveAccessToken({
+      refreshToken: input.token.refreshToken,
+      config,
+    });
+    const merged: GoogleDriveTokenSecretPayload = {
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken ?? input.token.refreshToken,
+      idToken: refreshed.idToken ?? input.token.idToken,
+      tokenType: refreshed.tokenType,
+      scope: refreshed.scope ?? input.token.scope,
+      scopes: refreshed.scopes.length > 0 ? refreshed.scopes : input.token.scopes,
+      obtainedAt: refreshed.obtainedAt,
+      expiresAt: refreshed.expiresAt,
+    };
+
+    await db
+      .update(documentConnectorAccounts)
+      .set({
+        status: 'connected',
+        scopes: merged.scopes,
+        tokenSecret: encryptSecret(JSON.stringify(merged)),
+        tokenExpiresAt: merged.expiresAt ? new Date(merged.expiresAt) : null,
+        lastError: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(documentConnectorAccounts.id, input.accountId));
+
+    return merged;
+  } catch {
+    return null;
+  }
 };
 
 export const toPublicGoogleDriveConnection = (
@@ -250,7 +306,7 @@ export const resolveGoogleDriveTokenSecret = async (input: {
     if (!parsed || typeof parsed !== 'object' || typeof parsed.accessToken !== 'string') {
       return null;
     }
-    return {
+    const secret = {
       accessToken: parsed.accessToken,
       refreshToken: typeof parsed.refreshToken === 'string' ? parsed.refreshToken : null,
       idToken: typeof parsed.idToken === 'string' ? parsed.idToken : null,
@@ -260,6 +316,10 @@ export const resolveGoogleDriveTokenSecret = async (input: {
       obtainedAt: typeof parsed.obtainedAt === 'string' ? parsed.obtainedAt : '',
       expiresAt: typeof parsed.expiresAt === 'string' ? parsed.expiresAt : null,
     };
+    return await refreshStoredGoogleDriveTokenSecret({
+      accountId: account.id,
+      token: secret,
+    });
   } catch {
     return null;
   }
@@ -286,7 +346,7 @@ export const resolveGoogleDriveTokenSecretByAccountId = async (input: {
     if (!parsed || typeof parsed !== 'object' || typeof parsed.accessToken !== 'string') {
       return null;
     }
-    return {
+    const secret = {
       accessToken: parsed.accessToken,
       refreshToken: typeof parsed.refreshToken === 'string' ? parsed.refreshToken : null,
       idToken: typeof parsed.idToken === 'string' ? parsed.idToken : null,
@@ -296,6 +356,10 @@ export const resolveGoogleDriveTokenSecretByAccountId = async (input: {
       obtainedAt: typeof parsed.obtainedAt === 'string' ? parsed.obtainedAt : '',
       expiresAt: typeof parsed.expiresAt === 'string' ? parsed.expiresAt : null,
     };
+    return await refreshStoredGoogleDriveTokenSecret({
+      accountId: row.id,
+      token: secret,
+    });
   } catch {
     return null;
   }

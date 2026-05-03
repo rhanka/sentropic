@@ -34,6 +34,8 @@ type GooglePickerBuilder = {
   setAppId: (appId: string) => GooglePickerBuilder;
   setOAuthToken: (token: string) => GooglePickerBuilder;
   setLocale: (locale: string) => GooglePickerBuilder;
+  setOrigin: (origin: string) => GooglePickerBuilder;
+  setRelayUrl: (url: string) => GooglePickerBuilder;
   addView: (view: GooglePickerDocsView) => GooglePickerBuilder;
   enableFeature: (feature: string) => GooglePickerBuilder;
   setCallback: (callback: (data: PickerCallbackData) => void) => GooglePickerBuilder;
@@ -95,6 +97,21 @@ const normalizeLocale = (value: string | null | undefined): string => {
   const normalized = value.trim().toLowerCase();
   return normalized.startsWith('fr') ? 'fr' : 'en';
 };
+
+const resolveGooglePickerTopOrigin = (windowLike: PickerWindow): string => {
+  try {
+    const topLocation = windowLike.top?.location;
+    const protocol = topLocation?.protocol;
+    const host = topLocation?.host;
+    if (protocol && host) return `${protocol}//${host}`;
+  } catch {
+    // Ignore cross-origin access failures and fall back to the current window.
+  }
+
+  return windowLike.location.origin;
+};
+
+const resolveGooglePickerRelayUrl = (origin: string): string => new URL('/', origin).toString();
 
 const getBrowserWindow = (): PickerWindow => {
   if (typeof window === 'undefined') {
@@ -187,6 +204,10 @@ export async function openGoogleDrivePickerWith(
     throw new Error('Google Picker API is unavailable.');
   }
 
+  const windowLike = getBrowserWindow();
+  const pickerOrigin = resolveGooglePickerTopOrigin(windowLike);
+  const pickerRelayUrl = resolveGooglePickerRelayUrl(pickerOrigin);
+
   return new Promise<string[]>((resolve) => {
     const view = new googlePicker.DocsView(googlePicker.ViewId.DOCS);
     view.setMimeTypes(GOOGLE_DRIVE_PICKER_SUPPORTED_MIME_TYPES);
@@ -198,6 +219,8 @@ export async function openGoogleDrivePickerWith(
       .setDeveloperKey(input.developerKey)
       .setOAuthToken(input.oauthToken)
       .setLocale(normalizeLocale(input.locale))
+      .setOrigin(pickerOrigin)
+      .setRelayUrl(pickerRelayUrl)
       .addView(view)
       .enableFeature(googlePicker.Feature.MULTISELECT_ENABLED)
       .enableFeature(googlePicker.Feature.SUPPORT_DRIVES)
