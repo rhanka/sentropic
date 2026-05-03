@@ -32,6 +32,7 @@ function withAuth(init: RequestInit = {}): RequestInit {
 
 export type ContextDocumentItem = {
   id: string;
+  source_type?: 'local' | 'google_drive' | 'sharepoint' | 'onedrive';
   context_type: DocumentContextType;
   context_id: string;
   filename: string;
@@ -45,6 +46,22 @@ export type ContextDocumentItem = {
   updated_at?: string | null;
   job_id?: string;
 };
+
+const GOOGLE_WORKSPACE_MIME_LABELS: Record<string, string> = {
+  'application/vnd.google-apps.document': 'Google Docs',
+  'application/vnd.google-apps.spreadsheet': 'Google Sheets',
+  'application/vnd.google-apps.presentation': 'Google Slides',
+};
+
+export function getDocumentMimeLabel(mimeType: string): string {
+  return GOOGLE_WORKSPACE_MIME_LABELS[mimeType] ?? mimeType;
+}
+
+export function shouldHideDocumentSize(
+  item: Pick<ContextDocumentItem, 'source_type' | 'mime_type'>,
+): boolean {
+  return item.source_type === 'google_drive' && item.mime_type in GOOGLE_WORKSPACE_MIME_LABELS;
+}
 
 export async function listDocuments(params: {
   contextType: DocumentContextType;
