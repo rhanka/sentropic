@@ -166,6 +166,16 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - `Disconnect Google Drive` still lives in the chat composer menu;
   - entity document surfaces (`DocumentsBlock`) still expose local upload only instead of the same local/GDrive source chooser.
   - Resolution is tracked as the complementary UX lot inserted before user UAT.
+- [x] `validation` BR16a-U9 — The complementary UX lot is now implemented on the branch:
+  - Settings exposes a user-scoped `Connectors` card for Google Drive lifecycle (`Connect` / `Disconnect`);
+  - the chat composer now exposes import-only Google Drive actions and redirects disconnected users toward Settings;
+  - `DocumentsBlock` uses the same local/GDrive source-menu contract as chat through a shared `DocumentSourceMenu.svelte` helper surface.
+- [x] `validation` BR16a-T3 — Lot 5 UI coverage now exists at the repo-supported levels:
+  - `make test-ui SCOPE=tests/utils/document-source-menu.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-ui SCOPE=tests/utils/google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-ui SCOPE=tests/utils/google-drive-picker.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-composer.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-settings-documents.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -274,23 +284,23 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - [x] **AI tests**
       - [x] Run AI document tool tests only when credentials are available and record flaky signatures if any.
 
-- [ ] **Lot 5 — Complementary UX alignment before user UAT**
-  - [ ] Add a user-scoped `Connectors` section to Settings using the existing settings card style.
-  - [ ] Move Google Drive lifecycle ownership to Settings (`Connect` / `Disconnect`).
-  - [ ] Remove `Disconnect Google Drive` from the chat composer menu; chat keeps import only.
-  - [ ] Extend `DocumentsBlock` surfaces to expose the same document-source choices as chat (`From computer` / `From Google Drive`).
-  - [ ] Reuse `MenuPopover` and keep one shared source-menu contract between chat and entity document surfaces; only extract a thin shared menu component if duplication justifies it.
-  - [ ] Update `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` for the connector/settings/source-menu contract before user UAT.
-  - [ ] Lot gate:
-    - [ ] `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
-    - [ ] **UI tests**
-      - [ ] Add/update settings connector tests.
-      - [ ] Add/update `DocumentsBlock` source-menu tests.
-      - [ ] Add/update chat composer source-menu tests.
+- [x] **Lot 5 — Complementary UX alignment before user UAT**
+  - [x] Add a user-scoped `Connectors` section to Settings using the existing settings card style.
+  - [x] Move Google Drive lifecycle ownership to Settings (`Connect` / `Disconnect`).
+  - [x] Remove `Disconnect Google Drive` from the chat composer menu; chat keeps import only.
+  - [x] Extend `DocumentsBlock` surfaces to expose the same document-source choices as chat (`From computer` / `From Google Drive`).
+  - [x] Reuse `MenuPopover` and keep one shared source-menu contract between chat and entity document surfaces; only extract a thin shared menu component if duplication justifies it.
+  - [x] Update `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` for the connector/settings/source-menu contract before user UAT.
+  - [x] Lot gate:
+    - [x] `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] **UI tests**
+      - [x] Add/update settings connector tests.
+      - [x] Add/update `DocumentsBlock` source-menu tests.
+      - [x] Add/update chat composer source-menu tests.
 
 - [ ] **Lot 6 — UAT**
-  - [x] Mocked web app UX validation covers connect/import/disconnect plus OAuth-config error handling via `e2e/tests/04-google-drive-composer.spec.ts`.
+  - [x] Mocked web app UX validation covers the new import-only composer path plus settings/DocumentsBlock connector surfaces via `e2e/tests/04-google-drive-composer.spec.ts` and `e2e/tests/04-google-drive-settings-documents.spec.ts`.
   - [ ] Traceable live readiness:
     - [x] Record authenticated Playwright `dev-state.json` on the branch dev lane with a verified seeded user via `make exec-playwright-dev ... tests/dev/00-record-auth.spec.ts ...`.
     - [x] Run `e2e/tests/dev/01-google-drive-live-readiness.spec.ts` on the branch dev lane with `make test-e2e-dev ...`.

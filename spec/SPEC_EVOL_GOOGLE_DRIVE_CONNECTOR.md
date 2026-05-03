@@ -294,31 +294,31 @@ Current UI baseline relevant to the BR-16a UX follow-up:
 - `ui/src/lib/components/DocumentsBlock.svelte` is reused on folders, organizations, initiatives, and creation flows, but today exposes only local file upload.
 - `ui/src/lib/components/FileMenu.svelte` is not the right abstraction for BR-16a document sources: it is an action menu (`new/import/export/delete`), not a source selector (`local file` vs `Google Drive`).
 
-Current BR-16a implementation status before the complementary UX lot:
+Current BR-16a implementation status after the complementary UX lot:
 
-- The composer connection surface is implemented: connection status fetch, OAuth start, disconnect, Picker config fetch, picker selection resolution, and Drive document attachment are wired in the existing chat composer menu.
 - The visible "Import from Google Drive" entry is live and attaches Drive selections to the chat session document list.
-- Deterministic browser validation now exists without live Google secrets: Playwright uses magic-link auth plus browser/API mocks for Picker/OAuth endpoints to exercise connect, import, disconnect, and inline error handling.
+- Google Drive lifecycle ownership now lives in a user-scoped Settings `Connectors` card rather than the chat composer.
+- `DocumentsBlock` now exposes the same source choices as the chat composer (`From computer` / `From Google Drive`) through the same shared source-menu contract.
+- Deterministic browser validation now exists without live Google secrets:
+  - `e2e/tests/04-google-drive-composer.spec.ts` covers the import-only chat composer path plus the redirect to Settings when the user is disconnected.
+  - `e2e/tests/04-google-drive-settings-documents.spec.ts` covers Settings lifecycle actions and `DocumentsBlock` source-menu visibility/routing.
 - Live root pre-UAT validation is now completed on the target runtime. The real Google OAuth path was exercised end to end with a connected user account, working picker config, live Google Picker listing, and a real Drive file attachment back into the chat composer.
-- The pre-UAT review also identified three product gaps that must be closed before user UAT sign-off:
-  - there is no user-facing Google Drive connector card in settings;
-  - the chat composer still exposes `Disconnect Google Drive`, even though connection lifecycle should live in settings;
-  - non-chat document surfaces (`DocumentsBlock`) still expose local upload only, so Google Drive import is not yet unified across folders/organizations/initiatives.
+- The final user UAT is still intentionally open: the product owner must validate the integrated root runtime with the real Google account, real documents, and final retrieval behavior.
 
-Post pre-UAT UX delta selected for BR-16a:
+Implemented UX delta for BR-16a:
 
 - Add a new user-visible `Connectors` section to settings.
   - This section must follow the existing settings card style, not invent a special layout.
-  - The Google Drive card must show connection state, connected account label/email when available, lifecycle CTA (`Connect` or `Disconnect`), and inline error text when lifecycle actions fail.
+  - The Google Drive card now shows connection state, connected account label/email when available, lifecycle CTA (`Connect` or `Disconnect`), and inline error text when lifecycle actions fail.
   - This card is user-scoped, not admin-only. It complements rather than replaces the existing admin provider-connections area.
 - Move Google Drive lifecycle ownership out of the chat composer.
-  - The chat composer keeps Google Drive import only.
-  - `Disconnect Google Drive` must be removed from the chat composer menu.
-  - When disconnected, Google Drive import actions should remain discoverable but must route the user toward the settings connector surface instead of embedding lifecycle controls inline in the chat menu.
+  - The chat composer now keeps Google Drive import only.
+  - `Disconnect Google Drive` is removed from the chat composer menu.
+  - When disconnected, Google Drive import actions remain discoverable and route the user toward the settings connector surface instead of embedding lifecycle controls inline in the chat menu.
 - Generalize the `+` document affordance across chat and entity document surfaces.
-  - Chat composer and `DocumentsBlock` should expose the same source choices: `From computer` and `From Google Drive`.
-  - Reuse `MenuPopover` for this source chooser.
-  - Prefer one shared source-menu rendering contract between `ChatPanel.svelte` and `DocumentsBlock.svelte`. If duplication becomes non-trivial, extract a thin `DocumentSourceMenu.svelte` wrapper on top of `MenuPopover`; do not overload `FileMenu.svelte`.
+  - Chat composer and `DocumentsBlock` now expose the same source choices: `From computer` and `From Google Drive`.
+  - `MenuPopover` is reused for this source chooser.
+  - BR-16a now uses a thin shared `DocumentSourceMenu.svelte` wrapper on top of `MenuPopover`; `FileMenu.svelte` remains untouched.
   - Keep backend contracts unchanged at the transport level: local upload continues through `/documents`, Google Drive attach continues through `/documents/google-drive`.
 
 Avoid in BR-16a:
