@@ -219,8 +219,8 @@ describe('Queue - document_summary', () => {
       workspaceId,
       contextType: 'folder',
       contextId: 'f_1',
-      filename: 'Roadmap.md',
-      mimeType: 'text/markdown',
+      filename: 'Roadmap',
+      mimeType: 'application/vnd.google-apps.document',
       sizeBytes: 0,
       sourceType: 'google_drive',
       storageKey: null,
@@ -332,8 +332,8 @@ describe('Queue - document_summary', () => {
       workspaceId,
       contextType: 'folder',
       contextId: 'f_1',
-      filename: 'Roadmap.md',
-      mimeType: 'text/markdown',
+      filename: 'Roadmap',
+      mimeType: 'application/vnd.google-apps.document',
       sizeBytes: 0,
       sourceType: 'google_drive',
       storageKey: null,
@@ -406,4 +406,3 @@ describe('Queue - document_summary', () => {
     expect(String(data.lastSyncError || '')).toContain('extract failed');
   });
 });
-
