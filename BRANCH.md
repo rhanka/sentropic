@@ -230,6 +230,11 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - `make test-api-unit SCOPE=tests/unit/google-drive-connector-accounts.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make test-api-endpoints SCOPE=tests/api/google-drive-oauth.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `validation` BR16a-DOC1 — Lot 7 documentation consolidation is complete:
+  - `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` now records the final BR-16a connector contract, accepted root UAT boundary, source-aware document model, token-readiness behavior, native Workspace ingestion/download split, and deferred BR-16b/BR-16c scope.
+  - `spec/SPEC_VOL_CHAT_DOCS_LLM_RAG.md` now records that the Google Drive connector portion is absorbed by BR-16a while SharePoint/OneDrive and full RAG remain future work.
+  - New and updated test coverage is traceable in branch files for API, UI, e2e, and dev-lane readiness: Google Drive OAuth/accounts/files/documents suites, document tool/queue coverage, shared source-menu utilities, composer/settings document e2e specs, and `e2e/tests/dev/01-google-drive-live-readiness.spec.ts`.
+  - Broad final gates will run through PR/CI per user instruction; local broad test campaigns are not repeated in Lot 7.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -376,12 +381,13 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - [x] Existing chat documents tool still works for local docs.
     - [x] Local document upload and Google Drive import both work on at least one entity `DocumentsBlock` surface.
 
-- [ ] **Lot 7 — Docs consolidation**
-  - [ ] Consolidate final connector contract into `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`.
-  - [ ] Update existing document connector/RAG specs only if behavior changes.
-  - [ ] Update `BRANCH.md` feedback loop before final validation.
+- [x] **Lot 7 — Docs consolidation**
+  - [x] Consolidate final connector contract into `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`.
+  - [x] Update existing document connector/RAG specs only if behavior changes.
+  - [x] Update `BRANCH.md` feedback loop before final validation.
 
 - [ ] **Lot 8 — Final validation**
+  - [x] New/updated tests are implemented and traced in the branch; broad gates are delegated to PR/CI per user instruction.
   - [ ] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
   - [ ] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
   - [ ] `make test-api-unit API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
