@@ -1,6 +1,6 @@
 # SPEC EVOL - Google Drive Connector
 
-Status: Draft for BR-16a Lot 0.
+Status: Consolidated after BR-16a UAT.
 
 Owner branch: `feat/gdrive-sso-indexing-16a`.
 
@@ -8,9 +8,21 @@ Related roadmap entry: BR-16a `feat/gdrive-sso-indexing`.
 
 ## Objective
 
-Implement the first document connector slice for Google Drive: user-scoped Google OAuth, Drive file search/selection, in-situ summarization/indexing through the current `document_summary` flow, and chat retrieval through existing document tooling.
+BR-16a implements the first document connector slice for Google Drive: user-scoped Google OAuth, Drive file search/selection, in-situ summarization/indexing through the current `document_summary` flow, and chat retrieval through existing document tooling.
 
 The source document remains in Google Drive. Entropic may store connector metadata, source references, sync status, extracted metadata, summaries, and detailed summaries, but must not copy the original Drive binary into S3 as the canonical source.
+
+## Final BR-16a Contract
+
+- Google Drive is a user-scoped connector. Each Entropic user connects their own Google account for a workspace; shared Drive documents are attachable only when the acting Google account already has access.
+- Settings owns connector lifecycle (`Connect` / `Disconnect`) and public readiness. Chat and entity document surfaces only import documents from the connected source.
+- Google Picker is the BR-16a selection surface. The backend resolves Picker file IDs, verifies metadata/access, and stores source references in `context_documents`.
+- Local uploads stay S3-backed. Google Drive documents stay in situ with `source_type=google_drive`, nullable `storage_key`, connector account linkage, Drive file IDs, visible source metadata, sync status, and summary fields.
+- The existing `document_summary` queue remains the indexing path. BR-16a adds source-aware document loading but does not add stored chunks, embeddings, or semantic vector retrieval.
+- Native Google Workspace ingestion is text-first for summaries and tools. User downloads are separate reusable exports: Google Docs to DOCX, Google Sheets to XLSX, and Google Slides to PPTX.
+- Public connection status validates token readiness, refreshes expired access tokens when possible, and reports a disconnected/error state when authorization cannot be refreshed.
+- The `documents` API/tooling remains the unified surface for local and Google Drive documents.
+- SharePoint/OneDrive, sharing assistance, change notifications/polling, and direct Google Docs/Slides editing tools remain deferred to later connector branches.
 
 ## Non-Goals
 
@@ -59,7 +71,7 @@ Recommended MVP:
 - Use Google Picker for user selection.
 - Use Google Picker's search/browse UI so the user can find Drive documents without Entropic implementing server-side Drive listing in BR-16a.
 - Request `https://www.googleapis.com/auth/drive.file` as the default Drive scope.
-- Use the OAuth web server flow with `access_type=offline` only if manual resync must work when the user is not actively connected.
+- Use the OAuth web server flow with `access_type=offline` so manual resync, downloads, and tool reads can refresh authorization after the browser session token expires.
 - Use `include_granted_scopes=true`.
 - Keep `state` signed and scoped to `{ userId, workspaceId, nonce, returnPath }`.
 
@@ -305,7 +317,7 @@ Current UI baseline relevant to the BR-16a UX follow-up:
 - `ui/src/lib/components/DocumentsBlock.svelte` is reused on folders, organizations, initiatives, and creation flows, but today exposes only local file upload.
 - `ui/src/lib/components/FileMenu.svelte` is not the right abstraction for BR-16a document sources: it is an action menu (`new/import/export/delete`), not a source selector (`local file` vs `Google Drive`).
 
-Current BR-16a implementation status after the complementary UX lot:
+Current BR-16a implementation status after UAT:
 
 - The visible "Import from Google Drive" entry is live and attaches Drive selections to the chat session document list.
 - Google Drive lifecycle ownership now lives in a user-scoped Settings `Connectors` card rather than the chat composer.
@@ -314,7 +326,7 @@ Current BR-16a implementation status after the complementary UX lot:
   - `e2e/tests/04-google-drive-composer.spec.ts` covers the import-only chat composer path plus the redirect to Settings when the user is disconnected.
   - `e2e/tests/04-google-drive-settings-documents.spec.ts` covers Settings lifecycle actions and `DocumentsBlock` source-menu visibility/routing.
 - Live root pre-UAT validation is now completed on the target runtime. The real Google OAuth path was exercised end to end with a connected user account, working picker config, live Google Picker listing, and a real Drive file attachment back into the chat composer.
-- The final user UAT is still intentionally open: the product owner must validate the integrated root runtime with the real Google account, real documents, and final retrieval behavior.
+- User UAT is accepted for BR-16a on the root runtime with the real Google account, real Drive documents, native Google Workspace imports/downloads, indexing, retrieval, and disconnect behavior.
 
 Implemented UX delta for BR-16a:
 

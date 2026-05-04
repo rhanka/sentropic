@@ -32,6 +32,12 @@
 - Impact sur les liens doc-objet : les documents s'attachent aux contextes (organization, folder, usecase/initiative). Avec BR-04 rename en `initiatives`, les contextType refs changent.
 - Impact sur le chat : les documents connectés doivent être accessibles par le `documents` tool comme les locaux.
 
+BR-16a consolidation note:
+
+- The Google Drive first slice is absorbed into `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`: user-scoped Google OAuth, Picker-based selection, source-aware `context_documents`, in-situ indexing through `document_summary`, and unified `documents` API/tool access.
+- The implemented schema uses `source_type`, nullable `storage_key`, connector account linkage, and external Drive file metadata rather than a generic `connector_type`/`external_ref` placeholder.
+- SharePoint/OneDrive and the generic multi-provider connector expansion remain future work for BR-16b. Google Drive sharing assistance, change notifications/polling, shared Drive refinements, and direct Google Workspace editing tools remain future work for BR-16c.
+
 ## Demand 4 — Connecteurs LLM supplémentaires
 
 > "Je voudrais aussi démultiplier les connecteurs llm (ajouter claude, mistral, cohere)"
@@ -51,6 +57,12 @@
 - Implique : chunking des documents, embeddings vectoriels, vector store (pgvector ou externe), retrieval pipeline avant injection dans le prompt LLM.
 - Impact sur le chat : le tool `documents` passe de "list/search" à "semantic retrieval" avec scoring de pertinence.
 - Impact sur le modèle : `contextDocuments` doit stocker les chunks + embeddings (ou table séparée `document_chunks`).
+
+BR-16a consolidation note:
+
+- BR-16a deliberately does not implement stored chunks, embeddings, vector search, or semantic retrieval.
+- Google Drive documents reuse the existing summary-first `document_summary` path and the current runtime document tool behavior (`list`, `get_summary`, `get_content`, `analyze`).
+- Full RAG remains a separate future branch and should start from the source-aware document contract rather than from local S3 assumptions.
 
 ## Demand 6 — Articulation avec BR-04
 
