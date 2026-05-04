@@ -212,10 +212,12 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 - [x] `validation` BR16a-T7 — Root pre-UAT surfaced a second export leak on downloads, and the branch now separates internal ingestion artifacts from user-facing downloads:
   - Root causes: `GET /documents/:id/content` reused the same Google Workspace export path as summarization (`Markdown/CSV/plain-text`), and `DocumentsBlock` delegated downloads to `window.open`, which left filename control to the browser.
-  - Resolution: native Google Workspace downloads now use reusable Office exports (`Docs -> DOCX`, `Sheets -> XLSX`, `Slides -> PPTX`) while ingestion stays text-first for RAG, and the UI now downloads through `fetch + blob + Content-Disposition` so the saved filename matches the server response instead of a hash-like browser fallback.
+  - Follow-up root cause: the document download response did not expose `Content-Disposition` to the cross-origin web UI (`localhost:5173` -> `8787`), and the attachment metadata only used the legacy `filename` form.
+  - Resolution: native Google Workspace downloads now use reusable Office exports (`Docs -> DOCX`, `Sheets -> XLSX`, `Slides -> PPTX`) while ingestion stays text-first for RAG, the UI downloads through `fetch + blob + Content-Disposition`, and the API now emits `Access-Control-Expose-Headers: Content-Disposition` with both `filename` and UTF-8 `filename*` attachment metadata.
   - Verified commands:
     - `make test-api-unit SCOPE=tests/unit/google-drive-client.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_TEST_WORKERS=1 API_TEST_ARGS="--testNamePattern=downloads --hookTimeout=20000" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make test-ui SCOPE=tests/utils/documents.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
