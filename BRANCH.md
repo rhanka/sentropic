@@ -353,28 +353,28 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
       - [x] Add/update `DocumentsBlock` source-menu tests.
       - [x] Add/update chat composer source-menu tests.
 
-- [ ] **Lot 6 — UAT**
+- [x] **Lot 6 — UAT**
   - [x] Mocked web app UX validation covers the new import-only composer path plus settings/DocumentsBlock connector surfaces via `e2e/tests/04-google-drive-composer.spec.ts` and `e2e/tests/04-google-drive-settings-documents.spec.ts`.
-  - [ ] Traceable live readiness:
+  - [x] Traceable live readiness:
     - [x] Record authenticated Playwright `dev-state.json` on the branch dev lane with a verified seeded user via `make exec-playwright-dev ... tests/dev/00-record-auth.spec.ts ...`.
     - [x] Run `e2e/tests/dev/01-google-drive-live-readiness.spec.ts` on the branch dev lane with `make test-e2e-dev ...`.
     - [x] Inject/prove runtime Google Drive credentials (`client_id`, `client_secret`, `callback_base_url`, `picker_api_key`, `picker_app_id`) on the target runtime.
-  - [ ] Web app:
-    - [ ] Open Settings and verify the new `Connectors` section matches the settings card style.
-    - [ ] Connect Google account from Settings.
-    - [ ] Confirm the chat composer exposes Google Drive import without any lifecycle CTA.
+  - [x] Web app:
+    - [x] Open Settings and verify the new `Connectors` section matches the settings card style.
+    - [x] Connect Google account from Settings.
+    - [x] Confirm the chat composer exposes Google Drive import without any lifecycle CTA.
     - [x] List/select Drive file from the chat composer.
-    - [ ] Verify the same local/GDrive source menu on one entity `DocumentsBlock` surface.
-    - [ ] List/select Drive file from an entity `DocumentsBlock` surface.
-    - [ ] Verify native Google Workspace files keep the source filename/type in lists (no `.md/.csv/.txt` suffix leakage) and show the Drive-reported size on `DocumentsBlock`.
-    - [ ] Download a native Google Workspace document and verify the saved file uses the source name with a reusable Office extension (`.docx`, `.xlsx`, `.pptx`), not a hash-like fallback or an internal `.md/.csv/.txt` export.
-    - [ ] Index selected file.
-    - [ ] Ask chat to retrieve document facts.
-    - [ ] Disconnect account from Settings and verify access is revoked.
-  - [ ] Non-regression:
+    - [x] Verify the same local/GDrive source menu on one entity `DocumentsBlock` surface.
+    - [x] List/select Drive file from an entity `DocumentsBlock` surface.
+    - [x] Verify native Google Workspace files keep the source filename/type in lists (no `.md/.csv/.txt` suffix leakage) and show the Drive-reported size on `DocumentsBlock`.
+    - [x] Download a native Google Workspace document and verify the saved file uses the source name with a reusable Office extension (`.docx`, `.xlsx`, `.pptx`), not a hash-like fallback or an internal `.md/.csv/.txt` export.
+    - [x] Index selected file.
+    - [x] Ask chat to retrieve document facts.
+    - [x] Disconnect account from Settings and verify access is revoked.
+  - [x] Non-regression:
     - [x] Local document upload still works.
     - [x] Existing chat documents tool still works for local docs.
-    - [ ] Local document upload and Google Drive import both work on at least one entity `DocumentsBlock` surface.
+    - [x] Local document upload and Google Drive import both work on at least one entity `DocumentsBlock` surface.
 
 - [ ] **Lot 7 — Docs consolidation**
   - [ ] Consolidate final connector contract into `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`.
