@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../../src/db/client';
 import { documentConnectorAccounts } from '../../src/db/schema';
 import {
+  getGoogleDriveConnection,
   resolveGoogleDriveTokenSecret,
   storeGoogleDriveTokenMaterial,
 } from '../../src/services/google-drive-connector-accounts';
@@ -82,6 +83,73 @@ describe('Google Drive connector account storage', () => {
     expect(String(init?.body)).toContain('refresh_token=refresh-token');
     expect(secret?.accessToken).toBe('refreshed-access-token');
     expect(secret?.refreshToken).toBe('refresh-token');
+  });
+
+  it('surfaces refresh failures as connector errors before settings report readiness', async () => {
+    process.env.GOOGLE_DRIVE_CLIENT_ID = 'google-client-id';
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET = 'google-client-secret';
+    process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL = 'http://localhost:8787';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          error: 'invalid_grant',
+          error_description: 'Token has been expired or revoked.',
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    await storeGoogleDriveTokenMaterial({
+      userId: user.id,
+      workspaceId: String(user.workspaceId),
+      identity: {
+        accountEmail: 'user@example.com',
+        accountSubject: 'google-subject-1',
+      },
+      token: {
+        accessToken: 'expired-access-token',
+        refreshToken: 'refresh-token',
+        idToken: 'id-token',
+        tokenType: 'Bearer',
+        expiresIn: 3600,
+        scope: 'openid email profile https://www.googleapis.com/auth/drive.file',
+        scopes: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/drive.file'],
+        obtainedAt: '2026-04-21T10:00:00.000Z',
+        expiresAt: '2026-04-21T11:00:00.000Z',
+      },
+    });
+
+    const account = await getGoogleDriveConnection(
+      {
+        userId: user.id,
+        workspaceId: String(user.workspaceId),
+      },
+      { validateToken: true },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(account).toMatchObject({
+      status: 'error',
+      connected: false,
+      accountEmail: 'user@example.com',
+      lastError: 'Token has been expired or revoked.',
+    });
+
+    const [row] = await db
+      .select()
+      .from(documentConnectorAccounts)
+      .where(
+        and(
+          eq(documentConnectorAccounts.userId, user.id),
+          eq(documentConnectorAccounts.workspaceId, String(user.workspaceId)),
+        ),
+      )
+      .limit(1);
+
+    expect(row.tokenSecret).toBeNull();
+    expect(row.tokenExpiresAt).toBeNull();
   });
 
   it('stores Google Drive access and refresh tokens as encrypted payloads', async () => {

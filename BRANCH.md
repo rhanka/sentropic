@@ -223,6 +223,13 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
     - `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
     - `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `validation` BR16a-T8 — Root pre-UAT surfaced stale Google Drive readiness in Settings after access-token expiry:
+  - Root cause: `/google-drive/connection` reported the persisted connector row status without validating the encrypted token material, while document downloads resolved the token and could fail with `409 Google Drive account is not connected`.
+  - Resolution: the public connection endpoint now validates token readiness, refreshes expired access tokens before reporting status, and records a connector `error` with sanitized `lastError` plus cleared unusable token material when Google rejects refresh authorization.
+  - Verified commands:
+    - `make test-api-unit SCOPE=tests/unit/google-drive-connector-accounts.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-endpoints SCOPE=tests/api/google-drive-oauth.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 
 ## AI Flaky tests
 - Acceptance rule:

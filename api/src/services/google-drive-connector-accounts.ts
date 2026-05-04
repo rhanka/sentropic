@@ -55,6 +55,9 @@ const toIso = (value: Date | string | null | undefined): string | null => {
 
 
 const GOOGLE_DRIVE_TOKEN_REFRESH_SKEW_MS = 60 * 1000;
+const GOOGLE_DRIVE_RECONNECT_REQUIRED_MESSAGE =
+  'Google Drive authorization expired or was revoked. Reconnect Google Drive.';
+const GOOGLE_DRIVE_OAUTH_NOT_CONFIGURED_MESSAGE = 'Google Drive OAuth is not configured.';
 
 const isGoogleDriveTokenExpired = (expiresAt: string | null | undefined, nowMs = Date.now()): boolean => {
   if (!expiresAt) return false;
@@ -63,15 +66,50 @@ const isGoogleDriveTokenExpired = (expiresAt: string | null | undefined, nowMs =
   return parsed.getTime() <= nowMs + GOOGLE_DRIVE_TOKEN_REFRESH_SKEW_MS;
 };
 
+const markGoogleDriveConnectorTokenError = async (input: {
+  accountId: string;
+  message: string;
+  clearTokenSecret: boolean;
+}): Promise<void> => {
+  await db
+    .update(documentConnectorAccounts)
+    .set({
+      status: 'error',
+      lastError: input.message,
+      updatedAt: new Date(),
+      ...(input.clearTokenSecret
+        ? {
+            tokenSecret: null,
+            tokenExpiresAt: null,
+          }
+        : {}),
+    })
+    .where(eq(documentConnectorAccounts.id, input.accountId));
+};
+
 const refreshStoredGoogleDriveTokenSecret = async (input: {
   accountId: string;
   token: GoogleDriveTokenSecretPayload;
 }): Promise<GoogleDriveTokenSecretPayload | null> => {
   if (!isGoogleDriveTokenExpired(input.token.expiresAt)) return input.token;
-  if (!input.token.refreshToken) return null;
+  if (!input.token.refreshToken) {
+    await markGoogleDriveConnectorTokenError({
+      accountId: input.accountId,
+      message: GOOGLE_DRIVE_RECONNECT_REQUIRED_MESSAGE,
+      clearTokenSecret: true,
+    });
+    return null;
+  }
 
   const config = await resolveGoogleDriveOAuthConfig();
-  if (!config) return null;
+  if (!config) {
+    await markGoogleDriveConnectorTokenError({
+      accountId: input.accountId,
+      message: GOOGLE_DRIVE_OAUTH_NOT_CONFIGURED_MESSAGE,
+      clearTokenSecret: false,
+    });
+    return null;
+  }
 
   try {
     const refreshed = await refreshGoogleDriveAccessToken({
@@ -102,7 +140,12 @@ const refreshStoredGoogleDriveTokenSecret = async (input: {
       .where(eq(documentConnectorAccounts.id, input.accountId));
 
     return merged;
-  } catch {
+  } catch (error) {
+    await markGoogleDriveConnectorTokenError({
+      accountId: input.accountId,
+      message: error instanceof Error ? error.message : GOOGLE_DRIVE_RECONNECT_REQUIRED_MESSAGE,
+      clearTokenSecret: true,
+    });
     return null;
   }
 };
@@ -162,11 +205,20 @@ export const getGoogleDriveConnectorAccount = async (input: {
   return row ?? null;
 };
 
-export const getGoogleDriveConnection = async (input: {
-  userId: string;
-  workspaceId: string;
-}): Promise<GoogleDriveConnectionPublic> =>
-  toPublicGoogleDriveConnection(await getGoogleDriveConnectorAccount(input));
+export const getGoogleDriveConnection = async (
+  input: {
+    userId: string;
+    workspaceId: string;
+  },
+  options: { validateToken?: boolean } = {},
+): Promise<GoogleDriveConnectionPublic> => {
+  let account = await getGoogleDriveConnectorAccount(input);
+  if (options.validateToken && account && account.status !== 'disconnected') {
+    await resolveGoogleDriveTokenSecret(input);
+    account = await getGoogleDriveConnectorAccount(input);
+  }
+  return toPublicGoogleDriveConnection(account);
+};
 
 export const storeGoogleDriveTokenMaterial = async (input: {
   userId: string;
@@ -298,7 +350,7 @@ export const resolveGoogleDriveTokenSecret = async (input: {
   workspaceId: string;
 }): Promise<GoogleDriveTokenSecretPayload | null> => {
   const account = await getGoogleDriveConnectorAccount(input);
-  if (!account || account.status !== 'connected') return null;
+  if (!account || (account.status !== 'connected' && account.status !== 'error')) return null;
   const decrypted = decryptSecretOrNull(account.tokenSecret);
   if (!decrypted) return null;
   try {
@@ -336,7 +388,7 @@ export const resolveGoogleDriveTokenSecretByAccountId = async (input: {
     .from(documentConnectorAccounts)
     .where(eq(documentConnectorAccounts.id, id))
     .limit(1);
-  if (!row || row.status !== 'connected') return null;
+  if (!row || (row.status !== 'connected' && row.status !== 'error')) return null;
 
   const decrypted = decryptSecretOrNull(row.tokenSecret);
   if (!decrypted) return null;

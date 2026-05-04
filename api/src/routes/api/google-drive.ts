@@ -89,10 +89,13 @@ googleDriveRouter.get('/connection', async (c) => {
   }
 
   return c.json({
-    account: await getGoogleDriveConnection({
-      userId: user.userId,
-      workspaceId: user.workspaceId,
-    }),
+    account: await getGoogleDriveConnection(
+      {
+        userId: user.userId,
+        workspaceId: user.workspaceId,
+      },
+      { validateToken: true },
+    ),
   });
 });
 
