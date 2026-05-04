@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../../db/client';
@@ -57,6 +57,18 @@ function getDataBoolean(data: unknown, key: string): boolean {
 function sanitizeDocumentName(name: string | null | undefined): string {
   const normalized = typeof name === 'string' ? name.trim() : '';
   return (normalized || 'document').replace(/[^\w.\- ()]/g, '_');
+}
+
+function buildAttachmentDisposition(fileName: string): string {
+  const cleaned = (fileName || 'document').replace(/[\r\n]/g, ' ').trim() || 'document';
+  const asciiFallback = cleaned.replace(/[^\x20-\x7E]/g, '_').replace(/["\\\/]/g, '_');
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(cleaned)}`;
+}
+
+function setDocumentDownloadHeaders(c: Context, mimeType: string | null | undefined, fileName: string): void {
+  c.header('Content-Type', mimeType || 'application/octet-stream');
+  c.header('Content-Disposition', buildAttachmentDisposition(fileName));
+  c.header('Access-Control-Expose-Headers', 'Content-Disposition');
 }
 
 function normalizeDocumentMimeType(fileName: string, rawMimeType: string | null | undefined): string {
@@ -299,8 +311,7 @@ documentsRouter.get('/:id/content', async (c) => {
     const bucket = getDocumentsBucketName();
     const stream = await getObjectBodyStream({ bucket, key: doc.storageKey });
 
-    c.header('Content-Type', doc.mimeType || 'application/octet-stream');
-    c.header('Content-Disposition', `attachment; filename="${doc.filename.replace(/"/g, '')}"`);
+    setDocumentDownloadHeaders(c, doc.mimeType, doc.filename);
     return c.newResponse(stream, 200);
   }
 
@@ -310,8 +321,7 @@ documentsRouter.get('/:id/content', async (c) => {
         ? { mode: 'user' as const, userId: user.userId, workspaceId: targetWorkspaceId }
         : undefined;
     const loaded = await loadContextDocumentContent({ document: doc, access, purpose: 'download' });
-    c.header('Content-Type', loaded.mimeType || 'application/octet-stream');
-    c.header('Content-Disposition', `attachment; filename="${loaded.filename.replace(/"/g, '')}"`);
+    setDocumentDownloadHeaders(c, loaded.mimeType, loaded.filename);
     return c.newResponse(loaded.bytes, 200);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load document content';

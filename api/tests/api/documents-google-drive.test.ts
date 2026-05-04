@@ -325,6 +325,10 @@ describe('Documents API (Google Drive attach)', () => {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     );
     expect(res.headers.get('content-disposition') || '').toContain('Roadmap.docx');
+    expect(res.headers.get('content-disposition') || '').toContain(
+      "filename*=UTF-8''Roadmap.docx",
+    );
+    expect(res.headers.get('access-control-expose-headers')).toBe('Content-Disposition');
     expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([80, 75, 3, 4]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/files/file_1/export');

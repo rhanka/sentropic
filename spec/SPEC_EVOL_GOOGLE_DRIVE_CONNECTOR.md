@@ -39,7 +39,8 @@ Implication:
 - BR-16a must introduce a source-aware document access path. Existing local documents keep `storageKey` and S3 behavior. Google Drive documents use a connector source reference and the same queue/tool semantics, with Drive export/download replacing S3 byte loading when the source is Google Drive.
 - BR-16a must also separate **ingestion exports** from **user download exports** for native Google Workspace files:
   - ingestion remains text-first for the summarization/RAG pipeline (`Google Docs -> Markdown`, `Sheets -> CSV`, `Slides -> plain text`);
-  - user-facing downloads must export native Google Workspace files to reusable Office binaries (`Google Docs -> DOCX`, `Sheets -> XLSX`, `Slides -> PPTX`) and preserve the source filename instead of leaking internal `.md/.csv/.txt` artifacts.
+  - user-facing downloads must export native Google Workspace files to reusable Office binaries (`Google Docs -> DOCX`, `Sheets -> XLSX`, `Slides -> PPTX`) and preserve the source filename instead of leaking internal `.md/.csv/.txt` artifacts;
+  - document download responses must expose `Content-Disposition` to the browser and include both ASCII `filename` and UTF-8 `filename*` attachment metadata so the UI download helper can save the source filename instead of falling back to a technical identifier.
 
 ## Official Google References
 
