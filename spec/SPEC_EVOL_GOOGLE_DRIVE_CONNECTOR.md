@@ -192,6 +192,8 @@ Minimum durable objects:
 Settings integration:
 
 - `document_connector_accounts` is the source of truth for per-user/per-workspace Google account state.
+- Public connection readiness must validate the encrypted token material, refresh expired access tokens when possible, and report `status=error` / `connected=false` when authorization has expired, been revoked, or cannot be refreshed.
+- Refresh failures must store a sanitized `last_error` and clear unusable token material when Google rejects the refresh token, so Settings cannot show a stale connected state while Drive operations fail.
 - `settings` remains the place for global connector configuration and encrypted/admin-managed OAuth client configuration when not provided by environment variables.
 - Do not duplicate account lifecycle state in `settings`.
 - Account rows must reference the same workspace/user concepts already used by app settings, RBAC, and document contexts.
