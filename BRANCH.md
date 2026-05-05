@@ -235,6 +235,14 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - `spec/SPEC_VOL_CHAT_DOCS_LLM_RAG.md` now records that the Google Drive connector portion is absorbed by BR-16a while SharePoint/OneDrive and full RAG remain future work.
   - New and updated test coverage is traceable in branch files for API, UI, e2e, and dev-lane readiness: Google Drive OAuth/accounts/files/documents suites, document tool/queue coverage, shared source-menu utilities, composer/settings document e2e specs, and `e2e/tests/dev/01-google-drive-live-readiness.spec.ts`.
   - Broad final gates will run through PR/CI per user instruction; local broad test campaigns are not repeated in Lot 7.
+- [x] `decision` BR16a-D3 — Production secrets stay on the Scaleway namespace/runtime model. BR-16a must not push `secret-environment-variables` at container level from CI/CD or from `make deploy-api`.
+- [ ] `attention` BR16a-PROD1 — Pre-merge production validation must run outside the GitHub CD path:
+  - remove parasite Google/DB/AI container-level secrets created by the rejected deploy path;
+  - provision Google OAuth/Picker runtime secrets at the Scaleway namespace level, aligned with the existing production secret model;
+  - verify the production API can boot and run migrations with the existing database/TLS runtime secrets;
+  - verify production mail sending still works;
+  - verify production Google Drive OAuth, Picker, import, indexing, and download behavior with CDP/browser evidence;
+  - rollback to the known healthy production image after validation unless the user explicitly keeps the branch image for UAT.
 
 ## AI Flaky tests
 - Acceptance rule:

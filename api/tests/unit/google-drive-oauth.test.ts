@@ -5,6 +5,8 @@ import {
   createGoogleDriveOAuthState,
   exchangeGoogleDriveOAuthCode,
   refreshGoogleDriveAccessToken,
+  resolveGoogleDriveOAuthConfig,
+  resolveGoogleDriveAppReturnBaseUrl,
   verifyGoogleDriveOAuthState,
   type GoogleDriveOAuthConfig,
 } from '../../src/services/google-drive-oauth';
@@ -26,6 +28,24 @@ describe('Google Drive OAuth helpers', () => {
     ).toBe('http://localhost:5173/folders?view=grid&google_drive=connected');
   });
 
+  it('derives the public app return base URL from the current sent-tech API host', () => {
+    const previous = process.env.AUTH_CALLBACK_BASE_URL;
+    delete process.env.AUTH_CALLBACK_BASE_URL;
+    try {
+      expect(
+        resolveGoogleDriveAppReturnBaseUrl({
+          requestApiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca',
+        }),
+      ).toBe('https://top-ai-ideas.sent-tech.ca');
+    } finally {
+      if (previous === undefined) {
+        delete process.env.AUTH_CALLBACK_BASE_URL;
+      } else {
+        process.env.AUTH_CALLBACK_BASE_URL = previous;
+      }
+    }
+  });
+
   it('builds an authorization URL with narrow Drive scope and offline access', () => {
     const { state } = createGoogleDriveOAuthState({
       userId: 'user-1',
@@ -44,6 +64,39 @@ describe('Google Drive OAuth helpers', () => {
     expect(url.searchParams.get('scope')).toContain('https://www.googleapis.com/auth/drive.file');
     expect(url.searchParams.get('scope')).toContain('openid');
     expect(url.searchParams.get('state')).toBe(state);
+  });
+
+  it('ignores loopback callback configuration in production when the request API base URL is available', async () => {
+    const previousEnv = {
+      NODE_ENV: process.env.NODE_ENV,
+      GOOGLE_DRIVE_CLIENT_ID: process.env.GOOGLE_DRIVE_CLIENT_ID,
+      GOOGLE_DRIVE_CLIENT_SECRET: process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+      GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL: process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL,
+      AUTH_CALLBACK_BASE_URL: process.env.AUTH_CALLBACK_BASE_URL,
+    };
+    process.env.NODE_ENV = 'production';
+    process.env.GOOGLE_DRIVE_CLIENT_ID = 'google-client-id';
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET = 'google-client-secret';
+    process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL = 'http://localhost:8787';
+    process.env.AUTH_CALLBACK_BASE_URL = 'https://app.example.test';
+
+    try {
+      const resolved = await resolveGoogleDriveOAuthConfig({
+        requestApiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca',
+      });
+
+      expect(resolved?.redirectUri).toBe(
+        'https://top-ai-ideas-api.sent-tech.ca/api/v1/google-drive/oauth/callback',
+      );
+    } finally {
+      for (const [key, value] of Object.entries(previousEnv)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
   });
 
   it('verifies signed state and rejects tampering or expiry', () => {

@@ -31,10 +31,29 @@ export const googleDriveRouter = new Hono();
 const googleDriveReturnRedirect = (
   returnPath: string,
   params: Record<string, string>,
+  options: { requestApiBaseUrl?: string | null } = {},
 ): string =>
   appendGoogleDriveOAuthResultToReturnPath(returnPath, params, {
-    baseUrl: resolveGoogleDriveAppReturnBaseUrl(),
+    baseUrl: resolveGoogleDriveAppReturnBaseUrl(options),
   });
+
+const firstForwardedValue = (value: string | null): string | null => {
+  const first = value?.split(',')[0]?.trim();
+  return first && first.length > 0 ? first : null;
+};
+
+const resolveRequestApiBaseUrl = (request: Request): string => {
+  const requestUrl = new URL(request.url);
+  const forwardedHost =
+    firstForwardedValue(request.headers.get('x-forwarded-host')) ||
+    firstForwardedValue(request.headers.get('host'));
+  if (!forwardedHost) return requestUrl.origin;
+
+  const forwardedProto =
+    firstForwardedValue(request.headers.get('x-forwarded-proto')) ||
+    requestUrl.protocol.replace(/:$/, '');
+  return `${forwardedProto}://${forwardedHost}`;
+};
 
 const oauthStartSchema = z.object({
   returnPath: z.string().trim().max(512).optional().nullable(),
@@ -195,6 +214,7 @@ googleDriveRouter.post('/oauth/start', async (c) => {
         userId: user.userId,
         workspaceId: user.workspaceId,
         returnPath: parsed.data.returnPath ?? null,
+        requestApiBaseUrl: resolveRequestApiBaseUrl(c.req.raw),
       }),
     );
   } catch (error) {
@@ -205,6 +225,7 @@ googleDriveRouter.post('/oauth/start', async (c) => {
 googleDriveRouter.get('/oauth/callback', async (c) => {
   const user = getAuthenticatedUser(c.get('user'));
   if (!user) return c.json({ message: 'Authentication required' }, 401);
+  const requestApiBaseUrl = resolveRequestApiBaseUrl(c.req.raw);
 
   const rawState = c.req.query('state') ?? '';
   const json = wantsJsonResponse(c.req.raw, c.req.query('format'));
@@ -227,14 +248,18 @@ googleDriveRouter.get('/oauth/callback', async (c) => {
       message: googleError,
     });
     if (json) return c.json({ account, message: googleError }, 400);
-    return c.redirect(googleDriveReturnRedirect(state.returnPath, { google_drive: 'error' }));
+    return c.redirect(
+      googleDriveReturnRedirect(state.returnPath, { google_drive: 'error' }, { requestApiBaseUrl }),
+    );
   }
 
   const code = c.req.query('code')?.trim();
   if (!code) return c.json({ message: 'Missing Google Drive OAuth code' }, 400);
 
   try {
-    const config = await resolveGoogleDriveOAuthConfig();
+    const config = await resolveGoogleDriveOAuthConfig({
+      requestApiBaseUrl,
+    });
     if (!config) throw new Error('Google Drive OAuth is not configured.');
 
     const token = await exchangeGoogleDriveOAuthCode({ code, config });
@@ -247,7 +272,13 @@ googleDriveRouter.get('/oauth/callback', async (c) => {
     });
 
     if (json) return c.json({ account, returnPath: state.returnPath });
-    return c.redirect(googleDriveReturnRedirect(state.returnPath, { google_drive: 'connected' }));
+    return c.redirect(
+      googleDriveReturnRedirect(
+        state.returnPath,
+        { google_drive: 'connected' },
+        { requestApiBaseUrl },
+      ),
+    );
   } catch (error) {
     const message = toErrorMessage(error, 'Google Drive OAuth callback failed');
     const account = await markGoogleDriveConnectorError({
@@ -256,7 +287,9 @@ googleDriveRouter.get('/oauth/callback', async (c) => {
       message,
     });
     if (json) return c.json({ account, message }, 400);
-    return c.redirect(googleDriveReturnRedirect(state.returnPath, { google_drive: 'error' }));
+    return c.redirect(
+      googleDriveReturnRedirect(state.returnPath, { google_drive: 'error' }, { requestApiBaseUrl }),
+    );
   }
 });
 

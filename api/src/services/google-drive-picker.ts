@@ -1,4 +1,4 @@
-import { resolveGoogleDriveOAuthConfig, GOOGLE_DRIVE_OAUTH_SCOPES } from './google-drive-oauth';
+import { resolveGoogleDriveOAuthClientId, GOOGLE_DRIVE_OAUTH_SCOPES } from './google-drive-oauth';
 import { settingsService } from './settings';
 
 export const GOOGLE_DRIVE_PICKER_API_KEY_SETTING_KEY = 'google_drive_picker_api_key';
@@ -49,8 +49,8 @@ async function resolveGoogleDrivePickerAppId(clientId: string): Promise<string |
 export const buildGoogleDrivePickerConfig = async (input: {
   oauthToken: string;
 }): Promise<GoogleDrivePickerConfig> => {
-  const oauthConfig = await resolveGoogleDriveOAuthConfig();
-  if (!oauthConfig?.clientId) {
+  const clientId = await resolveGoogleDriveOAuthClientId();
+  if (!clientId) {
     throw new Error('Google Drive Picker is not configured.');
   }
 
@@ -60,9 +60,9 @@ export const buildGoogleDrivePickerConfig = async (input: {
   }
 
   return {
-    clientId: oauthConfig.clientId,
+    clientId,
     developerKey,
-    appId: await resolveGoogleDrivePickerAppId(oauthConfig.clientId),
+    appId: await resolveGoogleDrivePickerAppId(clientId),
     oauthToken: input.oauthToken,
     scope:
       GOOGLE_DRIVE_OAUTH_SCOPES.find((entry) => entry.startsWith('https://www.googleapis.com/')) ??

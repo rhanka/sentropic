@@ -88,23 +88,79 @@ const normalizeReturnPath = (value: unknown): string => {
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
 
-const resolveCallbackBaseUrl = async (): Promise<string | null> => {
-  const raw =
-    normalizeOptionalText(process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL) ||
-    normalizeOptionalText(env.AUTH_CALLBACK_BASE_URL) ||
-    normalizeOptionalText(
-      await settingsService.get(GOOGLE_DRIVE_OAUTH_CALLBACK_BASE_URL_SETTING_KEY, {
-        fallbackToGlobal: true,
-      }),
-    );
-  return raw ? trimTrailingSlash(raw) : null;
+const isProductionRuntime = (): boolean =>
+  process.env.NODE_ENV === 'production' || env.NODE_ENV === 'production';
+
+const isLoopbackCallbackBaseUrl = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
 };
 
-export const resolveGoogleDriveAppReturnBaseUrl = (): string | null => {
+const normalizeCallbackBaseUrl = (value: unknown): string | null => {
+  const raw = normalizeOptionalText(value);
+  if (!raw) return null;
+  const normalized = trimTrailingSlash(raw);
+  if (isProductionRuntime() && isLoopbackCallbackBaseUrl(normalized)) return null;
+  return normalized;
+};
+
+export const resolveGoogleDriveOAuthClientId = async (): Promise<string | null> =>
+  Promise.resolve(
+    normalizeOptionalText(process.env.GOOGLE_DRIVE_CLIENT_ID) ||
+      normalizeOptionalText(env.GOOGLE_CLIENT_ID),
+  ).then(async (value) =>
+    value ||
+    normalizeOptionalText(
+      await settingsService.get(GOOGLE_DRIVE_OAUTH_CLIENT_ID_SETTING_KEY, {
+        fallbackToGlobal: true,
+      }),
+    ),
+  );
+
+const resolveCallbackBaseUrl = async (
+  options: { requestApiBaseUrl?: string | null } = {},
+): Promise<string | null> => {
+  const setting = await settingsService.get(GOOGLE_DRIVE_OAUTH_CALLBACK_BASE_URL_SETTING_KEY, {
+    fallbackToGlobal: true,
+  });
+  const candidates = [
+    process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL,
+    setting,
+    options.requestApiBaseUrl,
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizeCallbackBaseUrl(candidate);
+    if (normalized) return normalized;
+  }
+  return null;
+};
+
+const deriveAppReturnBaseUrlFromApiBaseUrl = (value: string | null | undefined): string | null => {
+  const raw = normalizeOptionalText(value);
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (isLoopbackCallbackBaseUrl(url.origin)) return null;
+    if (url.hostname.endsWith('-api.sent-tech.ca')) {
+      url.hostname = `${url.hostname.slice(0, -'-api.sent-tech.ca'.length)}.sent-tech.ca`;
+    }
+    return trimTrailingSlash(url.origin);
+  } catch {
+    return null;
+  }
+};
+
+export const resolveGoogleDriveAppReturnBaseUrl = (
+  options: { requestApiBaseUrl?: string | null } = {},
+): string | null => {
   const raw =
     normalizeOptionalText(process.env.AUTH_CALLBACK_BASE_URL) ||
     normalizeOptionalText(env.AUTH_CALLBACK_BASE_URL);
-  return raw ? trimTrailingSlash(raw) : null;
+  return raw ? trimTrailingSlash(raw) : deriveAppReturnBaseUrlFromApiBaseUrl(options.requestApiBaseUrl);
 };
 
 const resolveClientSecret = async (): Promise<string | null> => {
@@ -119,21 +175,13 @@ const resolveClientSecret = async (): Promise<string | null> => {
   return decryptSecretOrNull(rawSetting);
 };
 
-export const resolveGoogleDriveOAuthConfig = async (): Promise<GoogleDriveOAuthConfig | null> => {
+export const resolveGoogleDriveOAuthConfig = async (
+  options: { requestApiBaseUrl?: string | null } = {},
+): Promise<GoogleDriveOAuthConfig | null> => {
   const [clientId, clientSecret, callbackBaseUrl] = await Promise.all([
-    Promise.resolve(
-      normalizeOptionalText(process.env.GOOGLE_DRIVE_CLIENT_ID) ||
-        normalizeOptionalText(env.GOOGLE_CLIENT_ID),
-    ).then(async (value) =>
-      value ||
-      normalizeOptionalText(
-        await settingsService.get(GOOGLE_DRIVE_OAUTH_CLIENT_ID_SETTING_KEY, {
-          fallbackToGlobal: true,
-        }),
-      ),
-    ),
+    resolveGoogleDriveOAuthClientId(),
     resolveClientSecret(),
-    resolveCallbackBaseUrl(),
+    resolveCallbackBaseUrl(options),
   ]);
 
   if (!clientId || !clientSecret || !callbackBaseUrl) return null;
@@ -244,8 +292,9 @@ export const startGoogleDriveOAuth = async (input: {
   userId: string;
   workspaceId: string;
   returnPath?: string | null;
+  requestApiBaseUrl?: string | null;
 }): Promise<GoogleDriveOAuthStartResult> => {
-  const config = await resolveGoogleDriveOAuthConfig();
+  const config = await resolveGoogleDriveOAuthConfig({ requestApiBaseUrl: input.requestApiBaseUrl });
   if (!config) {
     throw new Error('Google Drive OAuth is not configured.');
   }
