@@ -143,6 +143,43 @@ describe('Google Drive OAuth API router', () => {
     );
   });
 
+  it('uses the public API origin from forwarded headers when production callback config is loopback', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    process.env.GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL = 'http://localhost:8787';
+    await settingsService.set(
+      GOOGLE_DRIVE_OAUTH_CALLBACK_BASE_URL_SETTING_KEY,
+      'http://localhost:8787',
+      'Google Drive loopback callback base URL',
+    );
+
+    try {
+      const res = await app.request('/api/v1/google-drive/oauth/start', {
+        method: 'POST',
+        headers: {
+          Cookie: `session=${user.sessionToken}`,
+          'Content-Type': 'application/json',
+          'x-forwarded-host': 'top-ai-ideas-api.sent-tech.ca',
+          'x-forwarded-proto': 'https',
+        },
+        body: JSON.stringify({ returnPath: '/settings/connectors' }),
+      });
+
+      expect(res.status).toBe(200);
+      const payload = await res.json();
+      const url = new URL(payload.authorizationUrl);
+      expect(url.searchParams.get('redirect_uri')).toBe(
+        'https://top-ai-ideas-api.sent-tech.ca/api/v1/google-drive/oauth/callback',
+      );
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+    }
+  });
+
   it('rejects callback state that does not validate', async () => {
     const res = await app.request(
       '/api/v1/google-drive/oauth/callback?format=json&state=invalid&code=code-1',

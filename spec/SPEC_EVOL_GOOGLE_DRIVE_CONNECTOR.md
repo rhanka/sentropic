@@ -114,8 +114,9 @@ Use these Google Auth Platform values for BR-16a provisioning:
 - Temporary support email fallback only if the Google Console selector does not expose `admin@sent-tech.ca`: `fabien.antoine@gmail.com`.
 - Test user while the app is in Testing mode: `fabien.antoine@gmail.com`.
 - Authorized domain: `sent-tech.ca`.
-- Production JavaScript origin: `https://entropic.sent-tech.ca`.
-- Production redirect URI: `https://entropic.sent-tech.ca/api/v1/google-drive/oauth/callback`.
+- Current production JavaScript origin: `https://top-ai-ideas.sent-tech.ca`.
+- Current production redirect URI: `https://top-ai-ideas-api.sent-tech.ca/api/v1/google-drive/oauth/callback`.
+- Future canonical `entropic.sent-tech.ca` hostnames remain part of the BR-14d DNS/runtime transition and must not be used by BR-16a CD until they resolve and route to the app/API.
 - Root local dev/UAT JavaScript origin: `http://localhost:5173`.
 - Root local dev/UAT redirect URI: `http://localhost:8787/api/v1/google-drive/oauth/callback`.
 - BR-16a five-slot sub-agent JavaScript origins: `http://localhost:5280` through `http://localhost:5284`.
@@ -137,7 +138,7 @@ Provisioning result on 2026-04-22 for Google Cloud project `sent-tech`:
 - OAuth web client created: `Entropic Web App`.
 - OAuth client ID: `924600787940-bc4tfvq52lseekjr090ic2e6k4gl4r8f.apps.googleusercontent.com`.
 - API key created: `Entropic Google Picker`; the key value is not recorded in repository docs.
-- API key restrictions: HTTP referrers `https://entropic.sent-tech.ca/*`, `http://localhost:5173/*`, and `http://localhost:5280/*` through `http://localhost:5284/*`.
+- API key restrictions: HTTP referrers `https://top-ai-ideas.sent-tech.ca/*`, future `https://entropic.sent-tech.ca/*` once BR-14d activates DNS/routing, `http://localhost:5173/*`, and `http://localhost:5280/*` through `http://localhost:5284/*`.
 - API key API restrictions: Google Drive API and Google Picker API.
 - Obsolete local port entries `http://localhost:5116`, `http://localhost:8716/api/v1/google-drive/oauth/callback`, and `http://localhost:5116/*` were removed from Google Cloud on 2026-04-22.
 
@@ -154,6 +155,14 @@ Provisioning in Google Cloud is not enough. The target runtime must also expose 
 Local runtime note:
 
 - The live UAT runtime must pass these values into the API container explicitly. In the current local setup, that means `docker-compose.yml` must forward `GOOGLE_DRIVE_*` plus `AUTH_CALLBACK_BASE_URL`; otherwise the branch code compiles but the live OAuth/Pickers paths stay untestable.
+
+Production runtime note:
+
+- BR-16a does not change the GitHub CD deployment model. `deploy-api` must keep the historical image-deploy behavior and must not push Scaleway container-level `secret-environment-variables`.
+- Production Google Drive runtime secrets are provisioned at the Scaleway namespace level, aligned with the existing production secret model used by database/TLS, mail, auth, model-provider, storage, and webauthn settings.
+- The required Google Drive runtime keys are `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL`, `GOOGLE_DRIVE_PICKER_API_KEY`, and optional `GOOGLE_DRIVE_PICKER_APP_ID`.
+- Current routed production values use the web origin `https://top-ai-ideas.sent-tech.ca` and API callback base `https://top-ai-ideas-api.sent-tech.ca` until BR-14d completes the `entropic.sent-tech.ca` DNS/runtime transition.
+- Before BR-16a is remerged, the cleaned branch must pass an out-of-CD production deployment validation that proves API boot/migrations, mail sending, Google OAuth, Picker, Drive import, indexing, and download behavior, followed by rollback unless the user explicitly keeps the branch image for UAT.
 
 Traceable proof commands on a target runtime:
 
