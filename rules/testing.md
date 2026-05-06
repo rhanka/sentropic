@@ -45,13 +45,17 @@ On TARGET=production (requires `make build-api build-ui-image` first):
 - User sign-off required before merge
 
 ## Environment Isolation Rules (MANDATORY)
-- User UAT/dev on root workspace only: `~/src/top-ai-ideas-fullstack` with `ENV=dev`
+- User UAT/dev on root workspace only: `/home/antoinefa/src/entropic` with `ENV=dev`
 - Branch changes in isolated worktrees: `tmp/feat-<slug>`
 - Never run test campaigns on root `dev`:
   - API/UI tests: `ENV=test` or branch-specific env
   - E2E tests: `ENV=e2e`, isolated ports, isolated compose project
 - During UAT: code/test in `tmp/feat-<slug>`, push, switch to root for UAT, switch back
 - `ENV` must be the last argument in all `make` commands
+- For concurrent branch/sub-agent testing, use the five-slot branch port convention from `rules/subagents.md`
+- For branch number `nn` and slot `0..4`: API ports are `9000 + (nn * 5) + slot`, UI ports are `5200 + (nn * 5) + slot`, and Maildev UI ports are `1100 + (nn * 5) + slot`
+- Test commands must include all three ports explicitly whenever any service stack can start
+- OAuth/Picker tests may only use local ports that are also registered as exact Google OAuth redirect URIs and JavaScript origins
 
 ## Branch Workflow Alignment
 - Defer full test runs until end of branch

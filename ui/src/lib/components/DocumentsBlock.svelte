@@ -1,19 +1,34 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { createEventDispatcher } from 'svelte';
-  import { _ } from 'svelte-i18n';
+  import { _, locale } from 'svelte-i18n';
   import { addToast } from '$lib/stores/toast';
+  import { getNavigation } from '$lib/core/navigation-adapter';
   import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
+  import DocumentSourceMenu from '$lib/components/DocumentSourceMenu.svelte';
+  import MenuPopover from '$lib/components/MenuPopover.svelte';
   import type { ContextDocumentItem, DocumentContextType } from '$lib/utils/documents';
   import {
-    DOCUMENT_UPLOAD_ACCEPT,
+    GOOGLE_DRIVE_CONNECTION_UPDATED_EVENT,
+    GOOGLE_DRIVE_CONNECTORS_ROUTE,
+  } from '$lib/utils/google-drive-connectors';
+  import {
+    downloadDocument,
     deleteDocument,
-    getDownloadUrl,
+    getDocumentMimeLabel,
     listDocuments,
     uploadDocument
   } from '$lib/utils/documents';
-  import { Trash2, Download, Eye, EyeOff, CirclePlus, Loader2 } from '@lucide/svelte';
+  import {
+    attachGoogleDriveDocuments,
+    fetchGoogleDriveConnection,
+    fetchGoogleDrivePickerConfig,
+    resolveGoogleDrivePickerSelection,
+    type GoogleDriveConnection,
+  } from '$lib/utils/google-drive';
+  import { openGoogleDrivePicker as openGoogleDrivePickerDialog } from '$lib/utils/google-drive-picker';
+  import { Trash2, Download, Eye, EyeOff, CirclePlus } from '@lucide/svelte';
 
   const iconButtonPrimary = 'rounded p-1 transition text-primary hover:bg-slate-100';
   const iconButtonWarning = 'rounded p-1 transition text-warning hover:bg-slate-100';
@@ -27,6 +42,15 @@
   let uploading = false;
   let error: string | null = null;
   let expandedSummaryById: Record<string, boolean> = {};
+  let showSourceMenu = false;
+  let sourceMenuTriggerRef: HTMLButtonElement | null = null;
+  let previousSourceMenuOpen = false;
+  let googleDriveConnection: GoogleDriveConnection | null = null;
+  let googleDriveConnectionLoading = false;
+  let googleDriveConnectionLoaded = false;
+  let googleDriveActionInFlight = false;
+  let googleDriveConnectionError: string | null = null;
+  let handleGoogleDriveConnectionUpdated: ((_: Event) => void) | null = null;
 
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let lastContextKey = '';
@@ -127,6 +151,14 @@
       }, 150);
     });
     void load();
+    void refreshGoogleDriveConnection({ silent: true });
+    handleGoogleDriveConnectionUpdated = () => {
+      void refreshGoogleDriveConnection({ silent: true });
+    };
+    window.addEventListener(
+      GOOGLE_DRIVE_CONNECTION_UPDATED_EVENT,
+      handleGoogleDriveConnectionUpdated,
+    );
   });
 
   onDestroy(() => {
@@ -136,12 +168,15 @@
     sseReloadTimer = null;
     if (sseKey) streamHub.delete(sseKey);
     sseKey = '';
+    if (handleGoogleDriveConnectionUpdated) {
+      window.removeEventListener(
+        GOOGLE_DRIVE_CONNECTION_UPDATED_EVENT,
+        handleGoogleDriveConnectionUpdated,
+      );
+    }
   });
 
-  const onPickFile = async (e: Event) => {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
+  const uploadPickedFile = async (file: File | null | undefined) => {
     if (!file) return;
 
     uploading = true;
@@ -160,14 +195,93 @@
     }
   };
 
+  const onPickLocalFile = async (event: CustomEvent<{ file: File }>) => {
+    showSourceMenu = false;
+    await uploadPickedFile(event.detail.file);
+  };
+
+  const loadGoogleDriveConnection = async (opts?: { silent?: boolean }) => {
+    if (googleDriveConnectionLoading) return;
+    googleDriveConnectionLoading = true;
+    if (!opts?.silent) googleDriveConnectionError = null;
+    try {
+      googleDriveConnection = await fetchGoogleDriveConnection();
+      googleDriveConnectionLoaded = true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      googleDriveConnection = null;
+      googleDriveConnectionLoaded = false;
+      googleDriveConnectionError = msg || $_('chat.documents.googleDrive.loadError');
+    } finally {
+      googleDriveConnectionLoading = false;
+    }
+  };
+
+  const refreshGoogleDriveConnection = async (opts?: { silent?: boolean }) => {
+    if (googleDriveConnectionLoading) return;
+    googleDriveConnectionLoaded = false;
+    await loadGoogleDriveConnection(opts);
+  };
+
+  $: if (showSourceMenu && !previousSourceMenuOpen) {
+    previousSourceMenuOpen = true;
+    void refreshGoogleDriveConnection({ silent: true });
+  } else if (!showSourceMenu && previousSourceMenuOpen) {
+    previousSourceMenuOpen = false;
+  }
+
+  const importFromGoogleDrive = async () => {
+    if (googleDriveActionInFlight || !googleDriveConnection?.connected) return;
+    googleDriveActionInFlight = true;
+    googleDriveConnectionError = null;
+    showSourceMenu = false;
+
+    try {
+      const picker = await fetchGoogleDrivePickerConfig();
+      const fileIds = await openGoogleDrivePickerDialog({
+        ...picker,
+        locale: $locale,
+      });
+      if (fileIds.length === 0) return;
+
+      await resolveGoogleDrivePickerSelection({ fileIds });
+      await attachGoogleDriveDocuments({
+        contextType,
+        contextId,
+        fileIds,
+      });
+      await load({ silent: true });
+      addToast({ type: 'success', message: $_('documents.googleDrive.importSuccess') });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      googleDriveConnectionError = msg || $_('chat.documents.googleDrive.importError');
+      addToast({ type: 'error', message: googleDriveConnectionError });
+    } finally {
+      googleDriveActionInFlight = false;
+    }
+  };
+
+  const openConnectors = () => {
+    showSourceMenu = false;
+    getNavigation().goto(GOOGLE_DRIVE_CONNECTORS_ROUTE);
+  };
+
   const toggleSummary = (id: string) => {
     expandedSummaryById = { ...expandedSummaryById, [id]: !expandedSummaryById[id] };
   };
 
-  const download = (docId: string) => {
+  const download = async (docId: string, fallbackFileName: string) => {
     const scopedWs = getScopedWorkspaceIdForUser();
-    const url = getDownloadUrl({ documentId: docId, workspaceId: scopedWs });
-    window.open(url, '_blank', 'noopener,noreferrer');
+    try {
+      await downloadDocument({
+        documentId: docId,
+        workspaceId: scopedWs,
+        fallbackFileName,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      addToast({ type: 'error', message: msg });
+    }
   };
 
   const remove = async (doc: ContextDocumentItem) => {
@@ -192,34 +306,51 @@
     </div>
 
     <div class="flex items-center gap-2">
-      <label
-        class={"inline-flex items-center justify-center " +
-          iconButtonPrimary +
-          " cursor-pointer " +
-          (uploading ? 'opacity-50 pointer-events-none' : '')}
-        title={$_('documents.upload.cta')}
-        aria-label={$_('documents.upload.cta')}
+      <MenuPopover
+        bind:open={showSourceMenu}
+        bind:triggerRef={sourceMenuTriggerRef}
+        widthClass="w-72"
+        menuClass="p-3"
       >
-        <input
-          class="hidden"
-          type="file"
-          on:change={onPickFile}
-          disabled={uploading}
-          accept={DOCUMENT_UPLOAD_ACCEPT}
-        />
-        {#if uploading}
-          <Loader2 class="w-5 h-5 animate-spin" />
-        {:else}
-          <CirclePlus class="w-5 h-5" />
-        {/if}
-        <span class="sr-only">{$_('documents.upload.cta')}</span>
-      </label>
+        <svelte:fragment slot="trigger" let:toggle>
+          <button
+            class={iconButtonPrimary}
+            type="button"
+            title={$_('documents.upload.cta')}
+            aria-label={$_('documents.upload.cta')}
+            bind:this={sourceMenuTriggerRef}
+            on:click={toggle}
+          >
+            <CirclePlus class="w-5 h-5" />
+            <span class="sr-only">{$_('documents.upload.cta')}</span>
+          </button>
+        </svelte:fragment>
+        <svelte:fragment slot="menu">
+          <DocumentSourceMenu
+            localActionLabel={$_('documents.upload.cta')}
+            localUploading={uploading}
+            googleDriveReady={googleDriveConnectionLoaded}
+            googleDriveConnected={Boolean(googleDriveConnection?.connected)}
+            googleDriveBusy={googleDriveConnectionLoading || googleDriveActionInFlight}
+            googleDriveAccountLabel={googleDriveConnection?.accountEmail ?? googleDriveConnection?.accountSubject ?? null}
+            on:pickLocal={onPickLocalFile}
+            on:importGoogleDrive={importFromGoogleDrive}
+            on:openConnectors={openConnectors}
+          />
+        </svelte:fragment>
+      </MenuPopover>
     </div>
   </div>
 
   {#if error}
     <div class="mt-4 rounded bg-red-50 border border-red-200 p-3 text-sm text-red-700">
       {error}
+    </div>
+  {/if}
+
+  {#if googleDriveConnectionError}
+    <div class="mt-4 rounded bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+      {googleDriveConnectionError}
     </div>
   {/if}
 
@@ -277,7 +408,7 @@
                 <td class="py-3 pr-2">
                   <button
                     class={iconButtonPrimary}
-                    on:click={() => download(doc.id)}
+                    on:click={() => download(doc.id, doc.filename)}
                     title={$_('documents.action.download')}
                     aria-label={$_('documents.action.download')}
                   >
@@ -287,7 +418,7 @@
 
                 <td class="py-3 pr-4">
                   <div class="font-medium text-slate-900">{doc.filename}</div>
-                  <div class="text-xs text-slate-500">{doc.mime_type}</div>
+                  <div class="text-xs text-slate-500">{getDocumentMimeLabel(doc.mime_type)}</div>
                 </td>
                 <td class="py-3 pr-4 text-slate-700 text-center">{formatBytes(doc.size_bytes)}</td>
                 <td class="py-3 pr-4 whitespace-nowrap text-center">

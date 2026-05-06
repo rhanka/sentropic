@@ -48,6 +48,15 @@ Minimal, repeatable contract so each sub-agent delivers one orthogonal lot safel
 - Never start services on ports belonging to another active branch
 - If port occupied by another compose project: stop and request new mapping
 - Keep `ENV` explicit and consistent
+- Each branch may reserve up to five concurrent sub-agent slots, numbered `0` through `4`
+- For branch number `nn`, compute local slot ports as:
+  - `API_PORT = 9000 + (nn * 5) + slot`
+  - `UI_PORT = 5200 + (nn * 5) + slot`
+  - `MAILDEV_UI_PORT = 1100 + (nn * 5) + slot`
+- Example: BR-16 slot `0..4` uses API `9080..9084`, UI `5280..5284`, Maildev `1180..1184`
+- Root dev/UAT remains reserved for the user on API `8787`, UI `5173`, Maildev `1080`; sub-agents never use those ports
+- Launch packets must name the assigned slot owner and exact ports before any `make` command
+- Active branch files and new sub-agent launch packets must use the slot convention when multiple agents or OAuth callback registration are involved
 
 ## Reporting Contract
 1. **Done**: concrete changes with file paths

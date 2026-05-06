@@ -336,6 +336,41 @@ describe('Documents API', () => {
     expect(bytes.length).toBeGreaterThan(0);
   });
 
+  it('POST /documents/:id/resync requeues local documents without changing storage source', async () => {
+    const form = new FormData();
+    form.set('context_type', 'folder');
+    form.set('context_id', 'f_1');
+    form.set('file', new File([new Uint8Array([1, 2, 3])], 'Doc resync.pdf', { type: 'application/pdf' }));
+    const up = await authenticatedMultipartRequest(app, '/api/v1/documents', user.sessionToken!, form);
+    expect(up.status).toBe(201);
+    const created = await up.json();
+    createdDocId = created.id;
+
+    addJobSpy.mockClear();
+
+    const res = await app.request(`/api/v1/documents/${createdDocId}/resync`, {
+      method: 'POST',
+      headers: { Cookie: `session=${user.sessionToken}` },
+    });
+    expect(res.status).toBe(202);
+    await expect(res.json()).resolves.toMatchObject({
+      id: createdDocId,
+      source_type: 'local',
+      status: 'uploaded',
+      sync_status: null,
+    });
+    expect(addJobSpy).toHaveBeenCalledTimes(1);
+    expect(addJobSpy.mock.calls[0]?.[0]).toBe('document_summary');
+    expect(addJobSpy.mock.calls[0]?.[1]).toMatchObject({ documentId: createdDocId, lang: 'fr' });
+
+    const [row] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, createdDocId!)).limit(1);
+    expect(row?.sourceType).toBe('local');
+    expect(row?.storageKey).toMatch(/^documents\//);
+    const data = (row?.data ?? {}) as any;
+    expect(data.summaryLang).toBe('fr');
+    expect(data.syncStatus).toBeUndefined();
+  });
+
   it('DELETE /documents/:id deletes DB row (204) and best-effort deletes S3 object', async () => {
     const form = new FormData();
     form.set('context_type', 'folder');
