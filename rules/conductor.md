@@ -43,8 +43,12 @@ tags: [orchestration]
 ## Port Non-Concurrency Rules
 - Root workspace (`ENV=dev`) must remain stable and isolated
 - Each active branch: unique `ENV`, `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT`
+- Each branch can reserve five concurrent sub-agent slots, numbered `0` through `4`
+- For branch number `nn`, slot ports are API `9000 + (nn * 5) + slot`, UI `5200 + (nn * 5) + slot`, Maildev UI `1100 + (nn * 5) + slot`
+- Example: BR-16 slots are API `9080..9084`, UI `5280..5284`, Maildev UI `1180..1184`
 - Before launching sub-agent: `make ps-all` to verify no port conflict
 - On conflict: reassign ports in `tmp/<slug>/.env`, `BRANCH.md`, `PLAN.md`
+- OAuth callback branches must not use ad hoc local ports; Google OAuth clients require exact redirect URIs and exact JavaScript origins
 
 ## Launch Packet Template
 - Branch id, name, working directory

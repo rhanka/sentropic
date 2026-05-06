@@ -32,6 +32,7 @@ function withAuth(init: RequestInit = {}): RequestInit {
 
 export type ContextDocumentItem = {
   id: string;
+  source_type?: 'local' | 'google_drive' | 'sharepoint' | 'onedrive';
   context_type: DocumentContextType;
   context_id: string;
   filename: string;
@@ -45,6 +46,16 @@ export type ContextDocumentItem = {
   updated_at?: string | null;
   job_id?: string;
 };
+
+const GOOGLE_WORKSPACE_MIME_LABELS: Record<string, string> = {
+  'application/vnd.google-apps.document': 'Google Docs',
+  'application/vnd.google-apps.spreadsheet': 'Google Sheets',
+  'application/vnd.google-apps.presentation': 'Google Slides',
+};
+
+export function getDocumentMimeLabel(mimeType: string): string {
+  return GOOGLE_WORKSPACE_MIME_LABELS[mimeType] ?? mimeType;
+}
 
 export async function listDocuments(params: {
   contextType: DocumentContextType;
@@ -89,6 +100,47 @@ export function getDownloadUrl(params: { documentId: string; workspaceId?: strin
   const url = new URL(`${getDocumentsApiBaseUrl()}/documents/${params.documentId}/content`, getUrlBaseForBrowser());
   if (params.workspaceId) url.searchParams.set('workspace_id', params.workspaceId);
   return url.toString();
+}
+
+function fileNameFromDisposition(disposition: string | null): string | null {
+  if (!disposition) return null;
+
+  const encodedMatch = disposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+  if (encodedMatch?.[1]) {
+    try {
+      return decodeURIComponent(encodedMatch[1]);
+    } catch {
+      return encodedMatch[1];
+    }
+  }
+
+  const quotedMatch = disposition.match(/filename\s*=\s*"([^"]+)"/i);
+  if (quotedMatch?.[1]) return quotedMatch[1];
+
+  const unquotedMatch = disposition.match(/filename\s*=\s*([^;]+)/i);
+  return unquotedMatch?.[1]?.trim() || null;
+}
+
+export async function downloadDocument(params: {
+  documentId: string;
+  workspaceId?: string | null;
+  fallbackFileName?: string;
+}): Promise<void> {
+  const res = await fetch(getDownloadUrl(params), withAuth({ method: 'GET' }));
+  if (!res.ok) throw new Error((await res.json().catch(() => null))?.message || `HTTP ${res.status}`);
+
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download =
+    fileNameFromDisposition(res.headers.get('content-disposition')) ??
+    params.fallbackFileName ??
+    'document';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(objectUrl);
 }
 
 export async function deleteDocument(params: { documentId: string; workspaceId?: string | null }): Promise<void> {

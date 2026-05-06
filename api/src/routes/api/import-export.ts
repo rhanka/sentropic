@@ -947,12 +947,17 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
     addZipFile(`matrix_${folderId}.json`, encodeJson(matrixPayload));
   }
 
+  const exportedDocuments = includeDocuments
+    ? documents.filter((doc) => doc.sourceType === 'local' && typeof doc.storageKey === 'string' && doc.storageKey.length > 0)
+    : [];
+  const skippedExternalDocuments = includeDocuments ? Math.max(0, documents.length - exportedDocuments.length) : 0;
+
   if (includeDocuments) {
     const bucket = getDocumentsBucketName();
-    for (const doc of documents) {
+    for (const doc of exportedDocuments) {
       const filename = doc.filename.replace(/[^\w.\- ()]/g, '_');
       const path = `documents/${doc.workspaceId}/${doc.contextType}/${doc.contextId}/${doc.id}-${filename}`;
-      const bytes = await getObjectBytes({ bucket, key: doc.storageKey });
+      const bytes = await getObjectBytes({ bucket, key: doc.storageKey as string });
       addZipFile(path, bytes);
     }
   }
@@ -961,7 +966,10 @@ exportsRouter.post('/', zValidator('json', exportSchema), async (c) => {
     title: 'Exported workspace data',
     notes: `Created by user ${user.userId}`,
     source: 'top-ai-ideas',
-    warnings: [],
+    warnings:
+      skippedExternalDocuments > 0
+        ? [`Skipped ${skippedExternalDocuments} external documents (non-local sources are not exported).`]
+        : [],
   };
   addZipFile('meta.json', encodeJson(meta));
 

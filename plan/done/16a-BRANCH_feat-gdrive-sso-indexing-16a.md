@@ -1,0 +1,412 @@
+# Feature: BR-16a Google Drive SSO and In-Situ Indexing
+
+## Objective
+Implement the Google Drive first slice of document connectors: user-scoped Google OAuth, Drive file search/selection, in-situ document summarization/indexing through the existing `document_summary` pipeline, and chat retrieval through stored references. Documents must stay in Google Drive; Entropic stores connector metadata, source references, sync status, extracted metadata, summaries, and detailed summaries.
+
+## Scope / Guardrails
+- Scope limited to Google Drive OAuth, Google Drive connector metadata, Drive Picker search/selection, Drive export/download adapters, source-aware document summarization, manual resync, user-scoped settings connector management, and document import integration across chat plus existing `DocumentsBlock` surfaces.
+- SharePoint, OneDrive, and generic connector expansion are deferred to BR-16b.
+- Google Drive sharing assistance, change notifications/polling, shared Drive collaboration refinements, and direct Google Docs/Slides editing tools are deferred to BR-16c.
+- One migration max in `api/drizzle/*.sql` if the schema needs connector metadata.
+- Make-only workflow, no direct Docker commands.
+- Root workspace `/home/antoinefa/src/entropic` is reserved for user work and must remain stable.
+- Branch development must happen in isolated worktree `tmp/feat-gdrive-sso-indexing-16a`.
+- Automated test campaigns must run on dedicated environments (`ENV=test-feat-gdrive-sso-indexing-16a` / `ENV=e2e-feat-gdrive-sso-indexing-16a`), never on root `dev`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+- Canonical roadmap branch is `feat/gdrive-sso-indexing`; this active branch is `feat/gdrive-sso-indexing-16a` because the canonical local ref is currently attached to a stale pre-Entropic worktree and must not be moved without explicit cleanup.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `api/src/services/**drive**`
+  - `api/src/services/**document**`
+  - `api/src/routes/api/**drive**`
+  - `api/src/routes/api/**document**`
+  - `api/src/db/**`
+  - `api/src/schema/**`
+  - `api/drizzle/*.sql`
+  - `api/tests/api/**drive**`
+  - `api/tests/api/**document**`
+  - `api/tests/unit/**drive**`
+  - `api/tests/unit/**document**`
+  - `ui/src/lib/**drive**`
+  - `ui/src/lib/**document**`
+  - `ui/src/lib/components/DocumentsBlock.svelte`
+  - `ui/src/routes/**documents**`
+  - `ui/src/routes/settings/+page.svelte`
+  - `ui/tests/**drive**`
+  - `ui/tests/**document**`
+  - `ui/tests/**settings**`
+  - `e2e/tests/**document**`
+  - `e2e/tests/**drive**`
+  - `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`
+  - `spec/SPEC_VOL_CHAT_DOCS_LLM_RAG.md`
+  - `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `README.md`
+  - `README.fr.md`
+  - `TRANSITION.md`
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `packages/llm-mesh/**`
+  - `spec/SPEC_EVOL_LLM_MESH.md`
+  - `plan/14*-BRANCH_*.md`
+  - `tmp/feat-llm-mesh-sdk/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `.github/workflows/**`
+  - `PLAN.md`
+  - `TODO.md`
+  - `api/package.json`
+  - `api/package-lock.json`
+  - `ui/package.json`
+  - `ui/package-lock.json`
+  - `rules/*.md`
+  - `scripts/**`
+- **Exception process**:
+  - Declare exception ID `BR16a-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop`.
+
+## Feedback Loop
+- [x] `clarification` BR16a-Q1 — Drive selection and OAuth scope: **1A selected**.
+  - 1A (selected): Google Picker + `drive.file`; Entropic only accesses files selected/opened by the user. The user must still be able to search/browse documents through the Google Picker UI.
+  - 1B: Server-side Drive browser with broader Drive listing/read scopes; likely heavier Google verification/security review.
+  - 1C: Hybrid: Picker in BR-16a, server-side browser deferred to a later connector branch.
+- [x] `clarification` BR16a-Q2 — Google Cloud provisioning: **2A selected with Codex-assisted browser provisioning**.
+  - 2A (selected): Codex performs provisioning through Playwright MCP attached to a user-launched Chromium CDP session. User provides the logged-in Google Cloud account/session and approves the browser automation.
+  - 2B: BR-16a implements with env placeholders and documents provisioning; live OAuth waits.
+  - 2C: BR-16a stays planning-only until Google Cloud provisioning is complete.
+- [x] `clarification` BR16a-Q3 — Google account ownership: **3C selected**.
+  - 3A (recommended): User-scoped Google connection only.
+  - 3B: Workspace-managed shared Google connector account.
+  - 3C (selected): Every Entropic user has their own Google identity. Shared Drive documents may be attached to a workspace when the acting user's Google account has rights. Sharing assistance and shared-drive collaboration refinements are deferred to BR-16c.
+- [x] `clarification` BR16a-Q4 — Token storage policy: **4A selected**.
+  - 4A (selected): Dedicated connector account table for lifecycle/status/scopes plus encrypted token payload, linked to settings for global connector config and OAuth client configuration.
+  - 4B: Reuse user-scoped `settings` keys and `secret-crypto` like current provider connections.
+  - 4C: Access-token-only sessions with no stored refresh token; manual reconnect required for resync.
+- [x] `clarification` BR16a-Q5 — Document schema handling for non-local sources: **5A selected**.
+  - 5A (selected): Add `source_type` and make `storage_key` nullable for Google Drive rows.
+  - 5B: Keep `storage_key` required and store a guarded sentinel such as `gdrive://<fileId>`.
+  - 5C: Keep `context_documents` local-only and add a separate linked Google document table.
+- [x] `clarification` BR16a-Q6 — Sync strategy: **6A selected for BR-16a**.
+  - 6A (selected): Manual/on-demand indexing plus explicit user-triggered resync. BR-16c will refine change notifications/polling; detected revisions must enqueue `document_summary` regeneration.
+  - 6B: Scheduled polling.
+  - 6C: Google webhook/events-based sync in BR-16a.
+- [x] `clarification` BR16a-Q7 — Supported source formats in MVP: **7B selected, method to specify**.
+  - 7A (recommended): Google Docs + PDFs first; Sheets/Slides deferred.
+  - 7B (selected): Google Docs, Sheets, Slides, PDFs, and text-like files in BR-16a. Native Google Workspace files use Drive export APIs; binary files use transient Drive download plus the existing `extractDocumentInfoFromDocument` generalist parser.
+  - 7C: Google Docs only.
+- [x] `clarification` BR16a-Q8 — Indexing depth: **8A revised selected**.
+  - 8A (selected revised): Extend the existing `document_summary` queue path to Google Drive sources. Store status, extracted metadata, summary, detailed summary, source refs, and sync metadata in/around `context_documents`. `documents.get_content` and `documents.analyze` load Drive content on demand and reuse existing runtime chunking for long documents. No stored embeddings in BR-16a.
+  - 8B: Cache extracted full text or chunks in DB for Google Drive docs, but still no embeddings.
+  - 8C: Full RAG retrieval with stored chunks/embeddings; defer to BR-17 or a later RAG branch.
+- [x] `clarification` BR16a-Q9 — UI entry point: **9A selected**.
+  - 9A (selected): Add Google Drive actions next to the paperclip in the existing document panel. If disconnected, show "Connect Google Drive"; if connected, show "Import from Google Drive" / "Attach from Google Drive" with a Google Drive icon.
+  - 9B: Settings-only connector management page.
+  - 9C: New full connector center UI.
+- [x] `clarification` BR16a-Q10 — Local branch naming: **10A selected**.
+  - 10A (selected): Keep active branch `feat/gdrive-sso-indexing-16a` because the canonical local ref is stale.
+  - 10B: Clean stale pre-Entropic worktree/ref and reclaim `feat/gdrive-sso-indexing`.
+  - 10C: Create another explicit branch name for this iteration.
+- [x] `clarification` BR16a-Q11 — Post pre-UAT connector UX ownership: **11A selected**.
+  - 11A (selected): Settings owns Google Drive lifecycle (`Connect` / `Disconnect`). Chat and entity document surfaces own import only, through a shared local/GDrive source chooser.
+  - 11B: Keep connection lifecycle in the chat composer and add a redundant settings status card.
+  - 11C: Move both lifecycle and import entirely into settings.
+- [x] `attention` BR16a-EX1 — Conditional roadmap updates are allowed for `PLAN.md` and `plan/16c-BRANCH_feat-gdrive-shared-edit-sync.md`. Reason: user split Google Drive sharing/sync/direct-edit follow-up into future BR-16c while scoping BR-16a. Impact: documentation only, no runtime behavior. Rollback: remove the BR-16c plan stub and revert BR-16c roadmap references.
+- [x] `clarification` BR16a-EX2 — Route registration uses `api/src/routes/api/index.ts`, which is outside the current Allowed Paths. Reason: the new Google Drive OAuth router can be implemented under `api/src/routes/api/**drive**`, but exposing `/api/v1/google-drive/*` in the main API router needs the central route index. Impact: route exposure only. Rollback: remove the route index import/use lines.
+- [x] `clarification` BR16a-EX3 — Drizzle migration metadata uses `api/drizzle/meta/_journal.json`, which is outside the explicit `api/drizzle/*.sql` Allowed Path. Reason: the new connector account SQL migration is not applied by Drizzle unless the journal includes the migration tag. Impact: migration metadata only. Rollback: remove the 0026 journal entry if the SQL migration is removed.
+- [x] `attention` BR16a-EX4 — Global workflow/testing/subagent rule updates are allowed for local SDLC and OAuth port-slot conventions. Reason: Google OAuth redirect URIs and Picker JavaScript origins must be exact, and BR-16a needs deterministic ports for up to five concurrent sub-agents without per-run console edits. Impact: documentation/rules only, no runtime behavior. Rollback: revert the `rules/*.md`, `PLAN.md`, and `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` documentation changes.
+- [x] `attention` BR16a-EX5 — `ui/src/lib/components/ChatPanel.svelte` and `ui/src/locales/*.json` are allowed for the Google Drive composer connection surface. Reason: BR16a-Q9 explicitly places "Connect Google Drive" / "Import from Google Drive" next to the existing paperclip in the chat composer, and user-facing labels need locale entries. Impact: composer menu surface only; no Picker import flow in Lot 1. Rollback: remove the Google Drive menu entries, locale keys, and client utility imports.
+- [x] `clarification` BR16a-EX6 — `docker-compose.yml` is allowed for local Google Drive runtime wiring. Reason: live OAuth/Pickers UAT requires the API container to receive `GOOGLE_DRIVE_*` credentials plus `AUTH_CALLBACK_BASE_URL`; without explicit compose wiring, the branch code cannot be exercised on root or isolated lanes. Impact: local/runtime environment wiring only; no API contract or product behavior beyond enabling configured credentials. Rollback: remove the added environment pass-through once a central secret/config injection path replaces local compose wiring.
+- [x] `attention` BR16a-EX7 — `ui/src/routes/settings/+page.svelte`, `ui/src/lib/components/DocumentsBlock.svelte`, optional shared source-menu UI under `ui/src/lib/components/**document**`, `ui/tests/**settings**`, `ui/tests/**document**`, and `ui/src/locales/*.json` are allowed for the post-pre-UAT connector UX alignment lot. Reason: the user requested that Google Drive connection lifecycle move into Settings and that existing entity document surfaces expose the same local/GDrive source menu as chat. Impact: UI/documentation/test surface only; backend Drive contracts stay unchanged. Rollback: remove the settings connector card and restore the previous local-only `DocumentsBlock` plus chat-only Google Drive lifecycle UI.
+- [x] `attention` BR16a-EX8 — `ui/src/routes/+layout.svelte` is allowed for the Google Drive settings deep-link/navigation fix. Reason: shared web-app surfaces (`ChatPanel`, `DocumentsBlock`) rely on the repo navigation adapter to avoid Chrome extension regressions, and the adapter is not initialized in the SvelteKit root layout today. Impact: web-app navigation only; extension behavior stays on the existing adapter path. Rollback: remove the adapter bootstrap from `+layout.svelte` if Google Drive settings deep-links move to another web-only navigation abstraction.
+- [ ] `attention` BR16a-UI1 — `make typecheck-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a` fails before change-specific diagnostics because `.svelte-kit` is not synced and `$lib` aliases are unresolved across the app. Follow-up check `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a` passes with 0 errors and 6 existing warnings. Impact: target/config issue, not a Google Drive UI error. Rollback: none for BR-16a runtime; fix the make target separately if required.
+- [x] `evidence` BR16a-GC1 — Google Cloud provisioning completed on 2026-04-22 for project `sent-tech`: Drive API and Picker API enabled, Auth Platform created, OAuth client `Entropic Web App` created, test user `fabien.antoine@gmail.com` added, and API key `Entropic Google Picker` created with HTTP referrer restrictions plus Drive/Picker API restrictions. Secret values are intentionally not recorded in repository docs.
+- [x] `evidence` BR16a-GC2 — Google Cloud cleanup completed on 2026-04-22: removed obsolete local origin `http://localhost:5116`, obsolete redirect URI `http://localhost:8716/api/v1/google-drive/oauth/callback`, and obsolete API key referrer `http://localhost:5116/*`.
+- [x] `attention` BR16a-EX1 — Scope expansion approved: implement Decision 5A (nullable `context_documents.storage_key` + source-aware documents) and introduce a minimal reusable document-source abstraction.
+  - Rationale: `tool-service`, `queue-manager` (document_summary), and `import-export` currently assume S3/local-only documents and will typecheck-fail and/or regress once Google Drive-backed documents are persisted.
+  - Intended abstraction outcome: a small document-access adapter layer that can load content for `local/S3` and `google_drive`, with explicit extension points for future `sharepoint`/`onedrive` sources (no provider-specific hacks, no `storage_key` sentinel).
+  - Approved additional paths for this exception:
+    - `api/src/services/tool-service.ts`
+    - `api/src/services/queue-manager.ts`
+    - `api/src/routes/api/import-export.ts`
+    - `api/tests/api/import-export.test.ts`
+    - plus minimal supporting `api/src/services/**document**` for the shared abstraction.
+- [x] `decision` BR16a-D1 — The `documents` tool now treats external sources as first-class document sources: list/read responses expose `sourceType` + sync metadata, and Google Drive `get_content` / `analyze` reads must use the connected user/workspace account when a user context is present. Background indexing/resync remains connector-account-driven.
+- [x] `decision` BR16a-D2 — Unified Google Drive content reads must stay user-scoped outside background jobs: `GET /documents/:id/content` now uses the acting user's connected Google account and returns `409` when that account is disconnected, instead of silently falling back to stored connector-account access.
+- [x] `attention` BR16a-T1 — Deterministic `documents` AI coverage now locks the Google Drive paths for connected `get_content`, connected `analyze`, and disconnected-user refusal.
+- [x] `attention` BR16a-U1 — The composer Google Drive import surface is now real: the paperclip-adjacent action fetches picker config, opens Google Picker, resolves the selected IDs server-side, attaches them through `/api/v1/documents/google-drive`, and refreshes the session document list. Impact: the disabled placeholder is removed; root live validation has proven OAuth return-path correctness and picker readiness, while the full user-facing import/index/retrieval sequence still belongs to Lot 5 UAT. Rollback: remove the Picker wiring and restore a connection-only composer surface.
+- [x] `attention` BR16a-R1 — Post-rebase verification exposed a duplicate `googleDriveRouter` import in `api/src/routes/api/index.ts`, which broke endpoint compilation before document logic executed. Fix: remove the duplicate import and rerun focused document suites on the rebased head. Impact: route index compile-time only; no runtime contract change. Rollback: revert the single-line import deduplication.
+- [x] `validation` BR16a-T2 — Focused Lot 4 / Lot 5 regression checks passed on the rebased head with no AI flaky signature:
+  - `make test-api-endpoints SCOPE=tests/api/documents.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-api-ai SCOPE=tests/ai/documents-tool.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `validation` BR16a-U2 — Root runtime OAuth/picker wiring is now validated. Evidence:
+  - Runtime Google Drive credentials were injected into root `.env` and the BR16a worktree `.env` for local verification only.
+  - Root API runtime wiring was completed by passing both `GOOGLE_DRIVE_*` variables and `AUTH_CALLBACK_BASE_URL` through `docker-compose.yml`.
+  - Live browser flow was executed against root `ENV=dev`: connect, Google warning continuation, consent approval, connected account persistence, picker readiness, and final redirect back to `http://localhost:5173/folders?google_drive=connected`.
+  - Root regression also exposed and fixed a product bug: the OAuth callback originally redirected to the API host (`http://localhost:8787/folders?...`) because the API emitted a relative return path. BR16a now emits an absolute UI redirect when `AUTH_CALLBACK_BASE_URL` is configured.
+- [x] `validation` BR16a-U3 — Mocked browser UX validation now covers the full composer flow without live Google secrets: magic-link-authenticated Playwright opens the chat composer, exercises the Google Drive connect redirect, imports a mocked picker selection, refreshes attached session documents, disconnects the account, and verifies the backend config error path inline.
+- [x] `validation` BR16a-U4 — Live OAuth/Picker root proof is closed. The target runtime now has working Google Drive credentials, a connected real account, successful Picker config generation, and a browser-proven return redirect to the root UI host.
+- [x] `attention` BR16a-U8 — Root pre-UAT also exposed two live-only integration bugs that deterministic mocks had not covered:
+  - stored Google Drive access tokens could expire before `picker-config` without any server-side refresh attempt, so BR16a now refreshes expiring connector-account tokens from the stored refresh token before returning them to runtime callers;
+  - the browser picker builder needed explicit `origin` / `relayUrl` wiring from the top-level window host to satisfy the real Google Picker bootstrap path.
+  - Focused API/UI unit coverage was added for both fixes before resuming user UAT.
+- [x] `validation` BR16a-U5 — Traceable dev-lane live-readiness now has real execution proof on 2026-04-27 using a verified seeded user. Evidence:
+  - `make exec-playwright-dev CMD="DEV_PLAYWRIGHT_AUTH_EMAIL=e2e-user-a@example.com npx playwright test --config playwright.dev.config.ts tests/dev/00-record-auth.spec.ts --workers=1 --retries=0 --reporter=list --grep 'e2e-user-a@example.com'" PLAYWRIGHT_DEV_UI_PORT=5280 API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-e2e-dev E2E_SPEC=e2e/tests/dev/01-google-drive-live-readiness.spec.ts PLAYWRIGHT_DEV_UI_PORT=5280 API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - Both commands passed. On the current lane, the readiness probe proves the missing-credential branch and the inline composer error path, not a live Google redirect.
+- [x] `attention` BR16a-U6 — `record-dev-playwright-auth` does not currently give a trustworthy BR16a proof with its default lane user. The helper defaults to `admin@sent-tech.ca`, and on this seeded test lane that account still has `users.email_verified=false`, so the recorded cookie yields `401 Invalid or expired session` on authenticated API calls. Use the verified seeded user command from BR16a-U5 for branch-lane proof until root runtime credentials + real user UAT are available. Rollback: none; this is documentation of current lane constraints, not a product behavior change.
+- [x] `validation` BR16a-LIVE1 — Live runtime credential bootstrap is complete on the tested environments.
+  - Proven on root `ENV=dev`: `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL`, `GOOGLE_DRIVE_PICKER_API_KEY`, derived `GOOGLE_DRIVE_PICKER_APP_ID`, and `AUTH_CALLBACK_BASE_URL`.
+  - Proven outcomes: real Google OAuth redirect, connected account persistence, `GET /api/v1/google-drive/connection` => connected, `GET /api/v1/google-drive/picker-config` => ready, and final browser redirect to the root UI host.
+- [x] `attention` BR16a-U7 — Root pre-UAT review confirmed the live connector works technically but surfaced product UX gaps that block user UAT sign-off:
+  - there is no Google Drive connector card in Settings;
+  - `Disconnect Google Drive` still lives in the chat composer menu;
+  - entity document surfaces (`DocumentsBlock`) still expose local upload only instead of the same local/GDrive source chooser.
+  - Resolution is tracked as the complementary UX lot inserted before user UAT.
+- [x] `validation` BR16a-U9 — The complementary UX lot is now implemented on the branch:
+  - Settings exposes a user-scoped `Connectors` card for Google Drive lifecycle (`Connect` / `Disconnect`);
+  - the chat composer now exposes import-only Google Drive actions and redirects disconnected users toward Settings;
+  - `DocumentsBlock` uses the same local/GDrive source-menu contract as chat through a shared `DocumentSourceMenu.svelte` helper surface.
+- [x] `validation` BR16a-T3 — Lot 5 UI coverage now exists at the repo-supported levels:
+  - `make test-ui SCOPE=tests/utils/document-source-menu.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-ui SCOPE=tests/utils/google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-ui SCOPE=tests/utils/google-drive-picker.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-composer.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+  - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-settings-documents.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `validation` BR16a-T4 — Post-Lot 5 connected-account regressions are now aligned with the stricter Drive access contract:
+  - Root cause: the focused API/unit fixtures still seeded Google Drive tokens with a fixed April 2026 expiry, which now routes the branch through the refresh path and correctly yields `Google Drive account is not connected` when no OAuth config exists on the isolated test lane.
+  - Resolution: the affected tests now use a relative future `expiresAt` helper (`api/tests/utils/google-drive-helper.ts`) so a seeded “connected account” remains connected at runtime without weakening the production code path.
+  - Verified commands:
+    - `make test-api-unit SCOPE=tests/unit/documents-tool-service.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-ai SCOPE=tests/ai/documents-tool.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-endpoints SCOPE=tests/api/google-drive-files.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `validation` BR16a-T5 — Root pre-UAT surfaced three linked Google Drive UX regressions, and the branch now covers them explicitly:
+  - Root causes: the web navigation adapter was never initialized in the SvelteKit root layout (full-page reload blink on Settings deep-links), disconnected source CTAs navigated to `/settings` without anchoring the connector card, and the chat/DocumentsBlock source menus reused stale Google Drive connection state after reconnects.
+  - Resolution: bootstrap the navigation adapter in `ui/src/routes/+layout.svelte`, deep-link disconnected flows to `/settings#google-drive-connectors`, refresh Drive connection state whenever the shared source menu opens, and align the disconnected CTA copy with the actual action (`Connect Google Drive in Settings`).
+  - Verified commands:
+    - `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-composer.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-settings-documents.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make build-ext-chrome API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `validation` BR16a-T6 — Root pre-UAT also surfaced a Google Workspace metadata leak on document lists, and the branch now keeps export formats internal:
+  - Root cause: the attach/resync routes persisted the export representation (`text/markdown`, `.md`, etc.) directly into `context_documents.filename` / `mimeType`, and list surfaces rendered those fields verbatim for both new and legacy rows.
+  - Resolution: attach/resync now persist source-visible filename/MIME, `documents.list` derives visible metadata from `data.source` for legacy rows, and `DocumentsBlock` displays the official Drive `size` value when Google provides one while still keeping export MIME/extensions internal.
+  - Verified commands:
+    - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-unit SCOPE=tests/unit/documents-tool-service.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-ai SCOPE=tests/ai/documents-tool.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-queue SCOPE=tests/queue/document-summary.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-ui SCOPE=tests/utils/documents.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-composer.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-e2e E2E_SPEC=e2e/tests/04-google-drive-settings-documents.spec.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make typecheck-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `validation` BR16a-T7 — Root pre-UAT surfaced a second export leak on downloads, and the branch now separates internal ingestion artifacts from user-facing downloads:
+  - Root causes: `GET /documents/:id/content` reused the same Google Workspace export path as summarization (`Markdown/CSV/plain-text`), and `DocumentsBlock` delegated downloads to `window.open`, which left filename control to the browser.
+  - Follow-up root cause: the document download response did not expose `Content-Disposition` to the cross-origin web UI (`localhost:5173` -> `8787`), and the attachment metadata only used the legacy `filename` form.
+  - Resolution: native Google Workspace downloads now use reusable Office exports (`Docs -> DOCX`, `Sheets -> XLSX`, `Slides -> PPTX`) while ingestion stays text-first for RAG, the UI downloads through `fetch + blob + Content-Disposition`, and the API now emits `Access-Control-Expose-Headers: Content-Disposition` with both `filename` and UTF-8 `filename*` attachment metadata.
+  - Verified commands:
+    - `make test-api-unit SCOPE=tests/unit/google-drive-client.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-endpoints SCOPE=tests/api/documents-google-drive.test.ts API_TEST_WORKERS=1 API_TEST_ARGS="--testNamePattern=downloads --hookTimeout=20000" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-ui SCOPE=tests/utils/documents.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `validation` BR16a-T8 — Root pre-UAT surfaced stale Google Drive readiness in Settings after access-token expiry:
+  - Root cause: `/google-drive/connection` reported the persisted connector row status without validating the encrypted token material, while document downloads resolved the token and could fail with `409 Google Drive account is not connected`.
+  - Resolution: the public connection endpoint now validates token readiness, refreshes expired access tokens before reporting status, and records a connector `error` with sanitized `lastError` plus cleared unusable token material when Google rejects refresh authorization.
+  - Verified commands:
+    - `make test-api-unit SCOPE=tests/unit/google-drive-connector-accounts.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make test-api-endpoints SCOPE=tests/api/google-drive-oauth.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+- [x] `validation` BR16a-DOC1 — Lot 7 documentation consolidation is complete:
+  - `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` now records the final BR-16a connector contract, accepted root UAT boundary, source-aware document model, token-readiness behavior, native Workspace ingestion/download split, and deferred BR-16b/BR-16c scope.
+  - `spec/SPEC_VOL_CHAT_DOCS_LLM_RAG.md` now records that the Google Drive connector portion is absorbed by BR-16a while SharePoint/OneDrive and full RAG remain future work.
+  - New and updated test coverage is traceable in branch files for API, UI, e2e, and dev-lane readiness: Google Drive OAuth/accounts/files/documents suites, document tool/queue coverage, shared source-menu utilities, composer/settings document e2e specs, and `e2e/tests/dev/01-google-drive-live-readiness.spec.ts`.
+  - Broad final gates will run through PR/CI per user instruction; local broad test campaigns are not repeated in Lot 7.
+- [x] `decision` BR16a-D3 — Production secrets stay on the Scaleway namespace/runtime model. BR-16a must not push `secret-environment-variables` at container level from CI/CD or from `make deploy-api`.
+- [x] `attention` BR16a-PROD1 — Pre-merge production validation ran outside the GitHub CD path:
+  - [x] remove parasite Google/DB/AI container-level secrets created by the rejected deploy path;
+  - [x] provision Google OAuth/Picker runtime secrets at the Scaleway namespace level, aligned with the existing production secret model;
+  - [x] correct the namespace production OAuth URLs after detecting local `.env` callback URLs were not valid for prod;
+  - [x] verify the production API can boot and run with the existing database/TLS runtime secrets;
+  - [x] verify production mail sending still works;
+  - [x] verify production Google Drive OAuth, Picker, import, indexing, and download behavior with CDP/browser evidence;
+  - [x] rollback to the known healthy production image after validation.
+  - Evidence on 2026-05-05: manual API deployment of BR16a image `7841a8` validated production health, mail magic-link request, real Google OAuth callback, Picker readiness, Drive file listing, native Google Slides import, indexing, correct Office download filename/export behavior, cleanup of the temporary document/session, then rollback to stable image `dd611a`. The API container has `0` container-level secrets; Google Drive runtime keys are present at namespace level only. Secret values are intentionally not recorded.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if Google connector and indexing split into independently validated PRs)
+- Rationale: BR-16a is one Google Drive connector slice. BR-16b owns non-Google connectors.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only after OAuth and file indexing paths are implemented.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot.
+- Execution flow:
+  - Develop and run tests in `tmp/feat-gdrive-sso-indexing-16a`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`/home/antoinefa/src/entropic`, `ENV=dev`) only after branch is pushed and ready.
+  - Switch back to `tmp/feat-gdrive-sso-indexing-16a` after UAT.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline & connector scope**
+  - [x] Read `rules/MASTER.md` and `rules/workflow.md`.
+  - [x] Create isolated worktree `tmp/feat-gdrive-sso-indexing-16a` from current `main`.
+  - [x] Copy root `.env` into the branch worktree.
+  - [x] Confirm active branch `feat/gdrive-sso-indexing-16a`.
+  - [x] Define environment mapping: `API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=feat-gdrive-sso-indexing-16a`.
+  - [x] Define test mapping: `API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`.
+  - [x] Define OAuth callback base URL for BR-16a slot 0: `GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL=http://localhost:9080`.
+  - [x] Confirm BR-16a is Google Drive only and BR-16b owns SharePoint/OneDrive.
+  - [x] Read current local document upload/index/chat integration files.
+  - [x] Read existing auth/settings/secret storage patterns.
+  - [x] Create `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`.
+  - [x] Finalize BR16a-Q5 and BR16a-Q8 before implementation.
+
+- [x] **Lot 1 — Google OAuth and connector account**
+  - [x] Define Google connector account data model.
+  - [x] Add OAuth start/callback/disconnect/status API routes.
+  - [x] Store refresh/access token material through encrypted storage.
+  - [x] Add UI account connection surface.
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] **API tests**
+      - [x] Add OAuth route tests for start/callback/status/disconnect.
+      - [x] Add token storage unit tests with encrypted secret behavior mocked.
+    - [x] **UI tests**
+      - [x] Add account connection state utility tests in `ui/tests/utils/google-drive.test.ts`.
+      - [x] `make test-ui SCOPE=tests/utils/google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+
+- [x] **Lot 2 — Drive file search and selection**
+  - [x] Add Drive API client wrapper.
+  - [x] Integrate Google Picker next to the existing document attachment control.
+  - [x] Preserve document search/browse UX through Picker under `drive.file`.
+  - [x] Resolve selected file IDs server-side with metadata.
+  - [x] Filter supported MIME types for Docs, Sheets, Slides, PDFs, and text-like files.
+  - [x] Attach selected file references to existing document/context surfaces.
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] **API tests**
+      - [x] Add Drive client unit tests with mocked Google API responses.
+      - [x] `make test-api-unit SCOPE=tests/unit/google-drive-client.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+      - [x] Add Picker selection resolve API tests with mocked Google Drive metadata.
+      - [x] `make test-api-endpoints SCOPE=tests/api/google-drive-files.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+      - [x] Add document attach API tests for Google Drive refs.
+    - [x] **UI tests**
+      - [x] Add Google Drive picker helper tests in `ui/tests/utils/google-drive-picker.test.ts`.
+      - [x] Extend Google Drive API helper tests in `ui/tests/utils/google-drive.test.ts`.
+      - [x] `make test-ui SCOPE=tests/utils/google-drive-picker.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+      - [x] `make test-ui SCOPE=tests/utils/google-drive.test.ts API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+      - [x] `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+      - [x] `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+
+- [x] **Lot 3 — In-situ indexing**
+  - [x] Extract file content through Google APIs without copying source documents into Entropic storage.
+  - [x] Route Google Drive rows through the existing `document_summary` queue behavior.
+  - [x] Store source references, sync status, extracted metadata, summary, and detailed summary.
+  - [x] Reuse existing runtime chunking for `documents.analyze`; do not add stored embeddings in BR-16a.
+  - [x] Preserve existing local upload behavior.
+  - [x] Add manual resync path.
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] **API tests**
+      - [x] Add indexing service tests for Google Drive source refs.
+      - [x] Add sync status transition tests.
+      - [x] Add long-document Google Drive chunked analyze tests.
+
+- [x] **Lot 4 — Chat documents tool integration**
+  - [x] Make `documents` tool list and read Google Drive documents through existing context document paths.
+  - [x] Make `documents.get_content` and `documents.analyze` load Drive content on demand when needed.
+  - [x] Surface source metadata and stale/sync status in tool responses.
+  - [x] Ensure permission checks use the connected user/workspace context.
+  - [x] Lot gate:
+    - [x] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] **API tests**
+      - [x] Add deterministic chat documents tool tests with Google Drive indexed docs.
+      - [x] Add permission-denied tests for disconnected/unauthorized Google refs.
+    - [x] **AI tests**
+      - [x] Run AI document tool tests only when credentials are available and record flaky signatures if any.
+
+- [x] **Lot 5 — Complementary UX alignment before user UAT**
+  - [x] Add a user-scoped `Connectors` section to Settings using the existing settings card style.
+  - [x] Move Google Drive lifecycle ownership to Settings (`Connect` / `Disconnect`).
+  - [x] Remove `Disconnect Google Drive` from the chat composer menu; chat keeps import only.
+  - [x] Extend `DocumentsBlock` surfaces to expose the same document-source choices as chat (`From computer` / `From Google Drive`).
+  - [x] Reuse `MenuPopover` and keep one shared source-menu contract between chat and entity document surfaces; only extract a thin shared menu component if duplication justifies it.
+  - [x] Update `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md` for the connector/settings/source-menu contract before user UAT.
+  - [x] Lot gate:
+    - [x] `make lint-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
+    - [x] **UI tests**
+      - [x] Add/update settings connector tests.
+      - [x] Add/update `DocumentsBlock` source-menu tests.
+      - [x] Add/update chat composer source-menu tests.
+
+- [x] **Lot 6 — UAT**
+  - [x] Mocked web app UX validation covers the new import-only composer path plus settings/DocumentsBlock connector surfaces via `e2e/tests/04-google-drive-composer.spec.ts` and `e2e/tests/04-google-drive-settings-documents.spec.ts`.
+  - [x] Traceable live readiness:
+    - [x] Record authenticated Playwright `dev-state.json` on the branch dev lane with a verified seeded user via `make exec-playwright-dev ... tests/dev/00-record-auth.spec.ts ...`.
+    - [x] Run `e2e/tests/dev/01-google-drive-live-readiness.spec.ts` on the branch dev lane with `make test-e2e-dev ...`.
+    - [x] Inject/prove runtime Google Drive credentials (`client_id`, `client_secret`, `callback_base_url`, `picker_api_key`, `picker_app_id`) on the target runtime.
+  - [x] Web app:
+    - [x] Open Settings and verify the new `Connectors` section matches the settings card style.
+    - [x] Connect Google account from Settings.
+    - [x] Confirm the chat composer exposes Google Drive import without any lifecycle CTA.
+    - [x] List/select Drive file from the chat composer.
+    - [x] Verify the same local/GDrive source menu on one entity `DocumentsBlock` surface.
+    - [x] List/select Drive file from an entity `DocumentsBlock` surface.
+    - [x] Verify native Google Workspace files keep the source filename/type in lists (no `.md/.csv/.txt` suffix leakage) and show the Drive-reported size on `DocumentsBlock`.
+    - [x] Download a native Google Workspace document and verify the saved file uses the source name with a reusable Office extension (`.docx`, `.xlsx`, `.pptx`), not a hash-like fallback or an internal `.md/.csv/.txt` export.
+    - [x] Index selected file.
+    - [x] Ask chat to retrieve document facts.
+    - [x] Disconnect account from Settings and verify access is revoked.
+  - [x] Non-regression:
+    - [x] Local document upload still works.
+    - [x] Existing chat documents tool still works for local docs.
+    - [x] Local document upload and Google Drive import both work on at least one entity `DocumentsBlock` surface.
+
+- [x] **Lot 7 — Docs consolidation**
+  - [x] Consolidate final connector contract into `spec/SPEC_EVOL_GOOGLE_DRIVE_CONNECTOR.md`.
+  - [x] Update existing document connector/RAG specs only if behavior changes.
+  - [x] Update `BRANCH.md` feedback loop before final validation.
+
+- [x] **Lot 8 — Final validation**
+  - [x] New/updated tests are implemented and traced in the branch; broad gates are delegated to PR/CI per user instruction.
+  - [x] Reopened clean PR #137 from `feat/gdrive-sso-indexing-16a` after resetting `main` to the pre-BR16a commit.
+  - [x] PR #137 CI is green on 2026-05-05; deploy jobs are skipped on PR as expected.
+  - [x] Verified BR16a diff has no `Makefile` or `.github/workflows/ci.yml` deployment changes and no active `secret-environment-variables` injection.
+  - [x] Scaleway namespace contains Google Drive runtime secret keys; secret values are not recorded.
+  - [x] Scaleway API container `secret_environment_variables` count is `0` after cleanup.
+  - [x] Manual BR16a production API MEP succeeded outside GitHub CD with namespace secrets only; no CI/CD deploy secret injection was introduced.
+  - [x] Mail smoke succeeded through the production API magic-link request path.
+  - [x] Google Drive OAuth, Picker readiness, import, indexing, and download smoke succeeded on the production API with real Google credentials and CDP browser evidence.
+  - [x] Production API rollback completed to known healthy image `dd611a`; post-rollback health is OK and container-level secret count remains `0`.
+  - [x] Create/update PR using `BRANCH.md` text as PR body.
+  - [x] Verify branch CI and resolve blockers.
+  - [x] UAT + CI are both `OK`; finalize by archiving the branch plan, removing root `BRANCH.md`, pushing, and merging.

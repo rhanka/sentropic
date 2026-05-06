@@ -226,6 +226,38 @@ export const emailVerificationCodes = pgTable('email_verification_codes', {
   verificationTokenIdx: index('email_verification_codes_verification_token_idx').on(table.verificationToken),
 }));
 
+export const documentConnectorAccounts = pgTable('document_connector_accounts', {
+  id: text('id').primaryKey(),
+  workspaceId: text('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull().default('google_drive'),
+  status: text('status').notNull().default('disconnected'), // 'connected' | 'disconnected' | 'error'
+  accountEmail: text('account_email'),
+  accountSubject: text('account_subject'),
+  scopes: jsonb('scopes').notNull().default(sql`'[]'::jsonb`),
+  tokenSecret: text('token_secret'),
+  tokenExpiresAt: timestamp('token_expires_at', { withTimezone: false }),
+  connectedAt: timestamp('connected_at', { withTimezone: false }),
+  disconnectedAt: timestamp('disconnected_at', { withTimezone: false }),
+  lastError: text('last_error'),
+  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
+}, (table) => ({
+  workspaceUserProviderUnique: uniqueIndex('document_connector_accounts_workspace_user_provider_unique').on(
+    table.workspaceId,
+    table.userId,
+    table.provider,
+  ),
+  workspaceIdIdx: index('document_connector_accounts_workspace_id_idx').on(table.workspaceId),
+  userIdIdx: index('document_connector_accounts_user_id_idx').on(table.userId),
+  statusIdx: index('document_connector_accounts_status_idx').on(table.status),
+  providerIdx: index('document_connector_accounts_provider_idx').on(table.provider),
+}));
+
 export type OrganizationRow = typeof organizations.$inferSelect;
 export type FolderRow = typeof folders.$inferSelect;
 export type InitiativeRow = typeof initiatives.$inferSelect;
@@ -391,7 +423,8 @@ export const contextDocuments = pgTable('context_documents', {
   filename: text('filename').notNull(),
   mimeType: text('mime_type').notNull(),
   sizeBytes: integer('size_bytes').notNull(),
-  storageKey: text('storage_key').notNull(), // object key in S3-compatible storage
+  sourceType: text('source_type').notNull().default('local'), // 'local' | 'google_drive' | 'sharepoint' | 'onedrive'
+  storageKey: text('storage_key'), // nullable for non-local sources (Decision 5A)
   status: text('status').notNull().default('uploaded'), // 'uploaded' | 'processing' | 'ready' | 'failed'
   // Document metadata / summaries are stored in JSONB to avoid schema churn (like organizations/use_cases)
   // Suggested structure:
@@ -410,6 +443,7 @@ export const contextDocuments = pgTable('context_documents', {
   workspaceIdIdx: index('context_documents_workspace_id_idx').on(table.workspaceId),
   contextIdx: index('context_documents_context_idx').on(table.contextType, table.contextId),
   statusIdx: index('context_documents_status_idx').on(table.status),
+  sourceTypeIdx: index('context_documents_source_type_idx').on(table.sourceType),
 }));
 
 // Optional: keep history of uploads/summaries per document.
@@ -436,6 +470,7 @@ export type UserSessionRow = typeof userSessions.$inferSelect;
 export type WebauthnChallengeRow = typeof webauthnChallenges.$inferSelect;
 export type MagicLinkRow = typeof magicLinks.$inferSelect;
 export type EmailVerificationCodeRow = typeof emailVerificationCodes.$inferSelect;
+export type DocumentConnectorAccountRow = typeof documentConnectorAccounts.$inferSelect;
 export type ChatSessionRow = typeof chatSessions.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
 export type ChatContextRow = typeof chatContexts.$inferSelect;

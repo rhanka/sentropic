@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../../src/db/client';
-import { contextDocuments, ADMIN_WORKSPACE_ID } from '../../src/db/schema';
+import { contextDocuments, documentConnectorAccounts, users, ADMIN_WORKSPACE_ID } from '../../src/db/schema';
 import { toolService } from '../../src/services/tool-service';
 import { createId } from '../../src/utils/id';
 import { eq } from 'drizzle-orm';
+import { storeGoogleDriveTokenMaterial } from '../../src/services/google-drive-connector-accounts';
+import { GOOGLE_WORKSPACE_MIME_TYPES } from '../../src/services/google-drive-client';
+import { createConnectedGoogleDriveToken } from '../utils/google-drive-helper';
 
 vi.mock('../../src/services/storage-s3', async () => {
   return {
@@ -19,6 +22,15 @@ vi.mock('../../src/services/document-text', async () => {
   };
 });
 
+const mockLoadGoogleDriveFileContent = vi.fn();
+vi.mock('../../src/services/google-drive-client', async () => {
+  const actual = await vi.importActual('../../src/services/google-drive-client');
+  return {
+    ...actual,
+    loadGoogleDriveFileContent: (args: any) => mockLoadGoogleDriveFileContent(args),
+  };
+});
+
 const mockCallLLM = vi.fn();
 vi.mock('../../src/services/llm-runtime', async () => {
   return {
@@ -30,15 +42,23 @@ describe('ToolService (documents) - unit', () => {
   const workspaceId = ADMIN_WORKSPACE_ID;
   const contextType = 'initiative' as const;
   const contextId = `uc_${createId()}`;
+  const googleUserId = `user_${createId()}`;
   let docId = '';
+
+  beforeEach(() => {
+    mockLoadGoogleDriveFileContent.mockReset();
+  });
 
   afterEach(async () => {
     if (docId) {
       await db.delete(contextDocuments).where(eq(contextDocuments.id, docId));
     }
+    await db.delete(documentConnectorAccounts).where(eq(documentConnectorAccounts.userId, googleUserId));
+    await db.delete(users).where(eq(users.id, googleUserId));
     docId = '';
     mockExtract.mockReset();
     mockCallLLM.mockReset();
+    mockLoadGoogleDriveFileContent.mockReset();
   });
 
   it('getDocumentContent: maxChars clips full_text when <= 10k words', async () => {
@@ -300,6 +320,8 @@ describe('ToolService (documents) - unit', () => {
     expect(res.items.length).toBeGreaterThan(0);
     const item = res.items.find((d) => d.id === docId);
     expect(item?.summaryAvailable).toBe(true);
+    expect(item?.sourceType).toBe('local');
+    expect(item?.source).toEqual({ kind: 'local' });
   });
 
   it('getDocumentSummary: enforces context match and returns status+summary', async () => {
@@ -438,5 +460,224 @@ describe('ToolService (documents) - unit', () => {
     estimateSpy.mockRestore();
     chunkSpy.mockRestore();
   });
-});
 
+  it('getDocumentContent: Google Drive uses connected user access and surfaces source sync metadata', async () => {
+    docId = createId();
+    await db.insert(users).values({
+      id: googleUserId,
+      email: `${googleUserId}@example.com`,
+      displayName: 'Google Drive Test User',
+      role: 'admin_app',
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await storeGoogleDriveTokenMaterial({
+      userId: googleUserId,
+      workspaceId,
+      token: createConnectedGoogleDriveToken(),
+      identity: {
+        accountEmail: 'user@example.com',
+        accountSubject: 'google-subject-1',
+      },
+    });
+
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType,
+      contextId,
+      filename: 'Roadmap',
+      mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+      sizeBytes: 10,
+      sourceType: 'google_drive',
+      storageKey: null,
+      status: 'ready',
+      data: {
+        summary: 'Résumé',
+        summaryLang: 'fr',
+        syncStatus: 'stale',
+        lastSyncedAt: '2026-04-24T09:00:00.000Z',
+        source: {
+          kind: 'google_drive',
+          fileId: 'file_1',
+          name: 'Roadmap',
+          mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+          exportMimeType: 'text/markdown',
+          webViewLink: 'https://docs.google.com/document/d/file_1',
+          modifiedTime: '2026-04-24T09:00:00.000Z',
+          version: '99',
+        },
+      } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    mockLoadGoogleDriveFileContent.mockResolvedValueOnce({
+      bytes: new Uint8Array([4, 5, 6]),
+      fileName: 'Roadmap.md',
+      mimeType: 'text/markdown',
+      exportMimeType: 'text/markdown',
+    });
+    mockExtract.mockResolvedValueOnce({
+      text: 'texte '.repeat(500).trim(),
+      metadata: { pages: 2, title: 'Roadmap' },
+      headingsH1: [],
+    });
+
+    const res = await toolService.getDocumentContent({
+      workspaceId,
+      contextType,
+      contextId,
+      documentId: docId,
+      userId: googleUserId,
+    });
+
+    expect(mockLoadGoogleDriveFileContent).toHaveBeenCalledTimes(1);
+    expect(mockLoadGoogleDriveFileContent.mock.calls[0]?.[0]).toMatchObject({
+      accessToken: 'google-access-token',
+      file: { id: 'file_1', name: 'Roadmap', mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document },
+    });
+    expect(res.sourceType).toBe('google_drive');
+    expect(res.syncStatus).toBe('stale');
+    expect(res.lastSyncedAt).toBe('2026-04-24T09:00:00.000Z');
+    expect(res.source).toMatchObject({
+      kind: 'google_drive',
+      fileId: 'file_1',
+      name: 'Roadmap',
+      exportMimeType: 'text/markdown',
+      version: '99',
+    });
+  });
+
+  it('analyzeDocument: Google Drive very long docs use chunked full-text analysis with connected user access', async () => {
+    const estimateSpy = vi.spyOn(toolService as any, 'estimateTokensFromText').mockReturnValue(700_001);
+    const chunkSpy = vi
+      .spyOn(toolService as any, 'chunkTextByApproxTokens')
+      .mockReturnValue(['drive_chunk_1', 'drive_chunk_2']);
+
+    docId = createId();
+    await db.insert(users).values({
+      id: googleUserId,
+      email: `${googleUserId}@example.com`,
+      displayName: 'Google Drive Test User',
+      role: 'admin_app',
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await storeGoogleDriveTokenMaterial({
+      userId: googleUserId,
+      workspaceId,
+      token: createConnectedGoogleDriveToken(),
+      identity: {
+        accountEmail: 'user@example.com',
+        accountSubject: 'google-subject-1',
+      },
+    });
+
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType,
+      contextId,
+      filename: 'Huge Roadmap',
+      mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+      sizeBytes: 10,
+      sourceType: 'google_drive',
+      storageKey: null,
+      status: 'ready',
+      data: {
+        summary: 'Résumé',
+        summaryLang: 'fr',
+        source: {
+          kind: 'google_drive',
+          fileId: 'file_1',
+          name: 'Huge Roadmap',
+          mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+          exportMimeType: 'text/markdown',
+        },
+      } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    mockLoadGoogleDriveFileContent.mockResolvedValueOnce({
+      bytes: new Uint8Array([7, 8, 9]),
+      fileName: 'Huge Roadmap.md',
+      mimeType: 'text/markdown',
+      exportMimeType: 'text/markdown',
+    });
+    mockExtract.mockResolvedValueOnce({
+      text: 'texte court (mais forcé en très long)',
+      metadata: { pages: 120, title: 'Huge Roadmap' },
+      headingsH1: [],
+    });
+    mockCallLLM
+      .mockResolvedValueOnce({ choices: [{ message: { content: 'notes chunk 1' } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: 'notes chunk 2' } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: 'analyse finale drive' } }] });
+
+    const res = await toolService.analyzeDocument({
+      workspaceId,
+      contextType,
+      contextId,
+      documentId: docId,
+      userId: googleUserId,
+      prompt: 'Extraire les chiffres clés',
+      maxWords: 800,
+    });
+
+    expect(mockLoadGoogleDriveFileContent).toHaveBeenCalledTimes(1);
+    expect(mockCallLLM).toHaveBeenCalledTimes(3);
+    expect(res.sourceType).toBe('google_drive');
+    expect(res.mode).toBe('full_text');
+    expect(res.analysis).toContain('analyse finale drive');
+
+    estimateSpy.mockRestore();
+    chunkSpy.mockRestore();
+  });
+
+  it('analyzeDocument: Google Drive rejects disconnected user access', async () => {
+    docId = createId();
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId,
+      contextType,
+      contextId,
+      filename: 'Roadmap',
+      mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+      sizeBytes: 10,
+      sourceType: 'google_drive',
+      storageKey: null,
+      status: 'ready',
+      data: {
+        summary: 'Résumé',
+        summaryLang: 'fr',
+        source: {
+          kind: 'google_drive',
+          fileId: 'file_1',
+          name: 'Roadmap',
+          mimeType: GOOGLE_WORKSPACE_MIME_TYPES.document,
+          exportMimeType: 'text/markdown',
+        },
+      } as any,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+
+    await expect(
+      toolService.analyzeDocument({
+        workspaceId,
+        contextType,
+        contextId,
+        documentId: docId,
+        userId: googleUserId,
+        prompt: 'Extraire les chiffres',
+      }),
+    ).rejects.toThrow('Google Drive account is not connected');
+  });
+});

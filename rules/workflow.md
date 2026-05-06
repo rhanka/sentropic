@@ -70,6 +70,13 @@ tags: [workflow]
   ```
 - Write `BRANCH.md` AFTER worktree creation (never before)
 - Port isolation: distinct `ENV`, `API_PORT`, `UI_PORT`, `MAILDEV_UI_PORT` per worktree
+- Port slots: for branch number `nn`, allocate up to five concurrent slots `0..4` using:
+  - API `9000 + (nn * 5) + slot`
+  - UI `5200 + (nn * 5) + slot`
+  - Maildev UI `1100 + (nn * 5) + slot`
+- Record slot owner and exact ports in `BRANCH.md`, `PLAN.md`, and sub-agent launch packets
+- Root dev/UAT ports stay fixed at API `8787`, UI `5173`, Maildev `1080`
+- For OAuth/Picker branches, provision exact local redirect URIs and JavaScript origins for every active slot before live browser testing
 
 ## Sub-Agent Implementation Prompt (MANDATORY)
 Include in every implementation sub-agent prompt:
