@@ -1078,6 +1078,7 @@ export const extractUrlContent = async (
 
 export interface ExecuteWithToolsStreamOptions {
   model?: string;
+  userId?: string;
   useWebSearch?: boolean;
   /**
    * Enable the `documents` tool (executed server-side) and attach it to a single authorized context.
@@ -1159,6 +1160,7 @@ export const executeWithToolsStream = async (
 ): Promise<ExecuteWithToolsStreamResult> => {
   const {
     model = 'gpt-4.1-nano',
+    userId,
     useWebSearch = false,
     useDocuments = false,
     documentsContext,
@@ -1351,6 +1353,7 @@ export const executeWithToolsStream = async (
               contextId: matched.contextId,
               documentId,
               maxChars,
+              userId,
             });
           } else if (action === 'analyze') {
             const documentId = typeof args.documentId === 'string' ? args.documentId : '';
@@ -1365,6 +1368,7 @@ export const executeWithToolsStream = async (
               documentId,
               prompt: promptText,
               maxWords,
+              userId,
               signal
             });
           } else {

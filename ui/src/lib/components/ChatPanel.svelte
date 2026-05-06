@@ -2,6 +2,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import type { Readable } from 'svelte/store';
   import type { AppContext } from '$lib/core/context-provider';
+  import { getNavigation } from '$lib/core/navigation-adapter';
   import { _, locale } from 'svelte-i18n';
   import {
     apiFetch,
@@ -27,18 +28,30 @@
   import StreamMessage from '$lib/components/StreamMessage.svelte';
   import { Streamdown } from 'svelte-streamdown';
   import EditableInput from '$lib/components/EditableInput.svelte';
+  import DocumentSourceMenu from '$lib/components/DocumentSourceMenu.svelte';
   import MenuPopover from '$lib/components/MenuPopover.svelte';
+  import {
+    GOOGLE_DRIVE_CONNECTION_UPDATED_EVENT,
+    GOOGLE_DRIVE_CONNECTORS_ROUTE,
+  } from '$lib/utils/google-drive-connectors';
   import { currentFolderId, foldersStore } from '$lib/stores/folders';
   import { organizationsStore } from '$lib/stores/organizations';
   import { initiativesStore } from '$lib/stores/initiatives';
   import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import {
-    DOCUMENT_UPLOAD_ACCEPT,
     deleteDocument,
     listDocuments,
     uploadDocument,
-    type ContextDocumentItem
+    type ContextDocumentItem,
   } from '$lib/utils/documents';
+  import {
+    attachGoogleDriveDocuments,
+    fetchGoogleDrivePickerConfig,
+    fetchGoogleDriveConnection,
+    resolveGoogleDrivePickerSelection,
+    type GoogleDriveConnection,
+  } from '$lib/utils/google-drive';
+  import { openGoogleDrivePicker as openGoogleDrivePickerDialog } from '$lib/utils/google-drive-picker';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
     decideLocalToolPermission,
@@ -60,7 +73,6 @@
     RotateCcw,
     UndoDot,
     Check,
-    Paperclip,
     X,
     Plus,
     Download,
@@ -1363,6 +1375,11 @@
   let sessionDocs: ContextDocumentItem[] = [];
   let sessionDocsUploading = false;
   let sessionDocsError: string | null = null;
+  let googleDriveConnection: GoogleDriveConnection | null = null;
+  let googleDriveConnectionLoaded = false;
+  let googleDriveConnectionLoading = false;
+  let googleDriveActionInFlight = false;
+  let googleDriveConnectionError: string | null = null;
   let sessionCheckpoints: ChatCheckpoint[] = [];
   let checkpointsByAnchorMessageId = new Map<string, ChatCheckpoint>();
   let checkpointActionInFlight = false;
@@ -1372,6 +1389,7 @@
   let sessionTitlesSseKey = '';
   let sessionDocsReloadTimer: ReturnType<typeof setTimeout> | null = null;
   let showComposerMenu = false;
+  let previousComposerMenuOpen = false;
   let composerMenuButtonRef: HTMLButtonElement | null = null;
   let composerMenuContextsMaxH = '';
   let composerMenuToolsMaxH = '';
@@ -1380,6 +1398,7 @@
   let handleDocumentClick: ((_: MouseEvent) => void) | null = null;
   // eslint-disable-next-line no-unused-vars
   let handleUserAISettingsUpdated: ((_: Event) => void) | null = null;
+  let handleGoogleDriveConnectionUpdated: ((_: Event) => void) | null = null;
   let contextEntries: ChatContextEntry[] = [];
   let sortedContexts: ChatContextEntry[] = [];
   let toolEnabledById: Record<string, boolean> = {};
@@ -2921,30 +2940,89 @@
     }
   };
 
-  const onPickSessionDoc = async (e: Event) => {
-    const inputEl = e.target as HTMLInputElement;
-    const file = inputEl.files?.[0];
-    inputEl.value = '';
+  const loadGoogleDriveConnection = async (opts?: { silent?: boolean }) => {
+    if (googleDriveConnectionLoading) return;
+    googleDriveConnectionLoading = true;
+    if (!opts?.silent) googleDriveConnectionError = null;
+    try {
+      googleDriveConnection = await fetchGoogleDriveConnection();
+      googleDriveConnectionLoaded = true;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      googleDriveConnectionError = msg || $_('chat.documents.googleDrive.loadError');
+      googleDriveConnectionLoaded = false;
+    } finally {
+      googleDriveConnectionLoading = false;
+    }
+  };
+
+  const refreshGoogleDriveConnection = async (opts?: { silent?: boolean }) => {
+    if (googleDriveConnectionLoading) return;
+    googleDriveConnectionLoaded = false;
+    await loadGoogleDriveConnection(opts);
+  };
+
+  const openGoogleDriveSettings = () => {
+    showComposerMenu = false;
+    getNavigation().goto(GOOGLE_DRIVE_CONNECTORS_ROUTE);
+  };
+
+  const ensureSessionDocumentTarget = async (): Promise<string> => {
+    if (sessionId) return sessionId;
+
+    const context = detectContextFromRoute();
+    const res = await apiPost<{ sessionId: string }>('/chat/sessions', {
+      primaryContextType: context?.primaryContextType,
+      primaryContextId: context?.primaryContextId,
+    });
+    sessionId = res.sessionId;
+    await loadSessions();
+    await loadMessages(res.sessionId, { scrollToBottom: true });
+    return res.sessionId;
+  };
+
+  const importSessionDocsFromGoogleDrive = async () => {
+    if (googleDriveActionInFlight) return;
+    googleDriveActionInFlight = true;
+    googleDriveConnectionError = null;
+    showComposerMenu = false;
+
+    try {
+      const targetSessionId = await ensureSessionDocumentTarget();
+      const picker = await fetchGoogleDrivePickerConfig();
+      const fileIds = await openGoogleDrivePickerDialog({
+        ...picker,
+        locale: $locale,
+      });
+      if (fileIds.length === 0) return;
+
+      await resolveGoogleDrivePickerSelection({ fileIds });
+      await attachGoogleDriveDocuments({
+        contextType: 'chat_session',
+        contextId: targetSessionId,
+        fileIds,
+      });
+      await loadSessionDocs();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      googleDriveConnectionError = msg || $_('chat.documents.googleDrive.importError');
+    } finally {
+      googleDriveActionInFlight = false;
+    }
+  };
+
+  const uploadSessionDoc = async (file: File | null | undefined) => {
     if (!file) return;
     showComposerMenu = false;
 
     sessionDocsUploading = true;
     sessionDocsError = null;
     try {
-      if (!sessionId) {
-        const context = detectContextFromRoute();
-        const res = await apiPost<{ sessionId: string }>('/chat/sessions', {
-          primaryContextType: context?.primaryContextType,
-          primaryContextId: context?.primaryContextId,
-        });
-        sessionId = res.sessionId;
-        await loadSessions();
-        await loadMessages(res.sessionId, { scrollToBottom: true });
-      }
+      const targetSessionId = await ensureSessionDocumentTarget();
       const scopedWs = getScopedWorkspaceIdForUser();
       await uploadDocument({
         contextType: 'chat_session',
-        contextId: sessionId!,
+        contextId: targetSessionId,
         file,
         workspaceId: scopedWs,
       });
@@ -2955,6 +3033,10 @@
     } finally {
       sessionDocsUploading = false;
     }
+  };
+
+  const onPickSessionDoc = async (event: CustomEvent<{ file: File }>) => {
+    await uploadSessionDoc(event.detail.file);
   };
 
   const removeSessionDoc = async (doc: ContextDocumentItem) => {
@@ -4623,6 +4705,7 @@
       ensureDefaultToolToggles();
       updateContextFromRoute();
       void loadExtensionActiveTabContext();
+      void refreshGoogleDriveConnection({ silent: true });
       handleUserAISettingsUpdated = (event: Event) => {
         const detail = (event as CustomEvent<UserAISettingsUpdatedPayload>)
           .detail;
@@ -4635,6 +4718,13 @@
       window.addEventListener(
         USER_AI_SETTINGS_UPDATED_EVENT,
         handleUserAISettingsUpdated,
+      );
+      handleGoogleDriveConnectionUpdated = () => {
+        void refreshGoogleDriveConnection({ silent: true });
+      };
+      window.addEventListener(
+        GOOGLE_DRIVE_CONNECTION_UPDATED_EVENT,
+        handleGoogleDriveConnectionUpdated,
       );
     }
     handleDocumentClick = (event: MouseEvent) => {
@@ -4721,6 +4811,10 @@
 
   $: if (mode === 'ai' && showComposerMenu) {
     void loadExtensionActiveTabContext();
+    if (!previousComposerMenuOpen) {
+      previousComposerMenuOpen = true;
+      void refreshGoogleDriveConnection({ silent: true });
+    }
     // Compute dynamic max-heights for context/tool sections
     if (panelEl && composerMenuButtonRef) {
       const panelTop = panelEl.getBoundingClientRect().top;
@@ -4730,6 +4824,8 @@
       composerMenuContextsMaxH = 'max-height:' + halfH + 'px';
       composerMenuToolsMaxH = 'max-height:' + halfH + 'px';
     }
+  } else if (previousComposerMenuOpen) {
+    previousComposerMenuOpen = false;
   }
 
   $: if (mode === 'ai' && $workspaceScopeHydrated) {
@@ -4738,6 +4834,10 @@
       previousAiWorkspaceId = nextWorkspaceId;
     } else if (nextWorkspaceId !== previousAiWorkspaceId) {
       previousAiWorkspaceId = nextWorkspaceId;
+      googleDriveConnection = null;
+      googleDriveConnectionLoaded = false;
+      googleDriveConnectionError = null;
+      void loadGoogleDriveConnection({ silent: true });
       void rescopeSessionsForWorkspaceChange();
     }
   }
@@ -4789,6 +4889,12 @@
       window.removeEventListener(
         USER_AI_SETTINGS_UPDATED_EVENT,
         handleUserAISettingsUpdated,
+      );
+    }
+    if (handleGoogleDriveConnectionUpdated) {
+      window.removeEventListener(
+        GOOGLE_DRIVE_CONNECTION_UPDATED_EVENT,
+        handleGoogleDriveConnectionUpdated,
       );
     }
   });
@@ -5653,6 +5759,13 @@
                 {sessionDocsError}
               </div>
             {/if}
+            {#if googleDriveConnectionError}
+              <div
+                class="mb-2 rounded bg-red-50 border border-red-200 px-2 py-1 text-[11px] text-red-700"
+              >
+                {googleDriveConnectionError}
+              </div>
+            {/if}
             {#if sessionDocs.length > 0}
               <div class="mb-2 flex flex-wrap gap-2">
                 {#each sessionDocs as doc (doc.id)}
@@ -5787,22 +5900,17 @@
               </button>
             </svelte:fragment>
             <svelte:fragment slot="menu">
-              <label
-                class={'flex w-full items-center gap-2 rounded px-1 py-1 text-[11px] text-slate-700 hover:bg-slate-50 ' +
-                  (sessionDocsUploading ? 'opacity-50 pointer-events-none' : '')}
-                aria-label={$_('chat.documents.addFile')}
-                title={$_('chat.documents.addFile')}
-              >
-                <input
-                  class="hidden"
-                  type="file"
-                  on:change={onPickSessionDoc}
-                  disabled={sessionDocsUploading}
-                  accept={DOCUMENT_UPLOAD_ACCEPT}
-                />
-                <Paperclip class="w-4 h-4" />
-                <span>{$_('chat.documents.addFile')}</span>
-              </label>
+              <DocumentSourceMenu
+                localActionLabel={$_('chat.documents.addFile')}
+                localUploading={sessionDocsUploading}
+                googleDriveReady={googleDriveConnectionLoaded}
+                googleDriveConnected={Boolean(googleDriveConnection?.connected)}
+                googleDriveBusy={googleDriveConnectionLoading || googleDriveActionInFlight}
+                googleDriveAccountLabel={googleDriveConnection?.accountEmail ?? googleDriveConnection?.accountSubject ?? null}
+                on:pickLocal={onPickSessionDoc}
+                on:importGoogleDrive={importSessionDocsFromGoogleDrive}
+                on:openConnectors={openGoogleDriveSettings}
+              />
               <div class="border-t border-slate-100 pt-2"></div>
               <div class="text-xs font-semibold text-slate-600">
                 {$_('chat.contexts.title')}

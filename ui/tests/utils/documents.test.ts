@@ -3,6 +3,8 @@ import { resetFetchMock, mockFetchJsonOnce } from '../test-setup';
 import {
   DOCUMENT_UPLOAD_ACCEPT,
   deleteDocument,
+  downloadDocument,
+  getDocumentMimeLabel,
   getDownloadUrl,
   listDocuments,
   uploadDocument,
@@ -18,6 +20,13 @@ describe('documents utils', () => {
     expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.zip');
     expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.tar.gz');
     expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.tgz');
+  });
+
+  it('maps Google Workspace MIME types to user-facing labels', () => {
+    expect(getDocumentMimeLabel('application/vnd.google-apps.document')).toBe('Google Docs');
+    expect(getDocumentMimeLabel('application/vnd.google-apps.spreadsheet')).toBe('Google Sheets');
+    expect(getDocumentMimeLabel('application/vnd.google-apps.presentation')).toBe('Google Slides');
+    expect(getDocumentMimeLabel('application/pdf')).toBe('application/pdf');
   });
 
   describe('listDocuments', () => {
@@ -109,6 +118,60 @@ describe('documents utils', () => {
     it('should include workspace_id when provided', () => {
       const url = getDownloadUrl({ documentId: 'doc_1', workspaceId: 'ws_1' });
       expect(url).toBe(`${API_BASE_URL}/documents/doc_1/content?workspace_id=ws_1`);
+    });
+  });
+
+  describe('downloadDocument', () => {
+    it('downloads documents with the server-provided filename', async () => {
+      const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+      fetchMock.mockResolvedValueOnce(
+        new Response(new Blob(['docx']), {
+          status: 200,
+          headers: {
+            'content-disposition': 'attachment; filename="Roadmap.docx"',
+          }
+        })
+      );
+
+      const originalCreateObjectURL = (URL as { createObjectURL?: (obj: Blob) => string }).createObjectURL;
+      const originalRevokeObjectURL = (URL as { revokeObjectURL?: (url: string) => void }).revokeObjectURL;
+      const createObjectURLMock = vi.fn().mockReturnValue('blob:documents-test');
+      const revokeObjectURLMock = vi.fn();
+      (URL as { createObjectURL?: (obj: Blob) => string }).createObjectURL = createObjectURLMock;
+      (URL as { revokeObjectURL?: (url: string) => void }).revokeObjectURL = revokeObjectURLMock;
+      const originalCreateElement = document.createElement.bind(document);
+      let createdLink: HTMLAnchorElement | null = null;
+      vi.spyOn(document, 'createElement').mockImplementation(((tagName: string): HTMLElement => {
+        const el = originalCreateElement(tagName) as HTMLElement;
+        if (tagName.toLowerCase() === 'a') {
+          createdLink = el as HTMLAnchorElement;
+          vi.spyOn(createdLink, 'click').mockImplementation(() => {});
+        }
+        return el;
+      }) as typeof document.createElement);
+
+      try {
+        await downloadDocument({ documentId: 'doc_1', workspaceId: 'ws_1', fallbackFileName: 'fallback.bin' });
+
+        expect(fetchMock).toHaveBeenCalledWith(
+          `${API_BASE_URL}/documents/doc_1/content?workspace_id=ws_1`,
+          { method: 'GET', credentials: 'include', headers: {} }
+        );
+        expect(createdLink?.download).toBe('Roadmap.docx');
+        expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+        expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:documents-test');
+      } finally {
+        if (originalCreateObjectURL) {
+          (URL as { createObjectURL?: (obj: Blob) => string }).createObjectURL = originalCreateObjectURL;
+        } else {
+          delete (URL as { createObjectURL?: (obj: Blob) => string }).createObjectURL;
+        }
+        if (originalRevokeObjectURL) {
+          (URL as { revokeObjectURL?: (url: string) => void }).revokeObjectURL = originalRevokeObjectURL;
+        } else {
+          delete (URL as { revokeObjectURL?: (url: string) => void }).revokeObjectURL;
+        }
+      }
     });
   });
 

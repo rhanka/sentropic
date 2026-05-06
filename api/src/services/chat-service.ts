@@ -4742,6 +4742,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
                 contextId: args.contextId,
                 documentId,
                 maxChars,
+                userId: options.userId,
               });
               result = { status: 'completed', ...content };
             } else if (action === 'analyze') {
@@ -4765,6 +4766,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
                 documentId,
                 prompt,
                 maxWords,
+                userId: options.userId,
                 signal: options.signal
               });
               result = { status: 'completed', ...analysis };
