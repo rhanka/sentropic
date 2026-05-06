@@ -237,12 +237,14 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - Broad final gates will run through PR/CI per user instruction; local broad test campaigns are not repeated in Lot 7.
 - [x] `decision` BR16a-D3 — Production secrets stay on the Scaleway namespace/runtime model. BR-16a must not push `secret-environment-variables` at container level from CI/CD or from `make deploy-api`.
 - [ ] `attention` BR16a-PROD1 — Pre-merge production validation must run outside the GitHub CD path:
-  - remove parasite Google/DB/AI container-level secrets created by the rejected deploy path;
-  - provision Google OAuth/Picker runtime secrets at the Scaleway namespace level, aligned with the existing production secret model;
-  - verify the production API can boot and run migrations with the existing database/TLS runtime secrets;
+  - [x] remove parasite Google/DB/AI container-level secrets created by the rejected deploy path;
+  - [x] provision Google OAuth/Picker runtime secrets at the Scaleway namespace level, aligned with the existing production secret model;
+  - [x] correct the namespace production OAuth URLs after detecting local `.env` callback URLs were not valid for prod;
+  - [ ] verify the production API can boot and run migrations with the existing database/TLS runtime secrets;
   - verify production mail sending still works;
   - verify production Google Drive OAuth, Picker, import, indexing, and download behavior with CDP/browser evidence;
   - rollback to the known healthy production image after validation unless the user explicitly keeps the branch image for UAT.
+  - Current blocker on 2026-05-05: the public API health endpoint still returns `200` with database `ok`, but new Scaleway deployments of `top-ai-ideas-api` remain `error` / `Container is unable to start OR is not listening on port 8787` even with `container_secret_count=0`.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -396,6 +398,12 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 
 - [ ] **Lot 8 — Final validation**
   - [x] New/updated tests are implemented and traced in the branch; broad gates are delegated to PR/CI per user instruction.
+  - [x] Reopened clean PR #137 from `feat/gdrive-sso-indexing-16a` after resetting `main` to the pre-BR16a commit.
+  - [x] PR #137 CI is green on 2026-05-05; deploy jobs are skipped on PR as expected.
+  - [x] Verified BR16a diff has no `Makefile` or `.github/workflows/ci.yml` deployment changes and no active `secret-environment-variables` injection.
+  - [x] Scaleway namespace contains Google Drive runtime secret keys; secret values are not recorded.
+  - [x] Scaleway API container `secret_environment_variables` count is `0` after cleanup.
+  - [ ] Resolve Scaleway deployment readiness before manual BR16a MEP: new deployments currently fail readiness while existing public traffic remains healthy.
   - [ ] `make typecheck-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
   - [ ] `make lint-api API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
   - [ ] `make test-api-unit API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
