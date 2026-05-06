@@ -55,11 +55,11 @@ Impact notes:
 - BR-14c depends on BR-14f for the thin API proof path only; the mesh contract still belongs to BR-14c.
 - BR-16a can continue in parallel, but will need a shallow rebase because its tests and local runtime rely on the same API/UI container wiring.
 - BR-21a is low-impact and should preferably merge before BR-14f to avoid needless rebase churn on a near-finished branch.
-- Current proof snapshot (2026-05-06): BR-14f is rebased on post-BR16a/post-BR21a `main`, PR #125 CI is green after rerunning the single live-AI flaky shard, and the isolated dev/UAT stack boots with `make dev API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=chore-node-workspace-monorepo-14f`.
+- Current proof snapshot (2026-05-06): BR-14f is rebased on post-BR16a/post-BR21a `main`, PR #125 CI is green after rerunning the single live-AI flaky shard, and the isolated branch dev stack boots with `make dev API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=chore-node-workspace-monorepo-14f`. User smoke UAT remains on root `ENV=dev` with user data.
 
 Activation plan:
 
-- BR-14f is not a product branch. It is accepted only if it preserves CI and local dev/UAT capacity while enabling workspace package consumption.
+- BR-14f is not a product branch. It is accepted only if it preserves CI, branch dev-stack capacity, and root user UAT capacity while enabling workspace package consumption.
 - BR-14c is the first mandatory activation branch: create `packages/llm-mesh`, expose the `@entropic/llm-mesh` package, and prove API consumption through the root workspace without copy steps, path hacks, or direct app-root package coupling.
 - BR-14b is the runtime activation branch: migrate application provider dispatch to the BR-14c mesh package and keep quotas, retries, streaming, structured output, tool calling, and audit behavior explicit.
 - BR-14a is the UI/package activation branch: extract `@entropic/chat` while consuming provider/model behavior through the mesh contract or a narrow mesh-compatible interface.

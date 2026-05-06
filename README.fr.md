@@ -122,6 +122,8 @@ flowchart TB
 
 La trajectoire consiste à extraire les briques génériques du produit actuel sans perdre le contact avec les usages réels.
 
+La structure du dépôt suit le même principe. Les racines applicatives restent `api/` et `ui/` ; les bibliothèques Node réutilisables vivent dans `packages/*` et sont consommées via le workspace racine. La première activation réelle de cette fondation est `@entropic/llm-mesh` : BR-14c doit prouver que `api/` peut importer le package depuis le workspace avant que les extractions runtime et chat s'appuient dessus.
+
 ```mermaid
 flowchart TB
     subgraph Apps["Applications construites sur Entropic"]

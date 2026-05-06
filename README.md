@@ -122,6 +122,8 @@ flowchart TB
 
 The trajectory is to extract generic building blocks from the current product without losing contact with real usage.
 
+The repository layout follows that same principle. The application roots remain `api/` and `ui/`; reusable Node libraries live under `packages/*` and are consumed through the root workspace. The first real activation of this foundation is `@entropic/llm-mesh`: BR-14c must prove that `api/` can import the package from the workspace before the runtime and chat extractions build on it.
+
 ```mermaid
 flowchart TB
     subgraph Apps["Applications built on Entropic"]

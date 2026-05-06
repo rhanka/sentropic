@@ -13,7 +13,7 @@ Ordering rule:
 
 - BR-14f lands before the BR-14c thin app proof path when the repo still mounts `api` and `ui` as isolated containers.
 - BR-14f owns the repo/tooling baseline only; BR-14c still owns the `@entropic/llm-mesh` contract and its API proof after rebase.
-- BR-14f is activated only by downstream consumption: BR-14c must create the first `packages/*` package and prove `api/` imports it through the root workspace; BR-14b and BR-14a then consume that package contract from runtime and chat extraction work.
+- Durable activation details live in `README.md`, `README.fr.md`, `rules/architecture.md`, `PLAN.md`, and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
 
 Scope summary:
 
@@ -22,7 +22,7 @@ Scope summary:
 - Keep `make` as the top-level orchestrator; do not switch to Nx.
 - Keep `api/` and `ui/` as application roots; do not move them under `packages/`.
 - Assess and document rebase impact on BR-14c, BR-16a, and BR-21a.
-- Preserve local dev/UAT capacity: the isolated `make dev` stack must boot with branch ports before merge.
+- Preserve branch dev-stack capacity: the isolated `make dev` stack must boot with branch ports before merge. User smoke UAT remains on root `ENV=dev`.
 
 Before implementation:
 
