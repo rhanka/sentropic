@@ -65,8 +65,11 @@ Introduce the minimal repo/tooling baseline required for `api`, `ui`, and future
 - [x] `validation` BR14f-V4 — Rebasing BR14f onto `origin/main` on 2026-04-25 surfaced one real workspace follow-up: `make build-ui-image` failed because `ui/Dockerfile` still used the pre-workspace `nginx/default.conf` path, and the rebased root workspace lockfile no longer included newer `main` dependencies such as `pptxgenjs`. After correcting the root-relative nginx path and making `make lock-root` refresh the root lockfile through an ephemeral Node container, local CI-targeted proofs all passed again under `ENV=test-chore-node-workspace-monorepo-14f`: `make lock-root`, `make build-ui-image`, `make up-api-test-ci`, `make test-api-unit`, and `make test-api-smoke`.
 - [x] `fix` BR14f-F3 — PR `#125` run `24956801574` showed every red `test-api-unit-integration` shard shared the same narrower bootstrap/runtime mismatch: `make up-api-test-ci` restored workspace dev dependencies with `docker-compose.dev.yml`, then restarted the API stack with `docker-compose.yml + docker-compose.test.yml` only. That second leg dropped the root repo bind mount and `workspace_node_modules` volume, so the test stack fell back to the production image filesystem and failed immediately on `sh: vitest: not found`. Keep the `up -d api --wait` leg on `docker-compose.dev.yml + docker-compose.test.yml` so CI reuses the same workspace mount/volume contract that the bootstrap install populated.
 - [x] `validation` BR14f-V5 — Fresh cold-path proof on 2026-04-26 under `ENV=test-chore-node-workspace-monorepo-14f-ci`: `make build-api-image`, `make up-api-test-ci`, `make test-api-unit`, and `make test-api-smoke` now pass after restoring `docker-compose.dev.yml` on the CI `up -d api --wait` leg. This reproduces the prior `vitest: not found` failure on a new named-volume namespace, then clears it with the minimal wiring change.
-- [ ] `attention` BR14f-T3 — PR `#125` needs a fresh CI rerun on the rebased head with BR14f-F3 included. The previous red API shards were explained by the workspace mount/volume loss in `up-api-test-ci`; GitHub Actions remains the source of truth for the remaining shards after this push.
-- [ ] `attention` BR14f-T2 — Stability proof is still incomplete for BR-16a under the new workspace wiring. The branch rebases mechanically, but its Google Drive flows have not rerun their own branch gates or UAT on top of BR14f yet. BR-21a no longer has this blocker: root UAT is recorded on `df41d0ed` after the runtime hardening fix `b58763cf`.
+- [x] `validation` BR14f-V6 — PR `#125` run `25415161869` is green on the rebased head `760f0f48` after rerunning the single failed live-AI shard `test-api-unit-integration (ai, initiative-generation-async,executive-summary-sync)`. The first failure signature was `api/tests/ai/initiative-generation-async.test.ts:470` (`expected false to be true`, no generated initiative with `organizationId`); rerun success on the same commit records it as accepted live-AI flakiness with user sign-off on 2026-05-06.
+- [x] `validation` BR14f-V7 — Dev/UAT capacity proof on 2026-05-06: `make dev API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=chore-node-workspace-monorepo-14f` boots the isolated workspace stack; `make ps API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=chore-node-workspace-monorepo-14f` shows API, Postgres, and Maildev healthy, UI up on `http://localhost:5115`, and API exposed on `http://localhost:8715`.
+- [x] `validation` BR14f-V8 — Activation plan tightened in `PLAN.md` and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`: BR14f is useful only if BR14c creates the first `packages/*` package and proves `api/` consumes it through the root workspace; BR14b and BR14a then activate the runtime and chat package layers on that contract.
+- [x] `attention` BR14f-T3 — PR `#125` fresh CI rerun on the rebased head is green. The previous red API shards were explained by the workspace mount/volume loss in `up-api-test-ci`; the later single red live-AI shard is accepted as flaky after a same-commit success rerun.
+- [x] `attention` BR14f-T2 — BR16a and BR21a are already merged into the current `main` baseline used by BR14f. PR `#125` now validates BR14f against that post-merge baseline; BR16c and later connector branches keep their own branch gates/UAT after rebasing.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -123,8 +126,9 @@ Introduce the minimal repo/tooling baseline required for `api`, `ui`, and future
 - [ ] **Lot 3 — Compatibility proof and branch impact**
   - [x] Prove the workspace baseline is sufficient for BR-14c to consume internal packages after rebase, without adding the `@entropic/llm-mesh` package itself in BR-14f.
   - [x] Record exact rebase impact and required follow-up for BR-14c, BR-16a, and BR-21a.
-  - [ ] Keep BR-16a and BR-21a behavior stable under the new container/runtime wiring.
-  - [ ] Lot gate:
+  - [x] Keep BR-16a and BR-21a behavior stable under the new container/runtime wiring.
+  - [x] Record the downstream activation plan: BR14c must be the first real workspace package consumer, then BR14b and BR14a must consume the package contracts.
+  - [x] Lot gate:
     - [x] `make ps API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
     - [x] `make down API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
 
@@ -137,6 +141,8 @@ Introduce the minimal repo/tooling baseline required for `api`, `ui`, and future
   - [x] `make lint-api API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
   - [x] `make typecheck-ui API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
   - [x] `make lint-ui API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=test-chore-node-workspace-monorepo-14f`
+  - [x] `make dev API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=chore-node-workspace-monorepo-14f`
+  - [x] `make ps API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=chore-node-workspace-monorepo-14f`
   - [x] Create/update PR using `BRANCH.md` text as PR body.
-  - [ ] Verify branch CI and resolve blockers.
-  - [ ] Once CI is `OK`, rebase BR-14c, then assess whether BR-16a and BR-21a also need rebases.
+  - [x] Verify branch CI and resolve blockers.
+  - [ ] After merge, rebase BR-14c and any remaining active branches on the workspace baseline.
