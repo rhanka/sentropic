@@ -2,9 +2,10 @@ services:
   api:
     image: ${REGISTRY}/${API_IMAGE_NAME:-top-ai-ideas-api}:${API_VERSION:-latest}
     build:
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./api/Dockerfile
       target: ${TARGET:-development}
+    working_dir: /workspace/api
     environment:
       - NODE_ENV=${TARGET:-development}
       - DATABASE_URL=${DATABASE_URL:-postgres://app:app@postgres:5432/app}
@@ -50,9 +51,10 @@ services:
   ui:
     image: ${REGISTRY}/${UI_IMAGE_NAME:-top-ai-ideas-ui}:${UI_VERSION:-latest}
     build:
-      context: ./ui
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./ui/Dockerfile
       target: ${TARGET:-development}
+    working_dir: /workspace/ui
     environment:
       - NODE_ENV=development
       - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:${API_PORT:-8787}/api/v1}
