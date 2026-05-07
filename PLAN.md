@@ -1,6 +1,6 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-05-06 — BR-14f (Node workspace monorepo infra) is rebased on post-BR16a/post-BR21a `main`, PR #125 CI is green after rerunning the single live-AI flaky shard, and isolated branch dev-stack startup is validated on `API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=chore-node-workspace-monorepo-14f`. User smoke UAT remains on root `ENV=dev` with user data. Existing active scoping remains: Entropic transition, BR-14f, BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16 follow-ups. BR-14 split → BR-14a + BR-14b + BR-14c + BR-14d + BR-14e + BR-14f. Selected execution order: PR-117 transition ops → BR-14f → BR-14c → BR-14b → BR-14a → BR-14e → BR-14d. BR-16 split → BR-16a + BR-16b + BR-16c. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
+Status: Updated 2026-05-06 — BR-14f (Node workspace monorepo infra) is ready to merge on PR #125: CI is green after rerunning external-network failures, isolated branch dev-stack startup is validated on `API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=chore-node-workspace-monorepo-14f`, and root user smoke UAT is validated on `ENV=dev` with user data. Existing active scoping remains: Entropic transition, BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16 follow-ups. BR-14 split → BR-14a + BR-14b + BR-14c + BR-14d + BR-14e + BR-14f. Selected execution order: PR-117 transition ops → BR-14f → BR-14c → BR-14b → BR-14a → BR-14e → BR-14d. BR-16 split → BR-16a + BR-16b + BR-16c. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
 
 ## 1) Current state
 
@@ -16,13 +16,15 @@ Status: Updated 2026-05-06 — BR-14f (Node workspace monorepo infra) is rebased
 - BR-08 `feat/model-runtime-claude-mistral-cohere` (scope extended: +Cohere)
 - BR-13 `feat/chrome-plugin-download-distribution`
 
+**Ready to merge:**
+- BR-14f `chore/node-workspace-monorepo-14f` — PR #125 (`e7ff9880`). Root Node workspace + full-repo container mounts; CI green and root smoke UAT validated 2026-05-06.
+
 **Next branches (explicitly queued):**
 - BR-23 `feat/multi-agent-framework-comparison` — compare LangGraph/Agno/Temporal. See `plan/23-BRANCH_feat-multi-agent-framework-comparison.md`.
 - BR-24 `chore/node24-actions-upgrade` — upgrade GitHub Actions workflows and third-party actions for Node 24 compatibility before the runner cutover; verify CI/CD and Scaleway deploy lanes end-to-end.
 - BR-25 `chore/rules-skills-audit` — absorb BR-04B audit learnings. See `plan/25-BRANCH_chore-rules-skills-audit.md`.
 
 **Active scoping (Lot 0 in progress):**
-- BR-14f `chore/node-workspace-monorepo-14f` — root Node workspace + full-repo container mounts to unblock internal package consumption from `api`/`ui` and reduce future package extraction churn.
 - BR-14c `feat/llm-mesh-sdk` — priority extraction: publishable npm lib `@entropic/llm-mesh`, Vercel AI SDK-like access to GPT/Claude/Gemini/Mistral/Cohere with token and Codex-account modes.
 - BR-14a `feat/chat-ui-sdk` — former BR-14, renamed: chat publishable as npm lib `@entropic/chat`, using the LLM mesh contract rather than application runtime internals.
 - BR-16a `feat/gdrive-sso-indexing` — Google Drive OAuth + Picker search/selection + in-situ `document_summary` indexing (docs stay in Drive). Split from former BR-16.
@@ -112,7 +114,7 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-13  | feat/chrome-plugin-download-distribution         | Chrome extension build + download/distribution flow.       | done                 | BR-06                          |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-14f | chore/node-workspace-monorepo-14f               | Introduce a root Node workspace and full-repo container    | scoping              | BR-00                          |
+| BR-14f | chore/node-workspace-monorepo-14f               | Introduce a root Node workspace and full-repo container    | ready                | BR-00                          |
 |        |                                                  | mounts for `api`/`ui`, so internal packages can be         |                      |                                |
 |        |                                                  | consumed cleanly by future extracted libraries.            |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
@@ -322,7 +324,7 @@ User UAT on root workspace (`ENV=dev`). Branch development and automated tests r
 - `plan/14a-BRANCH_feat-chat-ui-sdk.md` (BR-14a branch pointer)
 - `plan/14b-BRANCH_refacto-llm-runtime-core.md` (BR-14b branch pointer)
 - `plan/14c-BRANCH_feat-llm-mesh-sdk.md` (BR-14c branch pointer)
-- `plan/14f-BRANCH_chore-node-workspace-monorepo.md` (BR-14f branch pointer)
+- `plan/done/14f-BRANCH_chore-node-workspace-monorepo.md` (BR-14f archived branch pointer)
 - `plan/14d-BRANCH_chore-entropic-transition-ops.md` (BR-14d branch pointer)
 - `plan/14e-BRANCH_chore-entropic-codebase-finalization.md` (BR-14e branch pointer)
 - `spec/SPEC_EVOL_WORKSPACE_TYPES.md` (BR-04)

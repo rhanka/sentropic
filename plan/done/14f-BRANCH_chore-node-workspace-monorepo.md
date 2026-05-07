@@ -28,3 +28,10 @@ Before implementation:
 
 - Create a full `BRANCH.md` from `plan/BRANCH_TEMPLATE.md`.
 - Keep the first slice limited to infra/tooling and compatibility proofs.
+
+Final status:
+
+- PR #125 head `e7ff9880` is CI green after rerunning failed external-network jobs.
+- Isolated branch dev-stack proof passed on `API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=chore-node-workspace-monorepo-14f`.
+- Root user smoke UAT passed on `ENV=dev` with user data and fixed root ports `API_PORT=8787 UI_PORT=5173 MAILDEV_UI_PORT=1080`.
+- BR-14c is the next activation branch and must prove `api/` consumes `@entropic/llm-mesh` through the root workspace.
