@@ -1,0 +1,12 @@
+{
+  "name": "entropic-workspace",
+  "private": true,
+  "workspaces": [
+    "api",
+    "ui",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "typescript": "5.4.5"
+  }
+}

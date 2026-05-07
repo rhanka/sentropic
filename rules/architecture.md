@@ -1,8 +1,8 @@
 ---
-description: "Tech stack, architecture diagram, storage, AI, CI/CD, language policy"
+description: "Tech stack, architecture diagram, package boundaries, storage, AI, CI/CD, language policy"
 alwaysApply: false
-paths: ["api/src/**", "ui/src/**", "docker-compose*.yml"]
-globs: ["api/src/**", "ui/src/**", "docker-compose*.yml"]
+paths: ["api/src/**", "ui/src/**", "packages/**", "package.json", "api/package.json", "ui/package.json", "docker-compose*.yml"]
+globs: ["api/src/**", "ui/src/**", "packages/**", "package.json", "api/package.json", "ui/package.json", "docker-compose*.yml"]
 tags: [architecture, boundaries]
 ---
 
@@ -19,6 +19,15 @@ tags: [architecture, boundaries]
 - **CI/CD**: Make for local dev, GitHub Actions (based on make targets) for automation
 - **Dev environment**: Docker Compose with volume mounts
 - **Prod environment**: Scaleway Container Serverless (to-be)
+
+## Repository And Package Boundaries
+
+- `api/` and `ui/` remain application roots. Do not move them under `packages/` without a dedicated migration branch and explicit plan update.
+- Reusable Node libraries live under `packages/*` and are consumed through the root npm workspace.
+- `make` remains the top-level orchestrator for builds, tests, dev stacks, and CI; do not introduce Nx or another orchestrator as a required workflow without a dedicated architecture decision.
+- Package extraction must be activated by real app consumption. A new package is not accepted as architecture-only scaffolding: the owning branch must prove at least one app root imports it through workspace wiring.
+- BR-14c is the first activation branch for this pattern: `packages/llm-mesh` must expose `@entropic/llm-mesh`, and `api/` must consume it through the root workspace before BR-14b/BR-14a build on the contract.
+- Branch work may use isolated dev ports for technical stack proof, but user smoke UAT remains on the root workspace with `ENV=dev` and the user's data.
 
 ## Architecture Diagram
 

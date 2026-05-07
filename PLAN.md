@@ -1,6 +1,6 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` launched to remove the current API HIGH dependency vulnerability blocking CI/security gates. Existing active scoping remains: Entropic transition, BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16a (gdrive SSO + Picker search/selection + in-situ `document_summary` indexing). BR-14 split → BR-14a + BR-14b + BR-14c + BR-14d + BR-14e. Selected execution order: PR-117 transition ops → BR-14c → BR-14b → BR-14a → BR-14e → BR-14d. BR-16 split → BR-16a + BR-16b + BR-16c. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
+Status: Updated 2026-05-06 — BR-14f (Node workspace monorepo infra) is ready to merge on PR #125: CI is green after rerunning external-network failures, isolated branch dev-stack startup is validated on `API_PORT=8715 UI_PORT=5115 MAILDEV_UI_PORT=1015 ENV=chore-node-workspace-monorepo-14f`, and root user smoke UAT is validated on `ENV=dev` with user data. Existing active scoping remains: Entropic transition, BR-14c (LLM mesh npm library, priority), BR-14a (chat UI SDK), BR-16 follow-ups. BR-14 split → BR-14a + BR-14b + BR-14c + BR-14d + BR-14e + BR-14f. Selected execution order: PR-117 transition ops → BR-14f → BR-14c → BR-14b → BR-14a → BR-14e → BR-14d. BR-16 split → BR-16a + BR-16b + BR-16c. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
 
 ## 1) Current state
 
@@ -15,6 +15,9 @@ Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` laun
 - BR-06 `feat/chrome-upstream-v1` — **merged 2026-04-17** (`62de15ad`). Webapp tab_read/tab_action to Chrome tabs via extension + in-memory Tab Registry.
 - BR-08 `feat/model-runtime-claude-mistral-cohere` (scope extended: +Cohere)
 - BR-13 `feat/chrome-plugin-download-distribution`
+
+**Ready to merge:**
+- BR-14f `chore/node-workspace-monorepo-14f` — PR #125 (`e7ff9880`). Root Node workspace + full-repo container mounts; CI green and root smoke UAT validated 2026-05-06.
 
 **Next branches (explicitly queued):**
 - BR-23 `feat/multi-agent-framework-comparison` — compare LangGraph/Agno/Temporal. See `plan/23-BRANCH_feat-multi-agent-framework-comparison.md`.
@@ -35,11 +38,14 @@ Status: Updated 2026-04-25 — urgent fix branch `fix/high-vulnerabilities` laun
 
 **BR-14 orchestration (selected):**
 - PR-117 release ops decide/execute repo rename + DNS/redirect, or hand off remaining operational work to BR-14d.
-- BR-14c is first because `@entropic/llm-mesh` owns the public model-access contract.
+- BR-14f lands first if the repo still mounts `api`/`ui` as isolated containers and cannot consume internal packages from root. It adds the Node workspace / full-repo mount baseline only; BR-14c keeps ownership of the mesh contract and thin proof path.
+- BR-14c is the first BR-14 package/product branch because `@entropic/llm-mesh` owns the public model-access contract.
 - BR-14b migrates the application LLM runtime onto that contract.
 - BR-14a extracts `@entropic/chat` after the mesh contract; Lot 0 may scope in parallel only.
 - BR-14e performs the final non-chat/non-LLM codebase naming sweep and residual-name report.
 - BR-14d executes remaining transition ops and is mandatory unless all repo/DNS/Scaleway/workflow rename items are complete during PR-117 release.
+- BR-14f now rebases on a baseline where BR-16a and BR-21a are already merged, so its local workspace gates must be rerun on that post-merge state.
+- Historical proof snapshot (2026-04-25): BR-14f local workspace gates were green on `ff6190cb`; BR-14c, BR-16a, and BR-21a rebase simulations were doc-conflict only before BR-16a/BR21a merged.
 - Detailed branch contracts and rejected order options are in `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
 
 ## 2) BR-04/04B as structural branch
@@ -107,6 +113,10 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 |        |                                                  | gating.                                                    |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-13  | feat/chrome-plugin-download-distribution         | Chrome extension build + download/distribution flow.       | done                 | BR-06                          |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-14f | chore/node-workspace-monorepo-14f               | Introduce a root Node workspace and full-repo container    | ready                | BR-00                          |
+|        |                                                  | mounts for `api`/`ui`, so internal packages can be         |                      |                                |
+|        |                                                  | consumed cleanly by future extracted libraries.            |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-14c | feat/llm-mesh-sdk                                | Publish @entropic/llm-mesh: Vercel AI SDK-like access      | scoping (priority)   | BR-01, BR-08                   |
 |        |                                                  | to GPT/Claude/Gemini/Mistral/Cohere, token auth, Codex     |                      |                                |
@@ -201,6 +211,7 @@ graph TD
   BR11[BR-11 chrome multitab+voice]
   BR12[BR-12 release chrome+vscode ci]
   BR13[BR-13 chrome download ✓]
+  BR14f[BR-14f node workspace monorepo ⚡]
   BR14c[BR-14c llm mesh sdk ⚡]
   BR14b[BR-14b llm runtime core]
   BR14a[BR-14a chat ui sdk]
@@ -242,6 +253,10 @@ graph TD
   BR06 --> BR12
   BR07 --> BR12
   BR13 --> BR12
+  BR00 --> BR14f
+  BR14f --> BR14c
+  BR14f -.->|shared container/runtime wiring| BR16a
+  BR14f -.->|low churn rebase| BR21
   BR01 --> BR14c
   BR08 --> BR14c
   BR14c --> BR14b
@@ -273,8 +288,9 @@ graph TD
 
 **Wave in progress (2026-04-21)**: this transition branch (README pair, Entropic URL, repo/DNS/SCW plan, BR-14 split, PR-117 transition TODO) ∥ BR-16a Lot 0 (gdrive SSO + document_summary indexing scoping). Planning-only.
 **PR-117 release ops**: decide and execute repository rename + public DNS/redirect changes, or explicitly hand off each unchecked item to BR-14d with owner/date.
-**Wave next (priority)**: BR-14c Lot 0/1 (`@entropic/llm-mesh`) before BR-14a implementation. BR-16a Lot 1+ can proceed after Google Cloud app provisioning through Codex Playwright MCP attached to the user's Chromium CDP session.
-**Wave after BR-14c contract**: BR-14b (application LLM runtime migration to the mesh), then BR-14a (chat UI SDK extraction). BR-14a Lot 0 may scope in parallel, but implementation must not define a separate provider/model abstraction.
+**Wave next (priority)**: BR-14f (root Node workspace + full-repo mounts) before the BR-14c thin proof path. BR-14f must re-validate on the post-BR16a/BR21a baseline now present on `main`.
+**BR-14f activation contract**: BR-14f has value only if the next branches exercise it. BR-14c must create the first reusable package under `packages/*` and prove `api/` consumes it through the root workspace. BR-14b must then migrate application LLM runtime consumption to that package contract. BR-14a must consume the mesh contract instead of defining a competing provider/model layer. If BR-14c cannot import and test `@entropic/llm-mesh` from `api/` through workspace wiring, BR-14f is incomplete.
+**Wave after BR-14f**: BR-14c Lot 0/1 (`@entropic/llm-mesh`) with an API proof path on top of the new workspace baseline, then BR-14b (application LLM runtime migration to the mesh), then BR-14a (chat UI SDK extraction). BR-14a Lot 0 may scope in parallel, but implementation must not define a separate provider/model abstraction.
 **Wave Code Finalization**: BR-14e (non-chat/non-LLM codebase naming sweep, residual-name allowlist, test fixture cleanup) after BR-14a/14b/14c and before BR-14d.
 **Wave A2** (right after BR-04B merge — deferred behind current wave): BR-20 (entity/config refactor follow-up) + BR-22 (rich markdown list stabilization hotfix)
 **Platform wave**: BR-24 (Node 24 GitHub Actions compatibility) should run before the GitHub-hosted runner Node 24 cutover and can proceed in parallel with product work because it is workflow/infra-only.
@@ -308,6 +324,7 @@ User UAT on root workspace (`ENV=dev`). Branch development and automated tests r
 - `plan/14a-BRANCH_feat-chat-ui-sdk.md` (BR-14a branch pointer)
 - `plan/14b-BRANCH_refacto-llm-runtime-core.md` (BR-14b branch pointer)
 - `plan/14c-BRANCH_feat-llm-mesh-sdk.md` (BR-14c branch pointer)
+- `plan/done/14f-BRANCH_chore-node-workspace-monorepo.md` (BR-14f archived branch pointer)
 - `plan/14d-BRANCH_chore-entropic-transition-ops.md` (BR-14d branch pointer)
 - `plan/14e-BRANCH_chore-entropic-codebase-finalization.md` (BR-14e branch pointer)
 - `spec/SPEC_EVOL_WORKSPACE_TYPES.md` (BR-04)
