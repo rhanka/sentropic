@@ -268,8 +268,8 @@ build-ui: ## Build the SvelteKit UI (static)
 build-ext-chrome: ## Build Chrome extension to ui/chrome-ext/dist
 	@echo "📦 Installing UI dependencies from lockfile..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'npm ci && npm exec svelte-kit sync && npm run build:ext'
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /app/chrome-ext/dist'
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'test -f /app/chrome-ext/dist/manifest.json && test -f /app/chrome-ext/dist/content.js && test -f /app/chrome-ext/dist/chrome-ext/popup.html && test -f /app/chrome-ext/dist/chrome-ext/sidepanel.html'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/chrome-ext/dist'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'test -f /workspace/ui/chrome-ext/dist/manifest.json && test -f /workspace/ui/chrome-ext/dist/content.js && test -f /workspace/ui/chrome-ext/dist/chrome-ext/popup.html && test -f /workspace/ui/chrome-ext/dist/chrome-ext/sidepanel.html'
 	@echo "✅ Extension built in ui/chrome-ext/dist"
 
 .PHONY: dev-ext
@@ -281,8 +281,8 @@ dev-ext: up-ui ## Watch build Chrome extension
 build-ext-vscode: ## Build VSCode extension package to ui/static/vscode-extension
 	@echo "📦 Installing UI dependencies from lockfile..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'npm ci && npm exec svelte-kit sync && npm run build:vscode-ext'
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /app/static/vscode-extension /app/vscode-ext/dist'
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'test -f /app/static/vscode-extension/top-ai-ideas-vscode-extension.vsix && test -f /app/vscode-ext/dist/extension.cjs'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) ui sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/ui/static/vscode-extension /workspace/ui/vscode-ext/dist'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps ui sh -lc 'test -f /workspace/ui/static/vscode-extension/top-ai-ideas-vscode-extension.vsix && test -f /workspace/ui/vscode-ext/dist/extension.cjs'
 	@echo "✅ VSCode extension package built in ui/static/vscode-extension"
 
 .PHONY: dev-ext-vscode
@@ -412,6 +412,16 @@ audit-fix-%:
 lock-api: ## Update API package-lock.json using Node container (sync deps)
 	@echo "🔒 Updating API package-lock.json..."
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec api sh -lc "npm install --package-lock-only"
+
+.PHONY: lock-root
+lock-root: ## Update root package-lock.json using Node container (workspace root)
+	@echo "🔒 Updating root package-lock.json..."
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-v "$$(pwd):/workspace" \
+		-w /workspace \
+		node:24-alpine \
+		sh -lc "npm install --package-lock-only --workspaces --include-workspace-root"
 
 .PHONY: save-ui
 save-ui: ## Save UI Docker image as tar artifact
@@ -543,8 +553,8 @@ typecheck-ui: up-ui ## Run UI type checks
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run check
 
 .PHONY: typecheck-api
-typecheck-api: up-api ## Run API type checks
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T api npm run typecheck
+typecheck-api: ## Run API type checks
+	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps api npm run typecheck
 
 .PHONY: lint
 lint: lint-ui lint-api ## Run all linters
@@ -554,8 +564,8 @@ lint-ui: up-ui ## Run UI linter
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run lint
 
 .PHONY: lint-api
-lint-api: up-api ## Run API linter
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T api npm run lint
+lint-api: ## Run API linter
+	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps api npm run lint
 
 .PHONY: format
 format:
@@ -784,7 +794,8 @@ up-api-test: ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=tru
 
 .PHONY: up-api-test-ci
 up-api-test-ci: ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up -d api --wait api
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml up -d api --wait api
 
 .PHONY: up-ui
 up-ui: ## Start the ui stack in detached mode
