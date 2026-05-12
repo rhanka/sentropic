@@ -26,7 +26,7 @@ tags: [architecture, boundaries]
 - Reusable Node libraries live under `packages/*` and are consumed through the root npm workspace.
 - `make` remains the top-level orchestrator for builds, tests, dev stacks, and CI; do not introduce Nx or another orchestrator as a required workflow without a dedicated architecture decision.
 - Package extraction must be activated by real app consumption. A new package is not accepted as architecture-only scaffolding: the owning branch must prove at least one app root imports it through workspace wiring.
-- BR-14c is the first activation branch for this pattern: `packages/llm-mesh` must expose `@entropic/llm-mesh`, and `api/` must consume it through the root workspace before BR-14b/BR-14a build on the contract.
+- BR-14c is the first activation branch for this pattern: `packages/llm-mesh` must expose `@sentropic/llm-mesh`, and `api/` must consume it through the root workspace before BR-14b/BR-14a build on the contract.
 - Branch work may use isolated dev ports for technical stack proof, but user smoke UAT remains on the root workspace with `ENV=dev` and the user's data.
 
 ## Architecture Diagram

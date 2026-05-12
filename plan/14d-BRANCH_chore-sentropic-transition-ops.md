@@ -1,12 +1,12 @@
-# Branch Plan Stub: BR-14d Entropic Transition Ops
+# Branch Plan Stub: BR-14d Sentropic Transition Ops
 
 Current coordination source:
 
-- `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`
+- `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`
 
 Branch:
 
-- BR-14d `chore/entropic-transition-ops`
+- BR-14d `chore/sentropic-transition-ops`
 
 Ordering rule:
 
@@ -16,7 +16,7 @@ Ordering rule:
 Scope summary:
 
 - GitHub repository rename follow-up if PR-117 release did not finish it.
-- `entropic.sent-tech.ca` DNS and redirects from old `top-ai-ideas` hostnames.
+- `sentropic.sent-tech.ca` DNS and redirects from old `top-ai-ideas` hostnames.
 - GitHub Pages custom domain, API hostname, CORS origins, cookie domain, OAuth callback URLs.
 - Scaleway Container Serverless names, registry image names, secrets, workflows, dashboards, logs, alerts, and deployment metadata.
 

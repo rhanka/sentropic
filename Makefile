@@ -31,12 +31,13 @@ export WEBAUTHN_ORIGIN ?= http://localhost:$(UI_PORT)
 export WEBAUTHN_RP_ID ?= localhost
 export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*
 
-export API_VERSION    ?= $(shell echo "api/src api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/llm-mesh/src packages/llm-mesh/package.json packages/llm-mesh/tsconfig.json api/src api/tests/utils api/package.json api/package-lock.json api/Dockerfile api/tsconfig.json api/tsconfig.build.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs ui/tailwind.config.cjs" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= top-ai-ideas-api
 export UI_IMAGE_NAME  ?= top-ai-ideas-ui
 export E2E_IMAGE_NAME ?= top-ai-ideas-e2e
+export LLM_MESH_NODE_IMAGE ?= node:24-bookworm-slim
 
 .DEFAULT_GOAL := help
 
@@ -308,7 +309,7 @@ logs-dev-vscode: ## Stream OpenVSCode mounted dev lane logs
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml --profile vscode logs -f openvscode-dev
 
 .PHONY: up-dev-playwright
-up-dev-playwright: ## Start or reuse the Playwright dev helper on top of the standard dev stack
+up-dev-playwright: prepare-node-workspace ## Start or reuse the Playwright dev helper on top of the standard dev stack
 	@playwright_ui_port="$${PLAYWRIGHT_DEV_UI_PORT:-5174}"; \
 	playwright_ui_base_url="$${PLAYWRIGHT_UI_BASE_URL:-http://host.docker.internal:$$playwright_ui_port}"; \
 	playwright_api_base_url="$${PLAYWRIGHT_API_BASE_URL:-http://host.docker.internal:$(API_PORT)}"; \
@@ -556,6 +557,49 @@ typecheck-ui: up-ui ## Run UI type checks
 typecheck-api: ## Run API type checks
 	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps api npm run typecheck
 
+.PHONY: typecheck-llm-mesh
+typecheck-llm-mesh: ## Run @sentropic/llm-mesh type checks
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+
+.PHONY: build-llm-mesh
+build-llm-mesh: ## Build @sentropic/llm-mesh dist package
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+
+.PHONY: pack-llm-mesh
+pack-llm-mesh: build-llm-mesh ## Validate @sentropic/llm-mesh npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+.PHONY: publish-llm-mesh
+publish-llm-mesh: build-llm-mesh ## Publish @sentropic/llm-mesh from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/llm-mesh \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/llm-mesh@"$$version" version >/dev/null 2>&1; then echo "@sentropic/llm-mesh@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+NPM_TOKEN_FILE ?= /tmp/sentropic-npm-token
+
+.PHONY: publish-llm-mesh-token
+publish-llm-mesh-token: build-llm-mesh ## Publish @sentropic/llm-mesh using a token read from NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-llm-mesh in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/llm-mesh \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/llm-mesh@"$$version" version >/dev/null 2>&1; then echo "@sentropic/llm-mesh@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
 .PHONY: lint
 lint: lint-ui lint-api ## Run all linters
 
@@ -586,6 +630,10 @@ audit:
 # -----------------------------------------------------------------------------
 .PHONY: test
 test: test-api test-ui test-e2e ## Run all tests
+
+.PHONY: test-llm-mesh
+test-llm-mesh: ## Run @sentropic/llm-mesh tests
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
 .PHONY: test-ui
 test-ui: up-ui ## Run UI tests (usage: make test-ui, SCOPE=tests/stores/session.test.ts make test-ui)
@@ -748,8 +796,13 @@ clean-db: ## Clean database files and restart services [SKIP_CONFIRM=true to ski
 # -----------------------------------------------------------------------------
 # Development environment
 # -----------------------------------------------------------------------------
+.PHONY: prepare-node-workspace
+prepare-node-workspace: build-llm-mesh ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
+
 .PHONY: dev
-dev: ## Start UI and API in watch mode
+dev: prepare-node-workspace ## Start UI and API in watch mode
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d
 
 .PHONY: dev-ui
@@ -757,11 +810,11 @@ dev-ui:
 	$(DOCKER_COMPOSE) up --build ui
 
 .PHONY: dev-api
-dev-api:
+dev-api: prepare-node-workspace
 	$(DOCKER_COMPOSE) up --build api
 
 .PHONY: up
-up: ## Start the full stack in detached mode
+up: prepare-node-workspace ## Start the full stack in detached mode
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d --wait
 
 .PHONY: up-e2e
@@ -785,15 +838,15 @@ logs-e2e-vscode: ## Stream VSCode E2E logs
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml logs -f
 
 .PHONY: up-api
-up-api: ## Start the api stack in detached mode
+up-api: prepare-node-workspace ## Start the api stack in detached mode
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-api-test
-up-api-test: ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
+up-api-test: prepare-node-workspace ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-api-test-ci
-up-api-test-ci: ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
+up-api-test-ci: build-llm-mesh ## Start the api stack in detached mode for CI (reuse prebuilt API image, no rebuild)
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root && cd /workspace/api && npm run db:migrate'
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml up -d api --wait api
 

@@ -1,14 +1,14 @@
 # TODO - Top AI Ideas
 
-## Entropic transition — PR-117
+## Sentropic transition — PR-117
 
 - [x] Create `README.fr.md` as the French editorial reference.
 - [x] Replace `README.md` with the English GitHub reference.
 - [x] Add `TRANSITION.md` for repo/DNS/redirect/Scaleway transition.
 - [x] Split BR-14 into BR-14a / BR-14b / BR-14c / BR-14d / BR-14e in `PLAN.md`.
-- [x] Add BR-14 orchestration spec with selected order and alternatives: `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`.
-- [ ] Rename GitHub repository `rhanka/top-ai-ideas-fullstack` -> `rhanka/entropic`, or explicitly hand off execution to BR-14d with owner/date.
-- [ ] Configure `entropic.sent-tech.ca` as canonical public site and verify redirects from old `top-ai-ideas` hostnames, or explicitly hand off execution to BR-14d with owner/date.
+- [x] Add BR-14 orchestration spec with selected order and alternatives: `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`.
+- [ ] Rename GitHub repository `rhanka/top-ai-ideas-fullstack` -> `rhanka/sentropic`, or explicitly hand off execution to BR-14d with owner/date.
+- [ ] Configure `sentropic.sent-tech.ca` as canonical public site and verify redirects from old `top-ai-ideas` hostnames, or explicitly hand off execution to BR-14d with owner/date.
 - [ ] Decide whether Scaleway object rename runs in PR-117 release ops or in BR-14d; BR-14d is mandatory if any transition item remains.
 
 ## Check-list de mise en place
@@ -231,22 +231,22 @@ Roadmap specifications:
 - [ ] **BR-12** `feat/release-chrome-vscode-ci-publish`
   - [ ] Publish Chrome plugin and VSCode plugin automatically from CI.
 - [ ] **BR-14c** `feat/llm-mesh-sdk` — priority branch.
-  - [ ] Publish `@entropic/llm-mesh` as the first standalone npm service.
+  - [ ] Publish `@sentropic/llm-mesh` as the first standalone npm service.
   - [ ] Support OpenAI, Claude, Gemini, Mistral, Cohere.
   - [ ] Support direct token, user token, and Codex-account modes.
   - [ ] Prepare later Gemini Code Assist and Claude Code account support.
 - [ ] **BR-14b** `refacto/llm-runtime-core`
-  - [ ] Migrate the application LLM runtime onto `@entropic/llm-mesh`.
+  - [ ] Migrate the application LLM runtime onto `@sentropic/llm-mesh`.
   - [ ] Preserve quotas, retries, streaming, audit, and provider capability behavior.
 - [ ] **BR-14a** `feat/chat-ui-sdk`
-  - [ ] Extract `@entropic/chat` from web, Chrome, and VSCode surfaces.
+  - [ ] Extract `@sentropic/chat` from web, Chrome, and VSCode surfaces.
   - [ ] Reuse the LLM mesh contract; do not define a separate provider abstraction.
-- [ ] **BR-14e** `chore/entropic-codebase-finalization`
+- [ ] **BR-14e** `chore/sentropic-codebase-finalization`
   - [ ] Finalize non-chat/non-LLM codebase naming across API, UI, tests, fixtures, reports, exports, and package metadata.
   - [ ] Produce residual-name allowlist before operational transition.
-- [ ] **BR-14d** `chore/entropic-transition-ops`
+- [ ] **BR-14d** `chore/sentropic-transition-ops`
   - [ ] Execute remaining repo/DNS/redirect/Scaleway/container/registry/secret/workflow rename work.
-  - [ ] Keep redirects and rollback path until new Entropic deployment objects are verified.
+  - [ ] Keep redirects and rollback path until new Sentropic deployment objects are verified.
 - [ ] **BR-16** `feat/document-connectors`
   - [ ] Add connector abstraction for Google Workspace (Drive, Docs, Sheets) and SharePoint/OneDrive.
   - [ ] Extend `contextDocuments` model with `connector_type`, `external_ref`, `sync_status`.

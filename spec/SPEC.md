@@ -701,6 +701,13 @@ Dedicated TypeScript services:
 - `api/src/services/settings.ts` → settings and configuration management
 - `api/src/services/tools.ts` → chat tool definitions and dispatch
 
+Model-access runtime boundary:
+- Application code accesses LLM providers through the mesh-backed `api/src/services/llm-runtime` boundary.
+- The runtime dispatch contract is provided by the workspace package `@sentropic/llm-mesh`.
+- `@sentropic/llm-mesh` owns provider/model identifiers, model capability profiles, normalized generate/stream contracts, tool-call and structured-output contracts, retryable error normalization, and redacted auth descriptors.
+- Server-only API services keep secret material, provider SDK clients, quota checks, credential precedence, and application persistence outside the public package boundary.
+- App code must not reintroduce direct provider selector ownership beside the mesh runtime. Higher-level chat orchestration remains in `chat-service.ts` until a dedicated chat-service modularization branch extracts it.
+
 AI generation functions:
 - `generateFolderNameAndDescription(input, model, organization?)`
 - `generateInitiativeList(input, model, organization?)` (renamed from `generateUseCaseList`)

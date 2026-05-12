@@ -47,7 +47,7 @@ This document is the single checklist for **chat tools**: what is already implem
 - [x] `document_generate` (two-phase pattern: `action=upskill` then `action=generate`)
   - **Format**: optional `format: "docx" | "pptx"`; missing format defaults to `docx`.
   - **DOCX upskill**: returns a self-contained DOCX skill document for the LLM to learn best practices before generating.
-  - **PPTX upskill**: returns a compact Entropic PptGenJS skill document before freeform PPTX generation.
+  - **PPTX upskill**: returns a compact Sentropic PptGenJS skill document before freeform PPTX generation.
   - **DOCX template mode**: `action: "generate"` with `format: "docx"` and `templateId` - resolves existing DOCX template + data, renders, stores to S3, returns download link.
   - **DOCX freeform mode**: `action: "generate"` with `format: "docx"` and `code` - LLM-written `docx.js` code executed in VM sandbox, produces DOCX buffer, uploaded to S3, returns download link.
   - **PPTX freeform mode**: `action: "generate"` with `format: "pptx"` and `code` - LLM-written PptGenJS code executed in VM sandbox, produces PPTX buffer, uploaded to S3, returns download link.

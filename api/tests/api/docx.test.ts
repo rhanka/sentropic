@@ -476,6 +476,9 @@ describe('DOCX API', () => {
 
   it('processes publishing jobs even when AI queue slots are saturated', async () => {
     processJobsSpy.mockRestore();
+    // This test exercises the global queue scheduler with processJobs unmocked.
+    // Keep it independent from pending jobs created by earlier endpoint files.
+    await db.delete(jobQueue);
 
     const processJobSpy = vi.spyOn(queueManager as unknown as { processJob: (job: unknown) => Promise<void> }, 'processJob')
       .mockResolvedValue();

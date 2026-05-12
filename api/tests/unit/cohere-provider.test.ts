@@ -46,7 +46,7 @@ describe('CohereProviderRuntime', () => {
         supportsTools: true,
         supportsStreaming: true,
         supportsStructuredOutput: true,
-        supportsReasoning: false,
+        supportsReasoning: true,
       });
     });
   });
@@ -65,6 +65,7 @@ describe('CohereProviderRuntime', () => {
       const reasoning = models.find((m) => m.modelId === 'command-a-reasoning-08-2025');
       expect(reasoning).toBeDefined();
       expect(reasoning!.reasoningTier).toBe('advanced');
+      expect(reasoning!.supportsReasoning).toBe(true);
     });
   });
 

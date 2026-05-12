@@ -150,8 +150,18 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
       deltaCount: 2,
       deltas: ['{"query":', '"test"}'],
     },
-    reasoningEvents: null,
-    expectedReasoning: null,
+    reasoningEvents: [
+      { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Sonnet thought' }, index: 0 },
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Answer' }, index: 1 },
+      { type: 'message_stop' },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['Sonnet thought'],
+      contentCount: 1,
+      contentDeltas: ['Answer'],
+      hasDone: true,
+    },
     statusEvents: [{ type: 'message_stop' }],
   },
 
@@ -169,8 +179,31 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
     ],
     expectedContentCount: 2,
     expectedContentDeltas: ['Hello', ' world'],
-    toolEvents: null,
-    expectedTools: null,
+    toolEvents: [
+      {
+        type: 'content_block_start',
+        index: 1,
+        content_block: { type: 'tool_use', id: 'toolu_1', name: 'search' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '{"query":' },
+      },
+      {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '"test"}' },
+      },
+      { type: 'message_stop' },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'claude_call_1',
+      deltaCount: 2,
+      deltas: ['{"query":', '"test"}'],
+    },
     reasoningEvents: [
       { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Let me think...' }, index: 0 },
       { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Answer' }, index: 1 },
@@ -275,12 +308,12 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
-  // Mistral — Devstral
+  // Mistral — Mistral Small
   // -----------------------------------------------------------------------
   {
     providerId: 'mistral',
-    model: 'devstral-2512',
-    label: 'Devstral',
+    model: 'mistral-small-2603',
+    label: 'Mistral Small 4',
     chatEvents: [
       { data: { choices: [{ delta: { content: 'Hello' } }] } },
       { data: { choices: [{ delta: { content: ' from Devstral' } }] } },
@@ -324,8 +357,42 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
       deltaCount: 1,
       deltas: ['"python"}'],
     },
-    reasoningEvents: null,
-    expectedReasoning: null,
+    reasoningEvents: [
+      {
+        data: {
+          choices: [{
+            delta: {
+              content: [
+                { type: 'thinking', thinking: [{ type: 'text', text: 'Mistral small thought' }] },
+              ],
+            },
+          }],
+        },
+      },
+      {
+        data: {
+          choices: [{
+            delta: {
+              content: [
+                { type: 'text', text: 'Small answer' },
+              ],
+            },
+          }],
+        },
+      },
+      {
+        data: {
+          choices: [{ delta: {}, finish_reason: 'stop' }],
+        },
+      },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['Mistral small thought'],
+      contentCount: 1,
+      contentDeltas: ['Small answer'],
+      hasDone: true,
+    },
     statusEvents: [
       { data: { choices: [{ delta: {}, finish_reason: 'stop' }] } },
     ],
@@ -392,9 +459,62 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   // -----------------------------------------------------------------------
   // Cohere — Command A Reasoning (reasoning model variant)
   // -----------------------------------------------------------------------
-  // NOTE: The reasoning test for Cohere uses model 'command-a-reasoning-08-2025'
-  // but the chat/tool/status tests use 'command-a-03-2025'. We handle the
-  // reasoning model separately via the reasoningModel field below.
+  {
+    providerId: 'cohere',
+    model: 'command-a-reasoning-08-2025',
+    label: 'Command A Reasoning',
+    chatEvents: [
+      { type: 'content-delta', delta: { message: { content: { text: 'Reasoning hello' } } } },
+      { type: 'message-end' },
+    ],
+    expectedContentCount: 1,
+    expectedContentDeltas: ['Reasoning hello'],
+    toolEvents: [
+      {
+        type: 'tool-plan-delta',
+        delta: { message: { toolPlan: 'I should call a tool' } },
+      },
+      {
+        type: 'tool-call-start',
+        delta: {
+          tool_call: {
+            id: 'cohere_reasoning_tc_1',
+            function: { name: 'search' },
+          },
+        },
+      },
+      {
+        type: 'tool-call-delta',
+        delta: {
+          tool_call: {
+            function: { arguments: '{"query":"reasoning"}' },
+          },
+        },
+      },
+      { type: 'message-end' },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'cohere_reasoning_tc_1',
+      deltaCount: 1,
+      deltas: ['{"query":"reasoning"}'],
+    },
+    reasoningEvents: [
+      { type: 'tool-plan-delta', delta: { message: { toolPlan: 'Plan first' } } },
+      { type: 'content-delta', delta: { message: { content: { thinking: 'Thinking block' } } } },
+      { type: 'content-delta', delta: { message: { content: { text: 'Final answer' } } } },
+      { type: 'message-end' },
+    ],
+    expectedReasoning: {
+      count: 2,
+      deltas: ['Plan first', 'Thinking block'],
+      contentCount: 1,
+      contentDeltas: ['Final answer'],
+      hasDone: true,
+    },
+    statusEvents: [{ type: 'message-end' }],
+  },
 
   // -----------------------------------------------------------------------
   // OpenAI — GPT-4.1-nano (standard)
@@ -465,8 +585,37 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
     ],
     expectedContentCount: 2,
     expectedContentDeltas: ['Hello', ' world'],
-    toolEvents: null,
-    expectedTools: null,
+    toolEvents: [
+      { type: 'response.created', response: { id: 'resp_test_556' } },
+      {
+        type: 'response.output_item.added',
+        item: {
+          type: 'function_call',
+          id: 'fc_item_5',
+          call_id: 'call_5',
+          name: 'search',
+          arguments: '',
+        },
+      },
+      {
+        type: 'response.function_call_arguments.delta',
+        item_id: 'fc_item_5',
+        delta: '{"q":',
+      },
+      {
+        type: 'response.function_call_arguments.delta',
+        item_id: 'fc_item_5',
+        delta: '"reasoning"}',
+      },
+      { type: 'response.completed' },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'call_5',
+      deltaCount: 2,
+      deltas: ['{"q":', '"reasoning"}'],
+    },
     reasoningEvents: [
       { type: 'response.created', response: { id: 'resp_test_789' } },
       { type: 'response.reasoning_text.delta', delta: 'Let me think...' },
@@ -483,6 +632,67 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
     },
     statusEvents: [
       { type: 'response.created', response: { id: 'resp_test_000' } },
+      { type: 'response.completed' },
+    ],
+  },
+
+  // -----------------------------------------------------------------------
+  // OpenAI — GPT-5.4 Nano (standard reasoning model)
+  // -----------------------------------------------------------------------
+  {
+    providerId: 'openai',
+    model: 'gpt-5.4-nano',
+    label: 'GPT-5.4 Nano',
+    chatEvents: [
+      { type: 'response.created', response: { id: 'resp_nano_123' } },
+      { type: 'response.output_text.delta', delta: 'Nano' },
+      { type: 'response.output_text.delta', delta: ' answer' },
+      { type: 'response.completed' },
+    ],
+    expectedContentCount: 2,
+    expectedContentDeltas: ['Nano', ' answer'],
+    toolEvents: [
+      { type: 'response.created', response: { id: 'resp_nano_tool' } },
+      {
+        type: 'response.output_item.added',
+        item: {
+          type: 'function_call',
+          id: 'fc_item_nano',
+          call_id: 'call_nano',
+          name: 'search',
+          arguments: '',
+        },
+      },
+      {
+        type: 'response.function_call_arguments.done',
+        item_id: 'fc_item_nano',
+        name: 'search',
+        arguments: '{"q":"nano"}',
+      },
+      { type: 'response.completed' },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'call_nano',
+      deltaCount: 1,
+      deltas: ['{"q":"nano"}'],
+    },
+    reasoningEvents: [
+      { type: 'response.created', response: { id: 'resp_nano_reasoning' } },
+      { type: 'response.reasoning_summary_text.delta', delta: 'Nano summary' },
+      { type: 'response.output_text.delta', delta: 'Nano final' },
+      { type: 'response.completed' },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['Nano summary'],
+      contentCount: 1,
+      contentDeltas: ['Nano final'],
+      hasDone: true,
+    },
+    statusEvents: [
+      { type: 'response.created', response: { id: 'resp_nano_status' } },
       { type: 'response.completed' },
     ],
   },
@@ -520,15 +730,33 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
       startArgs: '{"query":"test"}',
       deltaCount: 0,
     },
-    reasoningEvents: null,
-    expectedReasoning: null,
+    reasoningEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'Flash thought', thought: true },
+              { text: 'Flash answer' },
+            ],
+          },
+          finishReason: 'STOP',
+        }],
+      },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['Flash thought'],
+      contentCount: 1,
+      contentDeltas: ['Flash answer'],
+      hasDone: true,
+    },
     statusEvents: [
       { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
     ],
   },
 
   // -----------------------------------------------------------------------
-  // Gemini — Pro Preview (reasoning model — no reasoning support)
+  // Gemini — Pro Preview (reasoning model)
   // -----------------------------------------------------------------------
   {
     providerId: 'gemini',
@@ -541,11 +769,45 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
     ],
     expectedContentCount: 2,
     expectedContentDeltas: ['Hello', ' world'],
-    toolEvents: null,
-    expectedTools: null,
-    // Reasoning not implemented for Gemini
-    reasoningEvents: null,
-    expectedReasoning: null,
+    toolEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [{
+              functionCall: { name: 'search', args: { query: 'pro' } },
+            }],
+          },
+        }],
+      },
+      { candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] },
+    ],
+    expectedTools: {
+      startCount: 1,
+      startName: 'search',
+      startToolCallId: 'gemini_call_1',
+      startArgs: '{"query":"pro"}',
+      deltaCount: 0,
+    },
+    reasoningEvents: [
+      {
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'Pro thought', thought: true },
+              { text: 'Pro answer' },
+            ],
+          },
+          finishReason: 'STOP',
+        }],
+      },
+    ],
+    expectedReasoning: {
+      count: 1,
+      deltas: ['Pro thought'],
+      contentCount: 1,
+      contentDeltas: ['Pro answer'],
+      hasDone: true,
+    },
     statusEvents: [
       {
         candidates: [{
@@ -589,6 +851,30 @@ const COHERE_TOOL_START_NAME_VARIANT = {
 describe('LLM stream event normalization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('has a stream fixture for every advertised model capability', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const matrixByKey = new Map(
+      STREAM_TEST_MATRIX.map((config) => [`${config.providerId}:${config.model}`, config]),
+    );
+    const catalogModels = providerRegistry.listModels();
+
+    expect([...matrixByKey.keys()].sort()).toEqual(
+      catalogModels.map((model) => `${model.providerId}:${model.modelId}`).sort(),
+    );
+
+    for (const model of catalogModels) {
+      const key = `${model.providerId}:${model.modelId}`;
+      const config = matrixByKey.get(key);
+      expect(config, key).toBeDefined();
+      if (model.supportsTools) {
+        expect(config?.toolEvents, `${key} tool fixture`).not.toBeNull();
+      }
+      if (model.reasoningTier !== 'none') {
+        expect(config?.reasoningEvents, `${key} reasoning fixture`).not.toBeNull();
+      }
+    }
   });
 
   describe.each(STREAM_TEST_MATRIX)(
@@ -669,10 +955,6 @@ describe('LLM stream event normalization', () => {
         const { providerRegistry } = await import('../../src/services/provider-registry');
         const provider = providerRegistry.requireProvider(config.providerId);
 
-        // For Cohere reasoning, the model is different from the main model
-        const reasoningModel =
-          config.providerId === 'cohere' ? 'command-a-reasoning-08-2025' : config.model;
-
         vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
           (async function* () {
             for (const evt of config.reasoningEvents!) yield evt;
@@ -685,7 +967,7 @@ describe('LLM stream event normalization', () => {
           callLLMStream({
             messages: [{ role: 'user', content: 'Think about this' }],
             providerId: config.providerId,
-            model: reasoningModel,
+            model: config.model,
           }),
         );
 
@@ -799,5 +1081,74 @@ describe('LLM stream event normalization', () => {
 
     const doneEvents = events.filter((e) => e.type === 'done');
     expect(doneEvents).toHaveLength(1);
+  });
+
+  it('should keep Gemini thought parts out of assistant content', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('gemini');
+    vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
+      (async function* () {
+        yield {
+          candidates: [{
+            content: {
+              parts: [
+                { text: 'hidden planning', thought: true },
+                { text: 'Visible answer' },
+              ],
+            },
+            finishReason: 'STOP',
+          }],
+        };
+      })(),
+    );
+
+    const { callLLMStream } = await import('../../src/services/llm-runtime');
+
+    const events = await collectStreamEvents(
+      callLLMStream({
+        messages: [{ role: 'user', content: 'Answer' }],
+        providerId: 'gemini',
+        model: 'gemini-3.1-pro-preview-customtools',
+      }),
+    );
+
+    const contentDeltas = events.filter((e) => e.type === 'content_delta');
+    expect(contentDeltas).toHaveLength(1);
+    expect((contentDeltas[0].data as { delta: string }).delta).toBe('Visible answer');
+
+    const reasoningDeltas = events.filter((e) => e.type === 'reasoning_delta');
+    expect(reasoningDeltas).toHaveLength(1);
+    expect((reasoningDeltas[0].data as { delta: string }).delta).toBe('hidden planning');
+  });
+
+  it('should strip mesh reasoning for GPT-4.1 Nano when chat passes reasoning options', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('openai');
+    let capturedRequest: unknown;
+    vi.spyOn(provider, 'streamGenerate').mockImplementation(async (request) => {
+      capturedRequest = request;
+      return (async function* () {
+        yield { type: 'response.created', response: { id: 'resp_no_reasoning' } };
+        yield { type: 'response.output_text.delta', delta: 'No reasoning params' };
+        yield { type: 'response.completed' };
+      })();
+    });
+
+    const { callLLMStream } = await import('../../src/services/llm-runtime');
+
+    const events = await collectStreamEvents(
+      callLLMStream({
+        messages: [{ role: 'user', content: 'Hi' }],
+        providerId: 'openai',
+        model: 'gpt-4.1-nano',
+        reasoningEffort: 'medium',
+        reasoningSummary: 'auto',
+      }),
+    );
+
+    const requestOptions = (capturedRequest as { requestOptions?: { reasoning?: unknown } }).requestOptions;
+    expect(requestOptions?.reasoning).toBeUndefined();
+    expect(events.some((event) => event.type === 'content_delta')).toBe(true);
+    expect(events.some((event) => event.type === 'done')).toBe(true);
   });
 });

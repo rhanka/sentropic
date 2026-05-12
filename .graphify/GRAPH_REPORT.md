@@ -1,7 +1,7 @@
-# Graph Report - /home/antoinefa/src/entropic  (2026-04-21)
+# Graph Report - /home/antoinefa/src/entropiq  (2026-04-21)
 
 ## Corpus Check
-- Reused existing graph at /home/antoinefa/src/entropic without re-running corpus detection.
+- Reused existing graph at /home/antoinefa/src/entropiq without re-running corpus detection.
 
 ## Summary
 - 4743 nodes · 6709 edges · 237 communities detected
@@ -26,10 +26,10 @@
 ## Hyperedges (group relationships)
 - **AGENTS sections** — doc_agents, agents_ai_assistant_bootstrap, agents_mandatory_read_order, agents_quick_reference [EXTRACTED 0.75]
 - **PLAN sections** — doc_plan, plan_plan_orchestrated_roadmap, plan_1_current_state, plan_2_br_04_04b_as_structural_branch, plan_3_branch_catalog, plan_4_dependency_graph, plan_5_scheduling_post_br_04, plan_6_environment_convention, plan_7_source_specifications [EXTRACTED 0.75]
-- **README.Fr sections** — doc_readme_fr, readme_fr_entropic, readme_fr_pourquoi_ce_nom, readme_fr_orientations, readme_fr_engagement, readme_fr_ou_nous_en_sommes, readme_fr_ce_qui_est_deja_en_place, readme_fr_chat_ui, readme_fr_workflow_agentique [EXTRACTED 0.75]
-- **README sections** — doc_readme, readme_entropic, readme_why_this_name, readme_direction, readme_commitment, readme_current_state, readme_what_already_exists, readme_chat_ui, readme_agentic_workflow [EXTRACTED 0.75]
-- **TODO sections** — doc_todo, todo_todo_top_ai_ideas, todo_entropic_transition_pr_117, todo_check_list_de_mise_en_place, todo_priority_roadmap_2026_02_23_to_2026_03_08, todo_week_1_target_deadline_2026_03_01, todo_week_2_target_deadline_2026_03_08, todo_branch_closure_rules_for_this_roadmap, todo_legacy_backlog_unordered [EXTRACTED 0.75]
-- **TRANSITION sections** — doc_transition, transition_entropic_transition_plan, transition_canonical_targets, transition_pr_117_transition_todo, transition_transition_principles, transition_selected_order_and_alternatives, transition_branch_sequencing, transition_github_repository_rename, transition_dns_and_redirects [EXTRACTED 0.75]
+- **README.Fr sections** — doc_readme_fr, readme_fr_entropiq, readme_fr_pourquoi_ce_nom, readme_fr_orientations, readme_fr_engagement, readme_fr_ou_nous_en_sommes, readme_fr_ce_qui_est_deja_en_place, readme_fr_chat_ui, readme_fr_workflow_agentique [EXTRACTED 0.75]
+- **README sections** — doc_readme, readme_entropiq, readme_why_this_name, readme_direction, readme_commitment, readme_current_state, readme_what_already_exists, readme_chat_ui, readme_agentic_workflow [EXTRACTED 0.75]
+- **TODO sections** — doc_todo, todo_todo_top_ai_ideas, todo_entropiq_transition_pr_117, todo_check_list_de_mise_en_place, todo_priority_roadmap_2026_02_23_to_2026_03_08, todo_week_1_target_deadline_2026_03_01, todo_week_2_target_deadline_2026_03_08, todo_branch_closure_rules_for_this_roadmap, todo_legacy_backlog_unordered [EXTRACTED 0.75]
+- **TRANSITION sections** — doc_transition, transition_entropiq_transition_plan, transition_canonical_targets, transition_pr_117_transition_todo, transition_transition_principles, transition_selected_order_and_alternatives, transition_branch_sequencing, transition_github_repository_rename, transition_dns_and_redirects [EXTRACTED 0.75]
 - **README sections** — doc_api_templates_readme, api_templates_readme_docx_templates, api_templates_readme_runtime, api_templates_readme_markdown_rendering, api_templates_readme_template_authoring_constraints, api_templates_readme_template_families, api_templates_readme_usecase_onepage_docx, api_templates_readme_executive_synthesis_docx_target, api_templates_readme_toc_table_of_contents_authoring [EXTRACTED 0.75]
 - **README sections** — doc_e2e_tests_fixtures_readme, e2e_tests_fixtures_readme_top_ai_ideas, e2e_tests_fixtures_readme_fonctionnalites_principales, e2e_tests_fixtures_readme_architecture_globale_mermaid, e2e_tests_fixtures_readme_configuration, e2e_tests_fixtures_readme_environment_variables, e2e_tests_fixtures_readme_ui_configuration, e2e_tests_fixtures_readme_viteapibaseurl, e2e_tests_fixtures_readme_api_configuration [EXTRACTED 0.75]
 - **Spec Concat sections** — doc_e2e_tests_fixtures_spec_concat, e2e_tests_fixtures_spec_concat_modele_de_donnees_postgresql_17_drizzle, e2e_tests_fixtures_spec_concat_vue_d_ensemble_tenancy_objets_metier, e2e_tests_fixtures_spec_concat_prompts_etat_actuel_vs_cible, e2e_tests_fixtures_spec_concat_etat_actuel_implemente, e2e_tests_fixtures_spec_concat_cible_non_implementee, e2e_tests_fixtures_spec_concat_auth_sessions_webauthn_magic_link_codes_email, e2e_tests_fixtures_spec_concat_chat_streaming_tracing, e2e_tests_fixtures_spec_concat_rapport_d_analyse_rendu_json_en_streaming [EXTRACTED 0.75]
@@ -89,7 +89,7 @@
 - **SPEC EVOL CONFIG UX ALIGNMENT sections** — doc_spec_spec_evol_config_ux_alignment, spec_spec_evol_config_ux_alignment_spec_evol_config_ux_alignment_agent_workflow_template, spec_spec_evol_config_ux_alignment_1_problem, spec_spec_evol_config_ux_alignment_2_aligned_pattern, spec_spec_evol_config_ux_alignment_actions, spec_spec_evol_config_ux_alignment_config_source_types_mapped_to_existing_schema, spec_spec_evol_config_ux_alignment_behavior_rules, spec_spec_evol_config_ux_alignment_3_api_contract, spec_spec_evol_config_ux_alignment_4_delta_per_surface [EXTRACTED 0.75]
 - **SPEC EVOL CV TRANSPOSE PROFILES sections** — doc_spec_spec_evol_cv_transpose_profiles, spec_spec_evol_cv_transpose_profiles_spec_evol_cv_transpose_profile_management_br_21, spec_spec_evol_cv_transpose_profiles_1_objective, spec_spec_evol_cv_transpose_profiles_2_scope, spec_spec_evol_cv_transpose_profiles_in_scope, spec_spec_evol_cv_transpose_profiles_out_of_scope, spec_spec_evol_cv_transpose_profiles_3_profile_data_model, spec_spec_evol_cv_transpose_profiles_3_1_profiles_table_sql, spec_spec_evol_cv_transpose_profiles_3_2_profile_json_structure_data_column [EXTRACTED 0.75]
 - **SPEC EVOL DEV PLAYWRIGHT HARNESS sections** — doc_spec_spec_evol_dev_playwright_harness, spec_spec_evol_dev_playwright_harness_specevoldevplaywrightharness, spec_spec_evol_dev_playwright_harness_intent, spec_spec_evol_dev_playwright_harness_scope, spec_spec_evol_dev_playwright_harness_1_compose_consolidation, spec_spec_evol_dev_playwright_harness_2_openvscode_compatibility, spec_spec_evol_dev_playwright_harness_3_playwright_dev_lane, spec_spec_evol_dev_playwright_harness_4_dedicated_playwright_dev_config, spec_spec_evol_dev_playwright_harness_5_makefile_contract [EXTRACTED 0.75]
-- **SPEC EVOL ENTROPIC BR14 ORCHESTRATION sections** — doc_spec_spec_evol_entropic_br14_orchestration, spec_spec_evol_entropic_br14_orchestration_entropic_br_14_orchestration_spec, spec_spec_evol_entropic_br14_orchestration_selected_execution_order, spec_spec_evol_entropic_br14_orchestration_options_considered, spec_spec_evol_entropic_br14_orchestration_audit_finding_br_14e_required, spec_spec_evol_entropic_br14_orchestration_br_14c_llm_mesh_sdk, spec_spec_evol_entropic_br14_orchestration_br_14b_runtime_core_migration, spec_spec_evol_entropic_br14_orchestration_br_14a_chat_ui_sdk, spec_spec_evol_entropic_br14_orchestration_br_14d_transition_operations [EXTRACTED 0.75]
+- **SPEC EVOL ENTROPIQ BR14 ORCHESTRATION sections** — doc_spec_spec_evol_entropiq_br14_orchestration, spec_spec_evol_entropiq_br14_orchestration_entropiq_br_14_orchestration_spec, spec_spec_evol_entropiq_br14_orchestration_selected_execution_order, spec_spec_evol_entropiq_br14_orchestration_options_considered, spec_spec_evol_entropiq_br14_orchestration_audit_finding_br_14e_required, spec_spec_evol_entropiq_br14_orchestration_br_14c_llm_mesh_sdk, spec_spec_evol_entropiq_br14_orchestration_br_14b_runtime_core_migration, spec_spec_evol_entropiq_br14_orchestration_br_14a_chat_ui_sdk, spec_spec_evol_entropiq_br14_orchestration_br_14d_transition_operations [EXTRACTED 0.75]
 - **SPEC EVOL FREEFORM DOCX sections** — doc_spec_spec_evol_freeform_docx, spec_spec_evol_freeform_docx_specevol_freeform_docx_generation_documentgenerate_mode_b_2, spec_spec_evol_freeform_docx_1_context, spec_spec_evol_freeform_docx_2_tool_contract, spec_spec_evol_freeform_docx_2_1_template_mode_unchanged, spec_spec_evol_freeform_docx_2_2_upskill_mode, spec_spec_evol_freeform_docx_2_3_freeform_mode, spec_spec_evol_freeform_docx_2_4_rules, spec_spec_evol_freeform_docx_3_freeform_helper_api [EXTRACTED 0.75]
 - **SPEC EVOL MODEL AUTH PROVIDERS sections** — doc_spec_spec_evol_model_auth_providers, spec_spec_evol_model_auth_providers_spec_evol_model_providers_and_sso_federation, spec_spec_evol_model_auth_providers_1_objective, spec_spec_evol_model_auth_providers_2_scope, spec_spec_evol_model_auth_providers_3_existing_baseline, spec_spec_evol_model_auth_providers_4_target_capabilities, spec_spec_evol_model_auth_providers_4_1_provider_runtime, spec_spec_evol_model_auth_providers_4_2_model_catalog, spec_spec_evol_model_auth_providers_4_3_credential_policy [EXTRACTED 0.75]
 - **SPEC EVOL MODEL PROVIDERS RUNTIME sections** — doc_spec_spec_evol_model_providers_runtime, spec_spec_evol_model_providers_runtime_spec_evol_model_providers_runtime_openai_gemini, spec_spec_evol_model_providers_runtime_1_objective, spec_spec_evol_model_providers_runtime_2_problem_statement, spec_spec_evol_model_providers_runtime_3_decision_strict_cutover, spec_spec_evol_model_providers_runtime_4_target_architecture, spec_spec_evol_model_providers_runtime_5_contract_requirements, spec_spec_evol_model_providers_runtime_6_migration_constraints, spec_spec_evol_model_providers_runtime_7_acceptance_criteria [EXTRACTED 0.75]
@@ -196,13 +196,13 @@ Nodes (26): bootstrap(), collapseOverlayToBubble(), handleHandoffState(), handle
 Cohesion: 0.14
 Nodes (26): completeCodexDeviceEnrollment(), exchangeAuthorizationCode(), normalizeIntervalSeconds(), startCodexDeviceEnrollment(), assertExpectedAccountLabel(), completeCodexEnrollment(), decodeJwtPayload(), deleteCodexSecrets() (+18 more)
 
-### Community 20 - "Entropic"
+### Community 20 - "Entropiq"
 Cohesion: 0.06
-Nodes (31): API, @entropic/*, @entropic/chat, @entropic/flow, @entropic/llm-mesh, @entropic/ui, IDE, LLM (+23 more)
+Nodes (31): API, @entropiq/*, @entropiq/chat, @entropiq/flow, @entropiq/llm-mesh, @entropiq/ui, IDE, LLM (+23 more)
 
-### Community 21 - "Readme - Entropic"
+### Community 21 - "Readme - Entropiq"
 Cohesion: 0.06
-Nodes (31): API, @entropic/*, @entropic/chat, @entropic/flow, @entropic/llm-mesh, @entropic/ui, IDE, LLM (+23 more)
+Nodes (31): API, @entropiq/*, @entropiq/chat, @entropiq/flow, @entropiq/llm-mesh, @entropiq/ui, IDE, LLM (+23 more)
 
 ### Community 22 - "Readme - Top Ideas"
 Cohesion: 0.06
@@ -376,9 +376,9 @@ Nodes (25): api/**, API_PORT=8705, ENV, ENV=dev, ENV=e2e-feat-workspace-template
 Cohesion: 0.08
 Nodes (25): agent test UI playwright, .cursor/rules/testing.mdc, .cursor/rules/workflow.mdc, feat/release-chrome-vscode-ci-publish, feat/release-ui-npm-and-pretest, publish UI/chrome/vscode, REL-Q1, REL-Q2 (+17 more)
 
-### Community 65 - "Entropic Transition Plan"
+### Community 65 - "Entropiq Transition Plan"
 Cohesion: 0.08
-Nodes (24): @entropic/*, @entropic/chat, @entropic/llm-mesh, entropic.sent-tech.ca, feat/llm-mesh-sdk, rhanka/entropic, rhanka/top-ai-ideas-fullstack, top-ai (+16 more)
+Nodes (24): @entropiq/*, @entropiq/chat, @entropiq/llm-mesh, entropiq.sent-tech.ca, feat/llm-mesh-sdk, rhanka/entropiq, rhanka/top-ai-ideas-fullstack, top-ai (+16 more)
 
 ### Community 66 - "Feature Plugin Multi"
 Cohesion: 0.08
@@ -452,13 +452,13 @@ Nodes (23): api-client.ts, buffer, ChatPanel, ChatWidget, context-provider.ts, E
 Cohesion: 0.09
 Nodes (23): docker-compose.dev-vscode.yml, docker-compose.dev.yml, down-dev-vscode, ENV=dev, make dev, Makefile, openvscode-dev, playwright (+15 more)
 
-### Community 84 - "Entropic Orchestration Spec"
+### Community 84 - "Entropiq Orchestration Spec"
 Cohesion: 0.09
-Nodes (23): api/package.json, chore/entropic-codebase-finalization, chore/entropic-transition-ops, @entropic/chat, @entropic/llm-mesh, feat/chat-ui-sdk, feat/llm-mesh-sdk, refacto/llm-runtime-core (+15 more)
+Nodes (23): api/package.json, chore/entropiq-codebase-finalization, chore/entropiq-transition-ops, @entropiq/chat, @entropiq/llm-mesh, feat/chat-ui-sdk, feat/llm-mesh-sdk, refacto/llm-runtime-core (+15 more)
 
 ### Community 85 - "Todo Top Ideas"
 Cohesion: 0.09
-Nodes (22): /api, entropic.sent-tech.ca, PLAN.md, README.fr.md, README.md, rhanka/entropic, rhanka/top-ai-ideas-fullstack, spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md (+14 more)
+Nodes (22): /api, entropiq.sent-tech.ca, PLAN.md, README.fr.md, README.md, rhanka/entropiq, rhanka/top-ai-ideas-fullstack, spec/SPEC_EVOL_ENTROPIQ_BR14_ORCHESTRATION.md (+14 more)
 
 ### Community 86 - "Feature Spectral Site"
 Cohesion: 0.09
@@ -602,15 +602,15 @@ Nodes (9): appendLiveProjectionEvent(), asFiniteSequence(), buildSegmentId(), ge
 
 ### Community 121 - "Branch Plan Stub - 14c Branch Feat"
 Cohesion: 0.14
-Nodes (14): API, BRANCH, Branch, BRANCH.md, Branch Plan Stub, @entropic/llm-mesh, feat/llm-mesh-sdk, LLM (+6 more)
+Nodes (14): API, BRANCH, Branch, BRANCH.md, Branch Plan Stub, @entropiq/llm-mesh, feat/llm-mesh-sdk, LLM (+6 more)
 
 ### Community 122 - "Branch Plan Stub - 14d Branch Chore"
 Cohesion: 0.14
-Nodes (14): API, BRANCH, BRANCH.md, Branch Plan Stub, chore/entropic-transition-ops, CORS, DNS, entropic.sent-tech.ca (+6 more)
+Nodes (14): API, BRANCH, BRANCH.md, Branch Plan Stub, chore/entropiq-transition-ops, CORS, DNS, entropiq.sent-tech.ca (+6 more)
 
 ### Community 123 - "Branch Plan Stub - 14e Branch Chore"
 Cohesion: 0.14
-Nodes (14): BRANCH.md, chore/entropic-codebase-finalization, LLM, plan/BRANCH_TEMPLATE.md, spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md, top-ai, top_ai, TOP_AI (+6 more)
+Nodes (14): BRANCH.md, chore/entropiq-codebase-finalization, LLM, plan/BRANCH_TEMPLATE.md, spec/SPEC_EVOL_ENTROPIQ_BR14_ORCHESTRATION.md, top-ai, top_ai, TOP_AI (+6 more)
 
 ### Community 124 - "Settings Service"
 Cohesion: 0.32
@@ -634,11 +634,11 @@ Nodes (10): buildAndPackage(), buildHostBundle(), buildWebviewBundle(), createCo
 
 ### Community 129 - "Superseded Chat Modularization"
 Cohesion: 0.18
-Nodes (11): Chat Modularization This, Current, feat/chat-ui-sdk, LLM, Lot, Ordering, Replacement, spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md (+3 more)
+Nodes (11): Chat Modularization This, Current, feat/chat-ui-sdk, LLM, Lot, Ordering, Replacement, spec/SPEC_EVOL_ENTROPIQ_BR14_ORCHESTRATION.md (+3 more)
 
 ### Community 130 - "Superseded LLM Runtime"
 Cohesion: 0.18
-Nodes (11): Current, LLM, LLM Runtime Refactor This, Ordering, refacto/llm-runtime-core, Replacement, SDK, spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md (+3 more)
+Nodes (11): Current, LLM, LLM Runtime Refactor This, Ordering, refacto/llm-runtime-core, Replacement, SDK, spec/SPEC_EVOL_ENTROPIQ_BR14_ORCHESTRATION.md (+3 more)
 
 ### Community 131 - "Job Task Metadata"
 Cohesion: 0.2

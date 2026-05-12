@@ -16,9 +16,9 @@ BR-16c owns collaboration and lifecycle features that are intentionally deferred
 
 ## Feedback Loop
 
-- [ ] `attention` BR16c-Q1 — Sharing assistance scope: should Entropic only detect/report missing permissions, or also guide/share Drive objects through Google APIs?
+- [ ] `attention` BR16c-Q1 — Sharing assistance scope: should Sentropic only detect/report missing permissions, or also guide/share Drive objects through Google APIs?
 - [ ] `attention` BR16c-Q2 — Change detection strategy: polling, Google Workspace Events/webhooks, or user-triggered stale checks.
-- [ ] `attention` BR16c-Q3 — Regeneration policy: when a Drive revision changes, should Entropic auto-enqueue `document_summary`, ask the user first, or mark stale only?
+- [ ] `attention` BR16c-Q3 — Regeneration policy: when a Drive revision changes, should Sentropic auto-enqueue `document_summary`, ask the user first, or mark stale only?
 - [ ] `attention` BR16c-Q4 — Direct Google Docs editing tool scope: patch text/sections only, structured document edits, or full doc generation into Google Docs.
 - [ ] `attention` BR16c-Q5 — Google Slides/PPT scope: generate Slides directly, edit existing Google Slides, or export PPTX through a `pptxgenjs`-style renderer.
 
