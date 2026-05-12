@@ -37,9 +37,9 @@
 
 ## Lot 0 - Frame the benchmark
 
-- [ ] Define evaluation dimensions for workflow graph, control loop, tool mediation, memory, approvals, observability, streaming, CLI UX, web UX, plugin distribution, and durability.
+- [x] Define evaluation dimensions for workflow graph, control loop, tool mediation, memory, approvals, observability, streaming, CLI UX, web UX, plugin distribution, and durability.
 - [ ] Define current architecture baseline: `@sentropic/llm-mesh`, app chat runtime, workflow runtime, default agents, existing tools, and planned BR19 skill catalog.
-- [ ] Define how `spec_vol` and `spec_evol` will be used to record intention and scope evolution.
+- [x] Define how `spec_vol` and `spec_evol` will be used to record intention and scope evolution.
 
 ## Lot 1 - Framework and orchestration watch
 
