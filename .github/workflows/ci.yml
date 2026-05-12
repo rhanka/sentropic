@@ -77,9 +77,9 @@ jobs:
     needs: [changes]
     steps:
       - uses: actions/checkout@v4
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
       - name: Setup Docker
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v3
       - name: Typecheck UI
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
@@ -229,16 +229,16 @@ jobs:
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         run: make build-ext-vscode
       - name: Build UI image
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make build-ui-image
       - name: Save UI image as artifact
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-ui
       - name: Test UI
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ui
       - name: Upload UI image artifact
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ui-image
@@ -290,9 +290,9 @@ jobs:
         with:
           name: api-image
           path: .
-      - name: Load API image from artifact
-        if: steps.check-api-image.outcome == 'failure'
-        run: make load-api
+      - name: Load UI image from artifact
+        if: steps.check-ui-image.outcome == 'failure'
+        run: make load-ui
       - name: Pull if UI image is up to date
         id: check-ui-image
         run: make pull-ui-image
