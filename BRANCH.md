@@ -38,31 +38,31 @@
 ## Lot 0 - Frame the benchmark
 
 - [x] Define evaluation dimensions for workflow graph, control loop, tool mediation, memory, approvals, observability, streaming, CLI UX, web UX, plugin distribution, and durability.
-- [ ] Define current architecture baseline: `@sentropic/llm-mesh`, app chat runtime, workflow runtime, default agents, existing tools, and planned BR19 skill catalog.
+- [x] Define current architecture baseline: `@sentropic/llm-mesh`, app chat runtime, workflow runtime, default agents, existing tools, and planned BR19 skill catalog.
 - [x] Define how `spec_vol` and `spec_evol` will be used to record intention and scope evolution.
 
 ## Lot 1 - Framework and orchestration watch
 
-- [ ] Compare LangGraph for graph/stateful agent orchestration.
-- [ ] Compare Agno for agent/team abstractions and tool orchestration.
-- [ ] Compare Temporal for durable workflow execution and human-in-the-loop control.
-- [ ] Compare Vercel AI SDK / AI Gateway for model access, streaming, gateway, telemetry, and app integration.
-- [ ] Add other candidates only if they materially affect durable app+CLI architecture.
+- [x] Compare LangGraph for graph/stateful agent orchestration.
+- [x] Compare Agno for agent/team abstractions and tool orchestration.
+- [x] Compare Temporal for durable workflow execution and human-in-the-loop control.
+- [x] Compare Vercel AI SDK / AI Gateway for model access, streaming, gateway, telemetry, and app integration.
+- [x] Add other candidates only if they materially affect durable app+CLI architecture.
 
 ## Lot 2 - CLI loop/control benchmark
 
-- [ ] Analyze Claude Code control-loop patterns: planning, tool calls, patch discipline, approvals, memory, and checkpoints.
-- [ ] Analyze Codex CLI control-loop patterns: workspace discipline, tools, sandboxing, approvals, and code review flow.
-- [ ] Analyze Gemini CLI control-loop patterns: tool mediation, repo operations, and model/provider integration.
-- [ ] Analyze Clawcode or equivalent Claude-compatible CLI patterns if useful.
-- [ ] Extract reusable primitives for an Entropiq CLI.
+- [x] Analyze Claude Code control-loop patterns: planning, tool calls, patch discipline, approvals, memory, and checkpoints.
+- [x] Analyze Codex CLI control-loop patterns: workspace discipline, tools, sandboxing, approvals, and code review flow.
+- [x] Analyze Gemini CLI control-loop patterns: tool mediation, repo operations, and model/provider integration.
+- [x] Analyze Clawcode or equivalent Claude-compatible CLI patterns if useful.
+- [x] Extract reusable primitives for an Entropiq CLI.
 
 ## Lot 3 - Unified app and CLI architecture
 
-- [ ] Define a shared agent/workflow/skill schema that can drive both web app interactions and CLI sessions.
-- [ ] Define how UI chat, API jobs, and CLI loops share skill discovery and execution policies.
-- [ ] Define where Claude.ai/ChatGPT-style hosted chat constraints differ from controllable CLI loops.
-- [ ] Define policy boundaries for user approvals, filesystem/network access, secret handling, and generated artifacts.
+- [x] Define a shared agent/workflow/skill schema that can drive both web app interactions and CLI sessions.
+- [x] Define how UI chat, API jobs, and CLI loops share skill discovery and execution policies.
+- [x] Define where Claude.ai/ChatGPT-style hosted chat constraints differ from controllable CLI loops.
+- [x] Define policy boundaries for user approvals, filesystem/network access, secret handling, and generated artifacts.
 
 ## Lot 4 - Publication and ecosystem strategy
 
@@ -72,7 +72,7 @@
 
 ## Lot 5 - Decision output
 
-- [ ] Produce a recommendation matrix with adopt, adapt, watch, and reject categories.
-- [ ] Produce branch implications for BR14b, BR14a, BR19, BR15, and BR10.
+- [x] Produce a recommendation matrix with adopt, adapt, watch, and reject categories.
+- [x] Produce branch implications for BR14b, BR14a, BR19, BR15, and BR10.
 - [ ] Produce a short migration-safe roadmap with no dual-runtime trap.
 - [ ] Remove `BRANCH.md` before merge unless project explicitly keeps it.
