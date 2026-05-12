@@ -1,4 +1,4 @@
-# SPEC_VOL - Agentic Framework and CLI Control Benchmark
+# SPEC_STUDY - Agentic Framework and CLI Control Benchmark
 
 ## Intention
 
@@ -39,7 +39,7 @@ Entropiq should separate four layers:
 
 A CLI should not be a separate architecture. It should be a runtime shell around the same agent loop, workflow, skill catalog, and model mesh used by the web app.
 
-## spec_evol rules
+## study_evol rules
 
 - Add candidates only when they teach a durable primitive missing from the current benchmark.
 - Do not collapse Vercel AI SDK into the same category as Temporal; compare it as model/streaming/gateway infrastructure.
