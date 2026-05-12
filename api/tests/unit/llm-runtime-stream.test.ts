@@ -41,12 +41,6 @@ vi.mock('@anthropic-ai/sdk', () => ({
   })),
 }));
 
-vi.mock('@mistralai/mistralai', () => ({
-  Mistral: vi.fn().mockImplementation(() => ({
-    chat: { complete: vi.fn(), stream: vi.fn() },
-  })),
-}));
-
 vi.mock('cohere-ai', () => ({
   CohereClient: vi.fn().mockImplementation(() => ({
     v2: { chat: vi.fn(), chatStream: vi.fn() },

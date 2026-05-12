@@ -1,20 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-// Mock the Mistral SDK before importing the provider
-const mockMistralComplete = vi.fn();
-const mockMistralStream = vi.fn();
-
-vi.mock('@mistralai/mistralai', () => {
-  class MockMistral {
-    chat = {
-      complete: mockMistralComplete,
-      stream: mockMistralStream,
-    };
-  }
-  return {
-    Mistral: MockMistral,
-  };
-});
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock env to control API key presence
 vi.mock('../../src/config/env', () => ({
@@ -25,12 +9,45 @@ vi.mock('../../src/config/env', () => ({
 
 import { MistralProviderRuntime } from '../../src/services/providers/mistral-provider';
 
+const originalFetch = globalThis.fetch;
+const mockFetch = vi.fn();
+
+const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
+  new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+    ...init,
+  });
+
+const sseResponse = (events: unknown[]) => {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const event of events) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      }
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: { 'Content-Type': 'text/event-stream' },
+  });
+};
+
 describe('MistralProviderRuntime', () => {
   let runtime: MistralProviderRuntime;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    globalThis.fetch = mockFetch as unknown as typeof fetch;
     runtime = new MistralProviderRuntime();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
   });
 
   describe('provider descriptor', () => {
@@ -128,10 +145,10 @@ describe('MistralProviderRuntime', () => {
       ).rejects.toThrow('unsupported mode');
     });
 
-    it('should call Mistral chat.complete', async () => {
-      mockMistralComplete.mockResolvedValue({
+    it('should call the Mistral chat completions endpoint', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({
         choices: [{ message: { content: 'Hello' } }],
-      });
+      }));
 
       const result = await runtime.generate({
         mode: 'chat-completions',
@@ -141,7 +158,15 @@ describe('MistralProviderRuntime', () => {
         },
       });
 
-      expect(mockMistralComplete).toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.mistral.ai/v1/chat/completions',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-mistral-key',
+          }),
+        }),
+      );
       expect(result).toEqual({ choices: [{ message: { content: 'Hello' } }] });
     });
   });
@@ -160,11 +185,7 @@ describe('MistralProviderRuntime', () => {
         { data: { choices: [{ delta: { content: ' world' }, finish_reason: 'stop' }] } },
       ];
 
-      mockMistralStream.mockResolvedValue({
-        [Symbol.asyncIterator]: async function* () {
-          for (const e of events) yield e;
-        },
-      });
+      mockFetch.mockResolvedValue(sseResponse(events));
 
       const iterable = await runtime.streamGenerate({
         mode: 'chat-completions',
