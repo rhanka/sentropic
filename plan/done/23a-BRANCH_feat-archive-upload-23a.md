@@ -7,7 +7,7 @@ Allow users to upload `.zip`, `.tar.gz`, and `.tgz` files as context documents. 
 - Scope limited to document upload/download behavior for local archive files.
 - No migration in this branch.
 - Make-only workflow, no direct Docker commands.
-- Root workspace `/home/antoinefa/src/entropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
 - Branch development happens only in isolated worktree `tmp/feat-archive-upload-23a`.
 - Automated tests run on dedicated environments, never root `dev`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
@@ -64,7 +64,7 @@ Allow users to upload `.zip`, `.tar.gz`, and `.tgz` files as context documents. 
 - Execution flow:
   - Develop and run tests in `tmp/feat-archive-upload-23a`.
   - Push branch before UAT.
-  - Run user UAT from root workspace (`/home/antoinefa/src/entropic`, `ENV=dev`) only if required.
+  - Run user UAT from root workspace (`/home/antoinefa/src/sentropic`, `ENV=dev`) only if required.
   - Switch back to `tmp/feat-archive-upload-23a` after UAT.
 
 ## Plan / Todo (lot-based)

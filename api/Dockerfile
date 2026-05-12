@@ -51,11 +51,13 @@ WORKDIR /workspace
 COPY package.json package-lock.json* ./
 COPY api/package.json ./api/package.json
 COPY ui/package.json ./ui/package.json
+COPY packages/llm-mesh/package.json ./packages/llm-mesh/package.json
 RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-root; \
     else npm install --workspaces --include-workspace-root; fi
 # Security: Audit production dependencies for HIGH/CRITICAL vulnerabilities
 RUN npm audit --audit-level=high --omit=dev --workspaces --include-workspace-root
 COPY . .
+RUN npm --workspace @sentropic/llm-mesh run build
 
 FROM base AS development
 WORKDIR /workspace/api

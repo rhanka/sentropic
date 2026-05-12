@@ -7,6 +7,10 @@ import type {
   ProviderDescriptor,
   ProviderRuntime,
 } from '../provider-runtime';
+import {
+  buildRuntimeProviderDescriptor,
+  listRuntimeModelsByProvider,
+} from '../provider-runtime';
 
 export type OpenAIGenerateRequest = {
   mode: 'chat-completions';
@@ -75,55 +79,18 @@ const buildCodexFetch =
     );
   };
 
-const OPENAI_MODELS: ModelCatalogEntry[] = [
-  {
-    providerId: 'openai',
-    modelId: 'gpt-5.4',
-    label: 'GPT-5.4',
-    reasoningTier: 'advanced',
-    supportsTools: true,
-    supportsStreaming: true,
-    defaultContexts: ['chat', 'structured', 'summary'],
-  },
-  {
-    providerId: 'openai',
-    modelId: 'gpt-5.4-nano',
-    label: 'GPT-5.4 Nano',
-    reasoningTier: 'standard',
-    supportsTools: true,
-    supportsStreaming: true,
-    defaultContexts: ['chat'],
-  },
-  {
-    providerId: 'openai',
-    modelId: 'gpt-4.1-nano',
-    label: 'GPT-4.1 Nano',
-    reasoningTier: 'none',
-    supportsTools: true,
-    supportsStreaming: true,
-    defaultContexts: ['doc'],
-  },
-];
-
 export class OpenAIProviderRuntime implements ProviderRuntime {
   readonly provider: ProviderDescriptor;
 
   constructor() {
-    this.provider = {
+    this.provider = buildRuntimeProviderDescriptor({
       providerId: 'openai',
-      label: 'OpenAI',
-      status: this.validateCredential().ok ? 'ready' : 'planned',
-      capabilities: {
-        supportsTools: true,
-        supportsStreaming: true,
-        supportsStructuredOutput: true,
-        supportsReasoning: true,
-      },
-    };
+      ready: this.validateCredential().ok,
+    });
   }
 
   listModels(): ModelCatalogEntry[] {
-    return OPENAI_MODELS;
+    return listRuntimeModelsByProvider('openai');
   }
 
   validateCredential(credential?: string): CredentialValidationResult {

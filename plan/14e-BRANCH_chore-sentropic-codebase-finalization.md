@@ -1,12 +1,12 @@
-# Branch Plan Stub: BR-14e Entropic Codebase Finalization
+# Branch Plan Stub: BR-14e Sentropic Codebase Finalization
 
 Current coordination source:
 
-- `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`
+- `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`
 
 Branch:
 
-- BR-14e `chore/entropic-codebase-finalization`
+- BR-14e `chore/sentropic-codebase-finalization`
 
 Ordering rule:
 

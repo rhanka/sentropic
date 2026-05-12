@@ -1,5 +1,5 @@
 {
-  "name": "entropic-workspace",
+  "name": "sentropic-workspace",
   "private": true,
   "workspaces": [
     "api",

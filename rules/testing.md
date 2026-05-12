@@ -45,7 +45,7 @@ On TARGET=production (requires `make build-api build-ui-image` first):
 - User sign-off required before merge
 
 ## Environment Isolation Rules (MANDATORY)
-- User UAT/dev on root workspace only: `/home/antoinefa/src/entropic` with `ENV=dev`
+- User UAT/dev on root workspace only: `/home/antoinefa/src/sentropic` with `ENV=dev`
 - Branch changes in isolated worktrees: `tmp/feat-<slug>`
 - Never run test campaigns on root `dev`:
   - API/UI tests: `ENV=test` or branch-specific env

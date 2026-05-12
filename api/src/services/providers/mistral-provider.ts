@@ -7,27 +7,10 @@ import type {
   ProviderDescriptor,
   ProviderRuntime,
 } from '../provider-runtime';
-
-const MISTRAL_MODELS: ModelCatalogEntry[] = [
-  {
-    providerId: 'mistral',
-    modelId: 'mistral-small-2603',
-    label: 'Mistral Small 4',
-    reasoningTier: 'standard',
-    supportsTools: true,
-    supportsStreaming: true,
-    defaultContexts: ['chat'],
-  },
-  {
-    providerId: 'mistral',
-    modelId: 'magistral-medium-2509',
-    label: 'Magistral Medium',
-    reasoningTier: 'advanced',
-    supportsTools: true,
-    supportsStreaming: true,
-    defaultContexts: ['chat', 'structured', 'summary'],
-  },
-];
+import {
+  buildRuntimeProviderDescriptor,
+  listRuntimeModelsByProvider,
+} from '../provider-runtime';
 
 export type MistralGenerateRequest = {
   mode: 'chat-completions';
@@ -63,21 +46,14 @@ export class MistralProviderRuntime implements ProviderRuntime {
   readonly provider: ProviderDescriptor;
 
   constructor() {
-    this.provider = {
+    this.provider = buildRuntimeProviderDescriptor({
       providerId: 'mistral',
-      label: 'Mistral AI',
-      status: this.validateCredential().ok ? 'ready' : 'planned',
-      capabilities: {
-        supportsTools: true,
-        supportsStreaming: true,
-        supportsStructuredOutput: true,
-        supportsReasoning: true,
-      },
-    };
+      ready: this.validateCredential().ok,
+    });
   }
 
   listModels(): ModelCatalogEntry[] {
-    return MISTRAL_MODELS;
+    return listRuntimeModelsByProvider('mistral');
   }
 
   validateCredential(credential?: string): CredentialValidationResult {
