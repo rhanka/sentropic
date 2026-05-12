@@ -7,28 +7,10 @@ import type {
   ProviderDescriptor,
   ProviderRuntime,
 } from '../provider-runtime';
-
-const COHERE_MODELS: ModelCatalogEntry[] = [
-  {
-    providerId: 'cohere',
-    modelId: 'command-a-03-2025',
-    label: 'Command A',
-    reasoningTier: 'standard',
-    supportsTools: true,
-    supportsStreaming: true,
-    defaultContexts: ['chat'],
-  },
-  {
-    providerId: 'cohere',
-    modelId: 'command-a-reasoning-08-2025',
-    label: 'Command A R.',
-    reasoningTier: 'advanced',
-    supportsTools: true,
-    supportsStreaming: true,
-    defaultContexts: ['chat', 'structured', 'summary'],
-  },
-  // embed-v4.0 and rerank-v3.5 catalogued only — deferred to BR-17 (RAG), not exposed in runtime
-];
+import {
+  buildRuntimeProviderDescriptor,
+  listRuntimeModelsByProvider,
+} from '../provider-runtime';
 
 export type CohereGenerateRequest = {
   mode: 'chat';
@@ -64,21 +46,14 @@ export class CohereProviderRuntime implements ProviderRuntime {
   readonly provider: ProviderDescriptor;
 
   constructor() {
-    this.provider = {
+    this.provider = buildRuntimeProviderDescriptor({
       providerId: 'cohere',
-      label: 'Cohere',
-      status: this.validateCredential().ok ? 'ready' : 'planned',
-      capabilities: {
-        supportsTools: true,
-        supportsStreaming: true,
-        supportsStructuredOutput: true,
-        supportsReasoning: false,
-      },
-    };
+      ready: this.validateCredential().ok,
+    });
   }
 
   listModels(): ModelCatalogEntry[] {
-    return COHERE_MODELS;
+    return listRuntimeModelsByProvider('cohere');
   }
 
   validateCredential(credential?: string): CredentialValidationResult {

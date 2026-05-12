@@ -6,27 +6,10 @@ import type {
   ProviderDescriptor,
   ProviderRuntime,
 } from '../provider-runtime';
-
-const GEMINI_MODELS: ModelCatalogEntry[] = [
-  {
-    providerId: 'gemini',
-    modelId: 'gemini-3.1-pro-preview-customtools',
-    label: 'Gemini 3.1 Pro',
-    reasoningTier: 'advanced',
-    supportsTools: true,
-    supportsStreaming: true,
-    defaultContexts: ['chat', 'structured', 'summary'],
-  },
-  {
-    providerId: 'gemini',
-    modelId: 'gemini-3.1-flash-lite-preview',
-    label: 'Gemini 3.1 Flash Lite',
-    reasoningTier: 'standard',
-    supportsTools: true,
-    supportsStreaming: true,
-    defaultContexts: ['chat'],
-  },
-];
+import {
+  buildRuntimeProviderDescriptor,
+  listRuntimeModelsByProvider,
+} from '../provider-runtime';
 
 type GeminiRequestOptions = {
   model: string;
@@ -51,21 +34,14 @@ export class GeminiProviderRuntime implements ProviderRuntime {
   readonly provider: ProviderDescriptor;
 
   constructor() {
-    this.provider = {
+    this.provider = buildRuntimeProviderDescriptor({
       providerId: 'gemini',
-      label: 'Google Gemini',
-      status: this.validateCredential().ok ? 'ready' : 'planned',
-      capabilities: {
-        supportsTools: true,
-        supportsStreaming: true,
-        supportsStructuredOutput: true,
-        supportsReasoning: true,
-      },
-    };
+      ready: this.validateCredential().ok,
+    });
   }
 
   listModels(): ModelCatalogEntry[] {
-    return GEMINI_MODELS;
+    return listRuntimeModelsByProvider('gemini');
   }
 
   validateCredential(credential?: string): CredentialValidationResult {

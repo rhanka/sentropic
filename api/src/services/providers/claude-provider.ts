@@ -8,27 +8,10 @@ import type {
   ProviderDescriptor,
   ProviderRuntime,
 } from '../provider-runtime';
-
-const CLAUDE_MODELS: ModelCatalogEntry[] = [
-  {
-    providerId: 'anthropic',
-    modelId: 'claude-sonnet-4-6',
-    label: 'Sonnet 4.6',
-    reasoningTier: 'standard',
-    supportsTools: true,
-    supportsStreaming: true,
-    defaultContexts: ['chat', 'structured'],
-  },
-  {
-    providerId: 'anthropic',
-    modelId: 'claude-opus-4-6',
-    label: 'Opus 4.6',
-    reasoningTier: 'advanced',
-    supportsTools: true,
-    supportsStreaming: true,
-    defaultContexts: ['chat', 'structured', 'summary'],
-  },
-];
+import {
+  buildRuntimeProviderDescriptor,
+  listRuntimeModelsByProvider,
+} from '../provider-runtime';
 
 export type ClaudeGenerateRequest = {
   mode: 'messages';
@@ -48,21 +31,14 @@ export class ClaudeProviderRuntime implements ProviderRuntime {
   readonly provider: ProviderDescriptor;
 
   constructor() {
-    this.provider = {
+    this.provider = buildRuntimeProviderDescriptor({
       providerId: 'anthropic',
-      label: 'Anthropic Claude',
-      status: this.validateCredential().ok ? 'ready' : 'planned',
-      capabilities: {
-        supportsTools: true,
-        supportsStreaming: true,
-        supportsStructuredOutput: true,
-        supportsReasoning: true,
-      },
-    };
+      ready: this.validateCredential().ok,
+    });
   }
 
   listModels(): ModelCatalogEntry[] {
-    return CLAUDE_MODELS;
+    return listRuntimeModelsByProvider('anthropic');
   }
 
   validateCredential(credential?: string): CredentialValidationResult {

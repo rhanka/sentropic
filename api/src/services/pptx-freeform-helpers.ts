@@ -2,7 +2,7 @@
  * Freeform PPTX generation helpers.
  *
  * Provides a compact API for LLM-generated code to build PowerPoint files
- * with PptGenJS inside the Entropic sandbox.
+ * with PptGenJS inside the Sentropic sandbox.
  */
 
 import pptxgenjs from 'pptxgenjs';
@@ -164,8 +164,8 @@ function textOptions(opts: SlideTextOpts = {}): AddTextOptions {
 export function pptx(opts: PresentationOpts = {}): PptxPresentation {
   const presentation = new PptxGenJS();
   presentation.layout = opts.layout ?? 'LAYOUT_WIDE';
-  presentation.author = safeText(opts.author, 'Entropic');
-  presentation.company = safeText(opts.company, 'Entropic');
+  presentation.author = safeText(opts.author, 'Sentropic');
+  presentation.company = safeText(opts.company, 'Sentropic');
   presentation.subject = safeText(opts.subject, 'Generated presentation');
   presentation.title = safeText(opts.title, 'Generated presentation');
   presentation.theme = {

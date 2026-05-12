@@ -8,6 +8,7 @@ ui/.svelte-kit/
 ui/dist/
 ui/chrome-ext/dist/
 api/dist/
+packages/*/dist/
 api/.tsbuildinfo
 api/templates/.~lock*
 *.tar

@@ -1,7 +1,7 @@
 # Feature: BR-16a Google Drive SSO and In-Situ Indexing
 
 ## Objective
-Implement the Google Drive first slice of document connectors: user-scoped Google OAuth, Drive file search/selection, in-situ document summarization/indexing through the existing `document_summary` pipeline, and chat retrieval through stored references. Documents must stay in Google Drive; Entropic stores connector metadata, source references, sync status, extracted metadata, summaries, and detailed summaries.
+Implement the Google Drive first slice of document connectors: user-scoped Google OAuth, Drive file search/selection, in-situ document summarization/indexing through the existing `document_summary` pipeline, and chat retrieval through stored references. Documents must stay in Google Drive; Sentropic stores connector metadata, source references, sync status, extracted metadata, summaries, and detailed summaries.
 
 ## Scope / Guardrails
 - Scope limited to Google Drive OAuth, Google Drive connector metadata, Drive Picker search/selection, Drive export/download adapters, source-aware document summarization, manual resync, user-scoped settings connector management, and document import integration across chat plus existing `DocumentsBlock` surfaces.
@@ -9,12 +9,12 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - Google Drive sharing assistance, change notifications/polling, shared Drive collaboration refinements, and direct Google Docs/Slides editing tools are deferred to BR-16c.
 - One migration max in `api/drizzle/*.sql` if the schema needs connector metadata.
 - Make-only workflow, no direct Docker commands.
-- Root workspace `/home/antoinefa/src/entropic` is reserved for user work and must remain stable.
+- Root workspace `/home/antoinefa/src/sentropic` is reserved for user work and must remain stable.
 - Branch development must happen in isolated worktree `tmp/feat-gdrive-sso-indexing-16a`.
 - Automated test campaigns must run on dedicated environments (`ENV=test-feat-gdrive-sso-indexing-16a` / `ENV=e2e-feat-gdrive-sso-indexing-16a`), never on root `dev`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
-- Canonical roadmap branch is `feat/gdrive-sso-indexing`; this active branch is `feat/gdrive-sso-indexing-16a` because the canonical local ref is currently attached to a stale pre-Entropic worktree and must not be moved without explicit cleanup.
+- Canonical roadmap branch is `feat/gdrive-sso-indexing`; this active branch is `feat/gdrive-sso-indexing-16a` because the canonical local ref is currently attached to a stale pre-Sentropic worktree and must not be moved without explicit cleanup.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -71,7 +71,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 
 ## Feedback Loop
 - [x] `clarification` BR16a-Q1 — Drive selection and OAuth scope: **1A selected**.
-  - 1A (selected): Google Picker + `drive.file`; Entropic only accesses files selected/opened by the user. The user must still be able to search/browse documents through the Google Picker UI.
+  - 1A (selected): Google Picker + `drive.file`; Sentropic only accesses files selected/opened by the user. The user must still be able to search/browse documents through the Google Picker UI.
   - 1B: Server-side Drive browser with broader Drive listing/read scopes; likely heavier Google verification/security review.
   - 1C: Hybrid: Picker in BR-16a, server-side browser deferred to a later connector branch.
 - [x] `clarification` BR16a-Q2 — Google Cloud provisioning: **2A selected with Codex-assisted browser provisioning**.
@@ -81,7 +81,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - [x] `clarification` BR16a-Q3 — Google account ownership: **3C selected**.
   - 3A (recommended): User-scoped Google connection only.
   - 3B: Workspace-managed shared Google connector account.
-  - 3C (selected): Every Entropic user has their own Google identity. Shared Drive documents may be attached to a workspace when the acting user's Google account has rights. Sharing assistance and shared-drive collaboration refinements are deferred to BR-16c.
+  - 3C (selected): Every Sentropic user has their own Google identity. Shared Drive documents may be attached to a workspace when the acting user's Google account has rights. Sharing assistance and shared-drive collaboration refinements are deferred to BR-16c.
 - [x] `clarification` BR16a-Q4 — Token storage policy: **4A selected**.
   - 4A (selected): Dedicated connector account table for lifecycle/status/scopes plus encrypted token payload, linked to settings for global connector config and OAuth client configuration.
   - 4B: Reuse user-scoped `settings` keys and `secret-crypto` like current provider connections.
@@ -108,7 +108,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
   - 9C: New full connector center UI.
 - [x] `clarification` BR16a-Q10 — Local branch naming: **10A selected**.
   - 10A (selected): Keep active branch `feat/gdrive-sso-indexing-16a` because the canonical local ref is stale.
-  - 10B: Clean stale pre-Entropic worktree/ref and reclaim `feat/gdrive-sso-indexing`.
+  - 10B: Clean stale pre-Sentropic worktree/ref and reclaim `feat/gdrive-sso-indexing`.
   - 10C: Create another explicit branch name for this iteration.
 - [x] `clarification` BR16a-Q11 — Post pre-UAT connector UX ownership: **11A selected**.
   - 11A (selected): Settings owns Google Drive lifecycle (`Connect` / `Disconnect`). Chat and entity document surfaces own import only, through a shared local/GDrive source chooser.
@@ -123,7 +123,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - [x] `attention` BR16a-EX7 — `ui/src/routes/settings/+page.svelte`, `ui/src/lib/components/DocumentsBlock.svelte`, optional shared source-menu UI under `ui/src/lib/components/**document**`, `ui/tests/**settings**`, `ui/tests/**document**`, and `ui/src/locales/*.json` are allowed for the post-pre-UAT connector UX alignment lot. Reason: the user requested that Google Drive connection lifecycle move into Settings and that existing entity document surfaces expose the same local/GDrive source menu as chat. Impact: UI/documentation/test surface only; backend Drive contracts stay unchanged. Rollback: remove the settings connector card and restore the previous local-only `DocumentsBlock` plus chat-only Google Drive lifecycle UI.
 - [x] `attention` BR16a-EX8 — `ui/src/routes/+layout.svelte` is allowed for the Google Drive settings deep-link/navigation fix. Reason: shared web-app surfaces (`ChatPanel`, `DocumentsBlock`) rely on the repo navigation adapter to avoid Chrome extension regressions, and the adapter is not initialized in the SvelteKit root layout today. Impact: web-app navigation only; extension behavior stays on the existing adapter path. Rollback: remove the adapter bootstrap from `+layout.svelte` if Google Drive settings deep-links move to another web-only navigation abstraction.
 - [ ] `attention` BR16a-UI1 — `make typecheck-ui API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a` fails before change-specific diagnostics because `.svelte-kit` is not synced and `$lib` aliases are unresolved across the app. Follow-up check `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a` passes with 0 errors and 6 existing warnings. Impact: target/config issue, not a Google Drive UI error. Rollback: none for BR-16a runtime; fix the make target separately if required.
-- [x] `evidence` BR16a-GC1 — Google Cloud provisioning completed on 2026-04-22 for project `sent-tech`: Drive API and Picker API enabled, Auth Platform created, OAuth client `Entropic Web App` created, test user `fabien.antoine@gmail.com` added, and API key `Entropic Google Picker` created with HTTP referrer restrictions plus Drive/Picker API restrictions. Secret values are intentionally not recorded in repository docs.
+- [x] `evidence` BR16a-GC1 — Google Cloud provisioning completed on 2026-04-22 for project `sent-tech`: Drive API and Picker API enabled, Auth Platform created, OAuth client `Sentropic Web App` created, test user `fabien.antoine@gmail.com` added, and API key `Sentropic Google Picker` created with HTTP referrer restrictions plus Drive/Picker API restrictions. Secret values are intentionally not recorded in repository docs.
 - [x] `evidence` BR16a-GC2 — Google Cloud cleanup completed on 2026-04-22: removed obsolete local origin `http://localhost:5116`, obsolete redirect URI `http://localhost:8716/api/v1/google-drive/oauth/callback`, and obsolete API key referrer `http://localhost:5116/*`.
 - [x] `attention` BR16a-EX1 — Scope expansion approved: implement Decision 5A (nullable `context_documents.storage_key` + source-aware documents) and introduce a minimal reusable document-source abstraction.
   - Rationale: `tool-service`, `queue-manager` (document_summary), and `import-export` currently assume S3/local-only documents and will typecheck-fail and/or regress once Google Drive-backed documents are persisted.
@@ -265,7 +265,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
 - Execution flow:
   - Develop and run tests in `tmp/feat-gdrive-sso-indexing-16a`.
   - Push branch before UAT.
-  - Run user UAT from root workspace (`/home/antoinefa/src/entropic`, `ENV=dev`) only after branch is pushed and ready.
+  - Run user UAT from root workspace (`/home/antoinefa/src/sentropic`, `ENV=dev`) only after branch is pushed and ready.
   - Switch back to `tmp/feat-gdrive-sso-indexing-16a` after UAT.
 
 ## Plan / Todo (lot-based)
@@ -325,7 +325,7 @@ Implement the Google Drive first slice of document connectors: user-scoped Googl
       - [x] `make exec-ui CMD="npx svelte-kit sync && npm run check" API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-gdrive-sso-indexing-16a`
 
 - [x] **Lot 3 — In-situ indexing**
-  - [x] Extract file content through Google APIs without copying source documents into Entropic storage.
+  - [x] Extract file content through Google APIs without copying source documents into Sentropic storage.
   - [x] Route Google Drive rows through the existing `document_summary` queue behavior.
   - [x] Store source references, sync status, extracted metadata, summary, and detailed summary.
   - [x] Reuse existing runtime chunking for `documents.analyze`; do not add stored embeddings in BR-16a.

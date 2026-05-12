@@ -1,6 +1,8 @@
 # SPEC EVOL - Model Providers Runtime (OpenAI/Gemini/...)
 
-Status: **Delivered** (via `feat/model-runtime-openai-gemini` merged to main). Architecture implemented in `api/src/services/llm-runtime/`, `api/src/services/providers/`, and `api/src/services/provider-registry.ts`. Not part of BR-04 scope. Canonical spec consolidation deferred to the branch that delivered it.
+Status: **Delivered** (via `feat/model-runtime-openai-gemini` merged to main). Architecture implemented in `api/src/services/llm-runtime/`, `api/src/services/providers/`, and `api/src/services/provider-registry.ts`. Not part of BR-04 scope.
+
+BR-14c successor note: `feat/llm-mesh-sdk` keeps the delivered provider adapters server-side, but moves public model-access contracts and runtime dispatch selection into `@sentropic/llm-mesh`. After BR-14c, app code must consume model access through the mesh-backed `llm-runtime` boundary; direct app-local provider selector ownership must not be reintroduced.
 
 ## 1) Objective
 Define a clean provider-runtime architecture with strict ownership boundaries across model providers, and remove mixed-provider implementation paths.

@@ -36,7 +36,7 @@ Adaptation limits:
 
 - Anthropic `pptx` references now include editing-oriented workflows. BR-21a must ignore those editing paths.
 - Do not port Python-based PPTX editing helpers or local filesystem workflows.
-- Do not assume Claude's skill sandbox model matches Entropic's runtime. Entropic uses the existing DOCX-style JavaScript VM sandbox pattern and only exposes approved PptGenJS helpers.
+- Do not assume Claude's skill sandbox model matches Sentropic's runtime. Sentropic uses the existing DOCX-style JavaScript VM sandbox pattern and only exposes approved PptGenJS helpers.
 - Use the references to write compact generation guidance, not as an implementation contract for import/edit/repair flows.
 
 ## Non-Goals
@@ -96,7 +96,7 @@ Frozen naming:
 
 `document_generate({ action: "upskill", format: "pptx" })` returns a compact PptGenJS-focused skill document adapted from the Anthropic PPTX skill.
 
-The upskill content must be self-contained and fit the Entropic sandbox:
+The upskill content must be self-contained and fit the Sentropic sandbox:
 
 - JavaScript/PptGenJS only.
 - Generation only; no existing-presentation editing instructions.
@@ -106,7 +106,7 @@ The upskill content must be self-contained and fit the Entropic sandbox:
 - No Python helper references.
 - Emphasize explicit slide dimensions, inches-based coordinates, text-box margins, font sizing, visual hierarchy, and non-text-only slides.
 - Encourage calling `document_generate({ action: "upskill", format: "pptx" })` before the first PPTX `generate` call in a conversation.
-- Avoid long vendored external text; keep the skill compact and Entropic-specific.
+- Avoid long vendored external text; keep the skill compact and Sentropic-specific.
 
 ## Sandbox Contract
 

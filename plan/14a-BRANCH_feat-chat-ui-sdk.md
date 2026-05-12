@@ -6,7 +6,7 @@ Do not use it to coordinate new BR-14 work.
 
 Current coordination source:
 
-- `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`
+- `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`
 
 Replacement branch:
 

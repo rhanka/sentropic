@@ -1,0 +1,65 @@
+# VCS
+.git
+.git/
+
+# Local secrets and assistant/browser state
+.env
+.env.*
+*.local
+.auth/
+.agents/
+.claude/
+.codex
+.components/
+.cursor/
+.playwright-mcp/
+.vscode/
+.idea/
+.DS_Store
+
+# Host dependencies
+node_modules/
+**/node_modules/
+.pnpm-store/
+
+# Build outputs and caches
+api/dist/
+api/.tsbuildinfo
+api/templates/.~lock*
+ui/build/
+ui/.svelte-kit/
+ui/dist/
+ui/chrome-ext/dist/
+ui/vscode-ext/dist/
+ui/static/vscode-extension/
+e2e/test-results/
+e2e/playwright-report/
+e2e/.auth/
+e2e/tests/dev/_scratch*
+e2e/tests/dev/_debug*
+e2e/tests/dev/proof-*
+coverage/
+**/coverage/
+
+# Runtime data and generated artifacts
+data/
+tmp/
+.tmp/
+artifacts/
+.graphify/
+graphify-out/
+.security/sast-*
+.security/sca-*
+.security/iac-*
+.security/container*
+
+# Logs and large local archives
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tar
+*.tar.gz
+*.tgz
+*.zip

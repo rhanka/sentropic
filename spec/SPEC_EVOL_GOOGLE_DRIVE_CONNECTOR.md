@@ -10,11 +10,11 @@ Related roadmap entry: BR-16a `feat/gdrive-sso-indexing`.
 
 BR-16a implements the first document connector slice for Google Drive: user-scoped Google OAuth, Drive file search/selection, in-situ summarization/indexing through the current `document_summary` flow, and chat retrieval through existing document tooling.
 
-The source document remains in Google Drive. Entropic may store connector metadata, source references, sync status, extracted metadata, summaries, and detailed summaries, but must not copy the original Drive binary into S3 as the canonical source.
+The source document remains in Google Drive. Sentropic may store connector metadata, source references, sync status, extracted metadata, summaries, and detailed summaries, but must not copy the original Drive binary into S3 as the canonical source.
 
 ## Final BR-16a Contract
 
-- Google Drive is a user-scoped connector. Each Entropic user connects their own Google account for a workspace; shared Drive documents are attachable only when the acting Google account already has access.
+- Google Drive is a user-scoped connector. Each Sentropic user connects their own Google account for a workspace; shared Drive documents are attachable only when the acting Google account already has access.
 - Settings owns connector lifecycle (`Connect` / `Disconnect`) and public readiness. Chat and entity document surfaces only import documents from the connected source.
 - Google Picker is the BR-16a selection surface. The backend resolves Picker file IDs, verifies metadata/access, and stores source references in `context_documents`.
 - Local uploads stay S3-backed. Google Drive documents stay in situ with `source_type=google_drive`, nullable `storage_key`, connector account linkage, Drive file IDs, visible source metadata, sync status, and summary fields.
@@ -69,7 +69,7 @@ Implication:
 Recommended MVP:
 
 - Use Google Picker for user selection.
-- Use Google Picker's search/browse UI so the user can find Drive documents without Entropic implementing server-side Drive listing in BR-16a.
+- Use Google Picker's search/browse UI so the user can find Drive documents without Sentropic implementing server-side Drive listing in BR-16a.
 - Request `https://www.googleapis.com/auth/drive.file` as the default Drive scope.
 - Use the OAuth web server flow with `access_type=offline` so manual resync, downloads, and tool reads can refresh authorization after the browser session token expires.
 - Use `include_granted_scopes=true`.
@@ -92,13 +92,13 @@ Decision BR16a-Q2: Codex performs Google Cloud provisioning through Playwright M
 User command for a dedicated Chromium CDP session:
 
 ```bash
-chromium --remote-debugging-port=9222 --user-data-dir=/tmp/entropic-google-cloud-cdp --no-first-run --no-default-browser-check
+chromium --remote-debugging-port=9222 --user-data-dir=/tmp/sentropic-google-cloud-cdp --no-first-run --no-default-browser-check
 ```
 
 Fallback if the binary is named `google-chrome`:
 
 ```bash
-google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/entropic-google-cloud-cdp --no-first-run --no-default-browser-check
+google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/sentropic-google-cloud-cdp --no-first-run --no-default-browser-check
 ```
 
 Codex/Playwright should connect to `http://127.0.0.1:9222`, use the already authenticated Google session, and create/verify the OAuth app configuration with user approval.
@@ -109,14 +109,14 @@ Google OAuth redirect URIs are exact matches, including scheme, host, port, path
 
 Use these Google Auth Platform values for BR-16a provisioning:
 
-- App name: `Entropic`.
+- App name: `Sentropic`.
 - Preferred support/contact email: `admin@sent-tech.ca`.
 - Temporary support email fallback only if the Google Console selector does not expose `admin@sent-tech.ca`: `fabien.antoine@gmail.com`.
 - Test user while the app is in Testing mode: `fabien.antoine@gmail.com`.
 - Authorized domain: `sent-tech.ca`.
 - Current production JavaScript origin: `https://top-ai-ideas.sent-tech.ca`.
 - Current production redirect URI: `https://top-ai-ideas-api.sent-tech.ca/api/v1/google-drive/oauth/callback`.
-- Future canonical `entropic.sent-tech.ca` hostnames remain part of the BR-14d DNS/runtime transition and must not be used by BR-16a CD until they resolve and route to the app/API.
+- Future canonical `sentropic.sent-tech.ca` hostnames remain part of the BR-14d DNS/runtime transition and must not be used by BR-16a CD until they resolve and route to the app/API.
 - Root local dev/UAT JavaScript origin: `http://localhost:5173`.
 - Root local dev/UAT redirect URI: `http://localhost:8787/api/v1/google-drive/oauth/callback`.
 - BR-16a five-slot sub-agent JavaScript origins: `http://localhost:5280` through `http://localhost:5284`.
@@ -131,14 +131,14 @@ Provisioning result on 2026-04-22 for Google Cloud project `sent-tech`:
 
 - `picker.googleapis.com` enabled.
 - `drive.googleapis.com` enabled.
-- Google Auth Platform created for app `Entropic`.
+- Google Auth Platform created for app `Sentropic`.
 - Support email fallback used: `fabien.antoine@gmail.com`; the console support-email selector did not expose `admin@sent-tech.ca` because it only showed the acting user and no managed Google Group. `admin@sent-tech.ca` was used as the project contact email.
 - Audience: External / Testing.
 - Test user added: `fabien.antoine@gmail.com`.
-- OAuth web client created: `Entropic Web App`.
+- OAuth web client created: `Sentropic Web App`.
 - OAuth client ID: `924600787940-bc4tfvq52lseekjr090ic2e6k4gl4r8f.apps.googleusercontent.com`.
-- API key created: `Entropic Google Picker`; the key value is not recorded in repository docs.
-- API key restrictions: HTTP referrers `https://top-ai-ideas.sent-tech.ca/*`, future `https://entropic.sent-tech.ca/*` once BR-14d activates DNS/routing, `http://localhost:5173/*`, and `http://localhost:5280/*` through `http://localhost:5284/*`.
+- API key created: `Sentropic Google Picker`; the key value is not recorded in repository docs.
+- API key restrictions: HTTP referrers `https://top-ai-ideas.sent-tech.ca/*`, future `https://sentropic.sent-tech.ca/*` once BR-14d activates DNS/routing, `http://localhost:5173/*`, and `http://localhost:5280/*` through `http://localhost:5284/*`.
 - API key API restrictions: Google Drive API and Google Picker API.
 - Obsolete local port entries `http://localhost:5116`, `http://localhost:8716/api/v1/google-drive/oauth/callback`, and `http://localhost:5116/*` were removed from Google Cloud on 2026-04-22.
 
@@ -161,7 +161,7 @@ Production runtime note:
 - BR-16a does not change the GitHub CD deployment model. `deploy-api` must keep the historical image-deploy behavior and must not push Scaleway container-level `secret-environment-variables`.
 - Production Google Drive runtime secrets are provisioned at the Scaleway namespace level, aligned with the existing production secret model used by database/TLS, mail, auth, model-provider, storage, and webauthn settings.
 - The required Google Drive runtime keys are `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_AUTH_CALLBACK_BASE_URL`, `GOOGLE_DRIVE_PICKER_API_KEY`, and optional `GOOGLE_DRIVE_PICKER_APP_ID`.
-- Current routed production values use the web origin `https://top-ai-ideas.sent-tech.ca` and API callback base `https://top-ai-ideas-api.sent-tech.ca` until BR-14d completes the `entropic.sent-tech.ca` DNS/runtime transition.
+- Current routed production values use the web origin `https://top-ai-ideas.sent-tech.ca` and API callback base `https://top-ai-ideas-api.sent-tech.ca` until BR-14d completes the `sentropic.sent-tech.ca` DNS/runtime transition.
 - Before BR-16a is remerged, the cleaned branch must pass an out-of-CD production deployment validation that proves API boot/migrations, mail sending, Google OAuth, Picker, Drive import, indexing, and download behavior, followed by rollback unless the user explicitly keeps the branch image for UAT.
 
 Traceable proof commands on a target runtime:

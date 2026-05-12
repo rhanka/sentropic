@@ -9,57 +9,20 @@ import {
   type ResolvedProviderCredential
 } from '../provider-credentials';
 import { getOpenAITransportMode, resolveConnectedCodexTransport } from '../provider-connections';
-import {
-  GeminiProviderRuntime,
-  type GeminiGenerateRequest,
-  type GeminiStreamGenerateRequest
-} from '../providers/gemini-provider';
-import {
-  OpenAIProviderRuntime,
-  type OpenAIGenerateRequest,
-  type OpenAIStreamGenerateRequest
-} from '../providers/openai-provider';
-import {
-  ClaudeProviderRuntime,
-  type ClaudeGenerateRequest,
-  type ClaudeStreamGenerateRequest
-} from '../providers/claude-provider';
-import {
-  MistralProviderRuntime,
-  type MistralGenerateRequest,
-  type MistralStreamGenerateRequest
-} from '../providers/mistral-provider';
-import {
-  CohereProviderRuntime,
-  type CohereGenerateRequest,
-  type CohereStreamGenerateRequest
-} from '../providers/cohere-provider';
 import { isProviderId, type ProviderId } from '../provider-runtime';
 import { settingsService } from '../settings';
 import { createId } from '../../utils/id';
-
-const getOpenAIProvider = (): OpenAIProviderRuntime => {
-  return providerRegistry.requireProvider('openai') as OpenAIProviderRuntime;
-};
-
-const getGeminiProvider = (): GeminiProviderRuntime => {
-  return providerRegistry.requireProvider('gemini') as GeminiProviderRuntime;
-};
-
-const getClaudeProvider = (): ClaudeProviderRuntime => {
-  return providerRegistry.requireProvider('anthropic') as ClaudeProviderRuntime;
-};
-
-const getMistralProvider = (): MistralProviderRuntime => {
-  return providerRegistry.requireProvider('mistral') as MistralProviderRuntime;
-};
-
-const getCohereProvider = (): CohereProviderRuntime => {
-  return providerRegistry.requireProvider('cohere') as CohereProviderRuntime;
-};
+import {
+  createCodexAccountAuthInput,
+  dispatchMeshGenerateRaw,
+  dispatchMeshStreamRaw,
+} from './mesh-dispatch';
 
 const pickProviderCapabilities = (providerId: ProviderId) =>
   providerRegistry.requireProvider(providerId).provider.capabilities;
+
+const normalizeProviderError = (providerId: ProviderId, error: unknown) =>
+  providerRegistry.requireProvider(providerId).normalizeError(error);
 
 type RuntimeSelection = {
   providerId: ProviderId;
@@ -205,6 +168,7 @@ export interface StreamEvent {
 }
 
 type GeminiRequestBuildOptions = {
+  model?: string;
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
   tools?: OpenAI.Chat.Completions.ChatCompletionTool[];
   toolChoice?: 'auto' | 'required' | 'none';
@@ -250,6 +214,17 @@ const toGeminiToolDeclarations = (
       parameters: tool.function?.parameters ?? { type: 'object', properties: {} },
     }))
     .filter((tool) => typeof tool.name === 'string' && tool.name.length > 0);
+};
+
+const buildGeminiThinkingConfig = (
+  reasoningEffort: string | undefined,
+): Record<string, unknown> | undefined => {
+  if (!reasoningEffort || reasoningEffort === 'none') return undefined;
+  const budgetMap: Record<string, number> = { low: 2048, medium: 4096, high: 8192, xhigh: 16384 };
+  return {
+    thinkingBudget: budgetMap[reasoningEffort] ?? 8192,
+    includeThoughts: true,
+  };
 };
 
 const GEMINI_UNSUPPORTED_RESPONSE_SCHEMA_KEYS = new Set<string>([
@@ -379,13 +354,9 @@ export const buildGeminiRequestBody = (
       options.structuredOutput.schema
     );
   }
-  // Gemini 3.1 reasoning: enable thinking when reasoning is requested
-  if (options.reasoningEffort && options.reasoningEffort !== 'none') {
-    const budgetMap: Record<string, number> = { low: 2048, medium: 4096, high: 8192, xhigh: 16384 };
-    generationConfig.thinkingConfig = {
-      thinkingBudget: budgetMap[options.reasoningEffort] ?? 8192,
-      includeThoughts: true,
-    };
+  const thinkingConfig = buildGeminiThinkingConfig(options.reasoningEffort);
+  if (thinkingConfig) {
+    generationConfig.thinkingConfig = thinkingConfig;
   }
 
   const functionDeclarations = toGeminiToolDeclarations(
@@ -790,22 +761,33 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
   }
 
   if (selection.providerId === 'gemini') {
-    const provider = getGeminiProvider();
-    const raw = await provider.generate({
-      mode: 'generate-content',
-      requestOptions: {
-        model: selection.model,
-        body: buildGeminiRequestBody({
-          messages,
-          tools: filteredTools,
-          toolChoice: normalizedToolChoice,
-          responseFormat,
-          maxOutputTokens,
-        }),
-      },
-      credential: credentialResolution.credential ?? undefined,
+    const raw = await dispatchMeshGenerateRaw<unknown>({
+      providerId: selection.providerId,
+      model: selection.model,
+      credentialResolution,
+      userId,
+      workspaceId,
+      messages,
+      tools: filteredTools,
+      toolChoice: normalizedToolChoice,
+      responseFormat,
+      maxOutputTokens,
       signal,
-    } satisfies GeminiGenerateRequest);
+      runtimeRequest: {
+        mode: 'generate-content',
+        requestOptions: {
+          model: selection.model,
+          body: buildGeminiRequestBody({
+            model: selection.model,
+            messages,
+            tools: filteredTools,
+            toolChoice: normalizedToolChoice,
+            responseFormat,
+            maxOutputTokens,
+          }),
+        },
+      },
+    });
 
     const text = extractGeminiText(raw);
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -831,24 +813,34 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
   }
 
   if (selection.providerId === 'anthropic') {
-    const provider = getClaudeProvider();
     const { system, messages: claudeMessages } = buildClaudeMessages(messages);
     const claudeTools = buildClaudeTools(filteredTools, normalizedToolChoice);
-    const raw = await provider.generate({
-      mode: 'messages',
-      requestOptions: {
-        model: selection.model,
-        max_tokens: typeof maxOutputTokens === 'number' && maxOutputTokens > 0
-          ? Math.floor(maxOutputTokens)
-          : 4096,
-        ...(system ? { system } : {}),
-        messages: claudeMessages as unknown[],
-        ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
-        // Claude API does not support response_format — JSON output must be requested via prompt
-      } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
-      credential: credentialResolution.credential ?? undefined,
+    const raw = await dispatchMeshGenerateRaw<unknown>({
+      providerId: selection.providerId,
+      model: selection.model,
+      credentialResolution,
+      userId,
+      workspaceId,
+      messages,
+      tools: filteredTools,
+      toolChoice: normalizedToolChoice,
+      responseFormat,
+      maxOutputTokens,
       signal,
-    } satisfies ClaudeGenerateRequest);
+      runtimeRequest: {
+        mode: 'messages',
+        requestOptions: {
+          model: selection.model,
+          max_tokens: typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+            ? Math.floor(maxOutputTokens)
+            : 4096,
+          ...(system ? { system } : {}),
+          messages: claudeMessages as unknown[],
+          ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
+          // Claude API does not support response_format — JSON output must be requested via prompt
+        } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
+      },
+    });
 
     const text = extractClaudeText(raw);
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -874,25 +866,35 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
   }
 
   if (selection.providerId === 'mistral') {
-    const provider = getMistralProvider();
     const mistralMessages = buildMistralMessages(messages);
     const mistralTools = buildMistralTools(filteredTools, normalizedToolChoice);
-    const raw = await provider.generate({
-      mode: 'chat-completions',
-      requestOptions: {
-        model: selection.model,
-        messages: mistralMessages,
-        ...(mistralTools ? { tools: mistralTools } : {}),
-        ...(!mistralTools && responseFormat === 'json_object'
-          ? { responseFormat: { type: 'json_object' } }
-          : {}),
-        ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
-          ? { max_tokens: Math.floor(maxOutputTokens) }
-          : {}),
-      },
-      credential: credentialResolution.credential ?? undefined,
+    const raw = await dispatchMeshGenerateRaw<unknown>({
+      providerId: selection.providerId,
+      model: selection.model,
+      credentialResolution,
+      userId,
+      workspaceId,
+      messages,
+      tools: filteredTools,
+      toolChoice: normalizedToolChoice,
+      responseFormat,
+      maxOutputTokens,
       signal,
-    } satisfies MistralGenerateRequest);
+      runtimeRequest: {
+        mode: 'chat-completions',
+        requestOptions: {
+          model: selection.model,
+          messages: mistralMessages,
+          ...(mistralTools ? { tools: mistralTools } : {}),
+          ...(!mistralTools && responseFormat === 'json_object'
+            ? { responseFormat: { type: 'json_object' } }
+            : {}),
+          ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+            ? { max_tokens: Math.floor(maxOutputTokens) }
+            : {}),
+        },
+      },
+    });
 
     const text = extractMistralText(raw);
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -918,25 +920,35 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
   }
 
   if (selection.providerId === 'cohere') {
-    const provider = getCohereProvider();
     const cohereMessages = buildCohereMessages(messages);
     const cohereTools = buildCohereTools(filteredTools, normalizedToolChoice);
-    const raw = await provider.generate({
-      mode: 'chat',
-      requestOptions: {
-        model: selection.model,
-        messages: cohereMessages,
-        ...(cohereTools ? { tools: cohereTools } : {}),
-        ...(responseFormat === 'json_object'
-          ? { response_format: { type: 'json_object' } }
-          : {}),
-        ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
-          ? { max_tokens: Math.floor(maxOutputTokens) }
-          : {}),
-      },
-      credential: credentialResolution.credential ?? undefined,
+    const raw = await dispatchMeshGenerateRaw<unknown>({
+      providerId: selection.providerId,
+      model: selection.model,
+      credentialResolution,
+      userId,
+      workspaceId,
+      messages,
+      tools: filteredTools,
+      toolChoice: normalizedToolChoice,
+      responseFormat,
+      maxOutputTokens,
       signal,
-    } satisfies CohereGenerateRequest);
+      runtimeRequest: {
+        mode: 'chat',
+        requestOptions: {
+          model: selection.model,
+          messages: cohereMessages,
+          ...(cohereTools ? { tools: cohereTools } : {}),
+          ...(responseFormat === 'json_object'
+            ? { response_format: { type: 'json_object' } }
+            : {}),
+          ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+            ? { max_tokens: Math.floor(maxOutputTokens) }
+            : {}),
+        },
+      },
+    });
 
     const text = extractCohereText(raw);
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -975,13 +987,23 @@ export const callLLM = async (options: CallLLMOptions): Promise<OpenAI.Chat.Comp
   };
 
   // Pass AbortSignal through request options to enable cooperative cancellation
-  const provider = getOpenAIProvider();
-  return await provider.generate({
-    mode: 'chat-completions',
-    requestOptions,
-    credential: credentialResolution.credential ?? undefined,
-    signal
-  } satisfies OpenAIGenerateRequest) as OpenAI.Chat.Completions.ChatCompletion;
+  return await dispatchMeshGenerateRaw<OpenAI.Chat.Completions.ChatCompletion>({
+    providerId: selection.providerId,
+    model: selection.model,
+    credentialResolution,
+    userId,
+    workspaceId,
+    messages,
+    tools: filteredTools,
+    toolChoice: normalizedToolChoice,
+    responseFormat,
+    maxOutputTokens,
+    signal,
+    runtimeRequest: {
+      mode: 'chat-completions',
+      requestOptions,
+    },
+  });
 };
 
 /**
@@ -1049,9 +1071,9 @@ export async function* callLLMStream(
   }
 
   if (selection.providerId === 'gemini') {
-    const provider = getGeminiProvider();
     const responseId = previousResponseId || `gemini_${createId()}`;
     const requestBody = buildGeminiRequestBody({
+      model: selectedModel,
       messages,
       tools: filteredTools,
       toolChoice: normalizedToolChoice,
@@ -1069,15 +1091,30 @@ export async function* callLLMStream(
         data: { state: 'response_created', response_id: responseId },
       };
 
-      const stream = await provider.streamGenerate({
-        mode: 'stream-generate-content',
-        requestOptions: {
-          model: selectedModel,
-          body: requestBody,
-        },
-        credential: credentialResolution.credential ?? undefined,
+      const stream = await dispatchMeshStreamRaw({
+        providerId: selection.providerId,
+        model: selectedModel,
+        credentialResolution,
+        userId,
+        workspaceId,
+        messages,
+        tools: filteredTools,
+        toolChoice: normalizedToolChoice,
+        responseFormat: effectiveResponseFormat,
+        structuredOutput: effectiveStructuredOutput,
+        reasoningEffort,
+        reasoningSummary,
+        maxOutputTokens,
         signal,
-      } satisfies GeminiStreamGenerateRequest);
+        previousResponseId,
+        runtimeRequest: {
+          mode: 'stream-generate-content',
+          requestOptions: {
+            model: selectedModel,
+            body: requestBody,
+          },
+        },
+      });
 
       let toolCallIndex = 0;
       let emittedContent = false;
@@ -1146,7 +1183,7 @@ export async function* callLLMStream(
       yield { type: 'done', data: {} };
       return;
     } catch (error) {
-      const normalized = provider.normalizeError(error);
+      const normalized = normalizeProviderError(selection.providerId, error);
       yield {
         type: 'error',
         data: {
@@ -1159,7 +1196,6 @@ export async function* callLLMStream(
   }
 
   if (selection.providerId === 'anthropic') {
-    const provider = getClaudeProvider();
     const responseId = previousResponseId || `claude_${createId()}`;
     const { system, messages: claudeMessages } = buildClaudeMessages(messages);
     const claudeTools = buildClaudeTools(filteredTools, normalizedToolChoice);
@@ -1216,20 +1252,35 @@ export async function* callLLMStream(
         ? Math.max(claudeBaseMaxTokens, claudeReasoning.minMaxTokens)
         : claudeBaseMaxTokens;
 
-      const stream = await provider.streamGenerate({
-        mode: 'messages',
-        requestOptions: {
-          model: selectedModel,
-          max_tokens: claudeMaxTokens,
-          ...(system ? { system } : {}),
-          messages: claudeMessages as unknown[],
-          ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
-          ...(claudeReasoning?.thinkingParams ?? {}),
-          // Claude API does not support response_format — JSON output must be requested via prompt
-        } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
-        credential: credentialResolution.credential ?? undefined,
+      const stream = await dispatchMeshStreamRaw({
+        providerId: selection.providerId,
+        model: selectedModel,
+        credentialResolution,
+        userId,
+        workspaceId,
+        messages,
+        tools: filteredTools,
+        toolChoice: normalizedToolChoice,
+        responseFormat: effectiveResponseFormat,
+        structuredOutput: effectiveStructuredOutput,
+        reasoningEffort,
+        reasoningSummary,
+        maxOutputTokens,
         signal,
-      } satisfies ClaudeStreamGenerateRequest);
+        previousResponseId,
+        runtimeRequest: {
+          mode: 'messages',
+          requestOptions: {
+            model: selectedModel,
+            max_tokens: claudeMaxTokens,
+            ...(system ? { system } : {}),
+            messages: claudeMessages as unknown[],
+            ...(claudeTools ? { tools: claudeTools as unknown[] } : {}),
+            ...(claudeReasoning?.thinkingParams ?? {}),
+            // Claude API does not support response_format — JSON output must be requested via prompt
+          } as unknown as import('@anthropic-ai/sdk').Anthropic.MessageCreateParams,
+        },
+      });
 
       let emittedContent = false;
       for await (const chunk of stream) {
@@ -1277,7 +1328,7 @@ export async function* callLLMStream(
       yield { type: 'done', data: {} };
       return;
     } catch (error) {
-      const normalized = provider.normalizeError(error);
+      const normalized = normalizeProviderError(selection.providerId, error);
       yield {
         type: 'error',
         data: {
@@ -1290,7 +1341,6 @@ export async function* callLLMStream(
   }
 
   if (selection.providerId === 'mistral') {
-    const provider = getMistralProvider();
     const responseId = previousResponseId || `mistral_${createId()}`;
     const mistralMessages = buildMistralMessages(messages);
     const mistralTools = buildMistralTools(filteredTools, normalizedToolChoice);
@@ -1344,23 +1394,38 @@ export async function* callLLMStream(
         data: { state: 'response_created', response_id: responseId },
       };
 
-      const stream = await provider.streamGenerate({
-        mode: 'chat-completions',
-        requestOptions: {
-          model: selectedModel,
-          messages: mistralMessages,
-          ...(mistralTools ? { tools: mistralTools, toolChoice: normalizedToolChoice === 'required' ? 'any' : normalizedToolChoice } : {}),
-          // Mistral rejects responseFormat combined with tools (error 3051)
-          ...(!mistralTools && (effectiveStructuredOutput || effectiveResponseFormat === 'json_object')
-            ? { responseFormat: { type: 'json_object' } }
-            : {}),
-          ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
-            ? { maxTokens: Math.floor(maxOutputTokens) }
-            : {}),
-        },
-        credential: credentialResolution.credential ?? undefined,
+      const stream = await dispatchMeshStreamRaw({
+        providerId: selection.providerId,
+        model: selectedModel,
+        credentialResolution,
+        userId,
+        workspaceId,
+        messages,
+        tools: filteredTools,
+        toolChoice: normalizedToolChoice,
+        responseFormat: effectiveResponseFormat,
+        structuredOutput: effectiveStructuredOutput,
+        reasoningEffort,
+        reasoningSummary,
+        maxOutputTokens,
         signal,
-      } satisfies MistralStreamGenerateRequest);
+        previousResponseId,
+        runtimeRequest: {
+          mode: 'chat-completions',
+          requestOptions: {
+            model: selectedModel,
+            messages: mistralMessages,
+            ...(mistralTools ? { tools: mistralTools, toolChoice: normalizedToolChoice === 'required' ? 'any' : normalizedToolChoice } : {}),
+            // Mistral rejects responseFormat combined with tools (error 3051)
+            ...(!mistralTools && (effectiveStructuredOutput || effectiveResponseFormat === 'json_object')
+              ? { responseFormat: { type: 'json_object' } }
+              : {}),
+            ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+              ? { maxTokens: Math.floor(maxOutputTokens) }
+              : {}),
+          },
+        },
+      });
 
       let emittedContent = false;
       const mistralToolCallsInProgress = new Map<string, { id: string; name: string; args: string }>();
@@ -1455,7 +1520,7 @@ export async function* callLLMStream(
       yield { type: 'done', data: {} };
       return;
     } catch (error) {
-      const normalized = provider.normalizeError(error);
+      const normalized = normalizeProviderError(selection.providerId, error);
       yield {
         type: 'error',
         data: {
@@ -1468,7 +1533,6 @@ export async function* callLLMStream(
   }
 
   if (selection.providerId === 'cohere') {
-    const provider = getCohereProvider();
     const responseId = previousResponseId || `cohere_${createId()}`;
     const cohereMessages = buildCohereMessages(messages);
     const cohereTools = buildCohereTools(filteredTools, normalizedToolChoice);
@@ -1523,30 +1587,45 @@ export async function* callLLMStream(
         data: { state: 'response_created', response_id: responseId },
       };
 
-      const stream = await provider.streamGenerate({
-        mode: 'chat',
-        requestOptions: {
-          model: selectedModel,
-          messages: cohereMessages,
-          ...(cohereTools
-            ? {
-                tools: cohereTools,
-                // command-a-reasoning does not support tool_choice
-                ...(selectedModel.includes('reasoning') ? {} : { tool_choice: normalizedToolChoice === 'required' ? 'required' : normalizedToolChoice }),
-              }
-            : {}),
-          ...(effectiveStructuredOutput
-            ? { response_format: { type: 'json_object' } }
-            : effectiveResponseFormat === 'json_object'
-              ? { response_format: { type: 'json_object' } }
-              : {}),
-          ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
-            ? { max_tokens: Math.floor(maxOutputTokens) }
-            : {}),
-        },
-        credential: credentialResolution.credential ?? undefined,
+      const stream = await dispatchMeshStreamRaw({
+        providerId: selection.providerId,
+        model: selectedModel,
+        credentialResolution,
+        userId,
+        workspaceId,
+        messages,
+        tools: filteredTools,
+        toolChoice: normalizedToolChoice,
+        responseFormat: effectiveResponseFormat,
+        structuredOutput: effectiveStructuredOutput,
+        reasoningEffort,
+        reasoningSummary,
+        maxOutputTokens,
         signal,
-      } satisfies CohereStreamGenerateRequest);
+        previousResponseId,
+        runtimeRequest: {
+          mode: 'chat',
+          requestOptions: {
+            model: selectedModel,
+            messages: cohereMessages,
+            ...(cohereTools
+              ? {
+                  tools: cohereTools,
+                  // command-a-reasoning does not support tool_choice
+                  ...(selectedModel.includes('reasoning') ? {} : { tool_choice: normalizedToolChoice === 'required' ? 'required' : normalizedToolChoice }),
+                }
+              : {}),
+            ...(effectiveStructuredOutput
+              ? { response_format: { type: 'json_object' } }
+              : effectiveResponseFormat === 'json_object'
+                ? { response_format: { type: 'json_object' } }
+                : {}),
+            ...(typeof maxOutputTokens === 'number' && maxOutputTokens > 0
+              ? { max_tokens: Math.floor(maxOutputTokens) }
+              : {}),
+          },
+        },
+      });
 
       let emittedContent = false;
       let currentCohereToolCallId = '';
@@ -1619,7 +1698,7 @@ export async function* callLLMStream(
       yield { type: 'done', data: {} };
       return;
     } catch (error) {
-      const normalized = provider.normalizeError(error);
+      const normalized = normalizeProviderError(selection.providerId, error);
       yield {
         type: 'error',
         data: {
@@ -1739,14 +1818,29 @@ export async function* callLLMStream(
   try {
     yield { type: 'status', data: { state: 'started' } };
 
-    const provider = getOpenAIProvider();
-    const stream = await provider.streamGenerate({
-      mode: 'responses',
-      requestOptions,
-      credential: credentialResolution.credential ?? undefined,
-      ...(codexTransport ? { codexTransport } : {}),
-      signal
-    } satisfies OpenAIStreamGenerateRequest) as AsyncIterable<unknown>;
+    const stream = await dispatchMeshStreamRaw({
+      providerId: selection.providerId,
+      model: selectedModel,
+      credentialResolution,
+      authOverride: codexTransport ? createCodexAccountAuthInput(codexTransport) : undefined,
+      userId,
+      workspaceId,
+      messages,
+      tools: filteredTools,
+      toolChoice: normalizedToolChoice,
+      responseFormat: effectiveResponseFormat,
+      structuredOutput: effectiveStructuredOutput,
+      reasoningEffort,
+      reasoningSummary,
+      maxOutputTokens,
+      signal,
+      previousResponseId,
+      runtimeRequest: {
+        mode: 'responses',
+        requestOptions,
+        ...(codexTransport ? { codexTransport } : {}),
+      },
+    });
 
     // Some streams can emit only `output_text.done` without `output_text.delta`.
     // Track whether we've seen any output_text.delta so we can avoid duplicating the full text on .done.
@@ -1919,7 +2013,7 @@ export async function* callLLMStream(
       }
     }
   } catch (error) {
-    const normalized = getOpenAIProvider().normalizeError(error);
+    const normalized = normalizeProviderError(selection.providerId, error);
     yield {
       type: 'error',
       data: {
