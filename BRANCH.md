@@ -100,6 +100,8 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
   - [x] Create isolated worktree `tmp/refacto-chat-service-core` from `origin/main`.
   - [x] Confirm branch starts after BR14c, BR14g, and BR24 merges.
   - [x] Record current naming reality: `@sentropic/llm-mesh` is the published/current package name.
+  - [x] Capture initial file sizes: `chat-service.ts` 5671 lines, `tools.ts` 1428 lines, `stream-service.ts` 295 lines.
+  - [x] Identify primary test surfaces: `api/tests/ai/chat-sync.test.ts`, `api/tests/ai/comment-assistant.test.ts`, `api/tests/api/chat-message-actions.test.ts`, `api/tests/api/chat-history-analyze-tool.test.ts`, `api/tests/api/chat-checkpoint-contract.test.ts`, `api/tests/api/queue-stream-bootstrap-contract.test.ts`, stream/tool-related unit tests.
   - [ ] Read `api/src/services/chat-service.ts` once and identify responsibilities currently mixed in the file.
   - [ ] Read `api/src/services/tools.ts` once and identify reusable tool-loop responsibilities versus app-specific tool execution.
   - [ ] Read `api/src/services/stream-service.ts` once and identify stream event ownership.
