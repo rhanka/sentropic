@@ -16,7 +16,10 @@ Seven packages under `@sentropic/*`. The original six-package proposal was revis
 | `@sentropic/chat-ui` (BR14a) | in scoping | Svelte components, hooks consuming chat-core wire protocol, stream reassembly, optimistic UI, tool result rendering, reconnect/replay client logic | server logic, mesh access, persistence |
 | `@sentropic/flow` (future) | to scope | multi-step DAG (start/normal/conditional/fanout/join/end), durable execution, retries with idempotency keys, human approvals via signals/interrupts, multi-agent handoff with typed I/O contracts. Owns `CheckpointStore<FlowState>` instance (strict OCC strategy — see §12). Owns `JobQueue` port (bridge to background tasks, §10.4). | provider access (→ mesh), single-session chat orchestration (→ chat-core), UI |
 | `@sentropic/persistence-postgres` (future) | to scope | reference impl of `MessageStore`, `SessionStore`, `ChatCheckpointStore`, `FlowCheckpointStore`, `JobQueue`, `EventSink` adapters — Drizzle/Postgres specific | the ports themselves (those live in `chat-core` and `flow`). No domain model ownership. |
-| `@sentropic/harness` (BR25) | to scope | rules/skills/plan/spec templates, conductor CLI, verify hooks (lint/typecheck/migration/test plugins), branch scaffolding, project init with three presets (minimal Node / Svelte app / Postgres durable) | runtime dependency of any other package. Harness is tooling only. |
+| `@sentropic/harness` (BR25) | to scope | rules/skills/plan/spec templates, conductor CLI, verify hooks (lint/typecheck/migration/test plugins), branch scaffolding, project init with three presets (minimal Node / Svelte app / Postgres durable). Imports `graphify-node` (see §13). | runtime dependency of any other package. Harness is tooling only. |
+| `@sentropic/contracts` (BR14b, scaffolded `16163ffc`) | scaffolding now | shared transverse types (`TenantContext`, `AuthzContext`, `CostContext`, `IdempotencyKey`, `CheckpointVersion`, `EventEnvelope`, `PermissionMode`) and shared interfaces (`ToolRegistry`). Pure types + interfaces, zero runtime dependencies. | any logic; this is the boundary contract layer |
+| `@sentropic/skills` (BR19, future) | to scope (post BR14b) | skill catalog + sandbox + discovery + reference skills. SKILL.md format with `name`/`description`/`contextFilter`/`sandbox`/`tools`. Owns `SkillsToolRegistry` (implements `ToolRegistry`). | governance/policy/audit (→ `marketplace`); CLI tooling (→ `harness`) |
+| `@sentropic/marketplace` (BR-marketplace, future) | to scope | managed marketplace policy + decision engine + audit. Allows organizations to curate which skills/tools are visible/installable/invokable per role/workspace (see §15). Composes with `skills` via `MarketplaceEngine.evaluate()`. | the catalog itself (→ `skills`); public distribution (npm/mcp.so already cover) |
 
 **Dependency rules**
 
@@ -142,18 +145,19 @@ Each port must have an `in-memory` reference adapter shipped alongside the contr
 - Inline transport (Hono/SSE) leaking into `chat-core` core. Put it under `chat-core/server` sub-entry.
 - Cancellation/retry/checkpointing reimplemented in both chat-core and flow. Either common ports or clearly owned per package.
 
-## 8. Open questions (must close before BR14b implementation lands)
+## 8. Open questions (status post-iteration)
 
-1. ~~Should `@sentropic/events` ship before BR14b, or co-publish?~~ → **resolved §11**: co-ship in BR14b with `@sentropic/contracts`, provided wire is frozen before chat-core implementation lands.
-2. `StreamBuffer` TTL policy: per-tenant or per-session? Affects retention contract.
-3. `ToolRegistry` central or per-package (chat-core registry vs flow registry)? Lean shared abstract + per-call resolution by `AuthzContext`.
-4. Idempotency key generation: client-provided or server-derived (hash of tool name + args + sessionId)? Per side-effect class.
-5. Wire protocol versioning: header vs path (`/v1/sessions/...`). Lean header for forward compat.
-6. Harness CLI name: `harness`, `harness-cli`, `sentropic` (binary)?
+1. ~~Should `@sentropic/events` ship before BR14b, or co-publish?~~ → **resolved §11**: co-ship in BR14b with `@sentropic/contracts`.
+2. `StreamBuffer` TTL policy: per-tenant or per-session? **Deferred BR-flow** (default per-session 24h, configurable).
+3. ~~`ToolRegistry` central or per-package?~~ → **resolved §5**: interface declared in `@sentropic/contracts`, composable instances per runtime (`SkillsToolRegistry` → `ChatToolRegistry` → `FlowToolRegistry`), per-call resolution by `AuthzContext`. Federation, not centralization.
+4. ~~Idempotency key generation: client-provided or server-derived?~~ → **resolved**: server-derived `idempotencyKey(hash(toolName + JSON.stringify(args) + sessionId))` for tools declaring `sideEffect: true`; client-provided accepted (validated) otherwise. Default server-derived.
+5. ~~Wire protocol versioning: header vs path?~~ → **resolved**: header `Sec-Sentropic-Wire-Version: 1`. Routes neutral (`/sessions/...`). `Vary` header on cached responses. Path-based deferred unless required by ops.
+6. Harness CLI name: `harness`, `harness-cli`, `sentropic` (binary)? **Deferred BR25** (default `harness`).
 7. ~~Where do "skills" live as a runtime concept (for BR19)?~~ → **resolved**: separate package `@sentropic/skills`, see `SPEC_STUDY_SKILLS_TOOLS_VS_AGENT_MARKETPLACE.md`.
-8. ~~Two typed CheckpointStores vs one generic?~~ → **resolved §12**: single generic `CheckpointStore<T>` with strategy adapters (lenient for chat, strict OCC for flow).
-9. `LiveDocumentStore` CRDT choice: Y.js, Automerge, or a thinner Loro? Affects bundle size and op-log shape.
-10. Realtime audio wire: binary SSE frames vs WebRTC vs WebSocket? Each has different infrastructure cost.
+8. ~~Two typed CheckpointStores vs one generic?~~ → **resolved §12 + §14**: single generic `CheckpointStore<T>` with strategy adapters (lenient/strict). Plus sibling port `RepoCheckpointStore extends CheckpointStore<RepoState>` for CLI-only git-aware operations (validated externally by Gemini CLI shadow-repo, Aider `/undo`, Claude Code `/rewind`).
+9. `LiveDocumentStore` CRDT choice: Y.js, Automerge, or Loro? **Deferred BR14a+** (default Y.js).
+10. Realtime audio wire: binary SSE frames vs WebRTC vs WebSocket? **Deferred BR14a+** (default WebSocket binary).
+11. ~~Governance/policy layer for skills?~~ → **resolved §15**: separate `@sentropic/marketplace` package (managed marketplace overlay on top of `@sentropic/skills`).
 
 ## 10. Use case coverage
 
@@ -228,6 +232,46 @@ Two distinct flows:
 - ContentPart extension: `AudioPart { mimeType, bytes }`.
 
 Both flows respect retention/PII rules from the threat model (§3) — audio is high-PII.
+
+### 10.6 Offline-first
+
+The runtime continues to operate without network connectivity.
+
+- `chat-core` exposes a sync queue: outbound messages buffered when offline, replayed on reconnect with `IdempotencyKey` to prevent duplicate side effects.
+- Local persistence adapter (`persistence-fs` or `persistence-redis`) replaces Postgres while offline; messages reconciled on reconnect via last-write-wins (default) or 3-way merge (per-workspace policy).
+- Tools declare `requiresOnline: true` to be filtered out by `ToolRegistry` in offline mode.
+- `@sentropic/llm-mesh` exposes optional local-model fallback (Ollama / llama.cpp / WebLLM in browser) configurable per workspace.
+- Stream replay endpoint (§4) accepts `fromSeq` resume; offline gaps surface as explicit gap events for client rendering.
+
+### 10.7 Session offload (local ↔ remote)
+
+A session can migrate across runtimes (laptop CLI → mobile web → server cron worker → back).
+
+- Session identified by a portable UUID; state, messages, and checkpoints are exportable.
+- `SessionExporter` produces a signed envelope `{messages, checkpoints, state, tenant, version}` (tarball or JSON).
+- Import on target runtime atomically swaps ownership: target becomes writeable, source becomes read-only with forwarding pointer.
+- Dual-write conflicts: last-write-wins with audit alert (default); configurable to abort.
+- Use cases: start on CLI laptop → continue on mobile web → finish on CI worker; hand-off support session from agent to human; pause/resume a long flow on a different machine.
+- Persistence implication: `SessionStore` must support `export(sessionId)` and `import(envelope)` atomically with monotonic version checks.
+
+### 10.8 Async externally-triggered flows
+
+Distinct from background tasks (§10.4):
+
+- §10.4 background = **user initiates** a chat turn, a long tool runs in parallel, result re-enters the conversation.
+- §10.8 async externally-triggered = **no user initiates** ; an external event wakes an agent.
+
+Trigger sources:
+- Webhook entrant (Stripe payment, GitHub PR event, Slack incoming).
+- Schedule (cron-like, recurring).
+- Email-in parsed (forwarded mailbox).
+- File-watch (S3 PUT, FS change, queue topic).
+
+Pipeline: trigger → `@sentropic/flow` new run → optional notification (email / push / Slack / in-app).
+
+Package boundary: a future `@sentropic/triggers` (post BR-flow) OR integrated into `flow` if the trigger surface stays thin. Tenant scoping mandatory at trigger ingress (`TenantContext` resolved before any flow dispatch) to prevent cross-tenant invocation.
+
+Persistence: run state and notification log live in `flow` ports.
 
 ## 11. Delivery cadence (safe-but-fast)
 
@@ -319,6 +363,98 @@ Remaining adjacent: `LiveDocumentStore` may consume `CheckpointStore` internally
 - This integration does not change the rule that harness has zero runtime dependents from other `@sentropic/*` runtime packages.
 
 See companion `SPEC_STUDY_SKILLS_TOOLS_VS_AGENT_MARKETPLACE.md` for the orthogonal `@sentropic/skills` (BR19) package.
+
+## 14. Agent templating (invariant migration)
+
+The existing app implements agent templating: an agent has a configured base (system prompt template with `{{placeholder}}`, allowed tools, model preferences), and a workflow task references it by `agentDefinitionId` or via conditional `agentSelection`. This is documented in:
+
+- `spec/SPEC_AGENTIC_MODEL.md` §1 (Agent Definition Structure), §3 (Runtime Agent Selection), §4 (Prompt System — *Prompt Override Resolution*)
+- `spec/SPEC_TEMPLATING.md` (dedicated)
+- `api/src/config/default-agents.ts` (`promptTemplate?: string` field)
+- `api/src/config/default-workflows.ts` (`agentSelection` blocks lines 248, 536)
+- Tables `workflowDefinitions`, `workflow_definition_tasks.agentDefinitionId`
+
+**Invariant** : this templating concept MUST be preserved during the BR-flow extraction of `todo-orchestration.ts` into `@sentropic/flow`. The façade-first migration pattern (`SPEC_STUDY_AGENT_AUTONOMY_INCREMENTS.md` §6) preserves it by default; this section is the explicit reminder.
+
+**Skill overlay onto agent template** (forward-compatible design): a skill from `@sentropic/skills` can attach to an agent at invocation time to add instructions and tools without forking the agent definition.
+
+```ts
+interface AgentRuntime {
+  base: AgentDefinition;       // promptTemplate, defaultTools, modelPrefs
+  attachedSkills: Skill[];     // additive instructions + tools at runtime
+  resolve(authz: AuthzContext): ResolvedAgentConfig;
+}
+```
+
+The `resolve()` step:
+1. renders `base.promptTemplate` with context variables
+2. appends each `skill.instructions` (deterministic order)
+3. merges `base.defaultTools ∪ skill.tools` into the effective tool set
+4. filters by `AuthzContext` via the federated `ToolRegistry` (§5)
+5. consults `MarketplaceEngine.evaluate()` (§15) per skill before exposing
+
+This pattern is what makes a base agent "specializable" without proliferating agent definitions in the catalog. It applies equally to chat-core single-session runtime and flow multi-step runtime.
+
+**Restoring from a repo checkpoint** : `RepoCheckpointStore` (CLI-only port — see §8 Q8) lets a CLI built with `@sentropic/harness` offer a `/rewind` command equivalent to Claude Code, but with git-native storage à la Gemini CLI shadow repo (`~/.sentropic/checkpoints/<workspace-id>`). Aider validates the native-git approach for `/undo`. Restoration strategies: `abort` / `auto-stash` / `prompt` on dirty working tree.
+
+## 15. Managed marketplace (`@sentropic/marketplace`)
+
+An organization adopting Sentropic needs to define its own perimeter of agentic autonomy: which skills/tools are allowed, who can publish, who can install, who can invoke, what gets audited. This is an organizational concern distinct from the technical catalog (`@sentropic/skills`).
+
+```ts
+type SkillSource =
+  | 'npm-public'
+  | { kind: 'npm-private'; scope: string }
+  | { kind: 'mcp.so'; filter: string }
+  | { kind: 'github'; repoPattern: string }
+  | { kind: 'internal-registry'; url: string };
+
+type MarketplacePolicy = {
+  allowedSources: ReadonlyArray<SkillSource>;
+  allowedRoles: ReadonlyArray<string>;
+  approvalRequired: boolean;
+  reviewers?: ReadonlyArray<string>;
+  retentionDays?: number;
+  auditLevel: 'off' | 'install' | 'invoke' | 'all';
+};
+
+interface MarketplaceEngine {
+  evaluate(
+    actor: TenantContext,
+    action: 'publish' | 'install' | 'invoke',
+    target: SkillRef
+  ): Promise<MarketplaceDecision>;
+  listAllowed(tenant: TenantContext): Promise<SkillCatalogEntry[]>;
+  audit(decision: MarketplaceDecision, ctx: unknown): Promise<void>;
+}
+
+type MarketplaceDecision =
+  | { allowed: true; conditions?: ReadonlyArray<string> }
+  | { allowed: false; reason: string; appealUrl?: string };
+```
+
+Composition with `@sentropic/skills`:
+
+```
+SkillsToolRegistry   ──── consults ────►  MarketplaceEngine
+                                                │
+                                                ▼
+                                          evaluate(actor, 'invoke', skill)
+                                                │
+                                          allowed? → return tool
+                                          denied? → strip from registry result
+```
+
+Distribution:
+- `@sentropic/marketplace` is a runtime package (not tooling).
+- Reference impl: in-memory + Postgres adapter for audit log.
+- App ships marketplace admin UI for policy editing and approval queue (out of scope for v1, deferred).
+
+Distinctions (re-stated):
+- `@sentropic/skills` = the catalog (the *things*).
+- `@sentropic/marketplace` = the gated / curated / audited distribution layer (the *organizational rules* on the things).
+- `@sentropic/harness` = scaffolding / conductor / verify tooling (the *dev workflow*).
+- "Agent marketplace" (selling whole agents à la GPT Store) = out of scope until business need.
 
 ## 9. References (sources consulted by peer review A/B/C/D/E/F)
 
