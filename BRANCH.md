@@ -107,8 +107,8 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
   - [ ] Read `api/src/services/stream-service.ts` once and identify stream event ownership.
   - [ ] Inventory chat API endpoints and tests before code extraction.
   - [ ] Confirm no provider/model abstraction needs to be changed in BR14b.
-  - [ ] Define exact file split before implementation.
-  - [ ] Add or update `spec/BRANCH_SPEC_EVOL.md` only if inventory exposes behavior decisions that must survive branch completion.
+  - [x] Define proposed file split before implementation in `spec/BRANCH_SPEC_EVOL.md`.
+  - [x] Add `spec/BRANCH_SPEC_EVOL.md` for behavior and extraction-order decisions that must survive branch completion.
   - [ ] Lot gate: conductor report includes BR14b lane and UAT gate status.
 
 - [ ] **Lot 1 — Chat orchestration boundary**
