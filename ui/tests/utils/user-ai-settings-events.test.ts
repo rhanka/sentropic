@@ -45,7 +45,7 @@ describe('user ai settings events', () => {
 
     emitUserAISettingsUpdated({
       defaultProviderId: 'openai',
-      defaultModel: 'gpt-5.4',
+      defaultModel: 'gpt-5.5',
     });
     emitUserAISettingsUpdated({
       defaultProviderId: 'gemini',
@@ -55,7 +55,7 @@ describe('user ai settings events', () => {
     window.removeEventListener(USER_AI_SETTINGS_UPDATED_EVENT, handler);
 
     expect(capturedPayloads).toEqual([
-      { defaultProviderId: 'openai', defaultModel: 'gpt-5.4' },
+      { defaultProviderId: 'openai', defaultModel: 'gpt-5.5' },
       {
         defaultProviderId: 'gemini',
         defaultModel: 'gemini-3.1-pro-preview-customtools',

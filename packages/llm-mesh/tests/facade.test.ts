@@ -34,8 +34,8 @@ describe('createLlmMesh', () => {
     const model = { ...getProviderProfile('openai'), providerId: 'openai' as const };
     const adapter = buildAdapter({
       providerId: 'openai',
-      modelId: 'gpt-5.4',
-      label: 'GPT-5.4',
+      modelId: 'gpt-5.5',
+      label: 'GPT-5.5',
       reasoningTier: 'advanced',
       defaultTaskHints: ['chat'],
       capabilities: {
@@ -53,15 +53,15 @@ describe('createLlmMesh', () => {
       hooks: { onRequest },
     });
 
-    await mesh.generate({ model: 'openai:gpt-5.4', messages: userMessage });
+    await mesh.generate({ model: 'openai:gpt-5.5', messages: userMessage });
 
     expect(adapter.generate).toHaveBeenCalledWith(
-      expect.objectContaining({ providerId: 'openai', modelId: 'gpt-5.4' }),
+      expect.objectContaining({ providerId: 'openai', modelId: 'gpt-5.5' }),
       expect.objectContaining({ auth: expect.objectContaining({ descriptor: { sourceType: 'direct-token', label: 'OpenAI prod' } }) }),
     );
     expect(onRequest).toHaveBeenCalledWith(expect.objectContaining({
       providerId: 'openai',
-      modelId: 'gpt-5.4',
+      modelId: 'gpt-5.5',
       auth: { sourceType: 'direct-token', label: 'OpenAI prod' },
     }));
     expect(onRequest.mock.calls[0][0].auth.token).toBeUndefined();

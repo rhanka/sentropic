@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 // Mock the store to return known labels
 vi.mock('$lib/stores/modelCatalog', () => {
   const labels = new Map([
-    ['gpt-5.4', 'GPT-5.4'],
+    ['gpt-5.5', 'GPT-5.5'],
     ['claude-sonnet-4-6', 'Sonnet 4.6'],
     ['magistral-medium-2509', 'Magistral Medium'],
     ['devstral-2512', 'Devstral 2'],
@@ -26,7 +26,7 @@ describe('model display utils', () => {
   });
 
   it('returns short labels from catalog for known models', () => {
-    expect(formatCompactModelLabel('gpt-5.4')).toBe('GPT-5.4');
+    expect(formatCompactModelLabel('gpt-5.5')).toBe('GPT-5.5');
     expect(formatCompactModelLabel('claude-sonnet-4-6')).toBe('Sonnet 4.6');
     expect(formatCompactModelLabel('magistral-medium-2509')).toBe('Magistral Medium');
     expect(formatCompactModelLabel('devstral-2512')).toBe('Devstral 2');

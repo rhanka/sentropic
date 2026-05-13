@@ -164,7 +164,7 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   // -----------------------------------------------------------------------
   {
     providerId: 'anthropic',
-    model: 'claude-opus-4-6',
+    model: 'claude-opus-4-7',
     label: 'Claude Opus',
     chatEvents: [
       { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello' }, index: 0 },
@@ -565,12 +565,12 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
-  // OpenAI — GPT-5.4 (reasoning model)
+  // OpenAI — GPT-5.5 (reasoning model)
   // -----------------------------------------------------------------------
   {
     providerId: 'openai',
-    model: 'gpt-5.4',
-    label: 'GPT-5.4',
+    model: 'gpt-5.5',
+    label: 'GPT-5.5',
     chatEvents: [
       { type: 'response.created', response: { id: 'resp_test_123' } },
       { type: 'response.output_text.delta', delta: 'Hello' },
