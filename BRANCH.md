@@ -80,4 +80,9 @@
 - [x] Decide `CheckpointStore<T>` design (generic vs typed pair) with multi-backend adapters.
 - [x] Document use case coverage (CLI, visual tool renderers, canvas bidirectional, background tasks, voice).
 - [x] Define delivery cadence (multi-package per branch, safe-but-fast).
+- [x] Validate `RepoCheckpointStore` sibling port and shadow-repo `persistence-git` adapter (external evidence Gemini CLI, Aider, Claude Code).
+- [x] Resolve open questions Q3/Q4/Q5 (tool registry federation, idempotency derivation, header-based wire versioning).
+- [x] Add use cases offline-first, session offload, async externally-triggered.
+- [x] Document agent templating invariant and managed marketplace package (`@sentropic/marketplace`).
+- [x] Draft 5 SPEC_VOL minimal intentions (harness, chat-core, flow, skills, marketplace).
 - [ ] Remove `BRANCH.md` before merge unless project explicitly keeps it.
