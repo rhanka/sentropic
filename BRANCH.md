@@ -69,10 +69,15 @@
 - [x] Identify whether output should be shipped as npm packages, Codex/Claude/Gemini plugins, GitHub Actions, CLI binary, docs, or templates.
 - [x] Define how `@sentropic/llm-mesh` relates to future agent/workflow/skill packages.
 - [x] Define what should stay product-private versus public/open reusable infrastructure.
+- [x] Define conceptual boundaries between skills, tools, plugins, agents, and marketplace.
+- [x] Define `@sentropic/skills` package design and distribution strategy.
 
 ## Lot 5 - Decision output
 
 - [x] Produce a recommendation matrix with adopt, adapt, watch, and reject categories.
 - [x] Produce branch implications for BR14b, BR14a, BR19, BR15, and BR10.
 - [x] Produce a short migration-safe roadmap with no dual-runtime trap.
+- [x] Decide `CheckpointStore<T>` design (generic vs typed pair) with multi-backend adapters.
+- [x] Document use case coverage (CLI, visual tool renderers, canvas bidirectional, background tasks, voice).
+- [x] Define delivery cadence (multi-package per branch, safe-but-fast).
 - [ ] Remove `BRANCH.md` before merge unless project explicitly keeps it.
