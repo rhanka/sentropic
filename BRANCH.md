@@ -34,13 +34,14 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
   - `api/tests/**/tools*.test.ts`
   - `api/tests/**/stream*.test.ts`
   - `api/tests/**/fixtures/**`
+  - `packages/contracts/**` (via BR14b-EX1)
+  - `packages/events/**` (via BR14b-EX1)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.github/workflows/**`
   - `packages/llm-mesh/**`
-  - `packages/**/package.json`
   - `api/drizzle/**`
   - `ui/**`
   - `e2e/**`
@@ -54,10 +55,17 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
   - `spec/SPEC_EVOL_ENTROPIC_BR14_ORCHESTRATION.md`
   - `spec/SPEC_EVOL_LLM_MESH.md`
   - `spec/SPEC_CHATBOT.md`
+  - `packages/**/package.json` (via BR14b-EX1)
 - **Exception process**:
   - Declare exception ID `BR14b-EXn` in `## Feedback Loop` before touching any conditional or forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop`.
+
+## Scope Exceptions
+- `BR14b-EX1 — Bundle @sentropic/contracts and @sentropic/events with chat-core in BR14b`
+  - Rationale: Per BR23 SPEC_STUDY_ARCHITECTURE_BOUNDARIES §11 (delivery cadence): contracts package ships the 6 shared transverse types (TenantContext, AuthzContext, CostContext, IdempotencyKey, CheckpointVersion, EventEnvelope) that chat-core implementation will consume. Events package will follow in the same branch with the StreamEvent wire taxonomy. Co-shipping avoids a separate mini-branch for events while keeping atomic per-package buildability.
+  - Impact: New paths under `packages/contracts/**` and `packages/events/**` allowed. Standard `package.json` + `tsconfig.json` + `src/` structure aligned with existing `packages/llm-mesh` style.
+  - Rollback: Delete `packages/contracts/` (and `packages/events/` once added) entirely; revert this commit.
 
 ## Feedback Loop
 - `attention` 2026-05-12: BR14g was merged without an explicit UAT checkpoint. BR14b final gate therefore requires recorded user UAT passed or explicit user UAT waiver before merge; CI alone is insufficient.
@@ -172,3 +180,9 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: resolve CI and UAT blockers.
   - [ ] Final gate step 3: only after CI + UAT/waiver are both OK, commit removal of `BRANCH.md`, push, and merge.
+
+## Lot 1 - @sentropic/contracts scaffold
+- [x] Create packages/contracts/package.json
+- [x] Create packages/contracts/tsconfig.json
+- [x] Create packages/contracts/src/index.ts with 6 frozen types
+- [ ] Typecheck via make target if available
