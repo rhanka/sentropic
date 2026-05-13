@@ -66,13 +66,13 @@
 
 ## Lot 4 - Publication and ecosystem strategy
 
-- [ ] Identify whether output should be shipped as npm packages, Codex/Claude/Gemini plugins, GitHub Actions, CLI binary, docs, or templates.
-- [ ] Define how `@sentropic/llm-mesh` relates to future agent/workflow/skill packages.
-- [ ] Define what should stay product-private versus public/open reusable infrastructure.
+- [x] Identify whether output should be shipped as npm packages, Codex/Claude/Gemini plugins, GitHub Actions, CLI binary, docs, or templates.
+- [x] Define how `@sentropic/llm-mesh` relates to future agent/workflow/skill packages.
+- [x] Define what should stay product-private versus public/open reusable infrastructure.
 
 ## Lot 5 - Decision output
 
 - [x] Produce a recommendation matrix with adopt, adapt, watch, and reject categories.
 - [x] Produce branch implications for BR14b, BR14a, BR19, BR15, and BR10.
-- [ ] Produce a short migration-safe roadmap with no dual-runtime trap.
+- [x] Produce a short migration-safe roadmap with no dual-runtime trap.
 - [ ] Remove `BRANCH.md` before merge unless project explicitly keeps it.
