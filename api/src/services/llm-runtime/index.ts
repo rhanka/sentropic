@@ -1060,7 +1060,7 @@ export async function* callLLMStream(
     selection.providerId === 'openai' &&
     typeof userId === 'string' &&
     userId.trim().length > 0 &&
-    selectedModel === 'gpt-5.4' &&
+    selectedModel === 'gpt-5.5' &&
     (await getOpenAITransportMode()) === 'codex'
       ? await resolveConnectedCodexTransport(userId)
       : null;

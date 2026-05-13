@@ -5,11 +5,11 @@ import {
 } from '../../src/services/model-selection-legacy';
 
 describe('model selection legacy cutovers', () => {
-  it('maps gpt-5.2 to gpt-5.4 on the openai provider', () => {
+  it('maps gpt-5.2 to gpt-5.5 on the openai provider', () => {
     expect(findLegacyModelCutoverRule('gpt-5.2')).toEqual({
       providerId: 'openai',
       fromModelId: 'gpt-5.2',
-      toModelId: 'gpt-5.4',
+      toModelId: 'gpt-5.5',
     });
 
     expect(
@@ -19,7 +19,7 @@ describe('model selection legacy cutovers', () => {
       })
     ).toEqual({
       providerId: 'openai',
-      modelId: 'gpt-5.4',
+      modelId: 'gpt-5.5',
       migrated: true,
     });
   });

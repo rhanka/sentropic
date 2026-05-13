@@ -52,7 +52,7 @@ describe('chat session bootstrap contract', () => {
       .update(chatMessages)
       .set({
         content: 'Bootstrap final response',
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
       })
       .where(eq(chatMessages.id, assistantMessageId));
 

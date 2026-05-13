@@ -571,7 +571,7 @@ const toBudgetString = (value: unknown): string => {
 /** Per-model context window budgets (total tokens including input + output) */
 const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
   // OpenAI
-  'gpt-5.4':       1_000_000,
+  'gpt-5.5':       1_000_000,
   'gpt-5.4-nano':  1_000_000,
   'gpt-4.1':       1_000_000,
   'gpt-4.1-nano':  1_000_000,
@@ -580,7 +580,7 @@ const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
   'gemini-3.1-flash-lite-preview':      1_000_000,
   // Anthropic
   'claude-sonnet-4-6': 1_000_000,
-  'claude-opus-4-6':   1_000_000,
+  'claude-opus-4-7':   1_000_000,
   // Mistral
   'mistral-small-2603':     256_000,
   'magistral-medium-2509':  128_000,
@@ -3319,7 +3319,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     const selectedModel = resolvedSelection.model_id;
     const useCodexTransport =
       selectedProviderId === 'openai' &&
-      selectedModel === 'gpt-5.4' &&
+      selectedModel === 'gpt-5.5' &&
       (await getOpenAITransportMode()) === 'codex';
 
     // Reasoning-effort evaluation (best effort):

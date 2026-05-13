@@ -123,7 +123,7 @@
     concurrency: 10,
     publishingConcurrency: 5,
     defaultProviderId: 'openai' as 'openai' | 'gemini' | 'anthropic' | 'mistral' | 'cohere',
-    defaultModel: 'gpt-5.4',
+    defaultModel: 'gpt-5.5',
     processingInterval: 1000
   };
   let modelCatalog: ModelCatalogPayload = {

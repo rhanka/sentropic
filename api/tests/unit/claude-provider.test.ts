@@ -63,7 +63,7 @@ describe('ClaudeProviderRuntime', () => {
       expect(sonnet!.supportsTools).toBe(true);
       expect(sonnet!.supportsStreaming).toBe(true);
 
-      const opus = models.find((m) => m.modelId === 'claude-opus-4-6');
+      const opus = models.find((m) => m.modelId === 'claude-opus-4-7');
       expect(opus).toBeDefined();
       expect(opus!.reasoningTier).toBe('advanced');
     });

@@ -10,7 +10,7 @@ const LEGACY_MODEL_CUTOVER_RULES: LegacyModelCutoverRule[] = [
   {
     providerId: 'openai',
     fromModelId: 'gpt-5.2',
-    toModelId: 'gpt-5.4',
+    toModelId: 'gpt-5.5',
   },
   {
     providerId: 'gemini',
