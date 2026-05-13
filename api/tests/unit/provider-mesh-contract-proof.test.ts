@@ -12,7 +12,7 @@ describe('API LLM mesh contract proof', () => {
     );
     expect(proof.providers).toHaveLength(5);
     expect(proof.modelCount).toBeGreaterThanOrEqual(10);
-    expect(proof.mesh.listModels().some((model) => model.modelId === 'gpt-5.4')).toBe(true);
+    expect(proof.mesh.listModels().some((model) => model.modelId === 'gpt-5.5')).toBe(true);
   });
 
   it('keeps package model profiles aligned with the application runtime catalog', () => {

@@ -900,7 +900,7 @@ describe('Queue - organization_batch_create runtime', () => {
           initiativeCount: 10,
           locale: 'fr',
           organizationId: null,
-          model: 'gpt-5.4',
+          model: 'gpt-5.5',
           autoCreateOrganizations: true,
         },
         orgContext: {
@@ -929,7 +929,7 @@ describe('Queue - organization_batch_create runtime', () => {
       data: JSON.stringify({
         folderId,
         input: 'Opportunités pour Airudi à Montréal',
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
         locale: 'fr',
         initiatedByUserId: user.userId,
         workflow: {
@@ -1080,7 +1080,7 @@ describe('Queue - organization_batch_create runtime', () => {
           initiativeCount: 2,
           locale: 'fr',
           organizationId: null,
-          model: 'gpt-5.4',
+          model: 'gpt-5.5',
           autoCreateOrganizations: true,
         },
         orgContext: {
@@ -1113,7 +1113,7 @@ describe('Queue - organization_batch_create runtime', () => {
       data: JSON.stringify({
         folderId,
         input: 'Digital twin manufacturier',
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
         locale: 'fr',
         initiatedByUserId: user.userId,
         workflow: {

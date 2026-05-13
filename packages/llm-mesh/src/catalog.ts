@@ -219,8 +219,8 @@ const modelCapabilities = (
 export const modelProfiles = [
   {
     providerId: 'openai',
-    modelId: 'gpt-5.4',
-    label: 'GPT-5.4',
+    modelId: 'gpt-5.5',
+    label: 'GPT-5.5',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('openai', 'advanced'),
@@ -267,7 +267,7 @@ export const modelProfiles = [
   },
   {
     providerId: 'anthropic',
-    modelId: 'claude-opus-4-6',
+    modelId: 'claude-opus-4-7',
     label: 'Opus 4.6',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
