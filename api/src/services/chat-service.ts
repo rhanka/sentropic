@@ -7,6 +7,8 @@ import {
 } from './chat/postgres-checkpoint-adapter';
 import { postgresChatMessageStore } from './chat/postgres-chat-message-store';
 import { postgresChatSessionStore } from './chat/postgres-chat-session-store';
+import { postgresStreamBuffer } from './chat/postgres-stream-buffer';
+import { ChatRuntime } from '../../../packages/chat-core/src/runtime';
 import { createId } from '../utils/id';
 import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
 import {
@@ -784,6 +786,32 @@ const compactConversationContext = async (input: {
 };
 
 export class ChatService {
+  /**
+   * BR14b Lot 9 — first orchestration extraction.
+   * `ChatRuntime` owns chat orchestration above the persistence ports
+   * extracted in Lots 4/6/7/8. Methods migrate progressively from
+   * `ChatService` into `ChatRuntime` (see runtime.ts header). For now,
+   * `ChatService` instantiates the runtime with the four existing
+   * Postgres adapters; `checkpointStore` is wired as a stub typed via
+   * `as unknown as CheckpointStore<ChatState>` because the existing
+   * `postgresChatCheckpointAdapter` exposes a higher-level surface
+   * (`createCheckpointForSession` / `listCheckpointsForSession` /
+   * `restoreCheckpointForSession`) rather than the generic `load/save`
+   * CheckpointStore<ChatState> port. The runtime never reaches into
+   * that port in Lot 9 (the migrated slice doesn't checkpoint), so the
+   * stub is safe; full wiring lands when checkpoint orchestration moves
+   * into the runtime (Lot 11+).
+   */
+  private readonly runtime: ChatRuntime = new ChatRuntime({
+    messageStore: postgresChatMessageStore,
+    sessionStore: postgresChatSessionStore,
+    streamBuffer: postgresStreamBuffer,
+    // CheckpointStore<ChatState> is not exercised in Lot 9; cast through
+    // unknown to satisfy the typed DI without forcing a premature
+    // generic-port refactor of postgresChatCheckpointAdapter.
+    checkpointStore: postgresChatCheckpointAdapter as unknown as ConstructorParameters<typeof ChatRuntime>[0]['checkpointStore'],
+  });
+
   private normalizeMessageContexts(
     input: Pick<CreateChatMessageInput, 'contexts' | 'primaryContextType' | 'primaryContextId'>
   ): Array<{ contextType: ChatContextType; contextId: string }> {
@@ -5283,6 +5311,11 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
    * - Recompose content/reasoning depuis les deltas.
    * - Émet un event terminal si manquant.
    */
+  /**
+   * BR14b Lot 9 — first orchestration delegation.
+   * Body moved into `ChatRuntime.finalizeAssistantMessageFromStream`.
+   * Public signature and null-on-skip contract preserved verbatim.
+   */
   async finalizeAssistantMessageFromStream(options: {
     assistantMessageId: string;
     reason?: string;
@@ -5292,59 +5325,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     reasoning: string | null;
     wroteDone: boolean;
   } | null> {
-    const { assistantMessageId, reason, fallbackContent } = options;
-    const msg = await postgresChatMessageStore.findById(assistantMessageId);
-
-    if (!msg || msg.role !== 'assistant') return null;
-
-    const events = await readStreamEvents(assistantMessageId);
-    const hasTerminal = events.some((ev) => ev.eventType === 'done' || ev.eventType === 'error');
-
-    const contentParts: string[] = [];
-    const reasoningParts: string[] = [];
-    for (const ev of events) {
-      if (ev.eventType === 'content_delta') {
-        const data = ev.data as { delta?: unknown } | null;
-        const delta = typeof data?.delta === 'string' ? data.delta : '';
-        if (delta) contentParts.push(delta);
-      } else if (ev.eventType === 'reasoning_delta') {
-        const data = ev.data as { delta?: unknown } | null;
-        const delta = typeof data?.delta === 'string' ? data.delta : '';
-        if (delta) reasoningParts.push(delta);
-      }
-    }
-
-    let content = contentParts.join('');
-    if (!content.trim() && fallbackContent) content = fallbackContent;
-
-    const shouldUpdateContent = !msg.content || msg.content.trim().length === 0;
-    if (shouldUpdateContent && content) {
-      await postgresChatMessageStore.updateAssistantContent(assistantMessageId, {
-        content,
-        reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null,
-      });
-    }
-
-    let wroteDone = false;
-    if (!hasTerminal) {
-      const seq = await getNextSequence(assistantMessageId);
-      await writeStreamEvent(
-        assistantMessageId,
-        'done',
-        { reason: reason ?? 'cancelled' },
-        seq,
-        assistantMessageId
-      );
-      wroteDone = true;
-    }
-
-    await postgresChatSessionStore.touchUpdatedAt(msg.sessionId);
-
-    return {
-      content,
-      reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null,
-      wroteDone
-    };
+    return this.runtime.finalizeAssistantMessageFromStream(options);
   }
 }
 
