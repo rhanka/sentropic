@@ -11,6 +11,9 @@ import {
   type ChatCheckpointSummary,
   type BuildSystemPromptInput,
   type BuildSystemPromptResult,
+  type EvaluateReasoningEffortInput,
+  type ReasoningEffortEvaluation,
+  type ReasoningEffortLabel,
 } from '../../../packages/chat-core/src/runtime';
 import type { ChatMessageWithFeedback } from '../../../packages/chat-core/src/message-port';
 import { createId } from '../utils/id';
@@ -927,6 +930,19 @@ export class ChatService {
       // template registry, todo orchestration, tab registry, and
       // workspace-service — none of which chat-core may import.
       buildSystemPrompt: (input) => this.buildSystemPromptInternal(input),
+      // BR14b Lot 18 — bundle the reasoning-effort evaluator block (98
+      // lines pre-Lot 18) into a single Option A callback so the runtime
+      // can drive it as `evaluateReasoningEffort`. The body lives chat-
+      // service-side because it reads
+      // `CHAT_COMMON_PROMPTS.reasoning_effort_eval` from the chat prompt
+      // registry (`api/src/config/default-chat-system.ts`) which chat-core
+      // must not import. The two `writeStreamEvent` calls that bracket
+      // the legacy block (`reasoning_effort_eval_failed` +
+      // `reasoning_effort_selected`) STAY caller-side in
+      // `runAssistantGeneration` because the shared `streamSeq` counter
+      // is not yet migrated into the runtime.
+      evaluateReasoningEffort: (input) =>
+        this.evaluateReasoningEffortInternal(input),
     });
   }
 
@@ -1883,6 +1899,131 @@ export class ChatService {
   }
 
   /**
+   * BR14b Lot 18 — bound to the `evaluateReasoningEffort` callback on
+   * `ChatRuntimeDeps`. Carries the verbatim 98-line body of the
+   * reasoning-effort evaluator block extracted from
+   * `runAssistantGeneration` (chat-service.ts lines 2806-2898 pre-Lot 18).
+   *
+   * The two status `writeStreamEvent` calls that previously bracketed
+   * the block (`reasoning_effort_eval_failed` + `reasoning_effort_selected`)
+   * STAY caller-side because the shared `streamSeq` counter is not yet
+   * migrated into the runtime. The caller in `runAssistantGeneration`
+   * emits them around the runtime call based on the returned `failure`
+   * + `effortLabel` + `evaluatedBy` fields.
+   *
+   * Behavior preservation: no inner code change. The body below is byte-
+   * for-byte identical to the pre-Lot 18 inline block, with the only
+   * differences being (a) reads of `selectedProviderId` / `selectedModel`
+   * / `conversation` / `options.userId` / `sessionWorkspaceId` /
+   * `options.signal` redirected to the `input.*` fields, and (b) the
+   * caller-side `console.error` + status event emission moved out of the
+   * catch block into `runAssistantGeneration` (failure surfaced via the
+   * returned `failure: { message }` shape).
+   */
+  private async evaluateReasoningEffortInternal(
+    input: EvaluateReasoningEffortInput,
+  ): Promise<ReasoningEffortEvaluation> {
+    // Reasoning-effort evaluation (best effort):
+    // - Runs for any model whose catalog entry has reasoningTier !== 'none'.
+    // - Evaluator uses a cheap model from the same provider family when available,
+    //   otherwise falls back to OpenAI gpt-4.1-nano.
+    const selectedProviderId = input.selectedProviderId as ProviderId;
+    const selectedModel = input.selectedModel;
+    const shouldEvaluateReasoningEffort = modelSupportsReasoning(selectedModel);
+    const evaluatorProviderId: ProviderId =
+      selectedProviderId === 'gemini' ? 'gemini' : 'openai';
+    const evaluatorModel =
+      selectedProviderId === 'gemini'
+        ? 'gemini-3.1-flash-lite-preview'
+        : 'gpt-4.1-nano';
+    if (!shouldEvaluateReasoningEffort) {
+      return {
+        shouldEvaluate: false,
+        effortLabel: 'medium',
+        evaluatedBy: 'non-gpt-5',
+        evaluatorModel: null,
+      };
+    }
+    let effortForMessage: ReasoningEffortLabel | undefined;
+    // Default fallback if evaluator fails: medium.
+    let effortLabel: ReasoningEffortLabel = 'medium';
+    let evaluatedBy: string | undefined;
+    try {
+      const evalTemplate = CHAT_COMMON_PROMPTS.reasoning_effort_eval || '';
+      if (evalTemplate) {
+        const lastUserMessage =
+          [...input.conversation].reverse().find((m) => m.role === 'user')?.content?.trim() || '';
+        const excerpt = input.conversation
+          .slice(-8)
+          .map((m) => `${m.role.toUpperCase()}: ${(m.content || '').slice(0, 2000)}`)
+          .join('\n\n')
+          .trim();
+        const evalPrompt = evalTemplate
+          .replace('{{last_user_message}}', lastUserMessage || '(vide)')
+          .replace('{{context_excerpt}}', excerpt || '(vide)');
+
+        let out = '';
+        for await (const ev of callLLMStream({
+          providerId: evaluatorProviderId,
+          model: evaluatorModel,
+          userId: input.userId,
+          workspaceId: input.workspaceId ?? undefined,
+          messages: [{ role: 'user', content: evalPrompt }],
+          // Ask for a single token (none|low|medium|high|xhigh).
+          maxOutputTokens: 64,
+          signal: input.signal
+        })) {
+          if (ev.type === 'content_delta') {
+            const d = (ev.data ?? {}) as Record<string, unknown>;
+            const delta = typeof d.delta === 'string' ? d.delta : '';
+            if (delta) out += delta;
+          } else if (ev.type === 'error') {
+            const d = (ev.data ?? {}) as Record<string, unknown>;
+            const reqId = typeof d.request_id === 'string' ? d.request_id : '';
+            const msg =
+              typeof d.message === 'string'
+                ? d.message
+                : 'Reasoning effort evaluation failed';
+            throw new Error(reqId ? `${msg} (request_id=${reqId})` : msg);
+          }
+        }
+
+        const token = out.trim().split(/\s+/g)[0]?.toLowerCase() || '';
+        if (token === 'none' || token === 'low' || token === 'medium' || token === 'high' || token === 'xhigh') {
+          effortForMessage = token;
+          effortLabel = token;
+          evaluatedBy = evaluatorModel;
+        } else {
+          const preview = out.trim().slice(0, 200);
+          throw new Error(`Invalid effort token from ${evaluatorModel}: "${preview}"`);
+        }
+      }
+    } catch (e) {
+      // Best-effort only: do not block the chat if the classifier fails.
+      const msg = e instanceof Error ? e.message : String(e ?? 'unknown');
+      const safeMsg = msg.slice(0, 500);
+      return {
+        shouldEvaluate: true,
+        effortLabel: 'medium',
+        evaluatedBy: 'fallback',
+        evaluatorModel,
+        failure: { message: safeMsg },
+      };
+    }
+    // Always provide an `evaluatedBy` value when shouldEvaluate=true.
+    if (!evaluatedBy) {
+      evaluatedBy = 'fallback';
+    }
+    return {
+      shouldEvaluate: true,
+      effortLabel,
+      ...(effortForMessage ? { effortForMessage } : {}),
+      evaluatedBy,
+      evaluatorModel,
+    };
+  }
+
+  /**
    * BR14b Lot 16b — bound to the `buildSystemPrompt` callback on
    * `ChatRuntimeDeps`. Carries the verbatim 605-line body of Slice B
    * extracted from `runAssistantGeneration` (chat-service.ts lines
@@ -2803,103 +2944,47 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       selectedModel === 'gpt-5.5' &&
       (await getOpenAITransportMode()) === 'codex';
 
-    // Reasoning-effort evaluation (best effort):
-    // - Runs for any model whose catalog entry has reasoningTier !== 'none'.
-    // - Evaluator uses a cheap model from the same provider family when available,
-    //   otherwise falls back to OpenAI gpt-4.1-nano.
-    const shouldEvaluateReasoningEffort = modelSupportsReasoning(selectedModel);
-    const evaluatorProviderId: ProviderId =
-      selectedProviderId === 'gemini' ? 'gemini' : 'openai';
-    const evaluatorModel =
-      selectedProviderId === 'gemini'
-        ? 'gemini-3.1-flash-lite-preview'
-        : 'gpt-4.1-nano';
-    let reasoningEffortForThisMessage: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | undefined;
-    // Default fallback if evaluator fails: medium.
-    let reasoningEffortLabel: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'medium';
-    let reasoningEffortBy: string | undefined;
-    if (shouldEvaluateReasoningEffort) {
+    // BR14b Lot 18 — reasoning-effort evaluator block (98 lines pre-Lot 18)
+    // migrated into `ChatRuntime.evaluateReasoningEffort`. The runtime
+    // delegates the body to the `evaluateReasoningEffort` callback wired
+    // in the constructor (`evaluateReasoningEffortInternal`). The two
+    // status `writeStreamEvent` calls stay caller-side because the shared
+    // `streamSeq` counter is not yet migrated. On failure, we also emit
+    // the same `console.error` trace shape the legacy inline catch block
+    // produced (`{assistantMessageId, sessionId, model, evaluatorModel,
+    // error}`) so log-based debugging stays unchanged.
+    const reasoning = await this.runtime.evaluateReasoningEffort({
+      userId: options.userId,
+      workspaceId: sessionWorkspaceId,
+      selectedProviderId,
+      selectedModel,
+      conversation,
+      signal: options.signal,
+    });
+    if (reasoning.failure) {
       try {
-        const evalTemplate = CHAT_COMMON_PROMPTS.reasoning_effort_eval || '';
-        if (evalTemplate) {
-          const lastUserMessage =
-            [...conversation].reverse().find((m) => m.role === 'user')?.content?.trim() || '';
-          const excerpt = conversation
-            .slice(-8)
-            .map((m) => `${m.role.toUpperCase()}: ${(m.content || '').slice(0, 2000)}`)
-            .join('\n\n')
-            .trim();
-          const evalPrompt = evalTemplate
-            .replace('{{last_user_message}}', lastUserMessage || '(vide)')
-            .replace('{{context_excerpt}}', excerpt || '(vide)');
-
-          let out = '';
-          for await (const ev of callLLMStream({
-            providerId: evaluatorProviderId,
-            model: evaluatorModel,
-            userId: options.userId,
-            workspaceId: sessionWorkspaceId,
-            messages: [{ role: 'user', content: evalPrompt }],
-            // Ask for a single token (none|low|medium|high|xhigh).
-            maxOutputTokens: 64,
-            signal: options.signal
-          })) {
-            if (ev.type === 'content_delta') {
-              const d = (ev.data ?? {}) as Record<string, unknown>;
-              const delta = typeof d.delta === 'string' ? d.delta : '';
-              if (delta) out += delta;
-            } else if (ev.type === 'error') {
-              const d = (ev.data ?? {}) as Record<string, unknown>;
-              const reqId = typeof d.request_id === 'string' ? d.request_id : '';
-              const msg =
-                typeof d.message === 'string'
-                  ? d.message
-                  : 'Reasoning effort evaluation failed';
-              throw new Error(reqId ? `${msg} (request_id=${reqId})` : msg);
-            }
-          }
-
-          const token = out.trim().split(/\s+/g)[0]?.toLowerCase() || '';
-          if (token === 'none' || token === 'low' || token === 'medium' || token === 'high' || token === 'xhigh') {
-            reasoningEffortForThisMessage = token;
-            reasoningEffortLabel = token;
-            reasoningEffortBy = evaluatorModel;
-          } else {
-            const preview = out.trim().slice(0, 200);
-            throw new Error(`Invalid effort token from ${evaluatorModel}: "${preview}"`);
-          }
-        }
-      } catch (e) {
-        // Best-effort only: do not block the chat if the classifier fails.
-        // But trace the failure for debugging in the UI timeline.
-        const msg = e instanceof Error ? e.message : String(e ?? 'unknown');
-        const safeMsg = msg.slice(0, 500);
-        // Also log to API logs for debugging (user requested).
-        try {
-          console.error('[chat] reasoning_effort_eval_failed', {
-            assistantMessageId: options.assistantMessageId,
-            sessionId: options.sessionId,
-            model: selectedModel,
-            evaluatorModel,
-            error: safeMsg,
-          });
-        } catch {
-          // ignore
-        }
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'status',
-          { state: 'reasoning_effort_eval_failed', message: safeMsg },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
+        console.error('[chat] reasoning_effort_eval_failed', {
+          assistantMessageId: options.assistantMessageId,
+          sessionId: options.sessionId,
+          model: selectedModel,
+          evaluatorModel: reasoning.evaluatorModel,
+          error: reasoning.failure.message,
+        });
+      } catch {
+        // ignore
       }
+      await writeStreamEvent(
+        options.assistantMessageId,
+        'status',
+        { state: 'reasoning_effort_eval_failed', message: reasoning.failure.message },
+        streamSeq,
+        options.assistantMessageId
+      );
+      streamSeq += 1;
     }
-    // Always emit a "selected" status so the UI can display what was used.
-    if (!reasoningEffortBy) {
-      reasoningEffortBy = shouldEvaluateReasoningEffort ? 'fallback' : 'non-gpt-5';
-    }
+    const reasoningEffortForThisMessage = reasoning.effortForMessage;
+    const reasoningEffortLabel = reasoning.effortLabel;
+    const reasoningEffortBy = reasoning.evaluatedBy;
     await writeStreamEvent(
       options.assistantMessageId,
       'status',
