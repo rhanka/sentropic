@@ -1,0 +1,152 @@
+# Feature: BR-26 Flow Runtime Extraction (façade-first)
+
+## Objective
+Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + `gate-service.ts` into a publishable `@sentropic/flow` package via a façade-first migration: scope inventory, golden traces capture, façade layer, then progressive slice extraction without behavioral regression. Preserve agent templating (`promptTemplate` + `agentSelection`) and all SPEC_STUDY_AGENT_AUTONOMY_INCREMENTS §4 invariants.
+
+## Scope / Guardrails
+- Scope limited to the flow runtime domain (workflow definitions/runs, job queue, transitions, gates, agent templating bindings).
+- One migration max in `api/drizzle/*.sql` (only if a slice proves a schema change unavoidable, under `BR26-EX1`).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/entropiq` reserved for user dev/UAT (`ENV=dev`).
+- Branch development runs in isolated worktree `tmp/feat-flow-runtime-extract`.
+- Automated tests run on `ENV=test-feat-flow-runtime-extract` / `ENV=e2e-feat-flow-runtime-extract`, never on root `dev`.
+- `ENV=<env>` is always passed as the last argument of every `make` command.
+- All new text in English.
+- Branch slot: branch number `26`, slot `0` → API `9130`, UI `5330`, Maildev `1230`.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `spec/**`
+  - `api/src/services/todo-orchestration.ts` (Lot 4+)
+  - `api/src/services/queue-manager.ts` (Lot 5+)
+  - `api/src/services/todo-runtime.ts`
+  - `api/src/services/gate-service.ts`
+  - `api/src/services/flow/**` (new façade adapters, Lot 3+)
+  - `api/src/config/default-workflows.ts`
+  - `api/src/config/default-agents.ts`
+  - `packages/flow/**` (new package, Lot 2+)
+  - `packages/contracts/**` (only if `TenantContext`/`IdempotencyKey` are needed, under `BR26-EX1`)
+  - `packages/events/**` (only if `EventEnvelope` is needed, under `BR26-EX2`)
+  - `api/tests/fixtures/golden/br26/**` (Lot 1)
+  - `api/tests/services/flow/**` (regression tests per slice)
+  - `api/src/db/schema.ts` (Lot 1+ only if columns need to be added — index hints / version bumps)
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `api/src/services/chat-service.ts` (consumer; only call-site updates allowed under `BR26-EX3`)
+  - `api/src/services/chat-core/**`
+  - `packages/llm-mesh/**`
+  - `ui/**`
+  - Any `plan/NN-BRANCH_*.md` other than this branch file.
+- **Conditional Paths (allowed only with explicit `BR26-EXn` exception)**:
+  - `api/drizzle/*.sql` (max 1 file — `BR26-EX1`)
+  - `.github/workflows/**` (`BR26-EX4` if matrix split needs adjustment for new test suite)
+  - `api/src/services/chat-service.ts` (`BR26-EX3` for call-site rebinding through the façade)
+  - `packages/contracts/**`, `packages/events/**` (`BR26-EX1`/`BR26-EX2`)
+- **Exception process**:
+  - Declare exception ID `BR26-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the exception in this file under `## Feedback Loop`.
+
+## Feedback Loop
+- _(none open at scoping; Lot 1+ will record `blocked`/`deferred`/`attention` items here)_
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in this file; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (sub-agents work in dedicated lot scopes inside this single worktree; one final test cycle).
+- [ ] **Multi-branch**
+- Rationale: the extraction is a single linear refactor with a strict slice order; CI value is one final regression cycle on the integrated façade.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT performed on the integrated branch after each UI-impacting lot. Most lots are API-only, so UAT happens only at Lot N-2 (end-to-end smoke through the façade).
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Scoping (this lot, doc-only)**
+  - [x] Read MASTER, workflow, subagents rules + BRANCH_TEMPLATE.
+  - [x] Create worktree `tmp/feat-flow-runtime-extract` on `feat/flow-runtime-extract` from `origin/main`.
+  - [x] Inventory `todo-orchestration.ts` (33 public methods), `queue-manager.ts` (14 public methods + JobType union), `todo-runtime.ts` (pure helpers), `gate-service.ts`, `default-workflows.ts`, `default-agents.ts`, schema tables.
+  - [x] Capture façade design + slice extraction order in `spec/SPEC_EVOL_BR26_FLOW_FACADE.md`.
+  - [x] List the 6 golden trace fixtures to capture in Lot 1.
+  - [x] Define exception placeholders `BR26-EX1..4`.
+  - [x] No code touch.
+
+- [ ] **Lot 1 — Golden traces capture (test fixtures only)**
+  - [ ] Add fixture loader under `api/tests/fixtures/golden/br26/` (path scaffolding only).
+  - [ ] Capture 6 fixtures (chat tool-loop ≥3, fanout/join across 2 orgs, approval-gated pause+resume, queue-retry, resume-after-crash, cancel-mid-loop) → 6 `.jsonl` files with `{input, events[], final_state}`.
+  - [ ] Replay harness `api/tests/services/flow/replay.spec.ts` that re-runs current production code and asserts byte-identical event stream (modulo timestamps/IDs).
+  - [ ] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api SCOPE=tests/services/flow/replay.spec.ts ENV=test-feat-flow-runtime-extract`.
+
+- [ ] **Lot 2 — Package shell `packages/flow/`**
+  - [ ] Scaffold `packages/flow/{package.json,tsconfig.json,src/index.ts,README.md,LICENSE}` mirroring `packages/llm-mesh/` shape (name `@sentropic/flow`, `type: module`, `sideEffects: false`, dist build via `tsc`).
+  - [ ] Register in root npm workspace.
+  - [ ] Empty `src/index.ts` exporting only the port interfaces from §2 of SPEC_EVOL.
+  - [ ] Lot gate: `make build`, `make typecheck`, `make lint`.
+
+- [ ] **Lot 3 — Façade layer (delegating adapters in `api/src/services/flow/`)**
+  - [ ] Add port interfaces in `packages/flow/src/{workflow-store,run-store,job-queue,approval-gate,agent-template,transitions,flow-runtime}.ts`.
+  - [ ] Add Postgres adapters in `api/src/services/flow/postgres-{workflow-store,run-store,job-queue,approval-gate,agent-template,transitions}.ts` — each method delegates to the existing `todoOrchestrationService` / `queueManager` / `gate-service` functions (no logic moved yet).
+  - [ ] Add `FlowRuntime` composition root in `api/src/services/flow/flow-runtime.ts`.
+  - [ ] Re-run replay harness from Lot 1 against the façade → must stay byte-identical.
+  - [ ] Lot gate: typecheck-api, lint-api, replay spec, full `make test-api ENV=test-feat-flow-runtime-extract`.
+
+- [ ] **Lot 4 — Slice 1: `gate-service.ts` → `ApprovalGate` adapter**
+  - [ ] Move logic from `api/src/services/gate-service.ts` into `api/src/services/flow/postgres-approval-gate.ts`.
+  - [ ] Re-export thin re-exports in `gate-service.ts` for backward compatibility (deleted at Lot N).
+  - [ ] Regression test name: `gate-service.flow-replay.spec.ts` against fixture #3 (approval-gated pause+resume).
+  - [ ] Lot gate: typecheck-api, lint-api, scoped api test, replay harness.
+
+- [ ] **Lot 5 — Slice 2: `default-workflows.ts` + `default-agents.ts` → seed catalog port**
+  - [ ] Move the workflow seed catalog + agent seed catalog into `packages/flow/src/seeds/` (pure data, no DB access).
+  - [ ] `seedAgentsForType` / `seedWorkflowsForType` adapters keep the upsert behavior in `api/src/services/flow/postgres-workflow-store.ts`.
+  - [ ] Regression: re-seed an empty test DB → resulting rows byte-identical to current main.
+  - [ ] Lot gate: typecheck-api, lint-api, scoped api test, replay harness fixtures #1 + #2.
+
+- [ ] **Lot 6 — Slice 3: `workflow_run_state` CRUD → `RunStore`**
+  - [ ] Move snapshot/merge/version OCC logic from `queue-manager.ts` into `packages/flow/src/run-store.ts` + Postgres adapter.
+  - [ ] Preserve invariant §4.6 (checkpoint monotonicity).
+  - [ ] Regression: fixture #5 (resume-after-crash) + #6 (cancel-mid-loop).
+  - [ ] Lot gate: typecheck-api, lint-api, scoped api test, replay harness fixtures #4 + #5 + #6.
+
+- [ ] **Lot 7 — Slice 4: `JobQueue` extraction (lease, DLQ, heartbeat, idempotency)**
+  - [ ] Move queue lease/dispatch/cancel/drain methods from `queue-manager.ts` into `packages/flow/src/job-queue.ts` + Postgres adapter.
+  - [ ] Preserve invariants §4.2 (job idempotency), §4.7 (tenant scoping), §4.8 (DLQ semantics).
+  - [ ] Regression: all 6 fixtures.
+  - [ ] Lot gate: typecheck-api, lint-api, full `make test-api`.
+
+- [ ] **Lot 8 — Slice 5: `todo-orchestration.ts` orchestration loop → `FlowRuntime`**
+  - [ ] Move the workflow start + transition evaluation + agent resolution logic into `packages/flow/src/flow-runtime.ts` + Postgres adapter composition.
+  - [ ] `api/src/services/todo-orchestration.ts` becomes a thin re-export of the façade only.
+  - [ ] Regression: all 6 fixtures.
+  - [ ] Lot gate: typecheck-api, lint-api, full `make test-api`.
+
+- [ ] **Lot N-3 — Consumer rebinding (`BR26-EX3`)**
+  - [ ] Update `chat-service.ts` queueManager call sites to import from the façade.
+  - [ ] Update routes (`agent-config.ts`, `plans.ts`, `runs.ts`, `tasks.ts`, `todos.ts`, `workflow-config.ts`, `workspaces.ts`, `initiatives.ts`) to import `flowRuntime` instead of `todoOrchestrationService`.
+
+- [ ] **Lot N-2 — UAT (web app smoke)**
+  - [ ] Run one full use-case generation through the façade (matrix prepare → list → detail → exec summary).
+  - [ ] Run one approval-gated qualification workflow with manual gate signal.
+  - [ ] Run one chat-driven todo creation + task start.
+
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] Fold `spec/SPEC_EVOL_BR26_FLOW_FACADE.md` content into `spec/SPEC_VOL_FLOW.md` + updates to `spec/SPEC_WORKFLOW_RUNTIME.md` + `spec/SPEC_AGENTIC_MODEL.md`.
+  - [ ] Delete `spec/SPEC_EVOL_BR26_FLOW_FACADE.md`.
+
+- [ ] **Lot N — Final validation**
+  - [ ] `make typecheck-api`, `make typecheck`, `make lint-api`, `make lint`.
+  - [ ] `make build-api build-ui-image`.
+  - [ ] `make test-api ENV=test-feat-flow-runtime-extract`.
+  - [ ] `make test-ui ENV=test` (UI must remain untouched; regression check only).
+  - [ ] `make clean test-e2e API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 ENV=e2e-feat-flow-runtime-extract E2E_GROUP=<matrix>`.
+  - [ ] Final gate step 1: open PR with this `BRANCH.md` as body.
+  - [ ] Final gate step 2: CI green on PR.
+  - [ ] Final gate step 3: commit removal of `BRANCH.md`, push, merge.
