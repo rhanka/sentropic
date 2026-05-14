@@ -442,6 +442,22 @@ export type ChatRuntimeDeps = {
   readonly evaluateReasoningEffort?: (
     input: EvaluateReasoningEffortInput,
   ) => Promise<ReasoningEffortEvaluation>;
+  /**
+   * BR14b Lot 21c — Option A bundle of the api-side per-tool dispatch
+   * body. Invoked by `ChatRuntime.consumeToolCalls` for non-local tool
+   * calls. Bundles ~10 api-side helpers (`toolService.*`,
+   * `todoOrchestrationService.*`, `executeContextDocumentSearch`,
+   * `writeChatGenerationTrace`, `parseToolCallArgs`,
+   * `estimateContextBudget`, `compactContextIfNeeded`,
+   * `markTodoIterationState`). Same Option A pattern as Lot 12/16a/16b.
+   * Callback owns the `tool_call_result` event emission + streamSeq
+   * advancement via `streamSequencer.allocate`. Optional `?`: when
+   * undefined the dispatch short-circuits local tools only (full
+   * per-tool migration lands in Lot 21d).
+   */
+  readonly executeServerTool?: (
+    input: ExecuteServerToolInput,
+  ) => Promise<ExecuteServerToolResult>;
 };
 
 /**
@@ -1250,6 +1266,120 @@ export interface ConsumeAssistantStreamResult {
   readonly doneReason: ConsumeAssistantStreamDoneReason;
   readonly steerInterruptionBatch: ReadonlyArray<string>;
   readonly errorMessage?: string;
+}
+
+/**
+ * BR14b Lot 21c — input passed to the `executeServerTool` callback
+ * (Option A bundle, mirrors Lot 12/16a/16b pattern) for every non-local
+ * tool call dispatched by `ChatRuntime.consumeToolCalls`. Callback owns
+ * the per-tool `tool_call_result` event emission (each branch has its
+ * own payload shape) and advances the shared `streamSeq` cursor via
+ * `deps.streamSequencer.allocate(streamId)`. Fields opaque on the
+ * boundary (same convention as `ConsumeAssistantStreamRequest`).
+ * Surfaced for the upcoming Lot 21d migration of the inline per-tool
+ * body (~1622 lines, ~30 tool-name branches, 42 streamSeq sites).
+ */
+export interface ExecuteServerToolInput {
+  readonly userId: string;
+  readonly sessionId: string;
+  readonly assistantMessageId: string;
+  readonly workspaceId: string | null;
+  readonly toolCall: {
+    readonly id: string;
+    readonly name: string;
+    readonly args: string;
+  };
+  readonly streamSeq: number;
+  readonly currentMessages: ReadonlyArray<unknown>;
+  readonly tools: ReadonlyArray<unknown> | null;
+  readonly responseToolOutputs: ReadonlyArray<unknown>;
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly enforceTodoUpdateMode: boolean;
+  readonly todoAutonomousExtensionEnabled: boolean;
+  readonly contextBudgetReplanAttempts: number;
+  readonly readOnly: boolean;
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * BR14b Lot 21c — return shape of the `executeServerTool` callback.
+ * Mirrors the structured outputs the inline per-tool body accumulates:
+ *   - `output` — raw tool result (any shape); pushed into `executedTools.result`.
+ *   - `outputForModel` — `JSON.stringify(result)` pushed into both
+ *     `toolResults.content` and `responseToolOutputs.output`.
+ *   - `success` / `errorMessage` — `false` + error message when the
+ *     inline catch wrapped the error into `{status:'error', error}`.
+ *   - `todoStateUpdate` — forwarded to `markTodoIterationState` when
+ *     `tool === 'plan'` AND `todoAutonomousExtensionEnabled` is true
+ *     (covers the 3 inline call sites + the catch path).
+ *   - `contextBudgetReplan` — `true` when the gate triggered the
+ *     `continue` branch; runtime skips per-tool accumulators on this
+ *     iteration. Surfaced for Lot 21e gate migration.
+ */
+export interface ExecuteServerToolResult {
+  readonly output: unknown;
+  readonly outputForModel: string;
+  readonly success: boolean;
+  readonly errorMessage?: string;
+  readonly todoStateUpdate?: unknown;
+  readonly contextBudgetReplan?: boolean;
+}
+
+/**
+ * BR14b Lot 21c — input to `ChatRuntime.consumeToolCalls`. Mirrors the
+ * per-iteration tool-dispatch entry at chat-service.ts line 3267
+ * post-Lot 21b. Same mutate-in-place convention as
+ * `consumeAssistantStream`. `localToolNames` is the legacy
+ * `localToolNames` Set; the remaining fields (`sessionId` / `userId` /
+ * `workspaceId` / `providerId` / `modelId` / `tools` /
+ * `enforceTodoUpdateMode` / `readOnly` / `signal`) are forwarded to
+ * `executeServerTool` for non-local calls. Lot 21c lands only the
+ * type surface + the orchestration skeleton; per-tool dispatch
+ * migration deferred to Lot 21d.
+ */
+export interface ConsumeToolCallsInput {
+  readonly streamId: string;
+  readonly loopState: AssistantRunLoopState;
+  readonly localToolNames: ReadonlySet<string>;
+  readonly sessionId: string;
+  readonly userId: string;
+  readonly workspaceId: string | null;
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly tools: ReadonlyArray<unknown> | null;
+  readonly enforceTodoUpdateMode: boolean;
+  readonly readOnly: boolean;
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * BR14b Lot 21c — return shape of `ChatRuntime.consumeToolCalls`.
+ * Aggregated per-iteration outputs that mirror the inline body's
+ * `toolResults` (role:'tool' messages), `responseToolOutputs`
+ * (`function_call_output` rawInput entries), `pendingLocalToolCalls`
+ * (post-loop `awaiting_local_tool_results` queue), `executedTools`
+ * (trace accumulator), and `shouldBreakLoop` (mirrors the
+ * `continueGenerationLoop = false; break;` branch on empty toolCalls).
+ */
+export interface ConsumeToolCallsResult {
+  readonly toolResults: ReadonlyArray<{
+    readonly role: 'tool';
+    readonly content: string;
+    readonly tool_call_id: string;
+  }>;
+  readonly responseToolOutputs: ReadonlyArray<{
+    readonly type: 'function_call_output';
+    readonly call_id: string;
+    readonly output: string;
+  }>;
+  readonly pendingLocalToolCalls: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+    readonly args: unknown;
+  }>;
+  readonly executedTools: ReadonlyArray<AssistantRunLoopExecutedTool>;
+  readonly shouldBreakLoop: boolean;
 }
 
 /**
