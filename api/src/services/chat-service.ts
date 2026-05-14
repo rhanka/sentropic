@@ -17,7 +17,6 @@ import {
   type ReasoningEffortLabel,
 } from '../../../packages/chat-core/src/runtime';
 import type { ChatMessageWithFeedback } from '../../../packages/chat-core/src/message-port';
-import { consumePendingSteerMessages } from '../../../packages/chat-core/src/steer';
 import {
   writeContextBudgetStatus as writeContextBudgetStatusPure,
   type ContextBudgetSnapshot as ChatCoreContextBudgetSnapshot,
@@ -2819,7 +2818,10 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     const todoProgressionFocusMode = promptCtx.todoProgressionFocusMode;
     const hasActiveSessionTodo = promptCtx.hasActiveSessionTodo;
     const STEER_PROMPT_MAX_MESSAGES = 8;
-    const STEER_REASONING_REPLAY_MAX_CHARS = 6000;
+    // BR14b Lot 21b — `STEER_REASONING_REPLAY_MAX_CHARS` lifted to
+    // `packages/chat-core/src/runtime.ts` (module-level constant adjacent
+    // to `consumeAssistantStream`) since the caller no longer clamps the
+    // reasoning replay buffer directly.
     const STEER_REASONING_EXCERPT_MAX_CHARS = 1800;
     // BR14b Lot 19 — `normalizeSteerMessage` extracted to
     // `packages/chat-core/src/steer.ts` (imported at top of file).
@@ -2865,13 +2867,10 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         reasoningExcerpt,
       ].join('\n').trim();
     };
-    const isPreviousResponseNotFoundError = (message: string): boolean => {
-      const normalized = message.toLowerCase();
-      return (
-        normalized.includes('previous response') &&
-        normalized.includes('not found')
-      );
-    };
+    // BR14b Lot 21b — `isPreviousResponseNotFoundError` extracted to
+    // `packages/chat-core/src/mesh-errors.ts` and consumed by the
+    // `ChatRuntime.consumeAssistantStream` catch path. The inline
+    // closure has no other call site so it is deleted here.
     const applySteerInterruptionPrompt = (
       messages: Array<
         | { role: 'system' | 'user' | 'assistant'; content: string }
@@ -2918,7 +2917,9 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       baseMaxIterations: BASE_MAX_ITERATIONS,
     });
     let streamSeq = loopState.streamSeq;
-    let lastObservedStreamSequence = loopState.lastObservedStreamSequence;
+    // BR14b Lot 21b — `lastObservedStreamSequence` is now maintained on
+    // `loopState` by `ChatRuntime.consumeAssistantStream` (the runtime
+    // polls steer messages internally). No caller-side cursor needed.
     const contentParts = loopState.contentParts;
     const reasoningParts = loopState.reasoningParts;
     let lastErrorMessage = loopState.lastErrorMessage;
@@ -3010,12 +3011,10 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     // loop-local state fields. The destructure assigned `loopState.
     // continueGenerationLoop` to the local `let` so the loop body still
     // uses the same identifier.
-    // BR14b Lot 19 — pure helper `consumePendingSteerMessages` extracted to
-    // `packages/chat-core/src/steer.ts`. The previous closure captured
-    // `options.assistantMessageId` (used as streamId) and the mutable
-    // `lastObservedStreamSequence` cursor. The pure helper now takes those
-    // as explicit inputs and returns the advanced cursor as
-    // `nextSinceSequence`, which we assign back to the local counter.
+    // BR14b Lot 21b — `consumePendingSteerMessages` is now consumed by
+    // `ChatRuntime.consumeAssistantStream` inside the mesh stream
+    // consumer (Lot 19 helper kept as a chat-core public export). The
+    // chat-service caller no longer imports it directly.
 
     // BR14b Lot 21a — `writeContextBudgetStatus` (28-line closure pre-Lot
     // 21a) extracted to `packages/chat-core/src/context-budget.ts`. The
@@ -3167,9 +3166,6 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           preModelBudget,
         );
       }
-      let steerInterruptionRequested = false;
-      let steerInterruptionBatch: string[] = [];
-
       // Trace: exact payload sent to OpenAI (per iteration)
       await writeChatGenerationTrace({
         enabled: env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
@@ -3200,9 +3196,24 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         }
       });
 
-      let shouldRetryWithoutPreviousResponse = false;
-      try {
-        for await (const event of callLLMStream({
+      // BR14b Lot 21b — 182-line inline mesh stream consumer block
+      // (chat-service.ts lines 3200-3381 pre-Lot 21b) migrated into
+      // `ChatRuntime.consumeAssistantStream`. The runtime mutates the
+      // shared `loopState` in place (contentParts, reasoningParts,
+      // toolCalls, lastErrorMessage, previousResponseId,
+      // pendingResponsesRawInput, steerReasoningReplay,
+      // lastObservedStreamSequence, steerHistoryMessages,
+      // currentMessages) and routes every sequence-allocating write
+      // through `deps.streamSequencer.allocate` + `deps.streamBuffer.append`
+      // (Lot 20 contract). The caller observes the same mutations via
+      // the destructured locals (still pointed at the same arrays) and
+      // re-syncs the `streamSeq` cursor from `peek + 1` after the call.
+      // `previousResponseId` is re-read off `loopState` because the
+      // runtime now owns the `status.response_id` capture.
+      const streamResult = await this.runtime.consumeAssistantStream({
+        streamId: options.assistantMessageId,
+        loopState,
+        request: {
           providerId: selectedProviderId,
           model: selectedModel,
           credential: options.providerApiKey ?? undefined,
@@ -3210,176 +3221,25 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           workspaceId: sessionWorkspaceId,
           messages: currentMessages,
           tools,
-          // on laisse le service openai gérer la compat modèle (gpt-4.1-nano n'a pas reasoning.summary)
           reasoningSummary: 'detailed',
           reasoningEffort: reasoningEffortForThisMessage,
           toolChoice: pass1ToolChoice,
           previousResponseId: previousResponseId ?? undefined,
           rawInput: pendingResponsesRawInput ?? undefined,
-          signal: options.signal
-        })) {
-          const eventType = event.type as StreamEventType;
-          const data = (event.data ?? {}) as Record<string, unknown>;
-          // IMPORTANT: on n'émet pas 'done' ici. On émettra un unique 'done' à la toute fin,
-          // après éventuel 2e pass (sinon l'UI peut se retrouver "terminée" sans contenu).
-          if (eventType === 'done') {
-            continue;
-          }
-          if (eventType === 'error') {
-            const msg = (data as Record<string, unknown>).message;
-            const errorMessage =
-              typeof msg === 'string' ? msg : 'Unknown error';
-            if (
-              steerInterruptionRequested &&
-              errorMessage.toLowerCase().includes('aborted')
-            ) {
-              continue;
-            }
-            lastErrorMessage = errorMessage;
-            await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-            // on laisse le flux se terminer / throw; le catch global gère
-            continue;
-          }
-
-          await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
-          streamSeq += 1;
-
-          // Capture Responses API response_id for proper continuation
-          if (eventType === 'status') {
-            const responseId = typeof (data as Record<string, unknown>).response_id === 'string' ? ((data as Record<string, unknown>).response_id as string) : '';
-            if (responseId) previousResponseId = responseId;
-          }
-
-          if (eventType === 'content_delta') {
-            const delta = typeof data.delta === 'string' ? data.delta : '';
-            if (delta) {
-              contentParts.push(delta);
-            }
-          } else if (eventType === 'reasoning_delta') {
-            const delta = typeof data.delta === 'string' ? data.delta : '';
-            if (delta) {
-              reasoningParts.push(delta);
-              if (steerReasoningReplay.length < STEER_REASONING_REPLAY_MAX_CHARS) {
-                steerReasoningReplay += delta;
-                if (steerReasoningReplay.length > STEER_REASONING_REPLAY_MAX_CHARS) {
-                  steerReasoningReplay = steerReasoningReplay.slice(
-                    -STEER_REASONING_REPLAY_MAX_CHARS,
-                  );
-                }
-              } else {
-                steerReasoningReplay =
-                  `${steerReasoningReplay}${delta}`.slice(
-                    -STEER_REASONING_REPLAY_MAX_CHARS,
-                  );
-              }
-            }
-          } else if (eventType === 'tool_call_start') {
-            const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
-            const existingIndex = toolCalls.findIndex(tc => tc.id === toolCallId);
-            if (existingIndex === -1) {
-              toolCalls.push({
-                id: toolCallId,
-                name: typeof data.name === 'string' ? data.name : '',
-                args: typeof data.args === 'string' ? data.args : ''
-              });
-            } else {
-              const nextName = typeof data.name === 'string' ? data.name : '';
-              const nextArgs = typeof data.args === 'string' ? data.args : '';
-              toolCalls[existingIndex].name = nextName || toolCalls[existingIndex].name;
-              toolCalls[existingIndex].args = (toolCalls[existingIndex].args || '') + (nextArgs || '');
-            }
-          } else if (eventType === 'tool_call_delta') {
-            const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
-            const delta = typeof data.delta === 'string' ? data.delta : '';
-            const toolCall = toolCalls.find(tc => tc.id === toolCallId);
-            if (toolCall) {
-              toolCall.args += delta;
-            } else {
-              toolCalls.push({ id: toolCallId, name: '', args: delta });
-            }
-          }
-          if (!steerInterruptionRequested) {
-            const steerPoll = await consumePendingSteerMessages({
-              streamBuffer: postgresStreamBuffer,
-              streamId: options.assistantMessageId,
-              sinceSequence: lastObservedStreamSequence,
-            });
-            lastObservedStreamSequence = steerPoll.nextSinceSequence;
-            const pendingSteerMessages = steerPoll.messages;
-            if (pendingSteerMessages.length > 0) {
-              steerInterruptionRequested = true;
-              steerInterruptionBatch = pendingSteerMessages;
-              await writeStreamEvent(
-                options.assistantMessageId,
-                'status',
-                {
-                  state: 'run_interrupted_for_steer',
-                  steer_count: steerInterruptionBatch.length,
-                  latest_message:
-                    steerInterruptionBatch[steerInterruptionBatch.length - 1] ??
-                    '',
-                },
-                streamSeq,
-                options.assistantMessageId,
-              );
-              streamSeq += 1;
-              break;
-            }
-          }
-          // Note: eventType 'done' est volontairement retardé (voir plus haut)
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error ?? '');
-        if (
-          previousResponseId &&
-          isPreviousResponseNotFoundError(message)
-        ) {
-          shouldRetryWithoutPreviousResponse = true;
-        } else {
-          throw error;
-        }
-      }
-      if (shouldRetryWithoutPreviousResponse) {
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'status',
-          {
-            state: 'response_lineage_reset',
-            reason: 'previous_response_not_found',
-          },
-          streamSeq,
-          options.assistantMessageId,
-        );
-        streamSeq += 1;
-        previousResponseId = null;
-        pendingResponsesRawInput = null;
+          signal: options.signal,
+        },
+      });
+      previousResponseId = loopState.previousResponseId;
+      pendingResponsesRawInput = loopState.pendingResponsesRawInput;
+      currentMessages = loopState.currentMessages as ChatRuntimeMessage[];
+      lastErrorMessage = loopState.lastErrorMessage;
+      steerReasoningReplay = loopState.steerReasoningReplay;
+      streamSeq =
+        (await this.runtime.peekStreamSequence(options.assistantMessageId)) + 1;
+      if (streamResult.doneReason === 'retry_without_previous_response') {
         continue;
       }
-      if (steerInterruptionRequested && steerInterruptionBatch.length > 0) {
-        pendingResponsesRawInput = null;
-        previousResponseId = null;
-        steerHistoryMessages.push(...steerInterruptionBatch);
-        currentMessages = [
-          ...currentMessages,
-          ...steerInterruptionBatch.map((message) => ({
-            role: 'user' as const,
-            content: message,
-          })),
-        ];
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'status',
-          {
-            state: 'run_resumed_with_steer',
-            steer_count: steerInterruptionBatch.length,
-            latest_message:
-              steerInterruptionBatch[steerInterruptionBatch.length - 1] ?? '',
-          },
-          streamSeq,
-          options.assistantMessageId,
-        );
-        streamSeq += 1;
+      if (streamResult.doneReason === 'steer_interrupted') {
         continue;
       }
 
