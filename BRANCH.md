@@ -71,7 +71,7 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - `attention` 2026-05-12: BR14g was merged without an explicit UAT checkpoint. BR14b final gate therefore requires recorded user UAT passed or explicit user UAT waiver before merge; CI alone is insufficient.
 - `attention` 2026-05-12: Historical docs still reference `@entropic/llm-mesh`, but the published package is `@sentropic/llm-mesh`. BR14b must use the current code/package reality and leave global naming cleanup to BR14e unless a local reference blocks implementation.
 - `deferred` 2026-05-12: BR14a implementation is deferred until BR14b stabilizes chat-service core boundaries. BR14a Lot 0 scoping may proceed in parallel.
-- `blocker` 2026-05-13: `make up-api-test` / `make test-api` fails during `prepare-node-workspace` with `npm error code EUNSUPPORTEDPROTOCOL ("workspace:*")`. Pre-existing from Lots 2-3: `packages/contracts`, `packages/events`, `packages/chat-core` declare `workspace:*` deps which npm-cli does not understand, and their entries are missing from `package-lock.json`. Same error reproduces from baseline `62829367` before any Lot 4 work. Fix candidates: (a) replace `workspace:*` with `file:..` references in packages/{chat-core,events}/package.json (BR14b-EX1 scope), regen lockfile, and update api/Dockerfile to copy and build them (out of Lot 4 scope); (b) defer all package-consumption wiring (api/package.json, Dockerfile, lockfile) to a dedicated wiring lot. Lot 4 chat-checkpoint test gate cannot be exercised without (a) or (b). Typecheck (`make typecheck-api`) passes; logic was verified by code-equivalence inspection (verbatim port, see commit 75cb3915).
+- `closed` 2026-05-14 (Lot 5): `make up-api-test` / `make test-api` previously failed during `prepare-node-workspace` with `npm error code EUNSUPPORTEDPROTOCOL ("workspace:*")`. Root cause: `packages/{events,chat-core}/package.json` declared internal `@sentropic/*` deps with `"workspace:*"` (pnpm/Yarn convention) which npm-cli does not understand. Resolution: replaced `"workspace:*"` with `"*"` (npm workspaces native) in `packages/events/package.json` (1 dep) and `packages/chat-core/package.json` (2 deps); regenerated root `package-lock.json` via `make lock-root` which now links `node_modules/@sentropic/{contracts,events,chat-core}` to their respective `packages/*` directories. Verified: `make typecheck-api` PASS; `make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts` PASS (2/2 tests). Lot 4 deferred gate now closed.
 - `attention` 2026-05-13: Lot 4 added `packages/chat-core/src/checkpoint-port.ts` to isolate the contracts-free `CheckpointStore<T>` / `SaveResult` / `CheckpointMeta` surface from `ports.ts`. Required so the api workspace can import the port via relative path without dragging the full `@sentropic/contracts` / `@sentropic/events` graph (which is not yet wired into api/Dockerfile). `ports.ts` and `index.ts` re-export the surface so future `from '@sentropic/chat-core'` consumers see no API change.
 
 ## AI Flaky tests
@@ -207,5 +207,13 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] Define ChatState in packages/chat-core/src/types.ts
 - [x] Create api/src/services/chat/postgres-checkpoint-adapter.ts
 - [x] Refactor chat-service.ts to delegate (no public API change)
-- [ ] Re-run make test-api -> all chat-checkpoint tests green
+- [x] Re-run make test-api -> all chat-checkpoint tests green (unblocked by Lot 5)
 - [ ] (Deferred to Lot 5) tag/fork/delete methods full impl
+
+## Lot 5 - workspace protocol fix
+- [x] Replace workspace:* with * in packages/events/package.json (1 dep)
+- [x] Replace workspace:* with * in packages/chat-core/package.json (2 deps)
+- [x] Verified api/package.json declares no @sentropic/{contracts,events,chat-core} deps yet (uses file:../packages/llm-mesh for llm-mesh only) — out of Lot 5 scope
+- [x] Regenerate package-lock.json via make lock-root (links @sentropic/{contracts,events,chat-core} as workspace symlinks)
+- [x] make typecheck-api PASS
+- [x] make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts PASS (2/2 tests)
