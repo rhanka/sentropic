@@ -6,5 +6,6 @@ export * from './mesh-port.js';
 export * from './ports.js';
 export * from './types.js';
 export * from './history.js';
+export * from './steer.js';
 export * from './runtime.js';
 export * as InMemory from './in-memory/index.js';
