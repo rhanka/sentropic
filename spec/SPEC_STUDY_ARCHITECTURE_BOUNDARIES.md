@@ -20,6 +20,7 @@ Seven packages under `@sentropic/*`. The original six-package proposal was revis
 | `@sentropic/contracts` (BR14b, scaffolded `16163ffc`) | scaffolding now | shared transverse types (`TenantContext`, `AuthzContext`, `CostContext`, `IdempotencyKey`, `CheckpointVersion`, `EventEnvelope`, `PermissionMode`) and shared interfaces (`ToolRegistry`). Pure types + interfaces, zero runtime dependencies. | any logic; this is the boundary contract layer |
 | `@sentropic/skills` (BR19, future) | to scope (post BR14b) | skill catalog + sandbox + discovery + reference skills. SKILL.md format with `name`/`description`/`contextFilter`/`sandbox`/`tools`. Owns `SkillsToolRegistry` (implements `ToolRegistry`). | governance/policy/audit (→ `marketplace`); CLI tooling (→ `harness`) |
 | `@sentropic/marketplace` (BR-marketplace, future) | to scope | managed marketplace policy + decision engine + audit. Allows organizations to curate which skills/tools are visible/installable/invokable per role/workspace (see §15). Composes with `skills` via `MarketplaceEngine.evaluate()`. | the catalog itself (→ `skills`); public distribution (npm/mcp.so already cover) |
+| `@sentropic/graphify` (BR-graphify, fusion of `graphifyy@0.7.10`) | to scope | knowledge graph extraction from folders of code / docs / papers / images / audio-video transcripts; CLI binary `graphify`; cross-CLI skill format (Claude Code, Codex, Gemini, Aider, OpenCode, etc.); HTML+JSON+audit publication artifacts | runtime dependency from chat-core/flow (consumed by harness only and standalone CLI) |
 
 **Dependency rules**
 
@@ -354,13 +355,15 @@ Resolved open questions: §8 Q1 (events co-ship), §8 Q7 (skills package), §8 Q
 
 Remaining adjacent: `LiveDocumentStore` may consume `CheckpointStore` internally for snapshots, or stay a sibling port. Decision in BR14b prototype.
 
-## 13. Harness — graphify-node integration note
+## 13. Harness — `@sentropic/graphify` integration note
 
-`@sentropic/harness` (BR25) will import `graphify-node` (user-maintained Node port of graphify) to expose project-graph features as a built-in conductor command (`harness graph`). Details:
-- Dependency: `graphify-node` declared as peerDependency to keep harness footprint small.
+`@sentropic/harness` (BR25) will consume `@sentropic/graphify` (fusion under our namespace of the existing `graphifyy@0.7.10` package — see `SPEC_VOL_GRAPHIFY.md`) to expose project-graph features as a built-in conductor command. Details:
+
+- Source: `graphifyy@0.7.10` is the upstream code (binary `graphify`, ESM+CJS, cross-CLI skill format). The fusion strategy (npm registry transfer vs new publication + deprecate upstream) is decided in BR-graphify.
+- Dependency: `@sentropic/graphify` declared as peerDependency of harness to keep harness footprint small and allow standalone use of graphify.
 - Surface: `harness graph extract`, `harness graph query`, `harness graph publish` (HTML+JSON+audit artifacts).
-- Integration boundary: harness wraps graphify-node behind a thin command; no fork.
-- This integration does not change the rule that harness has zero runtime dependents from other `@sentropic/*` runtime packages.
+- Integration boundary: harness wraps `@sentropic/graphify` behind a thin command facade; no fork.
+- Harness rule preserved: zero runtime dependents from other `@sentropic/*` runtime packages. `@sentropic/graphify` is a dev/exploration tool, not a runtime package consumed by chat-core/flow.
 
 See companion `SPEC_STUDY_SKILLS_TOOLS_VS_AGENT_MARKETPLACE.md` for the orthogonal `@sentropic/skills` (BR19) package.
 
