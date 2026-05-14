@@ -102,6 +102,15 @@ describe('ChatRuntime.beginAssistantRunLoop (Lot 21a)', () => {
     expect(state.lastBudgetAnnouncedPct).toBe(-1);
     expect(state.contextBudgetReplanAttempts).toBe(0);
     expect(state.continueGenerationLoop).toBe(true);
+    expect(state.useCodexTransport).toBe(false);
+  });
+
+  it('honors the BeginAssistantRunLoopInput.useCodexTransport seed', async () => {
+    const { runtime } = buildFixture();
+    const state = await runtime.beginAssistantRunLoop(
+      buildInput({ useCodexTransport: true }),
+    );
+    expect(state.useCodexTransport).toBe(true);
   });
 
   it('prepends the system prompt to currentMessages and preserves conversation order', async () => {

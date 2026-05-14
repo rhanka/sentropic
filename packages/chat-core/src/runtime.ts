@@ -1059,6 +1059,19 @@ export interface AssistantRunLoopState {
   lastBudgetAnnouncedPct: number;
   contextBudgetReplanAttempts: number;
   continueGenerationLoop: boolean;
+  /**
+   * BR14b Lot 21c — surfaces the `useCodexTransport` boolean computed by
+   * chat-service (`selectedProviderId === 'openai' && selectedModel ===
+   * 'gpt-5.5' && (await getOpenAITransportMode()) === 'codex'`) on the
+   * loop state so the upcoming `consumeToolCalls` migration can read it
+   * without taking it as a per-call input. Caller updates it after
+   * `beginAssistantRunLoop` (the value depends on the resolved model
+   * selection performed AFTER loop-state init in the current chat-service
+   * flow). Used by the tool-dispatch path to gate the
+   * `needsExplicitToolReplay` rawInput rebuild + the `previousResponseId
+   * = null` clear when the transport is codex.
+   */
+  useCodexTransport: boolean;
 }
 
 /**
@@ -1098,6 +1111,17 @@ export interface BeginAssistantRunLoopInput {
   readonly todoProgressionFocusMode: boolean;
   readonly hasActiveSessionTodo: boolean;
   readonly baseMaxIterations: number;
+  /**
+   * BR14b Lot 21c — optional initial value for
+   * `AssistantRunLoopState.useCodexTransport`. Defaults to `false` when
+   * undefined; the chat-service caller currently resolves the boolean
+   * AFTER loop-state init (depends on the model selection performed
+   * later in `runAssistantGeneration`) so it overwrites the field
+   * directly post-init. Surfaced on the input so future callers that
+   * know the transport up-front can seed it without the post-init
+   * mutation.
+   */
+  readonly useCodexTransport?: boolean;
 }
 
 /**
@@ -3009,6 +3033,7 @@ export class ChatRuntime {
       lastBudgetAnnouncedPct: -1,
       contextBudgetReplanAttempts: 0,
       continueGenerationLoop: true,
+      useCodexTransport: input.useCodexTransport ?? false,
     };
   }
 }
