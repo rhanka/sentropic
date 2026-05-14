@@ -1716,6 +1716,14 @@ export class ChatService {
     return { messageId: options.messageId };
   }
 
+  /**
+   * BR14b Lot 12 — thin delegate. Body migrated verbatim into
+   * `ChatRuntime.retryUserMessage`. The runtime returns the resolved
+   * provider id as a plain string; we cast back to the typed
+   * `ProviderId` (mesh union) at the delegate boundary because the
+   * value passes through `resolveDefaultSelection` which guarantees a
+   * valid mesh provider id.
+   */
   async retryUserMessage(options: {
     messageId: string;
     userId: string;
@@ -1729,70 +1737,24 @@ export class ChatService {
     providerId: ProviderId;
     model: string;
   }> {
-    const msg = await this.getMessageForUser(options.messageId, options.userId);
-    if (!msg) throw new Error('Message not found');
-    if (msg.role !== 'user') throw new Error('Only user messages can be retried');
-
-    const [aiSettings, catalog] = await Promise.all([
-      settingsService.getAISettings({ userId: options.userId }),
-      getModelCatalogPayload({ userId: options.userId }),
-    ]);
-    const inferredProviderId = inferProviderFromModelIdWithLegacy(
-      catalog.models,
-      options.model
-    );
-    const resolvedSelection = resolveDefaultSelection(
-      {
-        providerId:
-          options.providerId || inferredProviderId || aiSettings.defaultProviderId,
-        modelId: options.model || aiSettings.defaultModel,
-      },
-      catalog.models
-    );
-    const selectedModel = resolvedSelection.model_id;
-    const selectedProviderId = resolvedSelection.provider_id;
-
-    await postgresChatMessageStore.deleteAfterSequence(msg.sessionId, msg.sequence);
-
-    const assistantMessageId = createId();
-    const assistantSeq = msg.sequence + 1;
-
-    await postgresChatMessageStore.insertMany([
-      {
-        id: assistantMessageId,
-        sessionId: msg.sessionId,
-        role: 'assistant',
-        content: null,
-        toolCalls: null,
-        toolCallId: null,
-        reasoning: null,
-        model: selectedModel,
-        promptId: null,
-        promptVersionId: null,
-        sequence: assistantSeq,
-        createdAt: new Date(),
-      },
-    ]);
-
-    await postgresChatSessionStore.touchUpdatedAt(msg.sessionId);
-
+    const result = await this.runtime.retryUserMessage(options);
     return {
-      sessionId: msg.sessionId,
-      userMessageId: options.messageId,
-      assistantMessageId,
-      streamId: assistantMessageId,
-      providerId: selectedProviderId,
-      model: selectedModel
+      sessionId: result.sessionId,
+      userMessageId: result.userMessageId,
+      assistantMessageId: result.assistantMessageId,
+      streamId: result.streamId,
+      providerId: result.providerId as ProviderId,
+      model: result.model,
     };
-  }
-
-  private async getNextMessageSequence(sessionId: string): Promise<number> {
-    return postgresChatMessageStore.getNextSequence(sessionId);
   }
 
   /**
    * Crée le message user + le placeholder assistant (même session).
    * Le streamId pour le SSE chat est égal à l'id du message assistant.
+   *
+   * BR14b Lot 12 — thin delegate. Body migrated verbatim into
+   * `ChatRuntime.createUserMessageWithAssistantPlaceholder`. Same
+   * `ProviderId` cast rationale as `retryUserMessage`.
    */
   async createUserMessageWithAssistantPlaceholder(input: CreateChatMessageInput): Promise<{
     sessionId: string;
@@ -1802,109 +1764,14 @@ export class ChatService {
     providerId: ProviderId;
     model: string;
   }> {
-    const desiredWorkspaceId = input.workspaceId ?? null;
-    const existing = input.sessionId ? await this.getSessionForUser(input.sessionId, input.userId) : null;
-    const existingId = existing && typeof (existing as { id?: unknown }).id === 'string' ? (existing as { id: string }).id : null;
-    const existingWorkspaceId =
-      existing && typeof (existing as { workspaceId?: unknown }).workspaceId === 'string'
-        ? ((existing as { workspaceId: string }).workspaceId as string)
-        : null;
-    const sessionId =
-      existingId && existingWorkspaceId === desiredWorkspaceId
-        ? existingId
-        : (await this.createSession({
-            userId: input.userId,
-            workspaceId: desiredWorkspaceId,
-            primaryContextType: input.primaryContextType ?? null,
-            primaryContextId: input.primaryContextId ?? null,
-            title: input.sessionTitle ?? null
-          })).sessionId;
-    const nextContextType = isChatContextType(input.primaryContextType) ? input.primaryContextType : null;
-    const nextContextId = typeof input.primaryContextId === 'string' ? input.primaryContextId.trim() : '';
-
-    if (nextContextType && nextContextId) {
-      const shouldUpdateContext =
-        !existing || existing.primaryContextType !== nextContextType || existing.primaryContextId !== nextContextId;
-      if (shouldUpdateContext) {
-        await postgresChatSessionStore.updateContext(sessionId, {
-          primaryContextType: nextContextType,
-          primaryContextId: nextContextId,
-        });
-      }
-    }
-
-    // Provider/model selection (request overrides > inferred by model id > workspace defaults).
-    const [aiSettings, catalog] = await Promise.all([
-      settingsService.getAISettings({ userId: input.userId }),
-      getModelCatalogPayload({ userId: input.userId }),
-    ]);
-    const inferredProviderId = inferProviderFromModelIdWithLegacy(
-      catalog.models,
-      input.model
-    );
-    const resolvedSelection = resolveDefaultSelection(
-      {
-        providerId:
-          input.providerId ||
-          inferredProviderId ||
-          aiSettings.defaultProviderId,
-        modelId: input.model || aiSettings.defaultModel,
-      },
-      catalog.models
-    );
-    const selectedProviderId = resolvedSelection.provider_id;
-    const selectedModel = resolvedSelection.model_id;
-    const userSeq = await this.getNextMessageSequence(sessionId);
-    const assistantSeq = userSeq + 1;
-
-    const userMessageId = createId();
-    const assistantMessageId = createId();
-
-    const messageContexts = this.normalizeMessageContexts(input);
-
-    await postgresChatMessageStore.insertMany([
-      {
-        id: userMessageId,
-        sessionId,
-        role: 'user',
-        content: input.content,
-        toolCalls: null,
-        toolCallId: null,
-        reasoning: null,
-        model: null,
-        promptId: null,
-        promptVersionId: null,
-        contexts: messageContexts.length > 0 ? messageContexts : null,
-        sequence: userSeq,
-        createdAt: new Date(),
-      },
-      {
-        id: assistantMessageId,
-        sessionId,
-        role: 'assistant',
-        content: null,
-        toolCalls: null,
-        toolCallId: null,
-        reasoning: null,
-        model: selectedModel,
-        promptId: null,
-        promptVersionId: null,
-        contexts: null,
-        sequence: assistantSeq,
-        createdAt: new Date(),
-      },
-    ]);
-
-    // Touch session updatedAt
-    await postgresChatSessionStore.touchUpdatedAt(sessionId);
-
+    const result = await this.runtime.createUserMessageWithAssistantPlaceholder(input);
     return {
-      sessionId,
-      userMessageId,
-      assistantMessageId,
-      streamId: assistantMessageId,
-      providerId: selectedProviderId,
-      model: selectedModel
+      sessionId: result.sessionId,
+      userMessageId: result.userMessageId,
+      assistantMessageId: result.assistantMessageId,
+      streamId: result.streamId,
+      providerId: result.providerId as ProviderId,
+      model: result.model,
     };
   }
 

@@ -346,6 +346,67 @@ export type RestoreCheckpointResult = {
 };
 
 /**
+ * Lot 12 — options for `ChatRuntime.retryUserMessage`. Mirrors the
+ * existing `ChatService.retryUserMessage` shape verbatim. `providerId`
+ * stays a `string | null | undefined` (rather than a typed
+ * `MeshProviderId`) because chat-core has no compile-time dependency on
+ * `@sentropic/llm-mesh`; the adapter resolves the typed string back into
+ * a `ProviderId` via `resolveModelSelection`.
+ */
+export type RetryUserMessageOptions = {
+  readonly messageId: string;
+  readonly userId: string;
+  readonly providerId?: string | null;
+  readonly model?: string | null;
+};
+
+export type RetryUserMessageResult = {
+  readonly sessionId: string;
+  readonly userMessageId: string;
+  readonly assistantMessageId: string;
+  readonly streamId: string;
+  readonly providerId: string;
+  readonly model: string;
+};
+
+/**
+ * Lot 12 — `CreateChatMessageInput` structural mirror.
+ *
+ * Pre-Lot 12 the type lived solely in `api/src/services/chat-service.ts`
+ * (it carries the `ChatContextType` union + the `ProviderId` mesh union).
+ * For chat-core to migrate `createUserMessageWithAssistantPlaceholder`
+ * verbatim, we re-declare the structural slice the runtime actually
+ * reads here. All context-typed fields downgrade to `string` because
+ * the runtime is contract-agnostic about which strings are valid
+ * context types (see `isChatContextType` callback).
+ */
+export type RuntimeCreateChatMessageInput = {
+  readonly userId: string;
+  readonly sessionId?: string | null;
+  readonly workspaceId?: string | null;
+  readonly content: string;
+  readonly providerId?: string | null;
+  readonly providerApiKey?: string | null;
+  readonly model?: string | null;
+  readonly primaryContextType?: string | null;
+  readonly primaryContextId?: string | null;
+  readonly contexts?: ReadonlyArray<{
+    readonly contextType: string;
+    readonly contextId: string;
+  }>;
+  readonly sessionTitle?: string | null;
+};
+
+export type CreateUserMessageResult = {
+  readonly sessionId: string;
+  readonly userMessageId: string;
+  readonly assistantMessageId: string;
+  readonly streamId: string;
+  readonly providerId: string;
+  readonly model: string;
+};
+
+/**
  * Options for `ChatRuntime.acceptLocalToolResult`. Mirrors the existing
  * `ChatService.acceptLocalToolResult` shape verbatim.
  */
@@ -984,6 +1045,231 @@ export class ChatRuntime {
       checkpointId: options.checkpointId,
       restoredToSequence,
       removedMessages,
+    };
+  }
+
+  /**
+   * Retry an existing user message: re-resolve `{providerId, model}`
+   * from caller overrides + AI settings, truncate every message above
+   * the retried sequence, insert a fresh assistant placeholder, and
+   * touch the session `updatedAt`. The caller (route) then drives the
+   * follow-up generation against `assistantMessageId`.
+   *
+   * Migrated verbatim from `ChatService.retryUserMessage` (chat-service.ts
+   * pre-Lot 12). Differences are limited to:
+   *   (a) `this.getMessageForUser` → `this.deps.messageStore.findIdentityForUser`;
+   *   (b) `settingsService.getAISettings` + `getModelCatalogPayload` +
+   *       `inferProviderFromModelIdWithLegacy` + `resolveDefaultSelection`
+   *       → single `this.deps.resolveModelSelection` callback;
+   *   (c) `postgresChatMessageStore.deleteAfterSequence` →
+   *       `this.deps.messageStore.deleteAfterSequence`;
+   *   (d) `createId()` → inlined `randomUUID()` (chat-core already
+   *       imports it at the top of the file);
+   *   (e) `postgresChatMessageStore.insertMany` →
+   *       `this.deps.messageStore.insertMany`;
+   *   (f) `postgresChatSessionStore.touchUpdatedAt` →
+   *       `this.deps.sessionStore.touchUpdatedAt`.
+   *
+   * Truncate semantic preserved: `deleteAfterSequence` removes every
+   * message with `sequence > msg.sequence`, so the retried user message
+   * is **kept** (it is at exactly `msg.sequence`); the assistant
+   * placeholder lands at `msg.sequence + 1`.
+   */
+  async retryUserMessage(
+    options: RetryUserMessageOptions,
+  ): Promise<RetryUserMessageResult> {
+    const msg = await this.deps.messageStore.findIdentityForUser(
+      options.messageId,
+      options.userId,
+    );
+    if (!msg) throw new Error('Message not found');
+    if (msg.role !== 'user') throw new Error('Only user messages can be retried');
+
+    const resolvedSelection = await this.deps.resolveModelSelection({
+      userId: options.userId,
+      providerId: options.providerId,
+      model: options.model,
+    });
+    const selectedModel = resolvedSelection.model_id;
+    const selectedProviderId = resolvedSelection.provider_id;
+
+    await this.deps.messageStore.deleteAfterSequence(msg.sessionId, msg.sequence);
+
+    const assistantMessageId = randomUUID();
+    const assistantSeq = msg.sequence + 1;
+
+    await this.deps.messageStore.insertMany([
+      {
+        id: assistantMessageId,
+        sessionId: msg.sessionId,
+        role: 'assistant',
+        content: null,
+        toolCalls: null,
+        toolCallId: null,
+        reasoning: null,
+        model: selectedModel,
+        promptId: null,
+        promptVersionId: null,
+        sequence: assistantSeq,
+        createdAt: new Date(),
+      },
+    ]);
+
+    await this.deps.sessionStore.touchUpdatedAt(msg.sessionId);
+
+    return {
+      sessionId: msg.sessionId,
+      userMessageId: options.messageId,
+      assistantMessageId,
+      streamId: assistantMessageId,
+      providerId: selectedProviderId,
+      model: selectedModel,
+    };
+  }
+
+  /**
+   * Create the user message + the assistant placeholder (same session).
+   * The streamId for the chat SSE equals the assistant message id.
+   *
+   * Reuses (or creates) a chat session aligned with the desired
+   * workspace, updates the session primary context if the inbound
+   * `primaryContextType`/`primaryContextId` differs from the persisted
+   * pair, resolves `{providerId, model}` via the `resolveModelSelection`
+   * callback, computes the next sequence, then inserts both messages
+   * atomically in one batch followed by a session `touchUpdatedAt`.
+   *
+   * Migrated verbatim from
+   * `ChatService.createUserMessageWithAssistantPlaceholder`
+   * (chat-service.ts pre-Lot 12). Differences are limited to:
+   *   (a) `this.getSessionForUser` → `this.deps.sessionStore.findForUser`;
+   *   (b) `this.createSession` → `this.deps.sessionStore.create`
+   *       (ChatService.createSession is itself a one-line delegate);
+   *   (c) `isChatContextType` → `this.deps.isChatContextType` callback;
+   *   (d) `postgresChatSessionStore.updateContext` →
+   *       `this.deps.sessionStore.updateContext`;
+   *   (e) `settingsService.getAISettings` + `getModelCatalogPayload` +
+   *       `inferProviderFromModelIdWithLegacy` + `resolveDefaultSelection`
+   *       → `this.deps.resolveModelSelection`;
+   *   (f) `this.getNextMessageSequence` →
+   *       `this.deps.messageStore.getNextSequence`;
+   *   (g) `createId()` → `randomUUID()`;
+   *   (h) `this.normalizeMessageContexts` →
+   *       `this.deps.normalizeMessageContexts`;
+   *   (i) `postgresChatMessageStore.insertMany` →
+   *       `this.deps.messageStore.insertMany`;
+   *   (j) `postgresChatSessionStore.touchUpdatedAt` →
+   *       `this.deps.sessionStore.touchUpdatedAt`.
+   *
+   * Placeholder lifecycle preserved: the assistant message is inserted
+   * with `content=null` / `reasoning=null` / `model=selectedModel` so
+   * downstream callers (route + queue manager) can stream-fill it via
+   * `runAssistantGeneration` and then finalize via
+   * `finalizeAssistantMessageFromStream`. The placeholder always lands
+   * at `userSeq + 1` so the pair is contiguous in the message sequence.
+   */
+  async createUserMessageWithAssistantPlaceholder(
+    input: RuntimeCreateChatMessageInput,
+  ): Promise<CreateUserMessageResult> {
+    const desiredWorkspaceId = input.workspaceId ?? null;
+    const existing = input.sessionId
+      ? await this.deps.sessionStore.findForUser(input.sessionId, input.userId)
+      : null;
+    const existingId =
+      existing && typeof (existing as { id?: unknown }).id === 'string'
+        ? (existing as { id: string }).id
+        : null;
+    const existingWorkspaceId =
+      existing && typeof (existing as { workspaceId?: unknown }).workspaceId === 'string'
+        ? ((existing as { workspaceId: string }).workspaceId as string)
+        : null;
+    const sessionId =
+      existingId && existingWorkspaceId === desiredWorkspaceId
+        ? existingId
+        : (await this.deps.sessionStore.create({
+            userId: input.userId,
+            workspaceId: desiredWorkspaceId,
+            primaryContextType: input.primaryContextType ?? null,
+            primaryContextId: input.primaryContextId ?? null,
+            title: input.sessionTitle ?? null,
+          })).sessionId;
+    const nextContextType = this.deps.isChatContextType(input.primaryContextType)
+      ? (input.primaryContextType as string)
+      : null;
+    const nextContextId =
+      typeof input.primaryContextId === 'string' ? input.primaryContextId.trim() : '';
+
+    if (nextContextType && nextContextId) {
+      const shouldUpdateContext =
+        !existing ||
+        existing.primaryContextType !== nextContextType ||
+        existing.primaryContextId !== nextContextId;
+      if (shouldUpdateContext) {
+        await this.deps.sessionStore.updateContext(sessionId, {
+          primaryContextType: nextContextType,
+          primaryContextId: nextContextId,
+        });
+      }
+    }
+
+    // Provider/model selection (request overrides > inferred by model id > workspace defaults).
+    const resolvedSelection = await this.deps.resolveModelSelection({
+      userId: input.userId,
+      providerId: input.providerId,
+      model: input.model,
+    });
+    const selectedProviderId = resolvedSelection.provider_id;
+    const selectedModel = resolvedSelection.model_id;
+    const userSeq = await this.deps.messageStore.getNextSequence(sessionId);
+    const assistantSeq = userSeq + 1;
+
+    const userMessageId = randomUUID();
+    const assistantMessageId = randomUUID();
+
+    const messageContexts = this.deps.normalizeMessageContexts(input);
+
+    await this.deps.messageStore.insertMany([
+      {
+        id: userMessageId,
+        sessionId,
+        role: 'user',
+        content: input.content,
+        toolCalls: null,
+        toolCallId: null,
+        reasoning: null,
+        model: null,
+        promptId: null,
+        promptVersionId: null,
+        contexts: messageContexts.length > 0 ? messageContexts : null,
+        sequence: userSeq,
+        createdAt: new Date(),
+      },
+      {
+        id: assistantMessageId,
+        sessionId,
+        role: 'assistant',
+        content: null,
+        toolCalls: null,
+        toolCallId: null,
+        reasoning: null,
+        model: selectedModel,
+        promptId: null,
+        promptVersionId: null,
+        contexts: null,
+        sequence: assistantSeq,
+        createdAt: new Date(),
+      },
+    ]);
+
+    // Touch session updatedAt
+    await this.deps.sessionStore.touchUpdatedAt(sessionId);
+
+    return {
+      sessionId,
+      userMessageId,
+      assistantMessageId,
+      streamId: assistantMessageId,
+      providerId: selectedProviderId,
+      model: selectedModel,
     };
   }
 }
