@@ -10,6 +10,7 @@ import {
   ChatRuntime,
   type ChatCheckpointSummary,
 } from '../../../packages/chat-core/src/runtime';
+import type { ChatMessageWithFeedback } from '../../../packages/chat-core/src/message-port';
 import { createId } from '../utils/id';
 import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
 import {
@@ -845,6 +846,23 @@ export class ChatService {
       // runtime's `createUserMessageWithAssistantPlaceholder` keeps the
       // exact membership check used pre-migration.
       isChatContextType: (value) => isChatContextType(value),
+      // BR14b Lot 14a — hydrate the `todoRuntime` payload alongside the
+      // listed messages. Bundles the three api-land helpers that chat-core
+      // cannot import: workspace resolution, workspace-role lookup, and
+      // the todo orchestration service. Returns `null` when the session
+      // has no addressable workspace (preserves the legacy null branch).
+      hydrateMessagesWithTodoRuntime: async ({ session, userId }) => {
+        const sessionWorkspaceId = await this.resolveSessionWorkspaceId(
+          session,
+          userId,
+        );
+        if (!sessionWorkspaceId) return null;
+        const role = (await getWorkspaceRole(userId, sessionWorkspaceId)) ?? 'viewer';
+        return todoOrchestrationService.getSessionTodoRuntime(
+          { userId, role, workspaceId: sessionWorkspaceId },
+          session.id,
+        );
+      },
     });
   }
 
@@ -1366,32 +1384,24 @@ export class ChatService {
     await postgresChatSessionStore.deleteForUser(sessionId, userId);
   }
 
-  async listMessages(sessionId: string, userId: string) {
-    const session = await this.getSessionForUser(sessionId, userId);
-    if (!session) throw new Error('Session not found');
-
-    const messages = await postgresChatMessageStore.listForSessionWithFeedback(
-      sessionId,
-      userId,
-    );
-
-    let todoRuntime: Record<string, unknown> | null = null;
-    const sessionWorkspaceId = await this.resolveSessionWorkspaceId(
-      session,
-      userId,
-    );
-    if (sessionWorkspaceId) {
-      const role = (await getWorkspaceRole(userId, sessionWorkspaceId)) ?? 'viewer';
-      todoRuntime = await todoOrchestrationService.getSessionTodoRuntime(
-        { userId, role, workspaceId: sessionWorkspaceId },
-        sessionId,
-      );
-    }
-
-    return {
-      messages,
-      todoRuntime,
-    };
+  /**
+   * BR14b Lot 14a — thin delegate to `ChatRuntime.listMessages`. Public
+   * signature preserved (returns `{ messages, todoRuntime }`). All three
+   * persistence/hydration concerns (session authz, message-with-feedback
+   * fetch, todoRuntime hydration) are now owned by the runtime; the
+   * todoRuntime hydration callback wired in the constructor calls back
+   * into `resolveSessionWorkspaceId` + `getWorkspaceRole` +
+   * `todoOrchestrationService.getSessionTodoRuntime` to preserve the
+   * pre-Lot 14a behavior.
+   */
+  async listMessages(
+    sessionId: string,
+    userId: string,
+  ): Promise<{
+    messages: ChatMessageWithFeedback[];
+    todoRuntime: Record<string, unknown> | null;
+  }> {
+    return this.runtime.listMessages(sessionId, userId);
   }
 
   private async resolveSessionWorkspaceId(

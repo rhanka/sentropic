@@ -330,3 +330,17 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts PASS (4/4)
 - [x] make test-api-endpoints SCOPE=tests/api/chat.test.ts PASS (28/28)
 - [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts PASS (14/14)
+
+## Lot 14a - listMessages migration (Option A todoRuntime hydration callback)
+- [x] Inventory listMessages dependencies
+- [x] Add hydrateMessagesWithTodoRuntime callback to ChatRuntimeDeps
+- [x] Migrate listMessages into ChatRuntime (verbatim)
+- [x] chat-service.ts delegates listMessages (public API unchanged)
+- [x] typecheck + tests PASS
+- [x] make typecheck-api PASS
+- [x] make lint-api PASS (0 errors; only pre-existing warnings)
+- [x] make test-api-endpoints SCOPE=tests/api/chat.test.ts PASS (28/28)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts PASS (4/4)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-feedback.test.ts PASS (2/2)
+- [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts PASS (14/14)
