@@ -5,4 +5,5 @@ export * from './session-port.js';
 export * from './mesh-port.js';
 export * from './ports.js';
 export * from './types.js';
+export * from './history.js';
 export * from './runtime.js';

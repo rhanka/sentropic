@@ -290,6 +290,73 @@ export type ChatRuntimeDeps = {
     readonly session: ChatSessionRow;
     readonly userId: string;
   }) => Promise<Record<string, unknown> | null>;
+  /**
+   * Lot 14b — resolve the effective workspace id for a session. Mirrors
+   * the body of `ChatService.resolveSessionWorkspaceId` (uses
+   * `session.workspaceId` when present, else `ensureWorkspaceForUser`).
+   * Crosses the port as an Option A callback because the fallback body
+   * imports `workspace-service` which chat-core must not pull in.
+   */
+  readonly resolveSessionWorkspaceId: (
+    session: ChatSessionRow,
+    userId: string,
+  ) => Promise<string | null>;
+  /**
+   * Lot 14b — list the documents attached to a chat session for the
+   * resolved workspace. Mirrors the body of
+   * `ChatService.listSessionDocuments` (joins `context_documents` with
+   * `job_queue` to derive the effective status). Crosses the port as
+   * an Option A callback because chat-core must not import
+   * `drizzle-orm` or the api `db/schema`.
+   */
+  readonly listSessionDocuments: (input: {
+    readonly sessionId: string;
+    readonly workspaceId: string | null;
+  }) => Promise<ReadonlyArray<ChatSessionDocumentItem>>;
+  /**
+   * Lot 14b — project stored stream events to assistant detail rows,
+   * grouped by message id. Mirrors the body of
+   * `ChatService.listAssistantDetailsByMessageId` (single `SELECT`
+   * ordered by `stream_id, sequence`). Crosses the port as an Option A
+   * callback for the same reason as `listSessionDocuments`.
+   */
+  readonly listAssistantDetailsByMessageId: (
+    messageIds: ReadonlyArray<string>,
+  ) => Promise<Record<string, ChatBootstrapStreamEvent[]>>;
+};
+
+/**
+ * Lot 14b — structural mirror of `ChatSessionDocumentItem` from
+ * `api/src/services/chat-service.ts`. Carried verbatim so the
+ * `getSessionBootstrap` / `getSessionHistory` return payloads stay
+ * byte-for-byte identical to the pre-Lot 14b shapes.
+ */
+export type ChatSessionDocumentItem = {
+  id: string;
+  context_type: 'chat_session';
+  context_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  status: 'uploaded' | 'processing' | 'ready' | 'failed';
+  summary?: string | null;
+  summary_lang?: string | null;
+  created_at?: Date;
+  updated_at?: Date | null;
+  job_id?: string | null;
+};
+
+/**
+ * Lot 14b — structural mirror of `ChatBootstrapStreamEvent` from
+ * `api/src/services/chat-service.ts`. Same shape as
+ * `ChatHistoryStreamEvent` but with a non-optional `createdAt: Date`
+ * (the api adapter SELECTs the `chat_stream_events.createdAt` column).
+ */
+export type ChatBootstrapStreamEvent = {
+  eventType: string;
+  data: unknown;
+  sequence: number;
+  createdAt: Date;
 };
 
 /**
