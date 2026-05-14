@@ -1,5 +1,5 @@
 /**
- * BR14b Lot 9/10/11 — chat orchestration extraction.
+ * BR14b Lot 9/10/11/12 — chat orchestration extraction.
  *
  * `ChatRuntime` is the home of chat orchestration that lives above the
  * persistence/stream ports already extracted in Lots 4/6/7/8 + the mesh
@@ -24,7 +24,7 @@
  *                            placeholder with the typed
  *                            `mesh: MeshDispatchPort` DI hook.
  *
- *   Lot 11  (THIS LOT)    — Refactor `postgresChatCheckpointAdapter` to
+ *   Lot 11  (DONE)        — Refactor `postgresChatCheckpointAdapter` to
  *                            strictly implement the generic
  *                            `CheckpointStore<ChatState>` port (load /
  *                            save / list / delete + optional tag/fork)
@@ -45,8 +45,39 @@
  *                            9/10 because the adapter is now strictly
  *                            typed.
  *
- *   Lots 12+ (NEXT)       — Move continuation generation, tool loop,
- *                            reasoning loop, cancel, retry, and finally
+ *   Lot 12  (THIS LOT)    — Migrate `retryUserMessage` (69 l) +
+ *                            `createUserMessageWithAssistantPlaceholder`
+ *                            (~115 l) into `ChatRuntime`. Both methods
+ *                            blend persistence (MessageStore +
+ *                            SessionStore) with two app-level concerns
+ *                            that must not cross into chat-core: AI
+ *                            settings + model-catalog lookup (resolves a
+ *                            `{providerId, modelId}` pair from user
+ *                            settings + request overrides + legacy
+ *                            inference) and message-contexts
+ *                            normalization (validates an inbound
+ *                            `CreateChatMessageInput` slice against the
+ *                            domain's `ChatContextType` union). Per
+ *                            SPEC §5 and the prevailing Lot 10 pattern
+ *                            (`normalizeVsCodeCodeAgent`), both surfaces
+ *                            cross the port as **Option A callbacks** on
+ *                            `ChatRuntimeDeps` rather than as new ports:
+ *                            each is a single pure function with no
+ *                            multi-method shape that other lots would
+ *                            reuse. The chat-service adapter wires
+ *                            `resolveModelSelection` (a combined call
+ *                            over `settingsService.getAISettings` +
+ *                            `getModelCatalogPayload` +
+ *                            `inferProviderFromModelIdWithLegacy` +
+ *                            `resolveDefaultSelection`),
+ *                            `normalizeMessageContexts` (binds
+ *                            `ChatService.normalizeMessageContexts`),
+ *                            and `isChatContextType` (binds the module-
+ *                            level type guard). chat-core stays contract-
+ *                            and api-import free.
+ *
+ *   Lots 13+ (NEXT)       — Move continuation generation, tool loop,
+ *                            reasoning loop, cancel, and finally
  *                            `runAssistantGeneration` itself into the
  *                            runtime. Mesh dispatch routes through
  *                            `deps.mesh.invoke` / `deps.mesh.invokeStream`.
@@ -189,6 +220,58 @@ export type ChatRuntimeDeps = {
   readonly normalizeVsCodeCodeAgent: (
     input: unknown,
   ) => NormalizedVsCodeCodeAgentRuntimePayload | null;
+  /**
+   * Lot 12 — resolve `{providerId, modelId}` from optional caller
+   * overrides + user AI settings + the active model catalog.
+   *
+   * Adapter (api/src/services/chat-service.ts):
+   *   1. `await settingsService.getAISettings({ userId })`
+   *   2. `await getModelCatalogPayload({ userId })`
+   *   3. `inferProviderFromModelIdWithLegacy(catalog.models, modelId)`
+   *   4. `resolveDefaultSelection({ providerId, modelId }, catalog.models)`
+   *
+   * Crosses the port as a single callback because chat-core must not
+   * import `settingsService` / `model-catalog` (both live in `api/src/`
+   * and depend on the provider registry). The shape of the return value
+   * mirrors `ModelSelectionPair` from `model-catalog.ts` byte-for-byte
+   * (`provider_id` / `model_id` snake_case) so the chat-service delegate
+   * stays a one-liner.
+   */
+  readonly resolveModelSelection: (input: {
+    readonly userId: string;
+    readonly providerId?: string | null;
+    readonly model?: string | null;
+  }) => Promise<{
+    readonly provider_id: string;
+    readonly model_id: string;
+  }>;
+  /**
+   * Lot 12 — normalize a `CreateChatMessageInput` slice (contexts +
+   * primaryContextType + primaryContextId) into the
+   * `{contextType, contextId}[]` array persisted on `chat_messages.contexts`.
+   *
+   * Crosses the port as a callback because the body depends on the
+   * `ChatContextType` union which is owned by `chat-service.ts`. The
+   * runtime is contract-agnostic about which strings are valid context
+   * types — it just persists whatever the callback returns.
+   */
+  readonly normalizeMessageContexts: (input: {
+    readonly contexts?: ReadonlyArray<{
+      readonly contextType: string;
+      readonly contextId: string;
+    }>;
+    readonly primaryContextType?: string | null;
+    readonly primaryContextId?: string | null;
+  }) => Array<{ readonly contextType: string; readonly contextId: string }>;
+  /**
+   * Lot 12 — type guard exposing the `ChatContextType` membership check
+   * used in `createUserMessageWithAssistantPlaceholder` to decide
+   * whether to write a `SessionStore.updateContext` for an incoming
+   * `primaryContextType`. Same rationale as
+   * `normalizeMessageContexts`: chat-core stays agnostic of the
+   * concrete `ChatContextType` union.
+   */
+  readonly isChatContextType: (value: unknown) => boolean;
 };
 
 /**
