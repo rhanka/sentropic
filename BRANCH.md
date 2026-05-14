@@ -286,3 +286,18 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] make test-api-endpoints SCOPE=tests/api/chat.test.ts PASS (28/28; continuation + local-tool spies on acceptLocalToolResult included)
 - [x] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts PASS (4/4)
 - [x] make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts PASS (6/6)
+
+## Lot 11 - checkpoint orchestration extraction (strict CheckpointStore port + ChatRuntime checkpoint methods)
+- [x] Refactor postgres-checkpoint-adapter to strict CheckpointStore<ChatState> port
+- [x] Migrate createCheckpoint/listCheckpoints/restoreCheckpoint orchestration into ChatRuntime
+- [x] Drop `as unknown as CheckpointStore<ChatState>` cast (clean typing)
+- [x] chat-service.ts delegates 3 methods (public API unchanged)
+- [x] typecheck + tests PASS
+- [x] make typecheck-api PASS
+- [x] make lint-api PASS (0 errors; only pre-existing warnings)
+- [x] make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts PASS (2/2)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts PASS (1/1)
+- [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts PASS (14/14)
+- [x] make test-api-endpoints SCOPE=tests/api/chat.test.ts PASS (28/28)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts PASS (4/4)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts PASS (1/1)

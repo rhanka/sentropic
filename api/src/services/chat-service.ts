@@ -1,15 +1,15 @@
 import { and, desc, eq, sql, inArray, or } from 'drizzle-orm';
 import { db, pool } from '../db/client';
 import { chatStreamEvents, contextDocuments, folders, jobQueue, organizations } from '../db/schema';
-import {
-  postgresChatCheckpointAdapter,
-  type ChatCheckpointSummary,
-} from './chat/postgres-checkpoint-adapter';
+import { postgresChatCheckpointAdapter } from './chat/postgres-checkpoint-adapter';
 import { postgresChatMessageStore } from './chat/postgres-chat-message-store';
 import { postgresChatSessionStore } from './chat/postgres-chat-session-store';
 import { postgresStreamBuffer } from './chat/postgres-stream-buffer';
 import { meshDispatchAdapter } from './chat/mesh-dispatch-adapter';
-import { ChatRuntime } from '../../../packages/chat-core/src/runtime';
+import {
+  ChatRuntime,
+  type ChatCheckpointSummary,
+} from '../../../packages/chat-core/src/runtime';
 import { createId } from '../utils/id';
 import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
 import {
@@ -774,24 +774,25 @@ const compactConversationContext = async (input: {
 
 export class ChatService {
   /**
-   * BR14b Lot 9/10 — orchestration extraction.
+   * BR14b Lots 9/10/11 — orchestration extraction.
    * `ChatRuntime` owns chat orchestration above the persistence ports
-   * extracted in Lots 4/6/7/8 and the mesh boundary port introduced in
-   * Lot 10. Methods migrate progressively from `ChatService` into
-   * `ChatRuntime` (see runtime.ts header). The runtime is wired in the
-   * constructor (instead of a field initializer) so the
-   * `normalizeVsCodeCodeAgent` callback can bind `this.normalizeVsCodeCodeAgentPayload`
-   * which still lives in `ChatService` because its body is reused by
-   * several non-runtime call-sites (system-prompt build, instruction
-   * rendering). `checkpointStore` is wired as a stub typed via
-   * `as unknown as CheckpointStore<ChatState>` because the existing
-   * `postgresChatCheckpointAdapter` exposes a higher-level surface
-   * (`createCheckpointForSession` / `listCheckpointsForSession` /
-   * `restoreCheckpointForSession`) rather than the generic `load/save`
-   * CheckpointStore<ChatState> port. The runtime never reaches into
-   * that port in Lots 9/10 (the migrated slices don't checkpoint), so
-   * the stub is safe; full wiring lands when checkpoint orchestration
-   * moves into the runtime (Lot 11+).
+   * extracted in Lots 4/6/7/8 and the mesh boundary port introduced
+   * in Lot 10. Methods migrate progressively from `ChatService` into
+   * `ChatRuntime` (see runtime.ts header). The runtime is wired in
+   * the constructor (instead of a field initializer) so the
+   * `normalizeVsCodeCodeAgent` callback can bind
+   * `this.normalizeVsCodeCodeAgentPayload` which still lives in
+   * `ChatService` because its body is reused by several non-runtime
+   * call-sites (system-prompt build, instruction rendering).
+   *
+   * Lot 11: `postgresChatCheckpointAdapter` now strictly implements
+   * `CheckpointStore<ChatState>` (load/save/list/delete + optional
+   * tag/fork) so the previous `as unknown as CheckpointStore<ChatState>`
+   * cast is gone. Checkpoint orchestration
+   * (`createCheckpoint` / `listCheckpoints` / `restoreCheckpoint`)
+   * lives on the runtime and composes the generic port with
+   * `MessageStore` + `SessionStore`. The public `ChatService` methods
+   * keep their signatures and become thin authz-checking delegates.
    */
   private readonly runtime: ChatRuntime;
 
@@ -800,10 +801,7 @@ export class ChatService {
       messageStore: postgresChatMessageStore,
       sessionStore: postgresChatSessionStore,
       streamBuffer: postgresStreamBuffer,
-      // CheckpointStore<ChatState> is not exercised in Lots 9/10; cast through
-      // unknown to satisfy the typed DI without forcing a premature
-      // generic-port refactor of postgresChatCheckpointAdapter.
-      checkpointStore: postgresChatCheckpointAdapter as unknown as ConstructorParameters<typeof ChatRuntime>[0]['checkpointStore'],
+      checkpointStore: postgresChatCheckpointAdapter,
       mesh: meshDispatchAdapter,
       normalizeVsCodeCodeAgent: (input) =>
         this.normalizeVsCodeCodeAgentPayload(input as VsCodeCodeAgentRuntimePayload | null | undefined),
@@ -1615,7 +1613,7 @@ export class ChatService {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
     if (!session) throw new Error('Session not found');
 
-    return postgresChatCheckpointAdapter.createCheckpointForSession({
+    return this.runtime.createCheckpoint({
       sessionId: options.sessionId,
       title: options.title,
       anchorMessageId: options.anchorMessageId,
@@ -1630,7 +1628,7 @@ export class ChatService {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
     if (!session) throw new Error('Session not found');
 
-    return postgresChatCheckpointAdapter.listCheckpointsForSession({
+    return this.runtime.listCheckpoints({
       sessionId: options.sessionId,
       limit: options.limit,
     });
@@ -1648,7 +1646,7 @@ export class ChatService {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
     if (!session) throw new Error('Session not found');
 
-    return postgresChatCheckpointAdapter.restoreCheckpointForSession({
+    return this.runtime.restoreCheckpoint({
       sessionId: options.sessionId,
       checkpointId: options.checkpointId,
     });
