@@ -22,15 +22,25 @@ export type {
   SaveResult,
 } from './checkpoint-port.js';
 
-/**
- * Per SPEC §5 — chat-core ports.
- * Signatures intentionally minimal in BR14b Lot 3 (shell only);
- * full method surface lands in Lot 4 when chat-service migrates onto these ports.
- */
-export interface MessageStore {
-  readonly _kind: 'MessageStore';
-}
+// Re-export the contracts-free MessageStore surface (BR14b Lot 6).
+// Replaces the placeholder `MessageStore { _kind }` that lived here in Lot 3.
+export type {
+  AssistantContentUpdate,
+  ChatMessageIdentity,
+  ChatMessageInsert,
+  ChatMessageRole,
+  ChatMessageRow,
+  ChatMessageWithFeedback,
+  FeedbackResult,
+  FeedbackVote,
+  MessageStore,
+} from './message-port.js';
 
+/**
+ * Per SPEC §5 — remaining chat-core ports.
+ * Signatures intentionally minimal in BR14b Lot 3 (shell only);
+ * full method surface lands progressively as chat-service migrates onto these ports.
+ */
 export interface SessionStore {
   readonly _kind: 'SessionStore';
 }
