@@ -43,7 +43,7 @@ Resolve all 4 HIGH severity Dependabot alerts on `rhanka/entropiq` by upgrading 
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- none
+- BR-SEC-N1 (`attention`): `tests/unit/google-drive-oauth.test.ts > derives the public app return base URL from the current sent-tech API host` fails locally because the worktree `.env` defines `AUTH_CALLBACK_BASE_URL=http://localhost:5173`, which leaks into the test process. The function reads `AUTH_CALLBACK_BASE_URL` before the test's `delete process.env.AUTH_CALLBACK_BASE_URL` takes effect. Verified pre-existing on origin/main (same failure with no changes applied). CI confirms test passes when env var is absent. Not a regression caused by this branch. Recommend: separate hardening branch to make the test resilient to ambient env vars (e.g., `vi.stubEnv` or read env lazily inside the function).
 
 ## AI Flaky tests
 - Not applicable. This branch does not touch AI runtime.
@@ -88,14 +88,14 @@ Resolve all 4 HIGH severity Dependabot alerts on `rhanka/entropiq` by upgrading 
     - [x] `make test-ui ENV=test-fix-security-high-vulnerabilities` -> 370/370 pass
   - [x] Atomic commit: `fix(security): upgrade flatted to 3.4.2 (CVE-2026-33228 high)`
 
-- [ ] **Lot 3 — Upgrade `fast-xml-builder` to 1.1.7+ via override (CVE-2026-44665)**
-  - [ ] Add `overrides.fast-xml-builder` to `api/package.json` at `^1.1.7`.
-  - [ ] Refresh `api/package-lock.json` via `make install-api ENV=test-fix-security-high-vulnerabilities`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api ENV=test-fix-security-high-vulnerabilities`
-    - [ ] `make lint-api ENV=test-fix-security-high-vulnerabilities`
-    - [ ] `make test-api-unit ENV=test-fix-security-high-vulnerabilities`
-  - [ ] Atomic commit: `fix(security): upgrade fast-xml-builder to 1.1.7 (CVE-2026-44665 high)`
+- [x] **Lot 3 — Upgrade `fast-xml-builder` to 1.1.7+ via override (CVE-2026-44665)**
+  - [x] Add `overrides.fast-xml-builder` to `api/package.json` at `^1.1.7` (resolved to 1.2.0).
+  - [x] Refresh `api/package-lock.json` via isolated regenerate in container.
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-fix-security-high-vulnerabilities` -> 0 errors
+    - [x] `make lint-api ENV=test-fix-security-high-vulnerabilities` -> 0 errors, 184 warnings (pre-existing console.log warnings)
+    - [x] `make test-api-unit ENV=test-fix-security-high-vulnerabilities` -> 493/494 pass (1 pre-existing failure in `tests/unit/google-drive-oauth.test.ts` due to local .env AUTH_CALLBACK_BASE_URL; not a regression — verified by reproducing on baseline; CI passes)
+  - [x] Atomic commit: `fix(security): upgrade fast-xml-builder to 1.2.0 (CVE-2026-44665 high)`
 
 - [ ] **Lot 4 — Final validation**
   - [ ] `make typecheck-api ENV=test-fix-security-high-vulnerabilities`
