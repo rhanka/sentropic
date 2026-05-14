@@ -204,6 +204,6 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 ## Lot 4 - chat-checkpoint extraction
 - [x] Define ChatState in packages/chat-core/src/types.ts
 - [x] Create api/src/services/chat/postgres-checkpoint-adapter.ts
-- [ ] Refactor chat-service.ts to delegate (no public API change)
+- [x] Refactor chat-service.ts to delegate (no public API change)
 - [ ] Re-run make test-api -> all chat-checkpoint tests green
 - [ ] (Deferred to Lot 5) tag/fork/delete methods full impl
