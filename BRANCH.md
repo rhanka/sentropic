@@ -630,3 +630,40 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
   - Mutable cursor + flags threading via `loopState` is feasible (already established by Lot 21b/21c precedent) but the closure captures `markTodoIterationState` mutates 2 loopState fields. Wire-up: callback receives `loopState` reference; chat-service-side method body mutates loopState directly (mirrors how Lot 21b/21c handle `currentMessages` etc.).
   - Recommendation for follow-up agent: split Lot 21d into Lot 21d-1 (this commit — Step 0 inventory + DECISION POINT) + Lot 21d-2 (extract `ChatService.executeServerToolInternal` with rich input + return aggregated deltas) + Lot 21d-3 (wire callback + delete inline body + tests). Or alternatively: keep Lot 21d as-is and execute it in a fresh session with full context budget (recommended).
 
+## Lot 21d-2 - executeServerToolInternal extraction (PURE CODE MOVEMENT)
+- [x] Step 1: identify and document tool-branch groups for self-split (~6 branches per group). Branch line ranges (chat-service.ts post-Lot 21c, before any Lot 21d-2 migration):
+  - **Group A** (6 branches, lines 3519-3638, ~120 lines): plan-validation-guard (3519); read_initiative (3526); update_initiative (3544); organizations_list (3571); organization_get (3589); organization_update (3611).
+  - **Group B** (6 branches, lines 3639-3818, ~180 lines): folders_list (3639); folder_get (3661); folder_update (3681); initiatives_list (3708); executive_summary_get (3729); executive_summary_update (3749).
+  - **Group C** (5 branches, lines 3820-4044, ~225 lines): matrix_get (3776); matrix_update (3793); plan-create (3820); plan-update_plan (3891); plan-update_task (3969).
+  - **Group D** (5 branches, lines 4045-4286, ~240 lines): comment_assistant (4045); web_search (4109); web_extract (4128); documents (4153); history_analyze (4229).
+  - **Group E** (10 branches, lines 4287-4356, ~70 lines): solutions_list (4287); solution_get (4296); proposals_list (4301); proposal_get (4310); products_list (4315); product_get (4324); gate_review (4329); workspace_list (4334); initiative_search (4339); task_dispatch (4348).
+  - **Group F** (2 branches, lines 4357-4732, ~350 lines): document_generate (4357, 235 lines); batch_create_organizations (4592, 115 lines); plus the catch-wrapper at 4700-4732.
+- [x] Step 2: scaffold `ChatService.executeServerToolInternal(input): Promise<ExecuteServerToolInternalResult>` private method with default branch only (throws `Unknown tool` mirroring inline 4681 fallback). Add chat-service-internal `ExecuteServerToolInternalInput` + `ExecuteServerToolInternalResult` types BEFORE `class ChatService`. Method is NOT yet invoked from `runAssistantGeneration` — inline switch remains the source of truth. `OpenAIChatLike` helper alias for `currentMessages`.
+- [x] Step 2: typecheck PASS (no behavior change; method unreferenced; scaffold adds +145 lines net).
+- [ ] Step 3: Group A migration (commit 2).
+- [ ] Step 3: Group B migration (commit 3).
+- [ ] Step 3: Group C migration (commit 4).
+- [ ] Step 3: Group D migration (commit 5).
+- [ ] Step 3: Group E migration (commit 6).
+- [ ] Step 3: Group F migration (commit 7).
+- [ ] Step 4: final cleanup commit — verify inline dispatch body is delegation-only.
+- [ ] Step 6: regression tests (FINAL)
+  - [ ] `make typecheck-api` PASS
+  - [ ] `make lint-api` PASS
+  - [ ] `make test-pkg-chat-core` PASS (151/151 — unchanged)
+  - [ ] `make test-api-endpoints SCOPE=tests/api/chat.test.ts` PASS (28/28)
+  - [ ] `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts` PASS (6/6)
+  - [ ] `make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts` PASS
+  - [ ] `make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts` PASS
+  - [ ] `make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts` PASS
+  - [ ] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts` PASS (14/14)
+  - [ ] `make test-api-unit SCOPE=tests/unit/stream-service.test.ts` PASS
+- [x] **Decisions captured for Step 3 follow-up agent**:
+  - **Input type**: chat-service-LOCAL `ExecuteServerToolInternalInput` rather than the chat-core `ExecuteServerToolInput`. Rationale: chat-core's type intentionally declares `tools` / `currentMessages` / `responseToolOutputs` as `ReadonlyArray<unknown>` (boundary opacity, preserved for Lot 21d-3 callback) and lacks api-side captured locals (`allowedByType` / `allowedFolderIds` / `allowedCommentContextSet` / `lastUserMessage` / `currentUserRole` / `primaryContextType` / `primaryContextId` / `sessionWorkspaceId` / `vscodeCodeAgentPayload` / `executedTools` / `iteration`) AND the 4 closures (`getOrganizationIdForFolder` / `isAllowedOrganizationId` / `markTodoIterationState` / `isExplicitConfirmation`). The chat-service-local type carries the full surface; Lot 21d-3 will bridge via Option A callback that binds closures + accumulator refs over `this`.
+  - **Streaming side effect**: per-branch `writeStreamEvent` calls + `streamSeq += 1` mutations stay INSIDE the method body; method returns the post-mutation `streamSeq` via `ExecuteServerToolInternalResult.streamSeq` so caller updates its shared local cursor.
+  - **Mutable state**: caller-side mutables (`todoAwaitingUserInput`, `todoContinuationActive`, `contextBudgetReplanAttempts`) are mutated via the captured closure `markTodoIterationState` (passed in `input`). No new return field needed.
+  - **Try/catch structure**: the inline `try { ... } catch { ... }` STRUCTURE stays caller-side. Branches inside `executeServerToolInternal` may throw — the caller's catch continues to wrap them into `{status:'error',error}` and push into `toolResults` / `responseToolOutputs` / `executedTools`. This preserves byte-identical error-path behavior including the existing `todoErrorCall = toolCall.name === 'plan'` + `markTodoIterationState(errorResult)` path at lines 4705-4708.
+  - **Context-budget gate**: STAYS caller-side at lines ~3406-3495 (the `continue` short-circuit happens BEFORE any call to `executeServerToolInternal`). Lot 21e migrates the gate.
+  - **Migration step protocol**: each Group commit (a) moves the verbatim branch body INTO the `executeServerToolInternal` switch as a new `case 'tool_name':` (preserves byte-identical per-branch logic + writeStreamEvent calls + streamSeq mutations); (b) replaces the inline `else if (toolCall.name === 'tool_name') { ... }` block with a delegation `const r = await this.executeServerToolInternal({...}); result = r.result; streamSeq = r.streamSeq;`; (c) runs typecheck + targeted tests; (d) `make commit MSG="refactor(chat-service): migrate <names> into executeServerToolInternal (group N)"`.
+  - **Args parsing in caller**: keep the existing `const args = JSON.parse(toolCall.args || '{}')` caller-side (line 3395) — pass `args` through `input.args` to avoid double-parsing. The plan-validation-guard branch at 3519 reads `toolCall.name === 'plan' && !todoOperation` — `todoOperation` is the caller's locally-computed value (lines 3497-3518); pass it through `input.todoOperation`.
+

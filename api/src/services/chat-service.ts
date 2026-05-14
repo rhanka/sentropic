@@ -774,6 +774,88 @@ const compactConversationContext = async (input: {
   };
 };
 
+/**
+ * BR14b Lot 21d-2 — chat-service-LOCAL input bundle for
+ * `ChatService.executeServerToolInternal`. Carries every captured local +
+ * closure that the 30 inline tool branches consume in `runAssistantGeneration`
+ * (post-Lot 21c, lines 3393-4732). The chat-core boundary type
+ * `ExecuteServerToolInput` (Lot 21c, opaque on `tools`/`currentMessages`/
+ * `responseToolOutputs`, missing api-side captured locals + 4 closures)
+ * cannot be reused as-is — Lot 21d-3 will bridge via Option A callback
+ * binding closures + accumulator refs over `this`.
+ */
+export interface ExecuteServerToolInternalInput {
+  readonly toolCall: { id: string; name: string; args: string };
+  readonly args: unknown;
+  readonly todoOperation: TodoRuntimeToolOperation | null;
+  readonly options: {
+    userId: string;
+    sessionId: string;
+    assistantMessageId: string;
+    locale?: string;
+    signal?: AbortSignal;
+  };
+  readonly currentMessages: OpenAIChatLike[];
+  readonly tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined;
+  readonly responseToolOutputs: Array<{
+    type: 'function_call_output';
+    call_id: string;
+    output: string;
+  }>;
+  readonly executedTools: Array<{
+    toolCallId: string;
+    name: string;
+    args: unknown;
+    result: unknown;
+  }>;
+  readonly selectedProviderId: ProviderId;
+  readonly selectedModel: string | null;
+  readonly sessionWorkspaceId: string | null;
+  readonly readOnly: boolean;
+  readonly currentUserRole: string | null;
+  readonly enforceTodoUpdateMode: boolean;
+  readonly todoAutonomousExtensionEnabled: boolean;
+  readonly allowedByType: {
+    organization: Set<string>;
+    folder: Set<string>;
+    usecase: Set<string>;
+    executive_summary: Set<string>;
+  };
+  readonly allowedFolderIds: ReadonlyArray<string>;
+  readonly allowedCommentContextSet: Set<string>;
+  readonly primaryContextType: ChatContextType | null;
+  readonly primaryContextId: string | null;
+  readonly vscodeCodeAgentPayload: unknown;
+  readonly lastUserMessage: string;
+  readonly iteration: number;
+  readonly streamSeq: number;
+  readonly getOrganizationIdForFolder: (folderId: string) => Promise<string | null>;
+  readonly isAllowedOrganizationId: (orgId: string) => Promise<boolean>;
+  readonly markTodoIterationState: (rawResult: unknown) => void;
+  readonly isExplicitConfirmation: (text: string, confirmationArg: unknown) => boolean;
+}
+
+/**
+ * BR14b Lot 21d-2 — chat-service-LOCAL return shape of
+ * `ChatService.executeServerToolInternal`. Mirrors the inline accumulator
+ * delta: the per-tool `result` value (caller pushes into `executedTools` /
+ * `toolResults` / `responseToolOutputs`) + advanced `streamSeq` cursor
+ * (each branch performs `writeStreamEvent` + `streamSeq += 1`). The
+ * `markTodoIterationState` closure mutates caller-side state in-place
+ * via closure capture (no surfacing needed). The `try/catch` STRUCTURE
+ * stays caller-side — branches may throw and the caller's catch wraps
+ * them into `{status:'error',error}` preserving byte-identical behavior.
+ */
+export interface ExecuteServerToolInternalResult {
+  readonly result: unknown;
+  readonly streamSeq: number;
+}
+
+// Alias for the OpenAI chat-message shape used by `currentMessages`.
+type OpenAIChatLike =
+  | OpenAI.Chat.Completions.ChatCompletionMessageParam
+  | { role: string; content?: unknown; tool_call_id?: string; name?: string; tool_calls?: unknown };
+
 export class ChatService {
   /**
    * BR14b Lots 9/10/11 — orchestration extraction.
@@ -5018,6 +5100,31 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     });
 
     await postgresChatSessionStore.touchUpdatedAt(options.sessionId);
+  }
+
+  /**
+   * BR14b Lot 21d-2 — `executeServerToolInternal` scaffold.
+   * PURE CODE MOVEMENT target. Per-tool dispatch body (30 tool branches
+   * inline in `runAssistantGeneration` lines 3393-4732 post-Lot 21c) is
+   * being moved INTO this private method by Lot 21d-2 group commits
+   * (A-F). No `ChatRuntime` indirection in this lot — `runAssistantGeneration`
+   * still calls this inline. The context-budget gate at lines ~3406-3495
+   * STAYS caller-side (deferred to Lot 21e). Until Group A commits, the
+   * switch holds only the `default` branch (verbatim of the inline
+   * `Unknown tool:` fallback at line 4681). See BRANCH.md Lot 21d-2 for
+   * group plan + decisions; Lot 21d-3 will bridge this method into the
+   * chat-core `executeServerTool` Option A callback.
+   */
+  private async executeServerToolInternal(
+    input: ExecuteServerToolInternalInput,
+  ): Promise<ExecuteServerToolInternalResult> {
+    const { toolCall } = input;
+    switch (toolCall.name) {
+      // BR14b Lot 21d-2 Group A-F per-tool case branches added by
+      // subsequent commits (verbatim move from the inline switch).
+      default:
+        throw new Error(`Unknown tool: ${toolCall.name}`);
+    }
   }
 
   /**
