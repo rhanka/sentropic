@@ -36,6 +36,18 @@ export type {
   MessageStore,
 } from './message-port.js';
 
+// Re-export the contracts-free StreamBuffer surface (BR14b Lot 7).
+// Replaces the placeholder `StreamBuffer { _kind }` that lived here in Lot 3.
+export type {
+  AppendWithRetryOptions,
+  ListActiveOptions,
+  ReadRangeOptions,
+  SequenceRetryDeps,
+  StoredStreamEvent,
+  StreamBuffer,
+  StreamEventTypeName,
+} from './stream-port.js';
+
 /**
  * Per SPEC §5 — remaining chat-core ports.
  * Signatures intentionally minimal in BR14b Lot 3 (shell only);
@@ -43,10 +55,6 @@ export type {
  */
 export interface SessionStore {
   readonly _kind: 'SessionStore';
-}
-
-export interface StreamBuffer {
-  readonly _kind: 'StreamBuffer';
 }
 
 /**
