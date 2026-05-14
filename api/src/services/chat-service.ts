@@ -73,14 +73,6 @@ import { generateFreeformPptx } from './pptx-generation';
 import { putObject, getDocumentsBucketName } from './storage-s3';
 import type { OrganizationEnrichJobData } from './queue-manager';
 import type { ProviderId } from './provider-runtime';
-import {
-  buildAssistantMessageHistoryDetails,
-  buildChatHistoryTimeline,
-  compactChatHistoryTimelineForSummary,
-  type ChatHistoryMessage,
-  type ChatHistoryTimelineItem,
-  type ChatHistoryStreamEvent,
-} from './chat-session-history';
 
 // TODO Lot 10: remove 'usecase' once data migration is complete
 export type ChatContextType = 'organization' | 'folder' | 'initiative' | 'executive_summary' | 'usecase';
@@ -1523,149 +1515,49 @@ export class ChatService {
     return out;
   }
 
+  /**
+   * BR14b Lot 14b — thin delegate to `ChatRuntime.getSessionBootstrap`.
+   * Public signature preserved. Composer body (authz precheck +
+   * parallel fetch of messages, checkpoints, workspaceId + sequential
+   * fetch of documents + assistant details) lives in chat-core; the
+   * 3 api-side callbacks (`resolveSessionWorkspaceId`,
+   * `listSessionDocuments`, `listAssistantDetailsByMessageId`) are
+   * wired into the runtime in the ChatService constructor.
+   */
   async getSessionBootstrap(options: { sessionId: string; userId: string }) {
-    const session = await this.getSessionForUser(options.sessionId, options.userId);
-    if (!session) throw new Error('Session not found');
-
-    const [{ messages, todoRuntime }, checkpoints, workspaceId] = await Promise.all([
-      this.listMessages(options.sessionId, options.userId),
-      this.listCheckpoints({
-        sessionId: options.sessionId,
-        userId: options.userId,
-        limit: 20,
-      }),
-      this.resolveSessionWorkspaceId(session, options.userId),
-    ]);
-
-    const documents = await this.listSessionDocuments({
-      sessionId: options.sessionId,
-      workspaceId,
-    });
-    const assistantMessageIds = messages
-      .filter((message) => message.role === 'assistant')
-      .map((message) => String(message.id ?? '').trim())
-      .filter((messageId) => messageId.length > 0);
-    const assistantDetailsByMessageId =
-      await this.listAssistantDetailsByMessageId(assistantMessageIds);
-
-    return {
-      messages,
-      todoRuntime,
-      checkpoints,
-      documents,
-      assistantDetailsByMessageId,
-    };
+    return this.runtime.getSessionBootstrap(options);
   }
 
+  /**
+   * BR14b Lot 14b — thin delegate to `ChatRuntime.getSessionHistory`.
+   * Public signature preserved (returns the same
+   * `{sessionId, title, todoRuntime, checkpoints, documents, items}`
+   * shape). The pure history projection helpers
+   * (`buildChatHistoryTimeline`, `compactChatHistoryTimelineForSummary`)
+   * moved into `packages/chat-core/src/history.ts` alongside the
+   * composer body.
+   */
   async getSessionHistory(options: {
     sessionId: string;
     userId: string;
     detailMode?: 'summary' | 'full';
-  }): Promise<{
-    sessionId: string;
-    title: string | null;
-    todoRuntime: Record<string, unknown> | null;
-    checkpoints: ChatCheckpointSummary[];
-    documents: ChatSessionDocumentItem[];
-    items: ChatHistoryTimelineItem[];
-  }> {
-    const session = await this.getSessionForUser(options.sessionId, options.userId);
-    if (!session) throw new Error('Session not found');
-
-    const [{ messages, todoRuntime }, checkpoints, workspaceId] = await Promise.all([
-      this.listMessages(options.sessionId, options.userId),
-      this.listCheckpoints({
-        sessionId: options.sessionId,
-        userId: options.userId,
-        limit: 20,
-      }),
-      this.resolveSessionWorkspaceId(session, options.userId),
-    ]);
-
-    const documents = await this.listSessionDocuments({
-      sessionId: options.sessionId,
-      workspaceId,
-    });
-    const assistantMessageIds = messages
-      .filter((message) => message.role === 'assistant')
-      .map((message) => String(message.id ?? '').trim())
-      .filter((messageId) => messageId.length > 0);
-    const assistantDetailsByMessageId =
-      await this.listAssistantDetailsByMessageId(assistantMessageIds);
-    const eventMap = new Map<string, ChatHistoryStreamEvent[]>();
-    for (const [messageId, events] of Object.entries(assistantDetailsByMessageId)) {
-      eventMap.set(messageId, events as ChatHistoryStreamEvent[]);
-    }
-    const projectedItems = buildChatHistoryTimeline(
-      messages as ChatHistoryMessage[],
-      eventMap,
-    );
-    const items =
-      options.detailMode === 'full'
-        ? projectedItems
-        : compactChatHistoryTimelineForSummary(projectedItems);
-
-    return {
-      sessionId: options.sessionId,
-      title: session.title ?? null,
-      todoRuntime,
-      checkpoints,
-      documents,
-      items: [...items].reverse(),
-    };
+  }) {
+    return this.runtime.getSessionHistory(options);
   }
 
+  /**
+   * BR14b Lot 14b — thin delegate to
+   * `ChatRuntime.getMessageRuntimeDetails`. Public signature preserved
+   * (returns `{messageId, items}`). The composer body uses
+   * `buildChatHistoryTimeline` + `buildAssistantMessageHistoryDetails`
+   * (moved into chat-core) and `MessageStore.findDetailedForUser`
+   * (authz + role precheck).
+   */
   async getMessageRuntimeDetails(options: {
     messageId: string;
     userId: string;
-  }): Promise<{
-    messageId: string;
-    items: ChatHistoryTimelineItem[];
-  }> {
-    const message = await this.getDetailedMessageForUser(
-      options.messageId,
-      options.userId,
-    );
-    if (!message) throw new Error('Message not found');
-    if (message.role !== 'assistant') {
-      throw new Error('Runtime details only exist for assistant messages');
-    }
-
-    const { messages } = await this.listMessages(
-      message.sessionId,
-      options.userId,
-    );
-    const details = await this.listAssistantDetailsByMessageId([options.messageId]);
-    const events = (details[options.messageId] ?? []) as ChatHistoryStreamEvent[];
-    const eventMap = new Map<string, ChatHistoryStreamEvent[]>();
-    eventMap.set(options.messageId, events);
-    const projected = buildChatHistoryTimeline(
-      messages as ChatHistoryMessage[],
-      eventMap,
-    );
-    const firstIndex = projected.findIndex(
-      (item) => String(item.message.id ?? '').trim() === options.messageId,
-    );
-    const lastIndex = (() => {
-      for (let index = projected.length - 1; index >= 0; index -= 1) {
-        if (String(projected[index]?.message.id ?? '').trim() === options.messageId) {
-          return index;
-        }
-      }
-      return -1;
-    })();
-    const items =
-      firstIndex >= 0 && lastIndex >= firstIndex
-        ? projected.slice(firstIndex, lastIndex + 1)
-        : buildAssistantMessageHistoryDetails(
-            message as ChatHistoryMessage,
-            events,
-          );
-
-    return {
-      messageId: options.messageId,
-      items,
-    };
+  }) {
+    return this.runtime.getMessageRuntimeDetails(options);
   }
 
   async createCheckpoint(options: {
