@@ -96,6 +96,7 @@ const buildLoopState = (
   lastBudgetAnnouncedPct: -1,
   contextBudgetReplanAttempts: 0,
   continueGenerationLoop: true,
+  useCodexTransport: false,
   ...overrides,
 });
 
