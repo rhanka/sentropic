@@ -16,6 +16,7 @@ import {
   type ReasoningEffortLabel,
 } from '../../../packages/chat-core/src/runtime';
 import type { ChatMessageWithFeedback } from '../../../packages/chat-core/src/message-port';
+import { consumePendingSteerMessages } from '../../../packages/chat-core/src/steer';
 import { createId } from '../utils/id';
 import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
 import {
@@ -24,7 +25,7 @@ import {
   modelSupportsReasoning,
   resolveDefaultSelection,
 } from './model-catalog';
-import { getNextSequence, readStreamEvents, writeStreamEvent } from './stream-service';
+import { getNextSequence, writeStreamEvent } from './stream-service';
 import { settingsService } from './settings';
 import type OpenAI from 'openai';
 import { getOpenAITransportMode } from './provider-connections';
@@ -2810,10 +2811,8 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     const STEER_PROMPT_MAX_MESSAGES = 8;
     const STEER_REASONING_REPLAY_MAX_CHARS = 6000;
     const STEER_REASONING_EXCERPT_MAX_CHARS = 1800;
-    const normalizeSteerMessage = (value: string): string =>
-      value
-        .replace(/\s+/g, ' ')
-        .trim();
+    // BR14b Lot 19 — `normalizeSteerMessage` extracted to
+    // `packages/chat-core/src/steer.ts` (imported at top of file).
     const normalizeReasoningExcerpt = (value: string): string => {
       const normalized = value.replace(/\s+/g, ' ').trim();
       if (!normalized) return '';
@@ -2995,27 +2994,12 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     streamSeq += 1;
 
     let continueGenerationLoop = true;
-    const consumePendingSteerMessages = async (): Promise<string[]> => {
-      const events = await readStreamEvents(
-        options.assistantMessageId,
-        lastObservedStreamSequence,
-      );
-      if (events.length === 0) return [];
-      lastObservedStreamSequence = events[events.length - 1]?.sequence ?? lastObservedStreamSequence;
-
-      const messages: string[] = [];
-      for (const event of events) {
-        if (event.eventType !== 'status') continue;
-        const data = asRecord(event.data);
-        if (!data || data.state !== 'steer_received') continue;
-        const message =
-          typeof data.message === 'string'
-            ? normalizeSteerMessage(data.message)
-            : '';
-        if (message) messages.push(message);
-      }
-      return messages;
-    };
+    // BR14b Lot 19 — pure helper `consumePendingSteerMessages` extracted to
+    // `packages/chat-core/src/steer.ts`. The previous closure captured
+    // `options.assistantMessageId` (used as streamId) and the mutable
+    // `lastObservedStreamSequence` cursor. The pure helper now takes those
+    // as explicit inputs and returns the advanced cursor as
+    // `nextSinceSequence`, which we assign back to the local counter.
 
     const writeContextBudgetStatus = async (
       phase: 'pre_model' | 'pre_tool',
@@ -3298,7 +3282,13 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             }
           }
           if (!steerInterruptionRequested) {
-            const pendingSteerMessages = await consumePendingSteerMessages();
+            const steerPoll = await consumePendingSteerMessages({
+              streamBuffer: postgresStreamBuffer,
+              streamId: options.assistantMessageId,
+              sinceSequence: lastObservedStreamSequence,
+            });
+            lastObservedStreamSequence = steerPoll.nextSinceSequence;
+            const pendingSteerMessages = steerPoll.messages;
             if (pendingSteerMessages.length > 0) {
               steerInterruptionRequested = true;
               steerInterruptionBatch = pendingSteerMessages;
