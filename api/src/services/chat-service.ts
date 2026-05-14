@@ -1,6 +1,10 @@
 import { and, asc, desc, eq, sql, inArray, gt, or } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue, organizations } from '../db/schema';
+import { chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue, organizations } from '../db/schema';
+import {
+  postgresChatCheckpointAdapter,
+  type ChatCheckpointSummary,
+} from './chat/postgres-checkpoint-adapter';
 import { createId } from '../utils/id';
 import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
 import {
@@ -323,17 +327,6 @@ type ContextBudgetSnapshot = {
   occupancyPct: number;
   zone: ContextBudgetZone;
 };
-const CHAT_CHECKPOINT_CONTEXT_TYPE = 'chat_session_checkpoint';
-
-type ChatCheckpointSummary = {
-  id: string;
-  title: string;
-  anchorMessageId: string;
-  anchorSequence: number;
-  messageCount: number;
-  createdAt: string;
-};
-
 type ChatBootstrapStreamEvent = {
   eventType: string;
   data: unknown;
@@ -1879,100 +1872,11 @@ export class ChatService {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
     if (!session) throw new Error('Session not found');
 
-    const messages = await db
-      .select({
-        id: chatMessages.id,
-        role: chatMessages.role,
-        content: chatMessages.content,
-        contexts: chatMessages.contexts,
-        toolCalls: chatMessages.toolCalls,
-        toolCallId: chatMessages.toolCallId,
-        reasoning: chatMessages.reasoning,
-        model: chatMessages.model,
-        promptId: chatMessages.promptId,
-        promptVersionId: chatMessages.promptVersionId,
-        sequence: chatMessages.sequence,
-        createdAt: chatMessages.createdAt,
-      })
-      .from(chatMessages)
-      .where(eq(chatMessages.sessionId, options.sessionId))
-      .orderBy(asc(chatMessages.sequence));
-
-    if (messages.length === 0) {
-      throw new Error('Cannot create checkpoint on an empty session');
-    }
-
-    const anchorMessage =
-      (options.anchorMessageId
-        ? messages.find((message) => message.id === options.anchorMessageId)
-        : null) ?? messages[messages.length - 1];
-    if (!anchorMessage) throw new Error('Anchor message not found');
-
-    const anchorSequence = Number(anchorMessage.sequence ?? 0);
-    if (!Number.isFinite(anchorSequence) || anchorSequence <= 0) {
-      throw new Error('Invalid checkpoint anchor sequence');
-    }
-
-    const snapshotMessages = messages
-      .filter((message) => Number(message.sequence ?? 0) <= anchorSequence)
-      .map((message) => ({
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        contexts: message.contexts,
-        toolCalls: message.toolCalls,
-        toolCallId: message.toolCallId,
-        reasoning: message.reasoning,
-        model: message.model,
-        promptId: message.promptId,
-        promptVersionId: message.promptVersionId,
-        sequence: message.sequence,
-        createdAt:
-          message.createdAt instanceof Date
-            ? message.createdAt.toISOString()
-            : String(message.createdAt ?? ''),
-      }));
-
-    const checkpointId = createId();
-    const now = new Date();
-    const title =
-      typeof options.title === 'string' && options.title.trim().length > 0
-        ? options.title.trim()
-        : `Checkpoint #${anchorSequence}`;
-
-    const snapshot = {
-      id: checkpointId,
-      title,
-      anchorMessageId: anchorMessage.id,
-      anchorSequence,
-      messageCount: snapshotMessages.length,
-      messages: snapshotMessages,
-    };
-
-    await db.insert(chatContexts).values({
-      id: checkpointId,
+    return postgresChatCheckpointAdapter.createCheckpointForSession({
       sessionId: options.sessionId,
-      contextType: CHAT_CHECKPOINT_CONTEXT_TYPE,
-      contextId: checkpointId,
-      snapshotBefore: null,
-      snapshotAfter: snapshot,
-      modifications: {
-        action: 'checkpoint_create',
-        anchorMessageId: anchorMessage.id,
-        anchorSequence,
-      },
-      modifiedAt: now,
-      createdAt: now,
+      title: options.title,
+      anchorMessageId: options.anchorMessageId,
     });
-
-    return {
-      id: checkpointId,
-      title,
-      anchorMessageId: anchorMessage.id,
-      anchorSequence,
-      messageCount: snapshotMessages.length,
-      createdAt: now.toISOString(),
-    };
   }
 
   async listCheckpoints(options: {
@@ -1983,44 +1887,9 @@ export class ChatService {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
     if (!session) throw new Error('Session not found');
 
-    const limit = Number.isFinite(options.limit)
-      ? Math.min(Math.max(Math.floor(options.limit as number), 1), 100)
-      : 20;
-
-    const rows = await db
-      .select({
-        id: chatContexts.id,
-        snapshotAfter: chatContexts.snapshotAfter,
-        createdAt: chatContexts.createdAt,
-      })
-      .from(chatContexts)
-      .where(
-        and(
-          eq(chatContexts.sessionId, options.sessionId),
-          eq(chatContexts.contextType, CHAT_CHECKPOINT_CONTEXT_TYPE),
-        ),
-      )
-      .orderBy(desc(chatContexts.createdAt))
-      .limit(limit);
-
-    return rows.map((row) => {
-      const snapshot = asRecord(row.snapshotAfter) ?? {};
-      const titleRaw = String(snapshot.title ?? '').trim();
-      const anchorMessageId = String(snapshot.anchorMessageId ?? '').trim();
-      const anchorSequence = Number(snapshot.anchorSequence ?? 0);
-      const messageCount = Number(snapshot.messageCount ?? 0);
-      const createdAt =
-        row.createdAt instanceof Date
-          ? row.createdAt.toISOString()
-          : new Date(String(row.createdAt ?? '')).toISOString();
-      return {
-        id: row.id,
-        title: titleRaw || `Checkpoint #${anchorSequence || 0}`,
-        anchorMessageId,
-        anchorSequence: Number.isFinite(anchorSequence) ? anchorSequence : 0,
-        messageCount: Number.isFinite(messageCount) ? messageCount : 0,
-        createdAt,
-      };
+    return postgresChatCheckpointAdapter.listCheckpointsForSession({
+      sessionId: options.sessionId,
+      limit: options.limit,
     });
   }
 
@@ -2036,47 +1905,10 @@ export class ChatService {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
     if (!session) throw new Error('Session not found');
 
-    const [checkpoint] = await db
-      .select({
-        id: chatContexts.id,
-        snapshotAfter: chatContexts.snapshotAfter,
-      })
-      .from(chatContexts)
-      .where(
-        and(
-          eq(chatContexts.id, options.checkpointId),
-          eq(chatContexts.sessionId, options.sessionId),
-          eq(chatContexts.contextType, CHAT_CHECKPOINT_CONTEXT_TYPE),
-        ),
-      );
-    if (!checkpoint) throw new Error('Checkpoint not found');
-
-    const snapshot = asRecord(checkpoint.snapshotAfter);
-    const restoredToSequence = Number(snapshot?.anchorSequence ?? 0);
-    if (!Number.isFinite(restoredToSequence) || restoredToSequence <= 0) {
-      throw new Error('Invalid checkpoint payload');
-    }
-
-    const removedRows = await db
-      .delete(chatMessages)
-      .where(
-        and(
-          eq(chatMessages.sessionId, options.sessionId),
-          gt(chatMessages.sequence, restoredToSequence),
-        ),
-      )
-      .returning({ id: chatMessages.id });
-
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, options.sessionId));
-
-    return {
-      checkpointId: checkpoint.id,
-      restoredToSequence,
-      removedMessages: removedRows.length,
-    };
+    return postgresChatCheckpointAdapter.restoreCheckpointForSession({
+      sessionId: options.sessionId,
+      checkpointId: options.checkpointId,
+    });
   }
 
   async setMessageFeedback(options: { messageId: string; userId: string; vote: 'up' | 'down' | 'clear' }) {
