@@ -9,6 +9,8 @@ import { meshDispatchAdapter } from './chat/mesh-dispatch-adapter';
 import {
   ChatRuntime,
   type ChatCheckpointSummary,
+  type BuildSystemPromptInput,
+  type BuildSystemPromptResult,
 } from '../../../packages/chat-core/src/runtime';
 import type { ChatMessageWithFeedback } from '../../../packages/chat-core/src/message-port';
 import { createId } from '../utils/id';
@@ -917,6 +919,14 @@ export class ChatService {
         });
         return title;
       },
+      // BR14b Lot 16b — bundle the system-prompt build chain (Slice B
+      // body, 605 lines pre-Lot 16b) into a single Option A callback so
+      // the runtime can drive it as `prepareSystemPrompt`. The body
+      // lives chat-service-side because it imports drizzle, db schema,
+      // the tool catalog, the chat prompt registry, the VsCode prompt
+      // template registry, todo orchestration, tab registry, and
+      // workspace-service — none of which chat-core may import.
+      buildSystemPrompt: (input) => this.buildSystemPromptInternal(input),
     });
   }
 
@@ -1873,65 +1883,56 @@ export class ChatService {
   }
 
   /**
-   * Exécute la génération assistant pour un message placeholder déjà créé.
-   * Écrit les events dans chat_stream_events (streamId = assistantMessageId)
-   * puis met à jour chat_messages.content + chat_messages.reasoning.
+   * BR14b Lot 16b — bound to the `buildSystemPrompt` callback on
+   * `ChatRuntimeDeps`. Carries the verbatim 605-line body of Slice B
+   * extracted from `runAssistantGeneration` (chat-service.ts lines
+   * 1946-2550 pre Lot 16b): context flags, allowed-documents/comments
+   * resolution, todo runtime snapshot, tool selection by context-type
+   * + workspace-type, server-side tab tool injection, documents block,
+   * context block per primary type, history block, todo orchestration
+   * block, active tools block, document_generate guidance block, and
+   * the system prompt IIFE. Returns the typed `BuildSystemPromptResult`
+   * struct consumed by `runAssistantGeneration` post-Lot 16b.
+   *
+   * Behavior preservation: no inner code change. The narrow prelude
+   * re-derives the `ChatContextType`-typed locals from the loose chat-
+   * core input types and re-binds the `options.*` reads (used 5 times
+   * in the original block) from the input fields. The body below the
+   * prelude is byte-for-byte identical to the pre-Lot 16b inline block.
    */
-  async runAssistantGeneration(options: {
-    userId: string;
-    sessionId: string;
-    assistantMessageId: string;
-    providerId?: ProviderId | null;
-    providerApiKey?: string | null;
-    model?: string | null;
-    contexts?: Array<{ contextType: string; contextId: string }>;
-    tools?: string[];
-    localToolDefinitions?: LocalToolDefinitionInput[];
-    vscodeCodeAgent?: VsCodeCodeAgentRuntimePayload | null;
-    resumeFrom?: ChatResumeFromToolOutputs;
-    locale?: string;
-    signal?: AbortSignal;
-  }): Promise<void> {
-    // BR14b Lot 15 — precheck slice migrated into
-    // `ChatRuntime.prepareAssistantRun`. Returns the typed
-    // `AssistantRunContext` consumed by the remainder of this method.
-    // Subsequent slices (title generation, prompt build, provider/model
-    // resolution, tool loop, continuation) still live in chat-service.ts
-    // and migrate into the runtime in Lots 16+.
-    const ctx = await this.runtime.prepareAssistantRun({
-      userId: options.userId,
-      sessionId: options.sessionId,
-      assistantMessageId: options.assistantMessageId,
-      contexts: options.contexts,
-    });
-    const session = ctx.session;
-    const sessionWorkspaceId = ctx.sessionWorkspaceId;
-    const readOnly = ctx.readOnly;
-    const currentUserRole = ctx.currentUserRole;
-    const contextsOverride = ctx.contextsOverride as Array<{
+  private async buildSystemPromptInternal(
+    input: BuildSystemPromptInput,
+  ): Promise<BuildSystemPromptResult> {
+    // Narrow chat-core's loose string types back to the chat-service
+    // `ChatContextType` union. Same cast pattern as the pre-Lot 15
+    // inline reads (chat-service.ts lines 1911-1917) and Lot 15
+    // post-`prepareAssistantRun` block.
+    const session = input.session;
+    const sessionWorkspaceId = input.sessionWorkspaceId;
+    const readOnly = input.readOnly;
+    const currentUserRole = input.currentUserRole;
+    const contextsOverride = input.contextsOverride as Array<{
       contextType: ChatContextType;
       contextId: string;
     }>;
-    const focusContext = ctx.focusContext as
+    const focusContext = input.focusContext as
       | { contextType: ChatContextType; contextId: string }
       | null;
-    const assistantRow = ctx.assistantRow;
-    const conversation = ctx.conversation;
-    const lastUserMessage = ctx.lastUserMessage;
-
-    // BR14b Lot 16a — title-generation side effect migrated into
-    // `ChatRuntime.ensureSessionTitle`. The runtime delegates the
-    // body (generateSessionTitle + sessionStore.updateTitle +
-    // notifyWorkspaceEvent) to the `ensureSessionTitle` callback wired
-    // in the constructor. Behavior is byte-identical to the pre-Lot 16
-    // inline block: short-circuits when the session already has a
-    // title or `lastUserMessage` is empty after trimming.
-    await this.runtime.ensureSessionTitle({
-      session,
-      sessionWorkspaceId,
-      focusContext,
-      lastUserMessage,
-    });
+    const lastUserMessage = input.lastUserMessage;
+    // The 5 `options.*` reads used by the original block are now
+    // sourced from the typed input.
+    const options = {
+      userId: input.userId,
+      sessionId: input.sessionId,
+      tools: input.requestedTools as string[],
+      localToolDefinitions: input.localToolDefinitions as
+        | LocalToolDefinitionInput[]
+        | undefined,
+      vscodeCodeAgent: input.vscodeCodeAgent as
+        | VsCodeCodeAgentRuntimePayload
+        | null
+        | undefined,
+    };
 
     // Récupérer le contexte depuis la session
     const primaryContextType = (focusContext?.contextType ??
@@ -2268,7 +2269,7 @@ export class ChatService {
     // Enrichir le system prompt avec le contexte si disponible
     let contextBlock = '';
     if ((primaryContextType === 'initiative' || primaryContextType === 'usecase') && primaryContextId) { // TODO Lot 9.5: remove 'usecase'
-      contextBlock = ` 
+      contextBlock = `
 
 Tu travailles sur le initiative ${primaryContextId}. Tu peux répondre aux questions générales de l'utilisateur en t'appuyant sur l'historique de la conversation.
 
@@ -2304,7 +2305,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
       const orgLine = primaryContextId
         ? `Tu travailles sur l'organisation ${primaryContextId}.`
         : `Tu es sur la liste des organisations (pas d'organisation sélectionnée).`;
-      contextBlock = ` 
+      contextBlock = `
 
 ${orgLine}
 
@@ -2323,7 +2324,7 @@ Règles :
       const folderLine = primaryContextId
         ? `Tu travailles sur le dossier ${primaryContextId}.`
         : `Tu es sur la liste des dossiers (pas de dossier sélectionné). Tu peux lire les dossiers via \`folders_list\`, puis lire les cas d'usage d'un dossier via \`usecases_list\` en passant son folderId.`;
-      contextBlock = ` 
+      contextBlock = `
 
 ${folderLine}
 
@@ -2344,7 +2345,7 @@ Règles :
 - Pour toute modification, lis d'abord puis mets à jour via les tools.
 - Si un folderId de contexte est présent, ne lis/modifie que ce dossier. Sinon (vue liste), tu peux lire plusieurs dossiers en fournissant explicitement leur folderId.`;
     } else if (primaryContextType === 'executive_summary' && primaryContextId) {
-      contextBlock = ` 
+      contextBlock = `
 
 Tu travailles sur la synthèse exécutive du dossier ${primaryContextId}.
 
@@ -2538,6 +2539,133 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         AUTOMATION_BLOCK: automationBlock,
       }).trim();
     })();
+
+    return {
+      systemPrompt,
+      tools,
+      localTools,
+      localToolNames,
+      allowedByType,
+      allowedFolderIds,
+      allowedDocContexts,
+      allowedCommentContexts,
+      hasContextType: (type) => hasContextType(type as ChatContextType),
+      primaryContextType,
+      primaryContextId,
+      vscodeCodeAgentPayload,
+      enforceTodoUpdateMode,
+      todoStructuralMutationIntent,
+      todoProgressionFocusMode,
+      hasActiveSessionTodo,
+    };
+  }
+
+  /**
+   * Exécute la génération assistant pour un message placeholder déjà créé.
+   * Écrit les events dans chat_stream_events (streamId = assistantMessageId)
+   * puis met à jour chat_messages.content + chat_messages.reasoning.
+   */
+  async runAssistantGeneration(options: {
+    userId: string;
+    sessionId: string;
+    assistantMessageId: string;
+    providerId?: ProviderId | null;
+    providerApiKey?: string | null;
+    model?: string | null;
+    contexts?: Array<{ contextType: string; contextId: string }>;
+    tools?: string[];
+    localToolDefinitions?: LocalToolDefinitionInput[];
+    vscodeCodeAgent?: VsCodeCodeAgentRuntimePayload | null;
+    resumeFrom?: ChatResumeFromToolOutputs;
+    locale?: string;
+    signal?: AbortSignal;
+  }): Promise<void> {
+    // BR14b Lot 15 — precheck slice migrated into
+    // `ChatRuntime.prepareAssistantRun`. Returns the typed
+    // `AssistantRunContext` consumed by the remainder of this method.
+    // Subsequent slices (title generation, prompt build, provider/model
+    // resolution, tool loop, continuation) still live in chat-service.ts
+    // and migrate into the runtime in Lots 16+.
+    const ctx = await this.runtime.prepareAssistantRun({
+      userId: options.userId,
+      sessionId: options.sessionId,
+      assistantMessageId: options.assistantMessageId,
+      contexts: options.contexts,
+    });
+    const session = ctx.session;
+    const sessionWorkspaceId = ctx.sessionWorkspaceId;
+    const readOnly = ctx.readOnly;
+    const currentUserRole = ctx.currentUserRole;
+    // BR14b Lot 16b — `contextsOverride` is no longer destructured here:
+    // the only consumer (the inline Slice B block) now lives inside
+    // `buildSystemPromptInternal` and reads `input.contextsOverride`
+    // directly. `focusContext` is still consumed by `ensureSessionTitle`.
+    const focusContext = ctx.focusContext as
+      | { contextType: ChatContextType; contextId: string }
+      | null;
+    const assistantRow = ctx.assistantRow;
+    const conversation = ctx.conversation;
+    const lastUserMessage = ctx.lastUserMessage;
+
+    // BR14b Lot 16a — title-generation side effect migrated into
+    // `ChatRuntime.ensureSessionTitle`. The runtime delegates the
+    // body (generateSessionTitle + sessionStore.updateTitle +
+    // notifyWorkspaceEvent) to the `ensureSessionTitle` callback wired
+    // in the constructor. Behavior is byte-identical to the pre-Lot 16
+    // inline block: short-circuits when the session already has a
+    // title or `lastUserMessage` is empty after trimming.
+    await this.runtime.ensureSessionTitle({
+      session,
+      sessionWorkspaceId,
+      focusContext,
+      lastUserMessage,
+    });
+
+    // BR14b Lot 16b — Slice B body (the full system-prompt build chain:
+    // context flags + allowed-documents/comments resolution + todo
+    // runtime snapshot + tool catalog + context blocks + system prompt
+    // IIFE, ~605 lines pre-Lot 16b) migrated into
+    // `ChatRuntime.prepareSystemPrompt` -> `buildSystemPromptInternal`
+    // private method via the `buildSystemPrompt` Option A callback wired
+    // in the constructor. Behavior is byte-identical to the pre-Lot 16b
+    // inline block: the runtime forwards the typed `AssistantRunContext`
+    // plus the caller-side options to the callback, which returns the
+    // typed `BuildSystemPromptResult` struct consumed below.
+    const promptCtx = await this.runtime.prepareSystemPrompt(ctx, {
+      userId: options.userId,
+      sessionId: options.sessionId,
+      requestedTools: Array.isArray(options.tools) ? options.tools : [],
+      localToolDefinitions: options.localToolDefinitions,
+      vscodeCodeAgent: options.vscodeCodeAgent,
+    });
+    const systemPrompt = promptCtx.systemPrompt;
+    const tools = promptCtx.tools as
+      | OpenAI.Chat.Completions.ChatCompletionTool[]
+      | undefined;
+    const localTools =
+      promptCtx.localTools as ReadonlyArray<OpenAI.Chat.Completions.ChatCompletionTool>;
+    const localToolNames = promptCtx.localToolNames;
+    const allowedByType = promptCtx.allowedByType;
+    const allowedFolderIds = promptCtx.allowedFolderIds;
+    const allowedDocContexts = promptCtx.allowedDocContexts as Array<{
+      contextType: 'organization' | 'folder' | 'initiative' | 'usecase' | 'chat_session';
+      contextId: string;
+    }>;
+    const allowedCommentContexts = promptCtx.allowedCommentContexts as Array<{
+      contextType: CommentContextType;
+      contextId: string;
+    }>;
+    const hasContextType = (type: ChatContextType) =>
+      promptCtx.hasContextType(type);
+    const primaryContextType = promptCtx.primaryContextType as
+      | ChatContextType
+      | null;
+    const primaryContextId = promptCtx.primaryContextId;
+    const vscodeCodeAgentPayload = promptCtx.vscodeCodeAgentPayload;
+    const enforceTodoUpdateMode = promptCtx.enforceTodoUpdateMode;
+    const todoStructuralMutationIntent = promptCtx.todoStructuralMutationIntent;
+    const todoProgressionFocusMode = promptCtx.todoProgressionFocusMode;
+    const hasActiveSessionTodo = promptCtx.hasActiveSessionTodo;
     const STEER_PROMPT_MAX_MESSAGES = 8;
     const STEER_REASONING_REPLAY_MAX_CHARS = 6000;
     const STEER_REASONING_EXCERPT_MAX_CHARS = 1800;
