@@ -805,6 +805,46 @@ export class ChatService {
       mesh: meshDispatchAdapter,
       normalizeVsCodeCodeAgent: (input) =>
         this.normalizeVsCodeCodeAgentPayload(input as VsCodeCodeAgentRuntimePayload | null | undefined),
+      // BR14b Lot 12 — model selection callback: bundles the four
+      // helpers (`settingsService.getAISettings`,
+      // `getModelCatalogPayload`, `inferProviderFromModelIdWithLegacy`,
+      // `resolveDefaultSelection`) that `retryUserMessage` and
+      // `createUserMessageWithAssistantPlaceholder` previously called
+      // inline. Returns the same `{provider_id, model_id}` shape as
+      // `resolveDefaultSelection`.
+      resolveModelSelection: async (selectionInput) => {
+        const [aiSettings, catalog] = await Promise.all([
+          settingsService.getAISettings({ userId: selectionInput.userId }),
+          getModelCatalogPayload({ userId: selectionInput.userId }),
+        ]);
+        const inferredProviderId = inferProviderFromModelIdWithLegacy(
+          catalog.models,
+          selectionInput.model,
+        );
+        return resolveDefaultSelection(
+          {
+            providerId:
+              selectionInput.providerId ||
+              inferredProviderId ||
+              aiSettings.defaultProviderId,
+            modelId: selectionInput.model || aiSettings.defaultModel,
+          },
+          catalog.models,
+        );
+      },
+      // BR14b Lot 12 — re-expose the instance method as a callback so
+      // the runtime stays agnostic of the `ChatContextType` union.
+      normalizeMessageContexts: (input) =>
+        this.normalizeMessageContexts(
+          input as Pick<
+            CreateChatMessageInput,
+            'contexts' | 'primaryContextType' | 'primaryContextId'
+          >,
+        ),
+      // BR14b Lot 12 — re-expose the module-level type guard so the
+      // runtime's `createUserMessageWithAssistantPlaceholder` keeps the
+      // exact membership check used pre-migration.
+      isChatContextType: (value) => isChatContextType(value),
     });
   }
 
