@@ -186,3 +186,10 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] Create packages/contracts/tsconfig.json
 - [x] Create packages/contracts/src/index.ts with 6 frozen types
 - [ ] Typecheck via make target if available
+
+## Lot 2 - @sentropic/events scaffold
+- [x] Create packages/events/package.json
+- [x] Create packages/events/tsconfig.json
+- [x] Create packages/events/src/index.ts with StreamEvent v1 union
+- [x] Re-export EventEnvelope from @sentropic/contracts
+- [ ] Typecheck (best effort if make target available)
