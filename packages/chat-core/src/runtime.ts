@@ -949,6 +949,147 @@ export type AcceptLocalToolResultResponse = {
 };
 
 /**
+ * BR14b Lot 21a — chat-core mirror of the api-side `ChatRuntimeMessage`
+ * union (`chat-service.ts` line 309-311). Used as the entry type for
+ * the tool-loop `currentMessages` cursor lifted into
+ * `AssistantRunLoopState`. The runtime stays role-agnostic and the
+ * api-side delegate narrows to the concrete provider message shapes
+ * (OpenAI Responses API) at the call boundary.
+ */
+export type AssistantRunLoopMessage =
+  | { role: 'system' | 'user' | 'assistant'; content: string }
+  | { role: 'tool'; content: string; tool_call_id: string };
+
+/**
+ * BR14b Lot 21a — pending tool-call accumulator. Mirrors the
+ * `toolCalls` array tracked in the chat-service.ts tool loop pre-Lot
+ * 21a. `id` is the provider-side `tool_call_id`; `name` and `args`
+ * are streamed deltas concatenated across `tool_call_start` /
+ * `tool_call_delta` events.
+ */
+export type AssistantRunLoopPendingToolCall = {
+  id: string;
+  name: string;
+  args: string;
+};
+
+/**
+ * BR14b Lot 21a — executed tool ledger. Mirrors the `executedTools`
+ * array tracked in the chat-service.ts tool loop pre-Lot 21a (each
+ * entry records the call id + tool name + parsed args + tool result
+ * for downstream persistence + assistant-message audit trail).
+ */
+export type AssistantRunLoopExecutedTool = {
+  toolCallId: string;
+  name: string;
+  args: unknown;
+  result: unknown;
+};
+
+/**
+ * BR14b Lot 21a — loop-local state value object initialized at the
+ * start of `ChatService.runAssistantGeneration` (chat-service.ts
+ * lines 2896-2934 + 3001 pre-Lot 21a). Carries every mutable counter,
+ * accumulator, and flag the tool-loop body reads or writes across
+ * iterations. Returned by `ChatRuntime.beginAssistantRunLoop` and
+ * threaded through the loop body as a single struct so the loop
+ * shape stays migration-friendly for Lot 21b (mesh stream consumer)
+ * and onward.
+ *
+ * Fields are intentionally mutable — the loop mutates them in place
+ * (e.g. `loopState.contentParts.length = 0` at iteration start,
+ * `loopState.iteration++`, `loopState.maxIterations = ...`) — so this
+ * type is a struct of public lvalues, not a frozen snapshot. The
+ * runtime owns the **initialization** of the fields; the loop body
+ * still owns the **mutation**. Future lots will progressively migrate
+ * the mutators into runtime methods that take the state by reference.
+ *
+ * Field-by-field correspondence with the inline declarations
+ * pre-Lot 21a:
+ *   - `streamSeq` ← `await getNextSequence(assistantMessageId)`
+ *   - `lastObservedStreamSequence` ← `Math.max(streamSeq - 1, 0)`
+ *   - `contentParts`/`reasoningParts` ← `[]`
+ *   - `lastErrorMessage` ← `null`
+ *   - `executedTools`/`toolCalls` ← `[]`
+ *   - `currentMessages` ← `[{system}, ...conversation]`
+ *   - `maxIterations` ← `BASE_MAX_ITERATIONS` (10)
+ *   - `todoAutonomousExtensionEnabled` ← `Boolean(enforceTodoUpdateMode &&
+ *       todoProgressionFocusMode)`
+ *   - `todoContinuationActive` ← `Boolean(todoAutonomousExtensionEnabled &&
+ *       hasActiveSessionTodo)`
+ *   - `todoAwaitingUserInput` ← `false`
+ *   - `iteration` ← `0`
+ *   - `previousResponseId` ← `resumeFrom?.previousResponseId ?? null`
+ *   - `pendingResponsesRawInput` ← projected from `resumeFrom?.toolOutputs`
+ *   - `steerHistoryMessages` ← `[]`
+ *   - `steerReasoningReplay` ← `''`
+ *   - `lastBudgetAnnouncedPct` ← `-1`
+ *   - `contextBudgetReplanAttempts` ← `0`
+ *   - `continueGenerationLoop` ← `true`
+ */
+export interface AssistantRunLoopState {
+  streamSeq: number;
+  lastObservedStreamSequence: number;
+  contentParts: string[];
+  reasoningParts: string[];
+  lastErrorMessage: string | null;
+  executedTools: AssistantRunLoopExecutedTool[];
+  toolCalls: AssistantRunLoopPendingToolCall[];
+  currentMessages: AssistantRunLoopMessage[];
+  maxIterations: number;
+  todoAutonomousExtensionEnabled: boolean;
+  todoContinuationActive: boolean;
+  todoAwaitingUserInput: boolean;
+  iteration: number;
+  previousResponseId: string | null;
+  pendingResponsesRawInput: unknown[] | null;
+  steerHistoryMessages: string[];
+  steerReasoningReplay: string;
+  lastBudgetAnnouncedPct: number;
+  contextBudgetReplanAttempts: number;
+  continueGenerationLoop: boolean;
+}
+
+/**
+ * BR14b Lot 21a — options for `ChatRuntime.beginAssistantRunLoop`.
+ * Mirrors the subset of caller-side values consumed by the loop-state
+ * initialization block (chat-service.ts lines 2896-2934 + 3001 pre-Lot
+ * 21a). The caller composes these from `runAssistantGeneration`
+ * options + the `AssistantRunContext` + `BuildSystemPromptResult`
+ * produced upstream.
+ *
+ *   - `assistantMessageId` — used as the stream id for the initial
+ *     `streamBuffer.getNextSequence` allocation.
+ *   - `systemPrompt` — prepended to `currentMessages` as the first
+ *     role:'system' entry.
+ *   - `conversation` — the user/assistant projection produced by Lot
+ *     15 `prepareAssistantRun`.
+ *   - `resumeFrom` — optional resume payload (previous response id +
+ *     buffered tool outputs); projected into `previousResponseId` +
+ *     `pendingResponsesRawInput` verbatim.
+ *   - `enforceTodoUpdateMode` / `todoProgressionFocusMode` /
+ *     `hasActiveSessionTodo` — three booleans from
+ *     `BuildSystemPromptResult` that drive `todoAutonomousExtensionEnabled`
+ *     and `todoContinuationActive`.
+ *   - `baseMaxIterations` — the `BASE_MAX_ITERATIONS` constant (10
+ *     pre-Lot 21a). Surfaced as input so chat-core stays free of
+ *     api-side tuning constants.
+ */
+export interface BeginAssistantRunLoopInput {
+  readonly assistantMessageId: string;
+  readonly systemPrompt: string;
+  readonly conversation: ReadonlyArray<{
+    readonly role: 'user' | 'assistant';
+    readonly content: string;
+  }>;
+  readonly resumeFrom?: ChatResumeFromToolOutputs;
+  readonly enforceTodoUpdateMode: boolean;
+  readonly todoProgressionFocusMode: boolean;
+  readonly hasActiveSessionTodo: boolean;
+  readonly baseMaxIterations: number;
+}
+
+/**
  * Verbatim duplicate of `asRecord` in `chat-service.ts` (line ~261).
  * Tiny pure helper, duplicated rather than re-imported to keep
  * chat-core free of any api/* module dependency.
@@ -2402,6 +2543,77 @@ export class ChatRuntime {
    */
   async peekStreamSequence(streamId: string): Promise<number> {
     return this.deps.streamSequencer.peek(streamId);
+  }
+
+  /**
+   * BR14b Lot 21a — initialize the tool-loop-local state for
+   * `runAssistantGeneration`. Mirrors the 40-line loop-setup block
+   * (chat-service.ts lines 2896-2934 + 3001 pre-Lot 21a) verbatim —
+   * every field initial value matches the inline declaration. The
+   * call also performs the initial `getNextSequence` lookup against
+   * the `StreamBuffer` port so the returned `streamSeq` starts at
+   * the same cursor value the caller would have computed inline.
+   *
+   * Behaviour preservation is the absolute contract: the returned
+   * state is byte-identical to the inline block pre-Lot 21a (apart
+   * from the field aggregation into a single struct). The caller
+   * threads `loopState` through the remaining loop body and mutates
+   * its fields in-place exactly as before (`loopState.iteration++`,
+   * `loopState.contentParts.length = 0`, etc.).
+   */
+  async beginAssistantRunLoop(
+    input: BeginAssistantRunLoopInput,
+  ): Promise<AssistantRunLoopState> {
+    const streamSeq = await this.deps.streamBuffer.getNextSequence(
+      input.assistantMessageId,
+    );
+    const lastObservedStreamSequence = Math.max(streamSeq - 1, 0);
+    const currentMessages: AssistantRunLoopMessage[] = [
+      { role: 'system', content: input.systemPrompt },
+      ...input.conversation.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+    ];
+    const previousResponseId: string | null =
+      input.resumeFrom?.previousResponseId ?? null;
+    const pendingResponsesRawInput: unknown[] | null = Array.isArray(
+      input.resumeFrom?.toolOutputs,
+    )
+      ? input.resumeFrom!.toolOutputs.map((item) => ({
+          type: 'function_call_output',
+          call_id: item.callId,
+          output: item.output,
+        }))
+      : null;
+    const todoAutonomousExtensionEnabled = Boolean(
+      input.enforceTodoUpdateMode && input.todoProgressionFocusMode,
+    );
+    const todoContinuationActive = Boolean(
+      todoAutonomousExtensionEnabled && input.hasActiveSessionTodo,
+    );
+    return {
+      streamSeq,
+      lastObservedStreamSequence,
+      contentParts: [],
+      reasoningParts: [],
+      lastErrorMessage: null,
+      executedTools: [],
+      toolCalls: [],
+      currentMessages,
+      maxIterations: input.baseMaxIterations,
+      todoAutonomousExtensionEnabled,
+      todoContinuationActive,
+      todoAwaitingUserInput: false,
+      iteration: 0,
+      previousResponseId,
+      pendingResponsesRawInput,
+      steerHistoryMessages: [],
+      steerReasoningReplay: '',
+      lastBudgetAnnouncedPct: -1,
+      contextBudgetReplanAttempts: 0,
+      continueGenerationLoop: true,
+    };
   }
 }
 
