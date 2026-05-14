@@ -111,8 +111,12 @@ import type {
   ChatStateSnapshotMessage,
 } from './types.js';
 import type { CheckpointStore } from './checkpoint-port.js';
-import type { ChatMessageRow, MessageStore } from './message-port.js';
-import type { SessionStore } from './session-port.js';
+import type {
+  ChatMessageRow,
+  ChatMessageWithFeedback,
+  MessageStore,
+} from './message-port.js';
+import type { ChatSessionRow, SessionStore } from './session-port.js';
 import type { StreamBuffer, StreamEventTypeName } from './stream-port.js';
 import type { MeshDispatchPort } from './mesh-port.js';
 
@@ -272,6 +276,20 @@ export type ChatRuntimeDeps = {
    * concrete `ChatContextType` union.
    */
   readonly isChatContextType: (value: unknown) => boolean;
+  /**
+   * Lot 14a — hydrate the `todoRuntime` payload returned alongside the
+   * message list. Crosses the port as an Option A callback (same pattern
+   * as Lot 10 `normalizeVsCodeCodeAgent` and Lot 12 `resolveModelSelection`)
+   * because the body bundles three api-land helpers
+   * (`ensureWorkspaceForUser`, `getWorkspaceRole`, and
+   * `todoOrchestrationService.getSessionTodoRuntime`) that chat-core must
+   * not import. When undefined the runtime returns `todoRuntime: null` to
+   * preserve the legacy behavior of sessions without a workspace.
+   */
+  readonly hydrateMessagesWithTodoRuntime?: (input: {
+    readonly session: ChatSessionRow;
+    readonly userId: string;
+  }) => Promise<Record<string, unknown> | null>;
 };
 
 /**
@@ -1331,6 +1349,51 @@ export class ChatRuntime {
     await this.deps.sessionStore.touchUpdatedAt(msg.sessionId);
 
     return { messageId: options.messageId };
+  }
+
+  /**
+   * BR14b Lot 14a — verbatim port of `ChatService.listMessages`.
+   * Returns the ordered message list (with feedback votes) and the
+   * hydrated todoRuntime payload for the session. Authz check
+   * (`Session not found`) preserved at the runtime entry; persistence
+   * delegated to the `SessionStore` + `MessageStore` ports; todoRuntime
+   * hydration delegated to the optional
+   * `hydrateMessagesWithTodoRuntime` callback. When the callback is
+   * undefined the runtime returns `todoRuntime: null`, matching the
+   * legacy behavior of sessions without an addressable workspace.
+   *
+   * Differences from the pre-Lot 14a chat-service body are limited to:
+   *   (a) `this.getSessionForUser` → `this.deps.sessionStore.findForUser`;
+   *   (b) `postgresChatMessageStore.listForSessionWithFeedback` →
+   *       `this.deps.messageStore.listForSessionWithFeedback`;
+   *   (c) the `resolveSessionWorkspaceId` + `getWorkspaceRole` +
+   *       `todoOrchestrationService.getSessionTodoRuntime` triplet →
+   *       `this.deps.hydrateMessagesWithTodoRuntime({ session, userId })`.
+   */
+  async listMessages(
+    sessionId: string,
+    userId: string,
+  ): Promise<{
+    messages: ChatMessageWithFeedback[];
+    todoRuntime: Record<string, unknown> | null;
+  }> {
+    const session = await this.deps.sessionStore.findForUser(sessionId, userId);
+    if (!session) throw new Error('Session not found');
+
+    const messages = await this.deps.messageStore.listForSessionWithFeedback(
+      sessionId,
+      userId,
+    );
+
+    const todoRuntime: Record<string, unknown> | null = this.deps
+      .hydrateMessagesWithTodoRuntime
+      ? await this.deps.hydrateMessagesWithTodoRuntime({ session, userId })
+      : null;
+
+    return {
+      messages,
+      todoRuntime,
+    };
   }
 }
 
