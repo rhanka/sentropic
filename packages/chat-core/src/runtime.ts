@@ -367,6 +367,27 @@ export type ChatRuntimeDeps = {
     } | null;
     readonly lastUserMessage: string;
   }) => Promise<string | null>;
+  /**
+   * Lot 16b — build the full system prompt + tool catalog + context
+   * flags consumed by the remainder of `runAssistantGeneration`.
+   * Bundles ~605 lines of chat-service-side logic (context flags,
+   * allowed-documents resolution, allowed-comments resolution, todo
+   * runtime snapshot, tool selection by context-type + workspace-type,
+   * server-side tab tool injection, documents block, context block per
+   * primary type, history block, todo orchestration block, active tools
+   * block, document_generate guidance block, system prompt IIFE) into a
+   * single Option A callback because chat-core must not import
+   * `drizzle-orm`, `db/schema`, `workspace-service`, `todo-orchestration`,
+   * `tab-registry`, the VsCode prompt template registry, the tool
+   * definitions catalog, or the chat prompt registry.
+   *
+   * The runtime's `prepareSystemPrompt` method is a trivial wrapper that
+   * forwards the typed input to this callback and returns the typed
+   * result struct.
+   */
+  readonly buildSystemPrompt?: (
+    input: BuildSystemPromptInput,
+  ) => Promise<BuildSystemPromptResult>;
 };
 
 /**
@@ -672,6 +693,105 @@ export type EnsureSessionTitleOptions = {
     readonly contextId: string;
   } | null;
   readonly lastUserMessage: string;
+};
+
+/**
+ * Lot 16b — input for the `buildSystemPrompt` callback (and the
+ * `prepareSystemPrompt` runtime method that wraps it). Carries the
+ * subset of `AssistantRunContext` (Lot 15) and `runAssistantGeneration`
+ * options that the 605-line system-prompt build chain reads:
+ *   - `userId`, `sessionId` — used for `listRegisteredTabs(userId)` and
+ *     the todo runtime snapshot lookup
+ *   - `session`, `sessionWorkspaceId`, `readOnly`, `currentUserRole`,
+ *     `contextsOverride`, `focusContext`, `lastUserMessage` — mirror the
+ *     `AssistantRunContext` fields consumed by the block
+ *   - `requestedTools` — caller toggle (web_search, plan, etc.)
+ *   - `localToolDefinitions` — caller-provided local tool definitions
+ *   - `vscodeCodeAgent` — raw VsCode payload (normalized inside the
+ *     callback via the existing chat-service helper)
+ */
+export type BuildSystemPromptInput = {
+  readonly userId: string;
+  readonly sessionId: string;
+  readonly session: ChatSessionRow;
+  readonly sessionWorkspaceId: string;
+  readonly readOnly: boolean;
+  readonly currentUserRole: string | null;
+  readonly contextsOverride: ReadonlyArray<{
+    readonly contextType: string;
+    readonly contextId: string;
+  }>;
+  readonly focusContext: {
+    readonly contextType: string;
+    readonly contextId: string;
+  } | null;
+  readonly lastUserMessage: string;
+  readonly requestedTools: ReadonlyArray<string>;
+  readonly localToolDefinitions?: ReadonlyArray<unknown>;
+  readonly vscodeCodeAgent?: unknown;
+};
+
+/**
+ * Lot 16b — typed result of the `buildSystemPrompt` callback (and the
+ * `prepareSystemPrompt` runtime method that wraps it). Carries exactly
+ * the 16 fields that the remainder of `runAssistantGeneration` reads
+ * downstream of the system-prompt build block (lines 2541+ post Lot
+ * 16b). Other intermediate locals (e.g. `documentsBlock`,
+ * `wsTypeToolNames`, `effectiveRequestedTools`, `requestedTools`,
+ * `todoToolRequested`, `hasDocuments`, `hasCommentContexts`,
+ * `documentsToolName`, `contextLabel`) stay strictly internal to the
+ * builder — they are consumed only inside the migrated block to compose
+ * the result.
+ *
+ * Field types intentionally use loose readonly arrays / unknowns at the
+ * port boundary because chat-core must not depend on `OpenAI` typings,
+ * `ChatContextType`, `CommentContextType`, or the chat-service-side
+ * tool catalog union. The api-side delegate narrows back to the
+ * concrete types at the destructure boundary in `runAssistantGeneration`.
+ */
+export type BuildSystemPromptResult = {
+  readonly systemPrompt: string;
+  readonly tools: ReadonlyArray<unknown> | undefined;
+  readonly localTools: ReadonlyArray<unknown>;
+  readonly localToolNames: ReadonlySet<string>;
+  readonly allowedByType: {
+    readonly organization: ReadonlySet<string>;
+    readonly folder: ReadonlySet<string>;
+    readonly usecase: ReadonlySet<string>;
+    readonly executive_summary: ReadonlySet<string>;
+  };
+  readonly allowedFolderIds: ReadonlySet<string>;
+  readonly allowedDocContexts: ReadonlyArray<{
+    readonly contextType: string;
+    readonly contextId: string;
+  }>;
+  readonly allowedCommentContexts: ReadonlyArray<{
+    readonly contextType: string;
+    readonly contextId: string;
+  }>;
+  readonly hasContextType: (type: string) => boolean;
+  readonly primaryContextType: string | null;
+  readonly primaryContextId: string | null;
+  readonly vscodeCodeAgentPayload:
+    | NormalizedVsCodeCodeAgentRuntimePayload
+    | null;
+  readonly enforceTodoUpdateMode: boolean;
+  readonly todoStructuralMutationIntent: boolean;
+  readonly todoProgressionFocusMode: boolean;
+  readonly hasActiveSessionTodo: boolean;
+};
+
+/**
+ * Lot 16b — options for `ChatRuntime.prepareSystemPrompt`. Carries the
+ * subset of caller-side fields that come from `runAssistantGeneration`
+ * options (not from the precheck `AssistantRunContext`). The wrapper
+ * combines this with the `AssistantRunContext` produced by Lot 15 to
+ * form the full `BuildSystemPromptInput`.
+ */
+export type PrepareSystemPromptOptions = {
+  readonly requestedTools: ReadonlyArray<string>;
+  readonly localToolDefinitions?: ReadonlyArray<unknown>;
+  readonly vscodeCodeAgent?: unknown;
 };
 
 /**
@@ -1970,6 +2090,56 @@ export class ChatRuntime {
       sessionWorkspaceId,
       focusContext,
       lastUserMessage,
+    });
+  }
+
+  /**
+   * BR14b Lot 16b — wrap the system-prompt build chain (Slice B body,
+   * 605 lines pre-Lot 16b: lines 1936-2540 of chat-service.ts) as a
+   * runtime orchestration step. The body lives chat-service-side
+   * (`buildSystemPromptInternal`) because it imports drizzle, db
+   * schema, the tool catalog, the chat prompt registry, the VsCode
+   * prompt template registry, todo orchestration, tab registry, and
+   * workspace-service — none of which chat-core may import. The
+   * runtime forwards the typed `AssistantRunContext` (Lot 15) plus the
+   * caller-side options (`requestedTools` / `localToolDefinitions` /
+   * `vscodeCodeAgent`) to the `deps.buildSystemPrompt` callback, and
+   * returns the result struct verbatim.
+   *
+   * Keeping this method on the runtime (rather than letting the
+   * service call its own private method directly) preserves the
+   * orchestration boundary: `runAssistantGeneration` now drives the
+   * runtime as the single coordination point for both Slice A
+   * (precheck), Slice B leading (title-gen) and Slice B body (system
+   * prompt build). Lots 17+ will extend the runtime with the remaining
+   * slices (provider/model resolution, reasoning effort eval, tool
+   * loop, continuation, etc.).
+   */
+  async prepareSystemPrompt(
+    ctx: AssistantRunContext,
+    options: PrepareSystemPromptOptions & {
+      readonly userId: string;
+      readonly sessionId: string;
+    },
+  ): Promise<BuildSystemPromptResult> {
+    if (!this.deps.buildSystemPrompt) {
+      throw new Error(
+        'ChatRuntime.prepareSystemPrompt requires deps.buildSystemPrompt',
+      );
+    }
+    return this.deps.buildSystemPrompt({
+      userId: options.userId,
+      sessionId: options.sessionId,
+      session: ctx.session,
+      sessionWorkspaceId: ctx.sessionWorkspaceId,
+      readOnly: ctx.readOnly,
+      currentUserRole: ctx.currentUserRole,
+      contextsOverride: ctx.contextsOverride,
+      focusContext: ctx.focusContext,
+      lastUserMessage: ctx.lastUserMessage,
+      requestedTools: options.requestedTools,
+      localToolDefinitions: options.localToolDefinitions,
+      vscodeCodeAgent: options.vscodeCodeAgent,
     });
   }
 }
