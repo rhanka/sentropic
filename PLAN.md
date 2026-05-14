@@ -1,6 +1,6 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-05-13 — BR-14c (`feat/llm-mesh-sdk`) MERGED (PR #141, 2026-05-11), BR-14g (model catalog GPT-5.5 + Opus 4.7) MERGED (PR #146), BR-24 (`chore/node24-actions-upgrade`) MERGED (PR #147), `fix-mistral` MERGED (PR #145). BR-23 (`feat/multi-agent-framework-comparison`) scoping COMPLETED 2026-05-13 — PR open, awaiting `SPEC_VOL` validation; architecture decisions closed in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` (single generic `CheckpointStore<T>`, single composable federated `ToolRegistry`, separate `@sentropic/marketplace`, façade-first `@sentropic/flow` extraction preserving agent templating invariant). BR-14b IN PROGRESS — Lot 1 contracts shipped (`16163ffc` = `@sentropic/contracts` skeleton), Lot 2 events shipped (`9cc76b61` = `@sentropic/events` skeleton); Lot 3 `@sentropic/chat-core` shell pending. BR-14a Lot 0 scoping complete (`c5cc6da1`); implementation blocked on BR-14b merge; target renamed `@sentropic/chat` → `@sentropic/chat-ui`. BR-25 (`chore/rules-skills-audit`) in study mode (17/46 checkboxes). Selected next execution order: BR-14b → BR-14a → BR-flow → BR-19 → BR-marketplace → BR-14e → BR-14d. New branches added to §3 catalog: BR-flow, BR-marketplace, BR-graphify, BR-persistence-git, BR-triggers. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`.
+Status: Updated 2026-05-14 — BR-14c (`feat/llm-mesh-sdk`) MERGED (PR #141, 2026-05-11), BR-14g (model catalog GPT-5.5 + Opus 4.7) MERGED (PR #146), BR-24 (`chore/node24-actions-upgrade`) MERGED (PR #147), `fix-mistral` MERGED (PR #145). BR-23 (`feat/multi-agent-framework-comparison`) scoping COMPLETED 2026-05-13 — PR #148 open, awaiting `SPEC_VOL` validation; architecture decisions closed in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` (single generic `CheckpointStore<T>`, single composable federated `ToolRegistry`, separate `@sentropic/marketplace`, façade-first `@sentropic/flow` extraction preserving agent templating invariant). BR-14b IN PROGRESS — Lot 1 contracts shipped (`16163ffc` = `@sentropic/contracts` skeleton), Lot 2 events shipped (`9cc76b61` = `@sentropic/events` skeleton); Lot 3 `@sentropic/chat-core` shell pending. BR-14a Lot 0 scoping complete (`c5cc6da1`); implementation blocked on BR-14b merge; target renamed `@sentropic/chat` → `@sentropic/chat-ui`. BR-25 (`chore/rules-skills-audit`) in study mode (17/46 checkboxes). BR-31 (`chore/make-to-nx-study`) STUDY CLOSED 2026-05-13 — recommendation REJECT (commits `681790fa` + `38d8f1d3`); no code change. Forthcoming branches renumbered: BR-26 (flow-runtime-extract), BR-27 (managed-marketplace), BR-28 (graphify-fusion), BR-29 (persistence-git-adapter), BR-30 (external-triggers). Selected next execution order: BR-14b → BR-14a → BR-26 → BR-19 → BR-27 → BR-29 → BR-30 → BR-14e → BR-14d. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`.
 
 ## 0) Repo merge policy (effective 2026-05-13)
 
@@ -42,7 +42,10 @@ Every PR going forward must be merged via a merge commit and the source branch l
 - BR-14a `feat/chat-ui-sdk` — **Lot 0 scoping complete** (`c5cc6da1`). Implementation blocked on BR-14b merge. Target package renamed `@sentropic/chat` → `@sentropic/chat-ui` per `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` §1.
 
 **Pending branches (unblocked or near-unblocked):**
-- BR-07, BR-10, BR-11, BR-12, BR-14e, BR-14d, BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22, BR-flow, BR-marketplace, BR-graphify, BR-persistence-git, BR-triggers — see §3 catalog for descriptions, dependencies, and priorities.
+- BR-07, BR-10, BR-11, BR-12, BR-14e, BR-14d, BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22, BR-26 (flow-runtime-extract), BR-27 (managed-marketplace), BR-28 (graphify-fusion), BR-29 (persistence-git-adapter), BR-30 (external-triggers) — see §3 catalog for descriptions, dependencies, and priorities.
+
+**Study closed (no code):**
+- BR-31 `chore/make-to-nx-study` — **study closed 2026-05-13**. Recommendation **REJECT** with sub-option (optional power-developer adapt). Deliverable: `spec/SPEC_STUDY_MAKE_TO_NX_MIGRATION.md`. Commits `681790fa` (BRANCH.md) + `38d8f1d3` (spec). No further lots; PR open for record.
 
 **Deferred:**
 - BR-09 `feat/sso-google` — deferred post-refacto (OOM resolution required before SSO Google work; exact target TBD by conductor).
@@ -211,27 +214,32 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 |        |                                                  | incidents) into rules + skills. Mechanical enforcement     | checkboxes)          |                                |
 |        |                                                  | over text rules.                                           |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-flow| feat/flow-runtime-extract                        | Extract @sentropic/flow from todo-orchestration.ts +       | plan                 | BR-14b (Lots 1-3), BR-23       |
+| BR-26  | feat/flow-runtime-extract                        | Extract @sentropic/flow from todo-orchestration.ts +       | plan                 | BR-14b (Lots 1-3), BR-23       |
 |        |                                                  | queue-manager.ts + default-workflows.ts via façade-first   |                      |                                |
 |        |                                                  | (no rewrite). Preserves agent templating invariant         |                      |                                |
 |        |                                                  | (SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §14). Owns          |                      |                                |
 |        |                                                  | FlowCheckpointStore strict strategy + JobQueue port.       |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-mp  | feat/managed-marketplace                         | @sentropic/marketplace package: governance policy +        | plan                 | BR-19                          |
+| BR-27  | feat/managed-marketplace                         | @sentropic/marketplace package: governance policy +        | plan                 | BR-19                          |
 |        |                                                  | decision engine + audit overlay on top of @sentropic/      |                      |                                |
 |        |                                                  | skills (curate which skills/tools per role/workspace).     |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-gx  | feat/graphify-fusion                             | Fuse graphifyy@0.7.10 under @sentropic/graphify; decide    | plan                 | none (standalone)              |
+| BR-28  | feat/graphify-fusion                             | Fuse graphifyy@0.7.10 under @sentropic/graphify; decide    | plan                 | none (standalone)              |
 |        |                                                  | registry transfer vs republish + deprecate upstream.       |                      |                                |
 |        |                                                  | Imported by @sentropic/harness (BR25) as peerDep.          |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-pg  | feat/persistence-git-adapter                     | @sentropic/persistence-git adapter implementing            | plan                 | BR-14b                         |
+| BR-29  | feat/persistence-git-adapter                     | @sentropic/persistence-git adapter implementing            | plan                 | BR-14b                         |
 |        |                                                  | RepoCheckpointStore (shadow git repo at                     |                      |                                |
 |        |                                                  | ~/.sentropic/checkpoints/, à la Gemini CLI).               |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-tr  | feat/external-triggers                           | External trigger sources for async externally-triggered    | plan                 | BR-flow                        |
+| BR-30  | feat/external-triggers                           | External trigger sources for async externally-triggered    | plan                 | BR-26                          |
 |        |                                                  | flows: webhook, schedule, email-in, file-watch. Either     |                      |                                |
-|        |                                                  | folded into BR-flow or standalone post-BR-flow.            |                      |                                |
+|        |                                                  | folded into BR-26 or standalone post-BR-26.                |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-31  | chore/make-to-nx-study                           | One-branch study assessing nx as a Make replacement.       | study closed         | none (doc-only)                |
+|        |                                                  | Deliverable: spec/SPEC_STUDY_MAKE_TO_NX_MIGRATION.md       | (recommend REJECT)   |                                |
+|        |                                                  | (status quo + nx simulation + CI before/after + transition |                      |                                |
+|        |                                                  | plan). Recommendation REJECT (commits 681790fa, 38d8f1d3). |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 ```
 
@@ -273,6 +281,12 @@ graph TD
   BR21[BR-21 cv transpose + profiles parked]
   BR22[BR-22 rich markdown list stabilization]
   BR24[BR-24 node24 actions upgrade]
+  BR26[BR-26 flow runtime extract]
+  BR27[BR-27 managed marketplace]
+  BR28[BR-28 graphify fusion]
+  BR29[BR-29 persistence git adapter]
+  BR30[BR-30 external triggers]
+  BR31[BR-31 make to nx study ✗ REJECT]
 
   BR00 --> BR01
   BR00 --> BR02
@@ -327,9 +341,23 @@ graph TD
   BR21a -.->|optional presentation export primitive| BR21
   BR04 --> BR22
   BR00 --> BR24
+
+  BR14b --> BR26
+  BR19 --> BR27
+  BR14b --> BR29
+  BR26 --> BR30
 ```
 
 ## 5) Scheduling post-BR-04
+
+**BR-14 / BR-23 successor waves (2026-05-14 mapping)**:
+- **W1 (in flight)**: BR-14b (`refacto/chat-service-core`) — Lot 3 chat-core shell pending.
+- **W2 (after BR-14b merge)**: BR-14a (`feat/chat-ui-sdk`) ∥ BR-26 (`feat/flow-runtime-extract`).
+- **W3 (after BR-14a/BR-26 merge)**: BR-19 (`feat/agent-sandbox-skills`).
+- **W4 (after BR-19 merge)**: BR-27 (`feat/managed-marketplace`) ∥ BR-29 (`feat/persistence-git-adapter`).
+- **W5 (after BR-26+BR-27 settle)**: BR-30 (`feat/external-triggers`).
+- **Out of waves — backlog**: BR-28 (`feat/graphify-fusion`) standalone, scheduled on capacity.
+- **Out of waves — closed**: BR-31 (`chore/make-to-nx-study`) study closed, recommendation REJECT.
 
 **Wave in progress (2026-04-21)**: this transition branch (README pair, Sentropic URL, repo/DNS/SCW plan, BR-14 split, PR-117 transition TODO) ∥ BR-16a Lot 0 (gdrive SSO + document_summary indexing scoping). Planning-only.
 **PR-117 release ops**: decide and execute repository rename + public DNS/redirect changes, or explicitly hand off each unchecked item to BR-14d with owner/date.
@@ -373,6 +401,12 @@ User UAT on root workspace (`ENV=dev`). Branch development and automated tests r
 - `plan/done/14f-BRANCH_chore-node-workspace-monorepo.md` (BR-14f archived branch pointer)
 - `plan/14d-BRANCH_chore-sentropic-transition-ops.md` (BR-14d branch pointer)
 - `plan/14e-BRANCH_chore-sentropic-codebase-finalization.md` (BR-14e branch pointer)
+- `plan/26-BRANCH_feat-flow-runtime-extract.md` (BR-26 branch pointer)
+- `plan/27-BRANCH_feat-managed-marketplace.md` (BR-27 branch pointer)
+- `plan/28-BRANCH_feat-graphify-fusion.md` (BR-28 branch pointer)
+- `plan/29-BRANCH_feat-persistence-git-adapter.md` (BR-29 branch pointer)
+- `plan/30-BRANCH_feat-external-triggers.md` (BR-30 branch pointer)
+- `plan/31-BRANCH_chore-make-to-nx-study.md` (BR-31 branch pointer — study closed)
 - `spec/SPEC_EVOL_WORKSPACE_TYPES.md` (BR-04)
 - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (residual)
 - `spec/SPEC_EVOL_BR15_AGENT_WORKFLOW_CONFIG_ROBUSTNESS.md` (deferred)
