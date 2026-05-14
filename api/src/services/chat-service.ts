@@ -2957,6 +2957,16 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       selectedProviderId === 'openai' &&
       selectedModel === 'gpt-5.5' &&
       (await getOpenAITransportMode()) === 'codex';
+    // BR14b Lot 21c — surface the codex transport flag on the loop state so
+    // the upcoming `consumeToolCalls` migration can read it without a
+    // per-call input. The legacy chat-service flow computes
+    // `useCodexTransport` AFTER `beginAssistantRunLoop` (depends on the
+    // resolved model selection done in this block), so the field is set
+    // here rather than in the `beginAssistantRunLoop` input. Behavior
+    // preservation: `loopState.useCodexTransport` is read only by Lot 21d+
+    // dispatch code; pre-Lot 21d the in-scope readers remain the
+    // pre-existing `useCodexTransport` local at lines ~4867 / ~4872.
+    loopState.useCodexTransport = useCodexTransport;
 
     // BR14b Lot 20 — reasoning-effort evaluator block (98 lines pre-Lot 18)
     // migrated into `ChatRuntime.evaluateReasoningEffort`. The runtime
