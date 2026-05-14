@@ -884,6 +884,39 @@ export class ChatService {
         const currentUserRole = await getWorkspaceRole(userId, workspaceId);
         return { readOnly, canWrite, currentUserRole };
       },
+      // BR14b Lot 16a — bundle the title-generation side effect of
+      // `runAssistantGeneration` (generateSessionTitle +
+      // sessionStore.updateTitle + notifyWorkspaceEvent) into a single
+      // Option A callback so the runtime can drive it as part of the
+      // assistant-run preparation. The session-shape narrowing from
+      // `ChatSessionRow` (chat-core) back to the local `primaryContextType`
+      // / `primaryContextId` happens at the callback boundary because
+      // chat-core stays agnostic of the `ChatContextType` union.
+      ensureSessionTitle: async ({
+        session,
+        sessionWorkspaceId,
+        focusContext,
+        lastUserMessage,
+      }) => {
+        const safeContextType =
+          focusContext?.contextType ||
+          (isChatContextType(session.primaryContextType)
+            ? session.primaryContextType
+            : null);
+        const title = await this.generateSessionTitle({
+          primaryContextType: safeContextType as ChatContextType | null,
+          primaryContextId: session.primaryContextId ?? null,
+          lastUserMessage,
+        });
+        if (!title) return null;
+        await postgresChatSessionStore.updateTitle(session.id, title);
+        await this.notifyWorkspaceEvent(sessionWorkspaceId, {
+          action: 'chat_session_title_updated',
+          sessionId: session.id,
+          title,
+        });
+        return title;
+      },
     });
   }
 
@@ -1886,25 +1919,19 @@ export class ChatService {
     const conversation = ctx.conversation;
     const lastUserMessage = ctx.lastUserMessage;
 
-    if (!session.title) {
-      if (lastUserMessage.trim()) {
-        const safeContextType =
-          focusContext?.contextType || (isChatContextType(session.primaryContextType) ? session.primaryContextType : null);
-        const title = await this.generateSessionTitle({
-          primaryContextType: safeContextType,
-          primaryContextId: session.primaryContextId ?? null,
-          lastUserMessage
-        });
-        if (title) {
-          await postgresChatSessionStore.updateTitle(session.id, title);
-          await this.notifyWorkspaceEvent(sessionWorkspaceId, {
-            action: 'chat_session_title_updated',
-            sessionId: session.id,
-            title
-          });
-        }
-      }
-    }
+    // BR14b Lot 16a — title-generation side effect migrated into
+    // `ChatRuntime.ensureSessionTitle`. The runtime delegates the
+    // body (generateSessionTitle + sessionStore.updateTitle +
+    // notifyWorkspaceEvent) to the `ensureSessionTitle` callback wired
+    // in the constructor. Behavior is byte-identical to the pre-Lot 16
+    // inline block: short-circuits when the session already has a
+    // title or `lastUserMessage` is empty after trimming.
+    await this.runtime.ensureSessionTitle({
+      session,
+      sessionWorkspaceId,
+      focusContext,
+      lastUserMessage,
+    });
 
     // Récupérer le contexte depuis la session
     const primaryContextType = (focusContext?.contextType ??
