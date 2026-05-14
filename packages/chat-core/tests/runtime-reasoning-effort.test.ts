@@ -28,6 +28,7 @@ import {
   InMemoryMeshDispatch,
   InMemorySessionStore,
   InMemoryStreamBuffer,
+  InMemoryStreamSequencer,
 } from '../src/in-memory/index.js';
 
 /**
@@ -129,12 +130,14 @@ const buildFixture = (overrides: Partial<ChatRuntimeDeps> = {}) => {
   const messageStore = new InMemoryMessageStore();
   const sessionStore = new InMemorySessionStore();
   const streamBuffer = new InMemoryStreamBuffer();
+  const streamSequencer = new InMemoryStreamSequencer();
   const checkpointStore = new InMemoryCheckpointStore<ChatState>();
   const mesh = new InMemoryMeshDispatch();
   const deps: ChatRuntimeDeps = {
     messageStore,
     sessionStore,
     streamBuffer,
+    streamSequencer,
     checkpointStore,
     mesh,
     normalizeVsCodeCodeAgent: () => null,
@@ -154,7 +157,7 @@ const buildFixture = (overrides: Partial<ChatRuntimeDeps> = {}) => {
     }),
     ...overrides,
   };
-  return { runtime: new ChatRuntime(deps), mesh, deps };
+  return { runtime: new ChatRuntime(deps), mesh, deps, streamBuffer, streamSequencer };
 };
 
 const buildInput = (
@@ -164,6 +167,7 @@ const buildInput = (
   workspaceId: 'ws-1',
   selectedProviderId: 'openai',
   selectedModel: 'gpt-5',
+  streamId: 'stream-test-1',
   conversation: [
     { role: 'user', content: 'How do I plan a roadmap?' },
   ],

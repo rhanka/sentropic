@@ -118,6 +118,7 @@ import type {
 } from './message-port.js';
 import type { ChatSessionRow, SessionStore } from './session-port.js';
 import type { StreamBuffer, StreamEventTypeName } from './stream-port.js';
+import type { StreamSequencer } from './stream-sequencer-port.js';
 import type { MeshDispatchPort } from './mesh-port.js';
 import {
   buildAssistantMessageHistoryDetails,
@@ -227,6 +228,18 @@ export type ChatRuntimeDeps = {
   readonly messageStore: MessageStore;
   readonly sessionStore: SessionStore;
   readonly streamBuffer: StreamBuffer;
+  /**
+   * BR14b Lot 20 — strict monotonic sequence allocator per `streamId`.
+   * Decoupled from `streamBuffer` so the runtime can advance the cursor
+   * without owning event storage. Concrete proof of contract: the two
+   * `writeStreamEvent` calls that previously bracketed
+   * `evaluateReasoningEffort` caller-side now live inside the runtime
+   * and rely on `streamSequencer.allocate` / `streamSequencer.peek` to
+   * keep the shared `streamSeq` cursor in sync without exposing
+   * mutation to the caller. Required by upcoming tool-loop migration
+   * (Lots 21+).
+   */
+  readonly streamSequencer: StreamSequencer;
   readonly checkpointStore: CheckpointStore<ChatState>;
   readonly mesh: MeshDispatchPort;
   readonly normalizeVsCodeCodeAgent: (
@@ -861,16 +874,28 @@ export interface EvaluateReasoningEffortInput {
     readonly content: string;
   }>;
   readonly signal?: AbortSignal;
+  /**
+   * BR14b Lot 20 — stream id where the runtime should append the two
+   * status events that previously lived caller-side
+   * (`reasoning_effort_eval_failed` + `reasoning_effort_selected`).
+   * The runtime allocates sequence numbers via `deps.streamSequencer`
+   * and appends via `deps.streamBuffer.append`. Required (no longer
+   * optional) so the caller no longer needs to bracket the call with
+   * `writeStreamEvent` + `streamSeq +=` mutations.
+   */
+  readonly streamId: string;
 }
 
 /**
- * BR14b Lot 18 — outcome of the reasoning-effort evaluation. The two
- * stream events that previously bracketed the inline block
- * (`reasoning_effort_eval_failed` + `reasoning_effort_selected`) STAY
- * caller-side because the shared `streamSeq` counter is not yet migrated
- * — `failure` carries the same error message string the legacy code
- * persisted into the failure event, and `evaluatedBy` carries the same
- * `by` field the success event reports.
+ * BR14b Lot 18 — outcome of the reasoning-effort evaluation.
+ *
+ * BR14b Lot 20 — the two stream events that previously bracketed the
+ * inline block caller-side (`reasoning_effort_eval_failed` +
+ * `reasoning_effort_selected`) are now emitted by the runtime itself
+ * via `deps.streamSequencer.allocate(streamId)` +
+ * `deps.streamBuffer.append(streamId, 'status', ...)`. The result struct
+ * still surfaces `failure` and `evaluatedBy` so callers that want to
+ * log additional diagnostic traces (e.g. `console.error`) can do so.
  *
  *   - `shouldEvaluate`: `false` when the selected model has
  *     `reasoningTier === 'none'` (the legacy code skipped the entire
@@ -2271,33 +2296,112 @@ export class ChatRuntime {
   }
 
   /**
-   * BR14b Lot 18 — slim wrapper around the `evaluateReasoningEffort`
-   * callback that bundles the 98-line evaluator block previously embedded
-   * in `ChatService.runAssistantGeneration`. When the dep is not wired
+   * BR14b Lot 18 — wrapper around the `evaluateReasoningEffort` callback
+   * that bundles the 98-line evaluator block previously embedded in
+   * `ChatService.runAssistantGeneration`. When the dep is not wired
    * (test harness, minimal runtime), the wrapper returns the same
    * fallback shape the legacy code produced when the evaluator decided
    * not to run: `{ shouldEvaluate: false, effortLabel: 'medium',
-   * evaluatedBy: 'fallback' }`.
+   * evaluatedBy: 'fallback' }` AND emits no stream events (mirrors the
+   * `if (modelSupportsReasoning(selectedModel))`-gated branch in the
+   * legacy code, which only wrote the two status events when the model
+   * was a reasoning model).
    *
-   * The two `writeStreamEvent` calls that bracket the legacy block
-   * (`status:reasoning_effort_eval_failed` + `status:reasoning_effort_selected`)
-   * STAY caller-side because the shared `streamSeq` counter is not yet
-   * migrated into the runtime. The caller emits them around this call
-   * using the `failure` field (when present) and the `effortLabel` /
-   * `evaluatedBy` fields.
+   * BR14b Lot 20 — the two `status` events that previously bracketed
+   * the legacy block (`reasoning_effort_eval_failed` +
+   * `reasoning_effort_selected`) are now emitted INSIDE this method,
+   * using `deps.streamSequencer.allocate(input.streamId)` for sequence
+   * allocation and `deps.streamBuffer.append(...)` for persistence.
+   * Concrete proof of the StreamSequencer port contract: the caller
+   * no longer mutates a shared `streamSeq` cursor around this call —
+   * it can re-sync via `deps.streamSequencer.peek(streamId)` once the
+   * runtime returns.
+   *
+   * Order preserved byte-for-byte vs the legacy code:
+   *   1. callback runs (or fallback short-circuits when undefined)
+   *   2. on `failure`: append `status` event
+   *      `{ state: 'reasoning_effort_eval_failed', message }` at the
+   *      next sequence
+   *   3. on `shouldEvaluate=true`: append `status` event
+   *      `{ state: 'reasoning_effort_selected', effort, by }` at the
+   *      next sequence
+   *
+   * When `shouldEvaluate=false` (callback unwired or non-reasoning
+   * model), NO event is appended — mirrors the legacy
+   * `modelSupportsReasoning` guard which skipped both status writes.
    */
   async evaluateReasoningEffort(
     input: EvaluateReasoningEffortInput,
   ): Promise<ReasoningEffortEvaluation> {
-    if (!this.deps.evaluateReasoningEffort) {
-      return {
-        shouldEvaluate: false,
-        effortLabel: 'medium',
-        evaluatedBy: 'fallback',
-        evaluatorModel: null,
-      };
+    const evaluation: ReasoningEffortEvaluation = this.deps
+      .evaluateReasoningEffort
+      ? await this.deps.evaluateReasoningEffort(input)
+      : {
+          shouldEvaluate: false,
+          effortLabel: 'medium',
+          evaluatedBy: 'fallback',
+          evaluatorModel: null,
+        };
+
+    // BR14b Lot 20 — reclaim the 2 caller-side `writeStreamEvent` calls.
+    // Only emit when the model supports reasoning (legacy guard).
+    if (evaluation.shouldEvaluate) {
+      if (evaluation.failure) {
+        const failedSeq = await this.deps.streamSequencer.allocate(
+          input.streamId,
+        );
+        await this.deps.streamBuffer.append(
+          input.streamId,
+          'status',
+          {
+            state: 'reasoning_effort_eval_failed',
+            message: evaluation.failure.message,
+          },
+          failedSeq,
+          input.streamId,
+        );
+      }
+      const selectedSeq = await this.deps.streamSequencer.allocate(
+        input.streamId,
+      );
+      await this.deps.streamBuffer.append(
+        input.streamId,
+        'status',
+        {
+          state: 'reasoning_effort_selected',
+          effort: evaluation.effortLabel,
+          by: evaluation.evaluatedBy,
+        },
+        selectedSeq,
+        input.streamId,
+      );
     }
-    return this.deps.evaluateReasoningEffort(input);
+
+    return evaluation;
+  }
+
+  /**
+   * BR14b Lot 20 — slim wrapper over `deps.streamSequencer.allocate`.
+   * Exposed because `deps` is `private readonly`. Mirrors the
+   * `ChatRuntime.resolveModelSelection` (Lot 17) and
+   * `ChatRuntime.acceptLocalToolResult` (Lot 10) public-wrapper pattern.
+   * Used by the tool-loop migration (Lots 21+) which still needs to
+   * advance the shared `streamSeq` cursor caller-side while the
+   * remaining loop body lives in chat-service.ts.
+   */
+  async allocateStreamSequence(streamId: string): Promise<number> {
+    return this.deps.streamSequencer.allocate(streamId);
+  }
+
+  /**
+   * BR14b Lot 20 — slim wrapper over `deps.streamSequencer.peek`.
+   * Used by `runAssistantGeneration` after `evaluateReasoningEffort`
+   * runs to re-sync the local `streamSeq` cursor with the runtime
+   * (which appended 1 or 2 events internally and consumed 1 or 2
+   * sequence slots).
+   */
+  async peekStreamSequence(streamId: string): Promise<number> {
+    return this.deps.streamSequencer.peek(streamId);
   }
 }
 

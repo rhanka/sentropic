@@ -5,6 +5,7 @@ import { postgresChatCheckpointAdapter } from './chat/postgres-checkpoint-adapte
 import { postgresChatMessageStore } from './chat/postgres-chat-message-store';
 import { postgresChatSessionStore } from './chat/postgres-chat-session-store';
 import { postgresStreamBuffer } from './chat/postgres-stream-buffer';
+import { postgresStreamSequencer } from './chat/postgres-stream-sequencer-adapter';
 import { meshDispatchAdapter } from './chat/mesh-dispatch-adapter';
 import {
   ChatRuntime,
@@ -800,6 +801,12 @@ export class ChatService {
       messageStore: postgresChatMessageStore,
       sessionStore: postgresChatSessionStore,
       streamBuffer: postgresStreamBuffer,
+      // BR14b Lot 20 — `StreamSequencer` port allocator. Decouples
+      // sequence allocation from event append so `ChatRuntime` methods
+      // can own `streamSeq` cursor mutation internally (concrete proof:
+      // `evaluateReasoningEffort` reclaims the 2 caller-side
+      // `writeStreamEvent` bracketing calls post-Lot 20).
+      streamSequencer: postgresStreamSequencer,
       checkpointStore: postgresChatCheckpointAdapter,
       mesh: meshDispatchAdapter,
       normalizeVsCodeCodeAgent: (input) =>
@@ -2943,12 +2950,16 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       selectedModel === 'gpt-5.5' &&
       (await getOpenAITransportMode()) === 'codex';
 
-    // BR14b Lot 18 — reasoning-effort evaluator block (98 lines pre-Lot 18)
+    // BR14b Lot 20 — reasoning-effort evaluator block (98 lines pre-Lot 18)
     // migrated into `ChatRuntime.evaluateReasoningEffort`. The runtime
     // delegates the body to the `evaluateReasoningEffort` callback wired
-    // in the constructor (`evaluateReasoningEffortInternal`). The two
-    // status `writeStreamEvent` calls stay caller-side because the shared
-    // `streamSeq` counter is not yet migrated. On failure, we also emit
+    // in the constructor (`evaluateReasoningEffortInternal`). Post-Lot 20
+    // the runtime ALSO emits the 2 status events
+    // (`reasoning_effort_eval_failed` + `reasoning_effort_selected`) that
+    // previously bracketed the call caller-side, allocating sequence
+    // numbers via `deps.streamSequencer`. The caller re-syncs the shared
+    // `streamSeq` cursor after the call via
+    // `runtime.peekStreamSequence(assistantMessageId) + 1`. We still emit
     // the same `console.error` trace shape the legacy inline catch block
     // produced (`{assistantMessageId, sessionId, model, evaluatorModel,
     // error}`) so log-based debugging stays unchanged.
@@ -2959,6 +2970,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       selectedModel,
       conversation,
       signal: options.signal,
+      streamId: options.assistantMessageId,
     });
     if (reasoning.failure) {
       try {
@@ -2972,26 +2984,19 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       } catch {
         // ignore
       }
-      await writeStreamEvent(
-        options.assistantMessageId,
-        'status',
-        { state: 'reasoning_effort_eval_failed', message: reasoning.failure.message },
-        streamSeq,
-        options.assistantMessageId
-      );
-      streamSeq += 1;
     }
     const reasoningEffortForThisMessage = reasoning.effortForMessage;
-    const reasoningEffortLabel = reasoning.effortLabel;
-    const reasoningEffortBy = reasoning.evaluatedBy;
-    await writeStreamEvent(
-      options.assistantMessageId,
-      'status',
-      { state: 'reasoning_effort_selected', effort: reasoningEffortLabel, by: reasoningEffortBy },
-      streamSeq,
-      options.assistantMessageId
-    );
-    streamSeq += 1;
+    // BR14b Lot 20 — `effortLabel` and `evaluatedBy` are now consumed by
+    // the runtime itself (inside `evaluateReasoningEffort`) which emits
+    // the `reasoning_effort_selected` status event with them. The caller
+    // only needs `effortForMessage` for downstream message persistence.
+    // Re-sync local `streamSeq` cursor with the runtime after
+    // `evaluateReasoningEffort` appended 0 (callback unwired /
+    // non-reasoning model), 1 (success path), or 2 (failure path) status
+    // events internally. `peek` returns the latest allocated sequence;
+    // the next caller-side `writeStreamEvent` continues from `peek + 1`.
+    streamSeq =
+      (await this.runtime.peekStreamSequence(options.assistantMessageId)) + 1;
 
     let continueGenerationLoop = true;
     // BR14b Lot 19 — pure helper `consumePendingSteerMessages` extracted to
