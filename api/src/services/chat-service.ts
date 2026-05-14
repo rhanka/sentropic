@@ -31,7 +31,7 @@ import {
   modelSupportsReasoning,
   resolveDefaultSelection,
 } from './model-catalog';
-import { getNextSequence, writeStreamEvent } from './stream-service';
+import { writeStreamEvent } from './stream-service';
 import { settingsService } from './settings';
 import type OpenAI from 'openai';
 import { getOpenAITransportMode } from './provider-connections';
@@ -2896,45 +2896,49 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       ];
     };
 
-    let streamSeq = await getNextSequence(options.assistantMessageId);
-    let lastObservedStreamSequence = Math.max(streamSeq - 1, 0);
-    const contentParts: string[] = [];
-    const reasoningParts: string[] = [];
-    let lastErrorMessage: string | null = null;
-    const executedTools: Array<{ toolCallId: string; name: string; args: unknown; result: unknown }> = [];
-    
-    // État pour tracker les tool calls en cours
-    const toolCalls: Array<{ id: string; name: string; args: string }> = [];
-    
-    // Boucle itérative pour gérer plusieurs rounds de tool calls
-    let currentMessages: ChatRuntimeMessage[] = [
-      { role: 'system' as const, content: systemPrompt },
-      ...conversation,
-    ];
-    let maxIterations = BASE_MAX_ITERATIONS;
-    const todoAutonomousExtensionEnabled = Boolean(
-      enforceTodoUpdateMode && todoProgressionFocusMode,
-    );
-    let todoContinuationActive = Boolean(
-      todoAutonomousExtensionEnabled && hasActiveSessionTodo,
-    );
-    let todoAwaitingUserInput = false;
-    let iteration = 0;
-    let previousResponseId: string | null =
-      options.resumeFrom?.previousResponseId ?? null;
-    let pendingResponsesRawInput: unknown[] | null = Array.isArray(
-      options.resumeFrom?.toolOutputs
-    )
-      ? options.resumeFrom!.toolOutputs.map((item) => ({
-          type: 'function_call_output',
-          call_id: item.callId,
-          output: item.output,
-        }))
-      : null;
-    const steerHistoryMessages: string[] = [];
-    let steerReasoningReplay = '';
-    let lastBudgetAnnouncedPct = -1;
-    let contextBudgetReplanAttempts = 0;
+    // BR14b Lot 21a — 39-line loop-state init block (chat-service.ts pre-Lot
+    // 21a lines 2899-2937 + 3004) migrated into
+    // `ChatRuntime.beginAssistantRunLoop`. The runtime performs the initial
+    // `streamBuffer.getNextSequence(assistantMessageId)` lookup and returns
+    // the 20-field `AssistantRunLoopState` value object initialized
+    // verbatim. The destructure preserves every existing identifier in
+    // chat-service.ts so the remaining loop-body code (200+ references)
+    // continues unchanged. `currentMessages` is typed loosely in chat-core
+    // (`AssistantRunLoopMessage`) and re-narrowed to `ChatRuntimeMessage[]`
+    // here so the chat-service.ts tool-loop downstream signatures stay
+    // intact.
+    const loopState = await this.runtime.beginAssistantRunLoop({
+      assistantMessageId: options.assistantMessageId,
+      systemPrompt,
+      conversation,
+      resumeFrom: options.resumeFrom,
+      enforceTodoUpdateMode,
+      todoProgressionFocusMode,
+      hasActiveSessionTodo,
+      baseMaxIterations: BASE_MAX_ITERATIONS,
+    });
+    let streamSeq = loopState.streamSeq;
+    let lastObservedStreamSequence = loopState.lastObservedStreamSequence;
+    const contentParts = loopState.contentParts;
+    const reasoningParts = loopState.reasoningParts;
+    let lastErrorMessage = loopState.lastErrorMessage;
+    const executedTools = loopState.executedTools;
+    const toolCalls = loopState.toolCalls;
+    let currentMessages: ChatRuntimeMessage[] =
+      loopState.currentMessages as ChatRuntimeMessage[];
+    let maxIterations = loopState.maxIterations;
+    const todoAutonomousExtensionEnabled =
+      loopState.todoAutonomousExtensionEnabled;
+    let todoContinuationActive = loopState.todoContinuationActive;
+    let todoAwaitingUserInput = loopState.todoAwaitingUserInput;
+    let iteration = loopState.iteration;
+    let previousResponseId = loopState.previousResponseId;
+    let pendingResponsesRawInput = loopState.pendingResponsesRawInput;
+    const steerHistoryMessages = loopState.steerHistoryMessages;
+    let steerReasoningReplay = loopState.steerReasoningReplay;
+    let lastBudgetAnnouncedPct = loopState.lastBudgetAnnouncedPct;
+    let contextBudgetReplanAttempts = loopState.contextBudgetReplanAttempts;
+    let continueGenerationLoop = loopState.continueGenerationLoop;
 
     // BR14b Lot 17 — model selection delegated to the
     // `resolveModelSelection` callback wired in Lot 12 (bundles the four
@@ -3001,7 +3005,11 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     streamSeq =
       (await this.runtime.peekStreamSequence(options.assistantMessageId)) + 1;
 
-    let continueGenerationLoop = true;
+    // BR14b Lot 21a — `continueGenerationLoop` initialization moved into
+    // `ChatRuntime.beginAssistantRunLoop` (above) alongside the other
+    // loop-local state fields. The destructure assigned `loopState.
+    // continueGenerationLoop` to the local `let` so the loop body still
+    // uses the same identifier.
     // BR14b Lot 19 — pure helper `consumePendingSteerMessages` extracted to
     // `packages/chat-core/src/steer.ts`. The previous closure captured
     // `options.assistantMessageId` (used as streamId) and the mutable
