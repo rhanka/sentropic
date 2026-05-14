@@ -1,11 +1,12 @@
 import { and, desc, eq, sql, inArray, or } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue, organizations } from '../db/schema';
+import { chatStreamEvents, contextDocuments, folders, jobQueue, organizations } from '../db/schema';
 import {
   postgresChatCheckpointAdapter,
   type ChatCheckpointSummary,
 } from './chat/postgres-checkpoint-adapter';
 import { postgresChatMessageStore } from './chat/postgres-chat-message-store';
+import { postgresChatSessionStore } from './chat/postgres-chat-session-store';
 import { createId } from '../utils/id';
 import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
 import {
@@ -1485,51 +1486,21 @@ export class ChatService {
   }
 
   async getSessionForUser(sessionId: string, userId: string) {
-    const [row] = await db
-      .select()
-      .from(chatSessions)
-      .where(and(eq(chatSessions.id, sessionId), eq(chatSessions.userId, userId)));
-    return row;
+    return postgresChatSessionStore.findForUser(sessionId, userId);
   }
 
   async createSession(input: CreateChatSessionInput): Promise<{ sessionId: string }> {
-    const sessionId = createId();
-    await db.insert(chatSessions).values({
-      id: sessionId,
-      userId: input.userId,
-      workspaceId: input.workspaceId ?? null,
-      primaryContextType: input.primaryContextType ?? null,
-      primaryContextId: input.primaryContextId ?? null,
-      title: input.title ?? null,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
-    return { sessionId };
+    return postgresChatSessionStore.create(input);
   }
 
   async listSessions(userId: string, workspaceId?: string | null) {
-    const normalizedWorkspaceId =
-      typeof workspaceId === 'string' && workspaceId.trim().length > 0
-        ? workspaceId.trim()
-        : null;
-    return await db
-      .select()
-      .from(chatSessions)
-      .where(
-        normalizedWorkspaceId
-          ? and(
-              eq(chatSessions.userId, userId),
-              eq(chatSessions.workspaceId, normalizedWorkspaceId),
-            )
-          : eq(chatSessions.userId, userId),
-      )
-      .orderBy(desc(chatSessions.updatedAt), desc(chatSessions.createdAt));
+    return postgresChatSessionStore.listForUser(userId, workspaceId);
   }
 
   async deleteSession(sessionId: string, userId: string): Promise<void> {
     const session = await this.getSessionForUser(sessionId, userId);
     if (!session) throw new Error('Session not found');
-    await db.delete(chatSessions).where(and(eq(chatSessions.id, sessionId), eq(chatSessions.userId, userId)));
+    await postgresChatSessionStore.deleteForUser(sessionId, userId);
   }
 
   async listMessages(sessionId: string, userId: string) {
@@ -1877,10 +1848,7 @@ export class ChatService {
 
     await postgresChatMessageStore.updateUserContent(options.messageId, options.content);
 
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, msg.sessionId));
+    await postgresChatSessionStore.touchUpdatedAt(msg.sessionId);
 
     return { messageId: options.messageId };
   }
@@ -1943,10 +1911,7 @@ export class ChatService {
       },
     ]);
 
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, msg.sessionId));
+    await postgresChatSessionStore.touchUpdatedAt(msg.sessionId);
 
     return {
       sessionId: msg.sessionId,
@@ -1998,14 +1963,10 @@ export class ChatService {
       const shouldUpdateContext =
         !existing || existing.primaryContextType !== nextContextType || existing.primaryContextId !== nextContextId;
       if (shouldUpdateContext) {
-        await db
-          .update(chatSessions)
-          .set({
-            primaryContextType: nextContextType,
-            primaryContextId: nextContextId,
-            updatedAt: new Date()
-          })
-          .where(eq(chatSessions.id, sessionId));
+        await postgresChatSessionStore.updateContext(sessionId, {
+          primaryContextType: nextContextType,
+          primaryContextId: nextContextId,
+        });
       }
     }
 
@@ -2072,10 +2033,7 @@ export class ChatService {
     ]);
 
     // Touch session updatedAt
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, sessionId));
+    await postgresChatSessionStore.touchUpdatedAt(sessionId);
 
     return {
       sessionId,
@@ -2306,10 +2264,7 @@ export class ChatService {
           lastUserMessage
         });
         if (title) {
-          await db
-            .update(chatSessions)
-            .set({ title, updatedAt: new Date() })
-            .where(eq(chatSessions.id, session.id));
+          await postgresChatSessionStore.updateTitle(session.id, title);
           await this.notifyWorkspaceEvent(sessionWorkspaceId, {
             action: 'chat_session_title_updated',
             sessionId: session.id,
@@ -5320,10 +5275,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       model: selectedModel || null,
     });
 
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, options.sessionId));
+    await postgresChatSessionStore.touchUpdatedAt(options.sessionId);
   }
 
   /**
@@ -5386,10 +5338,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       wroteDone = true;
     }
 
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, msg.sessionId));
+    await postgresChatSessionStore.touchUpdatedAt(msg.sessionId);
 
     return {
       content,
