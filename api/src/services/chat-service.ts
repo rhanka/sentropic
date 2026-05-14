@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, sql, inArray, gt, or } from 'drizzle-orm';
+import { and, desc, eq, sql, inArray, or } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue, organizations } from '../db/schema';
+import { chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue, organizations } from '../db/schema';
 import {
   postgresChatCheckpointAdapter,
   type ChatCheckpointSummary,
 } from './chat/postgres-checkpoint-adapter';
+import { postgresChatMessageStore } from './chat/postgres-chat-message-store';
 import { createId } from '../utils/id';
 import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
 import {
@@ -1476,45 +1477,11 @@ export class ChatService {
   }
 
   async getMessageForUser(messageId: string, userId: string) {
-    const [row] = await db
-      .select({
-        id: chatMessages.id,
-        sessionId: chatMessages.sessionId,
-        role: chatMessages.role,
-        sequence: chatMessages.sequence
-      })
-      .from(chatMessages)
-      .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
-      .where(and(eq(chatMessages.id, messageId), eq(chatSessions.userId, userId)));
-    return row ?? null;
+    return postgresChatMessageStore.findIdentityForUser(messageId, userId);
   }
 
   private async getDetailedMessageForUser(messageId: string, userId: string) {
-    const [row] = await db
-      .select({
-        id: chatMessages.id,
-        sessionId: chatMessages.sessionId,
-        role: chatMessages.role,
-        content: chatMessages.content,
-        contexts: chatMessages.contexts,
-        toolCalls: chatMessages.toolCalls,
-        toolCallId: chatMessages.toolCallId,
-        reasoning: chatMessages.reasoning,
-        model: chatMessages.model,
-        promptId: chatMessages.promptId,
-        promptVersionId: chatMessages.promptVersionId,
-        sequence: chatMessages.sequence,
-        createdAt: chatMessages.createdAt,
-        feedbackVote: chatMessageFeedback.vote,
-      })
-      .from(chatMessages)
-      .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
-      .leftJoin(
-        chatMessageFeedback,
-        and(eq(chatMessageFeedback.messageId, chatMessages.id), eq(chatMessageFeedback.userId, userId))
-      )
-      .where(and(eq(chatMessages.id, messageId), eq(chatSessions.userId, userId)));
-    return row ?? null;
+    return postgresChatMessageStore.findDetailedForUser(messageId, userId);
   }
 
   async getSessionForUser(sessionId: string, userId: string) {
@@ -1569,30 +1536,10 @@ export class ChatService {
     const session = await this.getSessionForUser(sessionId, userId);
     if (!session) throw new Error('Session not found');
 
-    const messages = await db
-      .select({
-        id: chatMessages.id,
-        sessionId: chatMessages.sessionId,
-        role: chatMessages.role,
-        content: chatMessages.content,
-        contexts: chatMessages.contexts,
-        toolCalls: chatMessages.toolCalls,
-        toolCallId: chatMessages.toolCallId,
-        reasoning: chatMessages.reasoning,
-        model: chatMessages.model,
-        promptId: chatMessages.promptId,
-        promptVersionId: chatMessages.promptVersionId,
-        sequence: chatMessages.sequence,
-        createdAt: chatMessages.createdAt,
-        feedbackVote: chatMessageFeedback.vote
-      })
-      .from(chatMessages)
-      .leftJoin(
-        chatMessageFeedback,
-        and(eq(chatMessageFeedback.messageId, chatMessages.id), eq(chatMessageFeedback.userId, userId))
-      )
-      .where(eq(chatMessages.sessionId, sessionId))
-      .orderBy(asc(chatMessages.sequence));
+    const messages = await postgresChatMessageStore.listForSessionWithFeedback(
+      sessionId,
+      userId,
+    );
 
     let todoRuntime: Record<string, unknown> | null = null;
     const sessionWorkspaceId = await this.resolveSessionWorkspaceId(
@@ -1916,31 +1863,11 @@ export class ChatService {
     if (!msg) throw new Error('Message not found');
     if (msg.role !== 'assistant') throw new Error('Feedback is only allowed on assistant messages');
 
-    if (options.vote === 'clear') {
-      await db
-        .delete(chatMessageFeedback)
-        .where(and(eq(chatMessageFeedback.messageId, options.messageId), eq(chatMessageFeedback.userId, options.userId)));
-      return { vote: null };
-    }
-
-    const voteValue = options.vote === 'up' ? 1 : -1;
-    const now = new Date();
-    await db
-      .insert(chatMessageFeedback)
-      .values({
-        id: createId(),
-        messageId: options.messageId,
-        userId: options.userId,
-        vote: voteValue,
-        createdAt: now,
-        updatedAt: now
-      })
-      .onConflictDoUpdate({
-        target: [chatMessageFeedback.messageId, chatMessageFeedback.userId],
-        set: { vote: voteValue, updatedAt: now }
-      });
-
-    return { vote: voteValue };
+    return postgresChatMessageStore.setFeedback(
+      options.messageId,
+      options.userId,
+      options.vote,
+    );
   }
 
   async updateUserMessageContent(options: { messageId: string; userId: string; content: string }) {
@@ -1948,10 +1875,7 @@ export class ChatService {
     if (!msg) throw new Error('Message not found');
     if (msg.role !== 'user') throw new Error('Only user messages can be edited');
 
-    await db
-      .update(chatMessages)
-      .set({ content: options.content })
-      .where(eq(chatMessages.id, options.messageId));
+    await postgresChatMessageStore.updateUserContent(options.messageId, options.content);
 
     await db
       .update(chatSessions)
@@ -1997,27 +1921,27 @@ export class ChatService {
     const selectedModel = resolvedSelection.model_id;
     const selectedProviderId = resolvedSelection.provider_id;
 
-    await db
-      .delete(chatMessages)
-      .where(and(eq(chatMessages.sessionId, msg.sessionId), gt(chatMessages.sequence, msg.sequence)));
+    await postgresChatMessageStore.deleteAfterSequence(msg.sessionId, msg.sequence);
 
     const assistantMessageId = createId();
     const assistantSeq = msg.sequence + 1;
 
-    await db.insert(chatMessages).values({
-      id: assistantMessageId,
-      sessionId: msg.sessionId,
-      role: 'assistant',
-      content: null,
-      toolCalls: null,
-      toolCallId: null,
-      reasoning: null,
-      model: selectedModel,
-      promptId: null,
-      promptVersionId: null,
-      sequence: assistantSeq,
-      createdAt: new Date()
-    });
+    await postgresChatMessageStore.insertMany([
+      {
+        id: assistantMessageId,
+        sessionId: msg.sessionId,
+        role: 'assistant',
+        content: null,
+        toolCalls: null,
+        toolCallId: null,
+        reasoning: null,
+        model: selectedModel,
+        promptId: null,
+        promptVersionId: null,
+        sequence: assistantSeq,
+        createdAt: new Date(),
+      },
+    ]);
 
     await db
       .update(chatSessions)
@@ -2035,12 +1959,7 @@ export class ChatService {
   }
 
   private async getNextMessageSequence(sessionId: string): Promise<number> {
-    const result = await db
-      .select({ maxSequence: sql<number>`MAX(${chatMessages.sequence})` })
-      .from(chatMessages)
-      .where(eq(chatMessages.sessionId, sessionId));
-    const maxSequence = result[0]?.maxSequence ?? 0;
-    return maxSequence + 1;
+    return postgresChatMessageStore.getNextSequence(sessionId);
   }
 
   /**
@@ -2119,7 +2038,7 @@ export class ChatService {
 
     const messageContexts = this.normalizeMessageContexts(input);
 
-    await db.insert(chatMessages).values([
+    await postgresChatMessageStore.insertMany([
       {
         id: userMessageId,
         sessionId,
@@ -2133,7 +2052,7 @@ export class ChatService {
         promptVersionId: null,
         contexts: messageContexts.length > 0 ? messageContexts : null,
         sequence: userSeq,
-        createdAt: new Date()
+        createdAt: new Date(),
       },
       {
         id: assistantMessageId,
@@ -2148,8 +2067,8 @@ export class ChatService {
         promptVersionId: null,
         contexts: null,
         sequence: assistantSeq,
-        createdAt: new Date()
-      }
+        createdAt: new Date(),
+      },
     ]);
 
     // Touch session updatedAt
@@ -2362,11 +2281,7 @@ export class ChatService {
     const focusContext = contextsOverride[0] ?? null;
 
     // Charger messages (sans inclure le placeholder assistant)
-    const messages = await db
-      .select()
-      .from(chatMessages)
-      .where(eq(chatMessages.sessionId, options.sessionId))
-      .orderBy(asc(chatMessages.sequence));
+    const messages = await postgresChatMessageStore.listForSession(options.sessionId);
 
     const assistantRow = messages.find((m) => m.id === options.assistantMessageId);
     if (!assistantRow) throw new Error('Assistant message not found');
@@ -5399,14 +5314,11 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     await writeStreamEvent(options.assistantMessageId, 'done', {}, streamSeq, options.assistantMessageId);
     streamSeq += 1;
 
-    await db
-      .update(chatMessages)
-      .set({
-        content: contentParts.join(''),
-        reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null,
-        model: selectedModel || null
-      })
-      .where(eq(chatMessages.id, options.assistantMessageId));
+    await postgresChatMessageStore.updateAssistantContent(options.assistantMessageId, {
+      content: contentParts.join(''),
+      reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null,
+      model: selectedModel || null,
+    });
 
     await db
       .update(chatSessions)
@@ -5429,17 +5341,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     wroteDone: boolean;
   } | null> {
     const { assistantMessageId, reason, fallbackContent } = options;
-    const [msg] = await db
-      .select({
-        id: chatMessages.id,
-        sessionId: chatMessages.sessionId,
-        role: chatMessages.role,
-        content: chatMessages.content,
-        reasoning: chatMessages.reasoning
-      })
-      .from(chatMessages)
-      .where(eq(chatMessages.id, assistantMessageId))
-      .limit(1);
+    const msg = await postgresChatMessageStore.findById(assistantMessageId);
 
     if (!msg || msg.role !== 'assistant') return null;
 
@@ -5465,13 +5367,10 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
 
     const shouldUpdateContent = !msg.content || msg.content.trim().length === 0;
     if (shouldUpdateContent && content) {
-      await db
-        .update(chatMessages)
-        .set({
-          content,
-          reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null
-        })
-        .where(eq(chatMessages.id, assistantMessageId));
+      await postgresChatMessageStore.updateAssistantContent(assistantMessageId, {
+        content,
+        reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null,
+      });
     }
 
     let wroteDone = false;
