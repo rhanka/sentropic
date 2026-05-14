@@ -405,6 +405,29 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts PASS (14/14)
 - [x] Net code change: chat-service.ts -19/+45 (= +26 lines for constructor callback wiring), runtime.ts +0/+81 (types + method), tests +0/+178 (new file). Total commit budget respected (≤ 150 lines / commit, work split across 3 commits).
 
+## Lot 16b - runAssistantGeneration Slice B system-prompt build migration (prepareSystemPrompt)
+- [x] Identify Slice B remaining boundary post Lot 16a (lines 1946-2550, 605 lines: context flags + allowed-documents/comments resolution + todo runtime snapshot + tool catalog by context-type + workspace-type tool layer + server-side tab tool injection + documents block + context blocks per primary type + history block + todo orchestration block + active tools block + document_generate guidance block + system prompt IIFE)
+- [x] Add `BuildSystemPromptInput` + `BuildSystemPromptResult` types in chat-core (16 result fields actually consumed downstream — narrowed from initial 28-field spec after grep of post-Slice-B consumption)
+- [x] Add `PrepareSystemPromptOptions` (caller-side fields not in `AssistantRunContext`: requestedTools + localToolDefinitions + vscodeCodeAgent)
+- [x] Add `buildSystemPrompt` callback to `ChatRuntimeDeps` (Option A; mandatory in spec but kept optional with throw in wrapper to mirror Lot 16a ensureSessionTitle pattern)
+- [x] Add `ChatRuntime.prepareSystemPrompt(ctx, options)` method (trivial wrapper that maps ctx + options to BuildSystemPromptInput and delegates to callback)
+- [x] Extract verbatim 605-line block from `runAssistantGeneration` into new private method `ChatService.buildSystemPromptInternal(input)`
+- [x] Wire `buildSystemPrompt: (input) => this.buildSystemPromptInternal(input)` in constructor
+- [x] Replace inline block in `runAssistantGeneration` with `await this.runtime.prepareSystemPrompt(ctx, {...})` + 16-field destructure (46 lines)
+- [x] Drop unused `contextsOverride` Lot-15 destructure (now read from `input.contextsOverride` inside the method, not from outer scope)
+- [x] Extend `packages/chat-core/tests/runtime-system-prompt.test.ts` with 7 new tests for `prepareSystemPrompt` (callback wiring, input mapping, result propagation, error propagation)
+- [x] make typecheck-api PASS
+- [x] make lint-api PASS (0 errors; only pre-existing warnings)
+- [x] make test-pkg-chat-core ENV=test-refacto-chat-service-core PASS (8 files, 82/82 tests; runtime.ts coverage 85.76% lines, up from 84.78% pre-Lot 16b; +7 new tests)
+- [x] make test-api-endpoints SCOPE=tests/api/chat.test.ts PASS (28/28)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts PASS (6/6)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts PASS (4/4)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts PASS (1/1)
+- [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts PASS (14/14)
+- [x] Net code change: chat-service.ts +185/-57 (= +128 net for 605-line verbatim move + 46-line delegation + 10-line constructor + 3-line import + comment doc; method body is moved verbatim and git diff counts both insertion of the new method and removal of the inline block); runtime.ts +170 (types + callback + wrapper method); tests +210/-3 (Lot 16b suite). Work split across 3 commits (chat-core types/callback/wrapper, chat-service slice move, chat-core tests).
+
 ## Lot 15.5 - chat-core test infrastructure (BR14b-EX3)
 - [x] Open BR14b-EX3 (Makefile target + packages/chat-core/tests/**)
 - [x] Create 5 in-memory port adapters under packages/chat-core/src/in-memory/

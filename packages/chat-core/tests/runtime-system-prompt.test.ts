@@ -1,5 +1,6 @@
 /**
  * BR14b Lot 16a — `ChatRuntime.ensureSessionTitle` unit tests.
+ * BR14b Lot 16b — `ChatRuntime.prepareSystemPrompt` unit tests added below.
  *
  * Exercises the title-generation side effect migrated from the leading
  * block of `ChatService.runAssistantGeneration` (chat-service.ts lines
@@ -11,14 +12,21 @@
  *     callback unchanged
  *   - the runtime returns whatever the callback returns
  *
- * Lot 16b will extend this file with `prepareSystemPrompt` coverage
- * (system prompt body + tool catalog + context blocks) once the
- * full Slice B body migrates into the runtime.
+ * The Lot 16b suite (`prepareSystemPrompt`) exercises the Slice B body
+ * delegation: input mapping from `AssistantRunContext` + caller options
+ * to the typed `BuildSystemPromptInput`, callback dispatch, and result
+ * forwarding. The runtime method is a trivial wrapper because the
+ * 605-line build chain itself lives on the chat-service side
+ * (`buildSystemPromptInternal`) — the unit tests therefore exercise
+ * the boundary contract only, not the body.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatRuntime } from '../src/runtime.js';
 import type {
+  AssistantRunContext,
+  BuildSystemPromptInput,
+  BuildSystemPromptResult,
   ChatRuntimeDeps,
   EnsureSessionTitleOptions,
 } from '../src/runtime.js';
@@ -180,5 +188,204 @@ describe('ChatRuntime.ensureSessionTitle (Lot 16a)', () => {
     );
     expect(result).toBeNull();
     expect(ensureSessionTitle).toHaveBeenCalledTimes(1);
+  });
+});
+
+const buildAssistantRunContext = (
+  overrides: Partial<AssistantRunContext> = {},
+): AssistantRunContext => ({
+  session: buildSession(),
+  sessionWorkspaceId: 'ws-1',
+  readOnly: false,
+  canWrite: true,
+  currentUserRole: 'editor',
+  contextsOverride: [
+    { contextType: 'initiative', contextId: 'init-1' },
+  ],
+  focusContext: { contextType: 'initiative', contextId: 'init-1' },
+  messages: [],
+  assistantRow: {
+    id: 'msg-assistant',
+    sessionId,
+    role: 'assistant',
+    content: '',
+    contexts: null,
+    toolCalls: null,
+    toolCallId: null,
+    reasoning: null,
+    model: null,
+    promptId: null,
+    promptVersionId: null,
+    sequence: 2,
+    createdAt: new Date('2026-05-01T10:00:00Z'),
+  },
+  conversation: [
+    { role: 'user', content: 'Help me draft a roadmap' },
+  ],
+  lastUserMessage: 'Help me draft a roadmap',
+  ...overrides,
+});
+
+const buildPromptResult = (
+  overrides: Partial<BuildSystemPromptResult> = {},
+): BuildSystemPromptResult => ({
+  systemPrompt: 'You are an assistant.',
+  tools: undefined,
+  localTools: [],
+  localToolNames: new Set<string>(),
+  allowedByType: {
+    organization: new Set<string>(),
+    folder: new Set<string>(),
+    usecase: new Set<string>(['init-1']),
+    executive_summary: new Set<string>(),
+  },
+  allowedFolderIds: new Set<string>(),
+  allowedDocContexts: [],
+  allowedCommentContexts: [],
+  hasContextType: () => false,
+  primaryContextType: 'initiative',
+  primaryContextId: 'init-1',
+  vscodeCodeAgentPayload: null,
+  enforceTodoUpdateMode: false,
+  todoStructuralMutationIntent: false,
+  todoProgressionFocusMode: false,
+  hasActiveSessionTodo: false,
+  ...overrides,
+});
+
+describe('ChatRuntime.prepareSystemPrompt (Lot 16b)', () => {
+  it('throws when buildSystemPrompt dep is not wired', async () => {
+    const fixture = buildFixture({ buildSystemPrompt: undefined });
+    const ctx = buildAssistantRunContext();
+    await expect(
+      fixture.runtime.prepareSystemPrompt(ctx, {
+        userId: 'user-x',
+        sessionId,
+        requestedTools: [],
+      }),
+    ).rejects.toThrow(
+      'ChatRuntime.prepareSystemPrompt requires deps.buildSystemPrompt',
+    );
+  });
+
+  it('forwards AssistantRunContext fields and caller options to the callback', async () => {
+    const buildSystemPrompt = vi.fn(async () => buildPromptResult());
+    const fixture = buildFixture({ buildSystemPrompt });
+    const ctx = buildAssistantRunContext();
+    await fixture.runtime.prepareSystemPrompt(ctx, {
+      userId: 'user-x',
+      sessionId,
+      requestedTools: ['plan', 'web_search'],
+      localToolDefinitions: [{ kind: 'fake' }],
+      vscodeCodeAgent: { workspaceKey: 'wk-1' },
+    });
+    expect(buildSystemPrompt).toHaveBeenCalledTimes(1);
+    const call = buildSystemPrompt.mock.calls[0]?.[0] as BuildSystemPromptInput;
+    expect(call.userId).toBe('user-x');
+    expect(call.sessionId).toBe(sessionId);
+    expect(call.session.id).toBe(sessionId);
+    expect(call.sessionWorkspaceId).toBe('ws-1');
+    expect(call.readOnly).toBe(false);
+    expect(call.currentUserRole).toBe('editor');
+    expect(call.contextsOverride).toEqual([
+      { contextType: 'initiative', contextId: 'init-1' },
+    ]);
+    expect(call.focusContext).toEqual({
+      contextType: 'initiative',
+      contextId: 'init-1',
+    });
+    expect(call.lastUserMessage).toBe('Help me draft a roadmap');
+    expect(call.requestedTools).toEqual(['plan', 'web_search']);
+    expect(call.localToolDefinitions).toEqual([{ kind: 'fake' }]);
+    expect(call.vscodeCodeAgent).toEqual({ workspaceKey: 'wk-1' });
+  });
+
+  it('forwards readOnly=true from the precheck context', async () => {
+    const buildSystemPrompt = vi.fn(async () => buildPromptResult());
+    const fixture = buildFixture({ buildSystemPrompt });
+    const ctx = buildAssistantRunContext({
+      readOnly: true,
+      canWrite: false,
+      currentUserRole: 'viewer',
+    });
+    await fixture.runtime.prepareSystemPrompt(ctx, {
+      userId: 'user-x',
+      sessionId,
+      requestedTools: [],
+    });
+    const call = buildSystemPrompt.mock.calls[0]?.[0] as BuildSystemPromptInput;
+    expect(call.readOnly).toBe(true);
+    expect(call.currentUserRole).toBe('viewer');
+  });
+
+  it('forwards focusContext=null and an empty contextsOverride', async () => {
+    const buildSystemPrompt = vi.fn(async () => buildPromptResult());
+    const fixture = buildFixture({ buildSystemPrompt });
+    const ctx = buildAssistantRunContext({
+      focusContext: null,
+      contextsOverride: [],
+    });
+    await fixture.runtime.prepareSystemPrompt(ctx, {
+      userId: 'user-x',
+      sessionId,
+      requestedTools: [],
+    });
+    const call = buildSystemPrompt.mock.calls[0]?.[0] as BuildSystemPromptInput;
+    expect(call.focusContext).toBeNull();
+    expect(call.contextsOverride).toEqual([]);
+  });
+
+  it('returns the BuildSystemPromptResult struct verbatim from the callback', async () => {
+    const customResult = buildPromptResult({
+      systemPrompt: 'CUSTOM PROMPT',
+      enforceTodoUpdateMode: true,
+      hasActiveSessionTodo: true,
+      todoProgressionFocusMode: true,
+      primaryContextType: 'folder',
+      primaryContextId: 'folder-9',
+    });
+    const buildSystemPrompt = vi.fn(async () => customResult);
+    const fixture = buildFixture({ buildSystemPrompt });
+    const ctx = buildAssistantRunContext();
+    const result = await fixture.runtime.prepareSystemPrompt(ctx, {
+      userId: 'user-x',
+      sessionId,
+      requestedTools: [],
+    });
+    expect(result.systemPrompt).toBe('CUSTOM PROMPT');
+    expect(result.enforceTodoUpdateMode).toBe(true);
+    expect(result.hasActiveSessionTodo).toBe(true);
+    expect(result.todoProgressionFocusMode).toBe(true);
+    expect(result.primaryContextType).toBe('folder');
+    expect(result.primaryContextId).toBe('folder-9');
+  });
+
+  it('omits localToolDefinitions and vscodeCodeAgent when not provided', async () => {
+    const buildSystemPrompt = vi.fn(async () => buildPromptResult());
+    const fixture = buildFixture({ buildSystemPrompt });
+    const ctx = buildAssistantRunContext();
+    await fixture.runtime.prepareSystemPrompt(ctx, {
+      userId: 'user-x',
+      sessionId,
+      requestedTools: [],
+    });
+    const call = buildSystemPrompt.mock.calls[0]?.[0] as BuildSystemPromptInput;
+    expect(call.localToolDefinitions).toBeUndefined();
+    expect(call.vscodeCodeAgent).toBeUndefined();
+  });
+
+  it('propagates an error thrown by the callback', async () => {
+    const buildSystemPrompt = vi.fn(async () => {
+      throw new Error('catalog unavailable');
+    });
+    const fixture = buildFixture({ buildSystemPrompt });
+    const ctx = buildAssistantRunContext();
+    await expect(
+      fixture.runtime.prepareSystemPrompt(ctx, {
+        userId: 'user-x',
+        sessionId,
+        requestedTools: [],
+      }),
+    ).rejects.toThrow('catalog unavailable');
   });
 });
