@@ -1272,6 +1272,66 @@ export class ChatRuntime {
       model: selectedModel,
     };
   }
+
+  /**
+   * BR14b Lot 13 — verbatim port of `ChatService.setMessageFeedback`.
+   * Validates the message belongs to the user, ensures the role is
+   * `assistant` (feedback is only allowed on assistant messages), then
+   * delegates feedback association to the MessageStore port.
+   *
+   * Differences from the pre-Lot 13 chat-service body are limited to:
+   *   (a) `this.getMessageForUser` → `this.deps.messageStore.findIdentityForUser`;
+   *   (b) `postgresChatMessageStore.setFeedback` → `this.deps.messageStore.setFeedback`.
+   */
+  async setMessageFeedback(options: {
+    messageId: string;
+    userId: string;
+    vote: 'up' | 'down' | 'clear';
+  }) {
+    const msg = await this.deps.messageStore.findIdentityForUser(
+      options.messageId,
+      options.userId,
+    );
+    if (!msg) throw new Error('Message not found');
+    if (msg.role !== 'assistant') throw new Error('Feedback is only allowed on assistant messages');
+
+    return this.deps.messageStore.setFeedback(
+      options.messageId,
+      options.userId,
+      options.vote,
+    );
+  }
+
+  /**
+   * BR14b Lot 13 — verbatim port of `ChatService.updateUserMessageContent`.
+   * Validates the message belongs to the user, ensures the role is `user`
+   * (only user messages can be edited), updates the content via the
+   * MessageStore port, then touches the parent session `updatedAt`
+   * timestamp via the SessionStore port.
+   *
+   * Differences from the pre-Lot 13 chat-service body are limited to:
+   *   (a) `this.getMessageForUser` → `this.deps.messageStore.findIdentityForUser`;
+   *   (b) `postgresChatMessageStore.updateUserContent` → `this.deps.messageStore.updateUserContent`;
+   *   (c) `postgresChatSessionStore.touchUpdatedAt` → `this.deps.sessionStore.touchUpdatedAt`.
+   */
+  async updateUserMessageContent(options: {
+    messageId: string;
+    userId: string;
+    content: string;
+  }) {
+    const msg = await this.deps.messageStore.findIdentityForUser(
+      options.messageId,
+      options.userId,
+    );
+    if (!msg) throw new Error('Message not found');
+    if (msg.role !== 'user') throw new Error('Only user messages can be edited');
+
+    await this.deps.messageStore.updateUserContent(options.messageId, options.content);
+
+    await this.deps.sessionStore.touchUpdatedAt(msg.sessionId);
+
+    return { messageId: options.messageId };
+  }
 }
 
 // Suppress the lint warning for the unused parseChatCheckpointKey
