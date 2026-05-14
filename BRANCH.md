@@ -469,12 +469,13 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] Extract 105-line evaluator body into private method `ChatService.evaluateReasoningEffortInternal(input)` in api/src/services/chat-service.ts (early-return for `shouldEvaluate=false` branch + verbatim try/catch with same callLLMStream call + invalid-token throw + fallback evaluatedBy/medium)
 - [x] Wire `evaluateReasoningEffort: (input) => this.evaluateReasoningEffortInternal(input)` in constructor
 - [x] Replace inline evaluation block in `runAssistantGeneration` with `await this.runtime.evaluateReasoningEffort({...})` + 2 caller-side `writeStreamEvent` calls around the runtime call + `console.error` trace caller-side on failure (same order as legacy code)
-- [ ] Add packages/chat-core/tests/runtime-reasoning-effort.test.ts with 6 cases (non-reasoning model fallback / gpt-5 happy 'high' / gemini happy 'low' / invalid token / mesh throws / wrapper without callback wired)
-- [ ] make typecheck-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
-- [ ] make lint-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
-- [ ] make test-pkg-chat-core ENV=test-refacto-chat-service-core (existing 82 + new ~6 = 88)
-- [ ] make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core (28/28)
-- [ ] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
-- [ ] make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
-- [ ] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
-- [ ] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
+- [x] Add packages/chat-core/tests/runtime-reasoning-effort.test.ts with 7 cases (callback unwired fallback / non-reasoning model fallback non-gpt-5 / gpt-5 happy 'high' + openai routing / gemini happy 'low' + gemini routing / invalid token fallback + failure surfaced / mesh error event fallback + failure surfaced / input forwarding spy)
+- [x] make typecheck-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
+- [x] make lint-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (0 errors; only pre-existing warnings)
+- [x] make test-pkg-chat-core ENV=test-refacto-chat-service-core PASS (9 files, 89/89 tests; runtime.ts coverage 85.62% lines; new runtime-reasoning-effort.test.ts 7/7 tests)
+- [x] make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (28/28)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (4/4)
+- [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (14/14)
+- [x] Net code change: runtime.ts +141 (Lot-18 types + callback + wrapper method); chat-service.ts +196/-101 = +95 net (98-line evaluator body moved into private method `evaluateReasoningEffortInternal` + 50-line delegate with 2 caller-side status events + 13-line constructor wiring + 3-line type import); tests +290 (new file). Work split across 3 commits (chat-core types/callback/wrapper, chat-service block migration, chat-core tests).
