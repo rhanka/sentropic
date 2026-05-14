@@ -193,3 +193,10 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] Create packages/events/src/index.ts with StreamEvent v1 union
 - [x] Re-export EventEnvelope from @sentropic/contracts
 - [ ] Typecheck (best effort if make target available)
+
+## Lot 3 - @sentropic/chat-core shell scaffold
+- [x] Create packages/chat-core/package.json
+- [x] Create packages/chat-core/tsconfig.json
+- [x] Create packages/chat-core/src/index.ts (public API re-exports)
+- [x] Create packages/chat-core/src/ports.ts (port interfaces)
+- [ ] Typecheck (best effort)
