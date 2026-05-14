@@ -224,3 +224,13 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] Create api/src/services/chat/postgres-chat-message-store.ts adapter
 - [x] Refactor chat-service.ts message methods to delegate (no public API change)
 - [x] Re-run make test-api-unit -> chat-message tests green
+
+## Lot 7 - stream service extraction
+- [x] Port surface decision: single StreamBuffer port covers all six concerns of stream-service.ts (generateStreamId, append, getNextSequence, appendWithSequenceRetry, read, listActive); SSE transport stays in routes/api/streams.ts per SPEC §7 anti-pattern (no transport in chat-core); PostgreSQL NOTIFY is an adapter-side implementation detail
+- [x] Design real StreamBuffer port in packages/chat-core/src/stream-port.ts (replace placeholder, mirror Lot 6 isolation pattern)
+- [x] Update packages/chat-core/src/ports.ts and src/index.ts re-exports (drop _kind stub, add stream-port surface)
+- [x] Create api/src/services/chat/postgres-stream-buffer.ts adapter (verbatim port of stream-service.ts logic incl. advisory-lock atomic path + NOTIFY)
+- [x] Refactor api/src/services/stream-service.ts as thin delegation shim (public function names + signatures preserved verbatim so chat-service.ts / queue-manager.ts / context-document.ts / routes/api/* require zero changes)
+- [ ] make typecheck-api PASS
+- [ ] make test-api-unit SCOPE=tests/unit/stream-service.test.ts PASS
+- [ ] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts PASS
