@@ -863,6 +863,20 @@ export class ChatService {
           session.id,
         );
       },
+      // BR14b Lot 14b — bridge `resolveSessionWorkspaceId`,
+      // `listSessionDocuments`, and `listAssistantDetailsByMessageId` to
+      // their existing private chat-service methods. Each crosses the
+      // port as an Option A callback because their bodies import
+      // api-only modules (`workspace-service`, drizzle, `db/schema`)
+      // that chat-core must not pull in. The 3 read-only composers
+      // (`getSessionBootstrap` / `getSessionHistory` /
+      // `getMessageRuntimeDetails`) migrate into `ChatRuntime` in the
+      // next commit and call these callbacks unchanged.
+      resolveSessionWorkspaceId: (session, userId) =>
+        this.resolveSessionWorkspaceId(session, userId),
+      listSessionDocuments: (input) => this.listSessionDocuments(input),
+      listAssistantDetailsByMessageId: (messageIds) =>
+        this.listAssistantDetailsByMessageId(messageIds),
     });
   }
 
