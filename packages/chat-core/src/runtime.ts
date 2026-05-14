@@ -343,6 +343,30 @@ export type ChatRuntimeDeps = {
     readonly userId: string;
     readonly workspaceId: string;
   }) => Promise<WorkspaceAccessFlags>;
+  /**
+   * Lot 16a — generate a session title from the last user message and
+   * persist it (when the session has no title yet). Bundles the chat-
+   * service helpers `generateSessionTitle` + `SessionStore.updateTitle`
+   * + `notifyWorkspaceEvent` into a single Option A callback because
+   * chat-core must not import `callLLM`, the prompt template registry,
+   * or the workspace-event NOTIFY plumbing.
+   *
+   * Returns the generated title (already persisted) so the caller can
+   * observe what happened, or `null` when no title was generated (either
+   * because the session already had one, the last user message was
+   * empty, or the LLM returned nothing). Implementations MUST be
+   * idempotent and safe to call regardless of `session.title` state —
+   * the runtime delegates the no-op decision to the callback.
+   */
+  readonly ensureSessionTitle?: (input: {
+    readonly session: ChatSessionRow;
+    readonly sessionWorkspaceId: string;
+    readonly focusContext: {
+      readonly contextType: string;
+      readonly contextId: string;
+    } | null;
+    readonly lastUserMessage: string;
+  }) => Promise<string | null>;
 };
 
 /**
@@ -626,6 +650,28 @@ export type WorkspaceAccessFlags = {
   readonly readOnly: boolean;
   readonly canWrite: boolean;
   readonly currentUserRole: string | null;
+};
+
+/**
+ * Lot 16a — options for `ChatRuntime.ensureSessionTitle`. Carries the
+ * fields the title-generation block of `runAssistantGeneration` reads
+ * verbatim from the `AssistantRunContext` produced by
+ * `prepareAssistantRun` (Lot 15). The runtime delegates the actual
+ * title-generation + persistence + workspace-event NOTIFY to the
+ * `deps.ensureSessionTitle` callback; this method just wires the
+ * context fields and short-circuits when the session already has a
+ * title or the last user message is empty (mirrors the
+ * `if (!session.title && lastUserMessage.trim())` guard inlined in
+ * chat-service.ts pre Lot 16).
+ */
+export type EnsureSessionTitleOptions = {
+  readonly session: ChatSessionRow;
+  readonly sessionWorkspaceId: string;
+  readonly focusContext: {
+    readonly contextType: string;
+    readonly contextId: string;
+  } | null;
+  readonly lastUserMessage: string;
 };
 
 /**
@@ -1890,6 +1936,41 @@ export class ChatRuntime {
       conversation,
       lastUserMessage,
     };
+  }
+
+  /**
+   * BR14b Lot 16a — migrate the title-generation side effect of
+   * `runAssistantGeneration` (chat-service.ts pre Lot 16, lines
+   * 1889-1907) into the runtime. Short-circuits when the session
+   * already has a title or the last user message is empty, then
+   * delegates to `deps.ensureSessionTitle` for the
+   * `generateSessionTitle` + `SessionStore.updateTitle` +
+   * `notifyWorkspaceEvent` chain. Returns the persisted title (or
+   * `null` when nothing was done) so callers can observe what
+   * happened.
+   *
+   * The remainder of Slice B (context blocks + tool catalog +
+   * system prompt build) migrates in Lot 16b through a separate
+   * `buildSystemPrompt` callback + `prepareSystemPrompt` method.
+   * Keeping title-gen as its own atomic method (rather than
+   * inlining it inside `prepareSystemPrompt`) preserves the
+   * idempotent contract — callers may invoke it independently
+   * (e.g. retry flow, queue-worker resume).
+   */
+  async ensureSessionTitle(
+    options: EnsureSessionTitleOptions,
+  ): Promise<string | null> {
+    const { session, sessionWorkspaceId, focusContext, lastUserMessage } =
+      options;
+    if (session.title) return null;
+    if (!lastUserMessage.trim()) return null;
+    if (!this.deps.ensureSessionTitle) return null;
+    return this.deps.ensureSessionTitle({
+      session,
+      sessionWorkspaceId,
+      focusContext,
+      lastUserMessage,
+    });
   }
 }
 
