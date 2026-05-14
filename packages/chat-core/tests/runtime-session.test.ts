@@ -17,6 +17,7 @@ import {
   InMemoryMeshDispatch,
   InMemorySessionStore,
   InMemoryStreamBuffer,
+  InMemoryStreamSequencer,
 } from '../src/in-memory/index.js';
 
 const sessionId = 'session-1';
@@ -26,6 +27,7 @@ const buildFixture = (overrides: Partial<ChatRuntimeDeps> = {}) => {
   const messageStore = new InMemoryMessageStore();
   const sessionStore = new InMemorySessionStore();
   const streamBuffer = new InMemoryStreamBuffer();
+  const streamSequencer = new InMemoryStreamSequencer();
   const checkpointStore = new InMemoryCheckpointStore<ChatState>();
   const mesh = new InMemoryMeshDispatch();
 
@@ -33,6 +35,7 @@ const buildFixture = (overrides: Partial<ChatRuntimeDeps> = {}) => {
     messageStore,
     sessionStore,
     streamBuffer,
+    streamSequencer,
     checkpointStore,
     mesh,
     normalizeVsCodeCodeAgent: () => null,
