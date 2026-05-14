@@ -18,6 +18,11 @@ import {
 } from '../../../packages/chat-core/src/runtime';
 import type { ChatMessageWithFeedback } from '../../../packages/chat-core/src/message-port';
 import { consumePendingSteerMessages } from '../../../packages/chat-core/src/steer';
+import {
+  writeContextBudgetStatus as writeContextBudgetStatusPure,
+  type ContextBudgetSnapshot as ChatCoreContextBudgetSnapshot,
+  type ContextBudgetZone as ChatCoreContextBudgetZone,
+} from '../../../packages/chat-core/src/context-budget';
 import { createId } from '../utils/id';
 import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
 import {
@@ -310,14 +315,12 @@ type ChatRuntimeMessage =
   | { role: 'system' | 'user' | 'assistant'; content: string }
   | { role: 'tool'; content: string; tool_call_id: string };
 
-type ContextBudgetZone = 'normal' | 'soft' | 'hard';
-
-type ContextBudgetSnapshot = {
-  estimatedTokens: number;
-  maxTokens: number;
-  occupancyPct: number;
-  zone: ContextBudgetZone;
-};
+// BR14b Lot 21a — `ContextBudgetZone` + `ContextBudgetSnapshot` moved to
+// `packages/chat-core/src/context-budget.ts` (consumed by the pure helper
+// `writeContextBudgetStatus`). Local aliases keep the existing chat-service
+// references intact so the migration stays surgical.
+type ContextBudgetZone = ChatCoreContextBudgetZone;
+type ContextBudgetSnapshot = ChatCoreContextBudgetSnapshot;
 type ChatBootstrapStreamEvent = {
   eventType: string;
   data: unknown;
@@ -3006,34 +3009,36 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     // as explicit inputs and returns the advanced cursor as
     // `nextSinceSequence`, which we assign back to the local counter.
 
+    // BR14b Lot 21a — `writeContextBudgetStatus` (28-line closure pre-Lot
+    // 21a) extracted to `packages/chat-core/src/context-budget.ts`. The
+    // closure captured `streamSeq` + `lastBudgetAnnouncedPct` +
+    // `options.assistantMessageId`. The pure helper now drives the
+    // sequence via `streamSequencer.allocate` and returns the advanced
+    // `lastBudgetAnnouncedPct` cursor; this caller-side wrapper re-syncs
+    // the local `streamSeq` from `peek + 1` after each call so the
+    // remainder of the loop body continues from the same cursor (same
+    // pattern Lot 20 introduced around `evaluateReasoningEffort`).
     const writeContextBudgetStatus = async (
       phase: 'pre_model' | 'pre_tool',
       snapshot: ContextBudgetSnapshot,
       extras?: Record<string, unknown>,
     ) => {
-      if (
-        snapshot.occupancyPct === lastBudgetAnnouncedPct &&
-        snapshot.zone === 'normal'
-      ) {
-        return;
+      const result = await writeContextBudgetStatusPure({
+        streamBuffer: postgresStreamBuffer,
+        streamSequencer: postgresStreamSequencer,
+        streamId: options.assistantMessageId,
+        phase,
+        snapshot,
+        lastBudgetAnnouncedPct,
+        extras,
+      });
+      lastBudgetAnnouncedPct = result.lastBudgetAnnouncedPct;
+      if (result.appended) {
+        streamSeq =
+          (await this.runtime.peekStreamSequence(
+            options.assistantMessageId,
+          )) + 1;
       }
-      await writeStreamEvent(
-        options.assistantMessageId,
-        'status',
-        {
-          state: 'context_budget_update',
-          phase,
-          occupancy_pct: snapshot.occupancyPct,
-          estimated_tokens: snapshot.estimatedTokens,
-          max_tokens: snapshot.maxTokens,
-          zone: snapshot.zone,
-          ...(extras ?? {}),
-        },
-        streamSeq,
-        options.assistantMessageId,
-      );
-      streamSeq += 1;
-      lastBudgetAnnouncedPct = snapshot.occupancyPct;
     };
 
     const compactContextIfNeeded = async (

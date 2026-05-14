@@ -8,5 +8,6 @@ export * from './ports.js';
 export * from './types.js';
 export * from './history.js';
 export * from './steer.js';
+export * from './context-budget.js';
 export * from './runtime.js';
 export * as InMemory from './in-memory/index.js';
