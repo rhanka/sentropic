@@ -79,14 +79,14 @@ Resolve all 4 HIGH severity Dependabot alerts on `rhanka/entropiq` by upgrading 
     - [x] `make test-ui ENV=test-fix-security-high-vulnerabilities` -> 370/370 pass
   - [x] Atomic commit: `fix(security): upgrade vite to 7.3.3 (CVE-2026-39363 CVE-2026-39364 high)`
 
-- [ ] **Lot 2 — Upgrade `flatted` to 3.4.2+ via override (CVE-2026-33228)**
-  - [ ] Update `ui/package.json` `overrides.flatted` to `^3.4.2`.
-  - [ ] Refresh `ui/package-lock.json` via `make install-ui ENV=test-fix-security-high-vulnerabilities`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-ui ENV=test-fix-security-high-vulnerabilities`
-    - [ ] `make lint-ui ENV=test-fix-security-high-vulnerabilities`
-    - [ ] `make test-ui ENV=test-fix-security-high-vulnerabilities`
-  - [ ] Atomic commit: `fix(security): upgrade flatted to 3.4.2 (CVE-2026-33228 high)`
+- [x] **Lot 2 — Upgrade `flatted` to 3.4.2+ via override (CVE-2026-33228)**
+  - [x] Update `ui/package.json` `overrides.flatted` to `^3.4.2`.
+  - [x] Refresh `ui/package-lock.json` via isolated regenerate in container.
+  - [x] Lot gate:
+    - [x] `make typecheck-ui ENV=test-fix-security-high-vulnerabilities` -> 0 errors
+    - [x] `make lint-ui ENV=test-fix-security-high-vulnerabilities` -> clean
+    - [x] `make test-ui ENV=test-fix-security-high-vulnerabilities` -> 370/370 pass
+  - [x] Atomic commit: `fix(security): upgrade flatted to 3.4.2 (CVE-2026-33228 high)`
 
 - [ ] **Lot 3 — Upgrade `fast-xml-builder` to 1.1.7+ via override (CVE-2026-44665)**
   - [ ] Add `overrides.fast-xml-builder` to `api/package.json` at `^1.1.7`.
