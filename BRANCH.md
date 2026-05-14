@@ -387,6 +387,24 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] make test-api-unit SCOPE=tests/unit/chat-summary-runtime.test.ts PASS (2/2)
 - [x] make test-api-unit SCOPE=tests/unit/chat-service-batch-create-orgs.test.ts PASS (5/5)
 
+## Lot 16a - runAssistantGeneration Slice B title-generation migration (ensureSessionTitle)
+- [x] Identify Slice B boundary in runAssistantGeneration (lines 1889-2513 pre-Lot 16: title-gen 1889-1907 + context flags 1908-1944 + documents/comments resolution 1945-1983 + todo runtime snapshot 1984-2012 + tool catalog 2014-2174 + context blocks 2176-2452 + system prompt IIFE 2457-2513; 624 lines total)
+- [x] Slice B is too large (>600 lines) for a single Lot 16; split into Lot 16a (title-gen only, this lot) + Lot 16b (full system prompt build, next lot)
+- [x] Add `EnsureSessionTitleOptions` type in chat-core (mirrors session + workspace + focus + last user message fields from `AssistantRunContext`)
+- [x] Add `ensureSessionTitle` callback to `ChatRuntimeDeps` (Option A; bundles generateSessionTitle + sessionStore.updateTitle + notifyWorkspaceEvent into one chat-service-side closure)
+- [x] Add `ChatRuntime.ensureSessionTitle(options)` method that short-circuits when session already has a title or trimmed lastUserMessage is empty, then delegates to the callback
+- [x] chat-service.ts constructor wires the `ensureSessionTitle` callback (binds to the existing `generateSessionTitle` private method + `postgresChatSessionStore.updateTitle` + `notifyWorkspaceEvent`)
+- [x] chat-service.ts runAssistantGeneration replaces the inline title-gen block (19 lines pre-Lot 16) with `await this.runtime.ensureSessionTitle({...})` (10 lines)
+- [x] make typecheck-api PASS
+- [x] make lint-api PASS (0 errors; only pre-existing warnings)
+- [x] make test-pkg-chat-core ENV=test-refacto-chat-service-core PASS (8 files, 75/75 tests; runtime.ts coverage 85.62% lines; new runtime-system-prompt.test.ts 6/6 tests)
+- [x] make test-api-endpoints SCOPE=tests/api/chat.test.ts PASS (28/28)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts PASS (6/6)
+- [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts PASS (14/14)
+- [x] Net code change: chat-service.ts -19/+45 (= +26 lines for constructor callback wiring), runtime.ts +0/+81 (types + method), tests +0/+178 (new file). Total commit budget respected (≤ 150 lines / commit, work split across 3 commits).
+
 ## Lot 15.5 - chat-core test infrastructure (BR14b-EX3)
 - [x] Open BR14b-EX3 (Makefile target + packages/chat-core/tests/**)
 - [x] Create 5 in-memory port adapters under packages/chat-core/src/in-memory/
