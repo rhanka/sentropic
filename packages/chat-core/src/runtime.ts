@@ -1790,6 +1790,107 @@ export class ChatRuntime {
       items,
     };
   }
+
+  /**
+   * BR14b Lot 15 — first slice of `runAssistantGeneration` decomposition.
+   *
+   * Verbatim port of the precheck block that opens
+   * `ChatService.runAssistantGeneration`: session lookup +
+   * workspace resolution + workspace-access flags + contexts
+   * normalisation + messages load + assistant-row precheck +
+   * conversation projection + last-user-message extraction.
+   *
+   * Differences from the pre-Lot 15 chat-service body are limited to:
+   *   (a) `this.getSessionForUser` → `this.deps.sessionStore.findForUser`
+   *       (already a thin wrapper post Lot 8);
+   *   (b) the inline `ensureWorkspaceForUser` + `session.workspaceId`
+   *       fallback collapses to `deps.resolveSessionWorkspaceId(session,
+   *       userId)` which has the identical body (Lot 14b);
+   *   (c) the inline `isWorkspaceDeleted` + `hasWorkspaceRole` +
+   *       `getWorkspaceRole` trio collapses to
+   *       `deps.resolveWorkspaceAccess({ userId, workspaceId })` which
+   *       bundles the same three calls in the same order (Lot 15);
+   *   (d) the inline `normalizeContexts` helper uses
+   *       `deps.isChatContextType` (Lot 12) instead of the module-level
+   *       guard — same membership check.
+   *
+   * The remainder of `runAssistantGeneration` (title generation,
+   * documents/comments blocks, tool selection, system prompt build,
+   * provider/model resolution, reasoning effort eval, tool loop,
+   * continuation, etc.) STAYS in chat-service.ts and consumes the
+   * returned `AssistantRunContext` field by field. Subsequent lots
+   * (16+) migrate those slices one by one.
+   */
+  async prepareAssistantRun(
+    options: PrepareAssistantRunOptions,
+  ): Promise<AssistantRunContext> {
+    const session = await this.deps.sessionStore.findForUser(
+      options.sessionId,
+      options.userId,
+    );
+    if (!session) throw new Error('Session not found');
+
+    const sessionWorkspaceId = await this.deps.resolveSessionWorkspaceId(
+      session,
+      options.userId,
+    );
+    if (!sessionWorkspaceId) throw new Error('Workspace not found for user');
+
+    const { readOnly, canWrite, currentUserRole } =
+      await this.deps.resolveWorkspaceAccess({
+        userId: options.userId,
+        workspaceId: sessionWorkspaceId,
+      });
+
+    const normalizeContexts = (
+      items?: ReadonlyArray<{ contextType: string; contextId: string }>,
+    ): Array<{ contextType: string; contextId: string }> => {
+      const out: Array<{ contextType: string; contextId: string }> = [];
+      for (const item of items ?? []) {
+        const type = item?.contextType;
+        const id = (item?.contextId || '').trim();
+        if (!this.deps.isChatContextType(type) || !id) continue;
+        const key = `${type}:${id}`;
+        if (out.some((c) => `${c.contextType}:${c.contextId}` === key)) continue;
+        out.push({ contextType: type, contextId: id });
+      }
+      return out;
+    };
+    const contextsOverride = normalizeContexts(options.contexts);
+    const focusContext = contextsOverride[0] ?? null;
+
+    // Charger messages (sans inclure le placeholder assistant)
+    const messages = await this.deps.messageStore.listForSession(
+      options.sessionId,
+    );
+
+    const assistantRow = messages.find((m) => m.id === options.assistantMessageId);
+    if (!assistantRow) throw new Error('Assistant message not found');
+
+    const conversation = messages
+      .filter((m) => m.sequence < assistantRow.sequence)
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content ?? '',
+      }));
+    const lastUserMessage =
+      [...conversation].reverse().find((m) => m.role === 'user')?.content?.trim() || '';
+
+    return {
+      session,
+      sessionWorkspaceId,
+      readOnly,
+      canWrite,
+      currentUserRole,
+      contextsOverride,
+      focusContext,
+      messages,
+      assistantRow,
+      conversation,
+      lastUserMessage,
+    };
+  }
 }
 
 // Suppress the lint warning for the unused parseChatCheckpointKey
