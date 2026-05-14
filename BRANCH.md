@@ -239,10 +239,15 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] make lint-api PASS (0 errors; only pre-existing warnings, none in new/edited files)
 
 ## Lot 8 - chat-session extraction
-- [ ] Design real SessionStore port in packages/chat-core/src/session-port.ts (replace placeholder, mirror Lot 6 isolation pattern)
-- [ ] Update packages/chat-core/src/ports.ts and src/index.ts re-exports (drop _kind stub, add session-port surface)
-- [ ] Create api/src/services/chat/postgres-chat-session-store.ts adapter (verbatim port logic, tenant scoping preserved)
-- [ ] Refactor chat-service.ts session methods to delegate (no public API change)
-- [ ] make typecheck-api PASS
-- [ ] make test-api-unit SCOPE chat-checkpoint-runtime + chat-summary-runtime PASS
-- [ ] make test-api-endpoints SCOPE chat-checkpoint-contract + chat-summary-contract + chat-message-actions PASS
+- [x] Port surface decision: single SessionStore port covers all chat_sessions reads/writes used by chat-service.ts (findForUser, listForUser, create, deleteForUser, touchUpdatedAt, updateContext, updateTitle); precheck for "Session not found" stays in ChatService.deleteSession; workspace resolution / title generation / workspace-event notification / todo runtime stay in chat-service.ts (port is persistence-only)
+- [x] Design real SessionStore port in packages/chat-core/src/session-port.ts (replace placeholder, mirror Lot 6 isolation pattern)
+- [x] Update packages/chat-core/src/ports.ts and src/index.ts re-exports (drop _kind stub, add session-port surface)
+- [x] Create api/src/services/chat/postgres-chat-session-store.ts adapter (verbatim port logic, tenant scoping preserved)
+- [x] Refactor chat-service.ts session methods to delegate (no public API change; -67/+16 lines net)
+- [x] make typecheck-api PASS
+- [x] make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts PASS (2/2)
+- [x] make test-api-unit SCOPE=tests/unit/chat-summary-runtime.test.ts PASS (2/2)
+- [x] make test-api-unit SCOPE=tests/unit/chat-session-history-docx.test.ts PASS (4/4)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts PASS (4/4)
