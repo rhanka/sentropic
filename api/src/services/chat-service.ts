@@ -8,6 +8,7 @@ import {
 import { postgresChatMessageStore } from './chat/postgres-chat-message-store';
 import { postgresChatSessionStore } from './chat/postgres-chat-session-store';
 import { postgresStreamBuffer } from './chat/postgres-stream-buffer';
+import { meshDispatchAdapter } from './chat/mesh-dispatch-adapter';
 import { ChatRuntime } from '../../../packages/chat-core/src/runtime';
 import { createId } from '../utils/id';
 import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
@@ -240,23 +241,9 @@ export type ChatResumeFromToolOutputs = {
   }>;
 };
 
-type AwaitingLocalToolState = {
-  sequence: number;
-  previousResponseId: string;
-  pendingLocalToolCalls: Array<{
-    id: string;
-    name: string;
-    args: unknown;
-  }>;
-  baseToolOutputs: Array<{
-    callId: string;
-    output: string;
-    name?: string;
-    args?: unknown;
-  }>;
-  localToolDefinitions: LocalToolDefinitionInput[];
-  vscodeCodeAgent: NormalizedVsCodeCodeAgentRuntimePayload | null;
-};
+// BR14b Lot 10: `AwaitingLocalToolState` moved into
+// `packages/chat-core/src/runtime.ts` alongside `acceptLocalToolResult` +
+// `extractAwaitingLocalToolState`. No external consumer.
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -787,30 +774,41 @@ const compactConversationContext = async (input: {
 
 export class ChatService {
   /**
-   * BR14b Lot 9 — first orchestration extraction.
+   * BR14b Lot 9/10 — orchestration extraction.
    * `ChatRuntime` owns chat orchestration above the persistence ports
-   * extracted in Lots 4/6/7/8. Methods migrate progressively from
-   * `ChatService` into `ChatRuntime` (see runtime.ts header). For now,
-   * `ChatService` instantiates the runtime with the four existing
-   * Postgres adapters; `checkpointStore` is wired as a stub typed via
+   * extracted in Lots 4/6/7/8 and the mesh boundary port introduced in
+   * Lot 10. Methods migrate progressively from `ChatService` into
+   * `ChatRuntime` (see runtime.ts header). The runtime is wired in the
+   * constructor (instead of a field initializer) so the
+   * `normalizeVsCodeCodeAgent` callback can bind `this.normalizeVsCodeCodeAgentPayload`
+   * which still lives in `ChatService` because its body is reused by
+   * several non-runtime call-sites (system-prompt build, instruction
+   * rendering). `checkpointStore` is wired as a stub typed via
    * `as unknown as CheckpointStore<ChatState>` because the existing
    * `postgresChatCheckpointAdapter` exposes a higher-level surface
    * (`createCheckpointForSession` / `listCheckpointsForSession` /
    * `restoreCheckpointForSession`) rather than the generic `load/save`
    * CheckpointStore<ChatState> port. The runtime never reaches into
-   * that port in Lot 9 (the migrated slice doesn't checkpoint), so the
-   * stub is safe; full wiring lands when checkpoint orchestration moves
-   * into the runtime (Lot 11+).
+   * that port in Lots 9/10 (the migrated slices don't checkpoint), so
+   * the stub is safe; full wiring lands when checkpoint orchestration
+   * moves into the runtime (Lot 11+).
    */
-  private readonly runtime: ChatRuntime = new ChatRuntime({
-    messageStore: postgresChatMessageStore,
-    sessionStore: postgresChatSessionStore,
-    streamBuffer: postgresStreamBuffer,
-    // CheckpointStore<ChatState> is not exercised in Lot 9; cast through
-    // unknown to satisfy the typed DI without forcing a premature
-    // generic-port refactor of postgresChatCheckpointAdapter.
-    checkpointStore: postgresChatCheckpointAdapter as unknown as ConstructorParameters<typeof ChatRuntime>[0]['checkpointStore'],
-  });
+  private readonly runtime: ChatRuntime;
+
+  constructor() {
+    this.runtime = new ChatRuntime({
+      messageStore: postgresChatMessageStore,
+      sessionStore: postgresChatSessionStore,
+      streamBuffer: postgresStreamBuffer,
+      // CheckpointStore<ChatState> is not exercised in Lots 9/10; cast through
+      // unknown to satisfy the typed DI without forcing a premature
+      // generic-port refactor of postgresChatCheckpointAdapter.
+      checkpointStore: postgresChatCheckpointAdapter as unknown as ConstructorParameters<typeof ChatRuntime>[0]['checkpointStore'],
+      mesh: meshDispatchAdapter,
+      normalizeVsCodeCodeAgent: (input) =>
+        this.normalizeVsCodeCodeAgentPayload(input as VsCodeCodeAgentRuntimePayload | null | undefined),
+    });
+  }
 
   private normalizeMessageContexts(
     input: Pick<CreateChatMessageInput, 'contexts' | 'primaryContextType' | 'primaryContextId'>
@@ -1219,111 +1217,13 @@ export class ChatService {
     return normalized;
   }
 
-  private extractAwaitingLocalToolState(
-    events: Array<{
-      eventType: string;
-      data: unknown;
-      sequence: number;
-    }>
-  ): AwaitingLocalToolState | null {
-    for (let i = events.length - 1; i >= 0; i -= 1) {
-      const event = events[i];
-      if (event.eventType !== 'status') continue;
-      const data = asRecord(event.data);
-      if (!data || data.state !== 'awaiting_local_tool_results') continue;
-
-      const previousResponseId =
-        typeof data.previous_response_id === 'string' ? data.previous_response_id : '';
-      if (!previousResponseId) return null;
-
-      const pendingLocalToolCalls: Array<{
-        id: string;
-        name: string;
-        args: unknown;
-      }> = [];
-      const pendingRaw = Array.isArray(data.pending_local_tool_calls)
-        ? data.pending_local_tool_calls
-        : [];
-      for (const item of pendingRaw) {
-        const rec = asRecord(item);
-        const toolCallId =
-          rec && typeof rec.tool_call_id === 'string' ? rec.tool_call_id.trim() : '';
-        const name =
-          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
-        const args = rec ? rec.args : {};
-        if (
-          !toolCallId ||
-          pendingLocalToolCalls.some((entry) => entry.id === toolCallId)
-        ) {
-          continue;
-        }
-        pendingLocalToolCalls.push({ id: toolCallId, name, args });
-      }
-
-      const baseToolOutputs: Array<{
-        callId: string;
-        output: string;
-        name?: string;
-        args?: unknown;
-      }> = [];
-      const outputsRaw = Array.isArray(data.base_tool_outputs)
-        ? data.base_tool_outputs
-        : [];
-      for (const item of outputsRaw) {
-        const rec = asRecord(item);
-        const callId =
-          rec && typeof rec.call_id === 'string' ? rec.call_id.trim() : '';
-        const output =
-          rec && typeof rec.output === 'string' ? rec.output : '';
-        if (!callId) continue;
-        const name =
-          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
-        baseToolOutputs.push({
-          callId,
-          output,
-          ...(name ? { name } : {}),
-          ...(rec && 'args' in rec ? { args: rec.args } : {}),
-        });
-      }
-
-      const localToolDefinitions: LocalToolDefinitionInput[] = [];
-      const localDefsRaw = Array.isArray(data.local_tool_definitions)
-        ? data.local_tool_definitions
-        : [];
-      for (const item of localDefsRaw) {
-        const rec = asRecord(item);
-        const name =
-          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
-        const description =
-          rec && typeof rec.description === 'string'
-            ? rec.description.trim()
-            : '';
-        const parameters =
-          rec && asRecord(rec.parameters)
-            ? (rec.parameters as Record<string, unknown>)
-            : null;
-        if (!name || !description || !parameters || !isValidToolName(name))
-          continue;
-        localToolDefinitions.push({ name, description, parameters });
-      }
-
-      if (pendingLocalToolCalls.length === 0) return null;
-
-      return {
-        sequence: event.sequence,
-        previousResponseId,
-        pendingLocalToolCalls,
-        baseToolOutputs,
-        localToolDefinitions,
-        vscodeCodeAgent: this.normalizeVsCodeCodeAgentPayload(
-          data.vscode_code_agent as VsCodeCodeAgentRuntimePayload,
-        ),
-      };
-    }
-
-    return null;
-  }
-
+  /**
+   * BR14b Lot 10 — body migrated verbatim into
+   * `ChatRuntime.acceptLocalToolResult` (and its private helper
+   * `extractAwaitingLocalToolState`). Public signature preserved so
+   * routes/api/chat.ts and tests in api/tests/unit/chat-service-tools.test.ts
+   * call sites are unchanged.
+   */
   async acceptLocalToolResult(options: {
     assistantMessageId: string;
     toolCallId: string;
@@ -1335,110 +1235,7 @@ export class ChatService {
     vscodeCodeAgent?: NormalizedVsCodeCodeAgentRuntimePayload | null;
     resumeFrom?: ChatResumeFromToolOutputs;
   }> {
-    const toolCallId = String(options.toolCallId ?? '').trim();
-    if (!toolCallId) {
-      throw new Error('toolCallId is required');
-    }
-
-    const events = await readStreamEvents(options.assistantMessageId);
-    const awaitingState = this.extractAwaitingLocalToolState(events);
-    if (!awaitingState) {
-      throw new Error('No pending local tool call found for this assistant message');
-    }
-    if (!awaitingState.pendingLocalToolCalls.some((entry) => entry.id === toolCallId)) {
-      throw new Error(`Tool call ${toolCallId} is not pending for this assistant message`);
-    }
-
-    const rawResult = options.result;
-    const resultObj = asRecord(rawResult);
-    const normalizedResult = resultObj
-      ? {
-          ...(typeof resultObj.status === 'string' ? {} : { status: 'completed' }),
-          ...resultObj
-        }
-      : { status: 'completed', value: rawResult };
-
-    let streamSeq = await getNextSequence(options.assistantMessageId);
-    await writeStreamEvent(
-      options.assistantMessageId,
-      'tool_call_result',
-      { tool_call_id: toolCallId, result: normalizedResult },
-      streamSeq,
-      options.assistantMessageId
-    );
-    streamSeq += 1;
-
-    await writeStreamEvent(
-      options.assistantMessageId,
-      'status',
-      { state: 'local_tool_result_received', tool_call_id: toolCallId },
-      streamSeq,
-      options.assistantMessageId
-    );
-
-    const followupEvents = await readStreamEvents(options.assistantMessageId, awaitingState.sequence);
-    const pendingSet = new Set(awaitingState.pendingLocalToolCalls.map((entry) => entry.id));
-    const collectedByToolCallId = new Map<string, string>();
-    for (const event of followupEvents) {
-      if (event.eventType !== 'tool_call_result') continue;
-      const data = asRecord(event.data);
-      if (!data) continue;
-      const id =
-        typeof data.tool_call_id === 'string' ? data.tool_call_id.trim() : '';
-      if (!id || !pendingSet.has(id)) continue;
-      const output = this.serializeToolOutput(data.result);
-      collectedByToolCallId.set(id, output);
-    }
-
-    const waitingForToolCallIds = awaitingState.pendingLocalToolCalls
-      .map((entry) => entry.id)
-      .filter((id) => !collectedByToolCallId.has(id));
-    if (waitingForToolCallIds.length > 0) {
-      return {
-        readyToResume: false,
-        waitingForToolCallIds,
-        localToolDefinitions: awaitingState.localToolDefinitions,
-        vscodeCodeAgent: awaitingState.vscodeCodeAgent,
-      };
-    }
-
-    const dedupedOutputs = new Map<string, string>();
-    for (const item of awaitingState.baseToolOutputs) {
-      if (!item.callId) continue;
-      dedupedOutputs.set(item.callId, item.output);
-    }
-    for (const id of awaitingState.pendingLocalToolCalls.map((entry) => entry.id)) {
-      const output = collectedByToolCallId.get(id);
-      if (!output) continue;
-      dedupedOutputs.set(id, output);
-    }
-    const pendingById = new Map(
-      awaitingState.pendingLocalToolCalls.map((entry) => [entry.id, entry] as const)
-    );
-    const baseById = new Map(
-      awaitingState.baseToolOutputs.map((entry) => [entry.callId, entry] as const)
-    );
-    const toolOutputs = Array.from(dedupedOutputs.entries()).map(([callId, output]) => {
-      const pending = pendingById.get(callId);
-      const base = baseById.get(callId);
-      return {
-        callId,
-        output,
-        ...(pending?.name ? { name: pending.name } : base?.name ? { name: base.name } : {}),
-        ...(pending ? { args: pending.args } : base && 'args' in base ? { args: base.args } : {}),
-      };
-    });
-
-    return {
-      readyToResume: true,
-      waitingForToolCallIds: [],
-      localToolDefinitions: awaitingState.localToolDefinitions,
-      vscodeCodeAgent: awaitingState.vscodeCodeAgent,
-      resumeFrom: {
-        previousResponseId: awaitingState.previousResponseId,
-        toolOutputs
-      }
-    };
+    return this.runtime.acceptLocalToolResult(options);
   }
 
   private getPromptTemplate(id: string): string {

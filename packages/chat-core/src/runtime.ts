@@ -1,46 +1,139 @@
 /**
- * BR14b Lot 9 — first orchestration extraction.
+ * BR14b Lot 9/10 — chat orchestration extraction.
  *
- * `ChatRuntime` is the future home of all chat orchestration that lives
- * above the persistence/stream ports already extracted in Lots 4/6/7/8:
+ * `ChatRuntime` is the home of chat orchestration that lives above the
+ * persistence/stream ports already extracted in Lots 4/6/7/8 + the mesh
+ * boundary port introduced in Lot 10:
  *
  *   Lots 4/6/7/8 (DONE)   — CheckpointStore + MessageStore + StreamBuffer
  *                            + SessionStore ports + Postgres adapters.
  *                            `chat-service.ts` delegates each persistence
  *                            call to its adapter.
  *
- *   Lot 9   (THIS LOT)    — Establish the `ChatRuntime` shell with DI of
- *                            the four existing ports + mesh hook. Migrate
- *                            ONE smallest atomic orchestration slice
+ *   Lot 9   (DONE)        — Established the `ChatRuntime` shell with DI of
+ *                            the four existing ports. Migrated the smallest
+ *                            atomic orchestration slice
  *                            (`finalizeAssistantMessageFromStream`) into
- *                            the runtime. Set the pattern for the next
- *                            lots: orchestration methods (vs persistence
- *                            methods already on the adapters) move INTO
- *                            this class while `chat-service.ts` becomes a
- *                            thin facade.
+ *                            the runtime.
  *
- *   Lots 10+ (NEXT)       — Move tool loop, reasoning loop, continuation
- *                            (`acceptLocalToolResult`), cancel, retry
- *                            (`retryUserMessage`), and finally
+ *   Lot 10  (THIS LOT)    — Design `MeshDispatchPort` (contracts-free mesh
+ *                            invocation surface) and migrate
+ *                            `acceptLocalToolResult` + its private helper
+ *                            `extractAwaitingLocalToolState` into the
+ *                            runtime as a verbatim port. Replaces the
+ *                            `invokeModel?: unknown` placeholder with the
+ *                            typed `mesh: MeshDispatchPort` DI hook. The
+ *                            migrated method does NOT call the mesh (it
+ *                            only reads/writes stream events) — the port
+ *                            is wired now so upcoming lots (continuation
+ *                            generation, reasoning loop) plug in without
+ *                            churning the constructor signature.
+ *
+ *   Lots 11+ (NEXT)       — Move continuation generation, tool loop,
+ *                            reasoning loop, cancel, retry, and finally
  *                            `runAssistantGeneration` itself into the
- *                            runtime. Persistence stays on the ports.
+ *                            runtime. Mesh dispatch routes through
+ *                            `deps.mesh.invoke` / `deps.mesh.invokeStream`.
  *
  * Per SPEC §1 / §5 / §14 — chat-core owns single-session orchestration.
- * Mesh access stays delegated through a callable `invokeModel` hook so
- * chat-core has zero compile-time dependency on `@sentropic/llm-mesh`.
+ * Mesh access stays delegated through `MeshDispatchPort` so chat-core has
+ * zero compile-time dependency on `@sentropic/llm-mesh` or any provider
+ * adapter.
  *
- * Behavior preservation is the absolute contract: the migrated method is
+ * Behavior preservation is the absolute contract: each migrated method is
  * a verbatim move (line-for-line) of the body that lived in
  * `chat-service.ts`. The only changes are: (a) `this.deps.*` instead of
- * the module-level adapter singletons, (b) the StreamBuffer call shape
- * that already existed via `stream-service.ts` is preserved by depending
- * on the port methods (`getNextSequence`, `append`, `read`) directly.
+ * the module-level adapter singletons, (b) helper functions previously
+ * defined at module scope in `chat-service.ts` (`asRecord`,
+ * `isValidToolName`) are duplicated here as private module-scoped helpers
+ * since they are tiny pure utilities, and (c) the `normalizeVsCodeCodeAgent`
+ * callback is injected via deps because the full normalizer body in
+ * `chat-service.ts` is reused by other call-sites (system-prompt build,
+ * instruction rendering) that do not move into the runtime in this lot.
  */
 import type { ChatState } from './types.js';
 import type { CheckpointStore } from './checkpoint-port.js';
 import type { MessageStore } from './message-port.js';
 import type { SessionStore } from './session-port.js';
 import type { StreamBuffer, StreamEventTypeName } from './stream-port.js';
+import type { MeshDispatchPort } from './mesh-port.js';
+
+/**
+ * Local tool definition input — structural shape mirroring
+ * `LocalToolDefinitionInput` exported from
+ * `api/src/services/chat-service.ts` (kept identical for external
+ * consumers like `queue-manager.ts`). Migrated alongside
+ * `acceptLocalToolResult` so callers feed runtime methods directly.
+ */
+export type LocalToolDefinitionInput = {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+};
+
+/**
+ * Resume continuation payload — mirrors `ChatResumeFromToolOutputs` in
+ * `chat-service.ts` byte-for-byte. Carries `previousResponseId` + an
+ * ordered list of merged tool outputs (server-side + local) used by
+ * `runAssistantGeneration` resume.
+ */
+export type ChatResumeFromToolOutputs = {
+  previousResponseId: string;
+  toolOutputs: Array<{
+    callId: string;
+    output: string;
+    name?: string;
+    args?: unknown;
+  }>;
+};
+
+/**
+ * Normalized VsCode code-agent runtime payload — structural shape mirroring
+ * `NormalizedVsCodeCodeAgentRuntimePayload` in `chat-service.ts`. Cross
+ * the port via DI (deps.normalizeVsCodeCodeAgent) so chat-core stays
+ * agnostic of the VsCode-specific normalization body.
+ */
+export type NormalizedVsCodeCodeAgentRuntimePayload = {
+  workspaceKey: string | null;
+  workspaceLabel: string | null;
+  promptGlobalOverride: string | null;
+  promptWorkspaceOverride: string | null;
+  instructionIncludePatterns: string[];
+  instructionFiles: Array<{ path: string; content: string }>;
+  systemContext: {
+    workingDirectory: string | null;
+    isGitRepo: boolean | null;
+    gitBranch: string | null;
+    platform: string | null;
+    osVersion: string | null;
+    shell: string | null;
+    clientDateIso: string | null;
+    clientTimezone: string | null;
+  } | null;
+};
+
+/**
+ * Internal state extracted from the most recent
+ * `awaiting_local_tool_results` status event for an assistant message.
+ * Mirrors `AwaitingLocalToolState` in `chat-service.ts` verbatim.
+ */
+type AwaitingLocalToolState = {
+  sequence: number;
+  previousResponseId: string;
+  pendingLocalToolCalls: Array<{
+    id: string;
+    name: string;
+    args: unknown;
+  }>;
+  baseToolOutputs: Array<{
+    callId: string;
+    output: string;
+    name?: string;
+    args?: unknown;
+  }>;
+  localToolDefinitions: LocalToolDefinitionInput[];
+  vscodeCodeAgent: NormalizedVsCodeCodeAgentRuntimePayload | null;
+};
 
 /**
  * DI container for `ChatRuntime`.
@@ -51,19 +144,24 @@ import type { StreamBuffer, StreamEventTypeName } from './stream-port.js';
  * inject in-memory fakes (SPEC §5: every port ships an `in-memory`
  * reference adapter).
  *
- * `invokeModel` is a forward-looking hook reserved for the upcoming
- * mesh boundary port. Lot 9 does NOT exercise it (the migrated slice
- * does not call the model). It is declared here so subsequent lots
- * (tool loop, reasoning loop, continuation) can wire mesh dispatch
- * without changing this signature. Kept untyped (`unknown`) on purpose
- * — the precise mesh port is designed in Lot 10+.
+ * `mesh` is the typed MeshDispatchPort introduced in Lot 10 — replaces
+ * the `invokeModel?: unknown` placeholder. Carries the model invocation
+ * contract used by future continuation/tool/reasoning loop migrations.
+ *
+ * `normalizeVsCodeCodeAgent` is injected as a callback rather than
+ * moved into the runtime because the body in `chat-service.ts` is
+ * reused by several other methods (system-prompt build, instruction
+ * rendering) that do not migrate into the runtime in this lot.
  */
 export type ChatRuntimeDeps = {
   readonly messageStore: MessageStore;
   readonly sessionStore: SessionStore;
   readonly streamBuffer: StreamBuffer;
   readonly checkpointStore: CheckpointStore<ChatState>;
-  readonly invokeModel?: (input: unknown) => Promise<unknown>;
+  readonly mesh: MeshDispatchPort;
+  readonly normalizeVsCodeCodeAgent: (
+    input: unknown,
+  ) => NormalizedVsCodeCodeAgentRuntimePayload | null;
 };
 
 /**
@@ -81,6 +179,57 @@ export type FinalizeAssistantResult = {
   readonly content: string;
   readonly reasoning: string | null;
   readonly wroteDone: boolean;
+};
+
+/**
+ * Options for `ChatRuntime.acceptLocalToolResult`. Mirrors the existing
+ * `ChatService.acceptLocalToolResult` shape verbatim.
+ */
+export type AcceptLocalToolResultOptions = {
+  readonly assistantMessageId: string;
+  readonly toolCallId: string;
+  readonly result: unknown;
+};
+
+export type AcceptLocalToolResultResponse = {
+  readyToResume: boolean;
+  waitingForToolCallIds: string[];
+  localToolDefinitions: LocalToolDefinitionInput[];
+  vscodeCodeAgent?: NormalizedVsCodeCodeAgentRuntimePayload | null;
+  resumeFrom?: ChatResumeFromToolOutputs;
+};
+
+/**
+ * Verbatim duplicate of `asRecord` in `chat-service.ts` (line ~261).
+ * Tiny pure helper, duplicated rather than re-imported to keep
+ * chat-core free of any api/* module dependency.
+ */
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+};
+
+/**
+ * Verbatim duplicate of `isValidToolName` in `chat-service.ts` (line ~272).
+ */
+const isValidToolName = (value: string): boolean =>
+  /^[a-zA-Z0-9_-]{1,64}$/.test(value);
+
+/**
+ * Verbatim duplicate of `ChatService.serializeToolOutput` (line ~865).
+ * Used to normalize follow-up tool_call_result event payloads collected
+ * during `acceptLocalToolResult`. Kept as a private module helper
+ * because the corresponding `chat-service.ts` instance method is also
+ * used by `runAssistantGeneration` which does not migrate in Lot 10 —
+ * future lots will consolidate.
+ */
+const serializeToolOutput = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return JSON.stringify({ value: String(value) });
+  }
 };
 
 export class ChatRuntime {
@@ -160,6 +309,248 @@ export class ChatRuntime {
       content,
       reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null,
       wroteDone,
+    };
+  }
+
+  /**
+   * Extract `AwaitingLocalToolState` from the latest
+   * `awaiting_local_tool_results` status event in the assistant message
+   * stream. Migrated verbatim from
+   * `ChatService.extractAwaitingLocalToolState` (chat-service.ts pre Lot 10).
+   * Only behavior difference: the VsCode normalizer is provided via
+   * `this.deps.normalizeVsCodeCodeAgent` callback instead of the
+   * `ChatService` instance method — the body is unchanged.
+   */
+  private extractAwaitingLocalToolState(
+    events: Array<{
+      eventType: string;
+      data: unknown;
+      sequence: number;
+    }>,
+  ): AwaitingLocalToolState | null {
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const event = events[i];
+      if (event.eventType !== 'status') continue;
+      const data = asRecord(event.data);
+      if (!data || data.state !== 'awaiting_local_tool_results') continue;
+
+      const previousResponseId =
+        typeof data.previous_response_id === 'string' ? data.previous_response_id : '';
+      if (!previousResponseId) return null;
+
+      const pendingLocalToolCalls: Array<{
+        id: string;
+        name: string;
+        args: unknown;
+      }> = [];
+      const pendingRaw = Array.isArray(data.pending_local_tool_calls)
+        ? data.pending_local_tool_calls
+        : [];
+      for (const item of pendingRaw) {
+        const rec = asRecord(item);
+        const toolCallId =
+          rec && typeof rec.tool_call_id === 'string' ? rec.tool_call_id.trim() : '';
+        const name =
+          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
+        const args = rec ? rec.args : {};
+        if (
+          !toolCallId ||
+          pendingLocalToolCalls.some((entry) => entry.id === toolCallId)
+        ) {
+          continue;
+        }
+        pendingLocalToolCalls.push({ id: toolCallId, name, args });
+      }
+
+      const baseToolOutputs: Array<{
+        callId: string;
+        output: string;
+        name?: string;
+        args?: unknown;
+      }> = [];
+      const outputsRaw = Array.isArray(data.base_tool_outputs)
+        ? data.base_tool_outputs
+        : [];
+      for (const item of outputsRaw) {
+        const rec = asRecord(item);
+        const callId =
+          rec && typeof rec.call_id === 'string' ? rec.call_id.trim() : '';
+        const output =
+          rec && typeof rec.output === 'string' ? rec.output : '';
+        if (!callId) continue;
+        const name =
+          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
+        baseToolOutputs.push({
+          callId,
+          output,
+          ...(name ? { name } : {}),
+          ...(rec && 'args' in rec ? { args: rec.args } : {}),
+        });
+      }
+
+      const localToolDefinitions: LocalToolDefinitionInput[] = [];
+      const localDefsRaw = Array.isArray(data.local_tool_definitions)
+        ? data.local_tool_definitions
+        : [];
+      for (const item of localDefsRaw) {
+        const rec = asRecord(item);
+        const name =
+          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
+        const description =
+          rec && typeof rec.description === 'string'
+            ? rec.description.trim()
+            : '';
+        const parameters =
+          rec && asRecord(rec.parameters)
+            ? (rec.parameters as Record<string, unknown>)
+            : null;
+        if (!name || !description || !parameters || !isValidToolName(name))
+          continue;
+        localToolDefinitions.push({ name, description, parameters });
+      }
+
+      if (pendingLocalToolCalls.length === 0) return null;
+
+      return {
+        sequence: event.sequence,
+        previousResponseId,
+        pendingLocalToolCalls,
+        baseToolOutputs,
+        localToolDefinitions,
+        vscodeCodeAgent: this.deps.normalizeVsCodeCodeAgent(data.vscode_code_agent),
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Accept a result for a pending local tool call. Records the
+   * `tool_call_result` + `status:local_tool_result_received` stream
+   * events, collects all collected results for the awaiting state, and
+   * returns either `readyToResume:true` with the merged tool outputs +
+   * `previousResponseId` for `runAssistantGeneration` continuation, or
+   * `readyToResume:false` with `waitingForToolCallIds` when other local
+   * tools are still pending.
+   *
+   * Migrated verbatim from `ChatService.acceptLocalToolResult`
+   * (chat-service.ts pre Lot 10). Only differences:
+   * (a) `readStreamEvents` → `this.deps.streamBuffer.read`,
+   * (b) `getNextSequence` → `this.deps.streamBuffer.getNextSequence`,
+   * (c) `writeStreamEvent` → `this.deps.streamBuffer.append`,
+   * (d) `this.serializeToolOutput` → module helper `serializeToolOutput`.
+   * No model invocation happens here — the mesh port is wired in deps
+   * but unused by this method; future lots use it for the actual
+   * `runAssistantGeneration` resume that follows this call externally.
+   */
+  async acceptLocalToolResult(
+    options: AcceptLocalToolResultOptions,
+  ): Promise<AcceptLocalToolResultResponse> {
+    const toolCallId = String(options.toolCallId ?? '').trim();
+    if (!toolCallId) {
+      throw new Error('toolCallId is required');
+    }
+
+    const events = await this.deps.streamBuffer.read(options.assistantMessageId);
+    const awaitingState = this.extractAwaitingLocalToolState(events);
+    if (!awaitingState) {
+      throw new Error('No pending local tool call found for this assistant message');
+    }
+    if (!awaitingState.pendingLocalToolCalls.some((entry) => entry.id === toolCallId)) {
+      throw new Error(`Tool call ${toolCallId} is not pending for this assistant message`);
+    }
+
+    const rawResult = options.result;
+    const resultObj = asRecord(rawResult);
+    const normalizedResult = resultObj
+      ? {
+          ...(typeof resultObj.status === 'string' ? {} : { status: 'completed' }),
+          ...resultObj
+        }
+      : { status: 'completed', value: rawResult };
+
+    let streamSeq = await this.deps.streamBuffer.getNextSequence(options.assistantMessageId);
+    await this.deps.streamBuffer.append(
+      options.assistantMessageId,
+      'tool_call_result',
+      { tool_call_id: toolCallId, result: normalizedResult },
+      streamSeq,
+      options.assistantMessageId,
+    );
+    streamSeq += 1;
+
+    await this.deps.streamBuffer.append(
+      options.assistantMessageId,
+      'status',
+      { state: 'local_tool_result_received', tool_call_id: toolCallId },
+      streamSeq,
+      options.assistantMessageId,
+    );
+
+    const followupEvents = await this.deps.streamBuffer.read(options.assistantMessageId, {
+      sinceSequence: awaitingState.sequence,
+    });
+    const pendingSet = new Set(awaitingState.pendingLocalToolCalls.map((entry) => entry.id));
+    const collectedByToolCallId = new Map<string, string>();
+    for (const event of followupEvents) {
+      if (event.eventType !== 'tool_call_result') continue;
+      const data = asRecord(event.data);
+      if (!data) continue;
+      const id =
+        typeof data.tool_call_id === 'string' ? data.tool_call_id.trim() : '';
+      if (!id || !pendingSet.has(id)) continue;
+      const output = serializeToolOutput(data.result);
+      collectedByToolCallId.set(id, output);
+    }
+
+    const waitingForToolCallIds = awaitingState.pendingLocalToolCalls
+      .map((entry) => entry.id)
+      .filter((id) => !collectedByToolCallId.has(id));
+    if (waitingForToolCallIds.length > 0) {
+      return {
+        readyToResume: false,
+        waitingForToolCallIds,
+        localToolDefinitions: awaitingState.localToolDefinitions,
+        vscodeCodeAgent: awaitingState.vscodeCodeAgent,
+      };
+    }
+
+    const dedupedOutputs = new Map<string, string>();
+    for (const item of awaitingState.baseToolOutputs) {
+      if (!item.callId) continue;
+      dedupedOutputs.set(item.callId, item.output);
+    }
+    for (const id of awaitingState.pendingLocalToolCalls.map((entry) => entry.id)) {
+      const output = collectedByToolCallId.get(id);
+      if (!output) continue;
+      dedupedOutputs.set(id, output);
+    }
+    const pendingById = new Map(
+      awaitingState.pendingLocalToolCalls.map((entry) => [entry.id, entry] as const),
+    );
+    const baseById = new Map(
+      awaitingState.baseToolOutputs.map((entry) => [entry.callId, entry] as const),
+    );
+    const toolOutputs = Array.from(dedupedOutputs.entries()).map(([callId, output]) => {
+      const pending = pendingById.get(callId);
+      const base = baseById.get(callId);
+      return {
+        callId,
+        output,
+        ...(pending?.name ? { name: pending.name } : base?.name ? { name: base.name } : {}),
+        ...(pending ? { args: pending.args } : base && 'args' in base ? { args: base.args } : {}),
+      };
+    });
+
+    return {
+      readyToResume: true,
+      waitingForToolCallIds: [],
+      localToolDefinitions: awaitingState.localToolDefinitions,
+      vscodeCodeAgent: awaitingState.vscodeCodeAgent,
+      resumeFrom: {
+        previousResponseId: awaitingState.previousResponseId,
+        toolOutputs,
+      },
     };
   }
 }
