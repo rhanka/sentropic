@@ -344,3 +344,13 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts PASS (1/1)
 - [x] make test-api-endpoints SCOPE=tests/api/chat-feedback.test.ts PASS (2/2)
 - [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts PASS (14/14)
+
+## Lot 14b - read-only composers migration (getSessionBootstrap / getSessionHistory / getMessageRuntimeDetails)
+- [x] Move 3 pure history helpers to packages/chat-core/src/history.ts
+- [x] Add 3 Option A callbacks to ChatRuntimeDeps
+- [x] chat-service.ts constructor wires the 3 callbacks
+- [ ] Migrate getSessionBootstrap into ChatRuntime
+- [ ] Migrate getSessionHistory into ChatRuntime
+- [ ] Migrate getMessageRuntimeDetails into ChatRuntime
+- [ ] chat-service.ts delegates 3 methods (public API unchanged)
+- [ ] typecheck + tests PASS
