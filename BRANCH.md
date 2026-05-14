@@ -498,12 +498,12 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] Net code change: steer.ts +109 (new pure helpers module + JSDoc); index.ts +1 (re-export); chat-service.ts +18/-26 = -8 net (4-line `normalizeSteerMessage` deleted + 21-line closure deleted + 13-line delegating call site + 1-line import + 1-line removed `readStreamEvents` from existing import + ~8 lines of explanatory Lot-19 comments); tests +215 (new file). Helper signature diverges from launch-packet spec: launch packet proposed `(input: unknown) => {text, occurredAt?} | null` and `Promise<{text, occurredAt?, sequence}[]>`, but verbatim port preserves chat-service.ts current types (`(value: string) => string` and `Promise<{messages: string[], nextSinceSequence: number}>`). Behavior preservation is the absolute contract per BR14b principle; helper extraction is the only purpose of this lot, not signature evolution.
 
 ## Lot 20 - StreamSequencer port + reasoning-effort bracketing reclaim
-- [ ] Design `StreamSequencer` port in `packages/chat-core/src/stream-sequencer-port.ts` (`allocate(streamId)` + `peek(streamId)`; mirrors checkpoint/message/stream/session isolation pattern)
-- [ ] Re-export port from `packages/chat-core/src/index.ts`
-- [ ] Create `packages/chat-core/src/in-memory/stream-sequencer.ts` (`InMemoryStreamSequencer`; `Map<streamId, number>` counter; monotonic per-stream allocate; peek returns 0 when never allocated; reset + snapshot helpers)
-- [ ] Re-export `InMemoryStreamSequencer` from `packages/chat-core/src/in-memory/index.ts`
-- [ ] Create `packages/chat-core/tests/stream-sequencer.test.ts` (6 cases: monotonic, per-stream isolation, peek-0-before-allocate, peek-last-after-allocate, reset, snapshot)
-- [ ] Create `api/src/services/chat/postgres-stream-sequencer-adapter.ts` (`PostgresStreamSequencer`; `allocate` delegates to `postgresStreamBuffer.getNextSequence`; `peek` SELECT MAX(sequence); singleton export `postgresStreamSequencer`)
+- [x] Design `StreamSequencer` port in `packages/chat-core/src/stream-sequencer-port.ts` (`allocate(streamId)` + `peek(streamId)`; mirrors checkpoint/message/stream/session isolation pattern)
+- [x] Re-export port from `packages/chat-core/src/index.ts`
+- [x] Create `packages/chat-core/src/in-memory/stream-sequencer.ts` (`InMemoryStreamSequencer`; `Map<streamId, number>` counter; monotonic per-stream allocate; peek returns 0 when never allocated; reset + snapshot helpers)
+- [x] Re-export `InMemoryStreamSequencer` from `packages/chat-core/src/in-memory/index.ts`
+- [x] Create `packages/chat-core/tests/stream-sequencer.test.ts` (6 cases: monotonic, per-stream isolation, peek-0-before-allocate, peek-last-after-allocate, reset, snapshot)
+- [x] Create `api/src/services/chat/postgres-stream-sequencer-adapter.ts` (`PostgresStreamSequencer`; `allocate` delegates to `postgresStreamBuffer.getNextSequence`; `peek` SELECT MAX(sequence); singleton export `postgresStreamSequencer`)
 - [ ] Extend `ChatRuntimeDeps` in `packages/chat-core/src/runtime.ts` with `readonly streamSequencer: StreamSequencer`
 - [ ] Add `ChatRuntime.allocateStreamSequence(streamId)` slim public wrapper
 - [ ] Reclaim the 2 caller-side `writeStreamEvent` bracketing calls into `ChatRuntime.evaluateReasoningEffort`: input requires `streamId`; the runtime allocates sequences via `deps.streamSequencer.allocate(streamId)` and appends `status:reasoning_effort_eval_failed` (when `failure`) + `status:reasoning_effort_selected` via `deps.streamBuffer.append`
