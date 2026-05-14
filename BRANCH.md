@@ -97,15 +97,15 @@ Resolve all 4 HIGH severity Dependabot alerts on `rhanka/entropiq` by upgrading 
     - [x] `make test-api-unit ENV=test-fix-security-high-vulnerabilities` -> 493/494 pass (1 pre-existing failure in `tests/unit/google-drive-oauth.test.ts` due to local .env AUTH_CALLBACK_BASE_URL; not a regression — verified by reproducing on baseline; CI passes)
   - [x] Atomic commit: `fix(security): upgrade fast-xml-builder to 1.2.0 (CVE-2026-44665 high)`
 
-- [ ] **Lot 4 — Final validation**
-  - [ ] `make typecheck-api ENV=test-fix-security-high-vulnerabilities`
-  - [ ] `make typecheck-ui ENV=test-fix-security-high-vulnerabilities`
-  - [ ] `make lint-api ENV=test-fix-security-high-vulnerabilities`
-  - [ ] `make lint-ui ENV=test-fix-security-high-vulnerabilities`
-  - [ ] `make test-api-unit ENV=test-fix-security-high-vulnerabilities`
-  - [ ] `make test-api-endpoints SCOPE=tests/api/chat.test.ts ENV=test-fix-security-high-vulnerabilities`
-  - [ ] `make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts ENV=test-fix-security-high-vulnerabilities`
-  - [ ] `make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts ENV=test-fix-security-high-vulnerabilities`
-  - [ ] `make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts ENV=test-fix-security-high-vulnerabilities`
-  - [ ] `make down ENV=test-fix-security-high-vulnerabilities`
+- [x] **Lot 4 — Final validation**
+  - [x] `make typecheck-api ENV=test-fix-security-high-vulnerabilities` -> 0 errors
+  - [x] `make typecheck-ui ENV=test-fix-security-high-vulnerabilities` -> 0 errors
+  - [x] `make lint-api ENV=test-fix-security-high-vulnerabilities` -> 0 errors, 184 warnings (pre-existing)
+  - [x] `make lint-ui ENV=test-fix-security-high-vulnerabilities` -> clean
+  - [x] `make test-api-unit ENV=test-fix-security-high-vulnerabilities` -> 493/494 pass (1 pre-existing failure, see Feedback Loop BR-SEC-N1)
+  - [x] `make test-api-endpoints SCOPE=tests/api/chat.test.ts ENV=test-fix-security-high-vulnerabilities` -> 28/28 pass
+  - [x] `make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts ENV=test-fix-security-high-vulnerabilities` -> 1/1 pass
+  - [x] `make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts ENV=test-fix-security-high-vulnerabilities` -> 1/1 pass
+  - [x] `make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts ENV=test-fix-security-high-vulnerabilities` -> 4/4 pass
+  - [x] `make down ENV=test-fix-security-high-vulnerabilities` -> services stopped
   - [ ] Push branch and create PR with this `BRANCH.md` as body.
