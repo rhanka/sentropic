@@ -349,8 +349,18 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] Move 3 pure history helpers to packages/chat-core/src/history.ts
 - [x] Add 3 Option A callbacks to ChatRuntimeDeps
 - [x] chat-service.ts constructor wires the 3 callbacks
-- [ ] Migrate getSessionBootstrap into ChatRuntime
-- [ ] Migrate getSessionHistory into ChatRuntime
-- [ ] Migrate getMessageRuntimeDetails into ChatRuntime
-- [ ] chat-service.ts delegates 3 methods (public API unchanged)
-- [ ] typecheck + tests PASS
+- [x] Migrate getSessionBootstrap into ChatRuntime
+- [x] Migrate getSessionHistory into ChatRuntime
+- [x] Migrate getMessageRuntimeDetails into ChatRuntime
+- [x] chat-service.ts delegates 3 methods (public API unchanged)
+- [x] typecheck + tests PASS
+- [x] make typecheck-api PASS
+- [x] make lint-api PASS (0 errors; only pre-existing warnings)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat.test.ts PASS (28/28)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts PASS (4/4)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts PASS (6/6)
+- [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts PASS (14/14)
+- [x] make test-api-unit SCOPE=tests/unit/chat-session-history-docx.test.ts PASS (4/4)
