@@ -462,13 +462,13 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] Net code change: chat-service.ts -19/+11 = -8 lines (20-line inline block removed, 12-line delegate + Lot-17 comment block added); runtime.ts +16 (slim public wrapper method); +8 net total. Pure dedup, behavior preserved.
 
 ## Lot 18 - runAssistantGeneration Slice C-2 reasoning effort evaluator migration
-- [ ] Locate reasoning-effort evaluator block in `runAssistantGeneration` (chat-service.ts lines 2806-2898 post Lot 17; bracketed by 2 status writeStreamEvent calls that STAY caller-side because `streamSeq` shared counter not yet migrated)
-- [ ] Add `ReasoningEffortLabel` + `EvaluateReasoningEffortInput` + `ReasoningEffortEvaluation` types in packages/chat-core/src/runtime.ts
-- [ ] Add optional `evaluateReasoningEffort` callback to `ChatRuntimeDeps` (Option A; mirrors Lot 16a/16b pattern)
-- [ ] Add `ChatRuntime.evaluateReasoningEffort(input)` wrapper method (when callback unwired returns `{shouldEvaluate:false, effortLabel:'medium', evaluatedBy:'fallback'}`)
-- [ ] Extract 92-line evaluator body into private method `ChatService.evaluateReasoningEffortInternal(input)` in api/src/services/chat-service.ts
-- [ ] Wire `evaluateReasoningEffort: (input) => this.evaluateReasoningEffortInternal(input)` in constructor
-- [ ] Replace inline evaluation block in `runAssistantGeneration` with `await this.runtime.evaluateReasoningEffort({...})` + 2 caller-side `writeStreamEvent` calls around the runtime call
+- [x] Locate reasoning-effort evaluator block in `runAssistantGeneration` (chat-service.ts lines 2806-2910 post Lot 17; bracketed by 2 status writeStreamEvent calls that STAY caller-side because `streamSeq` shared counter not yet migrated)
+- [x] Add `ReasoningEffortLabel` + `EvaluateReasoningEffortInput` + `ReasoningEffortEvaluation` types in packages/chat-core/src/runtime.ts (result type extended with `evaluatorModel` so caller can preserve the legacy console.error trace shape `{assistantMessageId, sessionId, model, evaluatorModel, error}`)
+- [x] Add optional `evaluateReasoningEffort` callback to `ChatRuntimeDeps` (Option A; mirrors Lot 16a/16b pattern)
+- [x] Add `ChatRuntime.evaluateReasoningEffort(input)` wrapper method (when callback unwired returns `{shouldEvaluate:false, effortLabel:'medium', evaluatedBy:'fallback', evaluatorModel:null}`)
+- [x] Extract 105-line evaluator body into private method `ChatService.evaluateReasoningEffortInternal(input)` in api/src/services/chat-service.ts (early-return for `shouldEvaluate=false` branch + verbatim try/catch with same callLLMStream call + invalid-token throw + fallback evaluatedBy/medium)
+- [x] Wire `evaluateReasoningEffort: (input) => this.evaluateReasoningEffortInternal(input)` in constructor
+- [x] Replace inline evaluation block in `runAssistantGeneration` with `await this.runtime.evaluateReasoningEffort({...})` + 2 caller-side `writeStreamEvent` calls around the runtime call + `console.error` trace caller-side on failure (same order as legacy code)
 - [ ] Add packages/chat-core/tests/runtime-reasoning-effort.test.ts with 6 cases (non-reasoning model fallback / gpt-5 happy 'high' / gemini happy 'low' / invalid token / mesh throws / wrapper without callback wired)
 - [ ] make typecheck-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
 - [ ] make lint-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core

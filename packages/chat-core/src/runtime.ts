@@ -893,6 +893,15 @@ export interface ReasoningEffortEvaluation {
   readonly effortLabel: ReasoningEffortLabel;
   readonly effortForMessage?: ReasoningEffortLabel;
   readonly evaluatedBy: string;
+  /**
+   * Evaluator-side model name (e.g. `'gpt-4.1-nano'` or
+   * `'gemini-3.1-flash-lite-preview'`). Populated whenever
+   * `shouldEvaluate=true` regardless of success/failure — exposed so the
+   * caller can emit the same console.error trace shape that the legacy
+   * inline code produced (`{assistantMessageId, sessionId, model,
+   * evaluatorModel, error}`). `null` when `shouldEvaluate=false`.
+   */
+  readonly evaluatorModel: string | null;
   readonly failure?: { readonly message: string };
 }
 
@@ -2285,6 +2294,7 @@ export class ChatRuntime {
         shouldEvaluate: false,
         effortLabel: 'medium',
         evaluatedBy: 'fallback',
+        evaluatorModel: null,
       };
     }
     return this.deps.evaluateReasoningEffort(input);
