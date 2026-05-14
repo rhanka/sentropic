@@ -48,14 +48,20 @@ export type {
   StreamEventTypeName,
 } from './stream-port.js';
 
+// Re-export the contracts-free SessionStore surface (BR14b Lot 8).
+// Replaces the placeholder `SessionStore { _kind }` that lived here in Lot 3.
+export type {
+  ChatSessionRow,
+  CreateSessionInput,
+  SessionContextUpdate,
+  SessionStore,
+} from './session-port.js';
+
 /**
  * Per SPEC §5 — remaining chat-core ports.
  * Signatures intentionally minimal in BR14b Lot 3 (shell only);
  * full method surface lands progressively as chat-service migrates onto these ports.
  */
-export interface SessionStore {
-  readonly _kind: 'SessionStore';
-}
 
 /**
  * Per SPEC §10.3 — canvas bidirectional editing.
