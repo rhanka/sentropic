@@ -9,3 +9,4 @@ export { InMemorySessionStore } from './session-store.js';
 export { InMemoryStreamBuffer } from './stream-buffer.js';
 export { InMemoryCheckpointStore } from './checkpoint-store.js';
 export { InMemoryMeshDispatch } from './mesh-dispatch.js';
+export { InMemoryStreamSequencer } from './stream-sequencer.js';
