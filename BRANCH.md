@@ -319,3 +319,14 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] make test-api-endpoints SCOPE=tests/api/chat.test.ts PASS (28/28)
 - [x] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts PASS (4/4)
 - [x] make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts PASS (6/6)
+
+## Lot 13 - setMessageFeedback + updateUserMessageContent migration (small atomic pair)
+- [x] Inventory dependencies of the 2 methods
+- [x] Extend ChatRuntime with setMessageFeedback + updateUserMessageContent
+- [x] chat-service.ts delegates 2 methods (public API unchanged)
+- [x] typecheck + tests PASS
+- [x] make typecheck-api PASS
+- [x] make lint-api PASS (0 errors; only pre-existing warnings)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts PASS (4/4)
+- [x] make test-api-endpoints SCOPE=tests/api/chat.test.ts PASS (28/28)
+- [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts PASS (14/14)

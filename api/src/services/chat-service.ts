@@ -1692,28 +1692,20 @@ export class ChatService {
     });
   }
 
+  /**
+   * BR14b Lot 13 — thin delegate. Body migrated verbatim into
+   * `ChatRuntime.setMessageFeedback`. Public signature preserved.
+   */
   async setMessageFeedback(options: { messageId: string; userId: string; vote: 'up' | 'down' | 'clear' }) {
-    const msg = await this.getMessageForUser(options.messageId, options.userId);
-    if (!msg) throw new Error('Message not found');
-    if (msg.role !== 'assistant') throw new Error('Feedback is only allowed on assistant messages');
-
-    return postgresChatMessageStore.setFeedback(
-      options.messageId,
-      options.userId,
-      options.vote,
-    );
+    return this.runtime.setMessageFeedback(options);
   }
 
+  /**
+   * BR14b Lot 13 — thin delegate. Body migrated verbatim into
+   * `ChatRuntime.updateUserMessageContent`. Public signature preserved.
+   */
   async updateUserMessageContent(options: { messageId: string; userId: string; content: string }) {
-    const msg = await this.getMessageForUser(options.messageId, options.userId);
-    if (!msg) throw new Error('Message not found');
-    if (msg.role !== 'user') throw new Error('Only user messages can be edited');
-
-    await postgresChatMessageStore.updateUserContent(options.messageId, options.content);
-
-    await postgresChatSessionStore.touchUpdatedAt(msg.sessionId);
-
-    return { messageId: options.messageId };
+    return this.runtime.updateUserMessageContent(options);
   }
 
   /**
