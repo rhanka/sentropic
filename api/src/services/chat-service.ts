@@ -1859,53 +1859,32 @@ export class ChatService {
     locale?: string;
     signal?: AbortSignal;
   }): Promise<void> {
-    const session = await this.getSessionForUser(options.sessionId, options.userId);
-    if (!session) throw new Error('Session not found');
-
-    const ownerWs = await ensureWorkspaceForUser(options.userId, { createIfMissing: false });
-    const sessionWorkspaceId =
-      session && typeof (session as { workspaceId?: unknown }).workspaceId === 'string'
-        ? ((session as { workspaceId: string }).workspaceId as string)
-        : ownerWs.workspaceId;
-    if (!sessionWorkspaceId) throw new Error('Workspace not found for user');
-    // Read-only mode:
-    // - Hidden workspaces are read-only until unhidden (only /parametres should be used to unhide)
-    // - Otherwise: writable if the user is editor/admin member of the session workspace
-    const hidden = await isWorkspaceDeleted(sessionWorkspaceId);
-    const canWrite = !hidden ? await hasWorkspaceRole(options.userId, sessionWorkspaceId, 'editor') : false;
-    const readOnly = hidden || !canWrite;
-    const currentUserRole = await getWorkspaceRole(options.userId, sessionWorkspaceId);
-
-    const normalizeContexts = (items?: Array<{ contextType: string; contextId: string }>) => {
-      const out: Array<{ contextType: ChatContextType; contextId: string }> = [];
-      for (const item of items ?? []) {
-        const type = item?.contextType;
-        const id = (item?.contextId || '').trim();
-        if (!isChatContextType(type) || !id) continue;
-        const key = `${type}:${id}`;
-        if (out.some((c) => `${c.contextType}:${c.contextId}` === key)) continue;
-        out.push({ contextType: type, contextId: id });
-      }
-      return out;
-    };
-    const contextsOverride = normalizeContexts(options.contexts);
-    const focusContext = contextsOverride[0] ?? null;
-
-    // Charger messages (sans inclure le placeholder assistant)
-    const messages = await postgresChatMessageStore.listForSession(options.sessionId);
-
-    const assistantRow = messages.find((m) => m.id === options.assistantMessageId);
-    if (!assistantRow) throw new Error('Assistant message not found');
-
-    const conversation = messages
-      .filter((m) => m.sequence < assistantRow.sequence)
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content ?? ''
-      }));
-    const lastUserMessage =
-      [...conversation].reverse().find((m) => m.role === 'user')?.content?.trim() || '';
+    // BR14b Lot 15 — precheck slice migrated into
+    // `ChatRuntime.prepareAssistantRun`. Returns the typed
+    // `AssistantRunContext` consumed by the remainder of this method.
+    // Subsequent slices (title generation, prompt build, provider/model
+    // resolution, tool loop, continuation) still live in chat-service.ts
+    // and migrate into the runtime in Lots 16+.
+    const ctx = await this.runtime.prepareAssistantRun({
+      userId: options.userId,
+      sessionId: options.sessionId,
+      assistantMessageId: options.assistantMessageId,
+      contexts: options.contexts,
+    });
+    const session = ctx.session;
+    const sessionWorkspaceId = ctx.sessionWorkspaceId;
+    const readOnly = ctx.readOnly;
+    const currentUserRole = ctx.currentUserRole;
+    const contextsOverride = ctx.contextsOverride as Array<{
+      contextType: ChatContextType;
+      contextId: string;
+    }>;
+    const focusContext = ctx.focusContext as
+      | { contextType: ChatContextType; contextId: string }
+      | null;
+    const assistantRow = ctx.assistantRow;
+    const conversation = ctx.conversation;
+    const lastUserMessage = ctx.lastUserMessage;
 
     if (!session.title) {
       if (lastUserMessage.trim()) {
