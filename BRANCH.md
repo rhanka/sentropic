@@ -231,6 +231,9 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] Update packages/chat-core/src/ports.ts and src/index.ts re-exports (drop _kind stub, add stream-port surface)
 - [x] Create api/src/services/chat/postgres-stream-buffer.ts adapter (verbatim port of stream-service.ts logic incl. advisory-lock atomic path + NOTIFY)
 - [x] Refactor api/src/services/stream-service.ts as thin delegation shim (public function names + signatures preserved verbatim so chat-service.ts / queue-manager.ts / context-document.ts / routes/api/* require zero changes)
-- [ ] make typecheck-api PASS
-- [ ] make test-api-unit SCOPE=tests/unit/stream-service.test.ts PASS
-- [ ] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts PASS
+- [x] make typecheck-api PASS
+- [x] make test-api-unit SCOPE=tests/unit/stream-service.test.ts PASS (25/25 tests)
+- [x] make test-api-unit SCOPE=tests/unit/chat-summary-runtime.test.ts PASS (2/2 tests)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts PASS (1/1 tests)
+- [x] make test-api-endpoints SCOPE=tests/api/streams.test.ts PASS (2/2 tests, incl. SSE replay cursor)
+- [x] make lint-api PASS (0 errors; only pre-existing warnings, none in new/edited files)
