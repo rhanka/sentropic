@@ -3166,7 +3166,108 @@ export class ChatRuntime {
       useCodexTransport: input.useCodexTransport ?? false,
     };
   }
+
+  /**
+   * BR14b Lot 21c — minimal `consumeToolCalls` orchestration shell.
+   *
+   * Lot 21c handles only:
+   *   1. Empty-toolCalls short-circuit (mirrors chat-service.ts line
+   *      3267: `if (toolCalls.length === 0) { continueGenerationLoop =
+   *      false; break; }`). Sets `loopState.continueGenerationLoop =
+   *      false`, returns `shouldBreakLoop: true`.
+   *   2. For-loop with `signal?.aborted` check (throws `AbortError`
+   *      verbatim like the inline body at line 3365).
+   *   3. Local-tool short-circuit (lines 3367-3387): pushes into
+   *      `pendingLocalToolCalls`, emits one `tool_call_result` event
+   *      with `{status:'awaiting_external_result'}` via
+   *      `deps.streamSequencer.allocate` + `deps.streamBuffer.append`,
+   *      and advances `loopState.streamSeq`.
+   *
+   * Non-local tool calls are NOT dispatched yet — Lot 21d will wire
+   * the `executeServerTool` callback + per-tool body (context budget
+   * gate + try/catch + result event + accumulators). Until then this
+   * method is NOT invoked by chat-service.ts (the inline loop body
+   * stays load-bearing) — Lot 21c is a foundation commit that lands
+   * the shell so Lot 21d can extend it without scaffolding churn.
+   *
+   * Note: `loopState.pendingResponsesRawInput = null` (chat-service.ts
+   * line 3264) lives BEFORE the empty-toolCalls check in the inline
+   * body — outside this method's responsibility — and stays caller-side
+   * until Lot 21d.
+   */
+  async consumeToolCalls(
+    input: ConsumeToolCallsInput,
+  ): Promise<ConsumeToolCallsResult> {
+    const { streamId, loopState, localToolNames, signal } = input;
+    if (loopState.toolCalls.length === 0) {
+      loopState.continueGenerationLoop = false;
+      return {
+        toolResults: [],
+        responseToolOutputs: [],
+        pendingLocalToolCalls: [],
+        executedTools: [],
+        shouldBreakLoop: true,
+      };
+    }
+    const pendingLocalToolCalls: Array<{
+      id: string;
+      name: string;
+      args: unknown;
+    }> = [];
+    for (const toolCall of loopState.toolCalls) {
+      if (signal?.aborted) throw new Error('AbortError');
+      const toolName = String(toolCall.name || '').trim();
+      if (toolName && localToolNames.has(toolName)) {
+        pendingLocalToolCalls.push({
+          id: toolCall.id,
+          name: toolName,
+          args: parseToolCallArgsForRuntime(toolCall.args),
+        });
+        const seq = await this.deps.streamSequencer.allocate(streamId);
+        await this.deps.streamBuffer.append(
+          streamId,
+          'tool_call_result',
+          {
+            tool_call_id: toolCall.id,
+            result: { status: 'awaiting_external_result' },
+          },
+          seq,
+          streamId,
+        );
+        loopState.streamSeq = seq + 1;
+        continue;
+      }
+      // Lot 21d: dispatch `deps.executeServerTool` here for non-local
+      // tool calls + accumulate `toolResults` / `responseToolOutputs` /
+      // `executedTools`. Until then this branch is a no-op.
+    }
+    return {
+      toolResults: [],
+      responseToolOutputs: [],
+      pendingLocalToolCalls,
+      executedTools: [],
+      shouldBreakLoop: false,
+    };
+  }
 }
+
+/**
+ * BR14b Lot 21c — verbatim duplicate of `parseToolCallArgs` from
+ * `chat-service.ts` line 265. Module-scope so the local-tool
+ * short-circuit can parse `tool_call.args` without taking the helper
+ * as a dep (same convention as `STEER_REASONING_REPLAY_MAX_CHARS` /
+ * `asRecord` from Lot 21b).
+ */
+const parseToolCallArgsForRuntime = (value: unknown): unknown => {
+  if (typeof value !== 'string') return value ?? {};
+  const trimmed = value.trim();
+  if (!trimmed) return {};
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return {};
+  }
+};
 
 // Suppress the lint warning for the unused parseChatCheckpointKey
 // helper: it is exported as a runtime utility for future debugging /
