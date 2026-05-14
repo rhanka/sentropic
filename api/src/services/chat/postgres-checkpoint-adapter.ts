@@ -7,7 +7,7 @@ import type {
   CheckpointMeta,
   CheckpointStore,
   SaveResult,
-} from '../../../../packages/chat-core/src/ports';
+} from '../../../../packages/chat-core/src/checkpoint-port';
 import type { ChatState } from '../../../../packages/chat-core/src/types';
 
 export const CHAT_CHECKPOINT_CONTEXT_TYPE = 'chat_session_checkpoint';
