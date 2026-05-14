@@ -548,3 +548,22 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (6/6)
 - [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (14/14)
 - [x] Net code change: context-budget.ts +156 (new pure helper module); chat-core/index.ts +1 (re-export); runtime.ts +212 (AssistantRunLoopState + 3 value-helper types + BeginAssistantRunLoopInput + beginAssistantRunLoop method + docstrings); chat-service.ts +51/-41 = +10 net (delete 39-line inline init block + 4-line `let continueGenerationLoop = true` + getNextSequence import + 28-line `writeContextBudgetStatus` closure body; add 14-line beginAssistantRunLoop call + 20-line field destructure + 20-line chat-core context-budget import + thin helper wrapper); tests +198 (context-budget.test.ts 6 cases + runtime-loop-state.test.ts 9 cases). Work split across 4 commits per launch packet plan.
+
+## Lot 21b - runAssistantGeneration mesh stream consumer extraction + streamSeq port migration
+- [x] Locate inline slice (chat-service.ts pre-Lot 21b lines 3203-3384): per-iteration mesh stream consumer body — `try { for await (const event of callLLMStream({...})) { ... } } catch { ... }` + post-loop `if (shouldRetryWithoutPreviousResponse) { ... } if (steerInterruptionRequested) { ... }` blocks. Inventory: 1 `callLLMStream` call, 1 try/catch with `isPreviousResponseNotFoundError` predicate, per-event switch (done/error/content_delta/reasoning_delta/tool_call_start/tool_call_delta + default), steer-interrupt poll at the bottom of the inner loop, 7 `streamSeq +=` mutations within the slice (3239+3245 inner stream writes, 3325 steer-interrupt status, 3354 response-lineage-reset status, 3382 run-resumed-with-steer status). `useCodexTransport` is NOT consumed inside the slice (only in tool dispatch + pass2 downstream).
+- [x] Add `packages/chat-core/src/mesh-errors.ts` with verbatim port of `isPreviousResponseNotFoundError(message)` predicate
+- [x] Re-export from `packages/chat-core/src/index.ts`
+- [x] Add `ConsumeAssistantStreamDoneReason` union + `ConsumeAssistantStreamRequest` + `ConsumeAssistantStreamInput` + `ConsumeAssistantStreamResult` types in `packages/chat-core/src/runtime.ts`
+- [ ] Add `ChatRuntime.consumeAssistantStream(input): Promise<ConsumeAssistantStreamResult>` method (verbatim port of chat-service.ts lines 3203-3384 pre-Lot 21b). All 5 `streamSeq +=` mutations inside the slice migrated to `await this.deps.streamSequencer.allocate(streamId)` + `await this.deps.streamBuffer.append(...)`
+- [ ] Refactor chat-service.ts: drop the 182-line inline mesh consumer block; replace with `await this.runtime.consumeAssistantStream({...})` delegating call + `streamSeq` re-sync from `peekStreamSequence + 1`
+- [ ] Add `packages/chat-core/tests/runtime-stream-consumer.test.ts` (10 cases)
+- [ ] make typecheck-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
+- [ ] make lint-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
+- [ ] make test-pkg-chat-core ENV=test-refacto-chat-service-core
+- [ ] make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
+- [ ] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
+- [ ] make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
+- [ ] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
+- [ ] make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
+- [ ] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core
+- [ ] make test-api-unit SCOPE=tests/unit/stream-service.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core

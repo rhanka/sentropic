@@ -1090,6 +1090,134 @@ export interface BeginAssistantRunLoopInput {
 }
 
 /**
+ * BR14b Lot 21b — terminal reason returned by
+ * `ChatRuntime.consumeAssistantStream`. Mirrors the four control-flow
+ * outcomes the inline mesh stream consumer used to drive
+ * (chat-service.ts lines 3203-3384 pre-Lot 21b):
+ *
+ *   - `'normal'`        — stream reached `done` cleanly; caller proceeds
+ *                          to tool dispatch (or finalization if no tool
+ *                          calls were accumulated).
+ *   - `'retry_without_previous_response'`
+ *                       — mesh rejected the call with a
+ *                          previous-response-not-found error; caller must
+ *                          clear `previousResponseId` +
+ *                          `pendingResponsesRawInput` and restart the
+ *                          iteration.
+ *   - `'steer_interrupted'`
+ *                       — a steer message arrived mid-stream; the
+ *                          consumer aborted early and the caller must
+ *                          merge the steer batch into `currentMessages`
+ *                          and restart the iteration.
+ *   - `'error'`         — the mesh emitted an `error` event (already
+ *                          forwarded to the stream); caller may continue
+ *                          its post-loop error handling (the legacy
+ *                          inline body did not surface a dedicated
+ *                          enum value — the catch path threw — but the
+ *                          runtime captures it explicitly so future
+ *                          callers can branch without re-parsing the
+ *                          error string).
+ */
+export type ConsumeAssistantStreamDoneReason =
+  | 'normal'
+  | 'retry_without_previous_response'
+  | 'steer_interrupted'
+  | 'error';
+
+/**
+ * BR14b Lot 21b — request payload passed to
+ * `ChatRuntime.consumeAssistantStream`. Mirrors the per-iteration mesh
+ * invocation contract previously inlined in
+ * `chat-service.ts` pre-Lot 21b (the literal object passed to
+ * `callLLMStream` at line 3205). Fields stay opaque (`unknown`,
+ * `ReadonlyArray<unknown>`) because chat-core forwards them to the
+ * mesh adapter as-is (same convention as `MeshStreamRequest`).
+ *
+ *   - `providerId` / `model` / `credential` / `userId` / `workspaceId`
+ *     — provider routing inputs.
+ *   - `messages` — the current `currentMessages` array AFTER any
+ *     `applySteerInterruptionPrompt` mutation done by the caller.
+ *   - `tools` — server-side tool catalog (may be undefined for pass2).
+ *   - `toolChoice` — `'auto' | 'required' | 'none'`. The legacy inline
+ *     pass1 uses `pass1ToolChoice` computed by the caller.
+ *   - `reasoningSummary` / `reasoningEffort` — provider reasoning
+ *     controls. Caller passes the validated label from
+ *     `evaluateReasoningEffort`.
+ *   - `previousResponseId` / `rawInput` — Responses-API continuation
+ *     handles. `null` is accepted (legacy code passed `?? undefined`).
+ *   - `signal` — abort signal forwarded to the mesh.
+ */
+export interface ConsumeAssistantStreamRequest {
+  readonly providerId?: string;
+  readonly model?: string;
+  readonly credential?: string;
+  readonly userId?: string;
+  readonly workspaceId?: string;
+  readonly messages: ReadonlyArray<unknown>;
+  readonly tools?: ReadonlyArray<unknown>;
+  readonly toolChoice?: 'auto' | 'required' | 'none';
+  readonly reasoningSummary?: 'auto' | 'concise' | 'detailed';
+  readonly reasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+  readonly previousResponseId?: string | null;
+  readonly rawInput?: ReadonlyArray<unknown> | null;
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * BR14b Lot 21b — input to `ChatRuntime.consumeAssistantStream`. The
+ * runtime mutates `loopState` in place so the caller's destructured
+ * locals (`contentParts`, `reasoningParts`, `toolCalls`, etc.) observe
+ * the streamed deltas immediately upon return — same shape the inline
+ * loop body produced pre-Lot 21b.
+ *
+ *   - `streamId` — used to allocate sequences via
+ *     `deps.streamSequencer.allocate` and to persist events via
+ *     `deps.streamBuffer.append`. Equal to `assistantMessageId` in
+ *     practice (the chat-service caller passes it).
+ *   - `loopState` — mutable run-loop value carrier produced by
+ *     `beginAssistantRunLoop`. The runtime mutates these fields:
+ *       * `contentParts.push(delta)` on `content_delta`
+ *       * `reasoningParts.push(delta)` + `steerReasoningReplay` cursor
+ *         on `reasoning_delta`
+ *       * `toolCalls` slot upsert on `tool_call_start` / `_delta`
+ *       * `previousResponseId` reassignment on `status.response_id`
+ *       * `lastErrorMessage` capture on `error`
+ *       * `lastObservedStreamSequence` advance on steer poll
+ *   - `request` — mesh request payload (see `ConsumeAssistantStreamRequest`).
+ */
+export interface ConsumeAssistantStreamInput {
+  readonly streamId: string;
+  readonly loopState: AssistantRunLoopState;
+  readonly request: ConsumeAssistantStreamRequest;
+}
+
+/**
+ * BR14b Lot 21b — return shape of `ChatRuntime.consumeAssistantStream`.
+ * Reports the terminal reason + the captured steer batch (when the
+ * stream was interrupted). The mutable state is on `loopState` (passed
+ * by reference), so most fields the inline body produced are observed
+ * via the input — only the fields that are NOT on `loopState` surface
+ * here.
+ *
+ *   - `doneReason` — see `ConsumeAssistantStreamDoneReason`.
+ *   - `steerInterruptionBatch` — populated when `doneReason ===
+ *     'steer_interrupted'`. Empty when other reasons. The caller
+ *     consumes this to mutate `steerHistoryMessages` +
+ *     `currentMessages` for the next iteration.
+ *   - `errorMessage` — populated when the consumer captured an
+ *     `error` event (mirrors `lastErrorMessage` on the state) or when
+ *     the catch branch threw because the error wasn't a
+ *     previous-response-not-found match (in which case the runtime
+ *     re-throws, same as the inline body — `errorMessage` then
+ *     remains `undefined`).
+ */
+export interface ConsumeAssistantStreamResult {
+  readonly doneReason: ConsumeAssistantStreamDoneReason;
+  readonly steerInterruptionBatch: ReadonlyArray<string>;
+  readonly errorMessage?: string;
+}
+
+/**
  * Verbatim duplicate of `asRecord` in `chat-service.ts` (line ~261).
  * Tiny pure helper, duplicated rather than re-imported to keep
  * chat-core free of any api/* module dependency.
