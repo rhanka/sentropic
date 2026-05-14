@@ -444,3 +444,19 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] `make test-pkg-chat-core ENV=test-refacto-chat-service-core` PASS (7 files, 69/69 tests; runtime.ts 85.38% lines; in-memory adapters 94.08% lines)
 - [x] `make typecheck-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core` PASS (regression check)
 - [x] `make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core` PASS (2/2 tests)
+
+## Lot 17 - runAssistantGeneration Slice C-1 dedup (resolveModelSelection reuse)
+- [x] Locate inline 4-helpers block in `runAssistantGeneration` (chat-service.ts lines 2789-2808 post Lot 16b: settingsService.getAISettings + getModelCatalogPayload + inferProviderFromModelIdWithLegacy + resolveDefaultSelection, 20 lines)
+- [x] Verify Lot 12 callback `resolveModelSelection` signature in runtime.ts (input `{userId, providerId?, model?}` → `{provider_id, model_id}`)
+- [x] Add public wrapper `ChatRuntime.resolveModelSelection(input)` in runtime.ts (slim delegate to `this.deps.resolveModelSelection`; needed because `deps` is `private readonly`)
+- [x] Replace inline 4-helpers block in `runAssistantGeneration` with `await this.runtime.resolveModelSelection({userId, providerId: options.providerId, model: options.model || assistantRow.model})` + cast `provider_id as ProviderId` (mirrors Lot 12 delegate pattern in retryUserMessage)
+- [x] Imports `settingsService`, `getModelCatalogPayload`, `inferProviderFromModelIdWithLegacy`, `resolveDefaultSelection` retained (still consumed by the Lot 12 callback closure at chat-service.ts line 810)
+- [x] make typecheck-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
+- [x] make lint-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (0 errors; only pre-existing warnings)
+- [x] make test-pkg-chat-core ENV=test-refacto-chat-service-core PASS (8 files, 82/82 tests)
+- [x] make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (28/28)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (4/4)
+- [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (14/14)
+- [x] Net code change: chat-service.ts -19/+11 = -8 lines (20-line inline block removed, 12-line delegate + Lot-17 comment block added); runtime.ts +16 (slim public wrapper method); +8 net total. Pure dedup, behavior preserved.
