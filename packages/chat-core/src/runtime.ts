@@ -1,5 +1,5 @@
 /**
- * BR14b Lot 9/10 — chat orchestration extraction.
+ * BR14b Lot 9/10/11 — chat orchestration extraction.
  *
  * `ChatRuntime` is the home of chat orchestration that lives above the
  * persistence/stream ports already extracted in Lots 4/6/7/8 + the mesh
@@ -16,20 +16,36 @@
  *                            (`finalizeAssistantMessageFromStream`) into
  *                            the runtime.
  *
- *   Lot 10  (THIS LOT)    — Design `MeshDispatchPort` (contracts-free mesh
- *                            invocation surface) and migrate
+ *   Lot 10  (DONE)        — Designed `MeshDispatchPort` (contracts-free
+ *                            mesh invocation surface) and migrated
  *                            `acceptLocalToolResult` + its private helper
  *                            `extractAwaitingLocalToolState` into the
- *                            runtime as a verbatim port. Replaces the
- *                            `invokeModel?: unknown` placeholder with the
- *                            typed `mesh: MeshDispatchPort` DI hook. The
- *                            migrated method does NOT call the mesh (it
- *                            only reads/writes stream events) — the port
- *                            is wired now so upcoming lots (continuation
- *                            generation, reasoning loop) plug in without
- *                            churning the constructor signature.
+ *                            runtime. Replaces the `invokeModel?: unknown`
+ *                            placeholder with the typed
+ *                            `mesh: MeshDispatchPort` DI hook.
  *
- *   Lots 11+ (NEXT)       — Move continuation generation, tool loop,
+ *   Lot 11  (THIS LOT)    — Refactor `postgresChatCheckpointAdapter` to
+ *                            strictly implement the generic
+ *                            `CheckpointStore<ChatState>` port (load /
+ *                            save / list / delete + optional tag/fork)
+ *                            and migrate the three session-aware
+ *                            checkpoint methods
+ *                            (`createCheckpointForSession` /
+ *                            `listCheckpointsForSession` /
+ *                            `restoreCheckpointForSession`) from the
+ *                            adapter into the runtime as orchestration:
+ *                            `ChatRuntime.createCheckpoint` /
+ *                            `listCheckpoints` / `restoreCheckpoint`.
+ *                            Composes `CheckpointStore.save/load/list/delete`
+ *                            + `MessageStore.listForSession` +
+ *                            `MessageStore.deleteAfterSequence` +
+ *                            `SessionStore.touchUpdatedAt`. Drops the
+ *                            `as unknown as CheckpointStore<ChatState>`
+ *                            cast that lived in `chat-service.ts` Lots
+ *                            9/10 because the adapter is now strictly
+ *                            typed.
+ *
+ *   Lots 12+ (NEXT)       — Move continuation generation, tool loop,
  *                            reasoning loop, cancel, retry, and finally
  *                            `runAssistantGeneration` itself into the
  *                            runtime. Mesh dispatch routes through
@@ -42,18 +58,29 @@
  *
  * Behavior preservation is the absolute contract: each migrated method is
  * a verbatim move (line-for-line) of the body that lived in
- * `chat-service.ts`. The only changes are: (a) `this.deps.*` instead of
- * the module-level adapter singletons, (b) helper functions previously
+ * `chat-service.ts` (Lots 9/10) or in `postgresChatCheckpointAdapter`
+ * (Lot 11). The only differences are: (a) `this.deps.*` instead of the
+ * module-level adapter singletons, (b) helper functions previously
  * defined at module scope in `chat-service.ts` (`asRecord`,
- * `isValidToolName`) are duplicated here as private module-scoped helpers
- * since they are tiny pure utilities, and (c) the `normalizeVsCodeCodeAgent`
- * callback is injected via deps because the full normalizer body in
- * `chat-service.ts` is reused by other call-sites (system-prompt build,
- * instruction rendering) that do not move into the runtime in this lot.
+ * `isValidToolName`) are duplicated here as private module-scoped
+ * helpers since they are tiny pure utilities, (c) the
+ * `normalizeVsCodeCodeAgent` callback is injected via deps because the
+ * full normalizer body in `chat-service.ts` is reused by other
+ * call-sites, and (d) Lot 11 checkpoint orchestration uses
+ * `MessageStore.listForSession` (returns the full `chat_messages` row
+ * set) instead of the previous direct `db.select(...)` of the same
+ * columns — the resulting `ChatStateSnapshot.messages` payload is shape-
+ * identical to the legacy on-disk snapshot.
  */
-import type { ChatState } from './types.js';
+import { randomUUID } from 'node:crypto';
+
+import type {
+  ChatState,
+  ChatStateSnapshot,
+  ChatStateSnapshotMessage,
+} from './types.js';
 import type { CheckpointStore } from './checkpoint-port.js';
-import type { MessageStore } from './message-port.js';
+import type { ChatMessageRow, MessageStore } from './message-port.js';
 import type { SessionStore } from './session-port.js';
 import type { StreamBuffer, StreamEventTypeName } from './stream-port.js';
 import type { MeshDispatchPort } from './mesh-port.js';
@@ -182,6 +209,60 @@ export type FinalizeAssistantResult = {
 };
 
 /**
+ * Summary returned by `ChatRuntime.createCheckpoint` /
+ * `listCheckpoints` / projected from `ChatState` snapshots.
+ *
+ * Pre-Lot 11 the type lived in
+ * `api/src/services/chat/postgres-checkpoint-adapter.ts` because the
+ * adapter exposed session-aware orchestration. With Lot 11 the
+ * orchestration moved into the runtime; the type follows it here so
+ * the chat-service facade imports it from chat-core. The shape is
+ * unchanged.
+ */
+export type ChatCheckpointSummary = {
+  id: string;
+  title: string;
+  anchorMessageId: string;
+  anchorSequence: number;
+  messageCount: number;
+  createdAt: string;
+};
+
+/**
+ * Options for `ChatRuntime.createCheckpoint`. Mirrors the existing
+ * `postgresChatCheckpointAdapter.createCheckpointForSession` shape.
+ */
+export type CreateCheckpointOptions = {
+  readonly sessionId: string;
+  readonly title?: string | null;
+  readonly anchorMessageId?: string | null;
+};
+
+/**
+ * Options for `ChatRuntime.listCheckpoints`. Mirrors the existing
+ * `postgresChatCheckpointAdapter.listCheckpointsForSession` shape.
+ */
+export type ListCheckpointsOptions = {
+  readonly sessionId: string;
+  readonly limit?: number;
+};
+
+/**
+ * Options for `ChatRuntime.restoreCheckpoint`. Mirrors the existing
+ * `postgresChatCheckpointAdapter.restoreCheckpointForSession` shape.
+ */
+export type RestoreCheckpointOptions = {
+  readonly sessionId: string;
+  readonly checkpointId: string;
+};
+
+export type RestoreCheckpointResult = {
+  checkpointId: string;
+  restoredToSequence: number;
+  removedMessages: number;
+};
+
+/**
  * Options for `ChatRuntime.acceptLocalToolResult`. Mirrors the existing
  * `ChatService.acceptLocalToolResult` shape verbatim.
  */
@@ -214,6 +295,85 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
  */
 const isValidToolName = (value: string): boolean =>
   /^[a-zA-Z0-9_-]{1,64}$/.test(value);
+
+/**
+ * Composite-key encoder for `CheckpointStore<ChatState>`. Mirrors the
+ * encoder owned by the postgres adapter byte-for-byte so the runtime
+ * and the adapter agree on the key shape. Duplicated rather than
+ * imported because chat-core must not depend on `api/*`.
+ *
+ * Format: `${sessionId}#${checkpointId}`. The `#` separator is
+ * forbidden in our id alphabet (UUID v4 characters), guaranteeing
+ * unambiguous parsing.
+ */
+const CHAT_CHECKPOINT_KEY_SEPARATOR = '#';
+
+const encodeChatCheckpointKey = (
+  sessionId: string,
+  checkpointId: string,
+): string => `${sessionId}${CHAT_CHECKPOINT_KEY_SEPARATOR}${checkpointId}`;
+
+const parseChatCheckpointKey = (
+  key: string,
+): { sessionId: string; checkpointId: string } | null => {
+  const idx = key.indexOf(CHAT_CHECKPOINT_KEY_SEPARATOR);
+  if (idx <= 0 || idx === key.length - 1) return null;
+  return {
+    sessionId: key.slice(0, idx),
+    checkpointId: key.slice(idx + 1),
+  };
+};
+
+/**
+ * Project a `ChatStateSnapshot` (loaded via `CheckpointStore.load`)
+ * back into the `ChatCheckpointSummary` shape that the chat API
+ * surface returns. Mirrors the mapping previously embedded in
+ * `postgresChatCheckpointAdapter.listCheckpointsForSession`.
+ */
+const summaryFromSnapshot = (
+  snapshot: ChatStateSnapshot,
+  createdAtIso: string,
+): ChatCheckpointSummary => {
+  const titleRaw = String(snapshot.title ?? '').trim();
+  const anchorMessageId = String(snapshot.anchorMessageId ?? '').trim();
+  const anchorSequence = Number(snapshot.anchorSequence ?? 0);
+  const messageCount = Number(snapshot.messageCount ?? 0);
+  return {
+    id: snapshot.id,
+    title: titleRaw || `Checkpoint #${anchorSequence || 0}`,
+    anchorMessageId,
+    anchorSequence: Number.isFinite(anchorSequence) ? anchorSequence : 0,
+    messageCount: Number.isFinite(messageCount) ? messageCount : 0,
+    createdAt: createdAtIso,
+  };
+};
+
+/**
+ * Project a `ChatMessageRow` (from `MessageStore.listForSession`)
+ * into the `ChatStateSnapshotMessage` shape persisted in the
+ * checkpoint payload. Mirrors the inline mapping previously embedded
+ * in `postgresChatCheckpointAdapter.createCheckpointForSession`
+ * (snapshotMessages map). Selects the same column set verbatim.
+ */
+const snapshotMessageFromRow = (
+  message: ChatMessageRow,
+): ChatStateSnapshotMessage => ({
+  id: message.id,
+  role: message.role,
+  content: message.content,
+  contexts: message.contexts,
+  toolCalls: message.toolCalls,
+  toolCallId: message.toolCallId,
+  reasoning: message.reasoning,
+  model: message.model,
+  promptId: message.promptId,
+  promptVersionId: message.promptVersionId,
+  sequence: message.sequence,
+  createdAt:
+    message.createdAt instanceof Date
+      ? message.createdAt.toISOString()
+      : String(message.createdAt ?? ''),
+});
 
 /**
  * Verbatim duplicate of `ChatService.serializeToolOutput` (line ~865).
@@ -553,4 +713,200 @@ export class ChatRuntime {
       },
     };
   }
+
+  /**
+   * Create a checkpoint of the current session state, anchored at a
+   * specific message (defaults to the latest message). Composes
+   * `MessageStore.listForSession` (read all messages, ordered by
+   * sequence) + `CheckpointStore.save` (persist the snapshot under
+   * key `${sessionId}#${checkpointId}`).
+   *
+   * Migrated verbatim from
+   * `PostgresChatCheckpointAdapter.createCheckpointForSession`
+   * (BR14b Lot 4). Differences are limited to:
+   *   (a) `db.select(...).from(chatMessages).where(...).orderBy(...)`
+   *       becomes `this.deps.messageStore.listForSession(sessionId)`
+   *       which already SELECTs the full column set ordered by
+   *       `sequence ASC`;
+   *   (b) `db.insert(chatContexts).values(...)` becomes
+   *       `this.deps.checkpointStore.save(key, state)` — the adapter
+   *       owns the table mapping;
+   *   (c) Caller (chat-service.ts) is responsible for the
+   *       session-owner authz check (`getSessionForUser`) before
+   *       invoking this method; the runtime does not enforce it
+   *       because the persistence layer is tenant-agnostic by design.
+   */
+  async createCheckpoint(
+    options: CreateCheckpointOptions,
+  ): Promise<ChatCheckpointSummary> {
+    const messages = await this.deps.messageStore.listForSession(
+      options.sessionId,
+    );
+
+    if (messages.length === 0) {
+      throw new Error('Cannot create checkpoint on an empty session');
+    }
+
+    const anchorMessage =
+      (options.anchorMessageId
+        ? messages.find((message) => message.id === options.anchorMessageId)
+        : null) ?? messages[messages.length - 1];
+    if (!anchorMessage) throw new Error('Anchor message not found');
+
+    const anchorSequence = Number(anchorMessage.sequence ?? 0);
+    if (!Number.isFinite(anchorSequence) || anchorSequence <= 0) {
+      throw new Error('Invalid checkpoint anchor sequence');
+    }
+
+    const snapshotMessages = messages
+      .filter((message) => Number(message.sequence ?? 0) <= anchorSequence)
+      .map(snapshotMessageFromRow);
+
+    const checkpointId = randomUUID();
+    const now = new Date();
+    const title =
+      typeof options.title === 'string' && options.title.trim().length > 0
+        ? options.title.trim()
+        : `Checkpoint #${anchorSequence}`;
+
+    const snapshot: ChatStateSnapshot = {
+      id: checkpointId,
+      title,
+      anchorMessageId: anchorMessage.id,
+      anchorSequence,
+      messageCount: snapshotMessages.length,
+      messages: snapshotMessages,
+    };
+
+    const state: ChatState = {
+      sessionId: options.sessionId,
+      snapshot,
+      modifications: {
+        action: 'checkpoint_create',
+        anchorMessageId: anchorMessage.id,
+        anchorSequence,
+      },
+      createdAt: now.toISOString(),
+    };
+
+    await this.deps.checkpointStore.save(
+      encodeChatCheckpointKey(options.sessionId, checkpointId),
+      state,
+    );
+
+    return {
+      id: checkpointId,
+      title,
+      anchorMessageId: anchorMessage.id,
+      anchorSequence,
+      messageCount: snapshotMessages.length,
+      createdAt: now.toISOString(),
+    };
+  }
+
+  /**
+   * List checkpoints for a session, newest first. Composes
+   * `CheckpointStore.list(prefix=sessionId, limit)` to retrieve the
+   * meta rows and `CheckpointStore.load(key)` per row to reconstruct
+   * the `ChatCheckpointSummary` shape (title, anchorMessageId,
+   * anchorSequence, messageCount) that the chat surface expects.
+   *
+   * Migrated verbatim from
+   * `PostgresChatCheckpointAdapter.listCheckpointsForSession`
+   * (BR14b Lot 4). Difference: the previous implementation issued a
+   * single SQL SELECT that returned the snapshot JSONB inline.
+   * The generic port's `list` returns only `CheckpointMeta` (key +
+   * version + timestamps); reconstructing the rich summary requires
+   * a follow-up `load(key)` per row. For the chat domain's default
+   * `limit=20` cap this is acceptable; if a future workload reveals
+   * a hot path we can revisit by extending the port or introducing
+   * a dedicated `summaries(prefix, limit)` overload.
+   *
+   * Behavior preservation: output shape is byte-for-byte identical
+   * to the legacy implementation; ordering (newest first by
+   * createdAt) is preserved by the adapter's `list` ORDER BY.
+   */
+  async listCheckpoints(
+    options: ListCheckpointsOptions,
+  ): Promise<ChatCheckpointSummary[]> {
+    const metas = await this.deps.checkpointStore.list(
+      options.sessionId,
+      options.limit,
+    );
+
+    const summaries: ChatCheckpointSummary[] = [];
+    for (const meta of metas) {
+      const loaded = await this.deps.checkpointStore.load(meta.key);
+      if (!loaded) continue;
+      summaries.push(summaryFromSnapshot(loaded.state.snapshot, meta.createdAt));
+    }
+    return summaries;
+  }
+
+  /**
+   * Restore a checkpoint by truncating all messages strictly above
+   * its anchor sequence and touching the session `updatedAt`.
+   * Composes `CheckpointStore.load` (read snapshot to extract
+   * anchorSequence) + `MessageStore.deleteAfterSequence` (truncate)
+   * + `SessionStore.touchUpdatedAt` (bump session timestamp).
+   *
+   * Migrated verbatim from
+   * `PostgresChatCheckpointAdapter.restoreCheckpointForSession`
+   * (BR14b Lot 4). Differences are limited to:
+   *   (a) `db.select(...).from(chatContexts).where(id+sessionId+type)`
+   *       becomes `this.deps.checkpointStore.load(key)`;
+   *   (b) `db.delete(chatMessages).where(sessionId+sequence>anchor)`
+   *       becomes `this.deps.messageStore.deleteAfterSequence(...)`;
+   *   (c) `db.update(chatSessions).set({updatedAt})` becomes
+   *       `this.deps.sessionStore.touchUpdatedAt(sessionId)`;
+   *   (d) The `removedMessages` count: the legacy adapter used
+   *       `RETURNING { id }` to count deleted rows. The
+   *       `MessageStore.deleteAfterSequence` port returns void; we
+   *       compute the count up-front by listing messages with
+   *       `sequence > anchorSequence` via `listForSession` then
+   *       filtering — same value, one extra read. Chat sessions are
+   *       small (tens to low hundreds of messages typically) so the
+   *       cost is negligible. This preserves the public API's
+   *       `removedMessages` contract.
+   */
+  async restoreCheckpoint(
+    options: RestoreCheckpointOptions,
+  ): Promise<RestoreCheckpointResult> {
+    const key = encodeChatCheckpointKey(
+      options.sessionId,
+      options.checkpointId,
+    );
+    const loaded = await this.deps.checkpointStore.load(key);
+    if (!loaded) throw new Error('Checkpoint not found');
+
+    const restoredToSequence = Number(loaded.state.snapshot.anchorSequence ?? 0);
+    if (!Number.isFinite(restoredToSequence) || restoredToSequence <= 0) {
+      throw new Error('Invalid checkpoint payload');
+    }
+
+    const messages = await this.deps.messageStore.listForSession(
+      options.sessionId,
+    );
+    const removedMessages = messages.filter(
+      (message) => Number(message.sequence ?? 0) > restoredToSequence,
+    ).length;
+
+    await this.deps.messageStore.deleteAfterSequence(
+      options.sessionId,
+      restoredToSequence,
+    );
+    await this.deps.sessionStore.touchUpdatedAt(options.sessionId);
+
+    return {
+      checkpointId: options.checkpointId,
+      restoredToSequence,
+      removedMessages,
+    };
+  }
 }
+
+// Suppress the lint warning for the unused parseChatCheckpointKey
+// helper: it is exported as a runtime utility for future debugging /
+// migration tooling. Keeping it next to `encodeChatCheckpointKey`
+// ensures the key shape stays symmetric in one file.
+void parseChatCheckpointKey;
