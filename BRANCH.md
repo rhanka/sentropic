@@ -513,13 +513,14 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] Drop unused `reasoningEffortLabel` and `reasoningEffortBy` locals (now consumed inside the runtime itself)
 - [x] Update 6 chat-core test fixtures (runtime-message, runtime-session, runtime-precheck, runtime-tool-loop, runtime-system-prompt, runtime-checkpoint, runtime-reasoning-effort) to inject `InMemoryStreamSequencer` into `ChatRuntimeDeps`
 - [x] Extend `packages/chat-core/tests/runtime-reasoning-effort.test.ts` with bracketing coverage (7 new cases): 1-event happy path / 2-event failure-path-in-order / no-event callback-unwired / no-event non-reasoning-model / monotonic seq across multiple calls / per-streamId isolation / messageId set on row
-- [ ] make typecheck-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
-- [ ] make lint-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
-- [ ] make test-pkg-chat-core ENV=test-refacto-chat-service-core PASS (11 files, ~108 tests)
-- [ ] make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
-- [ ] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
-- [ ] make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
-- [ ] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
-- [ ] make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
-- [ ] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
-- [ ] make test-api-unit SCOPE=tests/unit/stream-service.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
+- [x] make typecheck-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
+- [x] make lint-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (0 errors; only pre-existing warnings)
+- [x] make test-pkg-chat-core ENV=test-refacto-chat-service-core PASS (11 files, 113/113 tests; stream-sequencer.ts coverage 100% lines / 100% branches; runtime.ts coverage 85.31%)
+- [x] make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (28/28)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-summary-contract.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (1/1)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (4/4)
+- [x] make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (6/6)
+- [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (14/14)
+- [x] make test-api-unit SCOPE=tests/unit/stream-service.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS (25/25)
+- [x] Net code change: stream-sequencer-port.ts +64 (new port); in-memory/stream-sequencer.ts +38 (new adapter); in-memory/index.ts +1, index.ts +1 (re-exports); postgres-stream-sequencer-adapter.ts +53 (new adapter); runtime.ts +154/-12 = +142 net (StreamSequencer DI + streamId on EvaluateReasoningEffortInput + reclaim of 2 status events inside `evaluateReasoningEffort` + `allocateStreamSequence` / `peekStreamSequence` public wrappers + docstring updates); chat-service.ts +21/-28 = -7 net (drop 2 `writeStreamEvent` bracketing calls + 2 `streamSeq += 1` mutations + 2 unused locals, add `streamId` to runtime input + `peek+1` re-sync + 1 import + Lot-20 comment); 6 chat-core fixtures +18 (mechanical `streamSequencer: new InMemoryStreamSequencer()` add); tests/stream-sequencer.test.ts +73 (new file, 6 cases); tests/runtime-reasoning-effort.test.ts +162 (new bracketing describe block, 7 cases). Work split across 4 commits per launch packet plan.
