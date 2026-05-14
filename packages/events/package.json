@@ -1,0 +1,39 @@
+{
+  "name": "@sentropic/events",
+  "version": "0.1.0",
+  "description": "Wire-protocol StreamEvent taxonomy (v1) for @sentropic/* packages; re-exports transverse contracts from @sentropic/contracts.",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/entropic.git",
+    "directory": "packages/events"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sentropic/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5"
+  }
+}
