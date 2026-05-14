@@ -1,23 +1,28 @@
-# Feature: PLAN.md roadmap refresh (chore)
+# Fix: Resolve 4 HIGH Dependabot vulnerabilities
 
 ## Objective
-Refresh root `PLAN.md` to mirror the current orchestration state (BR-14c, BR-14g, BR-24, fix-mistral merged; BR-23 study complete with PR open; BR-14b in progress; BR-25 in study), surface forthcoming branches (BR-flow, BR-marketplace, BR-graphify, BR-persistence-git, BR-triggers), and record the 2026-05-13 repo merge policy (merge-commit only).
+Resolve all 4 HIGH severity Dependabot alerts on `rhanka/entropiq` by upgrading the affected npm packages to non-vulnerable versions. No workaround, no ignore, no downgrade. Real upgrades only.
 
 ## Scope / Guardrails
-- Scope limited to documentation: `PLAN.md` update + this `BRANCH.md` creation.
-- One migration max in `api/drizzle/*.sql` (not applicable — doc-only).
+- Scope limited to npm package upgrades for vulnerable dependencies in `api/`, `ui/`, and root workspace.
+- No code changes unless an API break in an upgraded package requires a 1-2 line consumer adjustment.
 - Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/entropiq` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development must happen in isolated worktree `tmp/chore-plan-roadmap-refresh` (even for one active branch).
-- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
-- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). Not applicable — doc-only.
+- Root workspace `~/src/entropiq` reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development happens in isolated worktree `tmp/fix-security-high-vulnerabilities` with `ENV=test-fix-security-high-vulnerabilities`.
+- Slot 0 ports: API_PORT=9090, UI_PORT=5180, MAILDEV_UI_PORT=1090.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `PLAN.md`
   - `BRANCH.md`
+  - `package.json`
+  - `package-lock.json`
+  - `api/package.json`
+  - `api/package-lock.json`
+  - `ui/package.json`
+  - `ui/package-lock.json`
+  - `packages/*/package.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -25,59 +30,82 @@ Refresh root `PLAN.md` to mirror the current orchestration state (BR-14c, BR-14g
   - `plan/NN-BRANCH_*.md`
   - `rules/**`
   - `spec/**`
-  - `api/**`
-  - `ui/**`
+  - `api/src/**`
+  - `ui/src/**`
+  - `packages/*/src/**`
   - `e2e/**`
-  - `packages/**`
-  - any other path
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - none
+- **Conditional Paths (allowed only with explicit exception)**:
+  - `api/drizzle/*.sql`
+  - `.github/workflows/**`
+  - `.security/vulnerability-register.yaml`
 - **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Declare exception ID `BR-SEC-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- none.
+- BR-SEC-N1 (`attention`): `tests/unit/google-drive-oauth.test.ts > derives the public app return base URL from the current sent-tech API host` fails locally because the worktree `.env` defines `AUTH_CALLBACK_BASE_URL=http://localhost:5173`, which leaks into the test process. The function reads `AUTH_CALLBACK_BASE_URL` before the test's `delete process.env.AUTH_CALLBACK_BASE_URL` takes effect. Verified pre-existing on origin/main (same failure with no changes applied). CI confirms test passes when env var is absent. Not a regression caused by this branch. Recommend: separate hardening branch to make the test resilient to ambient env vars (e.g., `vi.stubEnv` or read env lazily inside the function).
 
 ## AI Flaky tests
-- Not applicable — doc-only branch with no tests.
+- Not applicable. This branch does not touch AI runtime.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: doc-only refresh, no CI need, single PLAN.md target.
+- [x] **Mono-branch + cherry-pick**
+- [ ] **Multi-branch**
+- Rationale: Security patches share the same workspace and lockfile churn; mono-branch with one commit per CVE keeps history clean.
 
 ## UAT Management (in orchestration context)
-- Not applicable — doc-only branch, no UI/API surface change.
+- Mono-branch. Smoke check on API unit tests and contract tests only. No manual UAT required for dep upgrades.
+
+## HIGH Dependabot Alerts Inventory
+- Alert #135: `fast-xml-builder` 1.1.4 -> 1.1.7+ (CVE-2026-44665, GHSA-5wm8-gmm8-39j9, transitive in `api/package-lock.json`)
+- Alert #94: `vite` 7.3.1 -> 7.3.2+ (CVE-2026-39363, GHSA-p9ff-h696-f583, direct devDep in `ui/`)
+- Alert #93: `vite` 7.3.1 -> 7.3.2+ (CVE-2026-39364, GHSA-v2wj-q39q-566r, same fix as #94)
+- Alert #72: `flatted` 3.4.1 -> 3.4.2+ (CVE-2026-33228, GHSA-rf6f-7fwh-wjgh, transitive in `ui/package-lock.json`)
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & inventory**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/conductor.md`.
-  - [x] Read current `PLAN.md` (state to refresh) and `plan/BRANCH_TEMPLATE.md`.
-  - [x] Read `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` §1 + §11, `SPEC_STUDY_AGENT_AUTONOMY_INCREMENTS.md` §6, `SPEC_STUDY_SKILLS_TOOLS_VS_AGENT_MARKETPLACE.md`.
-  - [x] Create worktree `tmp/chore-plan-roadmap-refresh` on branch `chore/plan-roadmap-refresh` from `origin/main`.
-  - [x] Confirm scope (BRANCH.md + PLAN.md only) and guardrails.
-  - [x] Environment mapping: `ENV=test-chore-plan-roadmap-refresh`; no services required (doc-only).
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/security.md`, `plan/BRANCH_TEMPLATE.md`.
+  - [x] Create isolated worktree `tmp/fix-security-high-vulnerabilities` on `origin/main`.
+  - [x] Confirm scope boundaries.
+  - [x] Inventory HIGH Dependabot alerts via `gh api`.
 
-- [x] **Lot 1 — PLAN.md refresh**
-  - [x] Section A — replace stale status header with current state:
-    - BR-14c MERGED (PR #141, 2026-05-11)
-    - BR-14g MERGED (PR #146)
-    - BR-24 MERGED (PR #147)
-    - fix-mistral MERGED (PR #145)
-    - BR-23 SCOPING COMPLETED 2026-05-13, PR open, awaiting SPEC_VOL validation
-    - BR-14b IN PROGRESS — Lot 1 contracts (`16163ffc`), Lot 2 events (`9cc76b61`), Lot 3 chat-core shell pending
-    - BR-14a Lot 0 scoping complete (commit `c5cc6da1`)
-    - BR-25 chore/rules-skills-audit in study mode (17/46 checkboxes)
-  - [x] Section C — add repo policy note (2026-05-13): squash merge DISABLED, rebase merge DISABLED, merge commit ONLY, `delete_branch_on_merge` DISABLED.
-  - [x] Section B — append new branches to §3 catalog: BR-flow, BR-marketplace, BR-graphify, BR-persistence-git, BR-triggers.
-  - [x] Update existing rows: BR-14b status, BR-14a status + target rename `@sentropic/chat` → `@sentropic/chat-ui`, BR-23 status, BR-25 status.
-  - [x] Lot gate (doc-only):
-    - [x] No typecheck/lint/test required.
-    - [x] Verify `PLAN.md` is well-formed Markdown (visual review).
+- [x] **Lot 1 — Upgrade `vite` in `ui/` to 7.3.2+ (CVE-2026-39363, CVE-2026-39364)**
+  - [x] Bump direct devDep `vite` in `ui/package.json` to `^7.3.2` (resolved to 7.3.3).
+  - [x] `make install-ui-dev NPM_LIB=vite@^7.3.2 ENV=test-fix-security-high-vulnerabilities`
+  - [x] Regenerate stale `ui/package-lock.json` (workspace-local) via isolated install in container.
+  - [x] Lot gate:
+    - [x] `make typecheck-ui ENV=test-fix-security-high-vulnerabilities` -> 0 errors
+    - [x] `make lint-ui ENV=test-fix-security-high-vulnerabilities` -> clean
+    - [x] `make test-ui ENV=test-fix-security-high-vulnerabilities` -> 370/370 pass
+  - [x] Atomic commit: `fix(security): upgrade vite to 7.3.3 (CVE-2026-39363 CVE-2026-39364 high)`
 
-- [x] **Lot 2 — Commit**
-  - [x] `git add BRANCH.md PLAN.md`
-  - [x] `make commit MSG="docs: refresh PLAN.md status and add 5 new branches plus repo policy note"`
-  - [x] No push, no PR (let user review).
+- [x] **Lot 2 — Upgrade `flatted` to 3.4.2+ via override (CVE-2026-33228)**
+  - [x] Update `ui/package.json` `overrides.flatted` to `^3.4.2`.
+  - [x] Refresh `ui/package-lock.json` via isolated regenerate in container.
+  - [x] Lot gate:
+    - [x] `make typecheck-ui ENV=test-fix-security-high-vulnerabilities` -> 0 errors
+    - [x] `make lint-ui ENV=test-fix-security-high-vulnerabilities` -> clean
+    - [x] `make test-ui ENV=test-fix-security-high-vulnerabilities` -> 370/370 pass
+  - [x] Atomic commit: `fix(security): upgrade flatted to 3.4.2 (CVE-2026-33228 high)`
+
+- [x] **Lot 3 — Upgrade `fast-xml-builder` to 1.1.7+ via override (CVE-2026-44665)**
+  - [x] Add `overrides.fast-xml-builder` to `api/package.json` at `^1.1.7` (resolved to 1.2.0).
+  - [x] Refresh `api/package-lock.json` via isolated regenerate in container.
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-fix-security-high-vulnerabilities` -> 0 errors
+    - [x] `make lint-api ENV=test-fix-security-high-vulnerabilities` -> 0 errors, 184 warnings (pre-existing console.log warnings)
+    - [x] `make test-api-unit ENV=test-fix-security-high-vulnerabilities` -> 493/494 pass (1 pre-existing failure in `tests/unit/google-drive-oauth.test.ts` due to local .env AUTH_CALLBACK_BASE_URL; not a regression — verified by reproducing on baseline; CI passes)
+  - [x] Atomic commit: `fix(security): upgrade fast-xml-builder to 1.2.0 (CVE-2026-44665 high)`
+
+- [x] **Lot 4 — Final validation**
+  - [x] `make typecheck-api ENV=test-fix-security-high-vulnerabilities` -> 0 errors
+  - [x] `make typecheck-ui ENV=test-fix-security-high-vulnerabilities` -> 0 errors
+  - [x] `make lint-api ENV=test-fix-security-high-vulnerabilities` -> 0 errors, 184 warnings (pre-existing)
+  - [x] `make lint-ui ENV=test-fix-security-high-vulnerabilities` -> clean
+  - [x] `make test-api-unit ENV=test-fix-security-high-vulnerabilities` -> 493/494 pass (1 pre-existing failure, see Feedback Loop BR-SEC-N1)
+  - [x] `make test-api-endpoints SCOPE=tests/api/chat.test.ts ENV=test-fix-security-high-vulnerabilities` -> 28/28 pass
+  - [x] `make test-api-endpoints SCOPE=tests/api/chat-bootstrap-contract.test.ts ENV=test-fix-security-high-vulnerabilities` -> 1/1 pass
+  - [x] `make test-api-endpoints SCOPE=tests/api/chat-checkpoint-contract.test.ts ENV=test-fix-security-high-vulnerabilities` -> 1/1 pass
+  - [x] `make test-api-endpoints SCOPE=tests/api/chat-message-actions.test.ts ENV=test-fix-security-high-vulnerabilities` -> 4/4 pass
+  - [x] `make down ENV=test-fix-security-high-vulnerabilities` -> services stopped
+  - [ ] Push branch and create PR with this `BRANCH.md` as body.
