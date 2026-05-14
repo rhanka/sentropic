@@ -331,6 +331,18 @@ export type ChatRuntimeDeps = {
   readonly listAssistantDetailsByMessageId: (
     messageIds: ReadonlyArray<string>,
   ) => Promise<Record<string, ChatBootstrapStreamEvent[]>>;
+  /**
+   * Lot 15 — resolve workspace-access flags for the precheck slice of
+   * `runAssistantGeneration`. Bundles the three api-only calls
+   * (`isWorkspaceDeleted`, `hasWorkspaceRole`, `getWorkspaceRole`) into
+   * a single Option A callback because chat-core must not import
+   * `workspace-access`. Returns the exact `{ readOnly, canWrite,
+   * currentUserRole }` triple the legacy inline block produced.
+   */
+  readonly resolveWorkspaceAccess: (input: {
+    readonly userId: string;
+    readonly workspaceId: string;
+  }) => Promise<WorkspaceAccessFlags>;
 };
 
 /**
@@ -547,6 +559,73 @@ export type CreateUserMessageResult = {
   readonly streamId: string;
   readonly providerId: string;
   readonly model: string;
+};
+
+/**
+ * Lot 15 — options for `ChatRuntime.prepareAssistantRun`. Mirrors the
+ * leading slice of `ChatService.runAssistantGeneration` options verbatim
+ * (subset that the precheck slice actually reads: userId / sessionId /
+ * assistantMessageId / contexts). The remaining `runAssistantGeneration`
+ * fields (providerId / model / tools / vscodeCodeAgent / resumeFrom /
+ * locale / signal) belong to later slices and stay on the chat-service
+ * side until their owning lot.
+ */
+export type PrepareAssistantRunOptions = {
+  readonly userId: string;
+  readonly sessionId: string;
+  readonly assistantMessageId: string;
+  readonly contexts?: ReadonlyArray<{
+    readonly contextType: string;
+    readonly contextId: string;
+  }>;
+};
+
+/**
+ * Lot 15 — typed context returned by `ChatRuntime.prepareAssistantRun`.
+ * Carries the values produced by the precheck slice (session lookup +
+ * workspace resolution + workspace access flags + context normalisation
+ * + message load + assistant-row precheck + conversation projection +
+ * last-user-message extraction). Consumed by the remainder of
+ * `runAssistantGeneration` which still lives in `chat-service.ts` for
+ * lots 16+.
+ */
+export type AssistantRunContext = {
+  readonly session: ChatSessionRow;
+  readonly sessionWorkspaceId: string;
+  readonly readOnly: boolean;
+  readonly canWrite: boolean;
+  readonly currentUserRole: string | null;
+  readonly contextsOverride: ReadonlyArray<{
+    readonly contextType: string;
+    readonly contextId: string;
+  }>;
+  readonly focusContext: {
+    readonly contextType: string;
+    readonly contextId: string;
+  } | null;
+  readonly messages: ReadonlyArray<ChatMessageRow>;
+  readonly assistantRow: ChatMessageRow;
+  readonly conversation: ReadonlyArray<{
+    readonly role: 'user' | 'assistant';
+    readonly content: string;
+  }>;
+  readonly lastUserMessage: string;
+};
+
+/**
+ * Lot 15 — workspace-access flags resolved for the active user against
+ * the active session workspace. Mirrors the inline trio of api-only
+ * calls (`isWorkspaceDeleted` + `hasWorkspaceRole` + `getWorkspaceRole`)
+ * that lived at the top of `runAssistantGeneration`. Crosses the port
+ * as a single Option A callback (same pattern as Lot 10
+ * `normalizeVsCodeCodeAgent`, Lot 12 `resolveModelSelection`, Lot 14b
+ * `resolveSessionWorkspaceId`) because chat-core must not import
+ * `workspace-access`.
+ */
+export type WorkspaceAccessFlags = {
+  readonly readOnly: boolean;
+  readonly canWrite: boolean;
+  readonly currentUserRole: string | null;
 };
 
 /**

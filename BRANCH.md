@@ -364,3 +364,10 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts PASS (6/6)
 - [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts PASS (14/14)
 - [x] make test-api-unit SCOPE=tests/unit/chat-session-history-docx.test.ts PASS (4/4)
+
+## Lot 15 - runAssistantGeneration Slice A migration (prepareAssistantRun)
+- [ ] Identify Slice A boundary in runAssistantGeneration
+- [ ] Define AssistantRunContext type in chat-core
+- [ ] Add ChatRuntime.prepareAssistantRun method (verbatim port of Slice A)
+- [ ] chat-service.ts runAssistantGeneration consumes AssistantRunContext at top
+- [ ] typecheck + tests PASS

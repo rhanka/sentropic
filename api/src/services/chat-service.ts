@@ -869,6 +869,21 @@ export class ChatService {
       listSessionDocuments: (input) => this.listSessionDocuments(input),
       listAssistantDetailsByMessageId: (messageIds) =>
         this.listAssistantDetailsByMessageId(messageIds),
+      // BR14b Lot 15 — bundle the three api-only workspace-access calls
+      // (`isWorkspaceDeleted` + `hasWorkspaceRole` + `getWorkspaceRole`)
+      // into a single Option A callback consumed by
+      // `ChatRuntime.prepareAssistantRun`. Same order of calls and same
+      // boolean composition as the pre-Lot 15 inline block at the top of
+      // `runAssistantGeneration`.
+      resolveWorkspaceAccess: async ({ userId, workspaceId }) => {
+        const hidden = await isWorkspaceDeleted(workspaceId);
+        const canWrite = !hidden
+          ? await hasWorkspaceRole(userId, workspaceId, 'editor')
+          : false;
+        const readOnly = hidden || !canWrite;
+        const currentUserRole = await getWorkspaceRole(userId, workspaceId);
+        return { readOnly, canWrite, currentUserRole };
+      },
     });
   }
 
