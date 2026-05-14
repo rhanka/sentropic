@@ -388,6 +388,36 @@ export type ChatRuntimeDeps = {
   readonly buildSystemPrompt?: (
     input: BuildSystemPromptInput,
   ) => Promise<BuildSystemPromptResult>;
+  /**
+   * BR14b Lot 18 — evaluate the reasoning-effort label to request from
+   * the mesh for the current message. Bundles the inline 98-line block
+   * previously embedded in `ChatService.runAssistantGeneration` (lines
+   * 2806-2898 pre-Lot 18):
+   *
+   *   1. Decide whether to evaluate at all (`modelSupportsReasoning`).
+   *   2. Build the eval prompt from the `CHAT_COMMON_PROMPTS.reasoning_effort_eval`
+   *      template + the last user message + the conversation excerpt.
+   *   3. Stream-call the evaluator model (cheap gemini for gemini,
+   *      `gpt-4.1-nano` otherwise) via `MeshDispatchPort.invokeStream`.
+   *   4. Validate the produced token; map it to a `ReasoningEffortLabel`.
+   *   5. Surface the failure (if any) so the caller can emit the
+   *      `reasoning_effort_eval_failed` status event.
+   *
+   * Crosses the port as an Option A callback (mirrors Lot 16a/16b
+   * pattern) rather than as a body in the runtime because the
+   * evaluator prompt template lives in `api/src/config/default-chat-system.ts`
+   * (the chat prompt registry) which chat-core must not import. The
+   * adapter wires the prompt template + mesh dispatch + provider-family
+   * decision in one closure.
+   *
+   * Optional `?`: when undefined (tests that wire a minimal runtime),
+   * the wrapper returns `{ shouldEvaluate: false, effortLabel: 'medium',
+   * evaluatedBy: 'fallback' }` so chat-core stays usable in unit tests
+   * that don't exercise reasoning at all.
+   */
+  readonly evaluateReasoningEffort?: (
+    input: EvaluateReasoningEffortInput,
+  ) => Promise<ReasoningEffortEvaluation>;
 };
 
 /**
@@ -793,6 +823,78 @@ export type PrepareSystemPromptOptions = {
   readonly localToolDefinitions?: ReadonlyArray<unknown>;
   readonly vscodeCodeAgent?: unknown;
 };
+
+/**
+ * BR14b Lot 18 — reasoning-effort label union. Mirrors the literal union
+ * persisted in the `status:reasoning_effort_selected` stream event and
+ * consumed by `MeshStreamRequest.reasoningEffort`. Kept as a closed union
+ * (rather than a `string`) so callers can narrow safely without re-doing
+ * the token validation that the evaluator performs once.
+ */
+export type ReasoningEffortLabel =
+  | 'none'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh';
+
+/**
+ * BR14b Lot 18 — input carried into `ChatRuntime.evaluateReasoningEffort`.
+ * Mirrors the inline block previously embedded in
+ * `ChatService.runAssistantGeneration` (chat-service.ts lines 2806-2898
+ * pre-Lot 18). `conversation` reuses the same `{role, content}` projection
+ * built by the Lot 15 `prepareAssistantRun` slice; chat-core stays role-
+ * agnostic and the evaluator only narrows for the trailing user message.
+ *
+ * `selectedProviderId` / `selectedModel` are the already-resolved values
+ * from `resolveModelSelection` (Lot 12/17) — the evaluator chooses the
+ * evaluator-side model from the same provider family (gemini → gemini
+ * cheap model, otherwise OpenAI gpt-4.1-nano).
+ */
+export interface EvaluateReasoningEffortInput {
+  readonly userId: string;
+  readonly workspaceId: string | null;
+  readonly selectedProviderId: string;
+  readonly selectedModel: string;
+  readonly conversation: ReadonlyArray<{
+    readonly role: string;
+    readonly content: string;
+  }>;
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * BR14b Lot 18 — outcome of the reasoning-effort evaluation. The two
+ * stream events that previously bracketed the inline block
+ * (`reasoning_effort_eval_failed` + `reasoning_effort_selected`) STAY
+ * caller-side because the shared `streamSeq` counter is not yet migrated
+ * — `failure` carries the same error message string the legacy code
+ * persisted into the failure event, and `evaluatedBy` carries the same
+ * `by` field the success event reports.
+ *
+ *   - `shouldEvaluate`: `false` when the selected model has
+ *     `reasoningTier === 'none'` (the legacy code skipped the entire
+ *     block); `true` otherwise.
+ *   - `effortLabel`: the validated label the caller should request from
+ *     the mesh. Defaults to `'medium'` on fallback (legacy default).
+ *   - `effortForMessage`: present only when the evaluator produced a
+ *     valid token (mirrors the pre-Lot 18 `reasoningEffortForThisMessage`
+ *     local that downstream code reads when deciding whether to attach
+ *     the effort hint to the assistant message persisted record).
+ *   - `evaluatedBy`: same `reasoningEffortBy` legacy value
+ *     (`evaluatorModel`, `'fallback'`, or `'non-gpt-5'`).
+ *   - `failure`: present only when the evaluator threw or returned an
+ *     invalid token; the caller emits the
+ *     `reasoning_effort_eval_failed` status event using
+ *     `failure.message` verbatim.
+ */
+export interface ReasoningEffortEvaluation {
+  readonly shouldEvaluate: boolean;
+  readonly effortLabel: ReasoningEffortLabel;
+  readonly effortForMessage?: ReasoningEffortLabel;
+  readonly evaluatedBy: string;
+  readonly failure?: { readonly message: string };
+}
 
 /**
  * Options for `ChatRuntime.acceptLocalToolResult`. Mirrors the existing
@@ -2157,6 +2259,35 @@ export class ChatRuntime {
       localToolDefinitions: options.localToolDefinitions,
       vscodeCodeAgent: options.vscodeCodeAgent,
     });
+  }
+
+  /**
+   * BR14b Lot 18 — slim wrapper around the `evaluateReasoningEffort`
+   * callback that bundles the 98-line evaluator block previously embedded
+   * in `ChatService.runAssistantGeneration`. When the dep is not wired
+   * (test harness, minimal runtime), the wrapper returns the same
+   * fallback shape the legacy code produced when the evaluator decided
+   * not to run: `{ shouldEvaluate: false, effortLabel: 'medium',
+   * evaluatedBy: 'fallback' }`.
+   *
+   * The two `writeStreamEvent` calls that bracket the legacy block
+   * (`status:reasoning_effort_eval_failed` + `status:reasoning_effort_selected`)
+   * STAY caller-side because the shared `streamSeq` counter is not yet
+   * migrated into the runtime. The caller emits them around this call
+   * using the `failure` field (when present) and the `effortLabel` /
+   * `evaluatedBy` fields.
+   */
+  async evaluateReasoningEffort(
+    input: EvaluateReasoningEffortInput,
+  ): Promise<ReasoningEffortEvaluation> {
+    if (!this.deps.evaluateReasoningEffort) {
+      return {
+        shouldEvaluate: false,
+        effortLabel: 'medium',
+        evaluatedBy: 'fallback',
+      };
+    }
+    return this.deps.evaluateReasoningEffort(input);
   }
 }
 
