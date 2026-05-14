@@ -37,8 +37,6 @@
     "@sentropic/events": "*"
   },
   "devDependencies": {
-    "typescript": "5.4.5",
-    "vitest": "4.0.18",
-    "@vitest/coverage-v8": "4.0.18"
+    "typescript": "5.4.5"
   }
 }
