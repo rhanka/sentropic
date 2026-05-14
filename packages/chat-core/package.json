@@ -31,8 +31,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@sentropic/contracts": "workspace:*",
-    "@sentropic/events": "workspace:*"
+    "@sentropic/contracts": "*",
+    "@sentropic/events": "*"
   },
   "devDependencies": {
     "typescript": "5.4.5"
