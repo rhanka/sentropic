@@ -1437,6 +1437,22 @@ export class ChatRuntime {
   }
 
   /**
+   * BR14b Lot 17 — public wrapper around the `resolveModelSelection`
+   * callback (Lot 12) so that callers outside the runtime (notably
+   * `ChatService.runAssistantGeneration`) can reuse the same bundled
+   * `{aiSettings + catalog + inference + default-selection}` resolution
+   * without re-importing `settingsService` / `model-catalog` helpers.
+   *
+   * Return shape is the snake_case `{provider_id, model_id}` pair from
+   * `ModelSelectionPair` (mirrors `resolveDefaultSelection` byte-for-byte).
+   */
+  async resolveModelSelection(
+    input: Parameters<ChatRuntimeDeps['resolveModelSelection']>[0],
+  ): ReturnType<ChatRuntimeDeps['resolveModelSelection']> {
+    return this.deps.resolveModelSelection(input);
+  }
+
+  /**
    * Retry an existing user message: re-resolve `{providerId, model}`
    * from caller overrides + AI settings, truncate every message above
    * the retried sequence, insert a fresh assistant placeholder, and

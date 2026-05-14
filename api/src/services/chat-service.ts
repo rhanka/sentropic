@@ -2786,25 +2786,17 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     let lastBudgetAnnouncedPct = -1;
     let contextBudgetReplanAttempts = 0;
 
-    const [aiSettings, catalog] = await Promise.all([
-      settingsService.getAISettings({ userId: options.userId }),
-      getModelCatalogPayload({ userId: options.userId }),
-    ]);
-    const inferredProviderId = inferProviderFromModelIdWithLegacy(
-      catalog.models,
-      options.model || assistantRow.model || null
-    );
-    const resolvedSelection = resolveDefaultSelection(
-      {
-        providerId:
-          options.providerId ||
-          inferredProviderId ||
-          aiSettings.defaultProviderId,
-        modelId: options.model || assistantRow.model || aiSettings.defaultModel,
-      },
-      catalog.models
-    );
-    const selectedProviderId = resolvedSelection.provider_id;
+    // BR14b Lot 17 — model selection delegated to the
+    // `resolveModelSelection` callback wired in Lot 12 (bundles the four
+    // helpers `settingsService.getAISettings`, `getModelCatalogPayload`,
+    // `inferProviderFromModelIdWithLegacy`, `resolveDefaultSelection`).
+    // Cast back to `ProviderId` mirrors the Lot 12 delegate pattern.
+    const resolvedSelection = await this.runtime.resolveModelSelection({
+      userId: options.userId,
+      providerId: options.providerId,
+      model: options.model || assistantRow.model,
+    });
+    const selectedProviderId = resolvedSelection.provider_id as ProviderId;
     const selectedModel = resolvedSelection.model_id;
     const useCodexTransport =
       selectedProviderId === 'openai' &&
