@@ -36,8 +36,9 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
   - `api/tests/**/fixtures/**`
   - `packages/contracts/**` (via BR14b-EX1)
   - `packages/events/**` (via BR14b-EX1)
+  - `packages/chat-core/tests/**` (via BR14b-EX3)
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
+  - `Makefile` (except `test-pkg-chat-core` target addition via BR14b-EX3)
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.github/workflows/**`
@@ -66,6 +67,10 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
   - Rationale: Per BR23 SPEC_STUDY_ARCHITECTURE_BOUNDARIES §11 (delivery cadence): contracts package ships the 6 shared transverse types (TenantContext, AuthzContext, CostContext, IdempotencyKey, CheckpointVersion, EventEnvelope) that chat-core implementation will consume. Events package will follow in the same branch with the StreamEvent wire taxonomy. Co-shipping avoids a separate mini-branch for events while keeping atomic per-package buildability.
   - Impact: New paths under `packages/contracts/**` and `packages/events/**` allowed. Standard `package.json` + `tsconfig.json` + `src/` structure aligned with existing `packages/llm-mesh` style.
   - Rollback: Delete `packages/contracts/` (and `packages/events/` once added) entirely; revert this commit.
+- `BR14b-EX3 — Makefile target test-pkg-chat-core + packages/chat-core/tests/** in-memory adapter suite`
+  - Rationale: SPEC_STUDY_ARCHITECTURE_BOUNDARIES §5 mandates that "Each port must have an in-memory reference adapter shipped alongside the contract, so a downstream user can build without Postgres". Lots 9-15 migrated 13 orchestration methods to `ChatRuntime` without any unit test in `packages/chat-core/`. Final BR14b publish gate requires shippable quality, which means: (a) the 5 in-memory adapters mandated by §5 must exist under `packages/chat-core/src/in-memory/`, (b) a unit test suite must cover the 13 migrated `ChatRuntime` methods + the pure helpers in `history.ts`, and (c) a make target must run that suite in CI mirroring the existing `test-llm-mesh` Docker pattern.
+  - Impact: Makefile +4 lines (one new `test-pkg-chat-core` target). `packages/chat-core/src/in-memory/**` 5 new files (~600 lines) + barrel re-export. `packages/chat-core/tests/**` 6 new test files (~1000 lines). `packages/chat-core/package.json` +2 devDependencies (`vitest`, `@vitest/coverage-v8`) + 2 scripts. No behavior change in existing chat-service.ts / postgres adapters / api/tests/. From Lot 16 onwards, every migrated `ChatRuntime` method MUST land with its accompanying unit test in this suite.
+  - Rollback: revert the BR14b-EX3 commits; the `packages/chat-core/in-memory/` directory + `tests/` directory + Makefile target are pure additions and removing them leaves runtime / adapter / chat-service behavior untouched.
 
 ## Feedback Loop
 - `attention` 2026-05-12: BR14g was merged without an explicit UAT checkpoint. BR14b final gate therefore requires recorded user UAT passed or explicit user UAT waiver before merge; CI alone is insufficient.
@@ -381,3 +386,19 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts PASS (14/14)
 - [x] make test-api-unit SCOPE=tests/unit/chat-summary-runtime.test.ts PASS (2/2)
 - [x] make test-api-unit SCOPE=tests/unit/chat-service-batch-create-orgs.test.ts PASS (5/5)
+
+## Lot 15.5 - chat-core test infrastructure (BR14b-EX3)
+- [ ] Open BR14b-EX3 (Makefile target + packages/chat-core/tests/**)
+- [ ] Create 5 in-memory port adapters under packages/chat-core/src/in-memory/
+- [ ] Re-export in-memory namespace from packages/chat-core/src/index.ts
+- [ ] Add Makefile target `test-pkg-chat-core` mirroring `test-llm-mesh` Docker pattern
+- [ ] Add vitest + @vitest/coverage-v8 devDependencies + test scripts in packages/chat-core/package.json
+- [ ] Write packages/chat-core/tests/runtime-checkpoint.test.ts (Lot 11 coverage)
+- [ ] Write packages/chat-core/tests/runtime-message.test.ts (Lots 13 + 14a coverage)
+- [ ] Write packages/chat-core/tests/runtime-session.test.ts (Lot 14b coverage)
+- [ ] Write packages/chat-core/tests/runtime-tool-loop.test.ts (Lots 9 + 10 coverage)
+- [ ] Write packages/chat-core/tests/runtime-precheck.test.ts (Lot 15 coverage)
+- [ ] Write packages/chat-core/tests/history.test.ts (Lot 14b pure helpers)
+- [ ] `make test-pkg-chat-core ENV=test-refacto-chat-service-core` PASS (coverage ≥ 80% on runtime.ts; 100% on in-memory adapters)
+- [ ] `make typecheck-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core` PASS (regression check)
+- [ ] `make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts ENV=test-refacto-chat-service-core` PASS (regression check)
