@@ -1,122 +1,151 @@
-# Feature: Gemini 3.5 Thinking catalog replacement
+# Feature: BR-19 — @sentropic/skills (Skill Catalog + Sandbox)
 
 ## Objective
-Replace the remaining Gemini 3.1 Flash Lite catalog entry with Gemini 3.5 Thinking and correct the Opus 4.7 display label without adding a global roadmap branch number.
+Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description-based discovery, `SKILL.md` format, MCP export — and migrate the ~30 entries of `api/src/services/tools.ts` into skill bundles consumed by `@sentropic/chat-core` through the federated `ToolRegistry`.
 
 ## Scope / Guardrails
-- Scope limited to model catalog metadata, provider allowlists, legacy model cutover rules, focused tests, and specs that mention the Gemini catalog.
-- The same model-catalog scope also covers display-label corrections for active catalog entries.
-- No database migration.
-- Make-only workflow, no direct Docker/npm commands.
-- Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/fix-gemini-35-thinking`.
-- Automated test campaigns run on `ENV=test-fix-gemini-35-thinking`, never on `ENV=dev`.
-- In every `make` command, `ENV=test-fix-gemini-35-thinking` must be passed as the last argument when the target accepts an environment.
+- Scope limited to `packages/skills/**`, skill seed data, `api/src/services/skills/**` integration, and `api/src/services/tools.ts` migration only.
+- One migration max in `api/drizzle/*.sql` (only if `skill_metadata` table is needed; Lot 3 to decide).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/entropiq` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/feat-agent-sandbox-skills`.
+- Automated test campaigns must run on `ENV=test-feat-agent-sandbox-skills` / `ENV=e2e-feat-agent-sandbox-skills`, never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
+- Identity: BR-19, branch `feat/agent-sandbox-skills`, worktree `tmp/feat-agent-sandbox-skills`, base `origin/main` (a7541823), ENV alias `test-feat-agent-sandbox-skills`, slot 0 (API 9095, UI 5295, Maildev 1195).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/llm-mesh/src/catalog.ts`
-  - `packages/llm-mesh/src/providers.ts`
-  - `packages/llm-mesh/tests/facade.test.ts`
-  - `api/src/services/chat-service.ts`
-  - `api/src/services/model-selection-legacy.ts`
-  - `api/tests/api/models.test.ts`
-  - `api/tests/api/me.test.ts`
-  - `api/tests/api/ai-settings.test.ts`
-  - `api/tests/api/chat-message-actions.test.ts`
-  - `api/tests/unit/chat-service-tools.test.ts`
-  - `api/tests/unit/gemini-tool-handoff.test.ts`
-  - `api/tests/unit/llm-runtime-stream.test.ts`
-  - `api/tests/unit/model-selection-legacy.test.ts`
-  - `packages/chat-core/src/runtime.ts`
-  - `packages/chat-core/tests/runtime-reasoning-effort.test.ts`
-  - `ui/tests/utils/user-ai-settings-events.test.ts`
-  - `spec/SPEC_CHATBOT.md`
-  - `spec/SPEC_EVOL_LLM_MESH.md`
+  - `spec/SPEC_EVOL_BR19_SKILLS.md`
+  - `spec/SPEC_VOL_AGENT_SANDBOX_SKILLS.md` (consolidation only at Lot N-1)
+  - `packages/skills/**` (new package root)
+  - `api/src/services/skills/**` (new integration layer)
+  - `api/src/services/tools.ts` (migration target, eventual deletion)
+  - `api/src/services/tool-service.ts` (handler migration target)
+  - `api/src/services/chat-service.ts` (tool dispatch refactor — Lot N migration only)
+  - `api/src/config/default-skills.ts` (new, built-in skills seed)
+  - `api/tests/services/skills/**` (new tests)
+  - `api/tests/api/skills.spec.ts` (new tests)
+  - `package.json` (workspace registration only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `PLAN.md`
-  - `TODO.md`
-  - `plan/NN-BRANCH_*.md`
+  - `plan/NN-BRANCH_*.md` (except this branch file in Lot N-1)
+  - `ui/**` (skill output viewer deferred to BR-19b)
+  - `api/src/services/queue-manager.ts` (deferred to BR-19c)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql`
-  - `.github/workflows/**`
+  - `api/drizzle/*.sql` (max 1 file, only if `skill_metadata` table — declare `BR19-EX1`)
+  - `packages/contracts/**` (only to add `Skill`/`SkillMetadata` re-exports — declare `BR19-EX2`)
+  - `.github/workflows/**` (only to add packages/skills CI job — declare `BR19-EX3`)
+  - `api/src/db/schema.ts` (only paired with `BR19-EX1`)
 - **Exception process**:
-  - Declare exception ID `HOTFIX-G35T-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Declare exception ID `BR19-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- None.
+- (none yet — Lot 0 is doc-only scoping)
 
 ## AI Flaky tests
-- Acceptance rule: only provider/network/model nondeterminism can be accepted as `flaky accepted`, and only after one success on the same commit and command plus explicit user sign-off.
-- No flaky test accepted so far.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: hotfix touches one model catalog path and its focused tests.
+- Rationale: single skill catalog package + linear migration through tools.ts (~30 tools); each lot is sequentially gated by the previous (sandbox before discovery before migration). No independent CI cycle required.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only.
-- Execution flow:
-  - [x] Develop and run tests in `tmp/fix-gemini-35-thinking`.
-  - [ ] Push branch before UAT.
-  - [ ] Run user UAT from root workspace on a UAT branch/worktree if requested.
-  - [ ] Switch root back to `main` and continue finalization in `tmp/fix-gemini-35-thinking` after UAT.
+- **Mono-branch**: UAT after Lot 5 (search_skills meta-tool integration) and at Final Lot, when chat-service uses the catalog end-to-end.
+- UAT checkpoints listed as checkboxes inside Lot 5 and Final Lot.
+- Execution flow: develop+test in `tmp/feat-agent-sandbox-skills`, push, UAT from root workspace, switch back.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `TODO.md`, and `PLAN.md`.
-  - [x] Rebase local `main` on `origin/main`.
-  - [x] Create isolated worktree `tmp/fix-gemini-35-thinking`.
-  - [x] Confirm branch is `fix/gemini-35-thinking`.
-  - [x] Capture Makefile targets needed for debug/testing: `test-llm-mesh`, `typecheck-llm-mesh`, `test-api-unit`, `test-api-endpoints`, `test-ui`, `typecheck-api`, `lint-api`, `test-pkg-chat-core`.
-  - [x] Define environment mapping: `ENV=test-fix-gemini-35-thinking`; test ports API `8796`, UI `5186`, Maildev UI `1086`.
-  - [x] Confirm command style: `make ... ENV=test-fix-gemini-35-thinking` with `ENV` last.
-  - [x] Confirm scope and guardrails.
+- [x] **Lot 0 — Scoping (this lot)**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `plan/BRANCH_TEMPLATE.md`.
+  - [x] Read `plan/19-BRANCH_feat-agent-sandbox-skills.md` (stub), `spec/SPEC_VOL_AGENT_SANDBOX_SKILLS.md`, `SPEC_STUDY_SKILLS_TOOLS_VS_AGENT_MARKETPLACE.md`, `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` §1+§5+§14+§15, `SPEC_VOL_SKILLS.md`.
+  - [x] Inventory `api/src/services/tools.ts` (~30 entries) and `docx-freeform-skill.ts` reference pattern.
+  - [x] Create worktree `tmp/feat-agent-sandbox-skills` from `origin/main` on branch `feat/agent-sandbox-skills`.
+  - [x] Produce `spec/SPEC_EVOL_BR19_SKILLS.md` covering SKILL.md format, sandbox runtime decision, `SkillRegistry` interface, migration plan, `search_skills` meta-tool, MCP export, distribution, marketplace/chat-core boundaries, open questions.
+  - [x] Confirm slot 0 port assignment: API `9095`, UI `5295`, Maildev `1195` (BR-19 → `9000 + 19*5 + 0 = 9095`).
+  - [x] Commit scoping artefacts via `make commit`.
 
-- [ ] **Lot 1 — Gemini Thinking catalog cutover**
-  - [x] Add failing tests that expect Gemini catalog to expose `gemini-3.5-thinking` and no longer expose `gemini-3.1-flash-lite-preview`.
-  - [x] Replace the llm-mesh Gemini Flash Lite profile with Gemini 3.5 Thinking.
-  - [x] Replace Gemini provider allowlists with `gemini-3.5-thinking`.
-  - [x] Add legacy cutovers from `gemini-3.1-flash-lite-preview` and `gemini-2.5-flash-lite` to `gemini-3.5-thinking`.
-  - [x] Correct `claude-opus-4-7` display label from `Opus 4.6` to `Opus 4.7`.
-  - [x] Update API/UI tests for defaults, model selector payloads, and chat reasoning/tool flows.
-  - [x] Update specs to describe Gemini 3.5 Thinking.
+- [ ] **Lot 1 — `@sentropic/skills` package shell + `SKILL.md` parser**
+  - [ ] Create `packages/skills/` workspace entry with `package.json`, `tsconfig.json`, `vitest.config.ts` aligned with `packages/llm-mesh`.
+  - [ ] Define `Skill`, `SkillMetadata`, `ContextFilter`, `SandboxPolicy`, `SkillTool`, `SkillSearchHit` types in `src/types/`.
+  - [ ] Implement `SKILL.md` parser (frontmatter YAML + body extraction) in `src/format/parser.ts` with strict schema validation (Zod).
+  - [ ] Re-export shared types from `@sentropic/contracts` where applicable (no circular dep).
+  - [ ] Lot gate: typecheck + unit tests on parser (valid/invalid frontmatter, missing fields, malformed YAML).
+
+- [ ] **Lot 2 — Sandbox runtime integration**
+  - [ ] Implement `SandboxRuntime` port in `src/sandbox/runtime.ts` with `isolated-vm` adapter (decision frozen in SPEC_EVOL §2).
+  - [ ] Implement `SandboxPolicy` enforcement: timeout (default 30s), memory cap (128MB), API-surface allowlist (`files.create`, `db.query`, `fetch` only).
+  - [ ] Carry forward the docx-freeform sandbox helpers into a built-in skill bundle as reference implementation.
+  - [ ] Lot gate: typecheck + unit tests (isolation breach attempts, timeout, memory cap, allowlist enforcement).
+
+- [ ] **Lot 3 — `SkillRegistry` (catalog + filter + resolve)**
+  - [ ] Implement `SkillRegistry` (`register`, `list`, `get`, `search`, `resolveTools(authz)`) backed by in-memory map; in-memory ref adapter mandatory.
+  - [ ] Implement `SkillsToolRegistry` that adapts `SkillRegistry` to the `ToolRegistry` interface from `@sentropic/contracts`.
+  - [ ] Wire `AuthzContext` filtering (roles, workspace types, permission mode).
+  - [ ] Decide on optional `skill_metadata` table (defer to Lot 3 outcome; if needed declare `BR19-EX1`).
+  - [ ] Lot gate: typecheck + unit tests (filter by role, workspace, search ranking, resolve under AuthzContext).
+
+- [ ] **Lot 4 — `search_skills` meta-tool**
+  - [ ] Implement `search_skills(query, context)` callable as a tool: top-K skills by description match (BM25 or embedding-light heuristic — frozen in SPEC_EVOL §5).
+  - [ ] Auto-register `search_skills` in any `SkillsToolRegistry` instance.
+  - [ ] Lot gate: typecheck + unit tests (top-K behaviour, context filtering applied before ranking, empty result).
+
+- [ ] **Lot 5 — Migrate `tools.ts` to skill bundles (waves)**
+  - [ ] Migrate **wave A** (low-risk listers): `web` skill (`web_search`, `web_extract`), `workspace` skill (`workspace_list`, `initiative_search`).
+  - [ ] Migrate **wave B** (read-only object skills): `organizations`, `folders`, `initiatives`, `solutions`, `proposals`, `products` skills (each grouping `list`+`get`+optional `update`).
+  - [ ] Migrate **wave C** (write/structured skills): `executive_summary`, `matrix`, `documents`, `comment_assistant`, `plan`, `gate_review`, `history_analyze` skills.
+  - [ ] Migrate **wave D** (sandbox-backed skills): `document_generate` (uses sandbox, ports the docx-freeform skill), `batch_create_organizations`, `task_dispatch`.
+  - [ ] Refactor `api/src/services/chat-service.ts` tool dispatch to consume `SkillsToolRegistry.resolveTools(authz)`; delete the legacy `if toolCall.name === '...'` branches in one cleanup commit.
+  - [ ] Delete `api/src/services/tools.ts` after final wave (`no legacy fallback` rule).
+  - [ ] Lot gate (per wave): typecheck + unit tests + scoped API test (`make test-api-<suite> SCOPE=tests/services/skills/<wave>.spec.ts ENV=test-feat-agent-sandbox-skills`).
+
+- [ ] **Lot 6 — MCP server export (interop)**
+  - [ ] Implement `interop/mcp-export.ts` compiling one skill to one MCP server bundle (stdio + HTTP transports).
+  - [ ] Document `mcp.so` publish workflow (manual for v0.1, deferred to release tooling).
+  - [ ] Lot gate: typecheck + unit tests (round-trip skill ↔ MCP tool descriptor).
+
+- [ ] **Lot 7 — Tests (full pyramid)**
   - [ ] Lot gate:
-    - [x] Red test observed before implementation: `make test-llm-mesh ENV=test-fix-gemini-35-thinking`.
-    - [x] Red test observed for Opus label correction: `make test-llm-mesh ENV=test-fix-gemini-35-thinking` failed on `Opus 4.6` vs `Opus 4.7`.
-    - [x] `make test-llm-mesh ENV=test-fix-gemini-35-thinking`.
-    - [x] `make test-api-unit SCOPE="tests/unit/model-selection-legacy.test.ts tests/unit/gemini-tool-handoff.test.ts tests/unit/llm-runtime-stream.test.ts tests/unit/chat-service-tools.test.ts" API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
-    - [x] `make test-api-endpoints SCOPE="tests/api/models.test.ts tests/api/me.test.ts tests/api/ai-settings.test.ts tests/api/chat-message-actions.test.ts" API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
-    - [x] `make test-ui SCOPE=tests/utils/user-ai-settings-events.test.ts API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
-    - [x] `make test-pkg-chat-core ENV=test-fix-gemini-35-thinking`.
-    - [x] `make typecheck-llm-mesh ENV=test-fix-gemini-35-thinking`.
-    - [x] `make typecheck-api API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
-    - [x] `make lint-api API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
-    - [x] `make typecheck-ui API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
+    - [ ] `make typecheck-api` + `make lint-api`
+    - [ ] **API tests**
+      - [ ] Add `api/tests/services/skills/registry.spec.ts`, `parser.spec.ts`, `sandbox.spec.ts`, `discovery.spec.ts`.
+      - [ ] Add `api/tests/services/skills/migration-wave-<a|b|c|d>.spec.ts` (non-regression vs prior tools).
+      - [ ] Add `api/tests/api/skills.spec.ts` if HTTP surface exists (deferred decision in Lot 3).
+      - [ ] Sub-lot gate: `make test-api ENV=test-feat-agent-sandbox-skills`
+      - [ ] AI flaky tests run: `make test-api-ai ENV=test-feat-agent-sandbox-skills`
+    - [ ] **UI tests (TypeScript only)** — N/A (UI not in scope; deferred to BR-19b)
+    - [ ] **E2E tests**
+      - [ ] Prepare E2E build: `make build-api build-ui-image API_PORT=9095 UI_PORT=5295 MAILDEV_UI_PORT=1195 ENV=e2e-feat-agent-sandbox-skills`
+      - [ ] Update `e2e/tests/03-chat*.spec.ts` assertions: tool calls now go through `execute_skill` indirection (or stay direct — Lot 5 frozen behaviour).
+      - [ ] Sub-lot gate: `make clean test-e2e API_PORT=9095 UI_PORT=5295 MAILDEV_UI_PORT=1195 ENV=e2e-feat-agent-sandbox-skills E2E_GROUP=<matrix.e2e_group>`
 
-- [ ] **Lot 2 — UAT handoff**
-  - [x] Push branch `fix/gemini-35-thinking`.
-  - [ ] Web app settings: model selector shows `Gemini 3.5 Thinking` under Gemini.
-  - [ ] Web app settings: `Gemini 3.1 Flash Lite` is absent.
-  - [ ] Chat model picker shows `Gemini 3.5 Thinking` and can save it as the user default.
-  - [ ] Existing Gemini 3.5 Flash remains available.
-  - [ ] Legacy saved Gemini Flash Lite defaults migrate to Gemini 3.5 Thinking.
+- [ ] **Lot 8 — Docs consolidation**
+  - [ ] Integrate `spec/SPEC_EVOL_BR19_SKILLS.md` into `spec/SPEC_VOL_AGENT_SANDBOX_SKILLS.md` (final form) + cross-link from `spec/SPEC_VOL_LLM_MESH.md` adjacent specs.
+  - [ ] Delete `spec/SPEC_EVOL_BR19_SKILLS.md` after integration.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [x] Confirm no `spec/BRANCH_SPEC_EVOL.md` is needed.
-  - [x] Confirm specs touched in Lot 1 are committed.
-
-- [ ] **Lot N — Final validation**
-  - [x] Re-read this checklist and confirm all completed boxes are evidence-backed.
-  - [x] Push final branch state for UAT.
-  - [ ] Record UAT status after user sign-off.
+- [ ] **Lot 9 — Final validation**
+  - [ ] Typecheck & Lint (`make typecheck-api lint-api`)
+  - [ ] Retest API (copy Lot 7 checklist)
+  - [ ] Retest e2e (copy Lot 7 checklist)
+  - [ ] Retest AI flaky tests and document signatures.
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted.
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, move branch plan to `plan/done`, push, and merge.
+  - [ ] Final gate step 2: run/verify branch CI and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI both `OK`, commit removal of `BRANCH.md`, push, merge.
+
+## Deferred to follow-up branches
+- **BR-19b** — UI surface (`SkillOutputViewer.svelte`, ChatPanel TOOL_TOGGLES → skill categories mapping, inline file preview).
+- **BR-19c** — `queue-manager.ts` skill-based dispatch + workflow integration.
+- **BR-27** — `@sentropic/marketplace` (policy/audit/RBAC overlay consulting `SkillsToolRegistry`).
+- **BR-15** — spectral-generated tools registering as skills (depends on BR-19 done).
