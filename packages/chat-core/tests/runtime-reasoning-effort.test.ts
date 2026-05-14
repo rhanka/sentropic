@@ -321,3 +321,165 @@ describe('ChatRuntime.evaluateReasoningEffort (Lot 18)', () => {
     expect(result.effortLabel).toBe('xhigh');
   });
 });
+
+describe('ChatRuntime.evaluateReasoningEffort bracketing events (Lot 20)', () => {
+  it('emits exactly 1 status event (reasoning_effort_selected) on the happy path', async () => {
+    const mesh = new InMemoryMeshDispatch();
+    mesh.enqueueStream([
+      { type: 'content_delta', data: { delta: 'high' } },
+      { type: 'done', data: {} },
+    ]);
+    const callback = buildEvaluatorCallback(mesh, () => 'high');
+    const { runtime, streamBuffer, streamSequencer } = buildFixture({
+      evaluateReasoningEffort: callback,
+    });
+    const result = await runtime.evaluateReasoningEffort(
+      buildInput({ streamId: 'happy-1' }),
+    );
+    expect(result.shouldEvaluate).toBe(true);
+    expect(result.failure).toBeUndefined();
+
+    const events = streamBuffer.snapshot('happy-1');
+    expect(events).toHaveLength(1);
+    expect(events[0]?.eventType).toBe('status');
+    expect(events[0]?.sequence).toBe(1);
+    expect(events[0]?.data).toEqual({
+      state: 'reasoning_effort_selected',
+      effort: 'high',
+      by: 'gpt-4.1-nano',
+    });
+    // Sequencer cursor consumed exactly 1 slot.
+    expect(await streamSequencer.peek('happy-1')).toBe(1);
+  });
+
+  it('emits 2 status events in order (eval_failed then selected) on the failure path', async () => {
+    const mesh = new InMemoryMeshDispatch();
+    mesh.enqueueStream([
+      { type: 'content_delta', data: { delta: 'totally-invalid-token' } },
+      { type: 'done', data: {} },
+    ]);
+    const callback = buildEvaluatorCallback(mesh, () => 'high');
+    const { runtime, streamBuffer, streamSequencer } = buildFixture({
+      evaluateReasoningEffort: callback,
+    });
+    const result = await runtime.evaluateReasoningEffort(
+      buildInput({ streamId: 'fail-1' }),
+    );
+    expect(result.shouldEvaluate).toBe(true);
+    expect(result.failure).toBeDefined();
+    expect(result.effortLabel).toBe('medium');
+
+    const events = streamBuffer.snapshot('fail-1');
+    expect(events).toHaveLength(2);
+    // Order matters: eval_failed at seq 1, then selected at seq 2.
+    expect(events[0]?.sequence).toBe(1);
+    expect(events[0]?.eventType).toBe('status');
+    expect((events[0]?.data as { state: string }).state).toBe(
+      'reasoning_effort_eval_failed',
+    );
+    expect((events[0]?.data as { message: string }).message).toContain(
+      'Invalid effort token',
+    );
+    expect(events[1]?.sequence).toBe(2);
+    expect(events[1]?.eventType).toBe('status');
+    expect(events[1]?.data).toEqual({
+      state: 'reasoning_effort_selected',
+      effort: 'medium',
+      by: 'fallback',
+    });
+    expect(await streamSequencer.peek('fail-1')).toBe(2);
+  });
+
+  it('emits NO stream events when shouldEvaluate=false (callback unwired)', async () => {
+    const { runtime, streamBuffer, streamSequencer } = buildFixture({
+      evaluateReasoningEffort: undefined,
+    });
+    await runtime.evaluateReasoningEffort(buildInput({ streamId: 'noop-1' }));
+
+    expect(streamBuffer.snapshot('noop-1')).toHaveLength(0);
+    expect(await streamSequencer.peek('noop-1')).toBe(0);
+  });
+
+  it('emits NO stream events when shouldEvaluate=false (non-reasoning model branch)', async () => {
+    const fixture = buildFixture();
+    const callback = buildEvaluatorCallback(fixture.mesh, (model) =>
+      model === 'gpt-5' ? 'high' : 'none',
+    );
+    const { runtime, streamBuffer, streamSequencer } = buildFixture({
+      evaluateReasoningEffort: callback,
+    });
+    await runtime.evaluateReasoningEffort(
+      buildInput({ streamId: 'non-gpt-5', selectedModel: 'gpt-4.1-mini' }),
+    );
+
+    expect(streamBuffer.snapshot('non-gpt-5')).toHaveLength(0);
+    expect(await streamSequencer.peek('non-gpt-5')).toBe(0);
+  });
+
+  it('preserves monotonic sequence allocation across multiple calls on the same stream', async () => {
+    const mesh1 = new InMemoryMeshDispatch();
+    mesh1.enqueueStream([
+      { type: 'content_delta', data: { delta: 'low' } },
+      { type: 'done', data: {} },
+    ]);
+    mesh1.enqueueStream([
+      { type: 'content_delta', data: { delta: 'high' } },
+      { type: 'done', data: {} },
+    ]);
+    const callback = buildEvaluatorCallback(mesh1, () => 'high');
+    const { runtime, streamBuffer, streamSequencer } = buildFixture({
+      evaluateReasoningEffort: callback,
+    });
+    await runtime.evaluateReasoningEffort(buildInput({ streamId: 'mono-1' }));
+    await runtime.evaluateReasoningEffort(buildInput({ streamId: 'mono-1' }));
+
+    const events = streamBuffer.snapshot('mono-1');
+    expect(events).toHaveLength(2);
+    expect(events[0]?.sequence).toBe(1);
+    expect(events[1]?.sequence).toBe(2);
+    expect(await streamSequencer.peek('mono-1')).toBe(2);
+  });
+
+  it('isolates sequence allocation across different streamIds', async () => {
+    const meshA = new InMemoryMeshDispatch();
+    meshA.enqueueStream([
+      { type: 'content_delta', data: { delta: 'high' } },
+      { type: 'done', data: {} },
+    ]);
+    meshA.enqueueStream([
+      { type: 'content_delta', data: { delta: 'low' } },
+      { type: 'done', data: {} },
+    ]);
+    const callback = buildEvaluatorCallback(meshA, () => 'high');
+    const { runtime, streamBuffer, streamSequencer } = buildFixture({
+      evaluateReasoningEffort: callback,
+    });
+    await runtime.evaluateReasoningEffort(buildInput({ streamId: 'iso-a' }));
+    await runtime.evaluateReasoningEffort(buildInput({ streamId: 'iso-b' }));
+
+    expect(streamBuffer.snapshot('iso-a')).toHaveLength(1);
+    expect(streamBuffer.snapshot('iso-a')[0]?.sequence).toBe(1);
+    expect(streamBuffer.snapshot('iso-b')).toHaveLength(1);
+    expect(streamBuffer.snapshot('iso-b')[0]?.sequence).toBe(1);
+    expect(await streamSequencer.peek('iso-a')).toBe(1);
+    expect(await streamSequencer.peek('iso-b')).toBe(1);
+  });
+
+  it('appends events with the streamId set as messageId on the stored row', async () => {
+    const mesh = new InMemoryMeshDispatch();
+    mesh.enqueueStream([
+      { type: 'content_delta', data: { delta: 'high' } },
+      { type: 'done', data: {} },
+    ]);
+    const callback = buildEvaluatorCallback(mesh, () => 'high');
+    const { runtime, streamBuffer } = buildFixture({
+      evaluateReasoningEffort: callback,
+    });
+    await runtime.evaluateReasoningEffort(buildInput({ streamId: 'msg-row-1' }));
+
+    const events = streamBuffer.snapshot('msg-row-1');
+    expect(events).toHaveLength(1);
+    expect(events[0]?.messageId).toBe('msg-row-1');
+    expect(events[0]?.streamId).toBe('msg-row-1');
+  });
+});

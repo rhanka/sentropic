@@ -512,7 +512,7 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] chat-service.ts `runAssistantGeneration` removes the 2 inline `writeStreamEvent` calls + the `streamSeq +=` mutations around `evaluateReasoningEffort`; re-syncs the local `streamSeq` cursor from `(await this.runtime.peekStreamSequence(options.assistantMessageId)) + 1` after the runtime call (the runtime appended 0/1/2 events internally depending on shouldEvaluate+failure branches)
 - [x] Drop unused `reasoningEffortLabel` and `reasoningEffortBy` locals (now consumed inside the runtime itself)
 - [x] Update 6 chat-core test fixtures (runtime-message, runtime-session, runtime-precheck, runtime-tool-loop, runtime-system-prompt, runtime-checkpoint, runtime-reasoning-effort) to inject `InMemoryStreamSequencer` into `ChatRuntimeDeps`
-- [ ] Extend `packages/chat-core/tests/runtime-reasoning-effort.test.ts` with bracketing coverage: assert the streamBuffer snapshot contains 1 event (selected) on happy path / 2 events (failed + selected) on failure path, at the allocated sequence numbers, in the correct order
+- [x] Extend `packages/chat-core/tests/runtime-reasoning-effort.test.ts` with bracketing coverage (7 new cases): 1-event happy path / 2-event failure-path-in-order / no-event callback-unwired / no-event non-reasoning-model / monotonic seq across multiple calls / per-streamId isolation / messageId set on row
 - [ ] make typecheck-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
 - [ ] make lint-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core PASS
 - [ ] make test-pkg-chat-core ENV=test-refacto-chat-service-core PASS (11 files, ~108 tests)
