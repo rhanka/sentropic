@@ -4,6 +4,7 @@ export * from './stream-port.js';
 export * from './stream-sequencer-port.js';
 export * from './session-port.js';
 export * from './mesh-port.js';
+export * from './mesh-errors.js';
 export * from './ports.js';
 export * from './types.js';
 export * from './history.js';
