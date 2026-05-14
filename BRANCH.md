@@ -217,3 +217,10 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] Regenerate package-lock.json via make lock-root (links @sentropic/{contracts,events,chat-core} as workspace symlinks)
 - [x] make typecheck-api PASS
 - [x] make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts PASS (2/2 tests)
+
+## Lot 6 - chat-message extraction
+- [x] Design real MessageStore port in packages/chat-core/src/message-port.ts (replace placeholder)
+- [x] Update packages/chat-core/src/ports.ts and src/index.ts re-exports
+- [x] Create api/src/services/chat/postgres-chat-message-store.ts adapter
+- [x] Refactor chat-service.ts message methods to delegate (no public API change)
+- [x] Re-run make test-api-unit -> chat-message tests green
