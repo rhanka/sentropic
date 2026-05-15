@@ -355,4 +355,194 @@ export class ChatRuntimeRunPrepare {
 
     return evaluation;
   }
+
+  /**
+   * BR14b Lot 20 — slim wrapper over `deps.streamSequencer.allocate`.
+   * Exposed because `deps` is `private readonly`. Mirrors the
+   * `ChatRuntime.resolveModelSelection` (Lot 17) and
+   * `ChatRuntime.acceptLocalToolResult` (Lot 10) public-wrapper pattern.
+   * Used by the tool-loop migration (Lots 21+) which still needs to
+   * advance the shared `streamSeq` cursor caller-side while the
+   * remaining loop body lives in chat-service.ts.
+   */
+  async allocateStreamSequence(streamId: string): Promise<number> {
+    return this.deps.streamSequencer.allocate(streamId);
+  }
+
+  /**
+   * BR14b Lot 20 — slim wrapper over `deps.streamSequencer.peek`.
+   * Used by `runAssistantGeneration` after `evaluateReasoningEffort`
+   * runs to re-sync the local `streamSeq` cursor with the runtime
+   * (which appended 1 or 2 events internally and consumed 1 or 2
+   * sequence slots).
+   */
+  async peekStreamSequence(streamId: string): Promise<number> {
+    return this.deps.streamSequencer.peek(streamId);
+  }
+
+  /**
+   * BR14b Lot 22a-1 — pre-loop initialization slice migrated from
+   * `chat-service.ts` lines 3084-3157 pre-Lot 22a-1. Bundles into a
+   * single method the four steps the chat-service caller used to drive
+   * inline BETWEEN `beginAssistantRunLoop` and the
+   * `while (continueGenerationLoop)` body:
+   *
+   *   1. `resolveModelSelection({userId, providerId, model || assistantRowModel})`
+   *      — same delegate call the inline code performed (Lot 12/17
+   *      callback).
+   *   2. Derive `useCodexTransport = selectedProviderId === 'openai'
+   *      && selectedModel === 'gpt-5.5' && (await
+   *      resolveOpenAITransportMode()) === 'codex'`. Mirrors the
+   *      inline boolean expression verbatim.
+   *   3. Mutate `loopState.useCodexTransport = useCodexTransport`
+   *      (verbatim assignment from chat-service.ts line 3109 pre-Lot
+   *      22a-1). The runtime owns this mutation so the caller no
+   *      longer needs to reach into `loopState` for this single field.
+   *   4. `evaluateReasoningEffort({...})` with the resolved provider +
+   *      model pair (Lot 18/20 callback). The runtime then re-syncs
+   *      `streamSeq` via `peekStreamSequence + 1` because
+   *      `evaluateReasoningEffort` may have appended 0/1/2 status events
+   *      internally.
+   *
+   * Behavior preservation is the absolute contract: every input + every
+   * intermediate cast + every mutation order matches the inline block
+   * pre-Lot 22a-1. The legacy `console.error('[chat]
+   * reasoning_effort_eval_failed', {assistantMessageId, sessionId,
+   * model, evaluatorModel, error})` trace is NOT emitted by this method
+   * — it carries `sessionId` (a chat-service-only field) and would also
+   * require coupling chat-core to console logging. The caller emits
+   * that trace using the returned `reasoning` value (same trace shape,
+   * same field set).
+   *
+   * When `deps.resolveOpenAITransportMode` is undefined (test harness,
+   * minimal runtime), the wrapper short-circuits the transport check
+   * to `useCodexTransport = false` regardless of the resolved
+   * provider/model pair. This mirrors the chat-service-side fallback
+   * behavior for any non-openai-gpt-5.5 selection (the boolean is
+   * always `false` for those because the leftmost `&&` clauses fail).
+   */
+  async initToolLoopState(
+    input: InitToolLoopStateInput,
+  ): Promise<InitToolLoopStateResult> {
+    // Step 1 — resolveModelSelection delegate (Lot 12/17 callback).
+    const resolvedSelection = await this.resolveModelSelection({
+      userId: input.userId,
+      providerId: input.providerId ?? undefined,
+      model: input.model || input.assistantRowModel,
+    });
+    const selectedProviderId = resolvedSelection.provider_id;
+    const selectedModel = resolvedSelection.model_id;
+    // Step 2 — derive useCodexTransport (mirrors the inline boolean
+    // expression at chat-service.ts line 3096-3099 pre-Lot 22a-1).
+    const useCodexTransport =
+      selectedProviderId === 'openai' &&
+      selectedModel === 'gpt-5.5' &&
+      this.deps.resolveOpenAITransportMode !== undefined &&
+      (await this.deps.resolveOpenAITransportMode()) === 'codex';
+    // Step 3 — mirror onto loopState (verbatim assignment from line
+    // 3109 pre-Lot 22a-1). The mutable in-place write preserves the
+    // legacy ordering: the loop body reads `loopState.useCodexTransport`
+    // AFTER this assignment, never before.
+    input.loopState.useCodexTransport = useCodexTransport;
+    // Step 4 — evaluateReasoningEffort (Lot 18/20 callback). The
+    // runtime appends 0/1/2 status events internally based on
+    // shouldEvaluate + failure.
+    const reasoning = await this.evaluateReasoningEffort({
+      userId: input.userId,
+      workspaceId: input.sessionWorkspaceId,
+      selectedProviderId,
+      selectedModel,
+      conversation: input.conversation,
+      signal: input.signal,
+      streamId: input.assistantMessageId,
+    });
+    // Re-sync the streamSeq cursor with the runtime after
+    // `evaluateReasoningEffort` appended 0 (callback unwired /
+    // non-reasoning model), 1 (success path), or 2 (failure path)
+    // status events internally. `peek` returns the latest allocated
+    // sequence; the next caller-side `writeStreamEvent` continues
+    // from `peek + 1`.
+    const streamSeq =
+      (await this.peekStreamSequence(input.assistantMessageId)) + 1;
+    return {
+      selectedProviderId,
+      selectedModel,
+      useCodexTransport,
+      reasoning,
+      reasoningEffortForThisMessage: reasoning.effortForMessage,
+      streamSeq,
+    };
+  }
+
+  /**
+   * BR14b Lot 21a — initialize the tool-loop-local state for
+   * `runAssistantGeneration`. Mirrors the 40-line loop-setup block
+   * (chat-service.ts lines 2896-2934 + 3001 pre-Lot 21a) verbatim —
+   * every field initial value matches the inline declaration. The
+   * call also performs the initial `getNextSequence` lookup against
+   * the `StreamBuffer` port so the returned `streamSeq` starts at
+   * the same cursor value the caller would have computed inline.
+   *
+   * Behaviour preservation is the absolute contract: the returned
+   * state is byte-identical to the inline block pre-Lot 21a (apart
+   * from the field aggregation into a single struct). The caller
+   * threads `loopState` through the remaining loop body and mutates
+   * its fields in-place exactly as before (`loopState.iteration++`,
+   * `loopState.contentParts.length = 0`, etc.).
+   */
+  async beginAssistantRunLoop(
+    input: BeginAssistantRunLoopInput,
+  ): Promise<AssistantRunLoopState> {
+    const streamSeq = await this.deps.streamBuffer.getNextSequence(
+      input.assistantMessageId,
+    );
+    const lastObservedStreamSequence = Math.max(streamSeq - 1, 0);
+    const currentMessages: AssistantRunLoopMessage[] = [
+      { role: 'system', content: input.systemPrompt },
+      ...input.conversation.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+    ];
+    const previousResponseId: string | null =
+      input.resumeFrom?.previousResponseId ?? null;
+    const pendingResponsesRawInput: unknown[] | null = Array.isArray(
+      input.resumeFrom?.toolOutputs,
+    )
+      ? input.resumeFrom!.toolOutputs.map((item) => ({
+          type: 'function_call_output',
+          call_id: item.callId,
+          output: item.output,
+        }))
+      : null;
+    const todoAutonomousExtensionEnabled = Boolean(
+      input.enforceTodoUpdateMode && input.todoProgressionFocusMode,
+    );
+    const todoContinuationActive = Boolean(
+      todoAutonomousExtensionEnabled && input.hasActiveSessionTodo,
+    );
+    return {
+      streamSeq,
+      lastObservedStreamSequence,
+      contentParts: [],
+      reasoningParts: [],
+      lastErrorMessage: null,
+      executedTools: [],
+      toolCalls: [],
+      currentMessages,
+      maxIterations: input.baseMaxIterations,
+      todoAutonomousExtensionEnabled,
+      todoContinuationActive,
+      todoAwaitingUserInput: false,
+      iteration: 0,
+      previousResponseId,
+      pendingResponsesRawInput,
+      steerHistoryMessages: [],
+      steerReasoningReplay: '',
+      lastBudgetAnnouncedPct: -1,
+      contextBudgetReplanAttempts: 0,
+      continueGenerationLoop: true,
+      useCodexTransport: input.useCodexTransport ?? false,
+    };
+  }
 }
