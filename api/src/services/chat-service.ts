@@ -27,7 +27,7 @@ import {
   type ContextBudgetZone as ChatCoreContextBudgetZone,
 } from '../../../packages/chat-core/src/context-budget';
 import { createId } from '../utils/id';
-import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
+import { callLLM, callLLMStream } from './llm-runtime';
 import {
   getModelCatalogPayload,
   inferProviderFromModelIdWithLegacy,
@@ -1130,28 +1130,13 @@ export class ChatService {
     return text.slice(0, maxLen) + '\n…(tronqué)…';
   }
 
-  private safeJson(value: unknown, maxLen: number): string {
-    try {
-      const raw = typeof value === 'string' ? value : JSON.stringify(value);
-      return this.safeTruncate(raw, maxLen);
-    } catch {
-      return this.safeTruncate(String(value), maxLen);
-    }
-  }
-
-  private buildToolDigest(executed: Array<{ name: string; result: unknown }>): string {
-    if (!executed.length) return '(aucun outil exécuté)';
-    // On limite agressivement pour éviter des prompts énormes (ex: web_extract).
-    const parts: string[] = [];
-    const maxPerTool = 4000;
-    const maxTotal = 12000;
-    for (const t of executed) {
-      const block = `- ${t.name}:\n${this.safeJson(t.result, maxPerTool)}`;
-      parts.push(block);
-      if (parts.join('\n\n').length > maxTotal) break;
-    }
-    return this.safeTruncate(parts.join('\n\n'), maxTotal);
-  }
+  // BR14b Lot 22a-2 — `safeJson` + `buildToolDigest` migrated into
+  // chat-core as module-scope pure helpers (`safeJsonForRuntime` +
+  // `buildToolDigestForRuntime` in `packages/chat-core/src/runtime.ts`).
+  // Consumed exclusively by `ChatRuntime.runPass2Fallback` after the
+  // inline pass2 fallback block was deleted. `safeTruncate` STAYS here
+  // because it still has chat-service-local callers (lines ~1329 +
+  // ~1439).
 
   private serializeToolOutput(value: unknown): string {
     if (typeof value === 'string') return value;
@@ -3069,7 +3054,13 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     // polls steer messages internally). No caller-side cursor needed.
     const contentParts = loopState.contentParts;
     const reasoningParts = loopState.reasoningParts;
-    let lastErrorMessage = loopState.lastErrorMessage;
+    // BR14b Lot 22a-2 — `lastErrorMessage` was the pre-migration carrier
+    // for surfacing stream error messages into the pass2 fallback block.
+    // After the pass2 slice migrated into `ChatRuntime.runPass2Fallback`
+    // (which manages its own internal `lastErrorMessage` cursor), the
+    // caller no longer reads this value, so the caller-side `let` and
+    // its inner-loop reassignment are deleted. The runtime still tracks
+    // it on `loopState.lastErrorMessage` for telemetry symmetry.
     const executedTools = loopState.executedTools;
     const toolCalls = loopState.toolCalls;
     let currentMessages: ChatRuntimeMessage[] =
@@ -3366,7 +3357,10 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       previousResponseId = loopState.previousResponseId;
       pendingResponsesRawInput = loopState.pendingResponsesRawInput;
       currentMessages = loopState.currentMessages as ChatRuntimeMessage[];
-      lastErrorMessage = loopState.lastErrorMessage;
+      // BR14b Lot 22a-2 — caller-side `lastErrorMessage` sync removed
+      // because the pass2 fallback (its only post-loop reader) migrated
+      // into `ChatRuntime.runPass2Fallback`. The runtime still maintains
+      // `loopState.lastErrorMessage` for telemetry symmetry.
       steerReasoningReplay = loopState.steerReasoningReplay;
       streamSeq =
         (await this.runtime.peekStreamSequence(options.assistantMessageId)) + 1;
@@ -3704,113 +3698,57 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       }
     }
 
-    // Si on arrive ici sans contenu final, on déclenche un 2e pass (sans tools) pour forcer une réponse.
-    // Si le 2e pass échoue => on marque une erreur (et on laisse le job échouer).
-    if (!contentParts.join('').trim()) {
-      const lastUserMessage = [...conversation].reverse().find((m) => m.role === 'user')?.content ?? '';
-      const digest = this.buildToolDigest(executedTools);
-      const pass2System =
-        systemPrompt +
-        `\n\nIMPORTANT: Tu dois maintenant produire une réponse finale à l'utilisateur.\n` +
-        `- Tu n'as pas le droit d'appeler d'outil (tools désactivés).\n` +
-        `- Tu dois répondre en français, de manière concise et actionnable.\n` +
-        `- Si une information manque, dis-le explicitement.\n`;
-
-      const pass2Messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-        { role: 'system', content: pass2System },
-        ...conversation,
-        {
-          role: 'user',
-          content:
-            `Demande utilisateur: ${lastUserMessage}\n\n` +
-            `Résultats disponibles (outils déjà exécutés):\n${digest}\n\n` +
-            `Rédige maintenant la réponse finale.`
-        }
-      ];
-
-      // Réinitialiser buffers pour le contenu final
-      contentParts.length = 0;
-      reasoningParts.length = 0;
-      lastErrorMessage = null;
-
-      try {
-        await writeChatGenerationTrace({
-          enabled: env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
-          sessionId: options.sessionId,
-          assistantMessageId: options.assistantMessageId,
-          userId: options.userId,
-          workspaceId: sessionWorkspaceId,
-          phase: 'pass2',
-          iteration: 1,
-          model: selectedModel || null,
-          toolChoice: 'none',
-          tools: null,
-          openaiMessages: pass2Messages,
-          toolCalls: null,
-          meta: { kind: 'pass2_prompt', callSite: 'ChatService.runAssistantGeneration/pass2/beforeOpenAI', openaiApi: 'responses' }
-        });
-
-        for await (const event of callLLMStream({
-          providerId: selectedProviderId,
-          model: selectedModel,
-          credential: options.providerApiKey ?? undefined,
-          userId: options.userId,
-          workspaceId: sessionWorkspaceId,
-          messages: pass2Messages,
-          tools: undefined,
-          toolChoice: 'none',
-          reasoningSummary: 'detailed',
-          reasoningEffort: reasoningEffortForThisMessage,
-          signal: options.signal
-        })) {
-          const eventType = event.type as StreamEventType;
-          const data = (event.data ?? {}) as Record<string, unknown>;
-          if (eventType === 'done') {
-            continue;
-          }
-          if (eventType === 'error') {
-            const msg = (data as Record<string, unknown>).message;
-            lastErrorMessage = typeof msg === 'string' ? msg : 'Unknown error';
-            await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-            continue;
-          }
-          // On stream les deltas pass2 sur le même streamId
-          await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
-          streamSeq += 1;
-          if (eventType === 'content_delta') {
-            const delta = typeof data.delta === 'string' ? data.delta : '';
-            if (delta) {
-              contentParts.push(delta);
-            }
-          } else if (eventType === 'reasoning_delta') {
-            const delta = typeof data.delta === 'string' ? data.delta : '';
-            if (delta) reasoningParts.push(delta);
-          }
-        }
-      } catch (e) {
-        const message =
-          lastErrorMessage ||
-          (e instanceof Error ? e.message : 'Second pass failed');
-        // Marquer une erreur explicite côté stream
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'error',
-          { message },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        throw e;
-      }
-
-      if (!contentParts.join('').trim()) {
-        const message = 'Second pass produced no content';
-        await writeStreamEvent(options.assistantMessageId, 'error', { message }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        throw new Error(message);
-      }
-    }
+    // BR14b Lot 22a-2 — pass2 fallback slice (no-content second pass
+    // with tools disabled) now lives behind `ChatRuntime.runPass2Fallback`.
+    // The runtime owns the guard, message build (system + conversation +
+    // tool digest), buffer resets, optional pass2_prompt trace, mesh
+    // streaming via `deps.mesh.invokeStream`, error event emission, and
+    // the post-stream `'Second pass produced no content'` throw. Behavior
+    // preservation STRICT — verbatim port of the 105-line inline body.
+    const pass2Result = await this.runtime.runPass2Fallback({
+      streamId: options.assistantMessageId,
+      assistantMessageId: options.assistantMessageId,
+      sessionId: options.sessionId,
+      userId: options.userId,
+      workspaceId: sessionWorkspaceId,
+      providerId: selectedProviderId,
+      model: selectedModel,
+      credential: options.providerApiKey ?? undefined,
+      signal: options.signal,
+      reasoningEffort: reasoningEffortForThisMessage,
+      conversation,
+      executedTools,
+      systemPrompt,
+      contentParts,
+      reasoningParts,
+      streamSeq,
+      traceEnabled:
+        env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
+      writeChatGenerationTrace: async (input) =>
+        writeChatGenerationTrace({
+          enabled: input.enabled,
+          sessionId: input.sessionId,
+          assistantMessageId: input.assistantMessageId,
+          userId: input.userId,
+          workspaceId: input.workspaceId,
+          phase: input.phase,
+          iteration: input.iteration,
+          model: input.model,
+          toolChoice: input.toolChoice,
+          tools: input.tools,
+          openaiMessages: input.openaiMessages,
+          toolCalls: input.toolCalls,
+          meta: input.meta,
+        }),
+    });
+    streamSeq = pass2Result.streamSeq;
+    // BR14b Lot 22a-2 — `pass2Result.lastErrorMessage` is exposed by
+    // the runtime for telemetry symmetry but not consumed past this
+    // point (matches the pre-migration inline body which wrote
+    // `lastErrorMessage` without subsequent reads). Kept on the
+    // `RunPass2FallbackResult` shape for unit-test assertion + future
+    // logging hooks.
+    void pass2Result;
 
     // BR14b Lot 21e-3 — terminal finalization slice (single `done` event +
     // persist final content + touch session updatedAt) now lives behind
