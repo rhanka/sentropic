@@ -12,6 +12,7 @@ import {
   type ChatCheckpointSummary,
   type BuildSystemPromptInput,
   type BuildSystemPromptResult,
+  type ConsumeToolCallsInput,
   type EvaluateReasoningEffortInput,
   type ExecuteServerToolInput,
   type ExecuteServerToolResult,
@@ -264,16 +265,14 @@ const getDataString = (data: unknown, key: string): string | null => {
 
 const isValidToolName = (value: string): boolean => /^[a-zA-Z0-9_-]{1,64}$/.test(value);
 
-const parseToolCallArgs = (value: unknown): unknown => {
-  if (typeof value !== 'string') return value ?? {};
-  const trimmed = value.trim();
-  if (!trimmed) return {};
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return {};
-  }
-};
+// BR14b Lot 21e-2 — `parseToolCallArgs` was the inline local-tool args
+// parser used by `runAssistantGeneration` for the local-tool short-circuit
+// (line 3521 pre-Lot 21c) and inside the api-side per-tool body (none
+// after Lot 21d-2). The local-tool short-circuit migrated into
+// `ChatRuntime.consumeToolCalls` (Lot 21c shell) with a verbatim
+// `parseToolCallArgsForRuntime` module-scope helper in chat-core. The
+// Lot 21e-2 for-loop body migration removed the last caller-side
+// reference; the api helper is deleted (no legacy fallback).
 
 type TodoRuntimeToolName = 'plan';
 type TodoRuntimeToolOperation = 'create' | 'update_plan' | 'update_task';
@@ -3511,144 +3510,65 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         }
       };
 
-      for (const toolCall of toolCalls) {
-        if (options.signal?.aborted) throw new Error('AbortError');
-        const toolName = String(toolCall.name || '').trim();
-        if (toolName && localToolNames.has(toolName)) {
-          pendingLocalToolCalls.push({
-            id: toolCall.id,
-            name: toolName,
-            args: parseToolCallArgs(toolCall.args),
-          });
-          await writeStreamEvent(
-            options.assistantMessageId,
-            'tool_call_result',
-            { tool_call_id: toolCall.id, result: { status: 'awaiting_external_result' } },
-            streamSeq,
-            options.assistantMessageId
-          );
-          streamSeq += 1;
-          continue;
-        }
-        
-        try {
-          const args = JSON.parse(toolCall.args || '{}');
-          const projectedResultChars = estimateToolResultProjectionChars(
-            toolCall.name,
-            asRecord(args) ?? {},
-          );
-          const preToolBudgetInitial = estimateContextBudget({
-            messages: currentMessages,
-            tools,
-            rawInput: responseToolOutputs,
-            providerId: selectedProviderId,
-            modelId: selectedModel,
-          });
-          await writeContextBudgetStatus('pre_tool', preToolBudgetInitial, {
-            tool_name: toolCall.name,
-          });
-          // BR14b Lot 21e-1 — the inline pre-tool context-budget gate
-          // (lines 3534-3636 pre-Lot 21e-1, ~95l: projection compute +
-          // hard-zone compaction branch + soft/hard deferred branch +
-          // escalation status emission + accumulator pushes + reset
-          // counter) now lives behind `ChatRuntime.applyContextBudgetGate`.
-          // Behavior preservation strict — the projection math, the
-          // deferred-result payload shape, the two stream-event payloads
-          // (`tool_call_result` + optional `context_budget_user_escalation_required`
-          // status), and the `+= 1` / `= 0` `contextBudgetReplanAttempts`
-          // semantics are byte-identical to pre-Lot 21e-1. The runtime
-          // owns event emission via `deps.streamSequencer.allocate` +
-          // `deps.streamBuffer.append`; the caller re-syncs `streamSeq`
-          // from `gate.streamSeq`. The `gate.deferredAccumulator` payload
-          // carries the three rows (`toolResults` / `responseToolOutputs`
-          // / `executedTools`) the caller pushes when `shouldContinue`
-          // is true, mirroring the pre-Lot 21e-1 inline pushes. Lot 21e-2
-          // will migrate the remaining for-loop body.
-          const gate = await this.runtime.applyContextBudgetGate({
-            streamId: options.assistantMessageId,
-            toolCall: { id: toolCall.id, name: toolCall.name },
-            args,
-            preToolBudget: preToolBudgetInitial,
-            projectedResultChars,
-            streamSeq,
-            contextBudgetReplanAttempts,
-            maxReplanAttempts: CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS,
-            softZoneCode: CONTEXT_BUDGET_SOFT_ZONE_CODE,
-            hardZoneCode: CONTEXT_BUDGET_HARD_ZONE_CODE,
-            resolveBudgetZone,
-            estimateTokenCountFromChars,
-            compactContextIfNeeded,
-          });
-          streamSeq = gate.streamSeq;
-          contextBudgetReplanAttempts = gate.contextBudgetReplanAttempts;
-          if (gate.shouldContinue) {
-            const deferredAcc = gate.deferredAccumulator!;
-            toolResults.push({
-              role: 'tool',
-              content: JSON.stringify(deferredAcc.deferredResult),
-              tool_call_id: deferredAcc.toolCallId,
-            });
-            responseToolOutputs.push({
-              type: 'function_call_output',
-              call_id: deferredAcc.toolCallId,
-              output: JSON.stringify(deferredAcc.deferredResult),
-            });
-            executedTools.push({
-              toolCallId: deferredAcc.toolCallId,
-              name: deferredAcc.toolName,
-              args: deferredAcc.args,
-              result: deferredAcc.deferredResult,
-            });
-            continue;
-          }
-          const todoOperation: TodoRuntimeToolOperation | null = (() => {
-            if (toolCall.name !== 'plan') return null;
-            const actionRaw =
-              typeof args.action === 'string' ? args.action.trim().toLowerCase() : '';
-            if (
-              actionRaw === 'create' ||
-              actionRaw === 'update_plan' ||
-              actionRaw === 'update_task'
-            ) {
-              return actionRaw;
-            }
-            if (actionRaw.length > 0) {
-              return null;
-            }
-            const hasTaskId =
-              typeof args.taskId === 'string' && args.taskId.trim().length > 0;
-            if (hasTaskId) return 'update_task';
-            const hasTodoId =
-              typeof args.todoId === 'string' && args.todoId.trim().length > 0;
-            if (hasTodoId) return 'update_plan';
-            return 'create';
-          })();
-          if (toolCall.name === 'plan' && !todoOperation) {
-            throw new Error(
-              'plan: action must be one of create|update_plan|update_task',
-            );
-          }
-          let result: unknown;
-
-          // BR14b Lot 21d-3 — server-tool dispatch now flows through the
-          // chat-core `runtime.executeServerTool(...)` facade, which
-          // forwards the per-tool input verbatim to the
-          // `ChatRuntimeDeps.executeServerTool` Option A callback bound
-          // in the `ChatService` constructor. The callback resolves to
-          // `this.executeServerToolInternal(...)` (Lot 21d-2's verbatim
-          // 30/30 server-tool switch). Behavior is identical to the
-          // pre-Lot 21d-3 direct method call — the only change is that
-          // the dispatch crosses the port boundary on its way to the
-          // api-side implementation, putting chat-core in control of the
-          // tool-call execution lifecycle. The chat-service-LOCAL input
-          // bundle (33 fields, including closures + captured locals) is
-          // structurally widened to the chat-core opaque
-          // `ExecuteServerToolInput` via the bound callback's
-          // `as unknown as ExecuteServerToolInternalInput` cast.
-          const r = await this.runtime.executeServerTool({
-            toolCall,
-            args,
-            todoOperation,
+      // BR14b Lot 21e-2 — the inline per-tool dispatch for-loop body
+      // (228l pre-Lot 21e-2, lines 3514-3741: abort check + local-tool
+      // short-circuit + try-block context-budget gate + executeServerTool
+      // dispatch + success accumulator pushes + catch-block error wrap)
+      // now lives behind `ChatRuntime.consumeToolCalls`. The runtime
+      // owns event emission (`tool_call_result` for local short-circuits
+      // and catch-block errors; gate-emitted `tool_call_result` +
+      // optional escalation status via `applyContextBudgetGate`) and
+      // returns the accumulator deltas + advanced cursors. The
+      // chat-service caller is reduced to a thin invocation + state
+      // sync: spread the returned arrays into the outer accumulators
+      // and re-sync `streamSeq` + `contextBudgetReplanAttempts` from
+      // the result. Behavior preservation STRICT — every event payload,
+      // every accumulator push order, every cursor mutation, the
+      // `todoErrorCall` plan-name gating, the `executeServerTool` return
+      // cast trick (api-side returns `{ result, streamSeq }` typed as
+      // chat-core `ExecuteServerToolResult` per the Lot 21d-3 boundary
+      // opacity), and the gate's deferred-accumulator semantics are
+      // byte-identical to pre-Lot 21e-2.
+      const consumeInput: ConsumeToolCallsInput = {
+        streamId: options.assistantMessageId,
+        loopState,
+        localToolNames,
+        sessionId: options.sessionId,
+        userId: options.userId,
+        workspaceId: sessionWorkspaceId,
+        providerId: selectedProviderId,
+        modelId: selectedModel,
+        tools: (tools ?? null) as ReadonlyArray<unknown> | null,
+        enforceTodoUpdateMode,
+        readOnly,
+        signal: options.signal,
+        contextBudgetReplanAttempts,
+        maxReplanAttempts: CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS,
+        softZoneCode: CONTEXT_BUDGET_SOFT_ZONE_CODE,
+        hardZoneCode: CONTEXT_BUDGET_HARD_ZONE_CODE,
+        estimateContextBudget: (input) =>
+          estimateContextBudget({
+            messages: input.messages as ChatRuntimeMessage[],
+            tools: input.tools,
+            rawInput: input.rawInput as unknown[],
+            providerId: input.providerId as ProviderId,
+            modelId: input.modelId,
+          }),
+        estimateToolResultProjectionChars: (toolName, args) =>
+          estimateToolResultProjectionChars(toolName, args),
+        writeContextBudgetStatus: async (phase, snapshot, meta) =>
+          writeContextBudgetStatus(phase, snapshot, meta),
+        resolveBudgetZone,
+        estimateTokenCountFromChars,
+        compactContextIfNeeded: (reason, snapshot) =>
+          compactContextIfNeeded(reason, snapshot),
+        markTodoIterationState,
+        todoAutonomousExtensionEnabled,
+        buildExecuteServerToolInput: (ctx) =>
+          ({
+            toolCall: ctx.toolCall,
+            args: ctx.args,
+            todoOperation: ctx.todoOperation as TodoRuntimeToolOperation | null,
             options: {
               userId: options.userId,
               sessionId: options.sessionId,
@@ -3656,10 +3576,10 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
               locale: options.locale,
               signal: options.signal,
             },
-            currentMessages,
+            currentMessages: ctx.currentMessages,
             tools,
-            responseToolOutputs,
-            executedTools,
+            responseToolOutputs: ctx.responseToolOutputs,
+            executedTools: ctx.executedTools,
             selectedProviderId,
             selectedModel,
             sessionWorkspaceId,
@@ -3678,67 +3598,22 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             vscodeCodeAgentPayload,
             lastUserMessage,
             iteration,
-            streamSeq,
+            streamSeq: ctx.streamSeq,
             getOrganizationIdForFolder,
             isAllowedOrganizationId,
             markTodoIterationState,
             isExplicitConfirmation,
             hasContextType,
-          } as unknown as ExecuteServerToolInput);
-          result = (r as unknown as ExecuteServerToolInternalResult).result;
-          streamSeq = (r as unknown as ExecuteServerToolInternalResult).streamSeq;
-
-          // Garder une trace pour un éventuel 2e pass "rédaction-only"
-          executedTools.push({ toolCallId: toolCall.id, name: toolCall.name, args, result });
-
-          // Ajouter le résultat au format OpenAI pour continuer le stream
-          toolResults.push({
-            role: 'tool',
-            content: JSON.stringify(result),
-            tool_call_id: toolCall.id
-          });
-
-          // Responses API native continuation: function_call_output attached to call_id
-          responseToolOutputs.push({
-            type: 'function_call_output',
-            call_id: toolCall.id,
-            output: JSON.stringify(result),
-          });
-        } catch (error) {
-          const errorResult = {
-            status: 'error',
-            error: error instanceof Error ? error.message : 'Unknown error'
-          };
-          const todoErrorCall = toolCall.name === 'plan';
-          if (todoErrorCall && todoAutonomousExtensionEnabled) {
-            markTodoIterationState(errorResult);
-          }
-          await writeStreamEvent(
-            options.assistantMessageId,
-            'tool_call_result',
-            { tool_call_id: toolCall.id, result: errorResult },
-            streamSeq,
-            options.assistantMessageId
-          );
-          streamSeq += 1;
-          toolResults.push({
-            role: 'tool',
-            content: JSON.stringify(errorResult),
-            tool_call_id: toolCall.id
-          });
-          responseToolOutputs.push({
-            type: 'function_call_output',
-            call_id: toolCall.id,
-            output: JSON.stringify(errorResult),
-          });
-          executedTools.push({
-            toolCallId: toolCall.id,
-            name: toolCall.name || 'unknown_tool',
-            args: toolCall.args ? (() => { try { return JSON.parse(toolCall.args); } catch { return toolCall.args; } })() : undefined,
-            result: errorResult
-          });
-        }
-      }
+          }) as unknown as ExecuteServerToolInput,
+        currentMessages,
+      };
+      const consumed = await this.runtime.consumeToolCalls(consumeInput);
+      toolResults.push(...consumed.toolResults);
+      responseToolOutputs.push(...consumed.responseToolOutputs);
+      pendingLocalToolCalls.push(...consumed.pendingLocalToolCalls);
+      executedTools.push(...consumed.executedTools);
+      streamSeq = consumed.streamSeq;
+      contextBudgetReplanAttempts = consumed.contextBudgetReplanAttempts;
 
       // Trace: executed tool calls for this iteration (args/results)
       await writeChatGenerationTrace({
