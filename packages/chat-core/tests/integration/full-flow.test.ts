@@ -837,4 +837,224 @@ describe('ChatRuntime integration — inter-lib full-flow composition', () => {
     const events = fixture.streamBuffer.snapshot(assistantMessageId);
     expect(events.some((e) => e.eventType === 'content_delta')).toBe(true);
   });
+
+  // ---------------------------------------------------------------------
+  // CASE 9 — Awaiting local tool result with TWO pending local tools.
+  //
+  // Exercises ChatRuntimeMessages.acceptLocalToolResult sibling state
+  // between awaitingState + buffered tool_call_result events: only one of
+  // two pending results is received → readyToResume:false, second result
+  // delivered → readyToResume:true with merged tool outputs.
+  // ---------------------------------------------------------------------
+  it('keeps readyToResume=false until ALL pending local tool results arrive', async () => {
+    await seedSessionAndUserTurn(fixture, { userText: 'Run two local tools.' });
+    // Stage an `awaiting_local_tool_results` status event directly so the
+    // runtime's `acceptLocalToolResult` finds the multi-pending baseline
+    // without the prior `awaiting_external_result` placeholders that
+    // `consumeToolCalls` would otherwise emit (and that would count as
+    // "results received" on the very first follow-up read).
+    const seq1 = await fixture.streamBuffer.getNextSequence(assistantMessageId);
+    await fixture.streamBuffer.append(
+      assistantMessageId,
+      'status',
+      {
+        state: 'awaiting_local_tool_results',
+        previous_response_id: 'rsp_multi',
+        pending_local_tool_calls: [
+          { tool_call_id: 'tc-a', name: 'local_a', args: {} },
+          { tool_call_id: 'tc-b', name: 'local_b', args: {} },
+        ],
+        base_tool_outputs: [],
+        local_tool_definitions: [
+          { name: 'local_a', description: 'A', parameters: { type: 'object' } },
+          { name: 'local_b', description: 'B', parameters: { type: 'object' } },
+        ],
+      },
+      seq1,
+      assistantMessageId,
+    );
+
+    // First result delivered — still waiting on tc-b.
+    const partial = await fixture.runtime.acceptLocalToolResult({
+      assistantMessageId,
+      toolCallId: 'tc-a',
+      result: { status: 'completed', stdout: 'A done' },
+    });
+    expect(partial.readyToResume).toBe(false);
+    expect(partial.waitingForToolCallIds).toEqual(['tc-b']);
+    expect(partial.resumeFrom).toBeUndefined();
+
+    // Second result delivered — fully resolved with merged tool outputs.
+    const complete = await fixture.runtime.acceptLocalToolResult({
+      assistantMessageId,
+      toolCallId: 'tc-b',
+      result: { status: 'completed', stdout: 'B done' },
+    });
+    expect(complete.readyToResume).toBe(true);
+    expect(complete.waitingForToolCallIds).toEqual([]);
+    expect(complete.resumeFrom?.toolOutputs).toHaveLength(2);
+    expect(complete.resumeFrom?.toolOutputs.map((o) => o.callId).sort()).toEqual([
+      'tc-a',
+      'tc-b',
+    ]);
+  });
+
+  // ---------------------------------------------------------------------
+  // CASE 10 — Error injection via deps.executeServerTool throwing.
+  //
+  // Drives `consumeToolCalls` with a server tool whose executor throws.
+  // The runtime's try/catch wraps the error into a `tool_call_result`
+  // event with `{status:'error', error:<message>}`. Proves
+  // ChatRuntimeToolDispatch handles dispatch failures without crashing
+  // the run.
+  // ---------------------------------------------------------------------
+  it('wraps executeServerTool exceptions into tool_call_result error events', async () => {
+    // Rebuild fixture with a throwing executeServerTool.
+    fixture = buildFixture({
+      executeServerTool: async () => {
+        throw new Error('boom: tool dispatch failed');
+      },
+    });
+    await seedSessionAndUserTurn(fixture);
+    const ctx = await fixture.runtime.prepareAssistantRun({
+      userId,
+      sessionId,
+      assistantMessageId,
+    });
+    const prompt = await fixture.runtime.prepareSystemPrompt(ctx, {
+      userId,
+      sessionId,
+      requestedTools: [],
+    });
+    const loopState = await fixture.runtime.beginAssistantRunLoop({
+      assistantMessageId,
+      systemPrompt: prompt.systemPrompt,
+      conversation: ctx.conversation,
+      enforceTodoUpdateMode: false,
+      todoProgressionFocusMode: false,
+      hasActiveSessionTodo: false,
+      baseMaxIterations: 10,
+    });
+
+    // Inject a non-local tool call into loopState so consumeToolCalls
+    // routes through executeServerTool (which throws).
+    loopState.toolCalls = [
+      { id: 'tc-err', name: 'remote_tool', args: '{}' },
+    ];
+
+    // Minimal helper bundle to satisfy the gate-related inputs (gate
+    // never fires because zone='normal' for a 0% snapshot).
+    const noopSnapshot = {
+      estimatedTokens: 0,
+      maxTokens: 100_000,
+      occupancyPct: 0,
+      zone: 'normal' as const,
+    };
+    const result = await fixture.runtime.consumeToolCalls({
+      streamId: assistantMessageId,
+      loopState,
+      localToolNames: new Set<string>(),
+      sessionId,
+      userId,
+      workspaceId: 'ws-1',
+      providerId: 'openai',
+      modelId: 'gpt-test',
+      tools: null,
+      enforceTodoUpdateMode: false,
+      readOnly: false,
+      contextBudgetReplanAttempts: 0,
+      maxReplanAttempts: 1,
+      softZoneCode: 'context_budget_risk',
+      hardZoneCode: 'context_budget_blocked',
+      estimateContextBudget: () => noopSnapshot,
+      estimateToolResultProjectionChars: () => 0,
+      writeContextBudgetStatus: async () => undefined,
+      resolveBudgetZone: () => 'normal',
+      estimateTokenCountFromChars: () => 1,
+      compactContextIfNeeded: async (_reason, snap) => snap,
+      markTodoIterationState: () => undefined,
+      todoAutonomousExtensionEnabled: false,
+      buildExecuteServerToolInput: (input) => ({
+        userId,
+        sessionId,
+        assistantMessageId,
+        workspaceId: 'ws-1',
+        toolCall: input.toolCall,
+        streamSeq: input.streamSeq,
+        currentMessages: input.currentMessages,
+        tools: null,
+        responseToolOutputs: input.responseToolOutputs,
+        providerId: 'openai',
+        modelId: 'gpt-test',
+        enforceTodoUpdateMode: false,
+        todoAutonomousExtensionEnabled: false,
+        contextBudgetReplanAttempts: 0,
+        readOnly: false,
+      }),
+      currentMessages: loopState.currentMessages,
+    });
+    // Tool dispatch failed but the loop did not crash.
+    expect(result.shouldBreakLoop).toBe(false);
+    expect(result.toolResults).toHaveLength(1);
+    // Error envelope landed as a tool_call_result event in the buffer.
+    const errorResult = fixture.streamBuffer
+      .snapshot(assistantMessageId)
+      .find(
+        (e) =>
+          e.eventType === 'tool_call_result' &&
+          (e.data as { tool_call_id?: string }).tool_call_id === 'tc-err',
+      );
+    expect(errorResult).toBeDefined();
+    const payload = errorResult?.data as {
+      result: { status: string; error?: string };
+    };
+    expect(payload.result.status).toBe('error');
+    expect(payload.result.error).toContain('boom: tool dispatch failed');
+  });
+
+  // ---------------------------------------------------------------------
+  // CASE 11 — Steer reasoning replay buffer accumulates across the stream
+  // up to STEER_REASONING_REPLAY_MAX_CHARS (6000) — verifies the runtime
+  // mutates loopState.steerReasoningReplay in-place during
+  // consumeAssistantStream (proving ChatRuntimeToolDispatch's reasoning
+  // tracker survives the façade).
+  // ---------------------------------------------------------------------
+  it('accumulates reasoning deltas into loopState.steerReasoningReplay during stream consumption', async () => {
+    await seedSessionAndUserTurn(fixture);
+    const ctx = await fixture.runtime.prepareAssistantRun({
+      userId,
+      sessionId,
+      assistantMessageId,
+    });
+    const prompt = await fixture.runtime.prepareSystemPrompt(ctx, {
+      userId,
+      sessionId,
+      requestedTools: [],
+    });
+    const loopState = await fixture.runtime.beginAssistantRunLoop({
+      assistantMessageId,
+      systemPrompt: prompt.systemPrompt,
+      conversation: ctx.conversation,
+      enforceTodoUpdateMode: false,
+      todoProgressionFocusMode: false,
+      hasActiveSessionTodo: false,
+      baseMaxIterations: 10,
+    });
+    fixture.mesh.enqueueStream([
+      { type: 'reasoning_delta', data: { delta: 'step one. ' } },
+      { type: 'reasoning_delta', data: { delta: 'step two. ' } },
+      { type: 'reasoning_delta', data: { delta: 'final.' } },
+      { type: 'content_delta', data: { delta: 'answer' } },
+      { type: 'done', data: {} },
+    ]);
+    await fixture.runtime.consumeAssistantStream({
+      streamId: assistantMessageId,
+      loopState,
+      request: buildBaseRequest(loopState),
+    });
+    expect(loopState.steerReasoningReplay).toBe('step one. step two. final.');
+    expect(loopState.reasoningParts).toEqual(['step one. ', 'step two. ', 'final.']);
+    // Cap not exceeded (well below 6000 chars).
+    expect(loopState.steerReasoningReplay.length).toBeLessThan(6000);
+  });
 });
