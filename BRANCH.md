@@ -51,7 +51,7 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - Mirror the exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- _(none open at scoping; Lot 1+ will record `blocked`/`deferred`/`attention` items here)_
+- **BR26-FB-01** (Lot 2, severity: `attention`, status: `open`): baseline `29b2c243` predates `origin/main` security fixes (`fix/security-high-vulnerabilities` merged at `edbe7d24`). The api Dockerfile audit gate (`npm audit --audit-level=high --omit=dev --workspaces --include-workspace-root`) fails on this branch as soon as any change invalidates the Docker layer cache, due to the Svelte `devalue` high-severity advisory (GHSA-77vg-94rm-hx3p). Lot 2 lockfile addition for `@sentropic/flow` triggers cache invalidation, surfacing the failure. Resolution path: rebase the branch onto `origin/main` (picks up vite/flatted/fast-xml-builder/svelte fixes) before Lot 3 or earlier. Recorded by Lot 2 sub-agent; deferred to conductor decision.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -85,11 +85,11 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Replay harness `api/tests/services/flow/replay.spec.ts` that re-runs current production code and asserts byte-identical event stream (modulo timestamps/IDs).
   - [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api SCOPE=tests/services/flow/replay.spec.ts ENV=test-feat-flow-runtime-extract`.
 
-- [ ] **Lot 2 — Package shell `packages/flow/`**
-  - [ ] Scaffold `packages/flow/{package.json,tsconfig.json,src/index.ts,README.md,LICENSE}` mirroring `packages/llm-mesh/` shape (name `@sentropic/flow`, `type: module`, `sideEffects: false`, dist build via `tsc`).
-  - [ ] Register in root npm workspace.
-  - [ ] Empty `src/index.ts` exporting only the port interfaces from §2 of SPEC_EVOL.
-  - [ ] Lot gate: `make build`, `make typecheck`, `make lint`.
+- [x] **Lot 2 — Package shell `packages/flow/`**
+  - [x] Scaffold `packages/flow/{package.json,tsconfig.json,src/index.ts,README.md,LICENSE}` mirroring `packages/llm-mesh/` shape (name `@sentropic/flow`, `type: module`, `sideEffects: false`, dist build via `tsc`).
+  - [x] Register in root npm workspace (lockfile entries added under `packages/*` glob).
+  - [x] Empty `src/index.ts` placeholder; port interfaces from §2 of SPEC_EVOL land in Lot 3.
+  - [ ] Lot gate: `make build`, `make typecheck`, `make lint` — blocked by `BR26-FB-01` (pre-existing audit gate vuln on baseline); deferred until baseline rebase onto `origin/main`.
 
 - [ ] **Lot 3 — Façade layer (delegating adapters in `api/src/services/flow/`)**
   - [ ] Add port interfaces in `packages/flow/src/{workflow-store,run-store,job-queue,approval-gate,agent-template,transitions,flow-runtime}.ts`.
