@@ -1331,18 +1331,54 @@ export interface ExecuteServerToolResult {
 }
 
 /**
- * BR14b Lot 21c — input to `ChatRuntime.consumeToolCalls`. Mirrors the
- * per-iteration tool-dispatch entry at chat-service.ts line 3267
- * post-Lot 21b. Same mutate-in-place convention as
- * `consumeAssistantStream`. `localToolNames` is the legacy
- * `localToolNames` Set; the remaining fields (`sessionId` / `userId` /
- * `workspaceId` / `providerId` / `modelId` / `tools` /
- * `enforceTodoUpdateMode` / `readOnly` / `signal`) are forwarded to
- * `executeServerTool` for non-local calls. Lot 21c lands only the
- * type surface + the orchestration skeleton; per-tool dispatch
- * migration deferred to Lot 21d.
+ * BR14b Lot 21c / 21e-2 — input to `ChatRuntime.consumeToolCalls`.
+ *
+ * Lot 21c landed the orchestration shell (empty-toolCalls short-circuit
+ * + local-tool branch). Lot 21e-2 extends the method to own the full
+ * per-tool dispatch loop body: context-budget gate pre-compute +
+ * gate invocation + per-tool `executeServerTool` dispatch + try/catch
+ * wrapper + accumulator pushes + `todoErrorCall` handling.
+ *
+ * Fields fall into four groups:
+ *
+ *   1. Per-call identity / config (Lot 21c): `streamId`, `loopState`,
+ *      `localToolNames`, `sessionId`, `userId`, `workspaceId`,
+ *      `providerId`, `modelId`, `tools`, `enforceTodoUpdateMode`,
+ *      `readOnly`, `signal`.
+ *
+ *   2. Context-budget gate (Lot 21e-2): the counter, the api-side
+ *      constants (`maxReplanAttempts`, `softZoneCode`, `hardZoneCode`),
+ *      and the api-side helpers (`estimateContextBudget`,
+ *      `estimateToolResultProjectionChars`, `writeContextBudgetStatus`,
+ *      `resolveBudgetZone`, `estimateTokenCountFromChars`,
+ *      `compactContextIfNeeded`) that the caller previously invoked
+ *      inline before calling `applyContextBudgetGate`. The runtime
+ *      pre-computes `projectedResultChars` + `preToolBudget`, emits the
+ *      `pre_tool` status, then forwards to its own
+ *      `applyContextBudgetGate` method.
+ *
+ *   3. Catch-block (Lot 21e-2): `markTodoIterationState` is invoked on
+ *      the error path when `toolCall.name === 'plan'` AND
+ *      `todoAutonomousExtensionEnabled === true` (mirrors the inline
+ *      `todoErrorCall` block at chat-service.ts line 3712-3715
+ *      pre-Lot 21e-2).
+ *
+ *   4. `executeServerTool` bundle builder (Lot 21e-2): caller-supplied
+ *      factory that builds the chat-service-LOCAL bundle (33 fields
+ *      including closures + captured locals) cast to the chat-core
+ *      opaque `ExecuteServerToolInput`. Same Option A pattern as
+ *      Lot 21d-3: the chat-core boundary stays narrow; the bundle is
+ *      forwarded verbatim to `deps.executeServerTool` via the
+ *      `runtime.executeServerTool` facade.
+ *
+ *   5. Outer state snapshot (Lot 21e-2): `currentMessages` is read by
+ *      the gate pre-compute (`estimateContextBudget` projects token
+ *      occupancy from messages + tools + rawInput). The caller passes
+ *      the current snapshot at loop entry; the gate's `compactContextIfNeeded`
+ *      closure mutates it caller-side when the hard-zone branch fires.
  */
 export interface ConsumeToolCallsInput {
+  // Group 1 — per-call identity / config (Lot 21c)
   readonly streamId: string;
   readonly loopState: AssistantRunLoopState;
   readonly localToolNames: ReadonlySet<string>;
@@ -1355,16 +1391,76 @@ export interface ConsumeToolCallsInput {
   readonly enforceTodoUpdateMode: boolean;
   readonly readOnly: boolean;
   readonly signal?: AbortSignal;
+  // Group 2 — context-budget gate (Lot 21e-2)
+  readonly contextBudgetReplanAttempts: number;
+  readonly maxReplanAttempts: number;
+  readonly softZoneCode: string;
+  readonly hardZoneCode: string;
+  readonly estimateContextBudget: (input: {
+    readonly messages: ReadonlyArray<unknown>;
+    readonly tools: ReadonlyArray<unknown> | null;
+    readonly rawInput: ReadonlyArray<unknown>;
+    readonly providerId: string;
+    readonly modelId: string;
+  }) => ContextBudgetSnapshot;
+  readonly estimateToolResultProjectionChars: (
+    toolName: string,
+    args: Record<string, unknown>,
+  ) => number;
+  readonly writeContextBudgetStatus: (
+    phase: 'pre_tool',
+    snapshot: ContextBudgetSnapshot,
+    meta: { readonly tool_name: string },
+  ) => Promise<void>;
+  readonly resolveBudgetZone: (occupancyPct: number) => ContextBudgetZone;
+  readonly estimateTokenCountFromChars: (charCount: number) => number;
+  readonly compactContextIfNeeded: (
+    reason: 'pre_tool_hard_threshold',
+    snapshot: ContextBudgetSnapshot,
+  ) => Promise<ContextBudgetSnapshot>;
+  // Group 3 — catch-block (Lot 21e-2)
+  readonly markTodoIterationState: (rawResult: unknown) => void;
+  readonly todoAutonomousExtensionEnabled: boolean;
+  // Group 4 — executeServerTool bundle builder (Lot 21e-2)
+  readonly buildExecuteServerToolInput: (ctx: {
+    readonly toolCall: { readonly id: string; readonly name: string; readonly args: string };
+    readonly args: unknown;
+    readonly todoOperation: string | null;
+    readonly streamSeq: number;
+    readonly currentMessages: ReadonlyArray<unknown>;
+    readonly responseToolOutputs: ReadonlyArray<unknown>;
+    readonly executedTools: ReadonlyArray<AssistantRunLoopExecutedTool>;
+  }) => ExecuteServerToolInput;
+  // Group 5 — outer state snapshot (Lot 21e-2)
+  readonly currentMessages: ReadonlyArray<unknown>;
 }
 
 /**
- * BR14b Lot 21c — return shape of `ChatRuntime.consumeToolCalls`.
- * Aggregated per-iteration outputs that mirror the inline body's
- * `toolResults` (role:'tool' messages), `responseToolOutputs`
- * (`function_call_output` rawInput entries), `pendingLocalToolCalls`
- * (post-loop `awaiting_local_tool_results` queue), `executedTools`
- * (trace accumulator), and `shouldBreakLoop` (mirrors the
- * `continueGenerationLoop = false; break;` branch on empty toolCalls).
+ * BR14b Lot 21c / 21e-2 — return shape of `ChatRuntime.consumeToolCalls`.
+ *
+ * Lot 21c landed the empty `toolResults` / `responseToolOutputs` /
+ * `executedTools` arrays. Lot 21e-2 populates them with the
+ * per-iteration accumulator deltas the caller must merge into its
+ * outer state. Two cursors are also returned so the caller stays in
+ * sync with the runtime: `streamSeq` (advanced by every event emitted
+ * across the iteration loop) and `contextBudgetReplanAttempts`
+ * (advanced or reset by `applyContextBudgetGate` invocations).
+ *
+ *   - `toolResults` — `role:'tool'` messages (one per tool call, both
+ *     success and error branches).
+ *   - `responseToolOutputs` — `function_call_output` rawInput entries
+ *     (one per tool call).
+ *   - `pendingLocalToolCalls` — local-tool short-circuit queue
+ *     (consumed by the caller's post-loop
+ *     `awaiting_local_tool_results` status emission).
+ *   - `executedTools` — trace accumulator (one row per tool call).
+ *   - `shouldBreakLoop` — `true` when the empty-toolCalls short-circuit
+ *     fired; the caller breaks the outer iteration loop.
+ *   - `streamSeq` — advanced cursor (mirrors the inline
+ *     `streamSeq = …` mutations across the iteration).
+ *   - `contextBudgetReplanAttempts` — advanced or reset counter
+ *     (mirrors the inline `+= 1` / `= 0` mutations driven by
+ *     `applyContextBudgetGate`).
  */
 export interface ConsumeToolCallsResult {
   readonly toolResults: ReadonlyArray<{
@@ -1384,6 +1480,8 @@ export interface ConsumeToolCallsResult {
   }>;
   readonly executedTools: ReadonlyArray<AssistantRunLoopExecutedTool>;
   readonly shouldBreakLoop: boolean;
+  readonly streamSeq: number;
+  readonly contextBudgetReplanAttempts: number;
 }
 
 /**
@@ -3306,37 +3404,91 @@ export class ChatRuntime {
   }
 
   /**
-   * BR14b Lot 21c — minimal `consumeToolCalls` orchestration shell.
+   * BR14b Lot 21c / 21e-2 — full per-iteration tool-dispatch loop body.
    *
-   * Lot 21c handles only:
-   *   1. Empty-toolCalls short-circuit (mirrors chat-service.ts line
-   *      3267: `if (toolCalls.length === 0) { continueGenerationLoop =
-   *      false; break; }`). Sets `loopState.continueGenerationLoop =
-   *      false`, returns `shouldBreakLoop: true`.
-   *   2. For-loop with `signal?.aborted` check (throws `AbortError`
-   *      verbatim like the inline body at line 3365).
-   *   3. Local-tool short-circuit (lines 3367-3387): pushes into
-   *      `pendingLocalToolCalls`, emits one `tool_call_result` event
-   *      with `{status:'awaiting_external_result'}` via
-   *      `deps.streamSequencer.allocate` + `deps.streamBuffer.append`,
-   *      and advances `loopState.streamSeq`.
+   * Lot 21c landed the orchestration shell (empty-toolCalls short-circuit
+   * + local-tool branch). Lot 21e-2 extends it with the full per-tool
+   * dispatch loop body, migrating the inline `for (const toolCall of toolCalls)`
+   * block previously hosted at `chat-service.ts` lines 3514-3741
+   * (post-Lot 21e-1) into the runtime. After Lot 21e-2 the chat-service
+   * caller is a single `runtime.consumeToolCalls({...})` invocation
+   * followed by a state sync (push the result accumulators into the
+   * outer arrays + re-assign `streamSeq` / `contextBudgetReplanAttempts`).
    *
-   * Non-local tool calls are NOT dispatched yet — Lot 21d will wire
-   * the `executeServerTool` callback + per-tool body (context budget
-   * gate + try/catch + result event + accumulators). Until then this
-   * method is NOT invoked by chat-service.ts (the inline loop body
-   * stays load-bearing) — Lot 21c is a foundation commit that lands
-   * the shell so Lot 21d can extend it without scaffolding churn.
+   * Per-iteration responsibilities (in order):
+   *   1. `signal?.aborted` check → throws `AbortError` verbatim
+   *      (mirrors line 3515 pre-Lot 21e-2).
+   *   2. Local-tool short-circuit (lines 3516-3532 pre-Lot 21e-2):
+   *      push to `pendingLocalToolCalls` + emit one
+   *      `tool_call_result {status:'awaiting_external_result'}` event +
+   *      advance `streamSeq`.
+   *   3. Try block:
+   *      a. Parse `toolCall.args` JSON (defaults to `{}` on empty).
+   *      b. Pre-compute `projectedResultChars` + `preToolBudgetInitial`
+   *         via the caller-supplied api-side helpers (lines 3534-3546).
+   *      c. Emit `pre_tool` context-budget status (line 3547).
+   *      d. Invoke `applyContextBudgetGate` (lines 3567-3603). On
+   *         `shouldContinue` push the deferred accumulator into
+   *         `toolResults` / `responseToolOutputs` / `executedTools`
+   *         and `continue` the iteration.
+   *      e. Derive `todoOperation` from `args` (lines 3604-3625).
+   *         Throw on `plan` without a derivable action (line 3626-3630).
+   *      f. Dispatch the per-tool body via
+   *         `runtime.executeServerTool(buildExecuteServerToolInput(ctx))`
+   *         — Lot 21d-3 facade (lines 3648-3689 pre-Lot 21e-2).
+   *      g. Push success rows into `executedTools` / `toolResults` /
+   *         `responseToolOutputs` (lines 3692-3706).
+   *   4. Catch block (lines 3707-3740):
+   *      a. Wrap the thrown error into `{status:'error', error}`.
+   *      b. When `toolCall.name === 'plan'` AND
+   *         `todoAutonomousExtensionEnabled` is true, invoke
+   *         `markTodoIterationState(errorResult)`.
+   *      c. Emit one `tool_call_result` event with the error envelope +
+   *         advance `streamSeq`.
+   *      d. Push the error rows into `toolResults` / `responseToolOutputs` /
+   *         `executedTools`.
    *
-   * Note: `loopState.pendingResponsesRawInput = null` (chat-service.ts
-   * line 3264) lives BEFORE the empty-toolCalls check in the inline
-   * body — outside this method's responsibility — and stays caller-side
-   * until Lot 21d.
+   * The method is accumulator-agnostic: it builds the per-call delta
+   * arrays locally and returns them to the caller, which is responsible
+   * for merging into the outer `runAssistantGeneration` state. Same
+   * convention as `applyContextBudgetGate.deferredAccumulator`.
+   *
+   * The runtime emits events via `deps.streamSequencer.allocate` +
+   * `deps.streamBuffer.append` (same convention as Lot 21c shell +
+   * Lot 21e-1 gate). The caller is expected to bind those deps to the
+   * `chatStreamEvents` postgres adapter (production wiring).
+   *
+   * `loopState.pendingResponsesRawInput = null` (chat-service.ts
+   * line 3414 pre-Lot 21e-2) sits BEFORE the empty-toolCalls check in
+   * the inline body — outside this method's responsibility — and stays
+   * caller-side.
    */
   async consumeToolCalls(
     input: ConsumeToolCallsInput,
   ): Promise<ConsumeToolCallsResult> {
-    const { streamId, loopState, localToolNames, signal } = input;
+    const {
+      streamId,
+      loopState,
+      localToolNames,
+      signal,
+      maxReplanAttempts,
+      softZoneCode,
+      hardZoneCode,
+      estimateContextBudget,
+      estimateToolResultProjectionChars,
+      writeContextBudgetStatus,
+      resolveBudgetZone,
+      estimateTokenCountFromChars,
+      compactContextIfNeeded,
+      markTodoIterationState,
+      todoAutonomousExtensionEnabled,
+      buildExecuteServerToolInput,
+      providerId,
+      modelId,
+      tools,
+    } = input;
+    let streamSeq = loopState.streamSeq;
+    let contextBudgetReplanAttempts = input.contextBudgetReplanAttempts;
     if (loopState.toolCalls.length === 0) {
       loopState.continueGenerationLoop = false;
       return {
@@ -3345,13 +3497,27 @@ export class ChatRuntime {
         pendingLocalToolCalls: [],
         executedTools: [],
         shouldBreakLoop: true,
+        streamSeq,
+        contextBudgetReplanAttempts,
       };
     }
+    const toolResults: Array<{
+      role: 'tool';
+      content: string;
+      tool_call_id: string;
+    }> = [];
+    const responseToolOutputs: Array<{
+      type: 'function_call_output';
+      call_id: string;
+      output: string;
+    }> = [];
     const pendingLocalToolCalls: Array<{
       id: string;
       name: string;
       args: unknown;
     }> = [];
+    const executedTools: AssistantRunLoopExecutedTool[] = [];
+    const currentMessages = input.currentMessages;
     for (const toolCall of loopState.toolCalls) {
       if (signal?.aborted) throw new Error('AbortError');
       const toolName = String(toolCall.name || '').trim();
@@ -3372,19 +3538,177 @@ export class ChatRuntime {
           seq,
           streamId,
         );
-        loopState.streamSeq = seq + 1;
+        streamSeq = seq + 1;
+        loopState.streamSeq = streamSeq;
         continue;
       }
-      // Lot 21d: dispatch `deps.executeServerTool` here for non-local
-      // tool calls + accumulate `toolResults` / `responseToolOutputs` /
-      // `executedTools`. Until then this branch is a no-op.
+      try {
+        const args = JSON.parse(toolCall.args || '{}');
+        const projectedResultChars = estimateToolResultProjectionChars(
+          toolCall.name,
+          asRecord(args) ?? {},
+        );
+        const preToolBudgetInitial = estimateContextBudget({
+          messages: currentMessages,
+          tools,
+          rawInput: responseToolOutputs,
+          providerId,
+          modelId,
+        });
+        await writeContextBudgetStatus('pre_tool', preToolBudgetInitial, {
+          tool_name: toolCall.name,
+        });
+        const gate = await this.applyContextBudgetGate({
+          streamId,
+          toolCall: { id: toolCall.id, name: toolCall.name },
+          args,
+          preToolBudget: preToolBudgetInitial,
+          projectedResultChars,
+          streamSeq,
+          contextBudgetReplanAttempts,
+          maxReplanAttempts,
+          softZoneCode,
+          hardZoneCode,
+          resolveBudgetZone,
+          estimateTokenCountFromChars,
+          compactContextIfNeeded,
+        });
+        streamSeq = gate.streamSeq;
+        loopState.streamSeq = streamSeq;
+        contextBudgetReplanAttempts = gate.contextBudgetReplanAttempts;
+        if (gate.shouldContinue) {
+          const deferredAcc = gate.deferredAccumulator!;
+          toolResults.push({
+            role: 'tool',
+            content: JSON.stringify(deferredAcc.deferredResult),
+            tool_call_id: deferredAcc.toolCallId,
+          });
+          responseToolOutputs.push({
+            type: 'function_call_output',
+            call_id: deferredAcc.toolCallId,
+            output: JSON.stringify(deferredAcc.deferredResult),
+          });
+          executedTools.push({
+            toolCallId: deferredAcc.toolCallId,
+            name: deferredAcc.toolName,
+            args: deferredAcc.args,
+            result: deferredAcc.deferredResult,
+          });
+          continue;
+        }
+        const todoOperation: string | null = (() => {
+          if (toolCall.name !== 'plan') return null;
+          const actionRaw =
+            typeof args.action === 'string' ? args.action.trim().toLowerCase() : '';
+          if (
+            actionRaw === 'create' ||
+            actionRaw === 'update_plan' ||
+            actionRaw === 'update_task'
+          ) {
+            return actionRaw;
+          }
+          if (actionRaw.length > 0) {
+            return null;
+          }
+          const hasTaskId =
+            typeof args.taskId === 'string' && args.taskId.trim().length > 0;
+          if (hasTaskId) return 'update_task';
+          const hasTodoId =
+            typeof args.todoId === 'string' && args.todoId.trim().length > 0;
+          if (hasTodoId) return 'update_plan';
+          return 'create';
+        })();
+        if (toolCall.name === 'plan' && !todoOperation) {
+          throw new Error(
+            'plan: action must be one of create|update_plan|update_task',
+          );
+        }
+        const execInput = buildExecuteServerToolInput({
+          toolCall,
+          args,
+          todoOperation,
+          streamSeq,
+          currentMessages,
+          responseToolOutputs,
+          executedTools,
+        });
+        const r = await this.executeServerTool(execInput);
+        const rRecord = r as unknown as {
+          result: unknown;
+          streamSeq: number;
+        };
+        const result = rRecord.result;
+        streamSeq = rRecord.streamSeq;
+        loopState.streamSeq = streamSeq;
+        executedTools.push({
+          toolCallId: toolCall.id,
+          name: toolCall.name,
+          args,
+          result,
+        });
+        toolResults.push({
+          role: 'tool',
+          content: JSON.stringify(result),
+          tool_call_id: toolCall.id,
+        });
+        responseToolOutputs.push({
+          type: 'function_call_output',
+          call_id: toolCall.id,
+          output: JSON.stringify(result),
+        });
+      } catch (error) {
+        const errorResult = {
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+        const todoErrorCall = toolCall.name === 'plan';
+        if (todoErrorCall && todoAutonomousExtensionEnabled) {
+          markTodoIterationState(errorResult);
+        }
+        const seq = await this.deps.streamSequencer.allocate(streamId);
+        await this.deps.streamBuffer.append(
+          streamId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: errorResult },
+          seq,
+          streamId,
+        );
+        streamSeq = seq + 1;
+        loopState.streamSeq = streamSeq;
+        toolResults.push({
+          role: 'tool',
+          content: JSON.stringify(errorResult),
+          tool_call_id: toolCall.id,
+        });
+        responseToolOutputs.push({
+          type: 'function_call_output',
+          call_id: toolCall.id,
+          output: JSON.stringify(errorResult),
+        });
+        executedTools.push({
+          toolCallId: toolCall.id,
+          name: toolCall.name || 'unknown_tool',
+          args: toolCall.args
+            ? (() => {
+                try {
+                  return JSON.parse(toolCall.args);
+                } catch {
+                  return toolCall.args;
+                }
+              })()
+            : undefined,
+          result: errorResult,
+        });
+      }
     }
     return {
-      toolResults: [],
-      responseToolOutputs: [],
+      toolResults,
+      responseToolOutputs,
       pendingLocalToolCalls,
-      executedTools: [],
+      executedTools,
       shouldBreakLoop: false,
+      streamSeq,
+      contextBudgetReplanAttempts,
     };
   }
 
