@@ -810,11 +810,23 @@ export interface ExecuteServerToolInternalInput {
   }>;
   readonly selectedProviderId: ProviderId;
   readonly selectedModel: string | null;
-  readonly sessionWorkspaceId: string | null;
+  // BR14b Lot 21d-2 Step 3 Group C — tightened from `string | null` to
+  // `string`: `ChatRuntime.prepareAssistantRun` (packages/chat-core/src/runtime.ts
+  // line 709) throws when `resolveSessionWorkspaceId` returns null, so
+  // `sessionWorkspaceId` is non-null by the time `runAssistantGeneration`
+  // reaches the tool-dispatch loop. Required by `plan` branches that pass
+  // it as `TodoActor.workspaceId: string`.
+  readonly sessionWorkspaceId: string;
   readonly readOnly: boolean;
   readonly currentUserRole: string | null;
   readonly enforceTodoUpdateMode: boolean;
   readonly todoAutonomousExtensionEnabled: boolean;
+  // BR14b Lot 21d-2 Step 3 Group C — `todoStructuralMutationIntent` is a
+  // `runAssistantGeneration` local (line 2904) used by the `plan` update
+  // branches (`update_plan` / `update_task`) to gate structural mutations
+  // behind explicit user intent. Added here so Group C migration can
+  // reference it verbatim without recomputing.
+  readonly todoStructuralMutationIntent: boolean;
   readonly allowedByType: {
     readonly organization: ReadonlySet<string>;
     readonly folder: ReadonlySet<string>;
@@ -3638,6 +3650,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             currentUserRole,
             enforceTodoUpdateMode,
             todoAutonomousExtensionEnabled,
+            todoStructuralMutationIntent,
             allowedByType,
             allowedFolderIds,
             allowedCommentContextSet,
@@ -3699,274 +3712,25 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             result = r.result;
             streamSeq = r.streamSeq;
           } else if (toolCall.name === 'matrix_get') {
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const getResult = await toolService.getMatrix(args.folderId, { workspaceId: sessionWorkspaceId });
-            result = getResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'matrix_update') {
-            if (readOnly) throw new Error('Read-only workspace: matrix_update is disabled');
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const updateResult = await toolService.updateMatrix({
-              folderId: args.folderId,
-              matrixConfig: args.matrixConfig,
-              userId: options.userId,
-              sessionId: options.sessionId,
-              messageId: options.assistantMessageId,
-              toolCallId: toolCall.id,
-              locale: options.locale,
-              workspaceId: sessionWorkspaceId
-            });
-            result = updateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'plan' && todoOperation === 'create') {
-            const createToolLabel = 'plan(action=create)';
-            if (readOnly) {
-              throw new Error(`Read-only workspace: ${createToolLabel} is disabled`);
-            }
-            const title = typeof args.title === 'string' ? args.title.trim() : '';
-            if (!title) {
-              throw new Error(`${createToolLabel}: title is required`);
-            }
-            const planId =
-              typeof args.planId === 'string' && args.planId.trim().length > 0
-                ? args.planId.trim()
-                : undefined;
-            const planTitle =
-              typeof args.planTitle === 'string' && args.planTitle.trim().length > 0
-                ? args.planTitle.trim()
-                : undefined;
-            const description =
-              typeof args.description === 'string' && args.description.trim().length > 0
-                ? args.description
-                : undefined;
-            const taskDrafts: unknown[] = Array.isArray(args.tasks)
-              ? (args.tasks as unknown[])
-              : [];
-            const tasks: Array<{ title: string; description?: string }> =
-              taskDrafts
-              .map((item: unknown): { title: string; description?: string } => {
-                const draft = asRecord(item);
-                return {
-                  title: typeof draft?.title === 'string' ? draft.title.trim() : '',
-                  description:
-                    typeof draft?.description === 'string'
-                      ? draft.description
-                      : undefined
-                };
-              })
-              .filter((item) => item.title.length > 0);
-            const metadata = asRecord(args.metadata) ?? undefined;
-
-            const todoResult = await todoOrchestrationService.createTodoFromChat(
-              {
-                userId: options.userId,
-                role: currentUserRole ?? 'editor',
-                workspaceId: sessionWorkspaceId
-              },
-              {
-                title,
-                description,
-                planId,
-                planTitle,
-                tasks,
-                metadata,
-                sessionId: options.sessionId
-              }
-            );
-            const normalizedTodoResult = normalizeTodoRuntimeToolResult(
-              'plan',
-              toolCall.id,
-              todoResult,
-              'create',
-            );
-            markTodoIterationState(normalizedTodoResult);
-            result = normalizedTodoResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: normalizedTodoResult },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'plan' && todoOperation === 'update_plan') {
-            const todoUpdateLabel = 'plan(action=update_plan)';
-            if (readOnly) {
-              throw new Error(`Read-only workspace: ${todoUpdateLabel} is disabled`);
-            }
-            const todoId =
-              typeof args.todoId === 'string' && args.todoId.trim().length > 0
-                ? args.todoId.trim()
-                : '';
-            if (!todoId) {
-              throw new Error(`${todoUpdateLabel}: todoId is required`);
-            }
-            const title =
-              typeof args.title === 'string' && args.title.trim().length > 0
-                ? args.title.trim()
-                : undefined;
-            const description =
-              typeof args.description === 'string'
-                ? args.description
-                : undefined;
-            const ownerUserId =
-              typeof args.ownerUserId === 'string' && args.ownerUserId.trim().length > 0
-                ? args.ownerUserId.trim()
-                : undefined;
-            const status =
-              typeof args.status === 'string' && args.status.trim().length > 0
-                ? args.status.trim()
-                : undefined;
-            const closed = typeof args.closed === 'boolean' ? args.closed : undefined;
-            const metadataRecord = asRecord(args.metadata);
-            const metadata =
-              metadataRecord && Object.keys(metadataRecord).length > 0
-                ? metadataRecord
-                : undefined;
-            const hasStructuralTodoMutationArgs =
-              title !== undefined || description !== undefined || metadata !== undefined;
-            if (
-              enforceTodoUpdateMode &&
-              hasStructuralTodoMutationArgs &&
-              !todoStructuralMutationIntent
-            ) {
-              throw new Error(
-                `${todoUpdateLabel}: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)`,
-              );
-            }
-
-            const updateResult = await todoOrchestrationService.updateTodoFromChat(
-              {
-                userId: options.userId,
-                role: currentUserRole ?? 'editor',
-                workspaceId: sessionWorkspaceId
-              },
-              {
-                todoId,
-                title,
-                description,
-                ownerUserId,
-                status,
-                closed,
-                metadata
-              }
-            );
-            const normalizedTodoUpdateResult = normalizeTodoRuntimeToolResult(
-              'plan',
-              toolCall.id,
-              updateResult,
-              'update_plan',
-            );
-            markTodoIterationState(normalizedTodoUpdateResult);
-            result = normalizedTodoUpdateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: normalizedTodoUpdateResult },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'plan' && todoOperation === 'update_task') {
-            const taskUpdateLabel = 'plan(action=update_task)';
-            if (readOnly) {
-              throw new Error(`Read-only workspace: ${taskUpdateLabel} is disabled`);
-            }
-            const taskId =
-              typeof args.taskId === 'string' && args.taskId.trim().length > 0
-                ? args.taskId.trim()
-                : '';
-            if (!taskId) {
-              throw new Error(`${taskUpdateLabel}: taskId is required`);
-            }
-            const title =
-              typeof args.title === 'string' && args.title.trim().length > 0
-                ? args.title.trim()
-                : undefined;
-            const description =
-              typeof args.description === 'string'
-                ? args.description
-                : undefined;
-            const assigneeUserId =
-              typeof args.assigneeUserId === 'string' && args.assigneeUserId.trim().length > 0
-                ? args.assigneeUserId.trim()
-                : undefined;
-            const status =
-              typeof args.status === 'string' && args.status.trim().length > 0
-                ? args.status.trim()
-                : undefined;
-            const metadataRecord = asRecord(args.metadata);
-            const metadata =
-              metadataRecord && Object.keys(metadataRecord).length > 0
-                ? metadataRecord
-                : undefined;
-            const hasStructuralTaskMutationArgs =
-              title !== undefined || description !== undefined || metadata !== undefined;
-            if (
-              enforceTodoUpdateMode &&
-              hasStructuralTaskMutationArgs &&
-              !todoStructuralMutationIntent
-            ) {
-              throw new Error(
-                `${taskUpdateLabel}: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)`,
-              );
-            }
-
-            const updateResult = await todoOrchestrationService.updateTaskFromChat(
-              {
-                userId: options.userId,
-                role: currentUserRole ?? 'editor',
-                workspaceId: sessionWorkspaceId
-              },
-              {
-                taskId,
-                title,
-                description,
-                assigneeUserId,
-                status,
-                metadata
-              }
-            );
-            const normalizedTaskUpdateResult = normalizeTodoRuntimeToolResult(
-              'plan',
-              toolCall.id,
-              updateResult,
-              'update_task',
-            );
-            markTodoIterationState(normalizedTaskUpdateResult);
-            result = normalizedTaskUpdateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: normalizedTaskUpdateResult },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'comment_assistant') {
             const mode = typeof args.mode === 'string' ? args.mode : '';
             const contextType = typeof args.contextType === 'string' ? args.contextType : '';
@@ -4961,7 +4725,21 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
   private async executeServerToolInternal(
     input: ExecuteServerToolInternalInput,
   ): Promise<ExecuteServerToolInternalResult> {
-    const { toolCall, options, allowedByType, allowedFolderIds, sessionWorkspaceId, readOnly, hasContextType, isAllowedOrganizationId } = input;
+    const {
+      toolCall,
+      options,
+      todoOperation,
+      allowedByType,
+      allowedFolderIds,
+      sessionWorkspaceId,
+      readOnly,
+      currentUserRole,
+      enforceTodoUpdateMode,
+      todoStructuralMutationIntent,
+      hasContextType,
+      isAllowedOrganizationId,
+      markTodoIterationState,
+    } = input;
     // Verbatim alias for the caller-parsed `JSON.parse(toolCall.args || '{}')`
     // payload — per-branch field access mirrors inline `args.X` reads.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -5247,7 +5025,289 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         streamSeq += 1;
         break;
       }
-      // BR14b Lot 21d-2 Groups C-F per-tool case branches added by
+      // BR14b Lot 21d-2 Step 3 Group C — verbatim move of inline tool branches
+      // from `runAssistantGeneration` (matrix_get, matrix_update, plan(create),
+      // plan(update_plan), plan(update_task)).
+      case 'matrix_get': {
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const getResult = await toolService.getMatrix(args.folderId, { workspaceId: sessionWorkspaceId });
+        result = getResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'matrix_update': {
+        if (readOnly) throw new Error('Read-only workspace: matrix_update is disabled');
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const updateResult = await toolService.updateMatrix({
+          folderId: args.folderId,
+          matrixConfig: args.matrixConfig,
+          userId: options.userId,
+          sessionId: options.sessionId,
+          messageId: options.assistantMessageId,
+          toolCallId: toolCall.id,
+          locale: options.locale,
+          workspaceId: sessionWorkspaceId
+        });
+        result = updateResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'plan': {
+        if (todoOperation === 'create') {
+          const createToolLabel = 'plan(action=create)';
+          if (readOnly) {
+            throw new Error(`Read-only workspace: ${createToolLabel} is disabled`);
+          }
+          const title = typeof args.title === 'string' ? args.title.trim() : '';
+          if (!title) {
+            throw new Error(`${createToolLabel}: title is required`);
+          }
+          const planId =
+            typeof args.planId === 'string' && args.planId.trim().length > 0
+              ? args.planId.trim()
+              : undefined;
+          const planTitle =
+            typeof args.planTitle === 'string' && args.planTitle.trim().length > 0
+              ? args.planTitle.trim()
+              : undefined;
+          const description =
+            typeof args.description === 'string' && args.description.trim().length > 0
+              ? args.description
+              : undefined;
+          const taskDrafts: unknown[] = Array.isArray(args.tasks)
+            ? (args.tasks as unknown[])
+            : [];
+          const tasks: Array<{ title: string; description?: string }> =
+            taskDrafts
+            .map((item: unknown): { title: string; description?: string } => {
+              const draft = asRecord(item);
+              return {
+                title: typeof draft?.title === 'string' ? draft.title.trim() : '',
+                description:
+                  typeof draft?.description === 'string'
+                    ? draft.description
+                    : undefined
+              };
+            })
+            .filter((item) => item.title.length > 0);
+          const metadata = asRecord(args.metadata) ?? undefined;
+
+          const todoResult = await todoOrchestrationService.createTodoFromChat(
+            {
+              userId: options.userId,
+              role: currentUserRole ?? 'editor',
+              workspaceId: sessionWorkspaceId
+            },
+            {
+              title,
+              description,
+              planId,
+              planTitle,
+              tasks,
+              metadata,
+              sessionId: options.sessionId
+            }
+          );
+          const normalizedTodoResult = normalizeTodoRuntimeToolResult(
+            'plan',
+            toolCall.id,
+            todoResult,
+            'create',
+          );
+          markTodoIterationState(normalizedTodoResult);
+          result = normalizedTodoResult;
+          await writeStreamEvent(
+            options.assistantMessageId,
+            'tool_call_result',
+            { tool_call_id: toolCall.id, result: normalizedTodoResult },
+            streamSeq,
+            options.assistantMessageId
+          );
+          streamSeq += 1;
+        } else if (todoOperation === 'update_plan') {
+          const todoUpdateLabel = 'plan(action=update_plan)';
+          if (readOnly) {
+            throw new Error(`Read-only workspace: ${todoUpdateLabel} is disabled`);
+          }
+          const todoId =
+            typeof args.todoId === 'string' && args.todoId.trim().length > 0
+              ? args.todoId.trim()
+              : '';
+          if (!todoId) {
+            throw new Error(`${todoUpdateLabel}: todoId is required`);
+          }
+          const title =
+            typeof args.title === 'string' && args.title.trim().length > 0
+              ? args.title.trim()
+              : undefined;
+          const description =
+            typeof args.description === 'string'
+              ? args.description
+              : undefined;
+          const ownerUserId =
+            typeof args.ownerUserId === 'string' && args.ownerUserId.trim().length > 0
+              ? args.ownerUserId.trim()
+              : undefined;
+          const status =
+            typeof args.status === 'string' && args.status.trim().length > 0
+              ? args.status.trim()
+              : undefined;
+          const closed = typeof args.closed === 'boolean' ? args.closed : undefined;
+          const metadataRecord = asRecord(args.metadata);
+          const metadata =
+            metadataRecord && Object.keys(metadataRecord).length > 0
+              ? metadataRecord
+              : undefined;
+          const hasStructuralTodoMutationArgs =
+            title !== undefined || description !== undefined || metadata !== undefined;
+          if (
+            enforceTodoUpdateMode &&
+            hasStructuralTodoMutationArgs &&
+            !todoStructuralMutationIntent
+          ) {
+            throw new Error(
+              `${todoUpdateLabel}: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)`,
+            );
+          }
+
+          const updateResult = await todoOrchestrationService.updateTodoFromChat(
+            {
+              userId: options.userId,
+              role: currentUserRole ?? 'editor',
+              workspaceId: sessionWorkspaceId
+            },
+            {
+              todoId,
+              title,
+              description,
+              ownerUserId,
+              status,
+              closed,
+              metadata
+            }
+          );
+          const normalizedTodoUpdateResult = normalizeTodoRuntimeToolResult(
+            'plan',
+            toolCall.id,
+            updateResult,
+            'update_plan',
+          );
+          markTodoIterationState(normalizedTodoUpdateResult);
+          result = normalizedTodoUpdateResult;
+          await writeStreamEvent(
+            options.assistantMessageId,
+            'tool_call_result',
+            { tool_call_id: toolCall.id, result: normalizedTodoUpdateResult },
+            streamSeq,
+            options.assistantMessageId
+          );
+          streamSeq += 1;
+        } else if (todoOperation === 'update_task') {
+          const taskUpdateLabel = 'plan(action=update_task)';
+          if (readOnly) {
+            throw new Error(`Read-only workspace: ${taskUpdateLabel} is disabled`);
+          }
+          const taskId =
+            typeof args.taskId === 'string' && args.taskId.trim().length > 0
+              ? args.taskId.trim()
+              : '';
+          if (!taskId) {
+            throw new Error(`${taskUpdateLabel}: taskId is required`);
+          }
+          const title =
+            typeof args.title === 'string' && args.title.trim().length > 0
+              ? args.title.trim()
+              : undefined;
+          const description =
+            typeof args.description === 'string'
+              ? args.description
+              : undefined;
+          const assigneeUserId =
+            typeof args.assigneeUserId === 'string' && args.assigneeUserId.trim().length > 0
+              ? args.assigneeUserId.trim()
+              : undefined;
+          const status =
+            typeof args.status === 'string' && args.status.trim().length > 0
+              ? args.status.trim()
+              : undefined;
+          const metadataRecord = asRecord(args.metadata);
+          const metadata =
+            metadataRecord && Object.keys(metadataRecord).length > 0
+              ? metadataRecord
+              : undefined;
+          const hasStructuralTaskMutationArgs =
+            title !== undefined || description !== undefined || metadata !== undefined;
+          if (
+            enforceTodoUpdateMode &&
+            hasStructuralTaskMutationArgs &&
+            !todoStructuralMutationIntent
+          ) {
+            throw new Error(
+              `${taskUpdateLabel}: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)`,
+            );
+          }
+
+          const updateResult = await todoOrchestrationService.updateTaskFromChat(
+            {
+              userId: options.userId,
+              role: currentUserRole ?? 'editor',
+              workspaceId: sessionWorkspaceId
+            },
+            {
+              taskId,
+              title,
+              description,
+              assigneeUserId,
+              status,
+              metadata
+            }
+          );
+          const normalizedTaskUpdateResult = normalizeTodoRuntimeToolResult(
+            'plan',
+            toolCall.id,
+            updateResult,
+            'update_task',
+          );
+          markTodoIterationState(normalizedTaskUpdateResult);
+          result = normalizedTaskUpdateResult;
+          await writeStreamEvent(
+            options.assistantMessageId,
+            'tool_call_result',
+            { tool_call_id: toolCall.id, result: normalizedTaskUpdateResult },
+            streamSeq,
+            options.assistantMessageId
+          );
+          streamSeq += 1;
+        } else {
+          throw new Error(`Unknown tool: ${toolCall.name}`);
+        }
+        break;
+      }
+      // BR14b Lot 21d-2 Groups D-F per-tool case branches added by
       // subsequent commits (verbatim move from the inline switch).
       default:
         throw new Error(`Unknown tool: ${toolCall.name}`);
