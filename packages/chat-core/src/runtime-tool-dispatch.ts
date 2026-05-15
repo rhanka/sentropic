@@ -58,10 +58,16 @@
  * instantiation, and the four one-line delegators.
  */
 import type { ContextBudgetSnapshot } from './context-budget.js';
+import { isPreviousResponseNotFoundError } from './mesh-errors.js';
+import { consumePendingSteerMessages } from './steer.js';
+import type { StreamEventTypeName } from './stream-port.js';
+import { STEER_REASONING_REPLAY_MAX_CHARS } from './runtime.js';
 import type {
   ApplyContextBudgetGateInput,
   ApplyContextBudgetGateResult,
   ChatRuntimeDeps,
+  ConsumeAssistantStreamInput,
+  ConsumeAssistantStreamResult,
   ExecuteServerToolInput,
   ExecuteServerToolResult,
 } from './runtime.js';
@@ -259,5 +265,262 @@ export class ChatRuntimeToolDispatch {
       );
     }
     return this.deps.executeServerTool(input);
+  }
+
+  /**
+   * BR14b Lot 21b — consume one mesh stream iteration into the
+   * `AssistantRunLoopState`. Verbatim port of `chat-service.ts` lines
+   * 3203-3384 pre-Lot 21b: drives `deps.mesh.invokeStream`, persists
+   * each event via `deps.streamBuffer.append` at sequences allocated
+   * by `deps.streamSequencer.allocate`, accumulates deltas into
+   * `loopState`, captures `previousResponseId` from `status`, polls
+   * pending steer messages, and surfaces a terminal
+   * `ConsumeAssistantStreamDoneReason`. See
+   * `ConsumeAssistantStreamInput`/`Result` for the contract details.
+   */
+  async consumeAssistantStream(
+    input: ConsumeAssistantStreamInput,
+  ): Promise<ConsumeAssistantStreamResult> {
+    const { streamId, loopState, request } = input;
+    let steerInterruptionRequested = false;
+    let steerInterruptionBatch: string[] = [];
+    let shouldRetryWithoutPreviousResponse = false;
+    let captured: string | undefined;
+    try {
+      for await (const event of this.deps.mesh.invokeStream({
+        providerId: request.providerId,
+        model: request.model,
+        credential: request.credential,
+        userId: request.userId,
+        workspaceId: request.workspaceId,
+        messages: request.messages,
+        tools: request.tools,
+        reasoningSummary: request.reasoningSummary,
+        reasoningEffort: request.reasoningEffort,
+        toolChoice: request.toolChoice,
+        previousResponseId: request.previousResponseId ?? undefined,
+        rawInput: request.rawInput ?? undefined,
+        signal: request.signal,
+      })) {
+        const eventType = event.type;
+        const data = (event.data ?? {}) as Record<string, unknown>;
+        // IMPORTANT: do not emit 'done' here — the caller emits a single
+        // terminal `done` after pass2/finalization.
+        if (eventType === 'done') {
+          continue;
+        }
+        if (eventType === 'error') {
+          const msg = (data as Record<string, unknown>).message;
+          const errorMessage =
+            typeof msg === 'string' ? msg : 'Unknown error';
+          if (
+            steerInterruptionRequested &&
+            errorMessage.toLowerCase().includes('aborted')
+          ) {
+            continue;
+          }
+          loopState.lastErrorMessage = errorMessage;
+          captured = errorMessage;
+          const errSeq = await this.deps.streamSequencer.allocate(streamId);
+          await this.deps.streamBuffer.append(
+            streamId,
+            eventType as StreamEventTypeName,
+            data,
+            errSeq,
+            streamId,
+          );
+          // let the stream terminate/throw; the global catch will handle it
+          continue;
+        }
+
+        const seq = await this.deps.streamSequencer.allocate(streamId);
+        await this.deps.streamBuffer.append(
+          streamId,
+          eventType as StreamEventTypeName,
+          data,
+          seq,
+          streamId,
+        );
+
+        // Capture Responses API response_id for proper continuation
+        if (eventType === 'status') {
+          const responseId =
+            typeof (data as Record<string, unknown>).response_id === 'string'
+              ? ((data as Record<string, unknown>).response_id as string)
+              : '';
+          if (responseId) loopState.previousResponseId = responseId;
+        }
+
+        if (eventType === 'content_delta') {
+          const delta = typeof data.delta === 'string' ? data.delta : '';
+          if (delta) {
+            loopState.contentParts.push(delta);
+          }
+        } else if (eventType === 'reasoning_delta') {
+          const delta = typeof data.delta === 'string' ? data.delta : '';
+          if (delta) {
+            loopState.reasoningParts.push(delta);
+            if (
+              loopState.steerReasoningReplay.length <
+              STEER_REASONING_REPLAY_MAX_CHARS
+            ) {
+              loopState.steerReasoningReplay += delta;
+              if (
+                loopState.steerReasoningReplay.length >
+                STEER_REASONING_REPLAY_MAX_CHARS
+              ) {
+                loopState.steerReasoningReplay =
+                  loopState.steerReasoningReplay.slice(
+                    -STEER_REASONING_REPLAY_MAX_CHARS,
+                  );
+              }
+            } else {
+              loopState.steerReasoningReplay =
+                `${loopState.steerReasoningReplay}${delta}`.slice(
+                  -STEER_REASONING_REPLAY_MAX_CHARS,
+                );
+            }
+          }
+        } else if (eventType === 'tool_call_start') {
+          const toolCallId =
+            typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
+          const existingIndex = loopState.toolCalls.findIndex(
+            (tc) => tc.id === toolCallId,
+          );
+          if (existingIndex === -1) {
+            loopState.toolCalls.push({
+              id: toolCallId,
+              name: typeof data.name === 'string' ? data.name : '',
+              args: typeof data.args === 'string' ? data.args : '',
+            });
+          } else {
+            const nextName = typeof data.name === 'string' ? data.name : '';
+            const nextArgs = typeof data.args === 'string' ? data.args : '';
+            loopState.toolCalls[existingIndex].name =
+              nextName || loopState.toolCalls[existingIndex].name;
+            loopState.toolCalls[existingIndex].args =
+              (loopState.toolCalls[existingIndex].args || '') +
+              (nextArgs || '');
+          }
+        } else if (eventType === 'tool_call_delta') {
+          const toolCallId =
+            typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
+          const delta = typeof data.delta === 'string' ? data.delta : '';
+          const toolCall = loopState.toolCalls.find(
+            (tc) => tc.id === toolCallId,
+          );
+          if (toolCall) {
+            toolCall.args += delta;
+          } else {
+            loopState.toolCalls.push({
+              id: toolCallId,
+              name: '',
+              args: delta,
+            });
+          }
+        }
+        if (!steerInterruptionRequested) {
+          const steerPoll = await consumePendingSteerMessages({
+            streamBuffer: this.deps.streamBuffer,
+            streamId,
+            sinceSequence: loopState.lastObservedStreamSequence,
+          });
+          loopState.lastObservedStreamSequence = steerPoll.nextSinceSequence;
+          const pendingSteerMessages = steerPoll.messages;
+          if (pendingSteerMessages.length > 0) {
+            steerInterruptionRequested = true;
+            steerInterruptionBatch = [...pendingSteerMessages];
+            const interruptSeq = await this.deps.streamSequencer.allocate(
+              streamId,
+            );
+            await this.deps.streamBuffer.append(
+              streamId,
+              'status',
+              {
+                state: 'run_interrupted_for_steer',
+                steer_count: steerInterruptionBatch.length,
+                latest_message:
+                  steerInterruptionBatch[steerInterruptionBatch.length - 1] ??
+                  '',
+              },
+              interruptSeq,
+              streamId,
+            );
+            break;
+          }
+        }
+        // Note: 'done' is intentionally delayed (see above)
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : String(error ?? '');
+      if (
+        loopState.previousResponseId &&
+        isPreviousResponseNotFoundError(message)
+      ) {
+        shouldRetryWithoutPreviousResponse = true;
+      } else {
+        throw error;
+      }
+    }
+    if (shouldRetryWithoutPreviousResponse) {
+      const resetSeq = await this.deps.streamSequencer.allocate(streamId);
+      await this.deps.streamBuffer.append(
+        streamId,
+        'status',
+        {
+          state: 'response_lineage_reset',
+          reason: 'previous_response_not_found',
+        },
+        resetSeq,
+        streamId,
+      );
+      loopState.previousResponseId = null;
+      loopState.pendingResponsesRawInput = null;
+      return {
+        doneReason: 'retry_without_previous_response',
+        steerInterruptionBatch: [],
+      };
+    }
+    if (steerInterruptionRequested && steerInterruptionBatch.length > 0) {
+      loopState.pendingResponsesRawInput = null;
+      loopState.previousResponseId = null;
+      loopState.steerHistoryMessages.push(...steerInterruptionBatch);
+      loopState.currentMessages = [
+        ...loopState.currentMessages,
+        ...steerInterruptionBatch.map((message) => ({
+          role: 'user' as const,
+          content: message,
+        })),
+      ];
+      const resumeSeq = await this.deps.streamSequencer.allocate(streamId);
+      await this.deps.streamBuffer.append(
+        streamId,
+        'status',
+        {
+          state: 'run_resumed_with_steer',
+          steer_count: steerInterruptionBatch.length,
+          latest_message:
+            steerInterruptionBatch[steerInterruptionBatch.length - 1] ?? '',
+        },
+        resumeSeq,
+        streamId,
+      );
+      return {
+        doneReason: 'steer_interrupted',
+        steerInterruptionBatch,
+      };
+    }
+    if (captured !== undefined) {
+      return {
+        doneReason: 'error',
+        steerInterruptionBatch: [],
+        errorMessage: captured,
+      };
+    }
+    return {
+      doneReason: 'normal',
+      steerInterruptionBatch: [],
+    };
   }
 }
