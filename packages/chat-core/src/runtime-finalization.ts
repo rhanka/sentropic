@@ -1,0 +1,362 @@
+/**
+ * BR14b Lot 22b-6 — Sixth and FINAL step of the `ChatRuntime` god-class
+ * split.
+ *
+ * `ChatRuntimeFinalization` owns the three post-stream / post-tool-loop
+ * finalization methods migrated into `ChatRuntime` between BR14b Lot
+ * 21e-3 and Lot 22a-2 that drive the per-iteration finalization, the
+ * terminal `done` event emission + persistence, and the pass2 fallback
+ * branch invoked when the first pass produced no usable content:
+ *
+ *   - Lot 21e-3 `finalizeAssistantIteration` (per-iteration executed-tools
+ *     trace + todo runtime refresh + `pendingLocalToolCalls`
+ *     short-circuit emitting `status:awaiting_local_tool_results` + the
+ *     post-iteration history / rawInput rebuild handling the
+ *     `needsExplicitToolReplay` branches for Codex / Anthropic / Mistral
+ *     / Cohere).
+ *   - Lot 21e-3 `emitFinalAssistantTurn` (terminal `done` event + persist
+ *     final assistant content + reasoning via
+ *     `MessageStore.updateAssistantContent` + touch session `updatedAt`
+ *     via `SessionStore.touchUpdatedAt`).
+ *   - Lot 22a-2 `runPass2Fallback` (pass2 mesh stream with tools disabled
+ *     and `toolChoice='none'` when `contentParts.join('').trim()` is
+ *     empty; in-place mutation of the caller's `contentParts` /
+ *     `reasoningParts` buffers + `lastErrorMessage` reset; final
+ *     `'Second pass produced no content'` throw when the pass2 still
+ *     produced nothing).
+ *
+ * The bodies are a VERBATIM move from `runtime.ts`; only the
+ * surrounding class changes.
+ *
+ * Pattern: reuses the Lot 22b-1 / 22b-2 / 22b-3 / 22b-4 / 22b-5 façade
+ * shape exactly. Each sub-class receives the same `ChatRuntimeDeps` by
+ * reference (no copy, no state duplication). The `ChatRuntime` façade
+ * instantiates one of these per `ChatRuntime` and delegates the public
+ * finalization methods through one-line wrappers. All public method
+ * signatures on `ChatRuntime` stay byte-for-byte identical so that
+ * `chat-service.ts` call sites and the unit cases spread across
+ * `tests/runtime-finalize-turn.test.ts` (20 cases) and
+ * `tests/runtime-pass2-fallback.test.ts` (12 cases) continue to work
+ * unchanged.
+ *
+ * Per Lot 22b-0 Section D inventory + Lot 22b-6 Step 0 re-scan — zero
+ * cross-sub-class `this.<method>` calls. The 3 methods only touch
+ * `this.deps.*` and module-scope helpers (`safeTruncateForRuntime`,
+ * `safeJsonForRuntime`, `buildToolDigestForRuntime`). No sibling-injection
+ * needed: the constructor takes `deps` only, mirroring
+ * `ChatRuntimeCheckpoint` (Lot 22b-1), `ChatRuntimeMessages` (Lot
+ * 22b-3), `ChatRuntimeRunPrepare` (Lot 22b-4), and
+ * `ChatRuntimeToolDispatch` (Lot 22b-5) rather than `ChatRuntimeSession`
+ * (Lot 22b-2, which needed the sibling `checkpoint` reference).
+ *
+ * Lot 22b-6 staging note: Step 1 lands the file scaffold + the
+ * `finalizeAssistantIteration` body (the largest of the 3 at ~269 LOC).
+ * Subsequent steps append the remaining two bodies + their imports
+ * verbatim (Step 2: `emitFinalAssistantTurn`; Step 3: `runPass2Fallback`
+ * + the 3 module-scope helpers). The class is NOT yet wired into the
+ * `ChatRuntime` façade — Step 4 inserts the field declaration, the
+ * constructor instantiation, and the three one-line delegators.
+ *
+ * At Lot 22b-6 close, `ChatRuntime` is a thin façade (~80 LOC class
+ * body) delegating to 6 domain sub-classes. The god class is gone.
+ */
+import type {
+  ChatRuntimeDeps,
+  FinalizeAssistantIterationInput,
+  FinalizeAssistantIterationResult,
+} from './runtime.js';
+
+export class ChatRuntimeFinalization {
+  constructor(private readonly deps: ChatRuntimeDeps) {}
+
+  /**
+   * BR14b Lot 21e-3 — post-`consumeToolCalls` per-iteration finalization
+   * block.
+   *
+   * Verbatim port of the inline blocks at `chat-service.ts` lines
+   * 3618-3781 (post-Lot 21e-2): the per-iteration executed-tools trace
+   * emission (Block A — trace), the todo runtime refresh (Block A —
+   * todo refresh), the `pendingLocalToolCalls` short-circuit emitting
+   * `status:awaiting_local_tool_results` (Block B), and the
+   * post-iteration history/rawInput rebuild handling the
+   * `needsExplicitToolReplay` branches for Codex / Anthropic / Mistral /
+   * Cohere (Block C).
+   *
+   * Two api-side closures cross as optional Option A callbacks
+   * (`writeChatGenerationTrace` + `refreshSessionTodoRuntime`) — same
+   * pattern as Lots 16a/16b/18/21c/21e-1. When the trace callback is
+   * undefined the trace is silently skipped (test fixtures don't need
+   * `chat-trace.ts` wiring). When the todo refresh callback is
+   * undefined or `todoAutonomousExtensionEnabled` is false or
+   * `todoAwaitingUserInput` is true (mirrors the inline guard at line
+   * 3648), the refresh is skipped and the booleans pass through
+   * verbatim.
+   *
+   * Event emission for Block B goes through `deps.streamSequencer.allocate`
+   * + `deps.streamBuffer.append` (same convention as
+   * `applyContextBudgetGate` and `consumeToolCalls`). The returned
+   * `streamSeq` is the cursor the caller must reassign locally.
+   *
+   * The pendingLocalToolCalls short-circuit throws the legacy
+   * `'Unable to pause generation for local tools: missing previous_response_id'`
+   * error when `previousResponseId` is `null` (mirrors the inline throw
+   * at lines 3674-3676). The caller propagates the error up the job
+   * queue.
+   */
+  async finalizeAssistantIteration(
+    input: FinalizeAssistantIterationInput,
+  ): Promise<FinalizeAssistantIterationResult> {
+    const {
+      streamId,
+      traceEnabled,
+      sessionId,
+      assistantMessageId,
+      userId,
+      workspaceId,
+      iteration,
+      modelId,
+      toolChoice,
+      tools,
+      currentMessages: currentMessagesInput,
+      previousResponseId: previousResponseIdInput,
+      responseToolOutputs,
+      toolCalls,
+      executedTools,
+      writeChatGenerationTrace,
+      todoAutonomousExtensionEnabled,
+      todoAwaitingUserInput: todoAwaitingUserInputInput,
+      refreshSessionTodoRuntime,
+      currentUserRole,
+      pendingLocalToolCalls,
+      localTools,
+      vscodeCodeAgentPayload,
+      streamSeq: streamSeqInput,
+      useCodexTransport,
+      providerId,
+      contentParts,
+    } = input;
+    let streamSeq = streamSeqInput;
+    let currentMessages: ReadonlyArray<unknown> = currentMessagesInput;
+    let previousResponseId: string | null = previousResponseIdInput;
+    let todoContinuationActive = true;
+    let todoAwaitingUserInput = todoAwaitingUserInputInput;
+
+    // Block A — trace executed tool calls for this iteration (args/results).
+    // Verbatim port of chat-service.ts lines 3619-3646.
+    if (writeChatGenerationTrace) {
+      await writeChatGenerationTrace({
+        enabled: traceEnabled,
+        sessionId,
+        assistantMessageId,
+        userId,
+        workspaceId,
+        phase: 'pass1',
+        iteration,
+        model: modelId,
+        toolChoice,
+        tools: tools ?? null,
+        openaiMessages: {
+          kind: 'executed_tools',
+          messages: currentMessages,
+          previous_response_id: previousResponseId,
+          responses_input_tool_outputs: responseToolOutputs,
+        },
+        toolCalls: toolCalls.map((tc) => {
+          const found = executedTools.find((x) => x.toolCallId === tc.id);
+          return {
+            id: tc.id,
+            name: tc.name,
+            args:
+              found?.args ??
+              (tc.args
+                ? (() => {
+                    try {
+                      return JSON.parse(tc.args);
+                    } catch {
+                      return tc.args;
+                    }
+                  })()
+                : undefined),
+            result: found?.result,
+          };
+        }),
+        meta: {
+          kind: 'executed_tools',
+          callSite:
+            'ChatService.runAssistantGeneration/pass1/afterTools',
+          openaiApi: 'responses',
+        },
+      });
+    }
+
+    // Block A — todo refresh.
+    // Verbatim port of chat-service.ts lines 3648-3670.
+    if (
+      todoAutonomousExtensionEnabled &&
+      !todoAwaitingUserInput &&
+      refreshSessionTodoRuntime
+    ) {
+      const refreshed = await refreshSessionTodoRuntime({
+        sessionId,
+        userId,
+        workspaceId,
+        currentUserRole,
+      });
+      if (!refreshed.hasRefreshedSessionTodo) {
+        todoContinuationActive = false;
+      } else {
+        todoContinuationActive = refreshed.todoContinuationActive;
+        if (refreshed.todoAwaitingUserInputAfterRefresh) {
+          todoAwaitingUserInput = true;
+        }
+      }
+    }
+
+    // Block B — pendingLocalToolCalls short-circuit.
+    // Verbatim port of chat-service.ts lines 3672-3744.
+    if (pendingLocalToolCalls.length > 0) {
+      if (!previousResponseId) {
+        throw new Error(
+          'Unable to pause generation for local tools: missing previous_response_id',
+        );
+      }
+      const seq = await this.deps.streamSequencer.allocate(streamId);
+      await this.deps.streamBuffer.append(
+        streamId,
+        'status',
+        {
+          state: 'awaiting_local_tool_results',
+          previous_response_id: previousResponseId,
+          pending_local_tool_calls: pendingLocalToolCalls.map((item) => ({
+            tool_call_id: item.id,
+            name: item.name,
+            args: item.args,
+          })),
+          local_tool_definitions: localTools.map((tool) => ({
+            name: tool.type === 'function' ? tool.function.name : '',
+            description:
+              tool.type === 'function'
+                ? tool.function.description ?? ''
+                : '',
+            parameters:
+              tool.type === 'function'
+                ? ((tool.function.parameters ?? {}) as Record<
+                    string,
+                    unknown
+                  >)
+                : {},
+          })),
+          base_tool_outputs: responseToolOutputs.map((item) => ({
+            call_id: item.call_id,
+            output: item.output,
+          })),
+          vscode_code_agent: vscodeCodeAgentPayload
+            ? {
+                source: 'vscode',
+                workspace_key: vscodeCodeAgentPayload.workspaceKey,
+                workspace_label: vscodeCodeAgentPayload.workspaceLabel,
+                prompt_global_override:
+                  vscodeCodeAgentPayload.promptGlobalOverride,
+                prompt_workspace_override:
+                  vscodeCodeAgentPayload.promptWorkspaceOverride,
+                instruction_include_patterns:
+                  vscodeCodeAgentPayload.instructionIncludePatterns,
+                instruction_files:
+                  vscodeCodeAgentPayload.instructionFiles.map((file) => ({
+                    path: file.path,
+                    content: file.content,
+                  })),
+                system_context: vscodeCodeAgentPayload.systemContext
+                  ? {
+                      working_directory:
+                        vscodeCodeAgentPayload.systemContext.workingDirectory,
+                      is_git_repo:
+                        vscodeCodeAgentPayload.systemContext.isGitRepo,
+                      git_branch:
+                        vscodeCodeAgentPayload.systemContext.gitBranch,
+                      platform:
+                        vscodeCodeAgentPayload.systemContext.platform,
+                      os_version:
+                        vscodeCodeAgentPayload.systemContext.osVersion,
+                      shell: vscodeCodeAgentPayload.systemContext.shell,
+                      client_date_iso:
+                        vscodeCodeAgentPayload.systemContext.clientDateIso,
+                      client_timezone:
+                        vscodeCodeAgentPayload.systemContext.clientTimezone,
+                    }
+                  : undefined,
+              }
+            : undefined,
+        },
+        seq,
+        streamId,
+      );
+      streamSeq = seq + 1;
+      return {
+        shouldExitGeneration: true,
+        streamSeq,
+        currentMessages,
+        previousResponseId,
+        pendingResponsesRawInput: responseToolOutputs,
+        todoContinuationActive,
+        todoAwaitingUserInput,
+      };
+    }
+
+    // Block C — OPTION 1 (Responses API): on CONTINUE via previous_response_id +
+    // function_call_output -> pas d'injection tool->user JSON, pas de
+    // "role:tool" dans messages. On laisse `previousResponseId` alimenter
+    // l'appel suivant. Pour l'historique local côté modèle, on n'ajoute
+    // l'assistant que si non vide.
+    // Verbatim port of chat-service.ts lines 3746-3781.
+    const assistantText = contentParts.join('');
+    if (assistantText.trim()) {
+      currentMessages = [
+        ...currentMessages,
+        { role: 'assistant', content: assistantText },
+      ];
+    }
+
+    // Non-Responses-API providers (Claude, Mistral, Cohere, Codex) need both
+    // function_call + function_call_output in rawInput so the runtime can
+    // reconstruct the assistant tool_use / tool_calls block before tool results.
+    const needsExplicitToolReplay =
+      useCodexTransport ||
+      providerId === 'anthropic' ||
+      providerId === 'mistral' ||
+      providerId === 'cohere';
+    let pendingResponsesRawInput: ReadonlyArray<unknown>;
+    if (needsExplicitToolReplay) {
+      if (useCodexTransport) previousResponseId = null;
+      pendingResponsesRawInput = toolCalls.flatMap((toolCall) => {
+        const output = responseToolOutputs.find(
+          (item) => item.call_id === toolCall.id,
+        );
+        return output
+          ? [
+              {
+                type: 'function_call' as const,
+                call_id: toolCall.id,
+                name: toolCall.name,
+                arguments: toolCall.args || '{}',
+              },
+              output,
+            ]
+          : [];
+      });
+    } else {
+      pendingResponsesRawInput = responseToolOutputs;
+    }
+
+    return {
+      shouldExitGeneration: false,
+      streamSeq,
+      currentMessages,
+      previousResponseId,
+      pendingResponsesRawInput,
+      todoContinuationActive,
+      todoAwaitingUserInput,
+    };
+  }
+}
+
