@@ -1093,6 +1093,13 @@ export class ChatService {
         this.executeServerToolInternal(
           input as unknown as ExecuteServerToolInternalInput,
         ) as unknown as Promise<ExecuteServerToolResult>,
+      // BR14b Lot 22a-1 — Option A callback wrapping the api-side
+      // `getOpenAITransportMode` helper (`provider-connections.ts`) so
+      // `ChatRuntime.initToolLoopState` can derive the
+      // `useCodexTransport` boolean without taking a direct dep on the
+      // helper's import path. Returns the helper's `'codex' | 'token'`
+      // union verbatim.
+      resolveOpenAITransportMode: () => getOpenAITransportMode(),
     });
   }
 
@@ -3081,55 +3088,42 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     let contextBudgetReplanAttempts = loopState.contextBudgetReplanAttempts;
     let continueGenerationLoop = loopState.continueGenerationLoop;
 
-    // BR14b Lot 17 — model selection delegated to the
-    // `resolveModelSelection` callback wired in Lot 12 (bundles the four
-    // helpers `settingsService.getAISettings`, `getModelCatalogPayload`,
-    // `inferProviderFromModelIdWithLegacy`, `resolveDefaultSelection`).
-    // Cast back to `ProviderId` mirrors the Lot 12 delegate pattern.
-    const resolvedSelection = await this.runtime.resolveModelSelection({
+    // BR14b Lot 22a-1 — pre-loop init slice (74 lines pre-Lot 22a-1)
+    // migrated into `ChatRuntime.initToolLoopState`. The runtime bundles:
+    //   1. `resolveModelSelection` (Lot 12/17 callback)
+    //   2. derive `useCodexTransport = selectedProviderId === 'openai'
+    //      && selectedModel === 'gpt-5.5' && (await
+    //      resolveOpenAITransportMode()) === 'codex'`
+    //   3. mutate `loopState.useCodexTransport = useCodexTransport`
+    //   4. `evaluateReasoningEffort` (Lot 18/20 callback) + streamSeq
+    //      re-sync via `peekStreamSequence + 1`
+    // The legacy `console.error('[chat] reasoning_effort_eval_failed',
+    // ...)` trace is kept caller-side because it carries `sessionId`
+    // (a chat-service-only field). Cast back to `ProviderId` mirrors
+    // the Lot 12/17 delegate pattern.
+    const initResult = await this.runtime.initToolLoopState({
       userId: options.userId,
       providerId: options.providerId,
-      model: options.model || assistantRow.model,
-    });
-    const selectedProviderId = resolvedSelection.provider_id as ProviderId;
-    const selectedModel = resolvedSelection.model_id;
-    const useCodexTransport =
-      selectedProviderId === 'openai' &&
-      selectedModel === 'gpt-5.5' &&
-      (await getOpenAITransportMode()) === 'codex';
-    // BR14b Lot 21c — surface the codex transport flag on the loop state so
-    // the upcoming `consumeToolCalls` migration can read it without a
-    // per-call input. The legacy chat-service flow computes
-    // `useCodexTransport` AFTER `beginAssistantRunLoop` (depends on the
-    // resolved model selection done in this block), so the field is set
-    // here rather than in the `beginAssistantRunLoop` input. Behavior
-    // preservation: `loopState.useCodexTransport` is read only by Lot 21d+
-    // dispatch code; pre-Lot 21d the in-scope readers remain the
-    // pre-existing `useCodexTransport` local at lines ~4867 / ~4872.
-    loopState.useCodexTransport = useCodexTransport;
-
-    // BR14b Lot 20 — reasoning-effort evaluator block (98 lines pre-Lot 18)
-    // migrated into `ChatRuntime.evaluateReasoningEffort`. The runtime
-    // delegates the body to the `evaluateReasoningEffort` callback wired
-    // in the constructor (`evaluateReasoningEffortInternal`). Post-Lot 20
-    // the runtime ALSO emits the 2 status events
-    // (`reasoning_effort_eval_failed` + `reasoning_effort_selected`) that
-    // previously bracketed the call caller-side, allocating sequence
-    // numbers via `deps.streamSequencer`. The caller re-syncs the shared
-    // `streamSeq` cursor after the call via
-    // `runtime.peekStreamSequence(assistantMessageId) + 1`. We still emit
-    // the same `console.error` trace shape the legacy inline catch block
-    // produced (`{assistantMessageId, sessionId, model, evaluatorModel,
-    // error}`) so log-based debugging stays unchanged.
-    const reasoning = await this.runtime.evaluateReasoningEffort({
-      userId: options.userId,
-      workspaceId: sessionWorkspaceId,
-      selectedProviderId,
-      selectedModel,
+      model: options.model,
+      // BR14b Lot 22a-1 — coalesce `null` to `''` so the InitToolLoopState
+      // input stays `string`. Semantically equivalent to the legacy
+      // `options.model || assistantRow.model` expression: both `null`
+      // and `''` are falsy in the runtime body's `input.model ||
+      // input.assistantRowModel`, which then propagates the same value
+      // to `resolveModelSelection.model` (the dep's `||
+      // aiSettings.defaultModel` fallback treats `null` and `''`
+      // identically).
+      assistantRowModel: assistantRow.model ?? '',
+      assistantMessageId: options.assistantMessageId,
+      sessionWorkspaceId,
       conversation,
       signal: options.signal,
-      streamId: options.assistantMessageId,
+      loopState,
     });
+    const selectedProviderId = initResult.selectedProviderId as ProviderId;
+    const selectedModel = initResult.selectedModel;
+    const useCodexTransport = initResult.useCodexTransport;
+    const reasoning = initResult.reasoning;
     if (reasoning.failure) {
       try {
         console.error('[chat] reasoning_effort_eval_failed', {
@@ -3143,18 +3137,8 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         // ignore
       }
     }
-    const reasoningEffortForThisMessage = reasoning.effortForMessage;
-    // BR14b Lot 20 — `effortLabel` and `evaluatedBy` are now consumed by
-    // the runtime itself (inside `evaluateReasoningEffort`) which emits
-    // the `reasoning_effort_selected` status event with them. The caller
-    // only needs `effortForMessage` for downstream message persistence.
-    // Re-sync local `streamSeq` cursor with the runtime after
-    // `evaluateReasoningEffort` appended 0 (callback unwired /
-    // non-reasoning model), 1 (success path), or 2 (failure path) status
-    // events internally. `peek` returns the latest allocated sequence;
-    // the next caller-side `writeStreamEvent` continues from `peek + 1`.
-    streamSeq =
-      (await this.runtime.peekStreamSequence(options.assistantMessageId)) + 1;
+    const reasoningEffortForThisMessage = initResult.reasoningEffortForThisMessage;
+    streamSeq = initResult.streamSeq;
 
     // BR14b Lot 21a — `continueGenerationLoop` initialization moved into
     // `ChatRuntime.beginAssistantRunLoop` (above) alongside the other
