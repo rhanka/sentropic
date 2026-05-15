@@ -3610,10 +3610,12 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           }
           let result: unknown;
 
-          // BR14b Lot 21d-2 Step 3 Group A — delegate to `executeServerToolInternal`.
+          // BR14b Lot 21d-2 Step 3 Groups A+B — delegate to `executeServerToolInternal`.
           // Body verbatim-moved into the method's switch; this closure factory keeps
-          // the input bundle DRY across the five Group A delegations (read_initiative,
-          // update_initiative, organizations_list, organization_get, organization_update).
+          // the input bundle DRY across all Group A+B delegations (read_initiative,
+          // update_initiative, organizations_list, organization_get, organization_update,
+          // folders_list, folder_get, folder_update, initiatives_list,
+          // executive_summary_get, executive_summary_update).
           const buildExecuteServerToolInput = (): ExecuteServerToolInternalInput => ({
             toolCall,
             args,
@@ -3673,142 +3675,29 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             result = r.result;
             streamSeq = r.streamSeq;
           } else if (toolCall.name === 'folders_list') {
-            if (!hasContextType('organization') && !hasContextType('folder')) {
-              throw new Error('Security: folders_list is only available in organization/folder context');
-            }
-            const organizationId = typeof args.organizationId === 'string'
-              ? args.organizationId
-              : (allowedByType.organization.values().next().value ?? null);
-            const listResult = await toolService.listFolders({
-              workspaceId: sessionWorkspaceId,
-              organizationId,
-              idsOnly: !!args.idsOnly,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = listResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'folder_get') {
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const getResult = await toolService.getFolder(args.folderId, {
-              workspaceId: sessionWorkspaceId,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = getResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'folder_update') {
-            if (readOnly) throw new Error('Read-only workspace: folder_update is disabled');
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const updateResult = await toolService.updateFolderFields({
-              folderId: args.folderId,
-              updates: Array.isArray(args.updates) ? args.updates : [],
-              userId: options.userId,
-              sessionId: options.sessionId,
-              messageId: options.assistantMessageId,
-              toolCallId: toolCall.id,
-              locale: options.locale,
-              workspaceId: sessionWorkspaceId
-            });
-            result = updateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'initiatives_list') {
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const listResult = await toolService.listInitiativesForFolder(args.folderId, {
-              workspaceId: sessionWorkspaceId,
-              idsOnly: !!args.idsOnly,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = listResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'executive_summary_get') {
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const getResult = await toolService.getExecutiveSummary(args.folderId, {
-              workspaceId: sessionWorkspaceId,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = getResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'executive_summary_update') {
-            if (readOnly) throw new Error('Read-only workspace: executive_summary_update is disabled');
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const updateResult = await toolService.updateExecutiveSummaryFields({
-              folderId: args.folderId,
-              updates: Array.isArray(args.updates) ? args.updates : [],
-              userId: options.userId,
-              sessionId: options.sessionId,
-              messageId: options.assistantMessageId,
-              toolCallId: toolCall.id,
-              locale: options.locale,
-              workspaceId: sessionWorkspaceId
-            });
-            result = updateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'matrix_get') {
             if (!args.folderId || typeof args.folderId !== 'string') {
               throw new Error('Security: folderId is required');
@@ -5072,7 +4961,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
   private async executeServerToolInternal(
     input: ExecuteServerToolInternalInput,
   ): Promise<ExecuteServerToolInternalResult> {
-    const { toolCall, options, allowedByType, sessionWorkspaceId, readOnly, hasContextType, isAllowedOrganizationId } = input;
+    const { toolCall, options, allowedByType, allowedFolderIds, sessionWorkspaceId, readOnly, hasContextType, isAllowedOrganizationId } = input;
     // Verbatim alias for the caller-parsed `JSON.parse(toolCall.args || '{}')`
     // payload — per-branch field access mirrors inline `args.X` reads.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -5206,7 +5095,159 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         streamSeq += 1;
         break;
       }
-      // BR14b Lot 21d-2 Groups B-F per-tool case branches added by
+      // BR14b Lot 21d-2 Step 3 Group B — verbatim move of inline tool branches
+      // from `runAssistantGeneration` (folders_list, folder_get, folder_update,
+      // initiatives_list, executive_summary_get, executive_summary_update).
+      case 'folders_list': {
+        if (!hasContextType('organization') && !hasContextType('folder')) {
+          throw new Error('Security: folders_list is only available in organization/folder context');
+        }
+        const organizationId = typeof args.organizationId === 'string'
+          ? args.organizationId
+          : (allowedByType.organization.values().next().value ?? null);
+        const listResult = await toolService.listFolders({
+          workspaceId: sessionWorkspaceId,
+          organizationId,
+          idsOnly: !!args.idsOnly,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = listResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'folder_get': {
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const getResult = await toolService.getFolder(args.folderId, {
+          workspaceId: sessionWorkspaceId,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = getResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'folder_update': {
+        if (readOnly) throw new Error('Read-only workspace: folder_update is disabled');
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const updateResult = await toolService.updateFolderFields({
+          folderId: args.folderId,
+          updates: Array.isArray(args.updates) ? args.updates : [],
+          userId: options.userId,
+          sessionId: options.sessionId,
+          messageId: options.assistantMessageId,
+          toolCallId: toolCall.id,
+          locale: options.locale,
+          workspaceId: sessionWorkspaceId
+        });
+        result = updateResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'initiatives_list': {
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const listResult = await toolService.listInitiativesForFolder(args.folderId, {
+          workspaceId: sessionWorkspaceId,
+          idsOnly: !!args.idsOnly,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = listResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'executive_summary_get': {
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const getResult = await toolService.getExecutiveSummary(args.folderId, {
+          workspaceId: sessionWorkspaceId,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = getResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'executive_summary_update': {
+        if (readOnly) throw new Error('Read-only workspace: executive_summary_update is disabled');
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const updateResult = await toolService.updateExecutiveSummaryFields({
+          folderId: args.folderId,
+          updates: Array.isArray(args.updates) ? args.updates : [],
+          userId: options.userId,
+          sessionId: options.sessionId,
+          messageId: options.assistantMessageId,
+          toolCallId: toolCall.id,
+          locale: options.locale,
+          workspaceId: sessionWorkspaceId
+        });
+        result = updateResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      // BR14b Lot 21d-2 Groups C-F per-tool case branches added by
       // subsequent commits (verbatim move from the inline switch).
       default:
         throw new Error(`Unknown tool: ${toolCall.name}`);
