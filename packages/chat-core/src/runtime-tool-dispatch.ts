@@ -61,13 +61,20 @@ import type { ContextBudgetSnapshot } from './context-budget.js';
 import { isPreviousResponseNotFoundError } from './mesh-errors.js';
 import { consumePendingSteerMessages } from './steer.js';
 import type { StreamEventTypeName } from './stream-port.js';
-import { STEER_REASONING_REPLAY_MAX_CHARS } from './runtime.js';
+import {
+  STEER_REASONING_REPLAY_MAX_CHARS,
+  asRecord,
+  parseToolCallArgsForRuntime,
+} from './runtime.js';
 import type {
   ApplyContextBudgetGateInput,
   ApplyContextBudgetGateResult,
+  AssistantRunLoopExecutedTool,
   ChatRuntimeDeps,
   ConsumeAssistantStreamInput,
   ConsumeAssistantStreamResult,
+  ConsumeToolCallsInput,
+  ConsumeToolCallsResult,
   ExecuteServerToolInput,
   ExecuteServerToolResult,
 } from './runtime.js';
@@ -521,6 +528,315 @@ export class ChatRuntimeToolDispatch {
     return {
       doneReason: 'normal',
       steerInterruptionBatch: [],
+    };
+  }
+
+  /**
+   * BR14b Lot 21c / 21e-2 — full per-iteration tool-dispatch loop body.
+   *
+   * Lot 21c landed the orchestration shell (empty-toolCalls short-circuit
+   * + local-tool branch). Lot 21e-2 extends it with the full per-tool
+   * dispatch loop body, migrating the inline `for (const toolCall of toolCalls)`
+   * block previously hosted at `chat-service.ts` lines 3514-3741
+   * (post-Lot 21e-1) into the runtime. After Lot 21e-2 the chat-service
+   * caller is a single `runtime.consumeToolCalls({...})` invocation
+   * followed by a state sync (push the result accumulators into the
+   * outer arrays + re-assign `streamSeq` / `contextBudgetReplanAttempts`).
+   *
+   * Per-iteration responsibilities (in order):
+   *   1. `signal?.aborted` check → throws `AbortError` verbatim
+   *      (mirrors line 3515 pre-Lot 21e-2).
+   *   2. Local-tool short-circuit (lines 3516-3532 pre-Lot 21e-2):
+   *      push to `pendingLocalToolCalls` + emit one
+   *      `tool_call_result {status:'awaiting_external_result'}` event +
+   *      advance `streamSeq`.
+   *   3. Try block:
+   *      a. Parse `toolCall.args` JSON (defaults to `{}` on empty).
+   *      b. Pre-compute `projectedResultChars` + `preToolBudgetInitial`
+   *         via the caller-supplied api-side helpers (lines 3534-3546).
+   *      c. Emit `pre_tool` context-budget status (line 3547).
+   *      d. Invoke `applyContextBudgetGate` (lines 3567-3603). On
+   *         `shouldContinue` push the deferred accumulator into
+   *         `toolResults` / `responseToolOutputs` / `executedTools`
+   *         and `continue` the iteration.
+   *      e. Derive `todoOperation` from `args` (lines 3604-3625).
+   *         Throw on `plan` without a derivable action (line 3626-3630).
+   *      f. Dispatch the per-tool body via
+   *         `runtime.executeServerTool(buildExecuteServerToolInput(ctx))`
+   *         — Lot 21d-3 facade (lines 3648-3689 pre-Lot 21e-2).
+   *      g. Push success rows into `executedTools` / `toolResults` /
+   *         `responseToolOutputs` (lines 3692-3706).
+   *   4. Catch block (lines 3707-3740):
+   *      a. Wrap the thrown error into `{status:'error', error}`.
+   *      b. When `toolCall.name === 'plan'` AND
+   *         `todoAutonomousExtensionEnabled` is true, invoke
+   *         `markTodoIterationState(errorResult)`.
+   *      c. Emit one `tool_call_result` event with the error envelope +
+   *         advance `streamSeq`.
+   *      d. Push the error rows into `toolResults` / `responseToolOutputs` /
+   *         `executedTools`.
+   *
+   * The method is accumulator-agnostic: it builds the per-call delta
+   * arrays locally and returns them to the caller, which is responsible
+   * for merging into the outer `runAssistantGeneration` state. Same
+   * convention as `applyContextBudgetGate.deferredAccumulator`.
+   *
+   * The runtime emits events via `deps.streamSequencer.allocate` +
+   * `deps.streamBuffer.append` (same convention as Lot 21c shell +
+   * Lot 21e-1 gate). The caller is expected to bind those deps to the
+   * `chatStreamEvents` postgres adapter (production wiring).
+   *
+   * `loopState.pendingResponsesRawInput = null` (chat-service.ts
+   * line 3414 pre-Lot 21e-2) sits BEFORE the empty-toolCalls check in
+   * the inline body — outside this method's responsibility — and stays
+   * caller-side.
+   */
+  async consumeToolCalls(
+    input: ConsumeToolCallsInput,
+  ): Promise<ConsumeToolCallsResult> {
+    const {
+      streamId,
+      loopState,
+      localToolNames,
+      signal,
+      maxReplanAttempts,
+      softZoneCode,
+      hardZoneCode,
+      estimateContextBudget,
+      estimateToolResultProjectionChars,
+      writeContextBudgetStatus,
+      resolveBudgetZone,
+      estimateTokenCountFromChars,
+      compactContextIfNeeded,
+      markTodoIterationState,
+      todoAutonomousExtensionEnabled,
+      buildExecuteServerToolInput,
+      providerId,
+      modelId,
+      tools,
+    } = input;
+    let streamSeq = loopState.streamSeq;
+    let contextBudgetReplanAttempts = input.contextBudgetReplanAttempts;
+    if (loopState.toolCalls.length === 0) {
+      loopState.continueGenerationLoop = false;
+      return {
+        toolResults: [],
+        responseToolOutputs: [],
+        pendingLocalToolCalls: [],
+        executedTools: [],
+        shouldBreakLoop: true,
+        streamSeq,
+        contextBudgetReplanAttempts,
+      };
+    }
+    const toolResults: Array<{
+      role: 'tool';
+      content: string;
+      tool_call_id: string;
+    }> = [];
+    const responseToolOutputs: Array<{
+      type: 'function_call_output';
+      call_id: string;
+      output: string;
+    }> = [];
+    const pendingLocalToolCalls: Array<{
+      id: string;
+      name: string;
+      args: unknown;
+    }> = [];
+    const executedTools: AssistantRunLoopExecutedTool[] = [];
+    const currentMessages = input.currentMessages;
+    for (const toolCall of loopState.toolCalls) {
+      if (signal?.aborted) throw new Error('AbortError');
+      const toolName = String(toolCall.name || '').trim();
+      if (toolName && localToolNames.has(toolName)) {
+        pendingLocalToolCalls.push({
+          id: toolCall.id,
+          name: toolName,
+          args: parseToolCallArgsForRuntime(toolCall.args),
+        });
+        const seq = await this.deps.streamSequencer.allocate(streamId);
+        await this.deps.streamBuffer.append(
+          streamId,
+          'tool_call_result',
+          {
+            tool_call_id: toolCall.id,
+            result: { status: 'awaiting_external_result' },
+          },
+          seq,
+          streamId,
+        );
+        streamSeq = seq + 1;
+        loopState.streamSeq = streamSeq;
+        continue;
+      }
+      try {
+        const args = JSON.parse(toolCall.args || '{}');
+        const projectedResultChars = estimateToolResultProjectionChars(
+          toolCall.name,
+          asRecord(args) ?? {},
+        );
+        const preToolBudgetInitial = estimateContextBudget({
+          messages: currentMessages,
+          tools,
+          rawInput: responseToolOutputs,
+          providerId,
+          modelId,
+        });
+        await writeContextBudgetStatus('pre_tool', preToolBudgetInitial, {
+          tool_name: toolCall.name,
+        });
+        const gate = await this.applyContextBudgetGate({
+          streamId,
+          toolCall: { id: toolCall.id, name: toolCall.name },
+          args,
+          preToolBudget: preToolBudgetInitial,
+          projectedResultChars,
+          streamSeq,
+          contextBudgetReplanAttempts,
+          maxReplanAttempts,
+          softZoneCode,
+          hardZoneCode,
+          resolveBudgetZone,
+          estimateTokenCountFromChars,
+          compactContextIfNeeded,
+        });
+        streamSeq = gate.streamSeq;
+        loopState.streamSeq = streamSeq;
+        contextBudgetReplanAttempts = gate.contextBudgetReplanAttempts;
+        if (gate.shouldContinue) {
+          const deferredAcc = gate.deferredAccumulator!;
+          toolResults.push({
+            role: 'tool',
+            content: JSON.stringify(deferredAcc.deferredResult),
+            tool_call_id: deferredAcc.toolCallId,
+          });
+          responseToolOutputs.push({
+            type: 'function_call_output',
+            call_id: deferredAcc.toolCallId,
+            output: JSON.stringify(deferredAcc.deferredResult),
+          });
+          executedTools.push({
+            toolCallId: deferredAcc.toolCallId,
+            name: deferredAcc.toolName,
+            args: deferredAcc.args,
+            result: deferredAcc.deferredResult,
+          });
+          continue;
+        }
+        const todoOperation: string | null = (() => {
+          if (toolCall.name !== 'plan') return null;
+          const actionRaw =
+            typeof args.action === 'string' ? args.action.trim().toLowerCase() : '';
+          if (
+            actionRaw === 'create' ||
+            actionRaw === 'update_plan' ||
+            actionRaw === 'update_task'
+          ) {
+            return actionRaw;
+          }
+          if (actionRaw.length > 0) {
+            return null;
+          }
+          const hasTaskId =
+            typeof args.taskId === 'string' && args.taskId.trim().length > 0;
+          if (hasTaskId) return 'update_task';
+          const hasTodoId =
+            typeof args.todoId === 'string' && args.todoId.trim().length > 0;
+          if (hasTodoId) return 'update_plan';
+          return 'create';
+        })();
+        if (toolCall.name === 'plan' && !todoOperation) {
+          throw new Error(
+            'plan: action must be one of create|update_plan|update_task',
+          );
+        }
+        const execInput = buildExecuteServerToolInput({
+          toolCall,
+          args,
+          todoOperation,
+          streamSeq,
+          currentMessages,
+          responseToolOutputs,
+          executedTools,
+        });
+        const r = await this.executeServerTool(execInput);
+        const rRecord = r as unknown as {
+          result: unknown;
+          streamSeq: number;
+        };
+        const result = rRecord.result;
+        streamSeq = rRecord.streamSeq;
+        loopState.streamSeq = streamSeq;
+        executedTools.push({
+          toolCallId: toolCall.id,
+          name: toolCall.name,
+          args,
+          result,
+        });
+        toolResults.push({
+          role: 'tool',
+          content: JSON.stringify(result),
+          tool_call_id: toolCall.id,
+        });
+        responseToolOutputs.push({
+          type: 'function_call_output',
+          call_id: toolCall.id,
+          output: JSON.stringify(result),
+        });
+      } catch (error) {
+        const errorResult = {
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+        const todoErrorCall = toolCall.name === 'plan';
+        if (todoErrorCall && todoAutonomousExtensionEnabled) {
+          markTodoIterationState(errorResult);
+        }
+        const seq = await this.deps.streamSequencer.allocate(streamId);
+        await this.deps.streamBuffer.append(
+          streamId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: errorResult },
+          seq,
+          streamId,
+        );
+        streamSeq = seq + 1;
+        loopState.streamSeq = streamSeq;
+        toolResults.push({
+          role: 'tool',
+          content: JSON.stringify(errorResult),
+          tool_call_id: toolCall.id,
+        });
+        responseToolOutputs.push({
+          type: 'function_call_output',
+          call_id: toolCall.id,
+          output: JSON.stringify(errorResult),
+        });
+        executedTools.push({
+          toolCallId: toolCall.id,
+          name: toolCall.name || 'unknown_tool',
+          args: toolCall.args
+            ? (() => {
+                try {
+                  return JSON.parse(toolCall.args);
+                } catch {
+                  return toolCall.args;
+                }
+              })()
+            : undefined,
+          result: errorResult,
+        });
+      }
+    }
+    return {
+      toolResults,
+      responseToolOutputs,
+      pendingLocalToolCalls,
+      executedTools,
+      shouldBreakLoop: false,
+      streamSeq,
+      contextBudgetReplanAttempts,
     };
   }
 }
