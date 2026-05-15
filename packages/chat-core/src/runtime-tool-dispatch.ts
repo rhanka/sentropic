@@ -62,6 +62,8 @@ import type {
   ApplyContextBudgetGateInput,
   ApplyContextBudgetGateResult,
   ChatRuntimeDeps,
+  ExecuteServerToolInput,
+  ExecuteServerToolResult,
 } from './runtime.js';
 
 export class ChatRuntimeToolDispatch {
@@ -225,5 +227,37 @@ export class ChatRuntimeToolDispatch {
       contextBudgetReplanAttempts,
       preToolBudget,
     };
+  }
+
+  /**
+   * BR14b Lot 21d-3 — public facade over the `executeServerTool` Option A
+   * callback (defined on `ChatRuntimeDeps`). Forwards the per-tool input
+   * verbatim to `deps.executeServerTool(input)` and returns the callback's
+   * `ExecuteServerToolResult` unchanged.
+   *
+   * The boundary contract is intentionally narrow: chat-core stays
+   * agnostic of which api-side helpers, captured locals, or closures the
+   * adapter binds inside the callback. Callers that need to dispatch a
+   * non-local tool from inside `runAssistantGeneration` (or from
+   * `consumeToolCalls` once Lot 21e wires the for-loop) invoke this
+   * method instead of taking the deps reference directly — keeping
+   * `deps` private to the runtime and the inversion-of-control story
+   * intact.
+   *
+   * Throws when `deps.executeServerTool` is undefined (callback not
+   * wired). Test fixtures opt in by supplying a stubbed callback in
+   * `ChatRuntimeDeps`; production wiring binds
+   * `(input) => this.executeServerToolInternal(input)` in the
+   * `ChatService` constructor.
+   */
+  async executeServerTool(
+    input: ExecuteServerToolInput,
+  ): Promise<ExecuteServerToolResult> {
+    if (!this.deps.executeServerTool) {
+      throw new Error(
+        'ChatRuntime.executeServerTool: deps.executeServerTool is not wired',
+      );
+    }
+    return this.deps.executeServerTool(input);
   }
 }
