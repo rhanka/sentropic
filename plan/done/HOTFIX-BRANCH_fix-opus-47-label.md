@@ -91,7 +91,7 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
 - [ ] **Lot 2 — Sandbox runtime integration**
   - [ ] Implement `SandboxRuntime` port in `src/sandbox/runtime.ts` with `isolated-vm` adapter (decision frozen in SPEC_EVOL §2).
     - [x] Step 1: scaffold port + resolved-policy enforcement + `isolated-vm@6.1.2` dep.
-    - [ ] Step 2: API-surface wrappers (`files.create`, `db.query`, `fetch`).
+    - [x] Step 2: API-surface wrappers (`files.create`, `db.query`, `fetch`).
     - [ ] Step 3: `execute()` body + unit tests.
   - [ ] Implement `SandboxPolicy` enforcement: timeout (default 30s), memory cap (128MB), API-surface allowlist (`files.create`, `db.query`, `fetch` only).
   - [ ] Carry forward the docx-freeform sandbox helpers into a built-in skill bundle as reference implementation.
