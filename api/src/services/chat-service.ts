@@ -13,6 +13,8 @@ import {
   type BuildSystemPromptInput,
   type BuildSystemPromptResult,
   type EvaluateReasoningEffortInput,
+  type ExecuteServerToolInput,
+  type ExecuteServerToolResult,
   type ReasoningEffortEvaluation,
   type ReasoningEffortLabel,
 } from '../../../packages/chat-core/src/runtime';
@@ -1072,6 +1074,25 @@ export class ChatService {
       // is not yet migrated into the runtime.
       evaluateReasoningEffort: (input) =>
         this.evaluateReasoningEffortInternal(input),
+      // BR14b Lot 21d-3 — bind the chat-service `executeServerToolInternal`
+      // method (Lot 21d-2's verbatim consolidation of the 30 server-tool
+      // branches) behind the chat-core `executeServerTool` Option A
+      // callback. The chat-core boundary type `ExecuteServerToolInput`
+      // intentionally stays opaque (~14 fields) and lacks the 19 api-side
+      // captured locals + 4 closures carried by the chat-service-local
+      // `ExecuteServerToolInternalInput`. `runAssistantGeneration` builds
+      // the richer input at the call site and routes it through
+      // `runtime.executeServerTool(...)`, which forwards verbatim to this
+      // callback. The `as unknown as ExecuteServerToolInternalInput` cast
+      // bridges the boundary because TypeScript cannot prove structural
+      // assignability across the unknown-typed fields — runtime behavior
+      // is identical to the pre-Lot 21d-3 direct `this.executeServerToolInternal({...})`
+      // call (verified by `chat.test.ts` 28/28 + `chat-tools.test.ts` 6/6
+      // + `chat-service-tools.test.ts` 14/14 regression).
+      executeServerTool: (input) =>
+        this.executeServerToolInternal(
+          input as unknown as ExecuteServerToolInternalInput,
+        ) as unknown as Promise<ExecuteServerToolResult>,
     });
   }
 
@@ -3642,13 +3663,22 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           }
           let result: unknown;
 
-          // BR14b Lot 21d-2 Step 3 (30/30 complete) — all server-tool branches
-          // are routed through `executeServerToolInternal`'s switch (verbatim
-          // bodies moved by Groups A through F). The `default:` case inside
-          // the method throws `Unknown tool: <name>` mirroring the original
-          // inline fallback. Lot 21d-3 will wire this method behind the
-          // chat-core `executeServerTool` callback boundary.
-          const r = await this.executeServerToolInternal({
+          // BR14b Lot 21d-3 — server-tool dispatch now flows through the
+          // chat-core `runtime.executeServerTool(...)` facade, which
+          // forwards the per-tool input verbatim to the
+          // `ChatRuntimeDeps.executeServerTool` Option A callback bound
+          // in the `ChatService` constructor. The callback resolves to
+          // `this.executeServerToolInternal(...)` (Lot 21d-2's verbatim
+          // 30/30 server-tool switch). Behavior is identical to the
+          // pre-Lot 21d-3 direct method call — the only change is that
+          // the dispatch crosses the port boundary on its way to the
+          // api-side implementation, putting chat-core in control of the
+          // tool-call execution lifecycle. The chat-service-LOCAL input
+          // bundle (33 fields, including closures + captured locals) is
+          // structurally widened to the chat-core opaque
+          // `ExecuteServerToolInput` via the bound callback's
+          // `as unknown as ExecuteServerToolInternalInput` cast.
+          const r = await this.runtime.executeServerTool({
             toolCall,
             args,
             todoOperation,
@@ -3687,9 +3717,9 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             markTodoIterationState,
             isExplicitConfirmation,
             hasContextType,
-          });
-          result = r.result;
-          streamSeq = r.streamSeq;
+          } as unknown as ExecuteServerToolInput);
+          result = (r as unknown as ExecuteServerToolInternalResult).result;
+          streamSeq = (r as unknown as ExecuteServerToolInternalResult).streamSeq;
 
           // Garder une trace pour un éventuel 2e pass "rédaction-only"
           executedTools.push({ toolCallId: toolCall.id, name: toolCall.name, args, result });
