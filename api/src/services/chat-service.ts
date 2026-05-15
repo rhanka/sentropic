@@ -3635,13 +3635,15 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           }
           let result: unknown;
 
-          // BR14b Lot 21d-2 Step 3 Groups A+B+C+D — delegate to `executeServerToolInternal`.
+          // BR14b Lot 21d-2 Step 3 Groups A+B+C+D+E — delegate to `executeServerToolInternal`.
           // Body verbatim-moved into the method's switch; this closure factory keeps
-          // the input bundle DRY across all Group A-D delegations (read_initiative,
+          // the input bundle DRY across all Group A-E delegations (read_initiative,
           // update_initiative, organizations_list, organization_get, organization_update,
           // folders_list, folder_get, folder_update, initiatives_list,
           // executive_summary_get, executive_summary_update, matrix_get, matrix_update,
-          // plan, comment_assistant, web_search, web_extract, documents, history_analyze).
+          // plan, comment_assistant, web_search, web_extract, documents, history_analyze,
+          // solutions_list, solution_get, proposals_list, proposal_get, products_list,
+          // product_get, gate_review, workspace_list, initiative_search, task_dispatch).
           const buildExecuteServerToolInput = (): ExecuteServerToolInternalInput => ({
             toolCall,
             args,
@@ -3768,75 +3770,45 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             result = r.result;
             streamSeq = r.streamSeq;
           } else if (toolCall.name === 'solutions_list') {
-            const listResult = await toolService.listSolutions({
-              initiativeId: args.initiativeId,
-              workspaceId: sessionWorkspaceId,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = { status: 'completed', ...listResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'solution_get') {
-            const getResult = await toolService.getSolution(args.solutionId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
-            result = { status: 'completed', ...getResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'proposals_list') {
-            const listResult = await toolService.listProposals({
-              initiativeId: args.initiativeId,
-              workspaceId: sessionWorkspaceId,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = { status: 'completed', ...listResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'proposal_get') {
-            const getResult = await toolService.getProposal(args.proposalId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
-            result = { status: 'completed', ...getResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'products_list') {
-            const listResult = await toolService.listProducts({
-              workspaceId: sessionWorkspaceId,
-              initiativeId: typeof args.initiativeId === 'string' ? args.initiativeId : undefined,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = { status: 'completed', ...listResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'product_get') {
-            const getResult = await toolService.getProduct(args.productId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
-            result = { status: 'completed', ...getResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'gate_review') {
-            const gateResult = await toolService.reviewGate(sessionWorkspaceId, args.initiativeId, args.targetStage);
-            result = { status: 'completed', ...gateResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'workspace_list') {
-            const listResult = await toolService.listWorkspacesForUser(options.userId);
-            result = { status: 'completed', ...listResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'initiative_search') {
-            const searchResult = await toolService.searchInitiativesCrossWorkspace(options.userId, {
-              query: typeof args.query === 'string' ? args.query : undefined,
-              status: typeof args.status === 'string' ? args.status : undefined,
-              maturityStage: typeof args.maturityStage === 'string' ? args.maturityStage : undefined
-            });
-            result = { status: 'completed', ...searchResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'task_dispatch') {
-            // task_dispatch delegates to the plan tool's create action
-            const taskResult = await todoOrchestrationService.createTodoFromChat(
-              { userId: options.userId, role: currentUserRole ?? 'editor', workspaceId: args.workspaceId },
-              { title: args.title, description: typeof args.description === 'string' ? args.description : undefined, sessionId: options.sessionId }
-            );
-            result = { ...taskResult, status: 'completed', dispatched: true };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'document_generate') {
             const action = typeof args.action === 'string' ? args.action : 'generate';
             const rawFormat = typeof args.format === 'string' ? args.format : undefined;
@@ -5361,7 +5333,101 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         streamSeq += 1;
         break;
       }
-      // BR14b Lot 21d-2 Groups E-F per-tool case branches added by
+      // BR14b Lot 21d-2 Step 3 Group E — verbatim move of inline tool branches
+      // from `runAssistantGeneration` (solutions_list, solution_get, proposals_list,
+      // proposal_get, products_list, product_get, gate_review, workspace_list,
+      // initiative_search, task_dispatch).
+      case 'solutions_list': {
+        const listResult = await toolService.listSolutions({
+          initiativeId: args.initiativeId,
+          workspaceId: sessionWorkspaceId,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = { status: 'completed', ...listResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'solution_get': {
+        const getResult = await toolService.getSolution(args.solutionId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
+        result = { status: 'completed', ...getResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'proposals_list': {
+        const listResult = await toolService.listProposals({
+          initiativeId: args.initiativeId,
+          workspaceId: sessionWorkspaceId,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = { status: 'completed', ...listResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'proposal_get': {
+        const getResult = await toolService.getProposal(args.proposalId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
+        result = { status: 'completed', ...getResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'products_list': {
+        const listResult = await toolService.listProducts({
+          workspaceId: sessionWorkspaceId,
+          initiativeId: typeof args.initiativeId === 'string' ? args.initiativeId : undefined,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = { status: 'completed', ...listResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'product_get': {
+        const getResult = await toolService.getProduct(args.productId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
+        result = { status: 'completed', ...getResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'gate_review': {
+        const gateResult = await toolService.reviewGate(sessionWorkspaceId, args.initiativeId, args.targetStage);
+        result = { status: 'completed', ...gateResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'workspace_list': {
+        const listResult = await toolService.listWorkspacesForUser(options.userId);
+        result = { status: 'completed', ...listResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'initiative_search': {
+        const searchResult = await toolService.searchInitiativesCrossWorkspace(options.userId, {
+          query: typeof args.query === 'string' ? args.query : undefined,
+          status: typeof args.status === 'string' ? args.status : undefined,
+          maturityStage: typeof args.maturityStage === 'string' ? args.maturityStage : undefined
+        });
+        result = { status: 'completed', ...searchResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'task_dispatch': {
+        // task_dispatch delegates to the plan tool's create action
+        const taskResult = await todoOrchestrationService.createTodoFromChat(
+          { userId: options.userId, role: currentUserRole ?? 'editor', workspaceId: args.workspaceId },
+          { title: args.title, description: typeof args.description === 'string' ? args.description : undefined, sessionId: options.sessionId }
+        );
+        result = { ...taskResult, status: 'completed', dispatched: true };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      // BR14b Lot 21d-2 Group F per-tool case branches added by
       // subsequent commits (verbatim move from the inline switch).
       default:
         throw new Error(`Unknown tool: ${toolCall.name}`);
