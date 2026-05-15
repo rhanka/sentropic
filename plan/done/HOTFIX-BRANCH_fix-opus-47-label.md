@@ -81,7 +81,7 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
 
 - [ ] **Lot 1 — `@sentropic/skills` package shell + `SKILL.md` parser**
   - [x] Create `packages/skills/` workspace entry with `package.json`, `tsconfig.json`, `vitest.config.ts` aligned with `packages/llm-mesh`.
-  - [ ] Define `Skill`, `SkillMetadata`, `ContextFilter`, `SandboxPolicy`, `SkillTool`, `SkillSearchHit` types in `src/types/`.
+  - [x] Define `Skill`, `SkillMetadata`, `ContextFilter`, `SandboxPolicy`, `SkillTool`, `SkillSearchHit` types in `src/types/`.
   - [ ] Implement `SKILL.md` parser (frontmatter YAML + body extraction) in `src/format/parser.ts` with strict schema validation (Zod).
   - [ ] Re-export shared types from `@sentropic/contracts` where applicable (no circular dep).
   - [ ] Lot gate: typecheck + unit tests on parser (valid/invalid frontmatter, missing fields, malformed YAML).
