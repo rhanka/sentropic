@@ -3537,103 +3537,70 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             toolCall.name,
             asRecord(args) ?? {},
           );
-          let preToolBudget = estimateContextBudget({
+          const preToolBudgetInitial = estimateContextBudget({
             messages: currentMessages,
             tools,
             rawInput: responseToolOutputs,
             providerId: selectedProviderId,
             modelId: selectedModel,
           });
-          await writeContextBudgetStatus('pre_tool', preToolBudget, {
+          await writeContextBudgetStatus('pre_tool', preToolBudgetInitial, {
             tool_name: toolCall.name,
           });
-          const computeProjected = (snapshot: ContextBudgetSnapshot) => {
-            const projectedTokens =
-              snapshot.estimatedTokens +
-              estimateTokenCountFromChars(projectedResultChars);
-            const projectedPct = Math.min(
-              100,
-              Math.max(0, Math.round((projectedTokens / snapshot.maxTokens) * 100)),
-            );
-            return {
-              projectedTokens,
-              projectedPct,
-              projectedZone: resolveBudgetZone(projectedPct),
-            };
-          };
-          let projectedBudget = computeProjected(preToolBudget);
-          if (projectedBudget.projectedZone === 'hard') {
-            preToolBudget = await compactContextIfNeeded(
-              'pre_tool_hard_threshold',
-              preToolBudget,
-            );
-            projectedBudget = computeProjected(preToolBudget);
-          }
-          if (projectedBudget.projectedZone !== 'normal') {
-            contextBudgetReplanAttempts += 1;
-            const escalationRequired =
-              contextBudgetReplanAttempts > CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS;
-            const deferredResult = {
-              status: 'deferred',
-              code:
-                projectedBudget.projectedZone === 'hard'
-                  ? CONTEXT_BUDGET_HARD_ZONE_CODE
-                  : CONTEXT_BUDGET_SOFT_ZONE_CODE,
-              message:
-                projectedBudget.projectedZone === 'hard'
-                  ? 'Tool call blocked: context budget still above hard threshold after compaction.'
-                  : 'Tool call deferred: projected output would exceed context budget soft threshold.',
-              occupancy_pct: projectedBudget.projectedPct,
-              estimated_tokens: projectedBudget.projectedTokens,
-              max_tokens: preToolBudget.maxTokens,
-              replan_required: true,
-              escalation_required: escalationRequired,
-              suggested_actions: [
-                'Narrow scope and retry tool with smaller payload.',
-                'Use history_analyze for targeted extraction if needed.',
-              ],
-            };
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: deferredResult },
-              streamSeq,
-              options.assistantMessageId,
-            );
-            streamSeq += 1;
-            if (escalationRequired) {
-              await writeStreamEvent(
-                options.assistantMessageId,
-                'status',
-                {
-                  state: 'context_budget_user_escalation_required',
-                  occupancy_pct: projectedBudget.projectedPct,
-                  code: deferredResult.code,
-                },
-                streamSeq,
-                options.assistantMessageId,
-              );
-              streamSeq += 1;
-            }
+          // BR14b Lot 21e-1 — the inline pre-tool context-budget gate
+          // (lines 3534-3636 pre-Lot 21e-1, ~95l: projection compute +
+          // hard-zone compaction branch + soft/hard deferred branch +
+          // escalation status emission + accumulator pushes + reset
+          // counter) now lives behind `ChatRuntime.applyContextBudgetGate`.
+          // Behavior preservation strict — the projection math, the
+          // deferred-result payload shape, the two stream-event payloads
+          // (`tool_call_result` + optional `context_budget_user_escalation_required`
+          // status), and the `+= 1` / `= 0` `contextBudgetReplanAttempts`
+          // semantics are byte-identical to pre-Lot 21e-1. The runtime
+          // owns event emission via `deps.streamSequencer.allocate` +
+          // `deps.streamBuffer.append`; the caller re-syncs `streamSeq`
+          // from `gate.streamSeq`. The `gate.deferredAccumulator` payload
+          // carries the three rows (`toolResults` / `responseToolOutputs`
+          // / `executedTools`) the caller pushes when `shouldContinue`
+          // is true, mirroring the pre-Lot 21e-1 inline pushes. Lot 21e-2
+          // will migrate the remaining for-loop body.
+          const gate = await this.runtime.applyContextBudgetGate({
+            streamId: options.assistantMessageId,
+            toolCall: { id: toolCall.id, name: toolCall.name },
+            args,
+            preToolBudget: preToolBudgetInitial,
+            projectedResultChars,
+            streamSeq,
+            contextBudgetReplanAttempts,
+            maxReplanAttempts: CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS,
+            softZoneCode: CONTEXT_BUDGET_SOFT_ZONE_CODE,
+            hardZoneCode: CONTEXT_BUDGET_HARD_ZONE_CODE,
+            resolveBudgetZone,
+            estimateTokenCountFromChars,
+            compactContextIfNeeded,
+          });
+          streamSeq = gate.streamSeq;
+          contextBudgetReplanAttempts = gate.contextBudgetReplanAttempts;
+          if (gate.shouldContinue) {
+            const deferredAcc = gate.deferredAccumulator!;
             toolResults.push({
               role: 'tool',
-              content: JSON.stringify(deferredResult),
-              tool_call_id: toolCall.id,
+              content: JSON.stringify(deferredAcc.deferredResult),
+              tool_call_id: deferredAcc.toolCallId,
             });
             responseToolOutputs.push({
               type: 'function_call_output',
-              call_id: toolCall.id,
-              output: JSON.stringify(deferredResult),
+              call_id: deferredAcc.toolCallId,
+              output: JSON.stringify(deferredAcc.deferredResult),
             });
             executedTools.push({
-              toolCallId: toolCall.id,
-              name: toolCall.name || 'unknown_tool',
-              args,
-              result: deferredResult,
+              toolCallId: deferredAcc.toolCallId,
+              name: deferredAcc.toolName,
+              args: deferredAcc.args,
+              result: deferredAcc.deferredResult,
             });
             continue;
           }
-          contextBudgetReplanAttempts = 0;
           const todoOperation: TodoRuntimeToolOperation | null = (() => {
             if (toolCall.name !== 'plan') return null;
             const actionRaw =
