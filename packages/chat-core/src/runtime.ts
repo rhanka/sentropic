@@ -137,8 +137,12 @@ import { ChatRuntimeSession } from './runtime-session.js';
  * `chat-service.ts` line 2822 pre-Lot 21b (`const STEER_REASONING_REPLAY_MAX_CHARS = 6000`).
  * Lives at module scope so `consumeAssistantStream` can clamp the
  * reasoning replay buffer without taking the constant as an input.
+ *
+ * Exported (BR14b Lot 22b-5) so the `ChatRuntimeToolDispatch` sub-class
+ * can import it for its migrated `consumeAssistantStream` body without
+ * duplicating the constant.
  */
-const STEER_REASONING_REPLAY_MAX_CHARS = 6000;
+export const STEER_REASONING_REPLAY_MAX_CHARS = 6000;
 
 /**
  * Local tool definition input — structural shape mirroring
@@ -3774,8 +3778,12 @@ export class ChatRuntime {
  * short-circuit can parse `tool_call.args` without taking the helper
  * as a dep (same convention as `STEER_REASONING_REPLAY_MAX_CHARS` /
  * `asRecord` from Lot 21b).
+ *
+ * Exported (BR14b Lot 22b-5) so the `ChatRuntimeToolDispatch` sub-class
+ * can import it for its migrated `consumeToolCalls` body without
+ * duplicating the implementation.
  */
-const parseToolCallArgsForRuntime = (value: unknown): unknown => {
+export const parseToolCallArgsForRuntime = (value: unknown): unknown => {
   if (typeof value !== 'string') return value ?? {};
   const trimmed = value.trim();
   if (!trimmed) return {};
