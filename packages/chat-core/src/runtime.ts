@@ -2033,7 +2033,7 @@ const isValidToolName = (value: string): boolean =>
  */
 const CHAT_CHECKPOINT_KEY_SEPARATOR = '#';
 
-const encodeChatCheckpointKey = (
+export const encodeChatCheckpointKey = (
   sessionId: string,
   checkpointId: string,
 ): string => `${sessionId}${CHAT_CHECKPOINT_KEY_SEPARATOR}${checkpointId}`;
@@ -2055,7 +2055,7 @@ const parseChatCheckpointKey = (
  * surface returns. Mirrors the mapping previously embedded in
  * `postgresChatCheckpointAdapter.listCheckpointsForSession`.
  */
-const summaryFromSnapshot = (
+export const summaryFromSnapshot = (
   snapshot: ChatStateSnapshot,
   createdAtIso: string,
 ): ChatCheckpointSummary => {
@@ -2080,7 +2080,7 @@ const summaryFromSnapshot = (
  * in `postgresChatCheckpointAdapter.createCheckpointForSession`
  * (snapshotMessages map). Selects the same column set verbatim.
  */
-const snapshotMessageFromRow = (
+export const snapshotMessageFromRow = (
   message: ChatMessageRow,
 ): ChatStateSnapshotMessage => ({
   id: message.id,
