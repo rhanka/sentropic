@@ -675,3 +675,8 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
   - **Migration step protocol**: each Group commit (a) moves the verbatim branch body INTO the `executeServerToolInternal` switch as a new `case 'tool_name':` (preserves byte-identical per-branch logic + writeStreamEvent calls + streamSeq mutations); (b) replaces the inline `else if (toolCall.name === 'tool_name') { ... }` block with a delegation `const r = await this.executeServerToolInternal({...}); result = r.result; streamSeq = r.streamSeq;`; (c) runs typecheck + targeted tests; (d) `make commit MSG="refactor(chat-service): migrate <names> into executeServerToolInternal (group N)"`.
   - **Args parsing in caller**: keep the existing `const args = JSON.parse(toolCall.args || '{}')` caller-side (line 3395) — pass `args` through `input.args` to avoid double-parsing. The plan-validation-guard branch at 3519 reads `toolCall.name === 'plan' && !todoOperation` — `todoOperation` is the caller's locally-computed value (lines 3497-3518); pass it through `input.todoOperation`.
 
+## Lot 23 preview - chat-core integration test suite
+- [x] Added `packages/chat-core/tests/integration/full-flow.test.ts` (635l, 5 integration scenarios) composing in-memory CheckpointStore / MessageStore / SessionStore / StreamBuffer / StreamSequencer / MeshDispatch adapters to exercise the full ChatRuntime end-to-end without api dependencies.
+- [x] Verified against current chat-core API (post Lot 21d-3 `executeServerTool` facade): `make test-pkg-chat-core` PASS 169/169 (151 pre-existing + 13 Lot 21d-3 + 5 Lot 23 preview).
+- [x] Scope: preview-only — full Lot 23 still pending (extended scenarios, error injection, multi-loop, checkpoint resume edge cases).
+
