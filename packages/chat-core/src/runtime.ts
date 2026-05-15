@@ -1587,6 +1587,188 @@ export interface ApplyContextBudgetGateResult {
 }
 
 /**
+ * BR14b Lot 21e-3 — input to `ChatRuntime.finalizeAssistantIteration`.
+ *
+ * Bundles the post-`consumeToolCalls` blocks previously embedded in
+ * `ChatService.runAssistantGeneration` (chat-service.ts lines 3618-3781
+ * post-Lot 21e-2):
+ *
+ *   - Block A — per-iteration executed-tools trace emission
+ *     (`writeChatGenerationTrace`) + todo runtime refresh (refetch +
+ *     status reclassification through `TODO_TERMINAL_STATUSES` /
+ *     `TODO_BLOCKING_STATUSES`).
+ *   - Block B — `pendingLocalToolCalls` short-circuit: when local tools
+ *     were dispatched, emit a `status:awaiting_local_tool_results` event
+ *     + signal the caller to exit `runAssistantGeneration` (the inline
+ *     body did `return;`).
+ *   - Block C — assistant text history append + `needsExplicitToolReplay`
+ *     rawInput rebuild (Codex / Anthropic / Mistral / Cohere providers
+ *     need both `function_call` + `function_call_output` in `rawInput`).
+ *
+ * Two api-side closures cross as Option A callbacks (same pattern as
+ * Lots 16a/16b/18/21c/21e-1): `writeChatGenerationTrace` (the
+ * instrumentation hook) and `refreshSessionTodoRuntime` (bundles
+ * `todoOrchestrationService.getSessionTodoRuntime` +
+ * `toSessionTodoRuntimeSnapshot` + the api-side `TODO_TERMINAL_STATUSES`
+ * / `TODO_BLOCKING_STATUSES` membership checks). Both are optional so
+ * test fixtures can opt in without wiring the full api-land bundle.
+ */
+export interface FinalizeAssistantIterationInput {
+  readonly streamId: string;
+  // Block A — trace
+  readonly traceEnabled: boolean;
+  readonly sessionId: string;
+  readonly assistantMessageId: string;
+  readonly userId: string;
+  readonly workspaceId: string | null;
+  readonly iteration: number;
+  readonly modelId: string | null;
+  readonly toolChoice: 'auto' | 'required';
+  readonly tools: ReadonlyArray<unknown> | null;
+  readonly currentMessages: ReadonlyArray<unknown>;
+  readonly previousResponseId: string | null;
+  readonly responseToolOutputs: ReadonlyArray<{
+    readonly type: 'function_call_output';
+    readonly call_id: string;
+    readonly output: string;
+  }>;
+  readonly toolCalls: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+    readonly args: string;
+  }>;
+  readonly executedTools: ReadonlyArray<AssistantRunLoopExecutedTool>;
+  readonly writeChatGenerationTrace?: (input: {
+    readonly enabled: boolean;
+    readonly sessionId: string;
+    readonly assistantMessageId: string;
+    readonly userId: string;
+    readonly workspaceId: string | null;
+    readonly phase: 'pass1';
+    readonly iteration: number;
+    readonly model: string | null;
+    readonly toolChoice: 'auto' | 'required';
+    readonly tools: ReadonlyArray<unknown> | null;
+    readonly openaiMessages: {
+      readonly kind: 'executed_tools';
+      readonly messages: ReadonlyArray<unknown>;
+      readonly previous_response_id: string | null;
+      readonly responses_input_tool_outputs: ReadonlyArray<unknown>;
+    };
+    readonly toolCalls: ReadonlyArray<{
+      readonly id: string;
+      readonly name: string;
+      readonly args: unknown;
+      readonly result: unknown;
+    }>;
+    readonly meta: {
+      readonly kind: string;
+      readonly callSite: string;
+      readonly openaiApi: string;
+    };
+  }) => Promise<void>;
+  // Block A — todo refresh
+  readonly todoAutonomousExtensionEnabled: boolean;
+  readonly todoAwaitingUserInput: boolean;
+  readonly refreshSessionTodoRuntime?: (input: {
+    readonly sessionId: string;
+    readonly userId: string;
+    readonly workspaceId: string | null;
+    readonly currentUserRole: string | null;
+  }) => Promise<{
+    readonly hasRefreshedSessionTodo: boolean;
+    readonly todoContinuationActive: boolean;
+    readonly todoAwaitingUserInputAfterRefresh: boolean;
+  }>;
+  readonly currentUserRole: string | null;
+  // Block B — pendingLocalToolCalls
+  readonly pendingLocalToolCalls: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+    readonly args: unknown;
+  }>;
+  readonly localTools: ReadonlyArray<{
+    readonly type: 'function';
+    readonly function: {
+      readonly name: string;
+      readonly description?: string;
+      readonly parameters?: Record<string, unknown> | unknown;
+    };
+  }>;
+  readonly vscodeCodeAgentPayload: NormalizedVsCodeCodeAgentRuntimePayload | null;
+  readonly streamSeq: number;
+  // Block C — needsExplicitToolReplay
+  readonly useCodexTransport: boolean;
+  readonly providerId: string;
+  readonly contentParts: ReadonlyArray<string>;
+}
+
+/**
+ * BR14b Lot 21e-3 — return shape of `ChatRuntime.finalizeAssistantIteration`.
+ *
+ *   - `shouldExitGeneration` — `true` when the `pendingLocalToolCalls`
+ *     short-circuit fired; the caller `return`s out of
+ *     `runAssistantGeneration` (mirrors the inline `return;` at
+ *     chat-service.ts line 3743 pre-Lot 21e-3).
+ *   - `streamSeq` — advanced cursor (Block B emits one status event when
+ *     local tools pending; Block A is silent unless the trace callback
+ *     emits events of its own).
+ *   - `currentMessages` — possibly appended with the assistant text
+ *     turn (Block C: `[...currentMessages, { role: 'assistant', content }]`).
+ *   - `previousResponseId` — possibly cleared to `null` (Block C: when
+ *     `useCodexTransport === true`).
+ *   - `pendingResponsesRawInput` — rebuilt rawInput for the next
+ *     iteration (Block C: function_call + function_call_output replay
+ *     pairs for non-Responses-API providers, or the raw responseToolOutputs).
+ *   - `todoContinuationActive` / `todoAwaitingUserInput` — updated
+ *     booleans from Block A's todo refresh (the caller's outer `let`
+ *     slots are reassigned from these). When the refresh callback is not
+ *     wired or skipped, these mirror the input values verbatim.
+ */
+export interface FinalizeAssistantIterationResult {
+  readonly shouldExitGeneration: boolean;
+  readonly streamSeq: number;
+  readonly currentMessages: ReadonlyArray<unknown>;
+  readonly previousResponseId: string | null;
+  readonly pendingResponsesRawInput: ReadonlyArray<unknown>;
+  readonly todoContinuationActive: boolean;
+  readonly todoAwaitingUserInput: boolean;
+}
+
+/**
+ * BR14b Lot 21e-3 — input to `ChatRuntime.emitFinalAssistantTurn`.
+ *
+ * Bundles the post-while-loop terminal slice previously embedded in
+ * `ChatService.runAssistantGeneration` (chat-service.ts lines 3892-3902
+ * pre-Lot 21e-3):
+ *
+ *   - Emit a single `done` event on the stream (the only terminal event
+ *     of the run).
+ *   - Persist the final assistant content + reasoning via
+ *     `MessageStore.updateAssistantContent`.
+ *   - Touch the session's `updatedAt` timestamp via
+ *     `SessionStore.touchUpdatedAt`.
+ *
+ * Crosses no port boundary because both stores live on `deps`. Returns
+ * the advanced `streamSeq` so the caller can keep its cursor in sync
+ * (the value is currently unused post-finalize but mirrors the inline
+ * `streamSeq += 1` line for symmetry with other helpers).
+ */
+export interface EmitFinalAssistantTurnInput {
+  readonly streamId: string;
+  readonly assistantMessageId: string;
+  readonly sessionId: string;
+  readonly streamSeq: number;
+  readonly content: string;
+  readonly reasoning: string | null;
+  readonly model: string | null;
+}
+
+export interface EmitFinalAssistantTurnResult {
+  readonly streamSeq: number;
+}
+
+/**
  * Verbatim duplicate of `asRecord` in `chat-service.ts` (line ~261).
  * Tiny pure helper, duplicated rather than re-imported to keep
  * chat-core free of any api/* module dependency.
@@ -3870,6 +4052,338 @@ export class ChatRuntime {
       contextBudgetReplanAttempts,
       preToolBudget,
     };
+  }
+
+  /**
+   * BR14b Lot 21e-3 — post-`consumeToolCalls` per-iteration finalization
+   * block.
+   *
+   * Verbatim port of the inline blocks at `chat-service.ts` lines
+   * 3618-3781 (post-Lot 21e-2): the per-iteration executed-tools trace
+   * emission (Block A — trace), the todo runtime refresh (Block A —
+   * todo refresh), the `pendingLocalToolCalls` short-circuit emitting
+   * `status:awaiting_local_tool_results` (Block B), and the
+   * post-iteration history/rawInput rebuild handling the
+   * `needsExplicitToolReplay` branches for Codex / Anthropic / Mistral /
+   * Cohere (Block C).
+   *
+   * Two api-side closures cross as optional Option A callbacks
+   * (`writeChatGenerationTrace` + `refreshSessionTodoRuntime`) — same
+   * pattern as Lots 16a/16b/18/21c/21e-1. When the trace callback is
+   * undefined the trace is silently skipped (test fixtures don't need
+   * `chat-trace.ts` wiring). When the todo refresh callback is
+   * undefined or `todoAutonomousExtensionEnabled` is false or
+   * `todoAwaitingUserInput` is true (mirrors the inline guard at line
+   * 3648), the refresh is skipped and the booleans pass through
+   * verbatim.
+   *
+   * Event emission for Block B goes through `deps.streamSequencer.allocate`
+   * + `deps.streamBuffer.append` (same convention as
+   * `applyContextBudgetGate` and `consumeToolCalls`). The returned
+   * `streamSeq` is the cursor the caller must reassign locally.
+   *
+   * The pendingLocalToolCalls short-circuit throws the legacy
+   * `'Unable to pause generation for local tools: missing previous_response_id'`
+   * error when `previousResponseId` is `null` (mirrors the inline throw
+   * at lines 3674-3676). The caller propagates the error up the job
+   * queue.
+   */
+  async finalizeAssistantIteration(
+    input: FinalizeAssistantIterationInput,
+  ): Promise<FinalizeAssistantIterationResult> {
+    const {
+      streamId,
+      traceEnabled,
+      sessionId,
+      assistantMessageId,
+      userId,
+      workspaceId,
+      iteration,
+      modelId,
+      toolChoice,
+      tools,
+      currentMessages: currentMessagesInput,
+      previousResponseId: previousResponseIdInput,
+      responseToolOutputs,
+      toolCalls,
+      executedTools,
+      writeChatGenerationTrace,
+      todoAutonomousExtensionEnabled,
+      todoAwaitingUserInput: todoAwaitingUserInputInput,
+      refreshSessionTodoRuntime,
+      currentUserRole,
+      pendingLocalToolCalls,
+      localTools,
+      vscodeCodeAgentPayload,
+      streamSeq: streamSeqInput,
+      useCodexTransport,
+      providerId,
+      contentParts,
+    } = input;
+    let streamSeq = streamSeqInput;
+    let currentMessages: ReadonlyArray<unknown> = currentMessagesInput;
+    let previousResponseId: string | null = previousResponseIdInput;
+    let todoContinuationActive = true;
+    let todoAwaitingUserInput = todoAwaitingUserInputInput;
+
+    // Block A — trace executed tool calls for this iteration (args/results).
+    // Verbatim port of chat-service.ts lines 3619-3646.
+    if (writeChatGenerationTrace) {
+      await writeChatGenerationTrace({
+        enabled: traceEnabled,
+        sessionId,
+        assistantMessageId,
+        userId,
+        workspaceId,
+        phase: 'pass1',
+        iteration,
+        model: modelId,
+        toolChoice,
+        tools: tools ?? null,
+        openaiMessages: {
+          kind: 'executed_tools',
+          messages: currentMessages,
+          previous_response_id: previousResponseId,
+          responses_input_tool_outputs: responseToolOutputs,
+        },
+        toolCalls: toolCalls.map((tc) => {
+          const found = executedTools.find((x) => x.toolCallId === tc.id);
+          return {
+            id: tc.id,
+            name: tc.name,
+            args:
+              found?.args ??
+              (tc.args
+                ? (() => {
+                    try {
+                      return JSON.parse(tc.args);
+                    } catch {
+                      return tc.args;
+                    }
+                  })()
+                : undefined),
+            result: found?.result,
+          };
+        }),
+        meta: {
+          kind: 'executed_tools',
+          callSite:
+            'ChatService.runAssistantGeneration/pass1/afterTools',
+          openaiApi: 'responses',
+        },
+      });
+    }
+
+    // Block A — todo refresh.
+    // Verbatim port of chat-service.ts lines 3648-3670.
+    if (
+      todoAutonomousExtensionEnabled &&
+      !todoAwaitingUserInput &&
+      refreshSessionTodoRuntime
+    ) {
+      const refreshed = await refreshSessionTodoRuntime({
+        sessionId,
+        userId,
+        workspaceId,
+        currentUserRole,
+      });
+      if (!refreshed.hasRefreshedSessionTodo) {
+        todoContinuationActive = false;
+      } else {
+        todoContinuationActive = refreshed.todoContinuationActive;
+        if (refreshed.todoAwaitingUserInputAfterRefresh) {
+          todoAwaitingUserInput = true;
+        }
+      }
+    }
+
+    // Block B — pendingLocalToolCalls short-circuit.
+    // Verbatim port of chat-service.ts lines 3672-3744.
+    if (pendingLocalToolCalls.length > 0) {
+      if (!previousResponseId) {
+        throw new Error(
+          'Unable to pause generation for local tools: missing previous_response_id',
+        );
+      }
+      const seq = await this.deps.streamSequencer.allocate(streamId);
+      await this.deps.streamBuffer.append(
+        streamId,
+        'status',
+        {
+          state: 'awaiting_local_tool_results',
+          previous_response_id: previousResponseId,
+          pending_local_tool_calls: pendingLocalToolCalls.map((item) => ({
+            tool_call_id: item.id,
+            name: item.name,
+            args: item.args,
+          })),
+          local_tool_definitions: localTools.map((tool) => ({
+            name: tool.type === 'function' ? tool.function.name : '',
+            description:
+              tool.type === 'function'
+                ? tool.function.description ?? ''
+                : '',
+            parameters:
+              tool.type === 'function'
+                ? ((tool.function.parameters ?? {}) as Record<
+                    string,
+                    unknown
+                  >)
+                : {},
+          })),
+          base_tool_outputs: responseToolOutputs.map((item) => ({
+            call_id: item.call_id,
+            output: item.output,
+          })),
+          vscode_code_agent: vscodeCodeAgentPayload
+            ? {
+                source: 'vscode',
+                workspace_key: vscodeCodeAgentPayload.workspaceKey,
+                workspace_label: vscodeCodeAgentPayload.workspaceLabel,
+                prompt_global_override:
+                  vscodeCodeAgentPayload.promptGlobalOverride,
+                prompt_workspace_override:
+                  vscodeCodeAgentPayload.promptWorkspaceOverride,
+                instruction_include_patterns:
+                  vscodeCodeAgentPayload.instructionIncludePatterns,
+                instruction_files:
+                  vscodeCodeAgentPayload.instructionFiles.map((file) => ({
+                    path: file.path,
+                    content: file.content,
+                  })),
+                system_context: vscodeCodeAgentPayload.systemContext
+                  ? {
+                      working_directory:
+                        vscodeCodeAgentPayload.systemContext.workingDirectory,
+                      is_git_repo:
+                        vscodeCodeAgentPayload.systemContext.isGitRepo,
+                      git_branch:
+                        vscodeCodeAgentPayload.systemContext.gitBranch,
+                      platform:
+                        vscodeCodeAgentPayload.systemContext.platform,
+                      os_version:
+                        vscodeCodeAgentPayload.systemContext.osVersion,
+                      shell: vscodeCodeAgentPayload.systemContext.shell,
+                      client_date_iso:
+                        vscodeCodeAgentPayload.systemContext.clientDateIso,
+                      client_timezone:
+                        vscodeCodeAgentPayload.systemContext.clientTimezone,
+                    }
+                  : undefined,
+              }
+            : undefined,
+        },
+        seq,
+        streamId,
+      );
+      streamSeq = seq + 1;
+      return {
+        shouldExitGeneration: true,
+        streamSeq,
+        currentMessages,
+        previousResponseId,
+        pendingResponsesRawInput: responseToolOutputs,
+        todoContinuationActive,
+        todoAwaitingUserInput,
+      };
+    }
+
+    // Block C — OPTION 1 (Responses API): on CONTINUE via previous_response_id +
+    // function_call_output -> pas d'injection tool->user JSON, pas de
+    // "role:tool" dans messages. On laisse `previousResponseId` alimenter
+    // l'appel suivant. Pour l'historique local côté modèle, on n'ajoute
+    // l'assistant que si non vide.
+    // Verbatim port of chat-service.ts lines 3746-3781.
+    const assistantText = contentParts.join('');
+    if (assistantText.trim()) {
+      currentMessages = [
+        ...currentMessages,
+        { role: 'assistant', content: assistantText },
+      ];
+    }
+
+    // Non-Responses-API providers (Claude, Mistral, Cohere, Codex) need both
+    // function_call + function_call_output in rawInput so the runtime can
+    // reconstruct the assistant tool_use / tool_calls block before tool results.
+    const needsExplicitToolReplay =
+      useCodexTransport ||
+      providerId === 'anthropic' ||
+      providerId === 'mistral' ||
+      providerId === 'cohere';
+    let pendingResponsesRawInput: ReadonlyArray<unknown>;
+    if (needsExplicitToolReplay) {
+      if (useCodexTransport) previousResponseId = null;
+      pendingResponsesRawInput = toolCalls.flatMap((toolCall) => {
+        const output = responseToolOutputs.find(
+          (item) => item.call_id === toolCall.id,
+        );
+        return output
+          ? [
+              {
+                type: 'function_call' as const,
+                call_id: toolCall.id,
+                name: toolCall.name,
+                arguments: toolCall.args || '{}',
+              },
+              output,
+            ]
+          : [];
+      });
+    } else {
+      pendingResponsesRawInput = responseToolOutputs;
+    }
+
+    return {
+      shouldExitGeneration: false,
+      streamSeq,
+      currentMessages,
+      previousResponseId,
+      pendingResponsesRawInput,
+      todoContinuationActive,
+      todoAwaitingUserInput,
+    };
+  }
+
+  /**
+   * BR14b Lot 21e-3 — terminal finalization slice of
+   * `runAssistantGeneration`.
+   *
+   * Verbatim port of `chat-service.ts` lines 3892-3902 (post-Lot 21e-2):
+   * emit the single `done` stream event, persist the final assistant
+   * content + reasoning via `MessageStore.updateAssistantContent`, and
+   * touch the session `updatedAt` via `SessionStore.touchUpdatedAt`.
+   *
+   * Stays in the runtime because both stores live on `deps`. Stream
+   * event emission goes through `deps.streamSequencer.allocate` +
+   * `deps.streamBuffer.append` per the Lot 20 contract.
+   */
+  async emitFinalAssistantTurn(
+    input: EmitFinalAssistantTurnInput,
+  ): Promise<EmitFinalAssistantTurnResult> {
+    const {
+      streamId,
+      assistantMessageId,
+      sessionId,
+      content,
+      reasoning,
+      model,
+    } = input;
+    const seq = await this.deps.streamSequencer.allocate(streamId);
+    await this.deps.streamBuffer.append(
+      streamId,
+      'done',
+      {},
+      seq,
+      streamId,
+    );
+    const streamSeq = seq + 1;
+    await this.deps.messageStore.updateAssistantContent(assistantMessageId, {
+      content,
+      reasoning,
+      model,
+    });
+    await this.deps.sessionStore.touchUpdatedAt(sessionId);
+    return { streamSeq };
   }
 }
 
