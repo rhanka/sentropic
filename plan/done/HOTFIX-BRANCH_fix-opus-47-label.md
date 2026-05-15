@@ -46,7 +46,10 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- (none yet — Lot 0 is doc-only scoping)
+- **BR19-EX4 — Makefile (additive only, Lot 1+)**
+  - Reason: `@sentropic/skills` requires its own `typecheck-skills` and `test-skills` Make targets so that the package can satisfy the Make-Only mandate (host Docker calls are forbidden). Targets must mirror the existing `typecheck-llm-mesh` / `test-llm-mesh` pattern.
+  - Impact: additive only — no edits to existing targets, no behaviour change for other packages. Limited to two new `.PHONY` targets and one shared image variable reuse (`LLM_MESH_NODE_IMAGE`).
+  - Rollback: delete the two new targets in a single revert commit; no downstream consumer outside this branch.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -77,7 +80,7 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - [x] Commit scoping artefacts via `make commit`.
 
 - [ ] **Lot 1 — `@sentropic/skills` package shell + `SKILL.md` parser**
-  - [ ] Create `packages/skills/` workspace entry with `package.json`, `tsconfig.json`, `vitest.config.ts` aligned with `packages/llm-mesh`.
+  - [x] Create `packages/skills/` workspace entry with `package.json`, `tsconfig.json`, `vitest.config.ts` aligned with `packages/llm-mesh`.
   - [ ] Define `Skill`, `SkillMetadata`, `ContextFilter`, `SandboxPolicy`, `SkillTool`, `SkillSearchHit` types in `src/types/`.
   - [ ] Implement `SKILL.md` parser (frontmatter YAML + body extraction) in `src/format/parser.ts` with strict schema validation (Zod).
   - [ ] Re-export shared types from `@sentropic/contracts` where applicable (no circular dep).
