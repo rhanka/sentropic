@@ -1967,6 +1967,45 @@ export interface RunPass2FallbackResult {
 }
 
 /**
+ * BR14b Lot 22a-2 — verbatim duplicates of `safeTruncate`, `safeJson`,
+ * and `buildToolDigest` from `chat-service.ts` (lines ~1125-1154). Tiny
+ * pure helpers, duplicated rather than re-imported to keep chat-core
+ * free of any api/* module dependency (same convention as
+ * `parseToolCallArgsForRuntime` and `asRecord`). Consumed by
+ * `ChatRuntime.runPass2Fallback` to build the pass2 user message
+ * digest from the executed tools ledger.
+ */
+const safeTruncateForRuntime = (text: string, maxLen: number): string => {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen) + '\n…(tronqué)…';
+};
+
+const safeJsonForRuntime = (value: unknown, maxLen: number): string => {
+  try {
+    const raw = typeof value === 'string' ? value : JSON.stringify(value);
+    return safeTruncateForRuntime(raw, maxLen);
+  } catch {
+    return safeTruncateForRuntime(String(value), maxLen);
+  }
+};
+
+const buildToolDigestForRuntime = (
+  executed: ReadonlyArray<{ name: string; result: unknown }>,
+): string => {
+  if (!executed.length) return '(aucun outil exécuté)';
+  // On limite agressivement pour éviter des prompts énormes (ex: web_extract).
+  const parts: string[] = [];
+  const maxPerTool = 4000;
+  const maxTotal = 12000;
+  for (const t of executed) {
+    const block = `- ${t.name}:\n${safeJsonForRuntime(t.result, maxPerTool)}`;
+    parts.push(block);
+    if (parts.join('\n\n').length > maxTotal) break;
+  }
+  return safeTruncateForRuntime(parts.join('\n\n'), maxTotal);
+};
+
+/**
  * Verbatim duplicate of `asRecord` in `chat-service.ts` (line ~261).
  * Tiny pure helper, duplicated rather than re-imported to keep
  * chat-core free of any api/* module dependency.
@@ -4729,18 +4768,193 @@ export class ChatRuntime {
   async runPass2Fallback(
     input: RunPass2FallbackInput,
   ): Promise<RunPass2FallbackResult> {
-    // BR14b Lot 22a-2 Step 1 — types + scaffold only.
-    // Body landed in Step 2 (verbatim port of chat-service.ts lines
-    // 3707-3813 post-Lot 22a-1). The Step 1 placeholder mirrors the
-    // launch-packet contract (scaffold + signature + empty body, with
-    // a deterministic stub that exercises the guard branch only so
-    // typecheck-pkg stays green between commits).
-    void input;
-    return {
-      skipped: true,
-      streamSeq: input.streamSeq,
-      lastErrorMessage: null,
-    };
+    const {
+      streamId,
+      assistantMessageId,
+      sessionId,
+      userId,
+      workspaceId,
+      providerId,
+      model,
+      credential,
+      signal,
+      reasoningEffort,
+      conversation,
+      executedTools,
+      systemPrompt,
+      contentParts,
+      reasoningParts,
+      streamSeq: streamSeqInput,
+      traceEnabled,
+      writeChatGenerationTrace,
+    } = input;
+    let streamSeq = streamSeqInput;
+    let lastErrorMessage: string | null = null;
+
+    // Guard — verbatim port of chat-service.ts line 3709:
+    //   `if (!contentParts.join('').trim()) { ... }`
+    if (contentParts.join('').trim()) {
+      return { skipped: true, streamSeq, lastErrorMessage: null };
+    }
+
+    // Build pass2 system + pass2 messages — verbatim port of
+    // chat-service.ts lines 3710-3729.
+    const lastUserMessage =
+      [...conversation].reverse().find((m) => m.role === 'user')?.content ??
+      '';
+    const digest = buildToolDigestForRuntime(executedTools);
+    const pass2System =
+      systemPrompt +
+      `\n\nIMPORTANT: Tu dois maintenant produire une réponse finale à l'utilisateur.\n` +
+      `- Tu n'as pas le droit d'appeler d'outil (tools désactivés).\n` +
+      `- Tu dois répondre en français, de manière concise et actionnable.\n` +
+      `- Si une information manque, dis-le explicitement.\n`;
+
+    const pass2Messages: Array<{
+      role: 'system' | 'user' | 'assistant';
+      content: string;
+    }> = [
+      { role: 'system', content: pass2System },
+      ...conversation,
+      {
+        role: 'user',
+        content:
+          `Demande utilisateur: ${lastUserMessage}\n\n` +
+          `Résultats disponibles (outils déjà exécutés):\n${digest}\n\n` +
+          `Rédige maintenant la réponse finale.`,
+      },
+    ];
+
+    // Reset buffers for final content — verbatim port of
+    // chat-service.ts lines 3732-3734.
+    contentParts.length = 0;
+    reasoningParts.length = 0;
+    lastErrorMessage = null;
+
+    try {
+      // Pass2 prompt trace — verbatim port of chat-service.ts lines
+      // 3737-3751. Optional Option A callback (skipped silently when
+      // undefined).
+      if (writeChatGenerationTrace) {
+        await writeChatGenerationTrace({
+          enabled: traceEnabled,
+          sessionId,
+          assistantMessageId,
+          userId,
+          workspaceId,
+          phase: 'pass2',
+          iteration: 1,
+          model: model || null,
+          toolChoice: 'none',
+          tools: null,
+          openaiMessages: pass2Messages,
+          toolCalls: null,
+          meta: {
+            kind: 'pass2_prompt',
+            callSite:
+              'ChatService.runAssistantGeneration/pass2/beforeOpenAI',
+            openaiApi: 'responses',
+          },
+        });
+      }
+
+      // Pass2 mesh stream — verbatim port of chat-service.ts lines
+      // 3753-3790. Mesh dispatch goes through `deps.mesh.invokeStream`
+      // (Lot 10 port). Event taxonomy mirrors the legacy
+      // `callLLMStream` shape: per-event `writeStreamEvent` +
+      // `streamSeq += 1`, accumulating `content_delta` /
+      // `reasoning_delta` into the caller's mutable buffers.
+      for await (const event of this.deps.mesh.invokeStream({
+        providerId,
+        model,
+        credential,
+        userId,
+        workspaceId: workspaceId ?? undefined,
+        messages: pass2Messages,
+        tools: undefined,
+        toolChoice: 'none',
+        reasoningSummary: 'detailed',
+        reasoningEffort,
+        signal,
+      })) {
+        const eventType = event.type;
+        const data = (event.data ?? {}) as Record<string, unknown>;
+        if (eventType === 'done') {
+          continue;
+        }
+        if (eventType === 'error') {
+          const msg = (data as Record<string, unknown>).message;
+          lastErrorMessage =
+            typeof msg === 'string' ? msg : 'Unknown error';
+          const errSeq =
+            await this.deps.streamSequencer.allocate(streamId);
+          await this.deps.streamBuffer.append(
+            streamId,
+            eventType as StreamEventTypeName,
+            data,
+            errSeq,
+            streamId,
+          );
+          streamSeq = errSeq + 1;
+          continue;
+        }
+        // On stream les deltas pass2 sur le même streamId.
+        const seq = await this.deps.streamSequencer.allocate(streamId);
+        await this.deps.streamBuffer.append(
+          streamId,
+          eventType as StreamEventTypeName,
+          data,
+          seq,
+          streamId,
+        );
+        streamSeq = seq + 1;
+        if (eventType === 'content_delta') {
+          const delta = typeof data.delta === 'string' ? data.delta : '';
+          if (delta) {
+            contentParts.push(delta);
+          }
+        } else if (eventType === 'reasoning_delta') {
+          const delta = typeof data.delta === 'string' ? data.delta : '';
+          if (delta) reasoningParts.push(delta);
+        }
+      }
+    } catch (e) {
+      // Verbatim port of chat-service.ts lines 3791-3805 — emit a
+      // final `error` event then rethrow. The caller propagates the
+      // error up the job queue.
+      const message =
+        lastErrorMessage ||
+        (e instanceof Error ? e.message : 'Second pass failed');
+      const errSeq = await this.deps.streamSequencer.allocate(streamId);
+      await this.deps.streamBuffer.append(
+        streamId,
+        'error' satisfies StreamEventTypeName,
+        { message },
+        errSeq,
+        streamId,
+      );
+      streamSeq = errSeq + 1;
+      throw e;
+    }
+
+    // Verbatim port of chat-service.ts lines 3807-3812 — throw when
+    // the second pass still produced no content (post-error event
+    // emission for downstream consumers).
+    if (!contentParts.join('').trim()) {
+      const message = 'Second pass produced no content';
+      const errSeq = await this.deps.streamSequencer.allocate(streamId);
+      await this.deps.streamBuffer.append(
+        streamId,
+        'error' satisfies StreamEventTypeName,
+        { message },
+        errSeq,
+        streamId,
+      );
+      streamSeq = errSeq + 1;
+      throw new Error(message);
+    }
+
+    return { skipped: false, streamSeq, lastErrorMessage };
   }
 }
 
