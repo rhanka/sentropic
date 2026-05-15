@@ -5,6 +5,7 @@
   "overrides": {
     "glob": "^11.1.0",
     "fast-xml-parser": "^5.3.6",
+    "fast-xml-builder": "^1.1.7",
     "@xmldom/xmldom": "0.9.10"
   },
   "scripts": {
@@ -44,9 +45,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@aws-sdk/client-s3": "^3.980.0",
-    "@sentropic/llm-mesh": "file:../packages/llm-mesh",
     "@hono/node-server": "^1.19.13",
     "@hono/zod-validator": "^0.7.6",
+    "@sentropic/llm-mesh": "file:../packages/llm-mesh",
     "@simplewebauthn/server": "^13.2.2",
     "@xmldom/xmldom": "0.9.10",
     "better-queue": "^3.8.12",
