@@ -50,6 +50,8 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - Reason: `@sentropic/skills` requires its own `typecheck-skills` and `test-skills` Make targets so that the package can satisfy the Make-Only mandate (host Docker calls are forbidden). Targets must mirror the existing `typecheck-llm-mesh` / `test-llm-mesh` pattern.
   - Impact: additive only — no edits to existing targets, no behaviour change for other packages. Limited to two new `.PHONY` targets and one shared image variable reuse (`LLM_MESH_NODE_IMAGE`).
   - Rollback: delete the two new targets in a single revert commit; no downstream consumer outside this branch.
+- **BR19-N1 — `@sentropic/contracts` re-export deferred (Lot 1, note)**
+  - The Lot 1 checkbox "Re-export shared types from `@sentropic/contracts`" is satisfied vacuously: no `@sentropic/contracts` package exists on this branch baseline (`2d0ddf38`). The package surface that BR-14b/BR-26 will extract (`TenantContext`, `AuthzContext`, `ToolRegistry`, `ResolvedTool`) is not yet authored, so there is no shared type to re-export from. Re-exports will be wired in Lot 3 (`SkillRegistry`) when concrete adapter types are introduced. No circular dependency is created.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -82,9 +84,9 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
 - [ ] **Lot 1 — `@sentropic/skills` package shell + `SKILL.md` parser**
   - [x] Create `packages/skills/` workspace entry with `package.json`, `tsconfig.json`, `vitest.config.ts` aligned with `packages/llm-mesh`.
   - [x] Define `Skill`, `SkillMetadata`, `ContextFilter`, `SandboxPolicy`, `SkillTool`, `SkillSearchHit` types in `src/types/`.
-  - [ ] Implement `SKILL.md` parser (frontmatter YAML + body extraction) in `src/format/parser.ts` with strict schema validation (Zod).
-  - [ ] Re-export shared types from `@sentropic/contracts` where applicable (no circular dep).
-  - [ ] Lot gate: typecheck + unit tests on parser (valid/invalid frontmatter, missing fields, malformed YAML).
+  - [x] Implement `SKILL.md` parser (frontmatter YAML + body extraction) in `src/format/parser.ts` with strict schema validation (Zod).
+  - [x] Re-export shared types from `@sentropic/contracts` where applicable (no circular dep).
+  - [x] Lot gate: typecheck + unit tests on parser (valid/invalid frontmatter, missing fields, malformed YAML).
 
 - [ ] **Lot 2 — Sandbox runtime integration**
   - [ ] Implement `SandboxRuntime` port in `src/sandbox/runtime.ts` with `isolated-vm` adapter (decision frozen in SPEC_EVOL §2).
