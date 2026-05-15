@@ -3642,17 +3642,13 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           }
           let result: unknown;
 
-          // BR14b Lot 21d-2 Step 3 Groups A+B+C+D+E+F (F1+F2) — delegate to `executeServerToolInternal`.
-          // Body verbatim-moved into the method's switch; this closure factory keeps
-          // the input bundle DRY across all Group A-F delegations (read_initiative,
-          // update_initiative, organizations_list, organization_get, organization_update,
-          // folders_list, folder_get, folder_update, initiatives_list,
-          // executive_summary_get, executive_summary_update, matrix_get, matrix_update,
-          // plan, comment_assistant, web_search, web_extract, documents, history_analyze,
-          // solutions_list, solution_get, proposals_list, proposal_get, products_list,
-          // product_get, gate_review, workspace_list, initiative_search, task_dispatch,
-          // document_generate, batch_create_organizations).
-          const buildExecuteServerToolInput = (): ExecuteServerToolInternalInput => ({
+          // BR14b Lot 21d-2 Step 3 (30/30 complete) — all server-tool branches
+          // are routed through `executeServerToolInternal`'s switch (verbatim
+          // bodies moved by Groups A through F). The `default:` case inside
+          // the method throws `Unknown tool: <name>` mirroring the original
+          // inline fallback. Lot 21d-3 will wire this method behind the
+          // chat-core `executeServerTool` callback boundary.
+          const r = await this.executeServerToolInternal({
             toolCall,
             args,
             todoOperation,
@@ -3692,142 +3688,8 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             isExplicitConfirmation,
             hasContextType,
           });
-
-          if (toolCall.name === 'read_initiative') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'update_initiative') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'organizations_list') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'organization_get') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'organization_update') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'folders_list') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'folder_get') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'folder_update') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'initiatives_list') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'executive_summary_get') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'executive_summary_update') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'matrix_get') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'matrix_update') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'plan' && todoOperation === 'create') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'plan' && todoOperation === 'update_plan') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'plan' && todoOperation === 'update_task') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'comment_assistant') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'web_search') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'web_extract') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'documents') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'history_analyze') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'solutions_list') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'solution_get') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'proposals_list') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'proposal_get') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'products_list') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'product_get') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'gate_review') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'workspace_list') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'initiative_search') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'task_dispatch') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'document_generate') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else if (toolCall.name === 'batch_create_organizations') {
-            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
-            result = r.result;
-            streamSeq = r.streamSeq;
-          } else {
-            throw new Error(`Unknown tool: ${toolCall.name}`);
-          }
+          result = r.result;
+          streamSeq = r.streamSeq;
 
           // Garder une trace pour un éventuel 2e pass "rédaction-only"
           executedTools.push({ toolCallId: toolCall.id, name: toolCall.name, args, result });
@@ -4169,17 +4031,19 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
   }
 
   /**
-   * BR14b Lot 21d-2 — `executeServerToolInternal` scaffold.
-   * PURE CODE MOVEMENT target. Per-tool dispatch body (30 tool branches
-   * inline in `runAssistantGeneration` lines 3393-4732 post-Lot 21c) is
-   * being moved INTO this private method by Lot 21d-2 group commits
-   * (A-F). No `ChatRuntime` indirection in this lot — `runAssistantGeneration`
-   * still calls this inline. The context-budget gate at lines ~3406-3495
-   * STAYS caller-side (deferred to Lot 21e). Until Group A commits, the
-   * switch holds only the `default` branch (verbatim of the inline
-   * `Unknown tool:` fallback at line 4681). See BRANCH.md Lot 21d-2 for
-   * group plan + decisions; Lot 21d-3 will bridge this method into the
-   * chat-core `executeServerTool` Option A callback.
+   * BR14b Lot 21d-2 — `executeServerToolInternal` private method.
+   * PURE CODE MOVEMENT target — completed by Step 3 Groups A-F (30/30
+   * server-tool branches migrated verbatim). The inline if/else-if chain
+   * in `runAssistantGeneration` (post-Lot 21c at lines 3393-4732) is now
+   * a single delegation `const r = await this.executeServerToolInternal({...})`.
+   * No `ChatRuntime` indirection in this lot — `runAssistantGeneration`
+   * still calls this method directly. The context-budget gate at lines
+   * ~3406-3495 STAYS caller-side (deferred to Lot 21e). The `default:`
+   * case throws `Unknown tool: <name>` mirroring the original inline
+   * fallback. The try/catch wrapper around the call STAYS caller-side —
+   * branches may throw and the caller wraps them into `{status:'error',error}`.
+   * Lot 21d-3 will bridge this method into the chat-core
+   * `executeServerTool` Option A callback.
    */
   private async executeServerToolInternal(
     input: ExecuteServerToolInternalInput,
@@ -5125,6 +4989,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       }
       // BR14b Lot 21d-2 Step 3 Group F — verbatim move of inline tool branches
       // from `runAssistantGeneration` (document_generate, batch_create_organizations).
+      // Step 3 completed by F3 commit: 30/30 server-tool branches migrated.
       case 'document_generate': {
         const action = typeof args.action === 'string' ? args.action : 'generate';
         const rawFormat = typeof args.format === 'string' ? args.format : undefined;
