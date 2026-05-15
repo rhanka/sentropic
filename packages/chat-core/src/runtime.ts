@@ -462,6 +462,21 @@ export type ChatRuntimeDeps = {
   readonly executeServerTool?: (
     input: ExecuteServerToolInput,
   ) => Promise<ExecuteServerToolResult>;
+  /**
+   * BR14b Lot 22a-1 — Option A callback wrapping the api-side
+   * `getOpenAITransportMode` helper (`api/src/services/provider-connections.ts`).
+   * Returns `'codex' | 'token'` (the same union the helper produces).
+   * Consumed by `ChatRuntime.initToolLoopState` to derive the
+   * `useCodexTransport` boolean (`selectedProviderId === 'openai' &&
+   * selectedModel === 'gpt-5.5' && (await callback()) === 'codex'`)
+   * without taking a direct dep on the helper's import path.
+   *
+   * Optional `?`: when undefined (test harness, minimal runtime),
+   * the wrapper short-circuits the transport check and defaults
+   * `useCodexTransport` to `false` (the legacy fallback for any
+   * provider/model pair where the transport-mode lookup is irrelevant).
+   */
+  readonly resolveOpenAITransportMode?: () => Promise<OpenAITransportMode>;
 };
 
 /**
@@ -959,6 +974,88 @@ export interface ReasoningEffortEvaluation {
    */
   readonly evaluatorModel: string | null;
   readonly failure?: { readonly message: string };
+}
+
+/**
+ * BR14b Lot 22a-1 — OpenAI transport mode resolved by the api-side
+ * `getOpenAITransportMode` helper (`api/src/services/provider-connections.ts`).
+ * Mirrors that helper's `Promise<'codex' | 'token'>` return type verbatim
+ * so the runtime callback contract stays byte-identical. Surfaced as a
+ * dedicated union so chat-core can stay agnostic of the helper's import
+ * path while typing the optional `resolveOpenAITransportMode` dep below.
+ */
+export type OpenAITransportMode = 'codex' | 'token';
+
+/**
+ * BR14b Lot 22a-1 — input carried into `ChatRuntime.initToolLoopState`.
+ * Bundles the four caller-side inputs the pre-loop init slice
+ * (chat-service.ts lines 3084-3157 pre-Lot 22a-1) reads to compose:
+ *   1. `resolveModelSelection` (Lot 12/17 callback) — for the resolved
+ *      provider + model pair driving every downstream mesh call.
+ *   2. The `useCodexTransport` boolean — derived from the resolved
+ *      selection + `deps.resolveOpenAITransportMode` callback. Mutated
+ *      onto `loopState.useCodexTransport` verbatim (mirrors the inline
+ *      `loopState.useCodexTransport = useCodexTransport` write at line
+ *      3109 pre-Lot 22a-1).
+ *   3. `evaluateReasoningEffort` (Lot 18/20 callback) — for the
+ *      reasoning effort label + the two status events the runtime emits
+ *      internally.
+ *   4. The post-call `streamSeq` cursor re-sync via
+ *      `peekStreamSequence + 1` (mirrors the inline re-sync at line
+ *      3156-3157 pre-Lot 22a-1).
+ *
+ * The `assistantRowModel` fallback mirrors the inline
+ * `options.model || assistantRow.model` expression (the caller composes
+ * it because chat-core stays agnostic of the assistant-row precheck
+ * shape produced by `prepareAssistantRun`).
+ */
+export interface InitToolLoopStateInput {
+  readonly userId: string;
+  readonly providerId?: string | null;
+  readonly model?: string | null;
+  readonly assistantRowModel: string;
+  readonly assistantMessageId: string;
+  readonly sessionWorkspaceId: string | null;
+  readonly conversation: ReadonlyArray<{
+    readonly role: 'user' | 'assistant';
+    readonly content: string;
+  }>;
+  readonly signal?: AbortSignal;
+  readonly loopState: AssistantRunLoopState;
+}
+
+/**
+ * BR14b Lot 22a-1 — result of `ChatRuntime.initToolLoopState`. Carries
+ * the four post-init values the chat-service caller needs to thread
+ * through the remainder of `runAssistantGeneration` (the pass1 tool
+ * loop + the pass2 fallback):
+ *   - `selectedProviderId` / `selectedModel` — the resolved pair from
+ *     `resolveModelSelection`. Same `string` opacity as
+ *     `EvaluateReasoningEffortInput.selectedProviderId`; the caller
+ *     casts back to `ProviderId` mirroring the Lot 17 pattern.
+ *   - `useCodexTransport` — already mirrored onto
+ *     `loopState.useCodexTransport`; returned for the caller's local
+ *     `const useCodexTransport` binding so the rest of
+ *     `runAssistantGeneration` keeps using the same identifier.
+ *   - `reasoning` — the full `ReasoningEffortEvaluation` (callback's
+ *     return value verbatim). Returned so the caller can emit the
+ *     legacy `console.error('[chat] reasoning_effort_eval_failed', ...)`
+ *     trace on `failure` — that trace carries `sessionId` which
+ *     chat-core stays agnostic of.
+ *   - `reasoningEffortForThisMessage` — convenience alias for
+ *     `reasoning.effortForMessage` (the caller's pre-Lot 22a-1 local).
+ *   - `streamSeq` — re-synced via `peekStreamSequence + 1` after the
+ *     two status events `evaluateReasoningEffort` may have appended
+ *     internally (mirrors the inline re-sync at line 3156-3157
+ *     pre-Lot 22a-1).
+ */
+export interface InitToolLoopStateResult {
+  readonly selectedProviderId: string;
+  readonly selectedModel: string;
+  readonly useCodexTransport: boolean;
+  readonly reasoning: ReasoningEffortEvaluation;
+  readonly reasoningEffortForThisMessage: ReasoningEffortLabel | undefined;
+  readonly streamSeq: number;
 }
 
 /**
@@ -3222,6 +3319,100 @@ export class ChatRuntime {
    */
   async peekStreamSequence(streamId: string): Promise<number> {
     return this.deps.streamSequencer.peek(streamId);
+  }
+
+  /**
+   * BR14b Lot 22a-1 — pre-loop initialization slice migrated from
+   * `chat-service.ts` lines 3084-3157 pre-Lot 22a-1. Bundles into a
+   * single method the four steps the chat-service caller used to drive
+   * inline BETWEEN `beginAssistantRunLoop` and the
+   * `while (continueGenerationLoop)` body:
+   *
+   *   1. `resolveModelSelection({userId, providerId, model || assistantRowModel})`
+   *      — same delegate call the inline code performed (Lot 12/17
+   *      callback).
+   *   2. Derive `useCodexTransport = selectedProviderId === 'openai'
+   *      && selectedModel === 'gpt-5.5' && (await
+   *      resolveOpenAITransportMode()) === 'codex'`. Mirrors the
+   *      inline boolean expression verbatim.
+   *   3. Mutate `loopState.useCodexTransport = useCodexTransport`
+   *      (verbatim assignment from chat-service.ts line 3109 pre-Lot
+   *      22a-1). The runtime owns this mutation so the caller no
+   *      longer needs to reach into `loopState` for this single field.
+   *   4. `evaluateReasoningEffort({...})` with the resolved provider +
+   *      model pair (Lot 18/20 callback). The runtime then re-syncs
+   *      `streamSeq` via `peekStreamSequence + 1` because
+   *      `evaluateReasoningEffort` may have appended 0/1/2 status events
+   *      internally.
+   *
+   * Behavior preservation is the absolute contract: every input + every
+   * intermediate cast + every mutation order matches the inline block
+   * pre-Lot 22a-1. The legacy `console.error('[chat]
+   * reasoning_effort_eval_failed', {assistantMessageId, sessionId,
+   * model, evaluatorModel, error})` trace is NOT emitted by this method
+   * — it carries `sessionId` (a chat-service-only field) and would also
+   * require coupling chat-core to console logging. The caller emits
+   * that trace using the returned `reasoning` value (same trace shape,
+   * same field set).
+   *
+   * When `deps.resolveOpenAITransportMode` is undefined (test harness,
+   * minimal runtime), the wrapper short-circuits the transport check
+   * to `useCodexTransport = false` regardless of the resolved
+   * provider/model pair. This mirrors the chat-service-side fallback
+   * behavior for any non-openai-gpt-5.5 selection (the boolean is
+   * always `false` for those because the leftmost `&&` clauses fail).
+   */
+  async initToolLoopState(
+    input: InitToolLoopStateInput,
+  ): Promise<InitToolLoopStateResult> {
+    // Step 1 — resolveModelSelection delegate (Lot 12/17 callback).
+    const resolvedSelection = await this.resolveModelSelection({
+      userId: input.userId,
+      providerId: input.providerId ?? undefined,
+      model: input.model || input.assistantRowModel,
+    });
+    const selectedProviderId = resolvedSelection.provider_id;
+    const selectedModel = resolvedSelection.model_id;
+    // Step 2 — derive useCodexTransport (mirrors the inline boolean
+    // expression at chat-service.ts line 3096-3099 pre-Lot 22a-1).
+    const useCodexTransport =
+      selectedProviderId === 'openai' &&
+      selectedModel === 'gpt-5.5' &&
+      this.deps.resolveOpenAITransportMode !== undefined &&
+      (await this.deps.resolveOpenAITransportMode()) === 'codex';
+    // Step 3 — mirror onto loopState (verbatim assignment from line
+    // 3109 pre-Lot 22a-1). The mutable in-place write preserves the
+    // legacy ordering: the loop body reads `loopState.useCodexTransport`
+    // AFTER this assignment, never before.
+    input.loopState.useCodexTransport = useCodexTransport;
+    // Step 4 — evaluateReasoningEffort (Lot 18/20 callback). The
+    // runtime appends 0/1/2 status events internally based on
+    // shouldEvaluate + failure.
+    const reasoning = await this.evaluateReasoningEffort({
+      userId: input.userId,
+      workspaceId: input.sessionWorkspaceId,
+      selectedProviderId,
+      selectedModel,
+      conversation: input.conversation,
+      signal: input.signal,
+      streamId: input.assistantMessageId,
+    });
+    // Re-sync the streamSeq cursor with the runtime after
+    // `evaluateReasoningEffort` appended 0 (callback unwired /
+    // non-reasoning model), 1 (success path), or 2 (failure path)
+    // status events internally. `peek` returns the latest allocated
+    // sequence; the next caller-side `writeStreamEvent` continues
+    // from `peek + 1`.
+    const streamSeq =
+      (await this.peekStreamSequence(input.assistantMessageId)) + 1;
+    return {
+      selectedProviderId,
+      selectedModel,
+      useCodexTransport,
+      reasoning,
+      reasoningEffortForThisMessage: reasoning.effortForMessage,
+      streamSeq,
+    };
   }
 
   /**
