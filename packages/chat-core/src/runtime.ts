@@ -1866,6 +1866,107 @@ export interface EmitFinalAssistantTurnResult {
 }
 
 /**
+ * BR14b Lot 22a-2 — input to `ChatRuntime.runPass2Fallback`.
+ *
+ * Bundles the pass2 fallback block previously embedded in
+ * `ChatService.runAssistantGeneration` (chat-service.ts lines 3707-3813
+ * post-Lot 22a-1, ~107l). The block runs AFTER the main tool loop +
+ * `finalizeAssistantIteration` finishes and BEFORE `emitFinalAssistantTurn`
+ * — it kicks in when the assistant produced no usable content
+ * (`!contentParts.join('').trim()`) and forces a clean second pass
+ * with tools disabled (`toolChoice='none'`, `tools=undefined`) and a
+ * tool-digest summary baked into the user message.
+ *
+ * Inputs cover:
+ *   - identity + transport: `streamId`, `assistantMessageId`, `sessionId`,
+ *     `userId`, `workspaceId`, `providerId`, `model`, `credential`,
+ *     `signal`, `reasoningEffort`.
+ *   - context to rebuild pass2 messages: `conversation`,
+ *     `executedTools` (digest source), `systemPrompt` (extended with the
+ *     pass2 directives).
+ *   - mutable buffers reset+filled in-place verbatim: `contentParts`,
+ *     `reasoningParts`. The caller's outer `let` accumulators are passed
+ *     by reference exactly like the inline body (`contentParts.length = 0`,
+ *     `contentParts.push(delta)`).
+ *   - cursor: `streamSeq` (advanced and returned).
+ *   - tracing: `traceEnabled` + optional `writeChatGenerationTrace` Option A
+ *     callback (same pattern as Lot 21e-3 / 22a-1). When the callback is
+ *     undefined (test harness) the pass2_prompt trace is silently skipped.
+ */
+export interface RunPass2FallbackInput {
+  readonly streamId: string;
+  readonly assistantMessageId: string;
+  readonly sessionId: string;
+  readonly userId: string;
+  readonly workspaceId: string | null;
+  readonly providerId: string;
+  readonly model: string;
+  readonly credential?: string;
+  readonly signal?: AbortSignal;
+  readonly reasoningEffort?:
+    | 'none'
+    | 'low'
+    | 'medium'
+    | 'high'
+    | 'xhigh';
+  readonly conversation: ReadonlyArray<{
+    readonly role: 'system' | 'user' | 'assistant';
+    readonly content: string;
+  }>;
+  readonly executedTools: ReadonlyArray<{
+    readonly name: string;
+    readonly result: unknown;
+  }>;
+  readonly systemPrompt: string;
+  readonly contentParts: string[];
+  readonly reasoningParts: string[];
+  readonly streamSeq: number;
+  readonly traceEnabled: boolean;
+  readonly writeChatGenerationTrace?: (input: {
+    readonly enabled: boolean;
+    readonly sessionId: string;
+    readonly assistantMessageId: string;
+    readonly userId: string;
+    readonly workspaceId: string | null;
+    readonly phase: 'pass2';
+    readonly iteration: number;
+    readonly model: string | null;
+    readonly toolChoice: 'none';
+    readonly tools: null;
+    readonly openaiMessages: ReadonlyArray<{
+      readonly role: 'system' | 'user' | 'assistant';
+      readonly content: string;
+    }>;
+    readonly toolCalls: null;
+    readonly meta: {
+      readonly kind: 'pass2_prompt';
+      readonly callSite: string;
+      readonly openaiApi: 'responses';
+    };
+  }) => Promise<void>;
+}
+
+/**
+ * BR14b Lot 22a-2 — return shape of `ChatRuntime.runPass2Fallback`.
+ *
+ *   - `skipped` — `true` when the guard short-circuited (caller-side
+ *     `contentParts.join('').trim()` already non-empty). When `true`,
+ *     `streamSeq` mirrors the input cursor verbatim and the mutable
+ *     buffers are untouched.
+ *   - `streamSeq` — advanced cursor reflecting every event emitted by
+ *     the pass2 mesh stream (mirrors the inline `streamSeq += 1` after
+ *     each `writeStreamEvent` call).
+ *   - `lastErrorMessage` — last captured pass2 error message (mirrors
+ *     the inline `lastErrorMessage` `let` reassignment on `error`
+ *     events). `null` when no error event was observed.
+ */
+export interface RunPass2FallbackResult {
+  readonly skipped: boolean;
+  readonly streamSeq: number;
+  readonly lastErrorMessage: string | null;
+}
+
+/**
  * Verbatim duplicate of `asRecord` in `chat-service.ts` (line ~261).
  * Tiny pure helper, duplicated rather than re-imported to keep
  * chat-core free of any api/* module dependency.
@@ -4575,6 +4676,71 @@ export class ChatRuntime {
     });
     await this.deps.sessionStore.touchUpdatedAt(sessionId);
     return { streamSeq };
+  }
+
+  /**
+   * BR14b Lot 22a-2 — pass2 fallback slice of `runAssistantGeneration`.
+   *
+   * Verbatim port of `chat-service.ts` lines 3707-3813 post-Lot 22a-1
+   * (~107l). Triggered AFTER the main tool loop + per-iteration
+   * `finalizeAssistantIteration` finish and BEFORE `emitFinalAssistantTurn`:
+   * when the assistant produced no usable content
+   * (`!contentParts.join('').trim()`), force a clean second pass with
+   * tools disabled to coerce a final user-facing response.
+   *
+   * Behavior (verbatim — STRICT preservation):
+   *   1. Guard: return `{skipped:true, streamSeq, lastErrorMessage:null}`
+   *      when `contentParts.join('').trim()` is non-empty (the caller
+   *      then proceeds to `emitFinalAssistantTurn`).
+   *   2. Build pass2 system prompt (`systemPrompt + <FR directives>`) +
+   *      pass2 messages (system + conversation + synthesized user
+   *      message with the digest of executed tools).
+   *   3. Reset `contentParts`, `reasoningParts`, `lastErrorMessage`
+   *      (in-place mutation of the caller's mutable arrays).
+   *   4. Optionally emit the `pass2_prompt` trace via the Option A
+   *      `writeChatGenerationTrace` callback.
+   *   5. Stream via `deps.mesh.invokeStream` with `tools=undefined`,
+   *      `toolChoice='none'`, `reasoningSummary='detailed'`. For each
+   *      non-`done` event: append to the stream buffer via
+   *      `deps.streamSequencer.allocate` + `deps.streamBuffer.append`,
+   *      advance `streamSeq`, capture `content_delta` /
+   *      `reasoning_delta` into the caller's buffers, capture
+   *      `error.message` into `lastErrorMessage`.
+   *   6. On thrown error during streaming: emit a final `error` event
+   *      then rethrow (mirrors the inline `try/catch` at lines 3791-3805).
+   *   7. After streaming completes: throw
+   *      `'Second pass produced no content'` if `contentParts` is still
+   *      empty (after emitting the error event).
+   *
+   * Option A callbacks (same pattern as Lots 16a/16b/18/21c/21e-1/21e-3/22a-1):
+   *   - `writeChatGenerationTrace` — optional pass2 trace emission.
+   *     When undefined (test harness / minimal runtime) the trace is
+   *     silently skipped. When defined, called with the verbatim
+   *     `{kind:'pass2_prompt', callSite:'ChatService.runAssistantGeneration/pass2/beforeOpenAI', openaiApi:'responses'}`
+   *     meta shape.
+   *
+   * Mesh dispatch goes through `this.deps.mesh.invokeStream` (Lot 10
+   * port) so chat-core stays free of any `callLLMStream` /
+   * `api/src/services/llm-runtime` direct dep. Stream event emission
+   * goes through `deps.streamSequencer.allocate` + `deps.streamBuffer.append`
+   * (Lot 20 contract — same convention as `consumeAssistantStream` /
+   * `applyContextBudgetGate` / `finalizeAssistantIteration`).
+   */
+  async runPass2Fallback(
+    input: RunPass2FallbackInput,
+  ): Promise<RunPass2FallbackResult> {
+    // BR14b Lot 22a-2 Step 1 — types + scaffold only.
+    // Body landed in Step 2 (verbatim port of chat-service.ts lines
+    // 3707-3813 post-Lot 22a-1). The Step 1 placeholder mirrors the
+    // launch-packet contract (scaffold + signature + empty body, with
+    // a deterministic stub that exercises the guard branch only so
+    // typecheck-pkg stays green between commits).
+    void input;
+    return {
+      skipped: true,
+      streamSeq: input.streamSeq,
+      lastErrorMessage: null,
+    };
   }
 }
 
