@@ -30,5 +30,14 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run tests --environment node"
+  },
+  "dependencies": {
+    "gray-matter": "4.0.3",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "20.11.30",
+    "typescript": "5.4.5",
+    "vitest": "4.0.18"
   }
 }
