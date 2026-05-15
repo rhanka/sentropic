@@ -62,6 +62,8 @@
  */
 import type {
   ChatRuntimeDeps,
+  EmitFinalAssistantTurnInput,
+  EmitFinalAssistantTurnResult,
   FinalizeAssistantIterationInput,
   FinalizeAssistantIterationResult,
 } from './runtime.js';
@@ -357,6 +359,48 @@ export class ChatRuntimeFinalization {
       todoContinuationActive,
       todoAwaitingUserInput,
     };
+  }
+
+  /**
+   * BR14b Lot 21e-3 — terminal finalization slice of
+   * `runAssistantGeneration`.
+   *
+   * Verbatim port of `chat-service.ts` lines 3892-3902 (post-Lot 21e-2):
+   * emit the single `done` stream event, persist the final assistant
+   * content + reasoning via `MessageStore.updateAssistantContent`, and
+   * touch the session `updatedAt` via `SessionStore.touchUpdatedAt`.
+   *
+   * Stays in the runtime because both stores live on `deps`. Stream
+   * event emission goes through `deps.streamSequencer.allocate` +
+   * `deps.streamBuffer.append` per the Lot 20 contract.
+   */
+  async emitFinalAssistantTurn(
+    input: EmitFinalAssistantTurnInput,
+  ): Promise<EmitFinalAssistantTurnResult> {
+    const {
+      streamId,
+      assistantMessageId,
+      sessionId,
+      content,
+      reasoning,
+      model,
+    } = input;
+    const seq = await this.deps.streamSequencer.allocate(streamId);
+    await this.deps.streamBuffer.append(
+      streamId,
+      'done',
+      {},
+      seq,
+      streamId,
+    );
+    const streamSeq = seq + 1;
+    await this.deps.messageStore.updateAssistantContent(assistantMessageId, {
+      content,
+      reasoning,
+      model,
+    });
+    await this.deps.sessionStore.touchUpdatedAt(sessionId);
+    return { streamSeq };
   }
 }
 
