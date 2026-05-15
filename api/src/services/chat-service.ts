@@ -16,6 +16,7 @@ import {
   type EvaluateReasoningEffortInput,
   type ExecuteServerToolInput,
   type ExecuteServerToolResult,
+  type FinalizeAssistantIterationInput,
   type ReasoningEffortEvaluation,
   type ReasoningEffortLabel,
 } from '../../../packages/chat-core/src/runtime';
@@ -80,7 +81,7 @@ import { todoOrchestrationService } from './todo-orchestration';
 import { ensureWorkspaceForUser } from './workspace-service';
 import { getWorkspaceRole, getWorkspaceType, hasWorkspaceRole, isWorkspaceDeleted } from './workspace-access';
 import { env } from '../config/env';
-import { writeChatGenerationTrace } from './chat-trace';
+import { writeChatGenerationTrace, type ChatTraceToolCall } from './chat-trace';
 import { generateCommentResolutionProposal } from './context-comments';
 import { generateFreeformDocx } from './docx-generation';
 import { generateFreeformPptx } from './pptx-generation';
@@ -3615,169 +3616,107 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       streamSeq = consumed.streamSeq;
       contextBudgetReplanAttempts = consumed.contextBudgetReplanAttempts;
 
-      // Trace: executed tool calls for this iteration (args/results)
-      await writeChatGenerationTrace({
-        enabled: env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
+      // BR14b Lot 21e-3 — post-`consumeToolCalls` per-iteration finalization
+      // (Block A trace + todo refresh, Block B `pendingLocalToolCalls`
+      // short-circuit, Block C history append + `needsExplicitToolReplay`
+      // rawInput rebuild) now lives behind `ChatRuntime.finalizeAssistantIteration`.
+      // Two api-side closures cross as Option A callbacks:
+      // `writeChatGenerationTrace` (the chat-trace instrumentation hook) and
+      // `refreshSessionTodoRuntime` (bundles `getSessionTodoRuntime` + snapshot
+      // projection + the api-side `TODO_TERMINAL_STATUSES` /
+      // `TODO_BLOCKING_STATUSES` membership checks). Behavior preservation
+      // STRICT — every event payload shape, every `let` binding semantic from
+      // the inline body is mirrored 1:1 in the runtime method body.
+      const finalizeInput: FinalizeAssistantIterationInput = {
+        streamId: options.assistantMessageId,
+        traceEnabled:
+          env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
         sessionId: options.sessionId,
         assistantMessageId: options.assistantMessageId,
         userId: options.userId,
         workspaceId: sessionWorkspaceId,
-        phase: 'pass1',
         iteration,
-        model: selectedModel || null,
+        modelId: selectedModel || null,
         toolChoice: pass1ToolChoice,
         tools: tools ?? null,
-        openaiMessages: {
-          kind: 'executed_tools',
-          messages: currentMessages,
-          previous_response_id: previousResponseId,
-          responses_input_tool_outputs: responseToolOutputs
-        },
-        toolCalls: toolCalls.map((tc) => {
-          const found = executedTools.find((x) => x.toolCallId === tc.id);
-          return {
-            id: tc.id,
-            name: tc.name,
-            args: found?.args ?? (tc.args ? (() => { try { return JSON.parse(tc.args); } catch { return tc.args; } })() : undefined),
-            result: found?.result
-          };
-        }),
-        meta: { kind: 'executed_tools', callSite: 'ChatService.runAssistantGeneration/pass1/afterTools', openaiApi: 'responses' }
-      });
-
-      if (todoAutonomousExtensionEnabled && !todoAwaitingUserInput) {
-        const refreshedSessionTodo = toSessionTodoRuntimeSnapshot(
-          await todoOrchestrationService.getSessionTodoRuntime(
-            {
-              userId: options.userId,
-              role: currentUserRole ?? 'viewer',
-              workspaceId: sessionWorkspaceId,
-            },
-            options.sessionId,
-          ),
-        );
-        if (!refreshedSessionTodo) {
-          todoContinuationActive = false;
-        } else {
+        currentMessages,
+        previousResponseId,
+        responseToolOutputs,
+        toolCalls,
+        executedTools,
+        writeChatGenerationTrace: async (input) =>
+          writeChatGenerationTrace({
+            enabled: input.enabled,
+            sessionId: input.sessionId,
+            assistantMessageId: input.assistantMessageId,
+            userId: input.userId,
+            workspaceId: input.workspaceId,
+            phase: input.phase,
+            iteration: input.iteration,
+            model: input.model,
+            toolChoice: input.toolChoice,
+            tools: input.tools as
+              | OpenAI.Chat.Completions.ChatCompletionTool[]
+              | null,
+            openaiMessages: input.openaiMessages,
+            toolCalls: input.toolCalls as ChatTraceToolCall[],
+            meta: input.meta,
+          }),
+        todoAutonomousExtensionEnabled,
+        todoAwaitingUserInput,
+        refreshSessionTodoRuntime: async (refreshInput) => {
+          const refreshedSessionTodo = toSessionTodoRuntimeSnapshot(
+            await todoOrchestrationService.getSessionTodoRuntime(
+              {
+                userId: refreshInput.userId,
+                role: refreshInput.currentUserRole ?? 'viewer',
+                workspaceId: refreshInput.workspaceId as string,
+              },
+              refreshInput.sessionId,
+            ),
+          );
+          if (!refreshedSessionTodo) {
+            return {
+              hasRefreshedSessionTodo: false,
+              todoContinuationActive: false,
+              todoAwaitingUserInputAfterRefresh: false,
+            };
+          }
           const refreshedStatus = normalizeTodoRuntimeStatus(
             refreshedSessionTodo.status,
           );
-          todoContinuationActive = !TODO_TERMINAL_STATUSES.has(refreshedStatus);
-          if (TODO_BLOCKING_STATUSES.has(refreshedStatus)) {
-            todoAwaitingUserInput = true;
-          }
-        }
-      }
-
-      if (pendingLocalToolCalls.length > 0) {
-        if (!previousResponseId) {
-          throw new Error(
-            'Unable to pause generation for local tools: missing previous_response_id'
-          );
-        }
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'status',
-          {
-            state: 'awaiting_local_tool_results',
-            previous_response_id: previousResponseId,
-            pending_local_tool_calls: pendingLocalToolCalls.map((item) => ({
-              tool_call_id: item.id,
-              name: item.name,
-              args: item.args,
-            })),
-            local_tool_definitions: localTools.map((tool) => ({
-              name: tool.type === 'function' ? tool.function.name : '',
-              description:
-                tool.type === 'function' ? tool.function.description ?? '' : '',
-              parameters:
-                tool.type === 'function'
-                  ? ((tool.function.parameters ?? {}) as Record<string, unknown>)
-                  : {}
-            })),
-            base_tool_outputs: responseToolOutputs.map((item) => ({
-              call_id: item.call_id,
-              output: item.output,
-            })),
-            vscode_code_agent: vscodeCodeAgentPayload
-              ? {
-                  source: 'vscode',
-                  workspace_key: vscodeCodeAgentPayload.workspaceKey,
-                  workspace_label: vscodeCodeAgentPayload.workspaceLabel,
-                  prompt_global_override:
-                    vscodeCodeAgentPayload.promptGlobalOverride,
-                  prompt_workspace_override:
-                    vscodeCodeAgentPayload.promptWorkspaceOverride,
-                  instruction_include_patterns:
-                    vscodeCodeAgentPayload.instructionIncludePatterns,
-                  instruction_files: vscodeCodeAgentPayload.instructionFiles.map(
-                    (file) => ({
-                      path: file.path,
-                      content: file.content,
-                    }),
-                  ),
-                  system_context: vscodeCodeAgentPayload.systemContext
-                    ? {
-                        working_directory:
-                          vscodeCodeAgentPayload.systemContext.workingDirectory,
-                        is_git_repo:
-                          vscodeCodeAgentPayload.systemContext.isGitRepo,
-                        git_branch:
-                          vscodeCodeAgentPayload.systemContext.gitBranch,
-                        platform: vscodeCodeAgentPayload.systemContext.platform,
-                        os_version: vscodeCodeAgentPayload.systemContext.osVersion,
-                        shell: vscodeCodeAgentPayload.systemContext.shell,
-                        client_date_iso:
-                          vscodeCodeAgentPayload.systemContext.clientDateIso,
-                        client_timezone:
-                          vscodeCodeAgentPayload.systemContext.clientTimezone,
-                      }
-                    : undefined,
-                }
-              : undefined
-          },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
+          return {
+            hasRefreshedSessionTodo: true,
+            todoContinuationActive:
+              !TODO_TERMINAL_STATUSES.has(refreshedStatus),
+            todoAwaitingUserInputAfterRefresh:
+              TODO_BLOCKING_STATUSES.has(refreshedStatus),
+          };
+        },
+        currentUserRole: currentUserRole ?? null,
+        pendingLocalToolCalls,
+        localTools:
+          localTools as unknown as FinalizeAssistantIterationInput['localTools'],
+        vscodeCodeAgentPayload:
+          vscodeCodeAgentPayload as FinalizeAssistantIterationInput['vscodeCodeAgentPayload'],
+        streamSeq,
+        useCodexTransport,
+        providerId: selectedProviderId,
+        contentParts,
+      };
+      const finalized = await this.runtime.finalizeAssistantIteration(
+        finalizeInput,
+      );
+      streamSeq = finalized.streamSeq;
+      currentMessages = finalized.currentMessages as ChatRuntimeMessage[];
+      previousResponseId = finalized.previousResponseId;
+      pendingResponsesRawInput = finalized.pendingResponsesRawInput as
+        | unknown[]
+        | null;
+      todoContinuationActive = finalized.todoContinuationActive;
+      todoAwaitingUserInput = finalized.todoAwaitingUserInput;
+      if (finalized.shouldExitGeneration) {
         return;
-      }
-
-      // OPTION 1 (Responses API): on CONTINUE via previous_response_id + function_call_output
-      // -> pas d'injection tool->user JSON, pas de "role:tool" dans messages.
-      // On laisse `previousResponseId` alimenter l'appel suivant.
-      // Pour l'historique local côté modèle, on n'ajoute l'assistant que si non vide.
-      const assistantText = contentParts.join('');
-      if (assistantText.trim()) {
-        currentMessages = [...currentMessages, { role: 'assistant', content: assistantText }];
-      }
-
-      // Non-Responses-API providers (Claude, Mistral, Cohere, Codex) need both
-      // function_call + function_call_output in rawInput so the runtime can
-      // reconstruct the assistant tool_use / tool_calls block before tool results.
-      const needsExplicitToolReplay =
-        useCodexTransport ||
-        selectedProviderId === 'anthropic' ||
-        selectedProviderId === 'mistral' ||
-        selectedProviderId === 'cohere';
-      if (needsExplicitToolReplay) {
-        if (useCodexTransport) previousResponseId = null;
-        pendingResponsesRawInput = toolCalls.flatMap((toolCall) => {
-          const output = responseToolOutputs.find((item) => item.call_id === toolCall.id);
-          return output
-            ? [
-                {
-                  type: 'function_call' as const,
-                  call_id: toolCall.id,
-                  name: toolCall.name,
-                  arguments: toolCall.args || '{}',
-                },
-                output,
-              ]
-            : [];
-        });
-      } else {
-        pendingResponsesRawInput = responseToolOutputs;
       }
     }
 
@@ -3889,17 +3828,24 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       }
     }
 
-    // Un seul terminal: done à la toute fin
-    await writeStreamEvent(options.assistantMessageId, 'done', {}, streamSeq, options.assistantMessageId);
-    streamSeq += 1;
-
-    await postgresChatMessageStore.updateAssistantContent(options.assistantMessageId, {
+    // BR14b Lot 21e-3 — terminal finalization slice (single `done` event +
+    // persist final content + touch session updatedAt) now lives behind
+    // `ChatRuntime.emitFinalAssistantTurn`. The runtime uses
+    // `deps.messageStore.updateAssistantContent` + `deps.sessionStore.touchUpdatedAt`
+    // (both wired to the postgres adapters in the constructor) and emits the
+    // `done` stream event via `deps.streamSequencer.allocate` +
+    // `deps.streamBuffer.append` (Lot 20 contract). Behavior preservation
+    // STRICT — verbatim port of the 3-line inline body.
+    const finalTurn = await this.runtime.emitFinalAssistantTurn({
+      streamId: options.assistantMessageId,
+      assistantMessageId: options.assistantMessageId,
+      sessionId: options.sessionId,
+      streamSeq,
       content: contentParts.join(''),
       reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null,
       model: selectedModel || null,
     });
-
-    await postgresChatSessionStore.touchUpdatedAt(options.sessionId);
+    streamSeq = finalTurn.streamSeq;
   }
 
   /**
