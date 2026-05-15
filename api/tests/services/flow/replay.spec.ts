@@ -42,22 +42,18 @@ import { join } from 'node:path';
 
 const EXPECTED_FIXTURES = [
   'approval-gated-pause-resume',
+  'cancel-mid-loop',
   'chat-tool-loop-3turns',
+  'fanout-join-2orgs',
   'queue-retry',
+  'resume-after-crash',
 ];
 
 describe('BR-26 golden trace replay', () => {
-  it('discovers the expected fixtures in api/tests/fixtures/golden/br26/', () => {
+  it('discovers all 6 expected fixtures in api/tests/fixtures/golden/br26/', () => {
     const fixtures = loadAllFixtures();
     const ids = fixtures.map((f) => f.fixtureId).sort();
-    // Every fixture present in the directory must be in the expected list.
-    for (const id of ids) {
-      expect(EXPECTED_FIXTURES, `unexpected fixture: ${id}`).toContain(id);
-    }
-    // Every baseline fixture from Step 1 must be present.
-    for (const expected of ['approval-gated-pause-resume', 'chat-tool-loop-3turns', 'queue-retry']) {
-      expect(ids, `missing baseline fixture: ${expected}`).toContain(expected);
-    }
+    expect(ids).toEqual(EXPECTED_FIXTURES);
   });
 
   it('every fixture is well-formed JSONL with input + events + final_state', () => {
@@ -183,6 +179,80 @@ describe('BR-26 golden trace replay', () => {
       );
       expect(taskResult?.attempts).toBe(2);
       expect(taskResult?.status).toBe('completed');
+    });
+
+    it('fanout-join-2orgs: 2 fanout instances complete then a single join task fires', () => {
+      const fixture = loadFixture(join(GOLDEN_DIR, 'fanout-join-2orgs.jsonl'));
+      const fanoutInstances = new Set(
+        fixture.events
+          .filter((e) => e.taskKey === 'organization_enrich')
+          .map((e) => e.taskInstanceKey),
+      );
+      expect(fanoutInstances.size).toBe(2);
+      expect(fanoutInstances.has('org-A')).toBe(true);
+      expect(fanoutInstances.has('org-B')).toBe(true);
+      // Both fanout children must complete before the join fires.
+      const lastFanoutCompletion = Math.max(
+        ...fixture.events
+          .filter(
+            (e) => e.taskKey === 'organization_enrich' && e.eventType === 'task_completed',
+          )
+          .map((e) => e.sequence),
+      );
+      const joinStarted = fixture.events.find(
+        (e) => e.taskKey === 'organization_targets_join' && e.eventType === 'task_started',
+      );
+      expect(joinStarted).toBeDefined();
+      expect(joinStarted!.sequence).toBeGreaterThan(lastFanoutCompletion);
+      const joinCompletions = fixture.events.filter(
+        (e) =>
+          e.eventType === 'task_completed' && e.taskKey === 'organization_targets_join',
+      );
+      expect(joinCompletions).toHaveLength(1);
+      expect(fixture.finalState.status).toBe('completed');
+    });
+
+    it('resume-after-crash: state_resumed event references the prior checkpoint version', () => {
+      const fixture = loadFixture(join(GOLDEN_DIR, 'resume-after-crash.jsonl'));
+      const resumed = fixture.events.find((e) => e.eventType === 'state_resumed');
+      expect(resumed).toBeDefined();
+      const payload = resumed!.payload as { fromVersion?: number; toVersion?: number };
+      expect(typeof payload.fromVersion).toBe('number');
+      expect(typeof payload.toVersion).toBe('number');
+      expect(payload.toVersion!).toBeGreaterThanOrEqual(payload.fromVersion!);
+      // The fixture must record the input checkpoint version on the resume event.
+      const seedVersion = (fixture.input.seed as { checkpointVersion?: number }).checkpointVersion;
+      expect(payload.fromVersion).toBe(seedVersion);
+      // No task completed in the fixture must have an attempts > 1 — the resume
+      // is a state reload, not a retry.
+      for (const result of fixture.finalState.taskResults) {
+        expect(result.attempts, `${result.taskKey}`).toBe(1);
+      }
+      expect(fixture.finalState.status).toBe('completed');
+    });
+
+    it('cancel-mid-loop: run_cancelled appears after >=1 tool result and final status is cancelled', () => {
+      const fixture = loadFixture(join(GOLDEN_DIR, 'cancel-mid-loop.jsonl'));
+      const cancelEvent = fixture.events.find((e) => e.eventType === 'run_cancelled');
+      expect(cancelEvent).toBeDefined();
+      // Partial output is preserved (at least one tool_result before cancellation).
+      const toolResultsBeforeCancel = fixture.events.filter(
+        (e) => e.eventType === 'chat_tool_result' && e.sequence < cancelEvent!.sequence,
+      );
+      expect(toolResultsBeforeCancel.length).toBeGreaterThan(0);
+      // No completion event must appear after cancellation.
+      const completedAfterCancel = fixture.events.filter(
+        (e) =>
+          (e.eventType === 'task_completed' || e.eventType === 'chat_completed') &&
+          e.sequence > cancelEvent!.sequence,
+      );
+      expect(completedAfterCancel).toHaveLength(0);
+      expect(fixture.finalState.status).toBe('cancelled');
+      // The chat_turn task must be recorded as cancelled in the run state.
+      const chatTurnResult = fixture.finalState.taskResults.find(
+        (r) => r.taskKey === 'chat_turn',
+      );
+      expect(chatTurnResult?.status).toBe('cancelled');
     });
   });
 

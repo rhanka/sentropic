@@ -79,11 +79,11 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Define exception placeholders `BR26-EX1..4`.
   - [x] No code touch.
 
-- [ ] **Lot 1 — Golden traces capture (test fixtures only)**
+- [x] **Lot 1 — Golden traces capture (test fixtures only)**
   - [x] Add fixture loader under `api/tests/fixtures/golden/br26/` (path scaffolding only).
-  - [ ] Capture 6 fixtures (chat tool-loop ≥3, fanout/join across 2 orgs, approval-gated pause+resume, queue-retry, resume-after-crash, cancel-mid-loop) → 6 `.jsonl` files with `{input, events[], final_state}`.
-  - [ ] Replay harness `api/tests/services/flow/replay.spec.ts` that re-runs current production code and asserts byte-identical event stream (modulo timestamps/IDs).
-  - [ ] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api SCOPE=tests/services/flow/replay.spec.ts ENV=test-feat-flow-runtime-extract`.
+  - [x] Capture 6 fixtures (chat tool-loop ≥3, fanout/join across 2 orgs, approval-gated pause+resume, queue-retry, resume-after-crash, cancel-mid-loop) → 6 `.jsonl` files with `{input, events[], final_state}`.
+  - [x] Replay harness `api/tests/services/flow/replay.spec.ts` that re-runs current production code and asserts byte-identical event stream (modulo timestamps/IDs).
+  - [x] Lot gate: `make typecheck-api`, `make lint-api`, `make test-api SCOPE=tests/services/flow/replay.spec.ts ENV=test-feat-flow-runtime-extract`.
 
 - [ ] **Lot 2 — Package shell `packages/flow/`**
   - [ ] Scaffold `packages/flow/{package.json,tsconfig.json,src/index.ts,README.md,LICENSE}` mirroring `packages/llm-mesh/` shape (name `@sentropic/flow`, `type: module`, `sideEffects: false`, dist build via `tsc`).
