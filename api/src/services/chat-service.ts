@@ -816,13 +816,13 @@ export interface ExecuteServerToolInternalInput {
   readonly enforceTodoUpdateMode: boolean;
   readonly todoAutonomousExtensionEnabled: boolean;
   readonly allowedByType: {
-    organization: Set<string>;
-    folder: Set<string>;
-    usecase: Set<string>;
-    executive_summary: Set<string>;
+    readonly organization: ReadonlySet<string>;
+    readonly folder: ReadonlySet<string>;
+    readonly usecase: ReadonlySet<string>;
+    readonly executive_summary: ReadonlySet<string>;
   };
-  readonly allowedFolderIds: ReadonlyArray<string>;
-  readonly allowedCommentContextSet: Set<string>;
+  readonly allowedFolderIds: ReadonlySet<string>;
+  readonly allowedCommentContextSet: ReadonlySet<string>;
   readonly primaryContextType: ChatContextType | null;
   readonly primaryContextId: string | null;
   readonly vscodeCodeAgentPayload: unknown;
@@ -833,6 +833,11 @@ export interface ExecuteServerToolInternalInput {
   readonly isAllowedOrganizationId: (orgId: string) => Promise<boolean>;
   readonly markTodoIterationState: (rawResult: unknown) => void;
   readonly isExplicitConfirmation: (text: string, confirmationArg: unknown) => boolean;
+  // BR14b Lot 21d-2 Step 3 Group A — `hasContextType` is a `runAssistantGeneration`
+  // closure (lines ~2891-2892, delegating to `promptCtx.hasContextType`) consumed
+  // by per-tool guard branches (e.g. `organizations_list`, `folders_list`, …).
+  // Added here so Group A migration can reference it verbatim without recomputing.
+  readonly hasContextType: (type: ChatContextType) => boolean;
 }
 
 /**
@@ -3605,119 +3610,68 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           }
           let result: unknown;
 
-          if (toolCall.name === 'read_initiative') {
-            if (!allowedByType.usecase.has(args.initiativeId)) {
-              throw new Error('Security: initiativeId does not match allowed contexts');
-            }
-            const readResult = await toolService.readInitiative(args.initiativeId, {
-              workspaceId: sessionWorkspaceId,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = readResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              // Normaliser pour l'UI: toujours fournir result.status
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(readResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'update_initiative') {
-            if (readOnly) {
-              throw new Error('Read-only workspace: initiative update is disabled');
-            }
-            if (!allowedByType.usecase.has(args.initiativeId)) {
-              throw new Error('Security: initiativeId does not match allowed contexts');
-            }
-            const updateResult = await toolService.updateInitiativeFields({
-              initiativeId: args.initiativeId,
-              updates: args.updates || [],
+          // BR14b Lot 21d-2 Step 3 Group A — delegate to `executeServerToolInternal`.
+          // Body verbatim-moved into the method's switch; this closure factory keeps
+          // the input bundle DRY across the five Group A delegations (read_initiative,
+          // update_initiative, organizations_list, organization_get, organization_update).
+          const buildExecuteServerToolInput = (): ExecuteServerToolInternalInput => ({
+            toolCall,
+            args,
+            todoOperation,
+            options: {
               userId: options.userId,
               sessionId: options.sessionId,
-              messageId: options.assistantMessageId,
-              toolCallId: toolCall.id,
+              assistantMessageId: options.assistantMessageId,
               locale: options.locale,
-              workspaceId: sessionWorkspaceId
-            });
-            result = updateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              // Normaliser pour l'UI: toujours fournir result.status
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'organizations_list') {
-            if (!hasContextType('organization')) {
-              throw new Error('Security: organizations_list is only available in organization context');
-            }
-            const listResult = await toolService.listOrganizations({
-              workspaceId: sessionWorkspaceId,
-              idsOnly: !!args.idsOnly,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = listResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'organization_get') {
-            if (!args.organizationId || typeof args.organizationId !== 'string') {
-              throw new Error('Security: organizationId is required');
-            }
-            const allowed = await isAllowedOrganizationId(args.organizationId);
-            if (!allowed) {
-              throw new Error('Security: organizationId does not match allowed contexts');
-            }
+              signal: options.signal,
+            },
+            currentMessages,
+            tools,
+            responseToolOutputs,
+            executedTools,
+            selectedProviderId,
+            selectedModel,
+            sessionWorkspaceId,
+            readOnly,
+            currentUserRole,
+            enforceTodoUpdateMode,
+            todoAutonomousExtensionEnabled,
+            allowedByType,
+            allowedFolderIds,
+            allowedCommentContextSet,
+            primaryContextType,
+            primaryContextId,
+            vscodeCodeAgentPayload,
+            lastUserMessage,
+            iteration,
+            streamSeq,
+            getOrganizationIdForFolder,
+            isAllowedOrganizationId,
+            markTodoIterationState,
+            isExplicitConfirmation,
+            hasContextType,
+          });
 
-            const getResult = await toolService.getOrganization(args.organizationId, {
-              workspaceId: sessionWorkspaceId,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = getResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+          if (toolCall.name === 'read_initiative') {
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
+          } else if (toolCall.name === 'update_initiative') {
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
+          } else if (toolCall.name === 'organizations_list') {
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
+          } else if (toolCall.name === 'organization_get') {
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'organization_update') {
-            if (readOnly) throw new Error('Read-only workspace: organization_update is disabled');
-            if (!args.organizationId || typeof args.organizationId !== 'string') {
-              throw new Error('Security: organizationId is required');
-            }
-            const allowed = await isAllowedOrganizationId(args.organizationId);
-            if (!allowed) {
-              throw new Error('Security: organizationId does not match allowed contexts');
-            }
-            const updateResult = await toolService.updateOrganizationFields({
-              organizationId: args.organizationId,
-              updates: Array.isArray(args.updates) ? args.updates : [],
-              userId: options.userId,
-              sessionId: options.sessionId,
-              messageId: options.assistantMessageId,
-              toolCallId: toolCall.id,
-              locale: options.locale,
-              workspaceId: sessionWorkspaceId
-            });
-            result = updateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'folders_list') {
             if (!hasContextType('organization') && !hasContextType('folder')) {
               throw new Error('Security: folders_list is only available in organization/folder context');
@@ -5118,13 +5072,146 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
   private async executeServerToolInternal(
     input: ExecuteServerToolInternalInput,
   ): Promise<ExecuteServerToolInternalResult> {
-    const { toolCall } = input;
+    const { toolCall, options, allowedByType, sessionWorkspaceId, readOnly, hasContextType, isAllowedOrganizationId } = input;
+    // Verbatim alias for the caller-parsed `JSON.parse(toolCall.args || '{}')`
+    // payload — per-branch field access mirrors inline `args.X` reads.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const args = input.args as any;
+    let streamSeq = input.streamSeq;
+    let result: unknown;
     switch (toolCall.name) {
-      // BR14b Lot 21d-2 Group A-F per-tool case branches added by
+      // BR14b Lot 21d-2 Step 3 Group A — verbatim move of inline tool branches
+      // from `runAssistantGeneration` (read_initiative, update_initiative,
+      // organizations_list, organization_get, organization_update).
+      case 'read_initiative': {
+        if (!allowedByType.usecase.has(args.initiativeId)) {
+          throw new Error('Security: initiativeId does not match allowed contexts');
+        }
+        const readResult = await toolService.readInitiative(args.initiativeId, {
+          workspaceId: sessionWorkspaceId,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = readResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          // Normaliser pour l'UI: toujours fournir result.status
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(readResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'update_initiative': {
+        if (readOnly) {
+          throw new Error('Read-only workspace: initiative update is disabled');
+        }
+        if (!allowedByType.usecase.has(args.initiativeId)) {
+          throw new Error('Security: initiativeId does not match allowed contexts');
+        }
+        const updateResult = await toolService.updateInitiativeFields({
+          initiativeId: args.initiativeId,
+          updates: args.updates || [],
+          userId: options.userId,
+          sessionId: options.sessionId,
+          messageId: options.assistantMessageId,
+          toolCallId: toolCall.id,
+          locale: options.locale,
+          workspaceId: sessionWorkspaceId
+        });
+        result = updateResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          // Normaliser pour l'UI: toujours fournir result.status
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'organizations_list': {
+        if (!hasContextType('organization')) {
+          throw new Error('Security: organizations_list is only available in organization context');
+        }
+        const listResult = await toolService.listOrganizations({
+          workspaceId: sessionWorkspaceId,
+          idsOnly: !!args.idsOnly,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = listResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'organization_get': {
+        if (!args.organizationId || typeof args.organizationId !== 'string') {
+          throw new Error('Security: organizationId is required');
+        }
+        const allowed = await isAllowedOrganizationId(args.organizationId);
+        if (!allowed) {
+          throw new Error('Security: organizationId does not match allowed contexts');
+        }
+
+        const getResult = await toolService.getOrganization(args.organizationId, {
+          workspaceId: sessionWorkspaceId,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = getResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'organization_update': {
+        if (readOnly) throw new Error('Read-only workspace: organization_update is disabled');
+        if (!args.organizationId || typeof args.organizationId !== 'string') {
+          throw new Error('Security: organizationId is required');
+        }
+        const allowed = await isAllowedOrganizationId(args.organizationId);
+        if (!allowed) {
+          throw new Error('Security: organizationId does not match allowed contexts');
+        }
+        const updateResult = await toolService.updateOrganizationFields({
+          organizationId: args.organizationId,
+          updates: Array.isArray(args.updates) ? args.updates : [],
+          userId: options.userId,
+          sessionId: options.sessionId,
+          messageId: options.assistantMessageId,
+          toolCallId: toolCall.id,
+          locale: options.locale,
+          workspaceId: sessionWorkspaceId
+        });
+        result = updateResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      // BR14b Lot 21d-2 Groups B-F per-tool case branches added by
       // subsequent commits (verbatim move from the inline switch).
       default:
         throw new Error(`Unknown tool: ${toolCall.name}`);
     }
+    return { result, streamSeq };
   }
 
   /**
