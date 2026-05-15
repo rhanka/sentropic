@@ -835,6 +835,19 @@ export interface ExecuteServerToolInternalInput {
   };
   readonly allowedFolderIds: ReadonlySet<string>;
   readonly allowedCommentContextSet: ReadonlySet<string>;
+  // BR14b Lot 21d-2 Step 3 Group D — `allowedDocContexts` and
+  // `allowedCommentContexts` are `runAssistantGeneration` locals
+  // (lines ~2900-2907) consumed by the `documents` and
+  // `comment_assistant` branches. Added here so Group D migration
+  // can reference them verbatim without recomputing.
+  readonly allowedDocContexts: Array<{
+    contextType: 'organization' | 'folder' | 'initiative' | 'usecase' | 'chat_session';
+    contextId: string;
+  }>;
+  readonly allowedCommentContexts: Array<{
+    contextType: CommentContextType;
+    contextId: string;
+  }>;
   readonly primaryContextType: ChatContextType | null;
   readonly primaryContextId: string | null;
   readonly vscodeCodeAgentPayload: unknown;
@@ -3622,12 +3635,13 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           }
           let result: unknown;
 
-          // BR14b Lot 21d-2 Step 3 Groups A+B — delegate to `executeServerToolInternal`.
+          // BR14b Lot 21d-2 Step 3 Groups A+B+C+D — delegate to `executeServerToolInternal`.
           // Body verbatim-moved into the method's switch; this closure factory keeps
-          // the input bundle DRY across all Group A+B delegations (read_initiative,
+          // the input bundle DRY across all Group A-D delegations (read_initiative,
           // update_initiative, organizations_list, organization_get, organization_update,
           // folders_list, folder_get, folder_update, initiatives_list,
-          // executive_summary_get, executive_summary_update).
+          // executive_summary_get, executive_summary_update, matrix_get, matrix_update,
+          // plan, comment_assistant, web_search, web_extract, documents, history_analyze).
           const buildExecuteServerToolInput = (): ExecuteServerToolInternalInput => ({
             toolCall,
             args,
@@ -3654,6 +3668,8 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             allowedByType,
             allowedFolderIds,
             allowedCommentContextSet,
+            allowedCommentContexts,
+            allowedDocContexts,
             primaryContextType,
             primaryContextId,
             vscodeCodeAgentPayload,
@@ -3732,247 +3748,25 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             result = r.result;
             streamSeq = r.streamSeq;
           } else if (toolCall.name === 'comment_assistant') {
-            const mode = typeof args.mode === 'string' ? args.mode : '';
-            const contextType = typeof args.contextType === 'string' ? args.contextType : '';
-            const contextId = typeof args.contextId === 'string' ? args.contextId.trim() : '';
-            if (!isCommentContextType(contextType) || !contextId) {
-              throw new Error('comment_assistant: contextType and contextId are required');
-            }
-            const allowedContext =
-              allowedCommentContextSet.has(`${contextType}:${contextId}`) ||
-              ((contextType === 'matrix' || contextType === 'executive_summary')
-                && allowedCommentContextSet.has(`folder:${contextId}`));
-            if (!allowedContext) {
-              throw new Error('Security: comment context is not allowed');
-            }
-            const effectiveCommentContexts = allowedCommentContexts.some(
-              (c) => c.contextType === contextType && c.contextId === contextId
-            )
-              ? allowedCommentContexts
-              : [...allowedCommentContexts, { contextType, contextId }];
-
-            if (mode === 'suggest') {
-              const statusFilter = args.status === 'closed' ? 'closed' : 'open';
-              const list = await toolService.listCommentThreadsForContexts({
-                workspaceId: sessionWorkspaceId,
-                contexts: effectiveCommentContexts,
-                status: statusFilter,
-                sectionKey: typeof args.sectionKey === 'string' ? args.sectionKey : null,
-                threadId: typeof args.threadId === 'string' ? args.threadId : null,
-                limit: 200
-              });
-              const proposal = await generateCommentResolutionProposal({
-                threads: list.threads,
-                users: list.users,
-                contextLabel: `${contextType}:${contextId}`,
-                currentUserId: options.userId,
-                currentUserRole: currentUserRole ?? null,
-                maxActions: 5
-              });
-              result = { status: 'completed', proposal, threads: list.threads };
-            } else if (mode === 'resolve') {
-              if (!isExplicitConfirmation(lastUserMessage, args.confirmation)) {
-                throw new Error('Explicit user confirmation is required before resolving comments');
-              }
-              const actions = Array.isArray(args.actions) ? args.actions : [];
-              const applied = await toolService.resolveCommentActions({
-                workspaceId: sessionWorkspaceId,
-                userId: options.userId,
-                allowedContexts: effectiveCommentContexts,
-                actions,
-                toolCallId: toolCall.id
-              });
-              result = { status: 'completed', ...applied };
-            } else {
-              throw new Error(`comment_assistant: unknown mode ${mode}`);
-            }
-
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'web_search') {
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'executing' } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-            const searchResults = await searchWeb(args.query, options.signal);
-            result = { status: 'completed', results: searchResults };
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'web_extract') {
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'executing' } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-            const urls = Array.isArray(args.urls) ? args.urls : [args.url || args.urls].filter(Boolean);
-            if (!urls || urls.length === 0) {
-              throw new Error('web_extract: urls array must not be empty');
-            }
-            // IMPORTANT: Tavily extract supports arrays — do a single call for all URLs.
-            const extractResult = await extractUrlContent(urls, options.signal);
-            const resultsArray = Array.isArray(extractResult) ? extractResult : [extractResult];
-            result = { status: 'completed', results: resultsArray };
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'documents') {
-            // Security: documents tool must match the effective session context exactly.
-            const allowed = allowedDocContexts;
-            const isAllowed = allowed.some((c) => c.contextType === args.contextType && c.contextId === args.contextId);
-            if (!isAllowed) {
-              throw new Error('Security: context does not match session context');
-            }
-
-            const action = typeof args.action === 'string' ? args.action : '';
-            if (action === 'list') {
-              const list = await toolService.listContextDocuments({
-                workspaceId: sessionWorkspaceId,
-                contextType: args.contextType,
-                contextId: args.contextId,
-              });
-              result = { status: 'completed', ...list };
-            } else if (action === 'get_summary') {
-              const documentId = typeof args.documentId === 'string' ? args.documentId : '';
-              if (!documentId) throw new Error('documents.get_summary: documentId is required');
-              const summary = await toolService.getDocumentSummary({
-                workspaceId: sessionWorkspaceId,
-                contextType: args.contextType,
-                contextId: args.contextId,
-                documentId,
-              });
-              result = { status: 'completed', ...summary };
-            } else if (action === 'get_content') {
-              const documentId = typeof args.documentId === 'string' ? args.documentId : '';
-              if (!documentId) throw new Error('documents.get_content: documentId is required');
-              const maxChars = typeof args.maxChars === 'number' ? args.maxChars : undefined;
-              const content = await toolService.getDocumentContent({
-                workspaceId: sessionWorkspaceId,
-                contextType: args.contextType,
-                contextId: args.contextId,
-                documentId,
-                maxChars,
-                userId: options.userId,
-              });
-              result = { status: 'completed', ...content };
-            } else if (action === 'analyze') {
-              await writeStreamEvent(
-                options.assistantMessageId,
-                'tool_call_result',
-                { tool_call_id: toolCall.id, result: { status: 'executing' } },
-                streamSeq,
-                options.assistantMessageId
-              );
-              streamSeq += 1;
-              const documentId = typeof args.documentId === 'string' ? args.documentId : '';
-              if (!documentId) throw new Error('documents.analyze: documentId is required');
-              const prompt = typeof args.prompt === 'string' ? args.prompt : '';
-              if (!prompt.trim()) throw new Error('documents.analyze: prompt is required');
-              const maxWords = typeof args.maxWords === 'number' ? args.maxWords : undefined;
-              const analysis = await toolService.analyzeDocument({
-                workspaceId: sessionWorkspaceId,
-                contextType: args.contextType,
-                contextId: args.contextId,
-                documentId,
-                prompt,
-                maxWords,
-                userId: options.userId,
-                signal: options.signal
-              });
-              result = { status: 'completed', ...analysis };
-            } else {
-              throw new Error(`documents: unknown action ${action}`);
-            }
-
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'history_analyze') {
-            const question =
-              typeof args.question === 'string' ? args.question.trim() : '';
-            if (!question) {
-              throw new Error('history_analyze: question is required');
-            }
-            const fromMessageId =
-              typeof args.from_message_id === 'string'
-                ? args.from_message_id
-                : undefined;
-            const toMessageId =
-              typeof args.to_message_id === 'string'
-                ? args.to_message_id
-                : undefined;
-            const maxTurns =
-              typeof args.max_turns === 'number' ? args.max_turns : undefined;
-            const targetToolCallId =
-              typeof args.target_tool_call_id === 'string'
-                ? args.target_tool_call_id
-                : undefined;
-            const targetToolResultMessageId =
-              typeof args.target_tool_result_message_id === 'string'
-                ? args.target_tool_result_message_id
-                : undefined;
-            const includeToolResults =
-              typeof args.include_tool_results === 'boolean'
-                ? args.include_tool_results
-                : undefined;
-            const includeSystemMessages =
-              typeof args.include_system_messages === 'boolean'
-                ? args.include_system_messages
-                : undefined;
-            const maxWords =
-              typeof args.max_words === 'number' ? args.max_words : undefined;
-
-            const analysis = await toolService.analyzeHistory({
-              workspaceId: sessionWorkspaceId,
-              sessionId: options.sessionId,
-              question,
-              fromMessageId,
-              toMessageId,
-              maxTurns,
-              targetToolCallId,
-              targetToolResultMessageId,
-              includeToolResults,
-              includeSystemMessages,
-              maxWords,
-              signal: options.signal,
-            });
-            result = { status: 'completed', ...analysis };
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'solutions_list') {
             const listResult = await toolService.listSolutions({
               initiativeId: args.initiativeId,
@@ -4731,13 +4525,18 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       todoOperation,
       allowedByType,
       allowedFolderIds,
+      allowedCommentContextSet,
+      allowedCommentContexts,
+      allowedDocContexts,
       sessionWorkspaceId,
       readOnly,
       currentUserRole,
       enforceTodoUpdateMode,
       todoStructuralMutationIntent,
+      lastUserMessage,
       hasContextType,
       isAllowedOrganizationId,
+      isExplicitConfirmation,
       markTodoIterationState,
     } = input;
     // Verbatim alias for the caller-parsed `JSON.parse(toolCall.args || '{}')`
@@ -5307,7 +5106,262 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         }
         break;
       }
-      // BR14b Lot 21d-2 Groups D-F per-tool case branches added by
+      // BR14b Lot 21d-2 Step 3 Group D — verbatim move of inline tool branches
+      // from `runAssistantGeneration` (comment_assistant, web_search,
+      // web_extract, documents, history_analyze).
+      case 'comment_assistant': {
+        const mode = typeof args.mode === 'string' ? args.mode : '';
+        const contextType = typeof args.contextType === 'string' ? args.contextType : '';
+        const contextId = typeof args.contextId === 'string' ? args.contextId.trim() : '';
+        if (!isCommentContextType(contextType) || !contextId) {
+          throw new Error('comment_assistant: contextType and contextId are required');
+        }
+        const allowedContext =
+          allowedCommentContextSet.has(`${contextType}:${contextId}`) ||
+          ((contextType === 'matrix' || contextType === 'executive_summary')
+            && allowedCommentContextSet.has(`folder:${contextId}`));
+        if (!allowedContext) {
+          throw new Error('Security: comment context is not allowed');
+        }
+        const effectiveCommentContexts = allowedCommentContexts.some(
+          (c) => c.contextType === contextType && c.contextId === contextId
+        )
+          ? allowedCommentContexts
+          : [...allowedCommentContexts, { contextType, contextId }];
+
+        if (mode === 'suggest') {
+          const statusFilter = args.status === 'closed' ? 'closed' : 'open';
+          const list = await toolService.listCommentThreadsForContexts({
+            workspaceId: sessionWorkspaceId,
+            contexts: effectiveCommentContexts,
+            status: statusFilter,
+            sectionKey: typeof args.sectionKey === 'string' ? args.sectionKey : null,
+            threadId: typeof args.threadId === 'string' ? args.threadId : null,
+            limit: 200
+          });
+          const proposal = await generateCommentResolutionProposal({
+            threads: list.threads,
+            users: list.users,
+            contextLabel: `${contextType}:${contextId}`,
+            currentUserId: options.userId,
+            currentUserRole: currentUserRole ?? null,
+            maxActions: 5
+          });
+          result = { status: 'completed', proposal, threads: list.threads };
+        } else if (mode === 'resolve') {
+          if (!isExplicitConfirmation(lastUserMessage, args.confirmation)) {
+            throw new Error('Explicit user confirmation is required before resolving comments');
+          }
+          const actions = Array.isArray(args.actions) ? args.actions : [];
+          const applied = await toolService.resolveCommentActions({
+            workspaceId: sessionWorkspaceId,
+            userId: options.userId,
+            allowedContexts: effectiveCommentContexts,
+            actions,
+            toolCallId: toolCall.id
+          });
+          result = { status: 'completed', ...applied };
+        } else {
+          throw new Error(`comment_assistant: unknown mode ${mode}`);
+        }
+
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'web_search': {
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'executing' } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        const searchResults = await searchWeb(args.query, options.signal);
+        result = { status: 'completed', results: searchResults };
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'web_extract': {
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'executing' } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        const urls = Array.isArray(args.urls) ? args.urls : [args.url || args.urls].filter(Boolean);
+        if (!urls || urls.length === 0) {
+          throw new Error('web_extract: urls array must not be empty');
+        }
+        // IMPORTANT: Tavily extract supports arrays — do a single call for all URLs.
+        const extractResult = await extractUrlContent(urls, options.signal);
+        const resultsArray = Array.isArray(extractResult) ? extractResult : [extractResult];
+        result = { status: 'completed', results: resultsArray };
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'documents': {
+        // Security: documents tool must match the effective session context exactly.
+        const allowed = allowedDocContexts;
+        const isAllowed = allowed.some((c) => c.contextType === args.contextType && c.contextId === args.contextId);
+        if (!isAllowed) {
+          throw new Error('Security: context does not match session context');
+        }
+
+        const action = typeof args.action === 'string' ? args.action : '';
+        if (action === 'list') {
+          const list = await toolService.listContextDocuments({
+            workspaceId: sessionWorkspaceId,
+            contextType: args.contextType,
+            contextId: args.contextId,
+          });
+          result = { status: 'completed', ...list };
+        } else if (action === 'get_summary') {
+          const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+          if (!documentId) throw new Error('documents.get_summary: documentId is required');
+          const summary = await toolService.getDocumentSummary({
+            workspaceId: sessionWorkspaceId,
+            contextType: args.contextType,
+            contextId: args.contextId,
+            documentId,
+          });
+          result = { status: 'completed', ...summary };
+        } else if (action === 'get_content') {
+          const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+          if (!documentId) throw new Error('documents.get_content: documentId is required');
+          const maxChars = typeof args.maxChars === 'number' ? args.maxChars : undefined;
+          const content = await toolService.getDocumentContent({
+            workspaceId: sessionWorkspaceId,
+            contextType: args.contextType,
+            contextId: args.contextId,
+            documentId,
+            maxChars,
+            userId: options.userId,
+          });
+          result = { status: 'completed', ...content };
+        } else if (action === 'analyze') {
+          await writeStreamEvent(
+            options.assistantMessageId,
+            'tool_call_result',
+            { tool_call_id: toolCall.id, result: { status: 'executing' } },
+            streamSeq,
+            options.assistantMessageId
+          );
+          streamSeq += 1;
+          const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+          if (!documentId) throw new Error('documents.analyze: documentId is required');
+          const prompt = typeof args.prompt === 'string' ? args.prompt : '';
+          if (!prompt.trim()) throw new Error('documents.analyze: prompt is required');
+          const maxWords = typeof args.maxWords === 'number' ? args.maxWords : undefined;
+          const analysis = await toolService.analyzeDocument({
+            workspaceId: sessionWorkspaceId,
+            contextType: args.contextType,
+            contextId: args.contextId,
+            documentId,
+            prompt,
+            maxWords,
+            userId: options.userId,
+            signal: options.signal
+          });
+          result = { status: 'completed', ...analysis };
+        } else {
+          throw new Error(`documents: unknown action ${action}`);
+        }
+
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'history_analyze': {
+        const question =
+          typeof args.question === 'string' ? args.question.trim() : '';
+        if (!question) {
+          throw new Error('history_analyze: question is required');
+        }
+        const fromMessageId =
+          typeof args.from_message_id === 'string'
+            ? args.from_message_id
+            : undefined;
+        const toMessageId =
+          typeof args.to_message_id === 'string'
+            ? args.to_message_id
+            : undefined;
+        const maxTurns =
+          typeof args.max_turns === 'number' ? args.max_turns : undefined;
+        const targetToolCallId =
+          typeof args.target_tool_call_id === 'string'
+            ? args.target_tool_call_id
+            : undefined;
+        const targetToolResultMessageId =
+          typeof args.target_tool_result_message_id === 'string'
+            ? args.target_tool_result_message_id
+            : undefined;
+        const includeToolResults =
+          typeof args.include_tool_results === 'boolean'
+            ? args.include_tool_results
+            : undefined;
+        const includeSystemMessages =
+          typeof args.include_system_messages === 'boolean'
+            ? args.include_system_messages
+            : undefined;
+        const maxWords =
+          typeof args.max_words === 'number' ? args.max_words : undefined;
+
+        const analysis = await toolService.analyzeHistory({
+          workspaceId: sessionWorkspaceId,
+          sessionId: options.sessionId,
+          question,
+          fromMessageId,
+          toMessageId,
+          maxTurns,
+          targetToolCallId,
+          targetToolResultMessageId,
+          includeToolResults,
+          includeSystemMessages,
+          maxWords,
+          signal: options.signal,
+        });
+        result = { status: 'completed', ...analysis };
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      // BR14b Lot 21d-2 Groups E-F per-tool case branches added by
       // subsequent commits (verbatim move from the inline switch).
       default:
         throw new Error(`Unknown tool: ${toolCall.name}`);
