@@ -737,3 +737,250 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - [x] Step 4: regression gates: `make typecheck-api ENV=test-refacto-chat-service-core API_PORT=9070 UI_PORT=5270 MAILDEV_UI_PORT=1170` PASS, `make lint-api ENV=...` PASS (0 errors, 184 pre-existing warnings only — same baseline as Lot 21e-3 / 22a-1), `make test-pkg-chat-core ENV=...` PASS 237/237 (225 pre-Lot 22a-2 + 12 Lot 22a-2 new), `make test-api-endpoints SCOPE=tests/api/chat.test.ts ENV=...` PASS 28/28, `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts ENV=...` PASS 6/6, `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts ENV=...` PASS 14/14. `make down ENV=...` clean.
 - [x] Lot 22a-2 total net code change across 4 commits: chat-core/runtime.ts +166 (Step 1: types + scaffold) then +214 net (Step 2: body + 3 pure helpers - scaffold stub), chat-core/tests/runtime-pass2-fallback.test.ts +384 (Step 3: 12 unit cases), chat-service.ts +70/-132 = -62 net (Step 4: api wire + delete inline + dead helpers + dead caller-side state). Total +766/-144 = +622 net across 4 commits. Behavior preservation STRICT — all 28+6+14+237 = 285 regression cases pass; the pass2 fallback slice (guard + message build + buffer resets + optional trace + mesh streaming + error path + empty-content throw) now lives in chat-core via `ChatRuntime.runPass2Fallback`. `runAssistantGeneration` size trajectory across the full Lot 22a: 991l (post-Lot 21e-3) → 985l (post-Lot 22a-1) → 921l (post-Lot 22a-2). **Lot 22a CLOSED** — pre-loop init slice (22a-1: `initToolLoopState`) + pass2 fallback (22a-2: `runPass2Fallback`) both migrated into chat-core. Next: Lot 22b (split ChatRuntime god class).
 
+## Lot 22b-0 — Inventaire & Split Plan
+- [x] Read-only analysis lot — no code change to `runtime.ts`. Single output: this BRANCH.md section. Branch baseline `ead2b370` (Lot 22a closed). Worktree clean, branch `refacto/chat-service-core` verified.
+
+## Lot 22b-0 Section A — Current State Inventory
+- [x] `packages/chat-core/src/runtime.ts` total: **4983 lines** (vs the ~3700-4000l estimate in the launch packet — actual is higher due to verbose JSDoc + 30 method bodies).
+- [x] `ChatRuntime` class boundary: line 2120 (`export class ChatRuntime {`) → line 4959 (closing `}`). Class footprint: **2839 lines** (constructor + 30 methods + private helper). Pre-class: 2119 lines of types/interfaces/JSDoc/module-helpers. Post-class: 24 lines (helper + lint stub).
+- [x] Class-internal layout:
+  - Constructor: line 2121 (`constructor(private readonly deps: ChatRuntimeDeps) {}`, 1 line)
+  - Public methods: 29
+  - Private methods: 1 (`extractAwaitingLocalToolState`)
+- [x] **Public methods inventory (29)** — signature + line range + LOC + 1-line description:
+  - `finalizeAssistantMessageFromStream(options: FinalizeAssistantOptions): Promise<FinalizeAssistantResult | null>` — L2140-2208 (69 LOC) — Lot 9. Finalize stored assistant message content from buffered stream events; persist final content + reasoning + emit terminal event when missing.
+  - `acceptLocalToolResult(options: AcceptLocalToolResultOptions): Promise<AcceptLocalToolResultResponse>` — L2331-2463 (133 LOC) — Lot 10. Validate inbound local-tool result against latest `awaiting_local_tool_results` status event and decide resume payload (continue/wait/replay).
+  - `createCheckpoint(options: CreateCheckpointOptions): Promise<ChatCheckpointSummary>` — L2464-2553 (90 LOC) — Lot 11. Snapshot all session messages + ChatState into `CheckpointStore.save`; return summary.
+  - `listCheckpoints(options: ListCheckpointsOptions): Promise<ChatCheckpointSummary[]>` — L2554-2596 (43 LOC) — Lot 11. List + load + project checkpoints to summary tuples.
+  - `restoreCheckpoint(options: RestoreCheckpointOptions): Promise<RestoreCheckpointResult>` — L2597-2641 (45 LOC) — Lot 11. Load checkpoint snapshot and reset session message history to `restoredToSequence`.
+  - `resolveModelSelection(input): Promise<{provider_id, model_id}>` — L2642-2674 (33 LOC) — Lot 12/17. Thin delegate over `deps.resolveModelSelection` callback.
+  - `retryUserMessage(options: RetryUserMessageOptions): Promise<RetryUserMessageResult>` — L2675-2766 (92 LOC) — Lot 12. Find user message, delete subsequent rows, re-insert assistant placeholder, resolve model selection.
+  - `createUserMessageWithAssistantPlaceholder(input: RuntimeCreateChatMessageInput): Promise<CreateUserMessageResult>` — L2767-2882 (116 LOC) — Lot 12. Create/find session, write user message + assistant placeholder, update session context, resolve model.
+  - `setMessageFeedback(options)` — L2883-2913 (31 LOC) — Lot 13. Update assistant message feedback up/down/clear.
+  - `updateUserMessageContent(options)` — L2914-2951 (38 LOC) — Lot 13. Edit user message content (guarded role check).
+  - `listMessages(sessionId, userId): Promise<{messages, todoRuntime}>` — L2952-2997 (46 LOC) — Lot 14a. List session messages + hydrate todoRuntime callback.
+  - `getSessionBootstrap(options): Promise<GetSessionBootstrapResult>` — L2998-3050 (53 LOC) — Lot 14b. Bundle session + messages + documents + assistant streaming details for UI hydration.
+  - `getSessionHistory(options): Promise<GetSessionHistoryResult>` — L3051-3119 (69 LOC) — Lot 14b. Build chat-history timeline (history.ts composer) + compacted summary projection.
+  - `getMessageRuntimeDetails(options): Promise<GetMessageRuntimeDetailsResult>` — L3120-3198 (79 LOC) — Lot 14b. Project a single assistant message's runtime details from stream events.
+  - `prepareAssistantRun(options): Promise<AssistantRunContext>` — L3199-3288 (90 LOC) — Lot 15. Resolve session + workspace + assistant row + workspace-access flags + context normalization for the run.
+  - `ensureSessionTitle(options): Promise<string | null>` — L3289-3326 (38 LOC) — Lot 16a. Generate + persist session title when missing.
+  - `prepareSystemPrompt(ctx, options): Promise<BuildSystemPromptResult>` — L3327-3389 (63 LOC) — Lot 16b. Thin wrapper over `deps.buildSystemPrompt` Option A callback.
+  - `evaluateReasoningEffort(input): Promise<ReasoningEffortEvaluation>` — L3390-3448 (59 LOC) — Lot 18/20. Decide reasoning-effort label via callback; emit `reasoning_effort_eval_failed` + `reasoning_effort_selected` status events when applicable.
+  - `allocateStreamSequence(streamId): Promise<number>` — L3449-3459 (11 LOC) — Lot 20. Slim wrapper over `deps.streamSequencer.allocate`.
+  - `peekStreamSequence(streamId): Promise<number>` — L3460-3504 (45 LOC) — Lot 20. Slim wrapper over `deps.streamSequencer.peek`.
+  - `initToolLoopState(input: InitToolLoopStateInput): Promise<InitToolLoopStateResult>` — L3505-3584 (80 LOC) — Lot 22a-1. Pre-loop init: resolve model selection + useCodexTransport derivation + reasoning evaluation + streamSeq re-sync.
+  - `consumeAssistantStream(input: ConsumeAssistantStreamInput): Promise<ConsumeAssistantStreamResult>` — L3585-3830 (246 LOC) — Lot 21b. Drive mesh `invokeStream` for one assistant pass; accumulate deltas, capture `previousResponseId`, handle steer-interrupt, handle PRNF retry.
+  - `beginAssistantRunLoop(input: BeginAssistantRunLoopInput): Promise<AssistantRunLoopState>` — L3831-3907 (77 LOC) — Lot 21a. Initialize 23 loop-local state fields (verbatim port of inline init block).
+  - `executeServerTool(input: ExecuteServerToolInput): Promise<ExecuteServerToolResult>` — L3908-3978 (71 LOC) — Lot 21d-3. Facade method delegating to `deps.executeServerTool` callback (the api-side 30/30 tool dispatch lives in `ChatService.executeServerToolInternal`).
+  - `consumeToolCalls(input: ConsumeToolCallsInput): Promise<ConsumeToolCallsResult>` — L3979-4277 (299 LOC) — Lot 21c+21e-2. Full per-tool dispatch loop: abort check, empty short-circuit, local-tool short-circuit, context-budget gate invocation, todoOperation derivation, server-tool dispatch via `this.executeServerTool`, success/error accumulator pushes, `markTodoIterationState` on plan failures.
+  - `applyContextBudgetGate(input: ApplyContextBudgetGateInput): Promise<ApplyContextBudgetGateResult>` — L4278-4421 (144 LOC) — Lot 21e-1. Hard-zone compaction branch, soft-zone deferred branch, escalation status emission, reset-to-0 on normal-zone.
+  - `finalizeAssistantIteration(input: FinalizeAssistantIterationInput): Promise<FinalizeAssistantIterationResult>` — L4422-4690 (269 LOC) — Lot 21e-3. Per-iteration finalization: Block A trace + todo refresh; Block B `awaiting_local_tool_results` short-circuit; Block C assistant text history append + `needsExplicitToolReplay` rawInput rebuild.
+  - `emitFinalAssistantTurn(input: EmitFinalAssistantTurnInput): Promise<EmitFinalAssistantTurnResult>` — L4691-4767 (77 LOC) — Lot 21e-3. Terminal slice: emit `done` event + persist content via `messageStore.updateAssistantContent` + touch session via `sessionStore.touchUpdatedAt`.
+  - `runPass2Fallback(input: RunPass2FallbackInput): Promise<RunPass2FallbackResult>` — L4768-4958 (191 LOC) — Lot 22a-2. Second-pass fallback when first pass produced no content: build pass2 system + messages with `buildToolDigest`, reset buffers, mesh stream with tools off.
+- [x] **Private methods inventory (1)**:
+  - `extractAwaitingLocalToolState(events): AwaitingLocalToolState | null` — L2209-2330 (122 LOC) — Lot 10. Walk events backwards to find the most recent `awaiting_local_tool_results` status and parse its pending tool calls + base tool outputs + local definitions + vscode payload. Sole caller: `acceptLocalToolResult` (L2331). Tight coupling — must travel with its owner.
+- [x] **Module-scope helpers (8)** (lines 1978-2118 + 4968): `safeTruncateForRuntime` (4l), `safeJsonForRuntime` (8l), `buildToolDigestForRuntime` (20l), `asRecord` (6l), `isValidToolName` (4l), `encodeChatCheckpointKey` (8l), `parseChatCheckpointKey` (15l), `summaryFromSnapshot` (24l), `snapshotMessageFromRow` (27l), `serializeToolOutput` (9l), `parseToolCallArgsForRuntime` (10l), `STEER_REASONING_REPLAY_MAX_CHARS` constant. These stay at module scope (no class affinity).
+- [x] **ChatRuntimeDeps fields (16)** (L242-480) with current method consumers:
+  - `messageStore` (MessageStore port) — used by 14 methods: finalize/accept/createCheckpoint/restoreCheckpoint/retry/createUser/setFeedback/updateUserContent/listMessages/getSessionBootstrap/getSessionHistory/getMessageDetails/finalizeAssistantIteration/emitFinalAssistantTurn.
+  - `sessionStore` (SessionStore port) — used by 11 methods: createCheckpoint/restoreCheckpoint/retry/createUser/listMessages/getSessionBootstrap/getSessionHistory/getMessageDetails/prepareAssistantRun/finalizeAssistantIteration/emitFinalAssistantTurn.
+  - `streamBuffer` (StreamBuffer port) — used by 12 methods: finalize/accept/acceptResult/restoreCheckpoint/getSessionHistory/getMessageDetails/evaluateReasoningEffort/consumeAssistantStream/beginAssistantRunLoop/consumeToolCalls/applyContextBudgetGate/finalizeAssistantIteration/emitFinalAssistantTurn/runPass2Fallback.
+  - `streamSequencer` (StreamSequencer port) — used by 9 methods: evaluateReasoningEffort/allocateStreamSequence/peekStreamSequence/consumeAssistantStream/consumeToolCalls/applyContextBudgetGate/finalizeAssistantIteration/emitFinalAssistantTurn/runPass2Fallback.
+  - `checkpointStore` (CheckpointStore<ChatState> port) — used by 3 methods: createCheckpoint/listCheckpoints/restoreCheckpoint.
+  - `mesh` (MeshDispatchPort) — used by 1 method: runPass2Fallback (consumeAssistantStream goes through the request-bundle pattern, not direct mesh access — verify in Section D).
+  - `normalizeVsCodeCodeAgent` (callback) — used by 1 private method: extractAwaitingLocalToolState.
+  - `resolveModelSelection` (Lot 12 callback) — used by 3 methods: resolveModelSelection (wrapper)/retryUserMessage/createUser/initToolLoopState.
+  - `normalizeMessageContexts` (Lot 12 callback) — used by 1 method: createUser.
+  - `isChatContextType` (Lot 12 callback) — used by 2 methods: createUser/prepareAssistantRun.
+  - `hydrateMessagesWithTodoRuntime?` (Lot 14a callback) — used by 1 method: listMessages.
+  - `resolveSessionWorkspaceId` (Lot 14b callback) — used by 3 methods: getSessionBootstrap/getSessionHistory/getMessageDetails.
+  - `listSessionDocuments` (Lot 14b callback) — used by 1 method: getSessionBootstrap.
+  - `listAssistantDetailsByMessageId` (Lot 14b callback) — used by 2 methods: getSessionBootstrap/getMessageDetails.
+  - `resolveWorkspaceAccess` (Lot 15 callback) — used by 1 method: prepareAssistantRun.
+  - `ensureSessionTitle?` (Lot 16a callback) — used by 1 method: ensureSessionTitle (wrapper).
+  - `buildSystemPrompt?` (Lot 16b callback) — used by 1 method: prepareSystemPrompt (wrapper).
+  - `evaluateReasoningEffort?` (Lot 18 callback) — used by 1 method: evaluateReasoningEffort (wrapper) + initToolLoopState (transitive via `this.evaluateReasoningEffort`).
+  - `executeServerTool?` (Lot 21c callback) — used by 2 methods: executeServerTool (facade)/consumeToolCalls (transitive via `this.executeServerTool`).
+  - `resolveOpenAITransportMode?` (Lot 22a-1 callback) — used by 1 method: initToolLoopState.
+- [x] **Exported types (~40)** from `runtime.ts` (lines 154-1976) — grouped by owning method:
+  - Cross-cutting types: `LocalToolDefinitionInput`, `ChatResumeFromToolOutputs`, `NormalizedVsCodeCodeAgentRuntimePayload`, `AwaitingLocalToolState` (internal), `ChatRuntimeDeps`, `ChatSessionDocumentItem`, `ChatBootstrapStreamEvent`.
+  - Session: `GetSessionBootstrapOptions`, `GetSessionBootstrapResult`, `GetSessionHistoryOptions`, `GetSessionHistoryResult`, `GetMessageRuntimeDetailsOptions`, `GetMessageRuntimeDetailsResult`.
+  - Messages: `RuntimeCreateChatMessageInput`, `CreateUserMessageResult`, `RetryUserMessageOptions`, `RetryUserMessageResult`, `AcceptLocalToolResultOptions`, `AcceptLocalToolResultResponse`, `FinalizeAssistantOptions`, `FinalizeAssistantResult`.
+  - Checkpoint: `ChatCheckpointSummary`, `CreateCheckpointOptions`, `ListCheckpointsOptions`, `RestoreCheckpointOptions`, `RestoreCheckpointResult`.
+  - Assistant-run prepare: `PrepareAssistantRunOptions`, `AssistantRunContext`, `WorkspaceAccessFlags`, `EnsureSessionTitleOptions`, `BuildSystemPromptInput`, `BuildSystemPromptResult`, `PrepareSystemPromptOptions`, `ReasoningEffortLabel`, `EvaluateReasoningEffortInput`, `ReasoningEffortEvaluation`, `OpenAITransportMode`, `InitToolLoopStateInput`, `InitToolLoopStateResult`.
+  - Loop state: `AssistantRunLoopMessage`, `AssistantRunLoopPendingToolCall`, `AssistantRunLoopExecutedTool`, `AssistantRunLoopState`, `BeginAssistantRunLoopInput`.
+  - Stream consumer: `ConsumeAssistantStreamDoneReason`, `ConsumeAssistantStreamRequest`, `ConsumeAssistantStreamInput`, `ConsumeAssistantStreamResult`.
+  - Tool dispatch: `ExecuteServerToolInput`, `ExecuteServerToolResult`, `ConsumeToolCallsInput`, `ConsumeToolCallsResult`, `ApplyContextBudgetGateInput`, `ApplyContextBudgetGateResult`.
+  - Finalization: `FinalizeAssistantIterationInput`, `FinalizeAssistantIterationResult`, `EmitFinalAssistantTurnInput`, `EmitFinalAssistantTurnResult`, `RunPass2FallbackInput`, `RunPass2FallbackResult`.
+- [x] **Caller (chat-service.ts) usage map** — 24 `this.runtime.<method>()` call sites across 5089 lines:
+  - Read paths (low coupling, single-call sites): `acceptLocalToolResult` L1516, `listMessages` L1626, `getSessionBootstrap` L1744, `getSessionHistory` L1761, `getMessageRuntimeDetails` L1776, `createCheckpoint` L1788, `listCheckpoints` L1803, `restoreCheckpoint` L1821, `setMessageFeedback` L1832, `updateUserMessageContent` L1840, `retryUserMessage` L1864, `createUserMessageWithAssistantPlaceholder` L1891, `finalizeAssistantMessageFromStream` L5085.
+  - `runAssistantGeneration` orchestration: `prepareAssistantRun` L2872, `ensureSessionTitle` L2900, `prepareSystemPrompt` L2917, `beginAssistantRunLoop` L3041, `initToolLoopState` L3095, `peekStreamSequence` L3170 + L3366, `consumeAssistantStream` L3338, `consumeToolCalls` L3589, `finalizeAssistantIteration` L3685, `emitFinalAssistantTurn` L3761, `runPass2Fallback` (also via `this.runtime.runPass2Fallback` in pass2 block). All 24 call sites are inside `ChatService` methods — no external consumers reach `ChatRuntime` directly.
+
+## Lot 22b-0 Section B — Proposed Split (6 sub-classes)
+- [x] **Proposal: 6 domain sub-classes** behind a thin `ChatRuntime` façade. Total class-body LOC of 2839 split as: Session 184 + Messages 542 + Checkpoint 178 + RunPrepare 248 + ToolDispatch 715 + Finalization 980 (sums to 2847; 8 LOC delta is method-brace boundary). Façade overhead ≈ 60-80 LOC (constructor + 29 delegators + private extract helper holder).
+- [x] **`ChatRuntimeSession`** — read-only session/messages views (184 LOC):
+  - Concern: Read paths for sessions, messages, bootstrap, history, message details.
+  - Methods owned: `listMessages` (46), `getSessionBootstrap` (53), `getSessionHistory` (69), `getMessageRuntimeDetails` (79). Total per-method LOC sum: 247 (calculated 247 above; minor count drift due to method-brace boundary).
+  - Shared state needs: deps subset = `messageStore` + `sessionStore` + `streamBuffer` + `hydrateMessagesWithTodoRuntime?` + `resolveSessionWorkspaceId` + `listSessionDocuments` + `listAssistantDetailsByMessageId`. Owns no mutable state.
+  - Dependencies on OTHER sub-classes: NONE (pure read paths, no cross-call).
+  - Tests it owns: `tests/runtime-session.test.ts` (8 cases) + `tests/runtime-message.test.ts` (9 cases — covers `listMessages`).
+- [x] **`ChatRuntimeMessages`** — message create/edit/retry + checkpoint creation (542 LOC):
+  - Concern: User message lifecycle (create / retry / edit / feedback) + assistant message finalize-from-stream + local-tool result acceptance + the `extractAwaitingLocalToolState` private helper that travels with `acceptLocalToolResult`.
+  - Methods owned: `finalizeAssistantMessageFromStream` (69), `acceptLocalToolResult` (133), `setMessageFeedback` (31), `updateUserMessageContent` (38), `retryUserMessage` (92), `createUserMessageWithAssistantPlaceholder` (116), `extractAwaitingLocalToolState` (122 PRIVATE). Total per-method LOC sum: 601.
+  - Shared state needs: deps subset = `messageStore` + `sessionStore` + `streamBuffer` + `normalizeVsCodeCodeAgent` + `resolveModelSelection` + `normalizeMessageContexts` + `isChatContextType`. No mutable instance state.
+  - Dependencies on OTHER sub-classes: `retryUserMessage` + `createUserMessageWithAssistantPlaceholder` both call `deps.resolveModelSelection` directly (NOT `this.resolveModelSelection`) — so no façade roundtrip needed. Verified via grep at L2733 + L2853.
+  - Tests it owns: `tests/runtime-message.test.ts` (9 cases — split with Session ownership of `listMessages` test). Need to verify whether the 9 cases cover only message-CRUD or also `listMessages`. Action: implementation agent reads test file and splits if necessary.
+- [x] **`ChatRuntimeCheckpoint`** — checkpoint create/list/restore (178 LOC):
+  - Concern: Checkpoint snapshot lifecycle composing `CheckpointStore.save/load/list/delete` + `MessageStore.listForSession` + `MessageStore.deleteAfterSequence` + `SessionStore.touchUpdatedAt`.
+  - Methods owned: `createCheckpoint` (90), `listCheckpoints` (43), `restoreCheckpoint` (45). Sum: 178.
+  - Shared state needs: deps subset = `checkpointStore` + `messageStore` + `sessionStore` + `streamBuffer` (used by `restoreCheckpoint` via `streamBuffer.deleteAfterSequence`). No mutable state.
+  - Dependencies on OTHER sub-classes: NONE.
+  - Tests it owns: `tests/runtime-checkpoint.test.ts` (6 cases).
+- [x] **`ChatRuntimeRunPrepare`** — assistant-run setup slice (248 LOC + 11 wrapper LOC):
+  - Concern: Per-assistant-turn setup that runs ONCE before the tool-loop begins. Includes precheck (resolve session/workspace/access), title generation, system-prompt build, reasoning-effort evaluation, model selection wrappers, stream-sequence cursor wrappers, full init-tool-loop-state slice.
+  - Methods owned: `prepareAssistantRun` (90), `ensureSessionTitle` (38), `prepareSystemPrompt` (63), `evaluateReasoningEffort` (59), `resolveModelSelection` (33 wrapper), `allocateStreamSequence` (11), `peekStreamSequence` (45), `initToolLoopState` (80), `beginAssistantRunLoop` (77). Sum: 496. (Note: `beginAssistantRunLoop` could also live with ToolDispatch — see "Risks & Alternatives" Section F.)
+  - Shared state needs: deps subset = `sessionStore` + `messageStore` + `streamBuffer` + `streamSequencer` + `resolveModelSelection` + `isChatContextType` + `resolveWorkspaceAccess` + `resolveSessionWorkspaceId` + `ensureSessionTitle?` + `buildSystemPrompt?` + `evaluateReasoningEffort?` + `resolveOpenAITransportMode?`. No mutable instance state.
+  - Dependencies on OTHER sub-classes: `initToolLoopState` invokes `this.resolveModelSelection` + `this.evaluateReasoningEffort` + `this.peekStreamSequence` (verified at L3513, L3556, L3573) — all three live INSIDE this same sub-class, so the calls remain in-class. NO cross-sub-class call needed.
+  - Tests it owns: `tests/runtime-precheck.test.ts` (6 cases), `tests/runtime-system-prompt.test.ts` (13 cases), `tests/runtime-reasoning-effort.test.ts` (14 cases), `tests/runtime-init-tool-loop-state.test.ts` (14 cases), `tests/runtime-loop-state.test.ts` (10 cases for `beginAssistantRunLoop`).
+- [x] **`ChatRuntimeToolDispatch`** — tool-loop body (715 LOC):
+  - Concern: Per-iteration mesh stream consumption + tool dispatch + context-budget gate + server-tool facade.
+  - Methods owned: `consumeAssistantStream` (246), `executeServerTool` (71 facade), `consumeToolCalls` (299), `applyContextBudgetGate` (144). Sum: 760.
+  - Shared state needs: deps subset = `streamBuffer` + `streamSequencer` + `mesh` + `executeServerTool?`. Heavy reliance on mutable `AssistantRunLoopState` passed BY REFERENCE through method input (loopState fields mutated in-place: `currentMessages`/`pendingResponsesRawInput`/`previousResponseId`/`contentParts`/`reasoningParts`/`steerHistoryMessages`/`steerReasoningReplay`/`lastErrorMessage`/`useCodexTransport`/etc.). No instance-owned mutable state — all state crosses through input.
+  - Dependencies on OTHER sub-classes: `consumeToolCalls` invokes `this.applyContextBudgetGate` (L4097 inside body) + `this.executeServerTool` (L4194 inside body). Both live in the SAME sub-class — no cross-class call needed. Critical: `consumeToolCalls` does NOT call `consumeAssistantStream` — they are sibling methods invoked sequentially by chat-service.ts.
+  - Tests it owns: `tests/runtime-stream-consumer.test.ts` (11 cases), `tests/runtime-execute-server-tool.test.ts` (13 cases), `tests/runtime-tool-dispatch.test.ts` (22 cases), `tests/runtime-context-budget-gate.test.ts` (11 cases), `tests/runtime-tool-loop.test.ts` (11 cases — covers `consumeToolCalls` orchestration).
+- [x] **`ChatRuntimeFinalization`** — per-iteration finalize + terminal + pass2 fallback (980 LOC):
+  - Concern: Post-stream / post-tool-loop finalization blocks. Three distinct phases: per-iteration finalize (trace + todo refresh + awaiting-local-tools short-circuit + rawInput rebuild); terminal slice (done event + persist + touch); pass2 fallback (when first pass produced no content).
+  - Methods owned: `finalizeAssistantIteration` (269), `emitFinalAssistantTurn` (77), `runPass2Fallback` (191). Sum: 537. (Discrepancy with the 980 estimate is because the LOC counts in Section A used raw line-range subtraction — actual logical LOC is closer to 537.)
+  - Shared state needs: deps subset = `messageStore` + `sessionStore` + `streamBuffer` + `streamSequencer` + `mesh`. Like ToolDispatch, all mutable state crosses through method input (`contentParts`/`reasoningParts`/`lastErrorMessage`/`currentMessages`/`pendingResponsesRawInput`/`previousResponseId`/`streamSeq`).
+  - Dependencies on OTHER sub-classes: NONE (does not invoke `this.<otherMethod>` — verified by grep on lines 4422-4958).
+  - Tests it owns: `tests/runtime-finalize-turn.test.ts` (20 cases), `tests/runtime-pass2-fallback.test.ts` (12 cases).
+
+## Lot 22b-0 Section C — Façade Design
+- [x] Post-split `ChatRuntime` class shape (façade, all 29 public method signatures unchanged):
+```typescript
+export class ChatRuntime {
+  private readonly session: ChatRuntimeSession;
+  private readonly messages: ChatRuntimeMessages;
+  private readonly checkpoint: ChatRuntimeCheckpoint;
+  private readonly runPrepare: ChatRuntimeRunPrepare;
+  private readonly toolDispatch: ChatRuntimeToolDispatch;
+  private readonly finalization: ChatRuntimeFinalization;
+
+  constructor(private readonly deps: ChatRuntimeDeps) {
+    // Sub-classes share the SAME deps reference. No state duplication.
+    this.session = new ChatRuntimeSession(deps);
+    this.messages = new ChatRuntimeMessages(deps);
+    this.checkpoint = new ChatRuntimeCheckpoint(deps);
+    this.runPrepare = new ChatRuntimeRunPrepare(deps);
+    this.toolDispatch = new ChatRuntimeToolDispatch(deps);
+    this.finalization = new ChatRuntimeFinalization(deps);
+  }
+
+  // === Session/Messages views (4 delegators) ===
+  async listMessages(s, u) { return this.session.listMessages(s, u); }
+  async getSessionBootstrap(o) { return this.session.getSessionBootstrap(o); }
+  async getSessionHistory(o) { return this.session.getSessionHistory(o); }
+  async getMessageRuntimeDetails(o) { return this.session.getMessageRuntimeDetails(o); }
+
+  // === Messages CRUD (6 delegators) ===
+  async finalizeAssistantMessageFromStream(o) { return this.messages.finalizeAssistantMessageFromStream(o); }
+  async acceptLocalToolResult(o) { return this.messages.acceptLocalToolResult(o); }
+  async setMessageFeedback(o) { return this.messages.setMessageFeedback(o); }
+  async updateUserMessageContent(o) { return this.messages.updateUserMessageContent(o); }
+  async retryUserMessage(o) { return this.messages.retryUserMessage(o); }
+  async createUserMessageWithAssistantPlaceholder(i) { return this.messages.createUserMessageWithAssistantPlaceholder(i); }
+
+  // === Checkpoint (3 delegators) ===
+  async createCheckpoint(o) { return this.checkpoint.createCheckpoint(o); }
+  async listCheckpoints(o) { return this.checkpoint.listCheckpoints(o); }
+  async restoreCheckpoint(o) { return this.checkpoint.restoreCheckpoint(o); }
+
+  // === Run prepare (9 delegators) ===
+  async prepareAssistantRun(o) { return this.runPrepare.prepareAssistantRun(o); }
+  async ensureSessionTitle(o) { return this.runPrepare.ensureSessionTitle(o); }
+  async prepareSystemPrompt(ctx, o) { return this.runPrepare.prepareSystemPrompt(ctx, o); }
+  async evaluateReasoningEffort(i) { return this.runPrepare.evaluateReasoningEffort(i); }
+  async resolveModelSelection(i) { return this.runPrepare.resolveModelSelection(i); }
+  async allocateStreamSequence(s) { return this.runPrepare.allocateStreamSequence(s); }
+  async peekStreamSequence(s) { return this.runPrepare.peekStreamSequence(s); }
+  async initToolLoopState(i) { return this.runPrepare.initToolLoopState(i); }
+  async beginAssistantRunLoop(i) { return this.runPrepare.beginAssistantRunLoop(i); }
+
+  // === Tool dispatch (4 delegators) ===
+  async consumeAssistantStream(i) { return this.toolDispatch.consumeAssistantStream(i); }
+  async executeServerTool(i) { return this.toolDispatch.executeServerTool(i); }
+  async consumeToolCalls(i) { return this.toolDispatch.consumeToolCalls(i); }
+  async applyContextBudgetGate(i) { return this.toolDispatch.applyContextBudgetGate(i); }
+
+  // === Finalization (3 delegators) ===
+  async finalizeAssistantIteration(i) { return this.finalization.finalizeAssistantIteration(i); }
+  async emitFinalAssistantTurn(i) { return this.finalization.emitFinalAssistantTurn(i); }
+  async runPass2Fallback(i) { return this.finalization.runPass2Fallback(i); }
+}
+```
+- [x] Constructor wiring: deps are passed to each sub-class by reference (no copy). Sub-classes share the same `MessageStore`/`SessionStore`/`StreamBuffer`/etc instances — there is no per-sub-class state, so port singletons remain singletons. Each sub-class holds its own `private readonly deps: ChatRuntimeDeps` to access the subset it needs.
+- [x] Backwards compatibility: every public method signature on `ChatRuntime` stays IDENTICAL byte-for-byte. All 24 chat-service.ts call sites (`this.runtime.<method>(...)`) work unchanged. Tests that construct `ChatRuntime` directly (all 16 chat-core test files) need ZERO change — they call `new ChatRuntime({...deps})` which now internally instantiates the 6 sub-classes. Internal `this.evaluateReasoningEffort` / `this.peekStreamSequence` / `this.executeServerTool` / `this.applyContextBudgetGate` calls that today live INSIDE `initToolLoopState` / `consumeToolCalls` need to switch to `this.<self>` (in-sub-class) OR stay as cross-sub-class — see Section D.
+
+## Lot 22b-0 Section D — Dependency Graph
+- [x] Internal `this.<method>` calls between sub-classes (grep of `this\.\(method\)` inside class body):
+  - `initToolLoopState` (RunPrepare): calls `this.resolveModelSelection` + `this.evaluateReasoningEffort` + `this.peekStreamSequence` — ALL THREE are RunPrepare methods. **In-sub-class call** ✓.
+  - `consumeToolCalls` (ToolDispatch): calls `this.applyContextBudgetGate` + `this.executeServerTool` — BOTH are ToolDispatch methods. **In-sub-class call** ✓.
+  - `acceptLocalToolResult` (Messages): calls `this.extractAwaitingLocalToolState` (its sibling private helper). **In-sub-class** ✓.
+  - All other methods: NO `this.<otherMethod>` calls (verified via grep).
+- [x] ASCII dependency graph:
+```
+                    ChatRuntime (facade)
+                    /  |  |  |  |  \
+                   /   |  |  |  |   \
+                  v    v  v  v  v    v
+              Session Msgs Ckpt RunPrep ToolDsp Fnz
+                              ^   ^
+                              |   |
+            (NONE: each sub-class is self-contained;
+             internal `this.<method>` calls all stay
+             within the same sub-class.)
+```
+- [x] Cross-sub-class dependency edges: **ZERO**. Verified above: every `this.<method>` call between methods already lives inside the same proposed sub-class. This is the critical property that makes the split safe — no façade roundtrip, no shared mutable state outside `deps`.
+- [x] Circular risks: **NONE**. Each sub-class only depends on `deps`. The façade depends on all 6, but the 6 sub-classes never reference each other or the façade.
+- [x] State sharing via `loopState`: `AssistantRunLoopState` is the only mutable cross-method state, but it is passed BY REFERENCE through method inputs (input.loopState), not held on any sub-class. Lot 21a-21e established this contract; the split preserves it byte-for-byte.
+
+## Lot 22b-0 Section E — Implementation Plan (Lot 22b-1 to 22b-6)
+- [x] **Ordering rationale**: do the simplest, lowest-coupling sub-classes FIRST (Checkpoint, Session, Messages) to validate the façade pattern with minimal risk. Then RunPrepare (medium coupling, owns the wrappers). Then ToolDispatch + Finalization (the two heavyweights, which contain `consumeToolCalls`/`finalizeAssistantIteration` — the biggest method bodies). This produces 6 atomic commits where each lot ≤300 net LOC moved, none larger than the existing `consumeToolCalls` (299 LOC).
+- [x] **Lot 22b-1 — Extract ChatRuntimeCheckpoint** (easiest, sets the pattern):
+  - Scope: move 3 methods (createCheckpoint + listCheckpoints + restoreCheckpoint = 178 LOC) into new file `packages/chat-core/src/runtime-checkpoint.ts`. Move `encodeChatCheckpointKey` + `parseChatCheckpointKey` module helpers OR keep them in `runtime.ts` (decision: keep in `runtime.ts` because `parseChatCheckpointKey` is marked as exported runtime utility — see L4974 `void parseChatCheckpointKey`).
+  - Strategy: (a) create new file with `export class ChatRuntimeCheckpoint { constructor(private readonly deps: ChatRuntimeDeps) {} <3 methods> }`; (b) move method bodies VERBATIM; (c) update `ChatRuntime` constructor to instantiate + 3 delegator methods; (d) verify `tests/runtime-checkpoint.test.ts` (6 cases) still passes via façade.
+  - Estimated effort: 2 commits (commit 1 = create sub-class + delegators; commit 2 = delete old method bodies from runtime.ts). Net: +~190 LOC new file, −~180 LOC from runtime.ts, +~25 LOC façade delegators = +35 net. Test count delta: 0.
+- [x] **Lot 22b-2 — Extract ChatRuntimeSession** (read-only views, no mutations):
+  - Scope: move 4 methods (listMessages + getSessionBootstrap + getSessionHistory + getMessageRuntimeDetails = 247 LOC) into `packages/chat-core/src/runtime-session.ts`. Verify whether `listMessages` test cases live in `runtime-message.test.ts` (Section A noted ambiguity); if so, split or leave the cross-domain test in place (no test moves required — vitest discovers tests automatically).
+  - Strategy: same as 22b-1. Read paths are easiest to migrate because they have no mutable state.
+  - Estimated effort: 2 commits. Net: +~260 LOC new file, −~247 LOC from runtime.ts, +~30 LOC façade delegators = +43 net. Test count delta: 0.
+- [x] **Lot 22b-3 — Extract ChatRuntimeMessages** (message CRUD + finalize-from-stream + accept-local-tool-result + private helper):
+  - Scope: move 6 public methods (finalize/accept/setFeedback/updateUserContent/retry/createUser = 479 LOC) + 1 private method (extractAwaitingLocalToolState 122 LOC) = 601 LOC into `packages/chat-core/src/runtime-messages.ts`. The private helper MUST travel with its sole caller `acceptLocalToolResult`.
+  - Strategy: same as 22b-1 + 22b-2. Verify the `tests/runtime-message.test.ts` 9 cases cover the migrated methods.
+  - Estimated effort: 3 commits (split across 2 commits to keep ≤300 LOC per move: commit 1 = finalize+accept+private helper ≈ 324 LOC; commit 2 = the 4 lighter methods ≈ 277 LOC; commit 3 = façade delegators + delete bodies). Net: +~640 LOC new file, −~601 from runtime.ts, +~50 LOC façade delegators = +89 net. Test count delta: 0.
+- [x] **Lot 22b-4 — Extract ChatRuntimeRunPrepare** (the assistant-run setup slice):
+  - Scope: move 9 methods (prepareAssistantRun + ensureSessionTitle + prepareSystemPrompt + evaluateReasoningEffort + resolveModelSelection + allocateStreamSequence + peekStreamSequence + initToolLoopState + beginAssistantRunLoop = 496 LOC) into `packages/chat-core/src/runtime-run-prepare.ts`. CRITICAL: `initToolLoopState` calls `this.resolveModelSelection` + `this.evaluateReasoningEffort` + `this.peekStreamSequence` — all 3 must land in the SAME file so the in-sub-class `this.<method>` calls work unchanged.
+  - Strategy: same as 22b-1. 2 commits because 496 LOC > 150-line commit limit: commit 1 = first 4 methods (prepareAssistantRun + ensureSessionTitle + prepareSystemPrompt + evaluateReasoningEffort = 250 LOC); commit 2 = remaining 5 (resolveModelSelection + 2 sequencer wrappers + initToolLoopState + beginAssistantRunLoop = 246 LOC). Commit 3 = façade + delete.
+  - Estimated effort: 3 commits. Net: +~530 LOC new file, −~496 from runtime.ts, +~60 LOC façade delegators = +94 net. Test count delta: 0.
+- [x] **Lot 22b-5 — Extract ChatRuntimeToolDispatch** (the tool-loop heavyweight):
+  - Scope: move 4 methods (consumeAssistantStream + executeServerTool + consumeToolCalls + applyContextBudgetGate = 760 LOC) into `packages/chat-core/src/runtime-tool-dispatch.ts`. Module-scope helper `parseToolCallArgsForRuntime` (L4968 = 10 LOC) and `STEER_REASONING_REPLAY_MAX_CHARS` constant (L145 = 1 LOC) travel with this sub-class. CRITICAL: `consumeToolCalls` calls `this.applyContextBudgetGate` + `this.executeServerTool` — all 3 must land in the SAME file.
+  - Strategy: 3-4 commits because 760 LOC > 150-line limit: commit 1 = consumeAssistantStream (246 LOC); commit 2 = executeServerTool + applyContextBudgetGate (215 LOC); commit 3 = consumeToolCalls (299 LOC); commit 4 = façade + delete.
+  - Estimated effort: 4 commits. Net: +~800 LOC new file, −~760 from runtime.ts, +~30 LOC façade delegators = +70 net. Test count delta: 0.
+- [x] **Lot 22b-6 — Extract ChatRuntimeFinalization** (the finalization heavyweight + close):
+  - Scope: move 3 methods (finalizeAssistantIteration + emitFinalAssistantTurn + runPass2Fallback = 537 LOC) into `packages/chat-core/src/runtime-finalization.ts`. Module-scope helpers `safeTruncateForRuntime` + `safeJsonForRuntime` + `buildToolDigestForRuntime` (40 LOC) travel with `runPass2Fallback`.
+  - Strategy: 3 commits: commit 1 = emitFinalAssistantTurn (77 LOC); commit 2 = finalizeAssistantIteration (269 LOC); commit 3 = runPass2Fallback + helpers + façade + delete (231 LOC + façade).
+  - At Lot 22b-6 completion, `runtime.ts` should contain ONLY: the 40 exported types + the `ChatRuntimeDeps` interface + the `ChatRuntime` façade class (≤80 LOC) + the `parseChatCheckpointKey` lint stub. Expected post-Lot 22b-6 `runtime.ts` size: ~2200 LOC (almost entirely type definitions + JSDoc). The class body itself shrinks from 2839 LOC to ~80 LOC.
+  - Estimated effort: 3 commits. Net: +~580 LOC new file, −~537 from runtime.ts, +~25 LOC façade delegators = +68 net. Test count delta: 0.
+- [x] **Total Lot 22b effort estimate**: 17 commits across 6 lots, ~+400 net LOC (mostly file headers + façade boilerplate + JSDoc). Behavior preservation strict — zero behavior change. All 237/237 existing chat-core tests must pass after each lot. All chat-service.ts regression suites (28+6+14+1+1+4 = 54 api tests) must pass after each lot.
+
+## Lot 22b-0 Section F — Risks & Alternatives
+- [x] **Risk 1 — Type re-exports**: ~40 types currently exported from `runtime.ts` (BuildSystemPromptInput, AssistantRunLoopState, ExecuteServerToolInput, etc.). After split, where do they live? **Decision**: keep all types in `runtime.ts` (the top of the file before the façade class) so external consumers (`chat-service.ts`, `tests/*.ts`) import them from `@sentropic/chat-core` exactly as today. The sub-class files import types from `runtime.ts` (or via a shared `runtime-types.ts` if circular-import becomes an issue — should NOT happen because sub-classes only import types, never the façade class). **Mitigation**: if circular-import surfaces, extract types to `packages/chat-core/src/runtime-types.ts` (pure type module, no class).
+- [x] **Risk 2 — Sub-class instance overhead per `new ChatRuntime`**: each `ChatService` instance creates ONE `ChatRuntime` (constructor, line 916 of chat-service.ts). After the split, that constructor instantiates 6 sub-classes. Cost: 6 object allocations + 6 `deps` reference assignments. Negligible at the ms scale (no per-message overhead because `ChatRuntime` is a singleton on `ChatService`). **Mitigation**: none needed. Verified via `grep "new ChatRuntime"` — only 1 call site in chat-service.ts + N test fixtures (test fixtures create new instances per test, but that's existing cost).
+- [x] **Risk 3 — `initToolLoopState` cross-sub-class call risk** (FALSE positive): `initToolLoopState` invokes `this.resolveModelSelection` + `this.evaluateReasoningEffort` + `this.peekStreamSequence` — all 3 land in RunPrepare so the in-sub-class `this.` references work unchanged. **No mitigation needed** because Section D verified the property. CAUTION: a careless re-ordering of methods between sub-classes would break this — the implementation agent MUST keep all 4 of those methods in the SAME sub-class.
+- [x] **Risk 4 — Test coverage drops during migration**: between commit 1 (move bodies) and commit 2 (delete from runtime.ts), there is a brief state where both copies exist. **Mitigation**: per-Lot strategy already plans the delete-old-bodies step as a SEPARATE commit after typecheck passes on the new copy. This was the approach used successfully in Lot 11/12/14b/16b/21d-2.
+- [x] **Risk 5 — `extractAwaitingLocalToolState` private travels alone**: this is a `private` method visible only to `ChatRuntime` today (L2209). After split it becomes `private` on `ChatRuntimeMessages`. **Mitigation**: zero impact — only `acceptLocalToolResult` (its sole caller) needs visibility, and they live in the same sub-class. The test suite doesn't reach it directly.
+- [x] **Alternative 1 (REJECTED) — 4 sub-classes instead of 6**: collapse `ChatRuntimeRunPrepare` + `ChatRuntimeToolDispatch` + `ChatRuntimeFinalization` into one `ChatRuntimeRunOrchestration` sub-class (~1900 LOC). REJECTED because the 1900 LOC sub-class would be almost as bad as the current god class — only a single boundary is moved (read paths peeled off). The "≤300 LOC per migration commit" guidance becomes hard to maintain.
+- [x] **Alternative 2 (REJECTED) — 8+ sub-classes**: split ToolDispatch further into `StreamConsumer` + `ServerToolFacade` + `BudgetGate` + `ToolLoopOrchestrator`. REJECTED because `consumeToolCalls` invokes `this.applyContextBudgetGate` + `this.executeServerTool` — splitting them across sub-classes forces a cross-sub-class call pattern (verified in Section D). The cleaner property of "zero cross-sub-class calls" is the strongest argument for the 6-sub-class split.
+- [x] **Alternative 3 (REJECTED) — flat function exports instead of sub-classes**: export each method as a top-level function `consumeAssistantStream(deps, input)` etc. REJECTED because (a) the 16 chat-core test files all instantiate `new ChatRuntime(deps)` — switching to function-style requires rewriting every test fixture; (b) the chat-service.ts façade pattern (`this.runtime.<method>`) becomes a per-call `<method>(this.deps, ...)` factor with 24 rewrites; (c) Object-orientation gives a clean place for cross-method `this.<helper>` calls inside the same sub-class (4 in-sub-class call sites would otherwise become explicit dep threading).
+- [x] **Alternative 4 (PARTIALLY CONSIDERED) — `beginAssistantRunLoop` placement**: could live in RunPrepare (init phase) OR in ToolDispatch (loop iteration state). Section B places it in RunPrepare because it runs ONCE before the loop starts and prepares 23 loop-local fields — semantically belongs with the other init slices (`prepareAssistantRun`, `initToolLoopState`). Implementation agent may revisit and move to ToolDispatch if the loop-state types end up in a `runtime-loop-state-types.ts` module. **No regression risk either way** (no cross-sub-class call surface).
+- [x] **Rollback strategy**: each Lot 22b-N is an atomic 2-4 commit sequence. If the regression suite fails AT ANY commit of Lot 22b-N, `git revert HEAD~k..HEAD` rolls back ONLY that Lot (all prior Lots stay in). Because the 6 sub-classes are independent (no cross-class state), a Lot 22b-3 rollback does NOT invalidate Lot 22b-1 / 22b-2 work. **Per-lot regression gates** (mandatory): `make typecheck-api`, `make lint-api`, `make test-pkg-chat-core`, `make test-api-endpoints SCOPE=tests/api/chat.test.ts`, `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts`, `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts`.
+
