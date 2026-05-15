@@ -3635,15 +3635,16 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           }
           let result: unknown;
 
-          // BR14b Lot 21d-2 Step 3 Groups A+B+C+D+E — delegate to `executeServerToolInternal`.
+          // BR14b Lot 21d-2 Step 3 Groups A+B+C+D+E+F (F1) — delegate to `executeServerToolInternal`.
           // Body verbatim-moved into the method's switch; this closure factory keeps
-          // the input bundle DRY across all Group A-E delegations (read_initiative,
+          // the input bundle DRY across all Group A-F delegations (read_initiative,
           // update_initiative, organizations_list, organization_get, organization_update,
           // folders_list, folder_get, folder_update, initiatives_list,
           // executive_summary_get, executive_summary_update, matrix_get, matrix_update,
           // plan, comment_assistant, web_search, web_extract, documents, history_analyze,
           // solutions_list, solution_get, proposals_list, proposal_get, products_list,
-          // product_get, gate_review, workspace_list, initiative_search, task_dispatch).
+          // product_get, gate_review, workspace_list, initiative_search, task_dispatch,
+          // document_generate).
           const buildExecuteServerToolInput = (): ExecuteServerToolInternalInput => ({
             toolCall,
             args,
@@ -3810,240 +3811,9 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             result = r.result;
             streamSeq = r.streamSeq;
           } else if (toolCall.name === 'document_generate') {
-            const action = typeof args.action === 'string' ? args.action : 'generate';
-            const rawFormat = typeof args.format === 'string' ? args.format : undefined;
-            if (rawFormat && rawFormat !== 'docx' && rawFormat !== 'pptx') {
-              throw new Error('document_generate: format must be "docx" | "pptx"');
-            }
-            const format = (rawFormat ?? 'docx') as 'docx' | 'pptx';
-
-            if (action === 'upskill') {
-              if (format === 'pptx') {
-                const { getPptxFreeformSkill } = await import('./pptx-freeform-skill');
-                result = {
-                  status: 'completed',
-                  mode: 'upskill',
-                  format,
-                  skill: getPptxFreeformSkill(),
-                };
-              } else {
-                // Return DOCX creation skill content for LLM learning
-                const { getDocxFreeformSkill } = await import('./docx-freeform-skill');
-                result = {
-                  status: 'completed',
-                  mode: 'upskill',
-                  skill: getDocxFreeformSkill(),
-                };
-              }
-              await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-              streamSeq += 1;
-            } else {
-              // Generate mode: DOCX template generation or DOCX/PPTX freeform sandbox generation.
-              const templateId = typeof args.templateId === 'string' ? args.templateId : undefined;
-              const code = typeof args.code === 'string' ? args.code : undefined;
-              const title = typeof args.title === 'string' ? args.title : undefined;
-              const { entityType, entityId } = resolveDocumentGenerateTarget({
-                entityType: args.entityType,
-                entityId: args.entityId,
-                primaryContextType,
-                primaryContextId,
-              });
-              if (!entityId) throw new Error('document_generate: entityId is required');
-              if (templateId && code) throw new Error('document_generate: templateId and code are mutually exclusive');
-              if (!templateId && !code) throw new Error('document_generate: either templateId or code is required');
-              if (format === 'pptx' && templateId) {
-                throw new Error('document_generate: templateId is not supported for format "pptx"');
-              }
-
-              if (code) {
-                if (format === 'pptx') {
-                  // Freeform PPTX: synchronous sandbox generation (BR-21a).
-                  try {
-                    const freeformResult = await generateFreeformPptx({
-                      code,
-                      entityType: entityType as 'initiative' | 'folder',
-                      entityId,
-                      workspaceId: sessionWorkspaceId,
-                      title,
-                    });
-
-                    const jobId = createId();
-                    const bucket = getDocumentsBucketName();
-                    const objectKey = `pptx-cache/${sessionWorkspaceId}/freeform/${entityType}/${entityId}/${jobId}.pptx`;
-
-                    await putObject({
-                      bucket,
-                      key: objectKey,
-                      body: freeformResult.buffer,
-                      contentType: freeformResult.mimeType,
-                    });
-
-                    const completedPayload = {
-                      state: 'done',
-                      progress: 100,
-                      fileName: freeformResult.fileName,
-                      mimeType: freeformResult.mimeType,
-                      byteLength: freeformResult.buffer.byteLength,
-                      storageBucket: bucket,
-                      storageKey: objectKey,
-                      queueClass: 'publishing',
-                      completedAt: new Date().toISOString(),
-                    };
-
-                    await db.run(sql`
-                      INSERT INTO job_queue (id, type, status, workspace_id, data, result, completed_at)
-                      VALUES (
-                        ${jobId},
-                        'pptx_generate',
-                        'completed',
-                        ${sessionWorkspaceId},
-                        ${JSON.stringify({ entityType, entityId, mode: 'freeform', format: 'pptx' })},
-                        ${JSON.stringify(completedPayload)},
-                        ${completedPayload.completedAt}
-                      )
-                    `);
-
-                    result = {
-                      status: 'completed',
-                      format,
-                      mode: 'freeform',
-                      entityType,
-                      entityId,
-                      jobId,
-                      fileName: freeformResult.fileName,
-                      mimeType: freeformResult.mimeType,
-                      downloadUrl: `/pptx/jobs/${jobId}/download`,
-                    };
-                  } catch (freeformError: unknown) {
-                    const errMsg =
-                      freeformError instanceof Error
-                        ? freeformError.message
-                        : 'Unknown freeform error';
-                    const explicitCode =
-                      typeof (freeformError as { code?: unknown })?.code === 'string'
-                        ? String((freeformError as { code?: unknown }).code)
-                        : '';
-
-                    let errorCode = 'code_runtime_error';
-                    if (
-                      explicitCode === 'code_syntax_error' ||
-                      explicitCode === 'code_runtime_error' ||
-                      explicitCode === 'code_timeout' ||
-                      explicitCode === 'invalid_return_type' ||
-                      explicitCode === 'pptx_packaging_error' ||
-                      explicitCode === 'not_found'
-                    ) {
-                      errorCode = explicitCode;
-                    } else if (errMsg.includes('SyntaxError') || errMsg.includes('syntax')) {
-                      errorCode = 'code_syntax_error';
-                    } else if (errMsg.includes('timeout') || errMsg.includes('Timeout')) {
-                      errorCode = 'code_timeout';
-                    } else if (errMsg.includes('invalid_return_type')) {
-                      errorCode = 'invalid_return_type';
-                    } else if (errMsg.includes('pptx_packaging_error') || errMsg.includes('packaging')) {
-                      errorCode = 'pptx_packaging_error';
-                    } else if (errMsg.includes('not found') || errMsg.includes('Not found')) {
-                      errorCode = 'not_found';
-                    } else if (errMsg.includes('putObject') || errMsg.includes('S3') || errMsg.includes('storage')) {
-                      errorCode = 'storage_error';
-                    }
-
-                    result = {
-                      status: 'error',
-                      code: errorCode,
-                      error: errMsg,
-                    };
-                  }
-                } else {
-                  // Freeform DOCX: synchronous generation per SPEC_EVOL_FREEFORM_DOCX §4
-                  try {
-                    const freeformResult = await generateFreeformDocx({
-                      code,
-                      entityType: entityType as 'initiative' | 'folder',
-                      entityId,
-                      workspaceId: sessionWorkspaceId,
-                    });
-
-                    const jobId = createId();
-                    const bucket = getDocumentsBucketName();
-                    const objectKey = `docx-cache/${sessionWorkspaceId}/freeform/${entityType}/${entityId}/${jobId}.docx`;
-
-                    await putObject({
-                      bucket,
-                      key: objectKey,
-                      body: freeformResult.buffer,
-                      contentType: freeformResult.mimeType,
-                    });
-
-                    const fileName = title
-                      ? `${title.replace(/[^a-zA-Z0-9À-ÿ _-]/g, '')}.docx`
-                      : freeformResult.fileName;
-
-                    const completedPayload = {
-                      state: 'done',
-                      progress: 100,
-                      fileName,
-                      mimeType: freeformResult.mimeType,
-                      byteLength: freeformResult.buffer.byteLength,
-                      storageBucket: bucket,
-                      storageKey: objectKey,
-                      queueClass: 'publishing',
-                      completedAt: new Date().toISOString(),
-                    };
-
-                    await db.run(sql`
-                      INSERT INTO job_queue (id, type, status, workspace_id, data, result, completed_at)
-                      VALUES (
-                        ${jobId},
-                        'docx_generate',
-                        'completed',
-                        ${sessionWorkspaceId},
-                        ${JSON.stringify({ entityType, entityId, mode: 'freeform' })},
-                        ${JSON.stringify(completedPayload)},
-                        ${completedPayload.completedAt}
-                      )
-                    `);
-
-                    result = {
-                      status: 'completed',
-                      mode: 'freeform',
-                      entityType,
-                      entityId,
-                      jobId,
-                      fileName,
-                      mimeType: freeformResult.mimeType,
-                      downloadUrl: `/docx/jobs/${jobId}/download`,
-                    };
-                  } catch (freeformError: unknown) {
-                    const errMsg = freeformError instanceof Error ? freeformError.message : 'Unknown freeform error';
-                    // Map engine error codes per spec §6.2
-                    let errorCode = 'code_runtime_error';
-                    if (errMsg.includes('SyntaxError') || errMsg.includes('syntax')) errorCode = 'code_syntax_error';
-                    else if (errMsg.includes('timeout') || errMsg.includes('Timeout')) errorCode = 'code_timeout';
-                    else if (errMsg.includes('not a Document') || errMsg.includes('invalid_return_type')) errorCode = 'invalid_return_type';
-                    else if (errMsg.includes('not found') || errMsg.includes('Not found')) errorCode = 'not_found';
-                    else if (errMsg.includes('putObject') || errMsg.includes('S3') || errMsg.includes('storage')) errorCode = 'storage_error';
-
-                    result = {
-                      status: 'error',
-                      code: errorCode,
-                      error: errMsg,
-                    };
-                  }
-                }
-              } else {
-                // Template mode (unchanged, DOCX only)
-                result = {
-                  status: 'completed',
-                  message: `Document generation queued for ${entityType} ${entityId} with template ${templateId}. The document will be available for download once processing completes.`,
-                  templateId,
-                  entityType,
-                  entityId,
-                };
-              }
-              await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-              streamSeq += 1;
-            } // end generate action
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else if (toolCall.name === 'batch_create_organizations') {
             if (readOnly) throw new Error('Read-only workspace: batch_create_organizations is disabled');
             const description = typeof args.description === 'string' ? args.description : '';
@@ -4500,6 +4270,8 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       allowedCommentContextSet,
       allowedCommentContexts,
       allowedDocContexts,
+      primaryContextType,
+      primaryContextId,
       sessionWorkspaceId,
       readOnly,
       currentUserRole,
@@ -5427,8 +5199,245 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         streamSeq += 1;
         break;
       }
-      // BR14b Lot 21d-2 Group F per-tool case branches added by
-      // subsequent commits (verbatim move from the inline switch).
+      // BR14b Lot 21d-2 Step 3 Group F — verbatim move of inline tool branches
+      // from `runAssistantGeneration` (document_generate, batch_create_organizations).
+      case 'document_generate': {
+        const action = typeof args.action === 'string' ? args.action : 'generate';
+        const rawFormat = typeof args.format === 'string' ? args.format : undefined;
+        if (rawFormat && rawFormat !== 'docx' && rawFormat !== 'pptx') {
+          throw new Error('document_generate: format must be "docx" | "pptx"');
+        }
+        const format = (rawFormat ?? 'docx') as 'docx' | 'pptx';
+
+        if (action === 'upskill') {
+          if (format === 'pptx') {
+            const { getPptxFreeformSkill } = await import('./pptx-freeform-skill');
+            result = {
+              status: 'completed',
+              mode: 'upskill',
+              format,
+              skill: getPptxFreeformSkill(),
+            };
+          } else {
+            // Return DOCX creation skill content for LLM learning
+            const { getDocxFreeformSkill } = await import('./docx-freeform-skill');
+            result = {
+              status: 'completed',
+              mode: 'upskill',
+              skill: getDocxFreeformSkill(),
+            };
+          }
+          await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+          streamSeq += 1;
+        } else {
+          // Generate mode: DOCX template generation or DOCX/PPTX freeform sandbox generation.
+          const templateId = typeof args.templateId === 'string' ? args.templateId : undefined;
+          const code = typeof args.code === 'string' ? args.code : undefined;
+          const title = typeof args.title === 'string' ? args.title : undefined;
+          const { entityType, entityId } = resolveDocumentGenerateTarget({
+            entityType: args.entityType,
+            entityId: args.entityId,
+            primaryContextType,
+            primaryContextId,
+          });
+          if (!entityId) throw new Error('document_generate: entityId is required');
+          if (templateId && code) throw new Error('document_generate: templateId and code are mutually exclusive');
+          if (!templateId && !code) throw new Error('document_generate: either templateId or code is required');
+          if (format === 'pptx' && templateId) {
+            throw new Error('document_generate: templateId is not supported for format "pptx"');
+          }
+
+          if (code) {
+            if (format === 'pptx') {
+              // Freeform PPTX: synchronous sandbox generation (BR-21a).
+              try {
+                const freeformResult = await generateFreeformPptx({
+                  code,
+                  entityType: entityType as 'initiative' | 'folder',
+                  entityId,
+                  workspaceId: sessionWorkspaceId,
+                  title,
+                });
+
+                const jobId = createId();
+                const bucket = getDocumentsBucketName();
+                const objectKey = `pptx-cache/${sessionWorkspaceId}/freeform/${entityType}/${entityId}/${jobId}.pptx`;
+
+                await putObject({
+                  bucket,
+                  key: objectKey,
+                  body: freeformResult.buffer,
+                  contentType: freeformResult.mimeType,
+                });
+
+                const completedPayload = {
+                  state: 'done',
+                  progress: 100,
+                  fileName: freeformResult.fileName,
+                  mimeType: freeformResult.mimeType,
+                  byteLength: freeformResult.buffer.byteLength,
+                  storageBucket: bucket,
+                  storageKey: objectKey,
+                  queueClass: 'publishing',
+                  completedAt: new Date().toISOString(),
+                };
+
+                await db.run(sql`
+                  INSERT INTO job_queue (id, type, status, workspace_id, data, result, completed_at)
+                  VALUES (
+                    ${jobId},
+                    'pptx_generate',
+                    'completed',
+                    ${sessionWorkspaceId},
+                    ${JSON.stringify({ entityType, entityId, mode: 'freeform', format: 'pptx' })},
+                    ${JSON.stringify(completedPayload)},
+                    ${completedPayload.completedAt}
+                  )
+                `);
+
+                result = {
+                  status: 'completed',
+                  format,
+                  mode: 'freeform',
+                  entityType,
+                  entityId,
+                  jobId,
+                  fileName: freeformResult.fileName,
+                  mimeType: freeformResult.mimeType,
+                  downloadUrl: `/pptx/jobs/${jobId}/download`,
+                };
+              } catch (freeformError: unknown) {
+                const errMsg =
+                  freeformError instanceof Error
+                    ? freeformError.message
+                    : 'Unknown freeform error';
+                const explicitCode =
+                  typeof (freeformError as { code?: unknown })?.code === 'string'
+                    ? String((freeformError as { code?: unknown }).code)
+                    : '';
+
+                let errorCode = 'code_runtime_error';
+                if (
+                  explicitCode === 'code_syntax_error' ||
+                  explicitCode === 'code_runtime_error' ||
+                  explicitCode === 'code_timeout' ||
+                  explicitCode === 'invalid_return_type' ||
+                  explicitCode === 'pptx_packaging_error' ||
+                  explicitCode === 'not_found'
+                ) {
+                  errorCode = explicitCode;
+                } else if (errMsg.includes('SyntaxError') || errMsg.includes('syntax')) {
+                  errorCode = 'code_syntax_error';
+                } else if (errMsg.includes('timeout') || errMsg.includes('Timeout')) {
+                  errorCode = 'code_timeout';
+                } else if (errMsg.includes('invalid_return_type')) {
+                  errorCode = 'invalid_return_type';
+                } else if (errMsg.includes('pptx_packaging_error') || errMsg.includes('packaging')) {
+                  errorCode = 'pptx_packaging_error';
+                } else if (errMsg.includes('not found') || errMsg.includes('Not found')) {
+                  errorCode = 'not_found';
+                } else if (errMsg.includes('putObject') || errMsg.includes('S3') || errMsg.includes('storage')) {
+                  errorCode = 'storage_error';
+                }
+
+                result = {
+                  status: 'error',
+                  code: errorCode,
+                  error: errMsg,
+                };
+              }
+            } else {
+              // Freeform DOCX: synchronous generation per SPEC_EVOL_FREEFORM_DOCX §4
+              try {
+                const freeformResult = await generateFreeformDocx({
+                  code,
+                  entityType: entityType as 'initiative' | 'folder',
+                  entityId,
+                  workspaceId: sessionWorkspaceId,
+                });
+
+                const jobId = createId();
+                const bucket = getDocumentsBucketName();
+                const objectKey = `docx-cache/${sessionWorkspaceId}/freeform/${entityType}/${entityId}/${jobId}.docx`;
+
+                await putObject({
+                  bucket,
+                  key: objectKey,
+                  body: freeformResult.buffer,
+                  contentType: freeformResult.mimeType,
+                });
+
+                const fileName = title
+                  ? `${title.replace(/[^a-zA-Z0-9À-ÿ _-]/g, '')}.docx`
+                  : freeformResult.fileName;
+
+                const completedPayload = {
+                  state: 'done',
+                  progress: 100,
+                  fileName,
+                  mimeType: freeformResult.mimeType,
+                  byteLength: freeformResult.buffer.byteLength,
+                  storageBucket: bucket,
+                  storageKey: objectKey,
+                  queueClass: 'publishing',
+                  completedAt: new Date().toISOString(),
+                };
+
+                await db.run(sql`
+                  INSERT INTO job_queue (id, type, status, workspace_id, data, result, completed_at)
+                  VALUES (
+                    ${jobId},
+                    'docx_generate',
+                    'completed',
+                    ${sessionWorkspaceId},
+                    ${JSON.stringify({ entityType, entityId, mode: 'freeform' })},
+                    ${JSON.stringify(completedPayload)},
+                    ${completedPayload.completedAt}
+                  )
+                `);
+
+                result = {
+                  status: 'completed',
+                  mode: 'freeform',
+                  entityType,
+                  entityId,
+                  jobId,
+                  fileName,
+                  mimeType: freeformResult.mimeType,
+                  downloadUrl: `/docx/jobs/${jobId}/download`,
+                };
+              } catch (freeformError: unknown) {
+                const errMsg = freeformError instanceof Error ? freeformError.message : 'Unknown freeform error';
+                // Map engine error codes per spec §6.2
+                let errorCode = 'code_runtime_error';
+                if (errMsg.includes('SyntaxError') || errMsg.includes('syntax')) errorCode = 'code_syntax_error';
+                else if (errMsg.includes('timeout') || errMsg.includes('Timeout')) errorCode = 'code_timeout';
+                else if (errMsg.includes('not a Document') || errMsg.includes('invalid_return_type')) errorCode = 'invalid_return_type';
+                else if (errMsg.includes('not found') || errMsg.includes('Not found')) errorCode = 'not_found';
+                else if (errMsg.includes('putObject') || errMsg.includes('S3') || errMsg.includes('storage')) errorCode = 'storage_error';
+
+                result = {
+                  status: 'error',
+                  code: errorCode,
+                  error: errMsg,
+                };
+              }
+            }
+          } else {
+            // Template mode (unchanged, DOCX only)
+            result = {
+              status: 'completed',
+              message: `Document generation queued for ${entityType} ${entityId} with template ${templateId}. The document will be available for download once processing completes.`,
+              templateId,
+              entityType,
+              entityId,
+            };
+          }
+          await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+          streamSeq += 1;
+        } // end generate action
+        break;
+      }
       default:
         throw new Error(`Unknown tool: ${toolCall.name}`);
     }
