@@ -197,8 +197,14 @@ export type NormalizedVsCodeCodeAgentRuntimePayload = {
  * Internal state extracted from the most recent
  * `awaiting_local_tool_results` status event for an assistant message.
  * Mirrors `AwaitingLocalToolState` in `chat-service.ts` verbatim.
+ *
+ * Exported (BR14b Lot 22b-3) so the `ChatRuntimeMessages` sub-class can
+ * type its private `extractAwaitingLocalToolState` helper without
+ * duplicating the shape. Only `acceptLocalToolResult` +
+ * `extractAwaitingLocalToolState` consume this type — both methods now
+ * live in `runtime-messages.ts`.
  */
-type AwaitingLocalToolState = {
+export type AwaitingLocalToolState = {
   sequence: number;
   previousResponseId: string;
   pendingLocalToolCalls: Array<{
@@ -2005,15 +2011,20 @@ const buildToolDigestForRuntime = (
  * Tiny pure helper, duplicated rather than re-imported to keep
  * chat-core free of any api/* module dependency.
  */
-const asRecord = (value: unknown): Record<string, unknown> | null => {
+export const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 };
 
 /**
  * Verbatim duplicate of `isValidToolName` in `chat-service.ts` (line ~272).
+ *
+ * Exported (BR14b Lot 22b-3) so the `ChatRuntimeMessages` sub-class can
+ * reuse it from `extractAwaitingLocalToolState` without re-declaring the
+ * regex. `asRecord` is exported alongside for the same reason — both
+ * helpers are pure shape utilities, no module-level side effect.
  */
-const isValidToolName = (value: string): boolean =>
+export const isValidToolName = (value: string): boolean =>
   /^[a-zA-Z0-9_-]{1,64}$/.test(value);
 
 /**
@@ -2098,12 +2109,16 @@ export const snapshotMessageFromRow = (
 /**
  * Verbatim duplicate of `ChatService.serializeToolOutput` (line ~865).
  * Used to normalize follow-up tool_call_result event payloads collected
- * during `acceptLocalToolResult`. Kept as a private module helper
- * because the corresponding `chat-service.ts` instance method is also
- * used by `runAssistantGeneration` which does not migrate in Lot 10 —
- * future lots will consolidate.
+ * during `acceptLocalToolResult`. Kept as a module helper because the
+ * corresponding `chat-service.ts` instance method is also used by
+ * `runAssistantGeneration` which does not migrate in Lot 10 — future
+ * lots will consolidate.
+ *
+ * Exported (BR14b Lot 22b-3) so the `ChatRuntimeMessages` sub-class can
+ * import it for its migrated `acceptLocalToolResult` body without
+ * duplicating the implementation.
  */
-const serializeToolOutput = (value: unknown): string => {
+export const serializeToolOutput = (value: unknown): string => {
   if (typeof value === 'string') return value;
   try {
     return JSON.stringify(value);
