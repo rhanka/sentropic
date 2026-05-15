@@ -809,7 +809,14 @@ export interface ExecuteServerToolInternalInput {
     result: unknown;
   }>;
   readonly selectedProviderId: ProviderId;
-  readonly selectedModel: string | null;
+  // BR14b Lot 21d-2 Step 3 Group F2 — tightened from `string | null` to
+  // `string`: `ChatRuntime.resolveModelSelection` (packages/chat-core/src/runtime.ts
+  // line 282) returns `{provider_id: string, model_id: string}`, so the
+  // caller-side `selectedModel = resolvedSelection.model_id` is non-null by
+  // the time `runAssistantGeneration` reaches the tool-dispatch loop.
+  // Required by `batch_create_organizations` which passes it as
+  // `OrganizationEnrichJobData.model: string | undefined`.
+  readonly selectedModel: string;
   // BR14b Lot 21d-2 Step 3 Group C — tightened from `string | null` to
   // `string`: `ChatRuntime.prepareAssistantRun` (packages/chat-core/src/runtime.ts
   // line 709) throws when `resolveSessionWorkspaceId` returns null, so
@@ -3635,7 +3642,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           }
           let result: unknown;
 
-          // BR14b Lot 21d-2 Step 3 Groups A+B+C+D+E+F (F1) — delegate to `executeServerToolInternal`.
+          // BR14b Lot 21d-2 Step 3 Groups A+B+C+D+E+F (F1+F2) — delegate to `executeServerToolInternal`.
           // Body verbatim-moved into the method's switch; this closure factory keeps
           // the input bundle DRY across all Group A-F delegations (read_initiative,
           // update_initiative, organizations_list, organization_get, organization_update,
@@ -3644,7 +3651,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           // plan, comment_assistant, web_search, web_extract, documents, history_analyze,
           // solutions_list, solution_get, proposals_list, proposal_get, products_list,
           // product_get, gate_review, workspace_list, initiative_search, task_dispatch,
-          // document_generate).
+          // document_generate, batch_create_organizations).
           const buildExecuteServerToolInput = (): ExecuteServerToolInternalInput => ({
             toolCall,
             args,
@@ -3815,93 +3822,9 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             result = r.result;
             streamSeq = r.streamSeq;
           } else if (toolCall.name === 'batch_create_organizations') {
-            if (readOnly) throw new Error('Read-only workspace: batch_create_organizations is disabled');
-            const description = typeof args.description === 'string' ? args.description : '';
-            const targetWorkspaceId = sessionWorkspaceId;
-            if (!description) throw new Error('batch_create_organizations: description is required');
-
-            // Parse organization names from description (comma-separated, numbered list, or newline-separated)
-            const orgNames = description
-              .split(/[,\n]/)
-              .map((s: string) => s.replace(/^\s*\d+[\.\)\-]\s*/, '').trim())
-              .filter((s: string) => s.length > 0 && s.length < 200);
-
-            if (orgNames.length === 0) {
-              throw new Error('batch_create_organizations: no organization names found in description');
-            }
-
-            // Create organizations in DB with status 'generating'
-            const orgRows: Array<{ id: string; name: string }> = [];
-            for (const name of orgNames) {
-              const orgId = createId();
-              await db.insert(organizations).values({
-                id: orgId,
-                workspaceId: targetWorkspaceId,
-                name,
-                status: 'generating',
-                data: {},
-              });
-              orgRows.push({ id: orgId, name });
-            }
-
-            // Launch organization_enrich jobs for each org (lazy import to avoid circular dependency)
-            const { queueManager } = await import('./queue-manager');
-            const enrichJobIds: string[] = [];
-            for (const org of orgRows) {
-              const jobData: OrganizationEnrichJobData = {
-                organizationId: org.id,
-                organizationName: org.name,
-                model: selectedModel,
-                initiatedByUserId: options.userId,
-                locale: options.locale ?? 'fr',
-                wasCreated: true,
-              };
-              const jobId = await queueManager.addJob('organization_enrich', jobData, {
-                workspaceId: targetWorkspaceId,
-              });
-              enrichJobIds.push(jobId);
-            }
-
-            // Poll all enrich jobs until completion (timeout 3min, poll every 2s)
-            const POLL_INTERVAL_MS = 2000;
-            const POLL_TIMEOUT_MS = 180_000;
-            const startTime = Date.now();
-            let allDone = false;
-            while (!allDone && Date.now() - startTime < POLL_TIMEOUT_MS) {
-              await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-              const jobRows = await db
-                .select({ id: jobQueue.id, status: jobQueue.status })
-                .from(jobQueue)
-                .where(inArray(jobQueue.id, enrichJobIds));
-              const statuses = jobRows.map((r) => r.status);
-              allDone = statuses.length === enrichJobIds.length &&
-                statuses.every((s) => s === 'completed' || s === 'failed');
-            }
-
-            // Fetch enriched organizations from DB
-            const enrichedOrgs = await db
-              .select()
-              .from(organizations)
-              .where(inArray(organizations.id, orgRows.map((o) => o.id)));
-
-            const orgResults = enrichedOrgs.map((org) => ({
-              id: org.id,
-              name: org.name,
-              status: org.status,
-              data: org.data,
-            }));
-
-            const failedCount = orgResults.filter((o) => o.status !== 'completed').length;
-            result = {
-              status: failedCount === orgResults.length ? 'error' : 'completed',
-              organizations: orgResults,
-              totalCreated: orgResults.length,
-              totalEnriched: orgResults.filter((o) => o.status === 'completed').length,
-              totalFailed: failedCount,
-              workspaceId: targetWorkspaceId,
-            };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
+            const r = await this.executeServerToolInternal(buildExecuteServerToolInput());
+            result = r.result;
+            streamSeq = r.streamSeq;
           } else {
             throw new Error(`Unknown tool: ${toolCall.name}`);
           }
@@ -4272,6 +4195,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       allowedDocContexts,
       primaryContextType,
       primaryContextId,
+      selectedModel,
       sessionWorkspaceId,
       readOnly,
       currentUserRole,
@@ -5436,6 +5360,96 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
           streamSeq += 1;
         } // end generate action
+        break;
+      }
+      case 'batch_create_organizations': {
+        if (readOnly) throw new Error('Read-only workspace: batch_create_organizations is disabled');
+        const description = typeof args.description === 'string' ? args.description : '';
+        const targetWorkspaceId = sessionWorkspaceId;
+        if (!description) throw new Error('batch_create_organizations: description is required');
+
+        // Parse organization names from description (comma-separated, numbered list, or newline-separated)
+        const orgNames = description
+          .split(/[,\n]/)
+          .map((s: string) => s.replace(/^\s*\d+[\.\)\-]\s*/, '').trim())
+          .filter((s: string) => s.length > 0 && s.length < 200);
+
+        if (orgNames.length === 0) {
+          throw new Error('batch_create_organizations: no organization names found in description');
+        }
+
+        // Create organizations in DB with status 'generating'
+        const orgRows: Array<{ id: string; name: string }> = [];
+        for (const name of orgNames) {
+          const orgId = createId();
+          await db.insert(organizations).values({
+            id: orgId,
+            workspaceId: targetWorkspaceId,
+            name,
+            status: 'generating',
+            data: {},
+          });
+          orgRows.push({ id: orgId, name });
+        }
+
+        // Launch organization_enrich jobs for each org (lazy import to avoid circular dependency)
+        const { queueManager } = await import('./queue-manager');
+        const enrichJobIds: string[] = [];
+        for (const org of orgRows) {
+          const jobData: OrganizationEnrichJobData = {
+            organizationId: org.id,
+            organizationName: org.name,
+            model: selectedModel,
+            initiatedByUserId: options.userId,
+            locale: options.locale ?? 'fr',
+            wasCreated: true,
+          };
+          const jobId = await queueManager.addJob('organization_enrich', jobData, {
+            workspaceId: targetWorkspaceId,
+          });
+          enrichJobIds.push(jobId);
+        }
+
+        // Poll all enrich jobs until completion (timeout 3min, poll every 2s)
+        const POLL_INTERVAL_MS = 2000;
+        const POLL_TIMEOUT_MS = 180_000;
+        const startTime = Date.now();
+        let allDone = false;
+        while (!allDone && Date.now() - startTime < POLL_TIMEOUT_MS) {
+          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+          const jobRows = await db
+            .select({ id: jobQueue.id, status: jobQueue.status })
+            .from(jobQueue)
+            .where(inArray(jobQueue.id, enrichJobIds));
+          const statuses = jobRows.map((r) => r.status);
+          allDone = statuses.length === enrichJobIds.length &&
+            statuses.every((s) => s === 'completed' || s === 'failed');
+        }
+
+        // Fetch enriched organizations from DB
+        const enrichedOrgs = await db
+          .select()
+          .from(organizations)
+          .where(inArray(organizations.id, orgRows.map((o) => o.id)));
+
+        const orgResults = enrichedOrgs.map((org) => ({
+          id: org.id,
+          name: org.name,
+          status: org.status,
+          data: org.data,
+        }));
+
+        const failedCount = orgResults.filter((o) => o.status !== 'completed').length;
+        result = {
+          status: failedCount === orgResults.length ? 'error' : 'completed',
+          organizations: orgResults,
+          totalCreated: orgResults.length,
+          totalEnriched: orgResults.filter((o) => o.status === 'completed').length,
+          totalFailed: failedCount,
+          workspaceId: targetWorkspaceId,
+        };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
         break;
       }
       default:
