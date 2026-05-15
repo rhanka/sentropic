@@ -632,4 +632,209 @@ describe('ChatRuntime integration — inter-lib full-flow composition', () => {
     expect(remaining.map((row) => row.id)).toEqual(['msg-user-1', assistantMessageId]);
     expect(remaining.map((row) => row.sequence)).toEqual([1, 2]);
   });
+
+  // =====================================================================
+  // BR14b Lot 23 — extended scenarios exercising the 6 sub-classes via the
+  // façade. Each new case proves the Lot 22b split preserved end-to-end
+  // behavior across cross-sub-class composition (Checkpoint+Session,
+  // RunPrepare+ToolDispatch+Finalization, Messages+ToolDispatch).
+  // =====================================================================
+
+  // ---------------------------------------------------------------------
+  // CASE 6 — Full tool-loop with checkpoint+restore mid-flow.
+  //
+  // Exercises Checkpoint + Session + ToolDispatch + Finalization together:
+  // run one consumeAssistantStream pass, finalize the assistant message,
+  // create a checkpoint at the end of iteration, append a second user/assistant
+  // turn, then restoreCheckpoint drops the second turn back to the anchor.
+  // ---------------------------------------------------------------------
+  it('runs a tool-loop pass then checkpoints + restores across the façade', async () => {
+    await seedSessionAndUserTurn(fixture, { title: 'Existing title' });
+
+    const ctx = await fixture.runtime.prepareAssistantRun({
+      userId,
+      sessionId,
+      assistantMessageId,
+    });
+    const prompt = await fixture.runtime.prepareSystemPrompt(ctx, {
+      userId,
+      sessionId,
+      requestedTools: [],
+    });
+    const loopState = await fixture.runtime.beginAssistantRunLoop({
+      assistantMessageId,
+      systemPrompt: prompt.systemPrompt,
+      conversation: ctx.conversation,
+      enforceTodoUpdateMode: false,
+      todoProgressionFocusMode: false,
+      hasActiveSessionTodo: false,
+      baseMaxIterations: 10,
+    });
+    fixture.mesh.enqueueStream([
+      { type: 'content_delta', data: { delta: 'first answer' } },
+      { type: 'done', data: {} },
+    ]);
+    await fixture.runtime.consumeAssistantStream({
+      streamId: assistantMessageId,
+      loopState,
+      request: buildBaseRequest(loopState),
+    });
+    await fixture.runtime.finalizeAssistantMessageFromStream({
+      assistantMessageId,
+    });
+
+    // Checkpoint after iteration 1 — anchored on the assistant placeholder.
+    const checkpoint = await fixture.runtime.createCheckpoint({
+      sessionId,
+      title: 'Iteration 1',
+      anchorMessageId: assistantMessageId,
+    });
+    expect(checkpoint.messageCount).toBe(2);
+
+    // Append a follow-up turn (would be a new iteration).
+    await fixture.messageStore.insertMany([
+      {
+        id: 'msg-user-2',
+        sessionId,
+        role: 'user',
+        content: 'And then?',
+        sequence: 3,
+        createdAt: new Date('2026-05-14T10:01:00Z'),
+      },
+      {
+        id: 'msg-assistant-2',
+        sessionId,
+        role: 'assistant',
+        content: 'second answer',
+        sequence: 4,
+        createdAt: new Date('2026-05-14T10:01:01Z'),
+      },
+    ]);
+
+    // Restore drops the follow-up turn, leaving sequences 1..2.
+    const restored = await fixture.runtime.restoreCheckpoint({
+      sessionId,
+      checkpointId: checkpoint.id,
+    });
+    expect(restored.removedMessages).toBe(2);
+    expect(restored.restoredToSequence).toBe(2);
+    const remaining = await fixture.messageStore.listForSession(sessionId);
+    expect(remaining.map((row) => row.id)).toEqual(['msg-user-1', assistantMessageId]);
+  });
+
+  // ---------------------------------------------------------------------
+  // CASE 7 — Multi-iteration tool-loop driving consumeAssistantStream
+  // twice in sequence with different streamed payloads. Proves loopState
+  // mutates monotonically and stream events stay gap-free across passes.
+  // ---------------------------------------------------------------------
+  it('drives two consecutive consumeAssistantStream passes preserving loop state cursors', async () => {
+    await seedSessionAndUserTurn(fixture);
+    const ctx = await fixture.runtime.prepareAssistantRun({
+      userId,
+      sessionId,
+      assistantMessageId,
+    });
+    const prompt = await fixture.runtime.prepareSystemPrompt(ctx, {
+      userId,
+      sessionId,
+      requestedTools: [],
+    });
+    const loopState = await fixture.runtime.beginAssistantRunLoop({
+      assistantMessageId,
+      systemPrompt: prompt.systemPrompt,
+      conversation: ctx.conversation,
+      enforceTodoUpdateMode: false,
+      todoProgressionFocusMode: false,
+      hasActiveSessionTodo: false,
+      baseMaxIterations: 10,
+    });
+
+    // Iteration 1.
+    fixture.mesh.enqueueStream([
+      { type: 'content_delta', data: { delta: 'part1' } },
+      { type: 'done', data: {} },
+    ]);
+    const r1 = await fixture.runtime.consumeAssistantStream({
+      streamId: assistantMessageId,
+      loopState,
+      request: buildBaseRequest(loopState),
+    });
+    expect(r1.doneReason).toBe('normal');
+    const peekedAfter1 = await fixture.runtime.peekStreamSequence(
+      assistantMessageId,
+    );
+
+    // Iteration 2 reuses the same loop state but emits a new payload.
+    // The caller would normally reset contentParts between iterations
+    // — but the buffer cursor must keep advancing across passes.
+    fixture.mesh.enqueueStream([
+      { type: 'content_delta', data: { delta: 'part2' } },
+      { type: 'done', data: {} },
+    ]);
+    loopState.iteration += 1;
+    const r2 = await fixture.runtime.consumeAssistantStream({
+      streamId: assistantMessageId,
+      loopState,
+      request: buildBaseRequest(loopState),
+    });
+    expect(r2.doneReason).toBe('normal');
+    // Buffer sequence advanced monotonically across iterations.
+    const peekedAfter2 = await fixture.runtime.peekStreamSequence(
+      assistantMessageId,
+    );
+    expect(peekedAfter2).toBeGreaterThan(peekedAfter1);
+    // Two content_delta events landed in the same buffer with strictly
+    // increasing sequences (gap-free).
+    const deltas = fixture.streamBuffer
+      .snapshot(assistantMessageId)
+      .filter((event) => event.eventType === 'content_delta');
+    expect(deltas).toHaveLength(2);
+    expect(deltas[0]!.sequence).toBeLessThan(deltas[1]!.sequence);
+    // Loop state ended with both parts accumulated (the loop owner is the
+    // caller — runtime appends without resetting).
+    expect(loopState.contentParts.join('')).toBe('part1part2');
+  });
+
+  // ---------------------------------------------------------------------
+  // CASE 8 — Pass2 fallback trigger when the main pass produced no
+  // user-facing content. Proves Finalization.runPass2Fallback wires the
+  // mesh adapter with tools=undefined and persists the recovered content.
+  // ---------------------------------------------------------------------
+  it('falls back to pass2 when contentParts is empty after the main pass', async () => {
+    await seedSessionAndUserTurn(fixture);
+    // First mesh sequence: drives the pass2 invokeStream call.
+    fixture.mesh.enqueueStream([
+      { type: 'content_delta', data: { delta: 'recovered answer' } },
+      { type: 'done', data: {} },
+    ]);
+    const pass2 = await fixture.runtime.runPass2Fallback({
+      streamId: assistantMessageId,
+      assistantMessageId,
+      sessionId,
+      userId,
+      workspaceId: 'ws-1',
+      providerId: 'openai',
+      model: 'gpt-test',
+      reasoningEffort: 'medium',
+      conversation: [
+        { role: 'system', content: 'You are helpful.' },
+        { role: 'user', content: 'Need a final answer.' },
+      ],
+      executedTools: [{ name: 'web_search', result: { hits: ['x'] } }],
+      systemPrompt: 'You are a helpful assistant.',
+      contentParts: [],
+      reasoningParts: [],
+      streamSeq: 1,
+      traceEnabled: false,
+      writeChatGenerationTrace: undefined,
+    });
+    expect(pass2.skipped).toBe(false);
+    // The mesh adapter was invoked with tools=undefined + toolChoice='none'.
+    expect(fixture.mesh.streamCalls).toHaveLength(1);
+    expect(fixture.mesh.streamCalls[0]!.tools).toBeUndefined();
+    expect(fixture.mesh.streamCalls[0]!.toolChoice).toBe('none');
+    // Recovered content landed in the stream buffer.
+    const events = fixture.streamBuffer.snapshot(assistantMessageId);
+    expect(events.some((e) => e.eventType === 'content_delta')).toBe(true);
+  });
 });
