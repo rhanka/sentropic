@@ -130,6 +130,10 @@ import {
   type ChatHistoryStreamEvent,
   type ChatHistoryTimelineItem,
 } from './history.js';
+import type {
+  ContextBudgetSnapshot,
+  ContextBudgetZone,
+} from './context-budget.js';
 
 /**
  * BR14b Lot 21b — max characters captured into
@@ -1380,6 +1384,108 @@ export interface ConsumeToolCallsResult {
   }>;
   readonly executedTools: ReadonlyArray<AssistantRunLoopExecutedTool>;
   readonly shouldBreakLoop: boolean;
+}
+
+/**
+ * BR14b Lot 21e-1 — input to `ChatRuntime.applyContextBudgetGate`.
+ *
+ * Mirrors verbatim the captured locals consumed by the inline gate at
+ * `chat-service.ts` lines 3534-3636 (post-Lot 21d-3): the parsed `args`,
+ * the pre-computed `preToolBudget` snapshot, the pre-computed
+ * `projectedResultChars`, the running `streamSeq` + `contextBudgetReplanAttempts`
+ * cursors, and three pure helpers + one compaction callback bound on
+ * the caller side. The caller pre-computes `preToolBudget` and
+ * `projectedResultChars` because the helpers `estimateContextBudget`
+ * and `estimateToolResultProjectionChars` live api-side (they consume
+ * `MODEL_CONTEXT_BUDGETS` and the api-defined per-tool projection
+ * heuristics — chat-core must not import them per SPEC §5).
+ *
+ *   - `resolveBudgetZone` — pure projection of `occupancyPct` to the
+ *     `ContextBudgetZone` union (api-side because the thresholds live
+ *     api-side as `CONTEXT_BUDGET_SOFT_THRESHOLD` / `CONTEXT_BUDGET_HARD_THRESHOLD`
+ *     constants).
+ *   - `estimateTokenCountFromChars` — pure char→token approximation
+ *     (`Math.max(1, Math.ceil(charCount / 4))`); api-side helper.
+ *   - `compactContextIfNeeded` — caller-side closure that mutates
+ *     `currentMessages` + emits `context_compaction_started/done/failed`
+ *     status events; returns the post-compaction snapshot. The gate
+ *     invokes it only on the hard-zone branch.
+ *   - `softZoneCode` / `hardZoneCode` — api-side string constants
+ *     (`'context_budget_risk'` / `'context_budget_blocked'`) passed in
+ *     so chat-core stays free of api-defined error code strings.
+ *   - `maxReplanAttempts` — api-side constant `CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS = 1`.
+ */
+export interface ApplyContextBudgetGateInput {
+  readonly streamId: string;
+  readonly toolCall: {
+    readonly id: string;
+    readonly name: string;
+  };
+  readonly args: unknown;
+  readonly preToolBudget: ContextBudgetSnapshot;
+  readonly projectedResultChars: number;
+  readonly streamSeq: number;
+  readonly contextBudgetReplanAttempts: number;
+  readonly maxReplanAttempts: number;
+  readonly softZoneCode: string;
+  readonly hardZoneCode: string;
+  readonly resolveBudgetZone: (occupancyPct: number) => ContextBudgetZone;
+  readonly estimateTokenCountFromChars: (charCount: number) => number;
+  readonly compactContextIfNeeded: (
+    reason: 'pre_tool_hard_threshold',
+    snapshot: ContextBudgetSnapshot,
+  ) => Promise<ContextBudgetSnapshot>;
+}
+
+/**
+ * BR14b Lot 21e-1 — return shape of `ChatRuntime.applyContextBudgetGate`.
+ *
+ *   - `shouldContinue` — `true` when the gate emitted a deferred result
+ *     and the caller must `continue` the for-loop (skip the per-tool
+ *     dispatch via `executeServerTool`); `false` when the gate passed
+ *     and the caller proceeds with the per-tool work. Mirrors the
+ *     `continue` short-circuit at chat-service.ts line 3634 (pre-Lot 21e-1).
+ *   - `streamSeq` — advanced cursor returned to the caller so it stays
+ *     in sync with `deps.streamSequencer.allocate` (the gate emits up
+ *     to two events on the deferred branch: a `tool_call_result` event
+ *     and an optional `status:context_budget_user_escalation_required`
+ *     event when `replanAttempts` exceeds `maxReplanAttempts`).
+ *   - `contextBudgetReplanAttempts` — advanced counter (incremented on
+ *     non-normal projected zone, reset to 0 on normal zone). Same
+ *     semantics as the inline `contextBudgetReplanAttempts += 1` /
+ *     `= 0` lines at chat-service.ts 3573 / 3636.
+ *   - `preToolBudget` — possibly-updated snapshot returned to the caller
+ *     so the projected payload accounting downstream uses the
+ *     post-compaction state (mirrors the inline reassignment at line
+ *     3568-3570 when the hard-zone branch fires).
+ *   - `deferredAccumulator` — present only when `shouldContinue === true`:
+ *     the three rows the caller must push into `toolResults` /
+ *     `responseToolOutputs` / `executedTools`. The caller owns the
+ *     accumulator arrays (they live in `runAssistantGeneration` outer
+ *     scope alongside the rest of the per-iteration state) and the
+ *     runtime stays accumulator-agnostic.
+ */
+export interface ApplyContextBudgetGateResult {
+  readonly shouldContinue: boolean;
+  readonly streamSeq: number;
+  readonly contextBudgetReplanAttempts: number;
+  readonly preToolBudget: ContextBudgetSnapshot;
+  readonly deferredAccumulator?: {
+    readonly deferredResult: {
+      readonly status: 'deferred';
+      readonly code: string;
+      readonly message: string;
+      readonly occupancy_pct: number;
+      readonly estimated_tokens: number;
+      readonly max_tokens: number;
+      readonly replan_required: true;
+      readonly escalation_required: boolean;
+      readonly suggested_actions: ReadonlyArray<string>;
+    };
+    readonly toolCallId: string;
+    readonly toolName: string;
+    readonly args: unknown;
+  };
 }
 
 /**
@@ -3279,6 +3385,166 @@ export class ChatRuntime {
       pendingLocalToolCalls,
       executedTools: [],
       shouldBreakLoop: false,
+    };
+  }
+
+  /**
+   * BR14b Lot 21e-1 — per-tool context-budget gate.
+   *
+   * Verbatim port of the inline block at `chat-service.ts` lines
+   * 3534-3636 (post-Lot 21d-3): runs the pre-tool budget projection,
+   * triggers compaction on the hard zone, and emits a deferred
+   * `tool_call_result` (plus an optional escalation status when the
+   * replan attempt counter exceeds the api-side
+   * `CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS` constant) when the projected
+   * zone is non-normal. Returns `shouldContinue: true` in that case so
+   * the caller's for-loop body skips the per-tool dispatch via
+   * `runtime.executeServerTool(...)` and pushes the
+   * `deferredAccumulator` payload into its three local accumulators
+   * (`toolResults` / `responseToolOutputs` / `executedTools`).
+   *
+   * Pre-Lot 21e-1 the block lived inline inside the for-loop body of
+   * `ChatService.runAssistantGeneration`. The migration is verbatim:
+   * the projection math, the deferred-result payload shape, the two
+   * event payloads, and the `+= 1` / `= 0` semantics of
+   * `contextBudgetReplanAttempts` are byte-identical. The caller still
+   * owns the three accumulator arrays + the `currentMessages`
+   * mutation (the latter happens inside the compaction callback) so
+   * the gate stays a thin orchestration slice with no captured locals
+   * beyond the explicit input bundle.
+   *
+   * Event emission goes through `deps.streamSequencer.allocate` +
+   * `deps.streamBuffer.append` (same convention as
+   * `consumeToolCalls`) rather than through a caller-supplied
+   * `writeStreamEvent` callback so the runtime owns sequence
+   * advancement. The returned `streamSeq` is the cursor the caller
+   * must reassign locally to stay in sync.
+   *
+   * The pre-tool budget snapshot (`preToolBudget`) and the projected
+   * payload chars (`projectedResultChars`) are pre-computed by the
+   * caller because `estimateContextBudget` /
+   * `estimateToolResultProjectionChars` are api-side helpers
+   * (`MODEL_CONTEXT_BUDGETS`, per-tool projection heuristics). Same
+   * with `resolveBudgetZone` and `estimateTokenCountFromChars` which
+   * cross as inputs to keep the api-side constants out of chat-core.
+   * `compactContextIfNeeded` is a caller-side closure because it
+   * mutates `currentMessages` (caller-local state) via
+   * `compactConversationContext` (api-side helper).
+   *
+   * NOTE: The caller MUST call `writeContextBudgetStatus('pre_tool',
+   * preToolBudget, { tool_name })` BEFORE invoking this method (the
+   * inline block does it at line 3547, before any projection). The
+   * status event is emitted by the api-side wrapper that re-syncs
+   * `lastBudgetAnnouncedPct` — keeping it caller-side preserves the
+   * pre-existing announce-once short-circuit semantics from Lot 21a.
+   */
+  async applyContextBudgetGate(
+    input: ApplyContextBudgetGateInput,
+  ): Promise<ApplyContextBudgetGateResult> {
+    const {
+      streamId,
+      toolCall,
+      args,
+      projectedResultChars,
+      maxReplanAttempts,
+      softZoneCode,
+      hardZoneCode,
+      resolveBudgetZone,
+      estimateTokenCountFromChars,
+      compactContextIfNeeded,
+    } = input;
+    let preToolBudget = input.preToolBudget;
+    let streamSeq = input.streamSeq;
+    let contextBudgetReplanAttempts = input.contextBudgetReplanAttempts;
+    const computeProjected = (snapshot: ContextBudgetSnapshot) => {
+      const projectedTokens =
+        snapshot.estimatedTokens +
+        estimateTokenCountFromChars(projectedResultChars);
+      const projectedPct = Math.min(
+        100,
+        Math.max(0, Math.round((projectedTokens / snapshot.maxTokens) * 100)),
+      );
+      return {
+        projectedTokens,
+        projectedPct,
+        projectedZone: resolveBudgetZone(projectedPct),
+      };
+    };
+    let projectedBudget = computeProjected(preToolBudget);
+    if (projectedBudget.projectedZone === 'hard') {
+      preToolBudget = await compactContextIfNeeded(
+        'pre_tool_hard_threshold',
+        preToolBudget,
+      );
+      projectedBudget = computeProjected(preToolBudget);
+    }
+    if (projectedBudget.projectedZone !== 'normal') {
+      contextBudgetReplanAttempts += 1;
+      const escalationRequired =
+        contextBudgetReplanAttempts > maxReplanAttempts;
+      const deferredResult = {
+        status: 'deferred' as const,
+        code:
+          projectedBudget.projectedZone === 'hard'
+            ? hardZoneCode
+            : softZoneCode,
+        message:
+          projectedBudget.projectedZone === 'hard'
+            ? 'Tool call blocked: context budget still above hard threshold after compaction.'
+            : 'Tool call deferred: projected output would exceed context budget soft threshold.',
+        occupancy_pct: projectedBudget.projectedPct,
+        estimated_tokens: projectedBudget.projectedTokens,
+        max_tokens: preToolBudget.maxTokens,
+        replan_required: true as const,
+        escalation_required: escalationRequired,
+        suggested_actions: [
+          'Narrow scope and retry tool with smaller payload.',
+          'Use history_analyze for targeted extraction if needed.',
+        ],
+      };
+      const seq1 = await this.deps.streamSequencer.allocate(streamId);
+      await this.deps.streamBuffer.append(
+        streamId,
+        'tool_call_result',
+        { tool_call_id: toolCall.id, result: deferredResult },
+        seq1,
+        streamId,
+      );
+      streamSeq = seq1 + 1;
+      if (escalationRequired) {
+        const seq2 = await this.deps.streamSequencer.allocate(streamId);
+        await this.deps.streamBuffer.append(
+          streamId,
+          'status',
+          {
+            state: 'context_budget_user_escalation_required',
+            occupancy_pct: projectedBudget.projectedPct,
+            code: deferredResult.code,
+          },
+          seq2,
+          streamId,
+        );
+        streamSeq = seq2 + 1;
+      }
+      return {
+        shouldContinue: true,
+        streamSeq,
+        contextBudgetReplanAttempts,
+        preToolBudget,
+        deferredAccumulator: {
+          deferredResult,
+          toolCallId: toolCall.id,
+          toolName: toolCall.name || 'unknown_tool',
+          args,
+        },
+      };
+    }
+    contextBudgetReplanAttempts = 0;
+    return {
+      shouldContinue: false,
+      streamSeq,
+      contextBudgetReplanAttempts,
+      preToolBudget,
     };
   }
 }
