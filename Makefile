@@ -1480,3 +1480,71 @@ up-maildev: ## Start MailDev service in detached mode
 .PHONY: down-maildev
 down-maildev: ## Stop MailDev service
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml stop maildev
+
+# === Scaleway Kapsule (poc-k8s tenant) ===================================
+# Tenant-scoped Make targets. The namespace + ResourceQuota + LimitRange +
+# NetworkPolicy baseline are NOT applied here; they live in
+# https://github.com/rhanka/poc-k8s/tree/main/tenants/sentropic — run
+# `make -C ~/src/poc-k8s apply-sentropic` first.
+# All targets honour KUBECONFIG (default ~/.kube/poc.yaml).
+SCW_NAMESPACE ?= sentropic
+SCW_ENV_FILE  ?= .env
+KUBECONFIG    ?= $(HOME)/.kube/poc.yaml
+
+.PHONY: scw-deploy scw-undeploy scw-bundle-secret scw-status
+
+scw-deploy: ## Apply tenant manifests on the poc cluster (SCW_INGRESS=1 includes 60-ingress.yaml)
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/10-rbac.yaml
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/20-postgres.yaml
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/30-api.yaml
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/40-ui.yaml
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/50-maildev.yaml
+	@if [ "$(SCW_INGRESS)" = "1" ]; then \
+	  KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/60-ingress.yaml; \
+	fi
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) rollout status deploy/api --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) rollout status deploy/ui  --timeout=300s
+
+scw-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s stay)
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/60-ingress.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/50-maildev.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/40-ui.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/30-api.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/20-postgres.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/10-rbac.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete secret sentropic-postgres sentropic-api --ignore-not-found
+
+scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (.env)
+	@test -f $(SCW_ENV_FILE) || { echo "missing $(SCW_ENV_FILE)" >&2; exit 1; }
+	@set -eu ; \
+	get() { v=$$(grep -E "^$$1=" $(SCW_ENV_FILE) | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$$//') ; printf '%s' "$$v" ; } ; \
+	POSTGRES_PASSWORD=$$(get POSTGRES_PASSWORD) ; [ -n "$$POSTGRES_PASSWORD" ] || POSTGRES_PASSWORD=app ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) create secret generic sentropic-postgres \
+	  --from-literal=POSTGRES_PASSWORD="$$POSTGRES_PASSWORD" \
+	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
+	OPENAI=$$(get OPENAI_API_KEY) ; ANTHROPIC=$$(get ANTHROPIC_API_KEY) ; GEMINI=$$(get GEMINI_API_KEY) ; \
+	MISTRAL=$$(get MISTRAL_API_KEY) ; COHERE=$$(get COHERE_API_KEY) ; TAVILY=$$(get TAVILY_API_KEY) ; \
+	MAIL_USERNAME=$$(get MAIL_USERNAME) ; MAIL_PASSWORD=$$(get MAIL_PASSWORD) ; \
+	GD_CS=$$(get GOOGLE_DRIVE_CLIENT_SECRET) ; GD_PK=$$(get GOOGLE_DRIVE_PICKER_API_KEY) ; \
+	GD_CID=$$(get GOOGLE_DRIVE_CLIENT_ID) ; GD_PID=$$(get GOOGLE_DRIVE_PICKER_APP_ID) ; \
+	DATABASE_URL="postgres://app:$${POSTGRES_PASSWORD}@postgres:5432/app" ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) create secret generic sentropic-api \
+	  --from-literal=DATABASE_URL="$$DATABASE_URL" \
+	  --from-literal=OPENAI_API_KEY="$$OPENAI" \
+	  --from-literal=ANTHROPIC_API_KEY="$$ANTHROPIC" \
+	  --from-literal=GEMINI_API_KEY="$$GEMINI" \
+	  --from-literal=MISTRAL_API_KEY="$$MISTRAL" \
+	  --from-literal=COHERE_API_KEY="$$COHERE" \
+	  --from-literal=TAVILY_API_KEY="$$TAVILY" \
+	  --from-literal=MAIL_USERNAME="$$MAIL_USERNAME" \
+	  --from-literal=MAIL_PASSWORD="$$MAIL_PASSWORD" \
+	  --from-literal=GOOGLE_DRIVE_CLIENT_ID="$$GD_CID" \
+	  --from-literal=GOOGLE_DRIVE_CLIENT_SECRET="$$GD_CS" \
+	  --from-literal=GOOGLE_DRIVE_PICKER_API_KEY="$$GD_PK" \
+	  --from-literal=GOOGLE_DRIVE_PICKER_APP_ID="$$GD_PID" \
+	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f -
+	@echo "==> Secrets sentropic-postgres + sentropic-api ready in $(SCW_NAMESPACE)."
+
+scw-status: ## Snapshot of the sentropic tenant on the poc cluster
+	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get deploy,statefulset,svc,ingress 2>/dev/null || true
+	@echo "" ; KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get pods -o wide 2>/dev/null || true
