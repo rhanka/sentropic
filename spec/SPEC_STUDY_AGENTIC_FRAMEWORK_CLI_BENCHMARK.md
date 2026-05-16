@@ -2,7 +2,7 @@
 
 ## Intention
 
-Build a durable decision framework for Entropiq's agentic architecture. The benchmark must compare workflow engines, agent frameworks, model-access SDKs, and CLI control loops as distinct layers, then define how one shared structure can power web, API job, and CLI modes.
+Build a durable decision framework for Sentropic's agentic architecture. The benchmark must compare workflow engines, agent frameworks, model-access SDKs, and CLI control loops as distinct layers, then define how one shared structure can power web, API job, and CLI modes.
 
 ## Durable question
 
@@ -15,7 +15,7 @@ The central question is not only which framework models workflows best. It is al
 - Temporal: durable workflow execution, retries, signals, human-in-the-loop gates, and long-running jobs.
 - Vercel AI SDK / AI Gateway: model access, streaming primitives, provider abstraction, observability, and application integration.
 - Claude Code / Codex CLI / Gemini CLI / Clawcode-like tools: reasoning loop control, patch discipline, tool mediation, approvals, filesystem boundaries, shell execution, and terminal UX.
-- Entropiq current stack: `@sentropic/llm-mesh`, default agents, workflow runtime, chat runtime, conductor branch process, future BR19 skill catalog.
+- Sentropic current stack: `@sentropic/llm-mesh`, default agents, workflow runtime, chat runtime, conductor branch process, future BR19 skill catalog.
 
 ## Evaluation dimensions
 
@@ -30,7 +30,7 @@ The central question is not only which framework models workflows best. It is al
 
 ## Architecture hypothesis
 
-Entropiq should separate four layers:
+Sentropic should separate four layers:
 
 - Model access layer: `@sentropic/llm-mesh` owns providers, model profiles, streaming normalization, and credentials.
 - Agent loop layer: owns reasoning loop state, approvals, tool calls, observations, memory, and recovery.
@@ -39,7 +39,7 @@ Entropiq should separate four layers:
 
 A CLI should not be a separate architecture. It should be a runtime shell around the same agent loop, workflow, skill catalog, and model mesh used by the web app.
 
-## Current Entropiq baseline
+## Current Sentropic baseline
 
 The study starts from the existing roadmap rather than from a blank architecture:
 
@@ -49,7 +49,7 @@ The study starts from the existing roadmap rather than from a blank architecture
 - The conductor branch process already contains useful human-control primitives: explicit scope, allowed/forbidden paths, selective staging, approval gates, checkpoints via commits, and read/report contracts.
 - BR19 is the natural target for durable skill catalog and sandbox decisions. This BR23 study should produce inputs for BR19, not implement BR19 directly.
 
-This means the target is not "pick one framework and replace Entropiq." The target is a layered architecture where framework adoption is selective and migration-safe.
+This means the target is not "pick one framework and replace Sentropic." The target is a layered architecture where framework adoption is selective and migration-safe.
 
 ## Decision lens: workflow graph modeling versus control-loop governance
 
@@ -62,21 +62,21 @@ These concerns overlap but should not be collapsed:
 - A graph can coordinate agents without defining safe patch discipline, shell policy, or approval UX.
 - A CLI can enforce excellent loop governance without providing durable long-running workflow execution.
 - A model SDK can stream and observe model calls without modeling either durable workflows or tool governance.
-- Entropiq needs all three layers: model access, loop governance, and workflow durability.
+- Sentropic needs all three layers: model access, loop governance, and workflow durability.
 
 ## Decision matrix
 
-| Candidate | Primary layer | Decision | Best fit for Entropiq | Key strengths | Main gaps / risks | BR23 implication |
+| Candidate | Primary layer | Decision | Best fit for Sentropic | Key strengths | Main gaps / risks | BR23 implication |
 | --- | --- | --- | --- | --- | --- | --- |
 | LangGraph | Agent/workflow graph | Adapt | Explicit graph/state modeling for multi-step agent plans, supervisor/worker patterns, and replayable state transitions. | Strong graph semantics, stateful execution, explicit transitions, useful mental model for multi-agent routing. | Does not by itself solve product-grade approvals, filesystem policy, patch discipline, or CLI UX. May overlap with BR04B workflow concepts if adopted wholesale. | Use as a reference model for agent graph/state schemas. Do not replace product workflows by default. |
 | Agno | Agent/team abstraction | Watch / selectively adapt | Lightweight agent/team/tool ergonomics and examples for app-level multi-agent composition. | Fast to model agents, tools, teams, knowledge, and simple app flows. Good ergonomics for prototypes. | Durability, governance, approvals, and enterprise observability need independent validation before adoption. | Borrow agent/team vocabulary where useful; avoid dependency until a concrete BR19/BR10 implementation need exists. |
-| Temporal | Durable workflow engine | Adapt / possible adopt for jobs | Long-running durable workflows, retries, signals, cancellations, human gates, and background execution. | Mature durability model, workers, retries, event history, signals, timers, compensation patterns. | Heavy operational footprint. Not a reasoning-loop framework. Poor fit for per-token interactive CLI control. | Strong candidate for API/background workflow durability if Entropiq outgrows current workflow runtime. Keep separate from agent loop. |
+| Temporal | Durable workflow engine | Adapt / possible adopt for jobs | Long-running durable workflows, retries, signals, cancellations, human gates, and background execution. | Mature durability model, workers, retries, event history, signals, timers, compensation patterns. | Heavy operational footprint. Not a reasoning-loop framework. Poor fit for per-token interactive CLI control. | Strong candidate for API/background workflow durability if Sentropic outgrows current workflow runtime. Keep separate from agent loop. |
 | Vercel AI SDK / AI Gateway | Model access, streaming, gateway | Adapt | Streaming UX, provider abstraction patterns, telemetry/gateway ideas, and app integration. | Strong web streaming primitives, provider adapters, gateway/observability direction, good UI integration patterns. | Not a Temporal-equivalent workflow engine and not a full agent governance layer. Potential overlap with `@sentropic/llm-mesh`. | Use as a benchmark for mesh API shape, streaming events, and gateway telemetry. Do not replace workflow or control loop. |
-| Claude Code | CLI control loop | Adapt | Terminal UX, plan/tool/observe loop, patch and file-edit discipline, approvals, memory, and human checkpoints. | Strong interactive coding loop, tool mediation, file context discipline, approval-oriented workflows. | Product APIs are not a reusable embedded framework. Behavior is tied to Anthropic/Claude UX and local CLI assumptions. | Treat as a reference implementation for Entropiq CLI loop governance. |
+| Claude Code | CLI control loop | Adapt | Terminal UX, plan/tool/observe loop, patch and file-edit discipline, approvals, memory, and human checkpoints. | Strong interactive coding loop, tool mediation, file context discipline, approval-oriented workflows. | Product APIs are not a reusable embedded framework. Behavior is tied to Anthropic/Claude UX and local CLI assumptions. | Treat as a reference implementation for Sentropic CLI loop governance. |
 | Codex CLI | CLI control loop | Adapt | Workspace safety, sandbox/approval model, selective edits, code review posture, tool mediation, and commit discipline. | Strong repo-safety habits, explicit sandboxing, patch-first workflow, scope reporting, review-oriented final outputs. | Not a general workflow engine. CLI UX and policies may not map one-to-one to browser sessions. | Use as reference for branch/worktree execution, approvals, sandboxing, and patch discipline. |
 | Gemini CLI | CLI control loop / provider integration | Watch / adapt | Tool mediation, repo operations, large-context workflows, and Google ecosystem/provider integration. | Useful comparison point for CLI tool contracts, model/provider coupling, and context handling. | Exact governance primitives and plugin model need verification before product commitment. | Track for CLI ergonomics and provider integration lessons; do not depend on it in BR23. |
 | Clawcode-like tools | Claude-compatible CLI ecosystem | Watch | Compatibility patterns around Claude Code-like commands, local tooling conventions, and terminal affordances. | Can reveal emerging conventions for agent terminal UX and command/plugin portability. | Ecosystem quality and stability vary. Risk of copying surface UX without governance substance. | Use as a trend signal only unless a concrete primitive is superior and documented. |
-| Entropiq current stack | Product runtime | Adopt as base | Existing product workflow/chat/model boundaries plus conductor governance patterns. | Already aligned with product domain, branch discipline, web/API concerns, and planned packages. | Needs a formal loop-governance layer and shared skill schema to avoid duplicated UI/API/CLI behavior. | Keep as base architecture; add framework-inspired primitives deliberately. |
+| Sentropic current stack | Product runtime | Adopt as base | Existing product workflow/chat/model boundaries plus conductor governance patterns. | Already aligned with product domain, branch discipline, web/API concerns, and planned packages. | Needs a formal loop-governance layer and shared skill schema to avoid duplicated UI/API/CLI behavior. | Keep as base architecture; add framework-inspired primitives deliberately. |
 
 ## Framework notes
 
@@ -84,7 +84,7 @@ These concerns overlap but should not be collapsed:
 
 LangGraph is strongest when the problem is explicit graph and state management for agentic flows. It is useful for modeling agent routers, supervisor/worker patterns, conditional transitions, accumulated state, and controlled continuation between nodes.
 
-For Entropiq, the durable lesson is the shape of graph state, not necessarily the dependency. A future BR19 or BR10 design can borrow these primitives:
+For Sentropic, the durable lesson is the shape of graph state, not necessarily the dependency. A future BR19 or BR10 design can borrow these primitives:
 
 - `AgentGraph`: named nodes, typed edges, entry/exit conditions, and resumable state.
 - `NodeState`: messages, artifacts, tool observations, policy decisions, and next-action hints.
@@ -96,7 +96,7 @@ LangGraph should not be treated as a complete answer to approvals or patch disci
 
 Agno is interesting as an ergonomics benchmark for agent and team composition. The useful comparison points are how quickly an app can declare agents, attach tools, wire teams, and expose a runnable assistant.
 
-The risk is premature adoption. Entropiq needs strict policy boundaries, artifact tracking, tool mediation, branch discipline, and future package boundaries. If Agno accelerates simple agent assembly but pushes governance into ad hoc callbacks, it should remain a watch item.
+The risk is premature adoption. Sentropic needs strict policy boundaries, artifact tracking, tool mediation, branch discipline, and future package boundaries. If Agno accelerates simple agent assembly but pushes governance into ad hoc callbacks, it should remain a watch item.
 
 The likely use is vocabulary and developer-experience inspiration, not direct runtime replacement.
 
@@ -104,10 +104,10 @@ The likely use is vocabulary and developer-experience inspiration, not direct ru
 
 Temporal is the strongest candidate for durable process execution. It should be evaluated for jobs that must survive restarts, wait for humans, retry reliably, emit event history, and coordinate external side effects.
 
-Temporal is not the agent reasoning loop. A good Entropiq design would use Temporal around the loop, not instead of it:
+Temporal is not the agent reasoning loop. A good Sentropic design would use Temporal around the loop, not instead of it:
 
 - Temporal workflow owns durable job lifecycle, retries, timers, signals, and cancellation.
-- Entropiq agent loop owns reasoning steps, tool calls, approval requests, and artifact edits.
+- Sentropic agent loop owns reasoning steps, tool calls, approval requests, and artifact edits.
 - Skill execution owns sandboxed tool behavior and typed outputs.
 - UI/CLI owns interaction, streaming, and approval presentation.
 
@@ -117,20 +117,20 @@ This separation avoids the dual-runtime trap: long-running background workflows 
 
 Vercel AI SDK and AI Gateway are model/streaming/application infrastructure benchmarks. They are not direct replacements for Temporal or a full agent-control layer.
 
-The strongest lessons for Entropiq are:
+The strongest lessons for Sentropic are:
 
 - event taxonomy for streaming text, tool calls, tool results, errors, and metadata;
 - provider abstraction shape and normalized model invocation;
 - app-friendly streaming APIs for UI and server routes;
 - gateway-level telemetry, rate/usage visibility, and provider routing patterns.
 
-The main architectural constraint is overlap with `@sentropic/llm-mesh`. Entropiq should compare API shape and telemetry practices, but preserve the mesh as the owner of provider and credential policy unless a later branch explicitly changes that contract.
+The main architectural constraint is overlap with `@sentropic/llm-mesh`. Sentropic should compare API shape and telemetry practices, but preserve the mesh as the owner of provider and credential policy unless a later branch explicitly changes that contract.
 
 ## CLI control-loop benchmark
 
 ### Reusable control-loop primitives
 
-The CLI candidates converge on a set of primitives Entropiq should treat as first-class:
+The CLI candidates converge on a set of primitives Sentropic should treat as first-class:
 
 - `Session`: current workspace, user intent, active policy, transcript, memory refs, and runtime mode.
 - `Plan`: explicit current objective, ordered steps, status, and stop conditions.
@@ -158,7 +158,7 @@ The main lesson is not to copy the exact UX. The lesson is that an agentic CLI n
 
 ### Codex CLI reference lessons
 
-Codex CLI is especially relevant to Entropiq's conductor process:
+Codex CLI is especially relevant to Sentropic's conductor process:
 
 - strict workspace and branch awareness;
 - sandboxed command execution with escalation;
@@ -166,7 +166,7 @@ Codex CLI is especially relevant to Entropiq's conductor process:
 - review-oriented reporting with read set, checks, risks, and scope adherence;
 - strong distinction between exploration, edit, validation, and commit phases.
 
-Entropiq can adapt this into a product-independent CLI loop where each action has a policy decision and each session can produce an audit trail.
+Sentropic can adapt this into a product-independent CLI loop where each action has a policy decision and each session can produce an audit trail.
 
 ### Gemini CLI reference lessons
 
@@ -184,11 +184,11 @@ Before adopting any Gemini-specific pattern, BR23 or a later branch should verif
 
 Clawcode-like tools are best treated as ecosystem signals. They may show which Claude-compatible terminal affordances are becoming standard: slash commands, local memory files, MCP/tool wiring, shell approvals, and plugin-like extension points.
 
-The risk is copying conventions without the safety model. Entropiq should only adapt a pattern if it improves governance, portability, or user comprehension.
+The risk is copying conventions without the safety model. Sentropic should only adapt a pattern if it improves governance, portability, or user comprehension.
 
 ## Shared UI/API/CLI architecture sketch
 
-Entropiq should define a shared agent structure that is independent of presentation surface:
+Sentropic should define a shared agent structure that is independent of presentation surface:
 
 ```text
 Runtime surface
@@ -266,7 +266,7 @@ This event taxonomy is the bridge between UI streaming, API observability, CLI t
 
 The current recommendation is layered:
 
-- Adopt Entropiq's current stack as the base, including `@sentropic/llm-mesh`, BR04B workflow concepts, conductor discipline, and future BR19 skill catalog.
+- Adopt Sentropic's current stack as the base, including `@sentropic/llm-mesh`, BR04B workflow concepts, conductor discipline, and future BR19 skill catalog.
 - Adapt LangGraph concepts for graph/state schemas, not as an immediate wholesale runtime replacement.
 - Adapt Temporal concepts, and possibly the engine later, for durable API/background workflows with human gates.
 - Adapt Vercel AI SDK / AI Gateway patterns for streaming, model event taxonomy, gateway telemetry, and app integration while preserving mesh ownership.
