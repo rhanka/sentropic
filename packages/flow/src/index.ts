@@ -56,3 +56,10 @@ export type {
   Transitions,
   WorkflowCondition,
 } from './transitions.js';
+
+export type {
+  FlowRuntime,
+  FlowRuntimePorts,
+  StartInitiativeGenerationParams,
+  StartWorkflowParams,
+} from './flow-runtime.js';
