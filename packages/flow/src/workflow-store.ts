@@ -49,7 +49,9 @@ export interface WorkflowStore<
 
   /**
    * Seed the workspace with the default workflow catalog for the given
-   * workspace type. Idempotent.
+   * workspace type. Idempotent. Takes the actor because the underlying
+   * implementation needs the workspace + role context to upsert
+   * workflow + agent definitions through the same authz path.
    */
-  seedForWorkspaceType(workspaceId: string, type: TWorkspaceType): Promise<void>;
+  seedForWorkspaceType(actor: TActor, type: TWorkspaceType): Promise<void>;
 }
