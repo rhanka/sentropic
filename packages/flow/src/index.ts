@@ -26,3 +26,20 @@ export type {
   TaskResultParams,
   WorkflowRunStateSnapshot,
 } from './run-store.js';
+
+export type {
+  DispatchWorkflowEntryParams,
+  EnqueueOptions,
+  JobQueue,
+  QueuedJob,
+  WorkflowDispatchDescriptor,
+} from './job-queue.js';
+
+export type {
+  ApprovalGate,
+  GateConfig,
+  GateCriteria,
+  GateDecision,
+  GateEvaluationResult,
+  GateMode,
+} from './approval-gate.js';
