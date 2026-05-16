@@ -109,10 +109,10 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - [x] Persistence decision (BR19-Q6): in-memory only — no `skill_metadata` table. No `BR19-EX1` declared. See `## Feedback Loop` BR19-D1.
   - [x] Lot gate: typecheck + unit tests — 32/32 green for Lot 3 (registry 14 + resolve 12 + adapter 6); 55/55 across the package.
 
-- [ ] **Lot 4 — `search_skills` meta-tool**
-  - [ ] Implement `search_skills(query, context)` callable as a tool: top-K skills by description match (BM25 or embedding-light heuristic — frozen in SPEC_EVOL §5).
-  - [ ] Auto-register `search_skills` in any `SkillsToolRegistry` instance.
-  - [ ] Lot gate: typecheck + unit tests (top-K behaviour, context filtering applied before ranking, empty result).
+- [x] **Lot 4 — `search_skills` meta-tool**
+  - [x] Implement `search_skills(query, context)` callable as a tool: top-K skills by description match (BM25 or embedding-light heuristic — frozen in SPEC_EVOL §5).
+  - [x] Auto-register `search_skills` in any `SkillsToolRegistry` instance.
+  - [x] Lot gate: typecheck + unit tests (top-K behaviour, context filtering applied before ranking, empty result). 67/67 green via `make test-skills` (12 Lot 4 cases: 9 in `search-skills-tool.test.ts` + 3 in `adapter.test.ts`).
 
 - [ ] **Lot 5 — Migrate `tools.ts` to skill bundles (waves)**
   - [ ] Migrate **wave A** (low-risk listers): `web` skill (`web_search`, `web_extract`), `workspace` skill (`workspace_list`, `initiative_search`).
