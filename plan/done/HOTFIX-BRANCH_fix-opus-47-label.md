@@ -99,7 +99,7 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
 
 - [ ] **Lot 3 — `SkillRegistry` (catalog + filter + resolve)**
   - [x] Implement `SkillRegistry` (`register`, `list`, `get`, `search`) backed by in-memory map (Step 1).
-  - [ ] Implement `resolveTools(authz)` with `AuthzContext` filtering (roles, workspace types, permission mode).
+  - [x] Implement `resolveTools(authz)` with `AuthzContext` filtering — roles, workspace types, permission mode (Step 2).
   - [ ] Implement `SkillsToolRegistry` that adapts `SkillRegistry` to the `ToolRegistry` interface (locally declared until `@sentropic/contracts` exists — see BR19-N1).
   - [ ] Decide on optional `skill_metadata` table (defer to Lot 3 outcome; if needed declare `BR19-EX1`).
   - [ ] Lot gate: typecheck + unit tests (filter by role, workspace, search ranking, resolve under AuthzContext).
