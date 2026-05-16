@@ -82,6 +82,7 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
 - `deferred` 2026-05-12: BR14a implementation is deferred until BR14b stabilizes chat-service core boundaries. BR14a Lot 0 scoping may proceed in parallel.
 - `closed` 2026-05-14 (Lot 5): `make up-api-test` / `make test-api` previously failed during `prepare-node-workspace` with `npm error code EUNSUPPORTEDPROTOCOL ("workspace:*")`. Root cause: `packages/{events,chat-core}/package.json` declared internal `@sentropic/*` deps with `"workspace:*"` (pnpm/Yarn convention) which npm-cli does not understand. Resolution: replaced `"workspace:*"` with `"*"` (npm workspaces native) in `packages/events/package.json` (1 dep) and `packages/chat-core/package.json` (2 deps); regenerated root `package-lock.json` via `make lock-root` which now links `node_modules/@sentropic/{contracts,events,chat-core}` to their respective `packages/*` directories. Verified: `make typecheck-api` PASS; `make test-api-unit SCOPE=tests/unit/chat-checkpoint-runtime.test.ts` PASS (2/2 tests). Lot 4 deferred gate now closed.
 - `attention` 2026-05-13: Lot 4 added `packages/chat-core/src/checkpoint-port.ts` to isolate the contracts-free `CheckpointStore<T>` / `SaveResult` / `CheckpointMeta` surface from `ports.ts`. Required so the api workspace can import the port via relative path without dragging the full `@sentropic/contracts` / `@sentropic/events` graph (which is not yet wired into api/Dockerfile). `ports.ts` and `index.ts` re-export the surface so future `from '@sentropic/chat-core'` consumers see no API change.
+- `closed` 2026-05-16 (Lot 5): **UAT passed** — branch HEAD `c56e7852`, surface tested: web app, scenarios 1 (streaming), 2 (local tool handoff), 3 (tool-result continuation), 5 (retry), 6 (checkpoint visibility), 7 (error display) all PASS. Scenario 4 (cancellation) revealed a UI bug ("Préparation" loading state persists after cancel) — investigation confirmed pre-existing bug since commit `a6c6b11b` (2026-03-30, well before BR-14b). Tracked as separate fix on dedicated branch `fix/ui-cancel-terminal-status` (per [[dedicated-fix-branches]] policy). NOT a BR-14b regression. User signed off UAT pass with cancel bug filed for separate fix. CI run #25962984836 = 29/29 PASS.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -191,25 +192,25 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
     - [ ] `make lint-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-refacto-chat-service-core`
     - [ ] API tests identified in Lot 0, file-by-file.
 
-- [ ] **Lot 5 — UAT preparation and user checkpoint**
+- [x] **Lot 5 — UAT preparation and user checkpoint**
   - [x] Prepare a UAT note with exact scenarios: streaming response, local tool handoff, tool-result continuation, cancellation, retry, checkpoint visibility, and error display. (see `BRANCH_UAT_NOTE.md`)
-  - [ ] Push branch and open/update PR with `BRANCH.md` as body before UAT.
-  - [ ] Confirm branch CI status.
-  - [ ] Ask user to perform UAT or explicitly waive UAT with reason.
-  - [ ] Record exactly one status before merge: `UAT passed` or `UAT waived by user`.
+  - [x] Push branch and open/update PR with `BRANCH.md` as body before UAT. (PR #158, pushed 2026-05-16)
+  - [x] Confirm branch CI status. (run #25962984836 — 29/29 PASS, 0 fail, 6 skipped)
+  - [x] Ask user to perform UAT or explicitly waive UAT with reason. (user ran UAT on root 2026-05-16)
+  - [x] Record exactly one status before merge: `UAT passed` or `UAT waived by user`. (see Feedback Loop entry below)
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Integrate durable behavior changes into `spec/SPEC_CHATBOT.md` or `spec/SPEC_EVOL_LLM_MESH.md` only if implementation changes public behavior or branch contracts.
-  - [ ] Delete `spec/BRANCH_SPEC_EVOL.md` after integration if it was created.
-  - [ ] Keep global naming cleanup deferred to BR14e unless a local inconsistency blocks BR14b.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Integrate durable behavior changes into `spec/SPEC_CHATBOT.md` or `spec/SPEC_EVOL_LLM_MESH.md` only if implementation changes public behavior or branch contracts. (BR14b is internal refacto — no public behavior change, no spec edit needed)
+  - [x] Delete `spec/BRANCH_SPEC_EVOL.md` after integration if it was created. (deleted)
+  - [x] Keep global naming cleanup deferred to BR14e unless a local inconsistency blocks BR14b. (no blocker)
 
 - [ ] **Lot N — Final validation and merge gate**
-  - [ ] Typecheck and lint API.
-  - [ ] Retest impacted API chat/tool/stream/live-AI files identified in Lot 0.
-  - [ ] Verify PR CI is green.
-  - [ ] Verify `UAT passed` or `UAT waived by user` is recorded in this file.
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
-  - [ ] Final gate step 2: resolve CI and UAT blockers.
+  - [x] Typecheck and lint API. (CI run #25962984836 — typecheck-lint-api PASS)
+  - [x] Retest impacted API chat/tool/stream/live-AI files identified in Lot 0. (245/245 chat-core + 28/28 chat.test.ts + all api unit-integration matrices PASS)
+  - [x] Verify PR CI is green. (29/29 PASS run #25962984836)
+  - [x] Verify `UAT passed` or `UAT waived by user` is recorded in this file. (Feedback Loop entry 2026-05-16)
+  - [x] Final gate step 1: create/update PR using `BRANCH.md` text as PR body. (PR #158 created)
+  - [x] Final gate step 2: resolve CI and UAT blockers. (CI all green, UAT scenarios 1-3+5-7 pass, scenario 4 cancel bug pre-existing tracked on separate fix/ui-cancel-terminal-status PR)
   - [ ] Final gate step 3: only after CI + UAT/waiver are both OK, commit removal of `BRANCH.md`, push, and merge.
 
 ## Lot 1 - @sentropic/contracts scaffold
