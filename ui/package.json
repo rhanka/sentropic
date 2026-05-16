@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "build:ext": "vite build --config ./chrome-ext/vite.config.ext.ts && node ./chrome-ext/copy-assets.js && node ./chrome-ext/package-extension-zip.js",
     "dev:ext": "vite build --config ./chrome-ext/vite.config.ext.ts --watch",

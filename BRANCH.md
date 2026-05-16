@@ -44,7 +44,7 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
   - `.github/workflows/**`
   - `packages/llm-mesh/**`
   - `api/drizzle/**`
-  - `ui/**`
+  - `ui/**` (except `ui/package.json` `scripts.check` field via BR14b-EX4)
   - `e2e/**`
   - `plan/14a-BRANCH_feat-chat-ui-sdk.md`
   - `plan/14b-BRANCH_refacto-chat-service-core.md`
@@ -71,6 +71,10 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
   - Rationale: SPEC_STUDY_ARCHITECTURE_BOUNDARIES §5 mandates that "Each port must have an in-memory reference adapter shipped alongside the contract, so a downstream user can build without Postgres". Lots 9-15 migrated 13 orchestration methods to `ChatRuntime` without any unit test in `packages/chat-core/`. Final BR14b publish gate requires shippable quality, which means: (a) the 5 in-memory adapters mandated by §5 must exist under `packages/chat-core/src/in-memory/`, (b) a unit test suite must cover the 13 migrated `ChatRuntime` methods + the pure helpers in `history.ts`, and (c) a make target must run that suite in CI mirroring the existing `test-llm-mesh` Docker pattern.
   - Impact: Makefile +4 lines (one new `test-pkg-chat-core` target). `packages/chat-core/src/in-memory/**` 5 new files (~600 lines) + barrel re-export. `packages/chat-core/tests/**` 6 new test files (~1000 lines). `packages/chat-core/package.json` +2 devDependencies (`vitest`, `@vitest/coverage-v8`) + 2 scripts. No behavior change in existing chat-service.ts / postgres adapters / api/tests/. From Lot 16 onwards, every migrated `ChatRuntime` method MUST land with its accompanying unit test in this suite.
   - Rollback: revert the BR14b-EX3 commits; the `packages/chat-core/in-memory/` directory + `tests/` directory + Makefile target are pure additions and removing them leaves runtime / adapter / chat-service behavior untouched.
+- `BR14b-EX4 — ui/package.json check script: prepend svelte-kit sync to fix CI typecheck race`
+  - Rationale: BR-14b adds 3 new workspace packages (contracts, events, chat-core) which slow vite dev container boot. `make typecheck-ui` runs `svelte-check` ~0.4s after container Healthy, but vite dev hasn't finished generating `.svelte-kit/tsconfig.json` (which provides the `$lib` alias). Result: 559 svelte-check errors, all `Cannot find module '$lib/...'`. Main passes by timing luck (smaller dep tree). Fix is forward-compatible : `npm run check` becomes `svelte-kit sync && svelte-check ...` mirroring the existing `build` script pattern.
+  - Impact: ui/package.json `scripts.check` field, 1 line, +20 chars. No runtime behavior change. Robust against future workspace growth. Authorized inline by user 2026-05-15 ("pour le typecheck tu peux le faire dans la branche BR14b").
+  - Rollback: revert this commit; `check` script returns to direct `svelte-check` invocation. CI typecheck-lint-ui will start failing again with `$lib` errors as soon as workspace boot exceeds the race window.
 
 ## Feedback Loop
 - `attention` 2026-05-12: BR14g was merged without an explicit UAT checkpoint. BR14b final gate therefore requires recorded user UAT passed or explicit user UAT waiver before merge; CI alone is insufficient.
