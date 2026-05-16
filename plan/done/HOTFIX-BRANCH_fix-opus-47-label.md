@@ -98,9 +98,9 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - [x] Lot gate: typecheck + unit tests (isolation breach attempts, timeout, memory cap, allowlist enforcement). 23/23 green via `make test-skills`.
 
 - [ ] **Lot 3 — `SkillRegistry` (catalog + filter + resolve)**
-  - [ ] Implement `SkillRegistry` (`register`, `list`, `get`, `search`, `resolveTools(authz)`) backed by in-memory map; in-memory ref adapter mandatory.
-  - [ ] Implement `SkillsToolRegistry` that adapts `SkillRegistry` to the `ToolRegistry` interface from `@sentropic/contracts`.
-  - [ ] Wire `AuthzContext` filtering (roles, workspace types, permission mode).
+  - [x] Implement `SkillRegistry` (`register`, `list`, `get`, `search`) backed by in-memory map (Step 1).
+  - [ ] Implement `resolveTools(authz)` with `AuthzContext` filtering (roles, workspace types, permission mode).
+  - [ ] Implement `SkillsToolRegistry` that adapts `SkillRegistry` to the `ToolRegistry` interface (locally declared until `@sentropic/contracts` exists — see BR19-N1).
   - [ ] Decide on optional `skill_metadata` table (defer to Lot 3 outcome; if needed declare `BR19-EX1`).
   - [ ] Lot gate: typecheck + unit tests (filter by role, workspace, search ranking, resolve under AuthzContext).
 
