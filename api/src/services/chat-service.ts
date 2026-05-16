@@ -1,15 +1,40 @@
-import { and, asc, desc, eq, sql, inArray, gt, or } from 'drizzle-orm';
+import { and, desc, eq, sql, inArray, or } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { chatContexts, chatMessageFeedback, chatMessages, chatSessions, chatStreamEvents, contextDocuments, folders, jobQueue, organizations } from '../db/schema';
+import { chatStreamEvents, contextDocuments, folders, jobQueue, organizations } from '../db/schema';
+import { postgresChatCheckpointAdapter } from './chat/postgres-checkpoint-adapter';
+import { postgresChatMessageStore } from './chat/postgres-chat-message-store';
+import { postgresChatSessionStore } from './chat/postgres-chat-session-store';
+import { postgresStreamBuffer } from './chat/postgres-stream-buffer';
+import { postgresStreamSequencer } from './chat/postgres-stream-sequencer-adapter';
+import { meshDispatchAdapter } from './chat/mesh-dispatch-adapter';
+import {
+  ChatRuntime,
+  type ChatCheckpointSummary,
+  type BuildSystemPromptInput,
+  type BuildSystemPromptResult,
+  type ConsumeToolCallsInput,
+  type EvaluateReasoningEffortInput,
+  type ExecuteServerToolInput,
+  type ExecuteServerToolResult,
+  type FinalizeAssistantIterationInput,
+  type ReasoningEffortEvaluation,
+  type ReasoningEffortLabel,
+} from '../../../packages/chat-core/src/runtime';
+import type { ChatMessageWithFeedback } from '../../../packages/chat-core/src/message-port';
+import {
+  writeContextBudgetStatus as writeContextBudgetStatusPure,
+  type ContextBudgetSnapshot as ChatCoreContextBudgetSnapshot,
+  type ContextBudgetZone as ChatCoreContextBudgetZone,
+} from '../../../packages/chat-core/src/context-budget';
 import { createId } from '../utils/id';
-import { callLLM, callLLMStream, type StreamEventType } from './llm-runtime';
+import { callLLM, callLLMStream } from './llm-runtime';
 import {
   getModelCatalogPayload,
   inferProviderFromModelIdWithLegacy,
   modelSupportsReasoning,
   resolveDefaultSelection,
 } from './model-catalog';
-import { getNextSequence, readStreamEvents, writeStreamEvent } from './stream-service';
+import { writeStreamEvent } from './stream-service';
 import { settingsService } from './settings';
 import type OpenAI from 'openai';
 import { getOpenAITransportMode } from './provider-connections';
@@ -56,21 +81,13 @@ import { todoOrchestrationService } from './todo-orchestration';
 import { ensureWorkspaceForUser } from './workspace-service';
 import { getWorkspaceRole, getWorkspaceType, hasWorkspaceRole, isWorkspaceDeleted } from './workspace-access';
 import { env } from '../config/env';
-import { writeChatGenerationTrace } from './chat-trace';
+import { writeChatGenerationTrace, type ChatTraceToolCall } from './chat-trace';
 import { generateCommentResolutionProposal } from './context-comments';
 import { generateFreeformDocx } from './docx-generation';
 import { generateFreeformPptx } from './pptx-generation';
 import { putObject, getDocumentsBucketName } from './storage-s3';
 import type { OrganizationEnrichJobData } from './queue-manager';
 import type { ProviderId } from './provider-runtime';
-import {
-  buildAssistantMessageHistoryDetails,
-  buildChatHistoryTimeline,
-  compactChatHistoryTimelineForSummary,
-  type ChatHistoryMessage,
-  type ChatHistoryTimelineItem,
-  type ChatHistoryStreamEvent,
-} from './chat-session-history';
 
 // TODO Lot 10: remove 'usecase' once data migration is complete
 export type ChatContextType = 'organization' | 'folder' | 'initiative' | 'executive_summary' | 'usecase';
@@ -232,23 +249,9 @@ export type ChatResumeFromToolOutputs = {
   }>;
 };
 
-type AwaitingLocalToolState = {
-  sequence: number;
-  previousResponseId: string;
-  pendingLocalToolCalls: Array<{
-    id: string;
-    name: string;
-    args: unknown;
-  }>;
-  baseToolOutputs: Array<{
-    callId: string;
-    output: string;
-    name?: string;
-    args?: unknown;
-  }>;
-  localToolDefinitions: LocalToolDefinitionInput[];
-  vscodeCodeAgent: NormalizedVsCodeCodeAgentRuntimePayload | null;
-};
+// BR14b Lot 10: `AwaitingLocalToolState` moved into
+// `packages/chat-core/src/runtime.ts` alongside `acceptLocalToolResult` +
+// `extractAwaitingLocalToolState`. No external consumer.
 
 const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -263,16 +266,14 @@ const getDataString = (data: unknown, key: string): string | null => {
 
 const isValidToolName = (value: string): boolean => /^[a-zA-Z0-9_-]{1,64}$/.test(value);
 
-const parseToolCallArgs = (value: unknown): unknown => {
-  if (typeof value !== 'string') return value ?? {};
-  const trimmed = value.trim();
-  if (!trimmed) return {};
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return {};
-  }
-};
+// BR14b Lot 21e-2 — `parseToolCallArgs` was the inline local-tool args
+// parser used by `runAssistantGeneration` for the local-tool short-circuit
+// (line 3521 pre-Lot 21c) and inside the api-side per-tool body (none
+// after Lot 21d-2). The local-tool short-circuit migrated into
+// `ChatRuntime.consumeToolCalls` (Lot 21c shell) with a verbatim
+// `parseToolCallArgsForRuntime` module-scope helper in chat-core. The
+// Lot 21e-2 for-loop body migration removed the last caller-side
+// reference; the api helper is deleted (no legacy fallback).
 
 type TodoRuntimeToolName = 'plan';
 type TodoRuntimeToolOperation = 'create' | 'update_plan' | 'update_task';
@@ -315,25 +316,12 @@ type ChatRuntimeMessage =
   | { role: 'system' | 'user' | 'assistant'; content: string }
   | { role: 'tool'; content: string; tool_call_id: string };
 
-type ContextBudgetZone = 'normal' | 'soft' | 'hard';
-
-type ContextBudgetSnapshot = {
-  estimatedTokens: number;
-  maxTokens: number;
-  occupancyPct: number;
-  zone: ContextBudgetZone;
-};
-const CHAT_CHECKPOINT_CONTEXT_TYPE = 'chat_session_checkpoint';
-
-type ChatCheckpointSummary = {
-  id: string;
-  title: string;
-  anchorMessageId: string;
-  anchorSequence: number;
-  messageCount: number;
-  createdAt: string;
-};
-
+// BR14b Lot 21a — `ContextBudgetZone` + `ContextBudgetSnapshot` moved to
+// `packages/chat-core/src/context-budget.ts` (consumed by the pure helper
+// `writeContextBudgetStatus`). Local aliases keep the existing chat-service
+// references intact so the migration stays surgical.
+type ContextBudgetZone = ChatCoreContextBudgetZone;
+type ContextBudgetSnapshot = ChatCoreContextBudgetSnapshot;
 type ChatBootstrapStreamEvent = {
   eventType: string;
   data: unknown;
@@ -788,7 +776,333 @@ const compactConversationContext = async (input: {
   };
 };
 
+/**
+ * BR14b Lot 21d-2 — chat-service-LOCAL input bundle for
+ * `ChatService.executeServerToolInternal`. Carries every captured local +
+ * closure that the 30 inline tool branches consume in `runAssistantGeneration`
+ * (post-Lot 21c, lines 3393-4732). The chat-core boundary type
+ * `ExecuteServerToolInput` (Lot 21c, opaque on `tools`/`currentMessages`/
+ * `responseToolOutputs`, missing api-side captured locals + 4 closures)
+ * cannot be reused as-is — Lot 21d-3 will bridge via Option A callback
+ * binding closures + accumulator refs over `this`.
+ */
+export interface ExecuteServerToolInternalInput {
+  readonly toolCall: { id: string; name: string; args: string };
+  readonly args: unknown;
+  readonly todoOperation: TodoRuntimeToolOperation | null;
+  readonly options: {
+    userId: string;
+    sessionId: string;
+    assistantMessageId: string;
+    locale?: string;
+    signal?: AbortSignal;
+  };
+  readonly currentMessages: OpenAIChatLike[];
+  readonly tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined;
+  readonly responseToolOutputs: Array<{
+    type: 'function_call_output';
+    call_id: string;
+    output: string;
+  }>;
+  readonly executedTools: Array<{
+    toolCallId: string;
+    name: string;
+    args: unknown;
+    result: unknown;
+  }>;
+  readonly selectedProviderId: ProviderId;
+  // BR14b Lot 21d-2 Step 3 Group F2 — tightened from `string | null` to
+  // `string`: `ChatRuntime.resolveModelSelection` (packages/chat-core/src/runtime.ts
+  // line 282) returns `{provider_id: string, model_id: string}`, so the
+  // caller-side `selectedModel = resolvedSelection.model_id` is non-null by
+  // the time `runAssistantGeneration` reaches the tool-dispatch loop.
+  // Required by `batch_create_organizations` which passes it as
+  // `OrganizationEnrichJobData.model: string | undefined`.
+  readonly selectedModel: string;
+  // BR14b Lot 21d-2 Step 3 Group C — tightened from `string | null` to
+  // `string`: `ChatRuntime.prepareAssistantRun` (packages/chat-core/src/runtime.ts
+  // line 709) throws when `resolveSessionWorkspaceId` returns null, so
+  // `sessionWorkspaceId` is non-null by the time `runAssistantGeneration`
+  // reaches the tool-dispatch loop. Required by `plan` branches that pass
+  // it as `TodoActor.workspaceId: string`.
+  readonly sessionWorkspaceId: string;
+  readonly readOnly: boolean;
+  readonly currentUserRole: string | null;
+  readonly enforceTodoUpdateMode: boolean;
+  readonly todoAutonomousExtensionEnabled: boolean;
+  // BR14b Lot 21d-2 Step 3 Group C — `todoStructuralMutationIntent` is a
+  // `runAssistantGeneration` local (line 2904) used by the `plan` update
+  // branches (`update_plan` / `update_task`) to gate structural mutations
+  // behind explicit user intent. Added here so Group C migration can
+  // reference it verbatim without recomputing.
+  readonly todoStructuralMutationIntent: boolean;
+  readonly allowedByType: {
+    readonly organization: ReadonlySet<string>;
+    readonly folder: ReadonlySet<string>;
+    readonly usecase: ReadonlySet<string>;
+    readonly executive_summary: ReadonlySet<string>;
+  };
+  readonly allowedFolderIds: ReadonlySet<string>;
+  readonly allowedCommentContextSet: ReadonlySet<string>;
+  // BR14b Lot 21d-2 Step 3 Group D — `allowedDocContexts` and
+  // `allowedCommentContexts` are `runAssistantGeneration` locals
+  // (lines ~2900-2907) consumed by the `documents` and
+  // `comment_assistant` branches. Added here so Group D migration
+  // can reference them verbatim without recomputing.
+  readonly allowedDocContexts: Array<{
+    contextType: 'organization' | 'folder' | 'initiative' | 'usecase' | 'chat_session';
+    contextId: string;
+  }>;
+  readonly allowedCommentContexts: Array<{
+    contextType: CommentContextType;
+    contextId: string;
+  }>;
+  readonly primaryContextType: ChatContextType | null;
+  readonly primaryContextId: string | null;
+  readonly vscodeCodeAgentPayload: unknown;
+  readonly lastUserMessage: string;
+  readonly iteration: number;
+  readonly streamSeq: number;
+  readonly getOrganizationIdForFolder: (folderId: string) => Promise<string | null>;
+  readonly isAllowedOrganizationId: (orgId: string) => Promise<boolean>;
+  readonly markTodoIterationState: (rawResult: unknown) => void;
+  readonly isExplicitConfirmation: (text: string, confirmationArg: unknown) => boolean;
+  // BR14b Lot 21d-2 Step 3 Group A — `hasContextType` is a `runAssistantGeneration`
+  // closure (lines ~2891-2892, delegating to `promptCtx.hasContextType`) consumed
+  // by per-tool guard branches (e.g. `organizations_list`, `folders_list`, …).
+  // Added here so Group A migration can reference it verbatim without recomputing.
+  readonly hasContextType: (type: ChatContextType) => boolean;
+}
+
+/**
+ * BR14b Lot 21d-2 — chat-service-LOCAL return shape of
+ * `ChatService.executeServerToolInternal`. Mirrors the inline accumulator
+ * delta: the per-tool `result` value (caller pushes into `executedTools` /
+ * `toolResults` / `responseToolOutputs`) + advanced `streamSeq` cursor
+ * (each branch performs `writeStreamEvent` + `streamSeq += 1`). The
+ * `markTodoIterationState` closure mutates caller-side state in-place
+ * via closure capture (no surfacing needed). The `try/catch` STRUCTURE
+ * stays caller-side — branches may throw and the caller's catch wraps
+ * them into `{status:'error',error}` preserving byte-identical behavior.
+ */
+export interface ExecuteServerToolInternalResult {
+  readonly result: unknown;
+  readonly streamSeq: number;
+}
+
+// Alias for the OpenAI chat-message shape used by `currentMessages`.
+type OpenAIChatLike =
+  | OpenAI.Chat.Completions.ChatCompletionMessageParam
+  | { role: string; content?: unknown; tool_call_id?: string; name?: string; tool_calls?: unknown };
+
 export class ChatService {
+  /**
+   * BR14b Lots 9/10/11 — orchestration extraction.
+   * `ChatRuntime` owns chat orchestration above the persistence ports
+   * extracted in Lots 4/6/7/8 and the mesh boundary port introduced
+   * in Lot 10. Methods migrate progressively from `ChatService` into
+   * `ChatRuntime` (see runtime.ts header). The runtime is wired in
+   * the constructor (instead of a field initializer) so the
+   * `normalizeVsCodeCodeAgent` callback can bind
+   * `this.normalizeVsCodeCodeAgentPayload` which still lives in
+   * `ChatService` because its body is reused by several non-runtime
+   * call-sites (system-prompt build, instruction rendering).
+   *
+   * Lot 11: `postgresChatCheckpointAdapter` now strictly implements
+   * `CheckpointStore<ChatState>` (load/save/list/delete + optional
+   * tag/fork) so the previous `as unknown as CheckpointStore<ChatState>`
+   * cast is gone. Checkpoint orchestration
+   * (`createCheckpoint` / `listCheckpoints` / `restoreCheckpoint`)
+   * lives on the runtime and composes the generic port with
+   * `MessageStore` + `SessionStore`. The public `ChatService` methods
+   * keep their signatures and become thin authz-checking delegates.
+   */
+  private readonly runtime: ChatRuntime;
+
+  constructor() {
+    this.runtime = new ChatRuntime({
+      messageStore: postgresChatMessageStore,
+      sessionStore: postgresChatSessionStore,
+      streamBuffer: postgresStreamBuffer,
+      // BR14b Lot 20 — `StreamSequencer` port allocator. Decouples
+      // sequence allocation from event append so `ChatRuntime` methods
+      // can own `streamSeq` cursor mutation internally (concrete proof:
+      // `evaluateReasoningEffort` reclaims the 2 caller-side
+      // `writeStreamEvent` bracketing calls post-Lot 20).
+      streamSequencer: postgresStreamSequencer,
+      checkpointStore: postgresChatCheckpointAdapter,
+      mesh: meshDispatchAdapter,
+      normalizeVsCodeCodeAgent: (input) =>
+        this.normalizeVsCodeCodeAgentPayload(input as VsCodeCodeAgentRuntimePayload | null | undefined),
+      // BR14b Lot 12 — model selection callback: bundles the four
+      // helpers (`settingsService.getAISettings`,
+      // `getModelCatalogPayload`, `inferProviderFromModelIdWithLegacy`,
+      // `resolveDefaultSelection`) that `retryUserMessage` and
+      // `createUserMessageWithAssistantPlaceholder` previously called
+      // inline. Returns the same `{provider_id, model_id}` shape as
+      // `resolveDefaultSelection`.
+      resolveModelSelection: async (selectionInput) => {
+        const [aiSettings, catalog] = await Promise.all([
+          settingsService.getAISettings({ userId: selectionInput.userId }),
+          getModelCatalogPayload({ userId: selectionInput.userId }),
+        ]);
+        const inferredProviderId = inferProviderFromModelIdWithLegacy(
+          catalog.models,
+          selectionInput.model,
+        );
+        return resolveDefaultSelection(
+          {
+            providerId:
+              selectionInput.providerId ||
+              inferredProviderId ||
+              aiSettings.defaultProviderId,
+            modelId: selectionInput.model || aiSettings.defaultModel,
+          },
+          catalog.models,
+        );
+      },
+      // BR14b Lot 12 — re-expose the instance method as a callback so
+      // the runtime stays agnostic of the `ChatContextType` union.
+      normalizeMessageContexts: (input) =>
+        this.normalizeMessageContexts(
+          input as Pick<
+            CreateChatMessageInput,
+            'contexts' | 'primaryContextType' | 'primaryContextId'
+          >,
+        ),
+      // BR14b Lot 12 — re-expose the module-level type guard so the
+      // runtime's `createUserMessageWithAssistantPlaceholder` keeps the
+      // exact membership check used pre-migration.
+      isChatContextType: (value) => isChatContextType(value),
+      // BR14b Lot 14a — hydrate the `todoRuntime` payload alongside the
+      // listed messages. Bundles the three api-land helpers that chat-core
+      // cannot import: workspace resolution, workspace-role lookup, and
+      // the todo orchestration service. Returns `null` when the session
+      // has no addressable workspace (preserves the legacy null branch).
+      hydrateMessagesWithTodoRuntime: async ({ session, userId }) => {
+        const sessionWorkspaceId = await this.resolveSessionWorkspaceId(
+          session,
+          userId,
+        );
+        if (!sessionWorkspaceId) return null;
+        const role = (await getWorkspaceRole(userId, sessionWorkspaceId)) ?? 'viewer';
+        return todoOrchestrationService.getSessionTodoRuntime(
+          { userId, role, workspaceId: sessionWorkspaceId },
+          session.id,
+        );
+      },
+      // BR14b Lot 14b — bridge `resolveSessionWorkspaceId`,
+      // `listSessionDocuments`, and `listAssistantDetailsByMessageId` to
+      // their existing private chat-service methods. Each crosses the
+      // port as an Option A callback because their bodies import
+      // api-only modules (`workspace-service`, drizzle, `db/schema`)
+      // that chat-core must not pull in. The 3 read-only composers
+      // (`getSessionBootstrap` / `getSessionHistory` /
+      // `getMessageRuntimeDetails`) migrate into `ChatRuntime` in the
+      // next commit and call these callbacks unchanged.
+      resolveSessionWorkspaceId: (session, userId) =>
+        this.resolveSessionWorkspaceId(session, userId),
+      listSessionDocuments: (input) => this.listSessionDocuments(input),
+      listAssistantDetailsByMessageId: (messageIds) =>
+        this.listAssistantDetailsByMessageId(messageIds),
+      // BR14b Lot 15 — bundle the three api-only workspace-access calls
+      // (`isWorkspaceDeleted` + `hasWorkspaceRole` + `getWorkspaceRole`)
+      // into a single Option A callback consumed by
+      // `ChatRuntime.prepareAssistantRun`. Same order of calls and same
+      // boolean composition as the pre-Lot 15 inline block at the top of
+      // `runAssistantGeneration`.
+      resolveWorkspaceAccess: async ({ userId, workspaceId }) => {
+        const hidden = await isWorkspaceDeleted(workspaceId);
+        const canWrite = !hidden
+          ? await hasWorkspaceRole(userId, workspaceId, 'editor')
+          : false;
+        const readOnly = hidden || !canWrite;
+        const currentUserRole = await getWorkspaceRole(userId, workspaceId);
+        return { readOnly, canWrite, currentUserRole };
+      },
+      // BR14b Lot 16a — bundle the title-generation side effect of
+      // `runAssistantGeneration` (generateSessionTitle +
+      // sessionStore.updateTitle + notifyWorkspaceEvent) into a single
+      // Option A callback so the runtime can drive it as part of the
+      // assistant-run preparation. The session-shape narrowing from
+      // `ChatSessionRow` (chat-core) back to the local `primaryContextType`
+      // / `primaryContextId` happens at the callback boundary because
+      // chat-core stays agnostic of the `ChatContextType` union.
+      ensureSessionTitle: async ({
+        session,
+        sessionWorkspaceId,
+        focusContext,
+        lastUserMessage,
+      }) => {
+        const safeContextType =
+          focusContext?.contextType ||
+          (isChatContextType(session.primaryContextType)
+            ? session.primaryContextType
+            : null);
+        const title = await this.generateSessionTitle({
+          primaryContextType: safeContextType as ChatContextType | null,
+          primaryContextId: session.primaryContextId ?? null,
+          lastUserMessage,
+        });
+        if (!title) return null;
+        await postgresChatSessionStore.updateTitle(session.id, title);
+        await this.notifyWorkspaceEvent(sessionWorkspaceId, {
+          action: 'chat_session_title_updated',
+          sessionId: session.id,
+          title,
+        });
+        return title;
+      },
+      // BR14b Lot 16b — bundle the system-prompt build chain (Slice B
+      // body, 605 lines pre-Lot 16b) into a single Option A callback so
+      // the runtime can drive it as `prepareSystemPrompt`. The body
+      // lives chat-service-side because it imports drizzle, db schema,
+      // the tool catalog, the chat prompt registry, the VsCode prompt
+      // template registry, todo orchestration, tab registry, and
+      // workspace-service — none of which chat-core may import.
+      buildSystemPrompt: (input) => this.buildSystemPromptInternal(input),
+      // BR14b Lot 18 — bundle the reasoning-effort evaluator block (98
+      // lines pre-Lot 18) into a single Option A callback so the runtime
+      // can drive it as `evaluateReasoningEffort`. The body lives chat-
+      // service-side because it reads
+      // `CHAT_COMMON_PROMPTS.reasoning_effort_eval` from the chat prompt
+      // registry (`api/src/config/default-chat-system.ts`) which chat-core
+      // must not import. The two `writeStreamEvent` calls that bracket
+      // the legacy block (`reasoning_effort_eval_failed` +
+      // `reasoning_effort_selected`) STAY caller-side in
+      // `runAssistantGeneration` because the shared `streamSeq` counter
+      // is not yet migrated into the runtime.
+      evaluateReasoningEffort: (input) =>
+        this.evaluateReasoningEffortInternal(input),
+      // BR14b Lot 21d-3 — bind the chat-service `executeServerToolInternal`
+      // method (Lot 21d-2's verbatim consolidation of the 30 server-tool
+      // branches) behind the chat-core `executeServerTool` Option A
+      // callback. The chat-core boundary type `ExecuteServerToolInput`
+      // intentionally stays opaque (~14 fields) and lacks the 19 api-side
+      // captured locals + 4 closures carried by the chat-service-local
+      // `ExecuteServerToolInternalInput`. `runAssistantGeneration` builds
+      // the richer input at the call site and routes it through
+      // `runtime.executeServerTool(...)`, which forwards verbatim to this
+      // callback. The `as unknown as ExecuteServerToolInternalInput` cast
+      // bridges the boundary because TypeScript cannot prove structural
+      // assignability across the unknown-typed fields — runtime behavior
+      // is identical to the pre-Lot 21d-3 direct `this.executeServerToolInternal({...})`
+      // call (verified by `chat.test.ts` 28/28 + `chat-tools.test.ts` 6/6
+      // + `chat-service-tools.test.ts` 14/14 regression).
+      executeServerTool: (input) =>
+        this.executeServerToolInternal(
+          input as unknown as ExecuteServerToolInternalInput,
+        ) as unknown as Promise<ExecuteServerToolResult>,
+      // BR14b Lot 22a-1 — Option A callback wrapping the api-side
+      // `getOpenAITransportMode` helper (`provider-connections.ts`) so
+      // `ChatRuntime.initToolLoopState` can derive the
+      // `useCodexTransport` boolean without taking a direct dep on the
+      // helper's import path. Returns the helper's `'codex' | 'token'`
+      // union verbatim.
+      resolveOpenAITransportMode: () => getOpenAITransportMode(),
+    });
+  }
+
   private normalizeMessageContexts(
     input: Pick<CreateChatMessageInput, 'contexts' | 'primaryContextType' | 'primaryContextId'>
   ): Array<{ contextType: ChatContextType; contextId: string }> {
@@ -816,28 +1130,13 @@ export class ChatService {
     return text.slice(0, maxLen) + '\n…(tronqué)…';
   }
 
-  private safeJson(value: unknown, maxLen: number): string {
-    try {
-      const raw = typeof value === 'string' ? value : JSON.stringify(value);
-      return this.safeTruncate(raw, maxLen);
-    } catch {
-      return this.safeTruncate(String(value), maxLen);
-    }
-  }
-
-  private buildToolDigest(executed: Array<{ name: string; result: unknown }>): string {
-    if (!executed.length) return '(aucun outil exécuté)';
-    // On limite agressivement pour éviter des prompts énormes (ex: web_extract).
-    const parts: string[] = [];
-    const maxPerTool = 4000;
-    const maxTotal = 12000;
-    for (const t of executed) {
-      const block = `- ${t.name}:\n${this.safeJson(t.result, maxPerTool)}`;
-      parts.push(block);
-      if (parts.join('\n\n').length > maxTotal) break;
-    }
-    return this.safeTruncate(parts.join('\n\n'), maxTotal);
-  }
+  // BR14b Lot 22a-2 — `safeJson` + `buildToolDigest` migrated into
+  // chat-core as module-scope pure helpers (`safeJsonForRuntime` +
+  // `buildToolDigestForRuntime` in `packages/chat-core/src/runtime.ts`).
+  // Consumed exclusively by `ChatRuntime.runPass2Fallback` after the
+  // inline pass2 fallback block was deleted. `safeTruncate` STAYS here
+  // because it still has chat-service-local callers (lines ~1329 +
+  // ~1439).
 
   private serializeToolOutput(value: unknown): string {
     if (typeof value === 'string') return value;
@@ -1196,111 +1495,13 @@ export class ChatService {
     return normalized;
   }
 
-  private extractAwaitingLocalToolState(
-    events: Array<{
-      eventType: string;
-      data: unknown;
-      sequence: number;
-    }>
-  ): AwaitingLocalToolState | null {
-    for (let i = events.length - 1; i >= 0; i -= 1) {
-      const event = events[i];
-      if (event.eventType !== 'status') continue;
-      const data = asRecord(event.data);
-      if (!data || data.state !== 'awaiting_local_tool_results') continue;
-
-      const previousResponseId =
-        typeof data.previous_response_id === 'string' ? data.previous_response_id : '';
-      if (!previousResponseId) return null;
-
-      const pendingLocalToolCalls: Array<{
-        id: string;
-        name: string;
-        args: unknown;
-      }> = [];
-      const pendingRaw = Array.isArray(data.pending_local_tool_calls)
-        ? data.pending_local_tool_calls
-        : [];
-      for (const item of pendingRaw) {
-        const rec = asRecord(item);
-        const toolCallId =
-          rec && typeof rec.tool_call_id === 'string' ? rec.tool_call_id.trim() : '';
-        const name =
-          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
-        const args = rec ? rec.args : {};
-        if (
-          !toolCallId ||
-          pendingLocalToolCalls.some((entry) => entry.id === toolCallId)
-        ) {
-          continue;
-        }
-        pendingLocalToolCalls.push({ id: toolCallId, name, args });
-      }
-
-      const baseToolOutputs: Array<{
-        callId: string;
-        output: string;
-        name?: string;
-        args?: unknown;
-      }> = [];
-      const outputsRaw = Array.isArray(data.base_tool_outputs)
-        ? data.base_tool_outputs
-        : [];
-      for (const item of outputsRaw) {
-        const rec = asRecord(item);
-        const callId =
-          rec && typeof rec.call_id === 'string' ? rec.call_id.trim() : '';
-        const output =
-          rec && typeof rec.output === 'string' ? rec.output : '';
-        if (!callId) continue;
-        const name =
-          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
-        baseToolOutputs.push({
-          callId,
-          output,
-          ...(name ? { name } : {}),
-          ...(rec && 'args' in rec ? { args: rec.args } : {}),
-        });
-      }
-
-      const localToolDefinitions: LocalToolDefinitionInput[] = [];
-      const localDefsRaw = Array.isArray(data.local_tool_definitions)
-        ? data.local_tool_definitions
-        : [];
-      for (const item of localDefsRaw) {
-        const rec = asRecord(item);
-        const name =
-          rec && typeof rec.name === 'string' ? rec.name.trim() : '';
-        const description =
-          rec && typeof rec.description === 'string'
-            ? rec.description.trim()
-            : '';
-        const parameters =
-          rec && asRecord(rec.parameters)
-            ? (rec.parameters as Record<string, unknown>)
-            : null;
-        if (!name || !description || !parameters || !isValidToolName(name))
-          continue;
-        localToolDefinitions.push({ name, description, parameters });
-      }
-
-      if (pendingLocalToolCalls.length === 0) return null;
-
-      return {
-        sequence: event.sequence,
-        previousResponseId,
-        pendingLocalToolCalls,
-        baseToolOutputs,
-        localToolDefinitions,
-        vscodeCodeAgent: this.normalizeVsCodeCodeAgentPayload(
-          data.vscode_code_agent as VsCodeCodeAgentRuntimePayload,
-        ),
-      };
-    }
-
-    return null;
-  }
-
+  /**
+   * BR14b Lot 10 — body migrated verbatim into
+   * `ChatRuntime.acceptLocalToolResult` (and its private helper
+   * `extractAwaitingLocalToolState`). Public signature preserved so
+   * routes/api/chat.ts and tests in api/tests/unit/chat-service-tools.test.ts
+   * call sites are unchanged.
+   */
   async acceptLocalToolResult(options: {
     assistantMessageId: string;
     toolCallId: string;
@@ -1312,110 +1513,7 @@ export class ChatService {
     vscodeCodeAgent?: NormalizedVsCodeCodeAgentRuntimePayload | null;
     resumeFrom?: ChatResumeFromToolOutputs;
   }> {
-    const toolCallId = String(options.toolCallId ?? '').trim();
-    if (!toolCallId) {
-      throw new Error('toolCallId is required');
-    }
-
-    const events = await readStreamEvents(options.assistantMessageId);
-    const awaitingState = this.extractAwaitingLocalToolState(events);
-    if (!awaitingState) {
-      throw new Error('No pending local tool call found for this assistant message');
-    }
-    if (!awaitingState.pendingLocalToolCalls.some((entry) => entry.id === toolCallId)) {
-      throw new Error(`Tool call ${toolCallId} is not pending for this assistant message`);
-    }
-
-    const rawResult = options.result;
-    const resultObj = asRecord(rawResult);
-    const normalizedResult = resultObj
-      ? {
-          ...(typeof resultObj.status === 'string' ? {} : { status: 'completed' }),
-          ...resultObj
-        }
-      : { status: 'completed', value: rawResult };
-
-    let streamSeq = await getNextSequence(options.assistantMessageId);
-    await writeStreamEvent(
-      options.assistantMessageId,
-      'tool_call_result',
-      { tool_call_id: toolCallId, result: normalizedResult },
-      streamSeq,
-      options.assistantMessageId
-    );
-    streamSeq += 1;
-
-    await writeStreamEvent(
-      options.assistantMessageId,
-      'status',
-      { state: 'local_tool_result_received', tool_call_id: toolCallId },
-      streamSeq,
-      options.assistantMessageId
-    );
-
-    const followupEvents = await readStreamEvents(options.assistantMessageId, awaitingState.sequence);
-    const pendingSet = new Set(awaitingState.pendingLocalToolCalls.map((entry) => entry.id));
-    const collectedByToolCallId = new Map<string, string>();
-    for (const event of followupEvents) {
-      if (event.eventType !== 'tool_call_result') continue;
-      const data = asRecord(event.data);
-      if (!data) continue;
-      const id =
-        typeof data.tool_call_id === 'string' ? data.tool_call_id.trim() : '';
-      if (!id || !pendingSet.has(id)) continue;
-      const output = this.serializeToolOutput(data.result);
-      collectedByToolCallId.set(id, output);
-    }
-
-    const waitingForToolCallIds = awaitingState.pendingLocalToolCalls
-      .map((entry) => entry.id)
-      .filter((id) => !collectedByToolCallId.has(id));
-    if (waitingForToolCallIds.length > 0) {
-      return {
-        readyToResume: false,
-        waitingForToolCallIds,
-        localToolDefinitions: awaitingState.localToolDefinitions,
-        vscodeCodeAgent: awaitingState.vscodeCodeAgent,
-      };
-    }
-
-    const dedupedOutputs = new Map<string, string>();
-    for (const item of awaitingState.baseToolOutputs) {
-      if (!item.callId) continue;
-      dedupedOutputs.set(item.callId, item.output);
-    }
-    for (const id of awaitingState.pendingLocalToolCalls.map((entry) => entry.id)) {
-      const output = collectedByToolCallId.get(id);
-      if (!output) continue;
-      dedupedOutputs.set(id, output);
-    }
-    const pendingById = new Map(
-      awaitingState.pendingLocalToolCalls.map((entry) => [entry.id, entry] as const)
-    );
-    const baseById = new Map(
-      awaitingState.baseToolOutputs.map((entry) => [entry.callId, entry] as const)
-    );
-    const toolOutputs = Array.from(dedupedOutputs.entries()).map(([callId, output]) => {
-      const pending = pendingById.get(callId);
-      const base = baseById.get(callId);
-      return {
-        callId,
-        output,
-        ...(pending?.name ? { name: pending.name } : base?.name ? { name: base.name } : {}),
-        ...(pending ? { args: pending.args } : base && 'args' in base ? { args: base.args } : {}),
-      };
-    });
-
-    return {
-      readyToResume: true,
-      waitingForToolCallIds: [],
-      localToolDefinitions: awaitingState.localToolDefinitions,
-      vscodeCodeAgent: awaitingState.vscodeCodeAgent,
-      resumeFrom: {
-        previousResponseId: awaitingState.previousResponseId,
-        toolOutputs
-      }
-    };
+    return this.runtime.acceptLocalToolResult(options);
   }
 
   private getPromptTemplate(id: string): string {
@@ -1483,141 +1581,49 @@ export class ChatService {
   }
 
   async getMessageForUser(messageId: string, userId: string) {
-    const [row] = await db
-      .select({
-        id: chatMessages.id,
-        sessionId: chatMessages.sessionId,
-        role: chatMessages.role,
-        sequence: chatMessages.sequence
-      })
-      .from(chatMessages)
-      .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
-      .where(and(eq(chatMessages.id, messageId), eq(chatSessions.userId, userId)));
-    return row ?? null;
+    return postgresChatMessageStore.findIdentityForUser(messageId, userId);
   }
 
   private async getDetailedMessageForUser(messageId: string, userId: string) {
-    const [row] = await db
-      .select({
-        id: chatMessages.id,
-        sessionId: chatMessages.sessionId,
-        role: chatMessages.role,
-        content: chatMessages.content,
-        contexts: chatMessages.contexts,
-        toolCalls: chatMessages.toolCalls,
-        toolCallId: chatMessages.toolCallId,
-        reasoning: chatMessages.reasoning,
-        model: chatMessages.model,
-        promptId: chatMessages.promptId,
-        promptVersionId: chatMessages.promptVersionId,
-        sequence: chatMessages.sequence,
-        createdAt: chatMessages.createdAt,
-        feedbackVote: chatMessageFeedback.vote,
-      })
-      .from(chatMessages)
-      .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
-      .leftJoin(
-        chatMessageFeedback,
-        and(eq(chatMessageFeedback.messageId, chatMessages.id), eq(chatMessageFeedback.userId, userId))
-      )
-      .where(and(eq(chatMessages.id, messageId), eq(chatSessions.userId, userId)));
-    return row ?? null;
+    return postgresChatMessageStore.findDetailedForUser(messageId, userId);
   }
 
   async getSessionForUser(sessionId: string, userId: string) {
-    const [row] = await db
-      .select()
-      .from(chatSessions)
-      .where(and(eq(chatSessions.id, sessionId), eq(chatSessions.userId, userId)));
-    return row;
+    return postgresChatSessionStore.findForUser(sessionId, userId);
   }
 
   async createSession(input: CreateChatSessionInput): Promise<{ sessionId: string }> {
-    const sessionId = createId();
-    await db.insert(chatSessions).values({
-      id: sessionId,
-      userId: input.userId,
-      workspaceId: input.workspaceId ?? null,
-      primaryContextType: input.primaryContextType ?? null,
-      primaryContextId: input.primaryContextId ?? null,
-      title: input.title ?? null,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
-    return { sessionId };
+    return postgresChatSessionStore.create(input);
   }
 
   async listSessions(userId: string, workspaceId?: string | null) {
-    const normalizedWorkspaceId =
-      typeof workspaceId === 'string' && workspaceId.trim().length > 0
-        ? workspaceId.trim()
-        : null;
-    return await db
-      .select()
-      .from(chatSessions)
-      .where(
-        normalizedWorkspaceId
-          ? and(
-              eq(chatSessions.userId, userId),
-              eq(chatSessions.workspaceId, normalizedWorkspaceId),
-            )
-          : eq(chatSessions.userId, userId),
-      )
-      .orderBy(desc(chatSessions.updatedAt), desc(chatSessions.createdAt));
+    return postgresChatSessionStore.listForUser(userId, workspaceId);
   }
 
   async deleteSession(sessionId: string, userId: string): Promise<void> {
     const session = await this.getSessionForUser(sessionId, userId);
     if (!session) throw new Error('Session not found');
-    await db.delete(chatSessions).where(and(eq(chatSessions.id, sessionId), eq(chatSessions.userId, userId)));
+    await postgresChatSessionStore.deleteForUser(sessionId, userId);
   }
 
-  async listMessages(sessionId: string, userId: string) {
-    const session = await this.getSessionForUser(sessionId, userId);
-    if (!session) throw new Error('Session not found');
-
-    const messages = await db
-      .select({
-        id: chatMessages.id,
-        sessionId: chatMessages.sessionId,
-        role: chatMessages.role,
-        content: chatMessages.content,
-        contexts: chatMessages.contexts,
-        toolCalls: chatMessages.toolCalls,
-        toolCallId: chatMessages.toolCallId,
-        reasoning: chatMessages.reasoning,
-        model: chatMessages.model,
-        promptId: chatMessages.promptId,
-        promptVersionId: chatMessages.promptVersionId,
-        sequence: chatMessages.sequence,
-        createdAt: chatMessages.createdAt,
-        feedbackVote: chatMessageFeedback.vote
-      })
-      .from(chatMessages)
-      .leftJoin(
-        chatMessageFeedback,
-        and(eq(chatMessageFeedback.messageId, chatMessages.id), eq(chatMessageFeedback.userId, userId))
-      )
-      .where(eq(chatMessages.sessionId, sessionId))
-      .orderBy(asc(chatMessages.sequence));
-
-    let todoRuntime: Record<string, unknown> | null = null;
-    const sessionWorkspaceId = await this.resolveSessionWorkspaceId(
-      session,
-      userId,
-    );
-    if (sessionWorkspaceId) {
-      const role = (await getWorkspaceRole(userId, sessionWorkspaceId)) ?? 'viewer';
-      todoRuntime = await todoOrchestrationService.getSessionTodoRuntime(
-        { userId, role, workspaceId: sessionWorkspaceId },
-        sessionId,
-      );
-    }
-
-    return {
-      messages,
-      todoRuntime,
-    };
+  /**
+   * BR14b Lot 14a — thin delegate to `ChatRuntime.listMessages`. Public
+   * signature preserved (returns `{ messages, todoRuntime }`). All three
+   * persistence/hydration concerns (session authz, message-with-feedback
+   * fetch, todoRuntime hydration) are now owned by the runtime; the
+   * todoRuntime hydration callback wired in the constructor calls back
+   * into `resolveSessionWorkspaceId` + `getWorkspaceRole` +
+   * `todoOrchestrationService.getSessionTodoRuntime` to preserve the
+   * pre-Lot 14a behavior.
+   */
+  async listMessages(
+    sessionId: string,
+    userId: string,
+  ): Promise<{
+    messages: ChatMessageWithFeedback[];
+    todoRuntime: Record<string, unknown> | null;
+  }> {
+    return this.runtime.listMessages(sessionId, userId);
   }
 
   private async resolveSessionWorkspaceId(
@@ -1725,149 +1731,49 @@ export class ChatService {
     return out;
   }
 
+  /**
+   * BR14b Lot 14b — thin delegate to `ChatRuntime.getSessionBootstrap`.
+   * Public signature preserved. Composer body (authz precheck +
+   * parallel fetch of messages, checkpoints, workspaceId + sequential
+   * fetch of documents + assistant details) lives in chat-core; the
+   * 3 api-side callbacks (`resolveSessionWorkspaceId`,
+   * `listSessionDocuments`, `listAssistantDetailsByMessageId`) are
+   * wired into the runtime in the ChatService constructor.
+   */
   async getSessionBootstrap(options: { sessionId: string; userId: string }) {
-    const session = await this.getSessionForUser(options.sessionId, options.userId);
-    if (!session) throw new Error('Session not found');
-
-    const [{ messages, todoRuntime }, checkpoints, workspaceId] = await Promise.all([
-      this.listMessages(options.sessionId, options.userId),
-      this.listCheckpoints({
-        sessionId: options.sessionId,
-        userId: options.userId,
-        limit: 20,
-      }),
-      this.resolveSessionWorkspaceId(session, options.userId),
-    ]);
-
-    const documents = await this.listSessionDocuments({
-      sessionId: options.sessionId,
-      workspaceId,
-    });
-    const assistantMessageIds = messages
-      .filter((message) => message.role === 'assistant')
-      .map((message) => String(message.id ?? '').trim())
-      .filter((messageId) => messageId.length > 0);
-    const assistantDetailsByMessageId =
-      await this.listAssistantDetailsByMessageId(assistantMessageIds);
-
-    return {
-      messages,
-      todoRuntime,
-      checkpoints,
-      documents,
-      assistantDetailsByMessageId,
-    };
+    return this.runtime.getSessionBootstrap(options);
   }
 
+  /**
+   * BR14b Lot 14b — thin delegate to `ChatRuntime.getSessionHistory`.
+   * Public signature preserved (returns the same
+   * `{sessionId, title, todoRuntime, checkpoints, documents, items}`
+   * shape). The pure history projection helpers
+   * (`buildChatHistoryTimeline`, `compactChatHistoryTimelineForSummary`)
+   * moved into `packages/chat-core/src/history.ts` alongside the
+   * composer body.
+   */
   async getSessionHistory(options: {
     sessionId: string;
     userId: string;
     detailMode?: 'summary' | 'full';
-  }): Promise<{
-    sessionId: string;
-    title: string | null;
-    todoRuntime: Record<string, unknown> | null;
-    checkpoints: ChatCheckpointSummary[];
-    documents: ChatSessionDocumentItem[];
-    items: ChatHistoryTimelineItem[];
-  }> {
-    const session = await this.getSessionForUser(options.sessionId, options.userId);
-    if (!session) throw new Error('Session not found');
-
-    const [{ messages, todoRuntime }, checkpoints, workspaceId] = await Promise.all([
-      this.listMessages(options.sessionId, options.userId),
-      this.listCheckpoints({
-        sessionId: options.sessionId,
-        userId: options.userId,
-        limit: 20,
-      }),
-      this.resolveSessionWorkspaceId(session, options.userId),
-    ]);
-
-    const documents = await this.listSessionDocuments({
-      sessionId: options.sessionId,
-      workspaceId,
-    });
-    const assistantMessageIds = messages
-      .filter((message) => message.role === 'assistant')
-      .map((message) => String(message.id ?? '').trim())
-      .filter((messageId) => messageId.length > 0);
-    const assistantDetailsByMessageId =
-      await this.listAssistantDetailsByMessageId(assistantMessageIds);
-    const eventMap = new Map<string, ChatHistoryStreamEvent[]>();
-    for (const [messageId, events] of Object.entries(assistantDetailsByMessageId)) {
-      eventMap.set(messageId, events as ChatHistoryStreamEvent[]);
-    }
-    const projectedItems = buildChatHistoryTimeline(
-      messages as ChatHistoryMessage[],
-      eventMap,
-    );
-    const items =
-      options.detailMode === 'full'
-        ? projectedItems
-        : compactChatHistoryTimelineForSummary(projectedItems);
-
-    return {
-      sessionId: options.sessionId,
-      title: session.title ?? null,
-      todoRuntime,
-      checkpoints,
-      documents,
-      items: [...items].reverse(),
-    };
+  }) {
+    return this.runtime.getSessionHistory(options);
   }
 
+  /**
+   * BR14b Lot 14b — thin delegate to
+   * `ChatRuntime.getMessageRuntimeDetails`. Public signature preserved
+   * (returns `{messageId, items}`). The composer body uses
+   * `buildChatHistoryTimeline` + `buildAssistantMessageHistoryDetails`
+   * (moved into chat-core) and `MessageStore.findDetailedForUser`
+   * (authz + role precheck).
+   */
   async getMessageRuntimeDetails(options: {
     messageId: string;
     userId: string;
-  }): Promise<{
-    messageId: string;
-    items: ChatHistoryTimelineItem[];
-  }> {
-    const message = await this.getDetailedMessageForUser(
-      options.messageId,
-      options.userId,
-    );
-    if (!message) throw new Error('Message not found');
-    if (message.role !== 'assistant') {
-      throw new Error('Runtime details only exist for assistant messages');
-    }
-
-    const { messages } = await this.listMessages(
-      message.sessionId,
-      options.userId,
-    );
-    const details = await this.listAssistantDetailsByMessageId([options.messageId]);
-    const events = (details[options.messageId] ?? []) as ChatHistoryStreamEvent[];
-    const eventMap = new Map<string, ChatHistoryStreamEvent[]>();
-    eventMap.set(options.messageId, events);
-    const projected = buildChatHistoryTimeline(
-      messages as ChatHistoryMessage[],
-      eventMap,
-    );
-    const firstIndex = projected.findIndex(
-      (item) => String(item.message.id ?? '').trim() === options.messageId,
-    );
-    const lastIndex = (() => {
-      for (let index = projected.length - 1; index >= 0; index -= 1) {
-        if (String(projected[index]?.message.id ?? '').trim() === options.messageId) {
-          return index;
-        }
-      }
-      return -1;
-    })();
-    const items =
-      firstIndex >= 0 && lastIndex >= firstIndex
-        ? projected.slice(firstIndex, lastIndex + 1)
-        : buildAssistantMessageHistoryDetails(
-            message as ChatHistoryMessage,
-            events,
-          );
-
-    return {
-      messageId: options.messageId,
-      items,
-    };
+  }) {
+    return this.runtime.getMessageRuntimeDetails(options);
   }
 
   async createCheckpoint(options: {
@@ -1879,100 +1785,11 @@ export class ChatService {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
     if (!session) throw new Error('Session not found');
 
-    const messages = await db
-      .select({
-        id: chatMessages.id,
-        role: chatMessages.role,
-        content: chatMessages.content,
-        contexts: chatMessages.contexts,
-        toolCalls: chatMessages.toolCalls,
-        toolCallId: chatMessages.toolCallId,
-        reasoning: chatMessages.reasoning,
-        model: chatMessages.model,
-        promptId: chatMessages.promptId,
-        promptVersionId: chatMessages.promptVersionId,
-        sequence: chatMessages.sequence,
-        createdAt: chatMessages.createdAt,
-      })
-      .from(chatMessages)
-      .where(eq(chatMessages.sessionId, options.sessionId))
-      .orderBy(asc(chatMessages.sequence));
-
-    if (messages.length === 0) {
-      throw new Error('Cannot create checkpoint on an empty session');
-    }
-
-    const anchorMessage =
-      (options.anchorMessageId
-        ? messages.find((message) => message.id === options.anchorMessageId)
-        : null) ?? messages[messages.length - 1];
-    if (!anchorMessage) throw new Error('Anchor message not found');
-
-    const anchorSequence = Number(anchorMessage.sequence ?? 0);
-    if (!Number.isFinite(anchorSequence) || anchorSequence <= 0) {
-      throw new Error('Invalid checkpoint anchor sequence');
-    }
-
-    const snapshotMessages = messages
-      .filter((message) => Number(message.sequence ?? 0) <= anchorSequence)
-      .map((message) => ({
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        contexts: message.contexts,
-        toolCalls: message.toolCalls,
-        toolCallId: message.toolCallId,
-        reasoning: message.reasoning,
-        model: message.model,
-        promptId: message.promptId,
-        promptVersionId: message.promptVersionId,
-        sequence: message.sequence,
-        createdAt:
-          message.createdAt instanceof Date
-            ? message.createdAt.toISOString()
-            : String(message.createdAt ?? ''),
-      }));
-
-    const checkpointId = createId();
-    const now = new Date();
-    const title =
-      typeof options.title === 'string' && options.title.trim().length > 0
-        ? options.title.trim()
-        : `Checkpoint #${anchorSequence}`;
-
-    const snapshot = {
-      id: checkpointId,
-      title,
-      anchorMessageId: anchorMessage.id,
-      anchorSequence,
-      messageCount: snapshotMessages.length,
-      messages: snapshotMessages,
-    };
-
-    await db.insert(chatContexts).values({
-      id: checkpointId,
+    return this.runtime.createCheckpoint({
       sessionId: options.sessionId,
-      contextType: CHAT_CHECKPOINT_CONTEXT_TYPE,
-      contextId: checkpointId,
-      snapshotBefore: null,
-      snapshotAfter: snapshot,
-      modifications: {
-        action: 'checkpoint_create',
-        anchorMessageId: anchorMessage.id,
-        anchorSequence,
-      },
-      modifiedAt: now,
-      createdAt: now,
+      title: options.title,
+      anchorMessageId: options.anchorMessageId,
     });
-
-    return {
-      id: checkpointId,
-      title,
-      anchorMessageId: anchorMessage.id,
-      anchorSequence,
-      messageCount: snapshotMessages.length,
-      createdAt: now.toISOString(),
-    };
   }
 
   async listCheckpoints(options: {
@@ -1983,44 +1800,9 @@ export class ChatService {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
     if (!session) throw new Error('Session not found');
 
-    const limit = Number.isFinite(options.limit)
-      ? Math.min(Math.max(Math.floor(options.limit as number), 1), 100)
-      : 20;
-
-    const rows = await db
-      .select({
-        id: chatContexts.id,
-        snapshotAfter: chatContexts.snapshotAfter,
-        createdAt: chatContexts.createdAt,
-      })
-      .from(chatContexts)
-      .where(
-        and(
-          eq(chatContexts.sessionId, options.sessionId),
-          eq(chatContexts.contextType, CHAT_CHECKPOINT_CONTEXT_TYPE),
-        ),
-      )
-      .orderBy(desc(chatContexts.createdAt))
-      .limit(limit);
-
-    return rows.map((row) => {
-      const snapshot = asRecord(row.snapshotAfter) ?? {};
-      const titleRaw = String(snapshot.title ?? '').trim();
-      const anchorMessageId = String(snapshot.anchorMessageId ?? '').trim();
-      const anchorSequence = Number(snapshot.anchorSequence ?? 0);
-      const messageCount = Number(snapshot.messageCount ?? 0);
-      const createdAt =
-        row.createdAt instanceof Date
-          ? row.createdAt.toISOString()
-          : new Date(String(row.createdAt ?? '')).toISOString();
-      return {
-        id: row.id,
-        title: titleRaw || `Checkpoint #${anchorSequence || 0}`,
-        anchorMessageId,
-        anchorSequence: Number.isFinite(anchorSequence) ? anchorSequence : 0,
-        messageCount: Number.isFinite(messageCount) ? messageCount : 0,
-        createdAt,
-      };
+    return this.runtime.listCheckpoints({
+      sessionId: options.sessionId,
+      limit: options.limit,
     });
   }
 
@@ -2036,99 +1818,36 @@ export class ChatService {
     const session = await this.getSessionForUser(options.sessionId, options.userId);
     if (!session) throw new Error('Session not found');
 
-    const [checkpoint] = await db
-      .select({
-        id: chatContexts.id,
-        snapshotAfter: chatContexts.snapshotAfter,
-      })
-      .from(chatContexts)
-      .where(
-        and(
-          eq(chatContexts.id, options.checkpointId),
-          eq(chatContexts.sessionId, options.sessionId),
-          eq(chatContexts.contextType, CHAT_CHECKPOINT_CONTEXT_TYPE),
-        ),
-      );
-    if (!checkpoint) throw new Error('Checkpoint not found');
-
-    const snapshot = asRecord(checkpoint.snapshotAfter);
-    const restoredToSequence = Number(snapshot?.anchorSequence ?? 0);
-    if (!Number.isFinite(restoredToSequence) || restoredToSequence <= 0) {
-      throw new Error('Invalid checkpoint payload');
-    }
-
-    const removedRows = await db
-      .delete(chatMessages)
-      .where(
-        and(
-          eq(chatMessages.sessionId, options.sessionId),
-          gt(chatMessages.sequence, restoredToSequence),
-        ),
-      )
-      .returning({ id: chatMessages.id });
-
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, options.sessionId));
-
-    return {
-      checkpointId: checkpoint.id,
-      restoredToSequence,
-      removedMessages: removedRows.length,
-    };
+    return this.runtime.restoreCheckpoint({
+      sessionId: options.sessionId,
+      checkpointId: options.checkpointId,
+    });
   }
 
+  /**
+   * BR14b Lot 13 — thin delegate. Body migrated verbatim into
+   * `ChatRuntime.setMessageFeedback`. Public signature preserved.
+   */
   async setMessageFeedback(options: { messageId: string; userId: string; vote: 'up' | 'down' | 'clear' }) {
-    const msg = await this.getMessageForUser(options.messageId, options.userId);
-    if (!msg) throw new Error('Message not found');
-    if (msg.role !== 'assistant') throw new Error('Feedback is only allowed on assistant messages');
-
-    if (options.vote === 'clear') {
-      await db
-        .delete(chatMessageFeedback)
-        .where(and(eq(chatMessageFeedback.messageId, options.messageId), eq(chatMessageFeedback.userId, options.userId)));
-      return { vote: null };
-    }
-
-    const voteValue = options.vote === 'up' ? 1 : -1;
-    const now = new Date();
-    await db
-      .insert(chatMessageFeedback)
-      .values({
-        id: createId(),
-        messageId: options.messageId,
-        userId: options.userId,
-        vote: voteValue,
-        createdAt: now,
-        updatedAt: now
-      })
-      .onConflictDoUpdate({
-        target: [chatMessageFeedback.messageId, chatMessageFeedback.userId],
-        set: { vote: voteValue, updatedAt: now }
-      });
-
-    return { vote: voteValue };
+    return this.runtime.setMessageFeedback(options);
   }
 
+  /**
+   * BR14b Lot 13 — thin delegate. Body migrated verbatim into
+   * `ChatRuntime.updateUserMessageContent`. Public signature preserved.
+   */
   async updateUserMessageContent(options: { messageId: string; userId: string; content: string }) {
-    const msg = await this.getMessageForUser(options.messageId, options.userId);
-    if (!msg) throw new Error('Message not found');
-    if (msg.role !== 'user') throw new Error('Only user messages can be edited');
-
-    await db
-      .update(chatMessages)
-      .set({ content: options.content })
-      .where(eq(chatMessages.id, options.messageId));
-
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, msg.sessionId));
-
-    return { messageId: options.messageId };
+    return this.runtime.updateUserMessageContent(options);
   }
 
+  /**
+   * BR14b Lot 12 — thin delegate. Body migrated verbatim into
+   * `ChatRuntime.retryUserMessage`. The runtime returns the resolved
+   * provider id as a plain string; we cast back to the typed
+   * `ProviderId` (mesh union) at the delegate boundary because the
+   * value passes through `resolveDefaultSelection` which guarantees a
+   * valid mesh provider id.
+   */
   async retryUserMessage(options: {
     messageId: string;
     userId: string;
@@ -2142,78 +1861,24 @@ export class ChatService {
     providerId: ProviderId;
     model: string;
   }> {
-    const msg = await this.getMessageForUser(options.messageId, options.userId);
-    if (!msg) throw new Error('Message not found');
-    if (msg.role !== 'user') throw new Error('Only user messages can be retried');
-
-    const [aiSettings, catalog] = await Promise.all([
-      settingsService.getAISettings({ userId: options.userId }),
-      getModelCatalogPayload({ userId: options.userId }),
-    ]);
-    const inferredProviderId = inferProviderFromModelIdWithLegacy(
-      catalog.models,
-      options.model
-    );
-    const resolvedSelection = resolveDefaultSelection(
-      {
-        providerId:
-          options.providerId || inferredProviderId || aiSettings.defaultProviderId,
-        modelId: options.model || aiSettings.defaultModel,
-      },
-      catalog.models
-    );
-    const selectedModel = resolvedSelection.model_id;
-    const selectedProviderId = resolvedSelection.provider_id;
-
-    await db
-      .delete(chatMessages)
-      .where(and(eq(chatMessages.sessionId, msg.sessionId), gt(chatMessages.sequence, msg.sequence)));
-
-    const assistantMessageId = createId();
-    const assistantSeq = msg.sequence + 1;
-
-    await db.insert(chatMessages).values({
-      id: assistantMessageId,
-      sessionId: msg.sessionId,
-      role: 'assistant',
-      content: null,
-      toolCalls: null,
-      toolCallId: null,
-      reasoning: null,
-      model: selectedModel,
-      promptId: null,
-      promptVersionId: null,
-      sequence: assistantSeq,
-      createdAt: new Date()
-    });
-
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, msg.sessionId));
-
+    const result = await this.runtime.retryUserMessage(options);
     return {
-      sessionId: msg.sessionId,
-      userMessageId: options.messageId,
-      assistantMessageId,
-      streamId: assistantMessageId,
-      providerId: selectedProviderId,
-      model: selectedModel
+      sessionId: result.sessionId,
+      userMessageId: result.userMessageId,
+      assistantMessageId: result.assistantMessageId,
+      streamId: result.streamId,
+      providerId: result.providerId as ProviderId,
+      model: result.model,
     };
-  }
-
-  private async getNextMessageSequence(sessionId: string): Promise<number> {
-    const result = await db
-      .select({ maxSequence: sql<number>`MAX(${chatMessages.sequence})` })
-      .from(chatMessages)
-      .where(eq(chatMessages.sessionId, sessionId));
-    const maxSequence = result[0]?.maxSequence ?? 0;
-    return maxSequence + 1;
   }
 
   /**
    * Crée le message user + le placeholder assistant (même session).
    * Le streamId pour le SSE chat est égal à l'id du message assistant.
+   *
+   * BR14b Lot 12 — thin delegate. Body migrated verbatim into
+   * `ChatRuntime.createUserMessageWithAssistantPlaceholder`. Same
+   * `ProviderId` cast rationale as `retryUserMessage`.
    */
   async createUserMessageWithAssistantPlaceholder(input: CreateChatMessageInput): Promise<{
     sessionId: string;
@@ -2223,116 +1888,14 @@ export class ChatService {
     providerId: ProviderId;
     model: string;
   }> {
-    const desiredWorkspaceId = input.workspaceId ?? null;
-    const existing = input.sessionId ? await this.getSessionForUser(input.sessionId, input.userId) : null;
-    const existingId = existing && typeof (existing as { id?: unknown }).id === 'string' ? (existing as { id: string }).id : null;
-    const existingWorkspaceId =
-      existing && typeof (existing as { workspaceId?: unknown }).workspaceId === 'string'
-        ? ((existing as { workspaceId: string }).workspaceId as string)
-        : null;
-    const sessionId =
-      existingId && existingWorkspaceId === desiredWorkspaceId
-        ? existingId
-        : (await this.createSession({
-            userId: input.userId,
-            workspaceId: desiredWorkspaceId,
-            primaryContextType: input.primaryContextType ?? null,
-            primaryContextId: input.primaryContextId ?? null,
-            title: input.sessionTitle ?? null
-          })).sessionId;
-    const nextContextType = isChatContextType(input.primaryContextType) ? input.primaryContextType : null;
-    const nextContextId = typeof input.primaryContextId === 'string' ? input.primaryContextId.trim() : '';
-
-    if (nextContextType && nextContextId) {
-      const shouldUpdateContext =
-        !existing || existing.primaryContextType !== nextContextType || existing.primaryContextId !== nextContextId;
-      if (shouldUpdateContext) {
-        await db
-          .update(chatSessions)
-          .set({
-            primaryContextType: nextContextType,
-            primaryContextId: nextContextId,
-            updatedAt: new Date()
-          })
-          .where(eq(chatSessions.id, sessionId));
-      }
-    }
-
-    // Provider/model selection (request overrides > inferred by model id > workspace defaults).
-    const [aiSettings, catalog] = await Promise.all([
-      settingsService.getAISettings({ userId: input.userId }),
-      getModelCatalogPayload({ userId: input.userId }),
-    ]);
-    const inferredProviderId = inferProviderFromModelIdWithLegacy(
-      catalog.models,
-      input.model
-    );
-    const resolvedSelection = resolveDefaultSelection(
-      {
-        providerId:
-          input.providerId ||
-          inferredProviderId ||
-          aiSettings.defaultProviderId,
-        modelId: input.model || aiSettings.defaultModel,
-      },
-      catalog.models
-    );
-    const selectedProviderId = resolvedSelection.provider_id;
-    const selectedModel = resolvedSelection.model_id;
-    const userSeq = await this.getNextMessageSequence(sessionId);
-    const assistantSeq = userSeq + 1;
-
-    const userMessageId = createId();
-    const assistantMessageId = createId();
-
-    const messageContexts = this.normalizeMessageContexts(input);
-
-    await db.insert(chatMessages).values([
-      {
-        id: userMessageId,
-        sessionId,
-        role: 'user',
-        content: input.content,
-        toolCalls: null,
-        toolCallId: null,
-        reasoning: null,
-        model: null,
-        promptId: null,
-        promptVersionId: null,
-        contexts: messageContexts.length > 0 ? messageContexts : null,
-        sequence: userSeq,
-        createdAt: new Date()
-      },
-      {
-        id: assistantMessageId,
-        sessionId,
-        role: 'assistant',
-        content: null,
-        toolCalls: null,
-        toolCallId: null,
-        reasoning: null,
-        model: selectedModel,
-        promptId: null,
-        promptVersionId: null,
-        contexts: null,
-        sequence: assistantSeq,
-        createdAt: new Date()
-      }
-    ]);
-
-    // Touch session updatedAt
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, sessionId));
-
+    const result = await this.runtime.createUserMessageWithAssistantPlaceholder(input);
     return {
-      sessionId,
-      userMessageId,
-      assistantMessageId,
-      streamId: assistantMessageId,
-      providerId: selectedProviderId,
-      model: selectedModel
+      sessionId: result.sessionId,
+      userMessageId: result.userMessageId,
+      assistantMessageId: result.assistantMessageId,
+      streamId: result.streamId,
+      providerId: result.providerId as ProviderId,
+      model: result.model,
     };
   }
 
@@ -2478,99 +2041,181 @@ export class ChatService {
   }
 
   /**
-   * Exécute la génération assistant pour un message placeholder déjà créé.
-   * Écrit les events dans chat_stream_events (streamId = assistantMessageId)
-   * puis met à jour chat_messages.content + chat_messages.reasoning.
+   * BR14b Lot 18 — bound to the `evaluateReasoningEffort` callback on
+   * `ChatRuntimeDeps`. Carries the verbatim 98-line body of the
+   * reasoning-effort evaluator block extracted from
+   * `runAssistantGeneration` (chat-service.ts lines 2806-2898 pre-Lot 18).
+   *
+   * The two status `writeStreamEvent` calls that previously bracketed
+   * the block (`reasoning_effort_eval_failed` + `reasoning_effort_selected`)
+   * STAY caller-side because the shared `streamSeq` counter is not yet
+   * migrated into the runtime. The caller in `runAssistantGeneration`
+   * emits them around the runtime call based on the returned `failure`
+   * + `effortLabel` + `evaluatedBy` fields.
+   *
+   * Behavior preservation: no inner code change. The body below is byte-
+   * for-byte identical to the pre-Lot 18 inline block, with the only
+   * differences being (a) reads of `selectedProviderId` / `selectedModel`
+   * / `conversation` / `options.userId` / `sessionWorkspaceId` /
+   * `options.signal` redirected to the `input.*` fields, and (b) the
+   * caller-side `console.error` + status event emission moved out of the
+   * catch block into `runAssistantGeneration` (failure surfaced via the
+   * returned `failure: { message }` shape).
    */
-  async runAssistantGeneration(options: {
-    userId: string;
-    sessionId: string;
-    assistantMessageId: string;
-    providerId?: ProviderId | null;
-    providerApiKey?: string | null;
-    model?: string | null;
-    contexts?: Array<{ contextType: string; contextId: string }>;
-    tools?: string[];
-    localToolDefinitions?: LocalToolDefinitionInput[];
-    vscodeCodeAgent?: VsCodeCodeAgentRuntimePayload | null;
-    resumeFrom?: ChatResumeFromToolOutputs;
-    locale?: string;
-    signal?: AbortSignal;
-  }): Promise<void> {
-    const session = await this.getSessionForUser(options.sessionId, options.userId);
-    if (!session) throw new Error('Session not found');
+  private async evaluateReasoningEffortInternal(
+    input: EvaluateReasoningEffortInput,
+  ): Promise<ReasoningEffortEvaluation> {
+    // Reasoning-effort evaluation (best effort):
+    // - Runs for any model whose catalog entry has reasoningTier !== 'none'.
+    // - Evaluator uses a cheap model from the same provider family when available,
+    //   otherwise falls back to OpenAI gpt-4.1-nano.
+    const selectedProviderId = input.selectedProviderId as ProviderId;
+    const selectedModel = input.selectedModel;
+    const shouldEvaluateReasoningEffort = modelSupportsReasoning(selectedModel);
+    const evaluatorProviderId: ProviderId =
+      selectedProviderId === 'gemini' ? 'gemini' : 'openai';
+    const evaluatorModel =
+      selectedProviderId === 'gemini'
+        ? 'gemini-3.1-flash-lite-preview'
+        : 'gpt-4.1-nano';
+    if (!shouldEvaluateReasoningEffort) {
+      return {
+        shouldEvaluate: false,
+        effortLabel: 'medium',
+        evaluatedBy: 'non-gpt-5',
+        evaluatorModel: null,
+      };
+    }
+    let effortForMessage: ReasoningEffortLabel | undefined;
+    // Default fallback if evaluator fails: medium.
+    let effortLabel: ReasoningEffortLabel = 'medium';
+    let evaluatedBy: string | undefined;
+    try {
+      const evalTemplate = CHAT_COMMON_PROMPTS.reasoning_effort_eval || '';
+      if (evalTemplate) {
+        const lastUserMessage =
+          [...input.conversation].reverse().find((m) => m.role === 'user')?.content?.trim() || '';
+        const excerpt = input.conversation
+          .slice(-8)
+          .map((m) => `${m.role.toUpperCase()}: ${(m.content || '').slice(0, 2000)}`)
+          .join('\n\n')
+          .trim();
+        const evalPrompt = evalTemplate
+          .replace('{{last_user_message}}', lastUserMessage || '(vide)')
+          .replace('{{context_excerpt}}', excerpt || '(vide)');
 
-    const ownerWs = await ensureWorkspaceForUser(options.userId, { createIfMissing: false });
-    const sessionWorkspaceId =
-      session && typeof (session as { workspaceId?: unknown }).workspaceId === 'string'
-        ? ((session as { workspaceId: string }).workspaceId as string)
-        : ownerWs.workspaceId;
-    if (!sessionWorkspaceId) throw new Error('Workspace not found for user');
-    // Read-only mode:
-    // - Hidden workspaces are read-only until unhidden (only /parametres should be used to unhide)
-    // - Otherwise: writable if the user is editor/admin member of the session workspace
-    const hidden = await isWorkspaceDeleted(sessionWorkspaceId);
-    const canWrite = !hidden ? await hasWorkspaceRole(options.userId, sessionWorkspaceId, 'editor') : false;
-    const readOnly = hidden || !canWrite;
-    const currentUserRole = await getWorkspaceRole(options.userId, sessionWorkspaceId);
+        let out = '';
+        for await (const ev of callLLMStream({
+          providerId: evaluatorProviderId,
+          model: evaluatorModel,
+          userId: input.userId,
+          workspaceId: input.workspaceId ?? undefined,
+          messages: [{ role: 'user', content: evalPrompt }],
+          // Ask for a single token (none|low|medium|high|xhigh).
+          maxOutputTokens: 64,
+          signal: input.signal
+        })) {
+          if (ev.type === 'content_delta') {
+            const d = (ev.data ?? {}) as Record<string, unknown>;
+            const delta = typeof d.delta === 'string' ? d.delta : '';
+            if (delta) out += delta;
+          } else if (ev.type === 'error') {
+            const d = (ev.data ?? {}) as Record<string, unknown>;
+            const reqId = typeof d.request_id === 'string' ? d.request_id : '';
+            const msg =
+              typeof d.message === 'string'
+                ? d.message
+                : 'Reasoning effort evaluation failed';
+            throw new Error(reqId ? `${msg} (request_id=${reqId})` : msg);
+          }
+        }
 
-    const normalizeContexts = (items?: Array<{ contextType: string; contextId: string }>) => {
-      const out: Array<{ contextType: ChatContextType; contextId: string }> = [];
-      for (const item of items ?? []) {
-        const type = item?.contextType;
-        const id = (item?.contextId || '').trim();
-        if (!isChatContextType(type) || !id) continue;
-        const key = `${type}:${id}`;
-        if (out.some((c) => `${c.contextType}:${c.contextId}` === key)) continue;
-        out.push({ contextType: type, contextId: id });
-      }
-      return out;
-    };
-    const contextsOverride = normalizeContexts(options.contexts);
-    const focusContext = contextsOverride[0] ?? null;
-
-    // Charger messages (sans inclure le placeholder assistant)
-    const messages = await db
-      .select()
-      .from(chatMessages)
-      .where(eq(chatMessages.sessionId, options.sessionId))
-      .orderBy(asc(chatMessages.sequence));
-
-    const assistantRow = messages.find((m) => m.id === options.assistantMessageId);
-    if (!assistantRow) throw new Error('Assistant message not found');
-
-    const conversation = messages
-      .filter((m) => m.sequence < assistantRow.sequence)
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content ?? ''
-      }));
-    const lastUserMessage =
-      [...conversation].reverse().find((m) => m.role === 'user')?.content?.trim() || '';
-
-    if (!session.title) {
-      if (lastUserMessage.trim()) {
-        const safeContextType =
-          focusContext?.contextType || (isChatContextType(session.primaryContextType) ? session.primaryContextType : null);
-        const title = await this.generateSessionTitle({
-          primaryContextType: safeContextType,
-          primaryContextId: session.primaryContextId ?? null,
-          lastUserMessage
-        });
-        if (title) {
-          await db
-            .update(chatSessions)
-            .set({ title, updatedAt: new Date() })
-            .where(eq(chatSessions.id, session.id));
-          await this.notifyWorkspaceEvent(sessionWorkspaceId, {
-            action: 'chat_session_title_updated',
-            sessionId: session.id,
-            title
-          });
+        const token = out.trim().split(/\s+/g)[0]?.toLowerCase() || '';
+        if (token === 'none' || token === 'low' || token === 'medium' || token === 'high' || token === 'xhigh') {
+          effortForMessage = token;
+          effortLabel = token;
+          evaluatedBy = evaluatorModel;
+        } else {
+          const preview = out.trim().slice(0, 200);
+          throw new Error(`Invalid effort token from ${evaluatorModel}: "${preview}"`);
         }
       }
+    } catch (e) {
+      // Best-effort only: do not block the chat if the classifier fails.
+      const msg = e instanceof Error ? e.message : String(e ?? 'unknown');
+      const safeMsg = msg.slice(0, 500);
+      return {
+        shouldEvaluate: true,
+        effortLabel: 'medium',
+        evaluatedBy: 'fallback',
+        evaluatorModel,
+        failure: { message: safeMsg },
+      };
     }
+    // Always provide an `evaluatedBy` value when shouldEvaluate=true.
+    if (!evaluatedBy) {
+      evaluatedBy = 'fallback';
+    }
+    return {
+      shouldEvaluate: true,
+      effortLabel,
+      ...(effortForMessage ? { effortForMessage } : {}),
+      evaluatedBy,
+      evaluatorModel,
+    };
+  }
+
+  /**
+   * BR14b Lot 16b — bound to the `buildSystemPrompt` callback on
+   * `ChatRuntimeDeps`. Carries the verbatim 605-line body of Slice B
+   * extracted from `runAssistantGeneration` (chat-service.ts lines
+   * 1946-2550 pre Lot 16b): context flags, allowed-documents/comments
+   * resolution, todo runtime snapshot, tool selection by context-type
+   * + workspace-type, server-side tab tool injection, documents block,
+   * context block per primary type, history block, todo orchestration
+   * block, active tools block, document_generate guidance block, and
+   * the system prompt IIFE. Returns the typed `BuildSystemPromptResult`
+   * struct consumed by `runAssistantGeneration` post-Lot 16b.
+   *
+   * Behavior preservation: no inner code change. The narrow prelude
+   * re-derives the `ChatContextType`-typed locals from the loose chat-
+   * core input types and re-binds the `options.*` reads (used 5 times
+   * in the original block) from the input fields. The body below the
+   * prelude is byte-for-byte identical to the pre-Lot 16b inline block.
+   */
+  private async buildSystemPromptInternal(
+    input: BuildSystemPromptInput,
+  ): Promise<BuildSystemPromptResult> {
+    // Narrow chat-core's loose string types back to the chat-service
+    // `ChatContextType` union. Same cast pattern as the pre-Lot 15
+    // inline reads (chat-service.ts lines 1911-1917) and Lot 15
+    // post-`prepareAssistantRun` block.
+    const session = input.session;
+    const sessionWorkspaceId = input.sessionWorkspaceId;
+    const readOnly = input.readOnly;
+    const currentUserRole = input.currentUserRole;
+    const contextsOverride = input.contextsOverride as Array<{
+      contextType: ChatContextType;
+      contextId: string;
+    }>;
+    const focusContext = input.focusContext as
+      | { contextType: ChatContextType; contextId: string }
+      | null;
+    const lastUserMessage = input.lastUserMessage;
+    // The 5 `options.*` reads used by the original block are now
+    // sourced from the typed input.
+    const options = {
+      userId: input.userId,
+      sessionId: input.sessionId,
+      tools: input.requestedTools as string[],
+      localToolDefinitions: input.localToolDefinitions as
+        | LocalToolDefinitionInput[]
+        | undefined,
+      vscodeCodeAgent: input.vscodeCodeAgent as
+        | VsCodeCodeAgentRuntimePayload
+        | null
+        | undefined,
+    };
 
     // Récupérer le contexte depuis la session
     const primaryContextType = (focusContext?.contextType ??
@@ -2907,7 +2552,7 @@ export class ChatService {
     // Enrichir le system prompt avec le contexte si disponible
     let contextBlock = '';
     if ((primaryContextType === 'initiative' || primaryContextType === 'usecase') && primaryContextId) { // TODO Lot 9.5: remove 'usecase'
-      contextBlock = ` 
+      contextBlock = `
 
 Tu travailles sur le initiative ${primaryContextId}. Tu peux répondre aux questions générales de l'utilisateur en t'appuyant sur l'historique de la conversation.
 
@@ -2943,7 +2588,7 @@ Exemple concret : Si l'utilisateur dit "Je souhaite reformuler Problème et solu
       const orgLine = primaryContextId
         ? `Tu travailles sur l'organisation ${primaryContextId}.`
         : `Tu es sur la liste des organisations (pas d'organisation sélectionnée).`;
-      contextBlock = ` 
+      contextBlock = `
 
 ${orgLine}
 
@@ -2962,7 +2607,7 @@ Règles :
       const folderLine = primaryContextId
         ? `Tu travailles sur le dossier ${primaryContextId}.`
         : `Tu es sur la liste des dossiers (pas de dossier sélectionné). Tu peux lire les dossiers via \`folders_list\`, puis lire les cas d'usage d'un dossier via \`usecases_list\` en passant son folderId.`;
-      contextBlock = ` 
+      contextBlock = `
 
 ${folderLine}
 
@@ -2983,7 +2628,7 @@ Règles :
 - Pour toute modification, lis d'abord puis mets à jour via les tools.
 - Si un folderId de contexte est présent, ne lis/modifie que ce dossier. Sinon (vue liste), tu peux lire plusieurs dossiers en fournissant explicitement leur folderId.`;
     } else if (primaryContextType === 'executive_summary' && primaryContextId) {
-      contextBlock = ` 
+      contextBlock = `
 
 Tu travailles sur la synthèse exécutive du dossier ${primaryContextId}.
 
@@ -3177,13 +2822,141 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         AUTOMATION_BLOCK: automationBlock,
       }).trim();
     })();
+
+    return {
+      systemPrompt,
+      tools,
+      localTools,
+      localToolNames,
+      allowedByType,
+      allowedFolderIds,
+      allowedDocContexts,
+      allowedCommentContexts,
+      hasContextType: (type) => hasContextType(type as ChatContextType),
+      primaryContextType,
+      primaryContextId,
+      vscodeCodeAgentPayload,
+      enforceTodoUpdateMode,
+      todoStructuralMutationIntent,
+      todoProgressionFocusMode,
+      hasActiveSessionTodo,
+    };
+  }
+
+  /**
+   * Exécute la génération assistant pour un message placeholder déjà créé.
+   * Écrit les events dans chat_stream_events (streamId = assistantMessageId)
+   * puis met à jour chat_messages.content + chat_messages.reasoning.
+   */
+  async runAssistantGeneration(options: {
+    userId: string;
+    sessionId: string;
+    assistantMessageId: string;
+    providerId?: ProviderId | null;
+    providerApiKey?: string | null;
+    model?: string | null;
+    contexts?: Array<{ contextType: string; contextId: string }>;
+    tools?: string[];
+    localToolDefinitions?: LocalToolDefinitionInput[];
+    vscodeCodeAgent?: VsCodeCodeAgentRuntimePayload | null;
+    resumeFrom?: ChatResumeFromToolOutputs;
+    locale?: string;
+    signal?: AbortSignal;
+  }): Promise<void> {
+    // BR14b Lot 15 — precheck slice migrated into
+    // `ChatRuntime.prepareAssistantRun`. Returns the typed
+    // `AssistantRunContext` consumed by the remainder of this method.
+    // Subsequent slices (title generation, prompt build, provider/model
+    // resolution, tool loop, continuation) still live in chat-service.ts
+    // and migrate into the runtime in Lots 16+.
+    const ctx = await this.runtime.prepareAssistantRun({
+      userId: options.userId,
+      sessionId: options.sessionId,
+      assistantMessageId: options.assistantMessageId,
+      contexts: options.contexts,
+    });
+    const session = ctx.session;
+    const sessionWorkspaceId = ctx.sessionWorkspaceId;
+    const readOnly = ctx.readOnly;
+    const currentUserRole = ctx.currentUserRole;
+    // BR14b Lot 16b — `contextsOverride` is no longer destructured here:
+    // the only consumer (the inline Slice B block) now lives inside
+    // `buildSystemPromptInternal` and reads `input.contextsOverride`
+    // directly. `focusContext` is still consumed by `ensureSessionTitle`.
+    const focusContext = ctx.focusContext as
+      | { contextType: ChatContextType; contextId: string }
+      | null;
+    const assistantRow = ctx.assistantRow;
+    const conversation = ctx.conversation;
+    const lastUserMessage = ctx.lastUserMessage;
+
+    // BR14b Lot 16a — title-generation side effect migrated into
+    // `ChatRuntime.ensureSessionTitle`. The runtime delegates the
+    // body (generateSessionTitle + sessionStore.updateTitle +
+    // notifyWorkspaceEvent) to the `ensureSessionTitle` callback wired
+    // in the constructor. Behavior is byte-identical to the pre-Lot 16
+    // inline block: short-circuits when the session already has a
+    // title or `lastUserMessage` is empty after trimming.
+    await this.runtime.ensureSessionTitle({
+      session,
+      sessionWorkspaceId,
+      focusContext,
+      lastUserMessage,
+    });
+
+    // BR14b Lot 16b — Slice B body (the full system-prompt build chain:
+    // context flags + allowed-documents/comments resolution + todo
+    // runtime snapshot + tool catalog + context blocks + system prompt
+    // IIFE, ~605 lines pre-Lot 16b) migrated into
+    // `ChatRuntime.prepareSystemPrompt` -> `buildSystemPromptInternal`
+    // private method via the `buildSystemPrompt` Option A callback wired
+    // in the constructor. Behavior is byte-identical to the pre-Lot 16b
+    // inline block: the runtime forwards the typed `AssistantRunContext`
+    // plus the caller-side options to the callback, which returns the
+    // typed `BuildSystemPromptResult` struct consumed below.
+    const promptCtx = await this.runtime.prepareSystemPrompt(ctx, {
+      userId: options.userId,
+      sessionId: options.sessionId,
+      requestedTools: Array.isArray(options.tools) ? options.tools : [],
+      localToolDefinitions: options.localToolDefinitions,
+      vscodeCodeAgent: options.vscodeCodeAgent,
+    });
+    const systemPrompt = promptCtx.systemPrompt;
+    const tools = promptCtx.tools as
+      | OpenAI.Chat.Completions.ChatCompletionTool[]
+      | undefined;
+    const localTools =
+      promptCtx.localTools as ReadonlyArray<OpenAI.Chat.Completions.ChatCompletionTool>;
+    const localToolNames = promptCtx.localToolNames;
+    const allowedByType = promptCtx.allowedByType;
+    const allowedFolderIds = promptCtx.allowedFolderIds;
+    const allowedDocContexts = promptCtx.allowedDocContexts as Array<{
+      contextType: 'organization' | 'folder' | 'initiative' | 'usecase' | 'chat_session';
+      contextId: string;
+    }>;
+    const allowedCommentContexts = promptCtx.allowedCommentContexts as Array<{
+      contextType: CommentContextType;
+      contextId: string;
+    }>;
+    const hasContextType = (type: ChatContextType) =>
+      promptCtx.hasContextType(type);
+    const primaryContextType = promptCtx.primaryContextType as
+      | ChatContextType
+      | null;
+    const primaryContextId = promptCtx.primaryContextId;
+    const vscodeCodeAgentPayload = promptCtx.vscodeCodeAgentPayload;
+    const enforceTodoUpdateMode = promptCtx.enforceTodoUpdateMode;
+    const todoStructuralMutationIntent = promptCtx.todoStructuralMutationIntent;
+    const todoProgressionFocusMode = promptCtx.todoProgressionFocusMode;
+    const hasActiveSessionTodo = promptCtx.hasActiveSessionTodo;
     const STEER_PROMPT_MAX_MESSAGES = 8;
-    const STEER_REASONING_REPLAY_MAX_CHARS = 6000;
+    // BR14b Lot 21b — `STEER_REASONING_REPLAY_MAX_CHARS` lifted to
+    // `packages/chat-core/src/runtime.ts` (module-level constant adjacent
+    // to `consumeAssistantStream`) since the caller no longer clamps the
+    // reasoning replay buffer directly.
     const STEER_REASONING_EXCERPT_MAX_CHARS = 1800;
-    const normalizeSteerMessage = (value: string): string =>
-      value
-        .replace(/\s+/g, ' ')
-        .trim();
+    // BR14b Lot 19 — `normalizeSteerMessage` extracted to
+    // `packages/chat-core/src/steer.ts` (imported at top of file).
     const normalizeReasoningExcerpt = (value: string): string => {
       const normalized = value.replace(/\s+/g, ' ').trim();
       if (!normalized) return '';
@@ -3226,13 +2999,10 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         reasoningExcerpt,
       ].join('\n').trim();
     };
-    const isPreviousResponseNotFoundError = (message: string): boolean => {
-      const normalized = message.toLowerCase();
-      return (
-        normalized.includes('previous response') &&
-        normalized.includes('not found')
-      );
-    };
+    // BR14b Lot 21b — `isPreviousResponseNotFoundError` extracted to
+    // `packages/chat-core/src/mesh-errors.ts` and consumed by the
+    // `ChatRuntime.consumeAssistantStream` catch path. The inline
+    // closure has no other call site so it is deleted here.
     const applySteerInterruptionPrompt = (
       messages: Array<
         | { role: 'system' | 'user' | 'assistant'; content: string }
@@ -3257,228 +3027,150 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       ];
     };
 
-    let streamSeq = await getNextSequence(options.assistantMessageId);
-    let lastObservedStreamSequence = Math.max(streamSeq - 1, 0);
-    const contentParts: string[] = [];
-    const reasoningParts: string[] = [];
-    let lastErrorMessage: string | null = null;
-    const executedTools: Array<{ toolCallId: string; name: string; args: unknown; result: unknown }> = [];
-    
-    // État pour tracker les tool calls en cours
-    const toolCalls: Array<{ id: string; name: string; args: string }> = [];
-    
-    // Boucle itérative pour gérer plusieurs rounds de tool calls
-    let currentMessages: ChatRuntimeMessage[] = [
-      { role: 'system' as const, content: systemPrompt },
-      ...conversation,
-    ];
-    let maxIterations = BASE_MAX_ITERATIONS;
-    const todoAutonomousExtensionEnabled = Boolean(
-      enforceTodoUpdateMode && todoProgressionFocusMode,
-    );
-    let todoContinuationActive = Boolean(
-      todoAutonomousExtensionEnabled && hasActiveSessionTodo,
-    );
-    let todoAwaitingUserInput = false;
-    let iteration = 0;
-    let previousResponseId: string | null =
-      options.resumeFrom?.previousResponseId ?? null;
-    let pendingResponsesRawInput: unknown[] | null = Array.isArray(
-      options.resumeFrom?.toolOutputs
-    )
-      ? options.resumeFrom!.toolOutputs.map((item) => ({
-          type: 'function_call_output',
-          call_id: item.callId,
-          output: item.output,
-        }))
-      : null;
-    const steerHistoryMessages: string[] = [];
-    let steerReasoningReplay = '';
-    let lastBudgetAnnouncedPct = -1;
-    let contextBudgetReplanAttempts = 0;
+    // BR14b Lot 21a — 39-line loop-state init block (chat-service.ts pre-Lot
+    // 21a lines 2899-2937 + 3004) migrated into
+    // `ChatRuntime.beginAssistantRunLoop`. The runtime performs the initial
+    // `streamBuffer.getNextSequence(assistantMessageId)` lookup and returns
+    // the 20-field `AssistantRunLoopState` value object initialized
+    // verbatim. The destructure preserves every existing identifier in
+    // chat-service.ts so the remaining loop-body code (200+ references)
+    // continues unchanged. `currentMessages` is typed loosely in chat-core
+    // (`AssistantRunLoopMessage`) and re-narrowed to `ChatRuntimeMessage[]`
+    // here so the chat-service.ts tool-loop downstream signatures stay
+    // intact.
+    const loopState = await this.runtime.beginAssistantRunLoop({
+      assistantMessageId: options.assistantMessageId,
+      systemPrompt,
+      conversation,
+      resumeFrom: options.resumeFrom,
+      enforceTodoUpdateMode,
+      todoProgressionFocusMode,
+      hasActiveSessionTodo,
+      baseMaxIterations: BASE_MAX_ITERATIONS,
+    });
+    let streamSeq = loopState.streamSeq;
+    // BR14b Lot 21b — `lastObservedStreamSequence` is now maintained on
+    // `loopState` by `ChatRuntime.consumeAssistantStream` (the runtime
+    // polls steer messages internally). No caller-side cursor needed.
+    const contentParts = loopState.contentParts;
+    const reasoningParts = loopState.reasoningParts;
+    // BR14b Lot 22a-2 — `lastErrorMessage` was the pre-migration carrier
+    // for surfacing stream error messages into the pass2 fallback block.
+    // After the pass2 slice migrated into `ChatRuntime.runPass2Fallback`
+    // (which manages its own internal `lastErrorMessage` cursor), the
+    // caller no longer reads this value, so the caller-side `let` and
+    // its inner-loop reassignment are deleted. The runtime still tracks
+    // it on `loopState.lastErrorMessage` for telemetry symmetry.
+    const executedTools = loopState.executedTools;
+    const toolCalls = loopState.toolCalls;
+    let currentMessages: ChatRuntimeMessage[] =
+      loopState.currentMessages as ChatRuntimeMessage[];
+    let maxIterations = loopState.maxIterations;
+    const todoAutonomousExtensionEnabled =
+      loopState.todoAutonomousExtensionEnabled;
+    let todoContinuationActive = loopState.todoContinuationActive;
+    let todoAwaitingUserInput = loopState.todoAwaitingUserInput;
+    let iteration = loopState.iteration;
+    let previousResponseId = loopState.previousResponseId;
+    let pendingResponsesRawInput = loopState.pendingResponsesRawInput;
+    const steerHistoryMessages = loopState.steerHistoryMessages;
+    let steerReasoningReplay = loopState.steerReasoningReplay;
+    let lastBudgetAnnouncedPct = loopState.lastBudgetAnnouncedPct;
+    let contextBudgetReplanAttempts = loopState.contextBudgetReplanAttempts;
+    let continueGenerationLoop = loopState.continueGenerationLoop;
 
-    const [aiSettings, catalog] = await Promise.all([
-      settingsService.getAISettings({ userId: options.userId }),
-      getModelCatalogPayload({ userId: options.userId }),
-    ]);
-    const inferredProviderId = inferProviderFromModelIdWithLegacy(
-      catalog.models,
-      options.model || assistantRow.model || null
-    );
-    const resolvedSelection = resolveDefaultSelection(
-      {
-        providerId:
-          options.providerId ||
-          inferredProviderId ||
-          aiSettings.defaultProviderId,
-        modelId: options.model || assistantRow.model || aiSettings.defaultModel,
-      },
-      catalog.models
-    );
-    const selectedProviderId = resolvedSelection.provider_id;
-    const selectedModel = resolvedSelection.model_id;
-    const useCodexTransport =
-      selectedProviderId === 'openai' &&
-      selectedModel === 'gpt-5.5' &&
-      (await getOpenAITransportMode()) === 'codex';
-
-    // Reasoning-effort evaluation (best effort):
-    // - Runs for any model whose catalog entry has reasoningTier !== 'none'.
-    // - Evaluator uses a cheap model from the same provider family when available,
-    //   otherwise falls back to OpenAI gpt-4.1-nano.
-    const shouldEvaluateReasoningEffort = modelSupportsReasoning(selectedModel);
-    const evaluatorProviderId: ProviderId =
-      selectedProviderId === 'gemini' ? 'gemini' : 'openai';
-    const evaluatorModel =
-      selectedProviderId === 'gemini'
-        ? 'gemini-3.1-flash-lite-preview'
-        : 'gpt-4.1-nano';
-    let reasoningEffortForThisMessage: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | undefined;
-    // Default fallback if evaluator fails: medium.
-    let reasoningEffortLabel: 'none' | 'low' | 'medium' | 'high' | 'xhigh' = 'medium';
-    let reasoningEffortBy: string | undefined;
-    if (shouldEvaluateReasoningEffort) {
+    // BR14b Lot 22a-1 — pre-loop init slice (74 lines pre-Lot 22a-1)
+    // migrated into `ChatRuntime.initToolLoopState`. The runtime bundles:
+    //   1. `resolveModelSelection` (Lot 12/17 callback)
+    //   2. derive `useCodexTransport = selectedProviderId === 'openai'
+    //      && selectedModel === 'gpt-5.5' && (await
+    //      resolveOpenAITransportMode()) === 'codex'`
+    //   3. mutate `loopState.useCodexTransport = useCodexTransport`
+    //   4. `evaluateReasoningEffort` (Lot 18/20 callback) + streamSeq
+    //      re-sync via `peekStreamSequence + 1`
+    // The legacy `console.error('[chat] reasoning_effort_eval_failed',
+    // ...)` trace is kept caller-side because it carries `sessionId`
+    // (a chat-service-only field). Cast back to `ProviderId` mirrors
+    // the Lot 12/17 delegate pattern.
+    const initResult = await this.runtime.initToolLoopState({
+      userId: options.userId,
+      providerId: options.providerId,
+      model: options.model,
+      // BR14b Lot 22a-1 — coalesce `null` to `''` so the InitToolLoopState
+      // input stays `string`. Semantically equivalent to the legacy
+      // `options.model || assistantRow.model` expression: both `null`
+      // and `''` are falsy in the runtime body's `input.model ||
+      // input.assistantRowModel`, which then propagates the same value
+      // to `resolveModelSelection.model` (the dep's `||
+      // aiSettings.defaultModel` fallback treats `null` and `''`
+      // identically).
+      assistantRowModel: assistantRow.model ?? '',
+      assistantMessageId: options.assistantMessageId,
+      sessionWorkspaceId,
+      conversation,
+      signal: options.signal,
+      loopState,
+    });
+    const selectedProviderId = initResult.selectedProviderId as ProviderId;
+    const selectedModel = initResult.selectedModel;
+    const useCodexTransport = initResult.useCodexTransport;
+    const reasoning = initResult.reasoning;
+    if (reasoning.failure) {
       try {
-        const evalTemplate = CHAT_COMMON_PROMPTS.reasoning_effort_eval || '';
-        if (evalTemplate) {
-          const lastUserMessage =
-            [...conversation].reverse().find((m) => m.role === 'user')?.content?.trim() || '';
-          const excerpt = conversation
-            .slice(-8)
-            .map((m) => `${m.role.toUpperCase()}: ${(m.content || '').slice(0, 2000)}`)
-            .join('\n\n')
-            .trim();
-          const evalPrompt = evalTemplate
-            .replace('{{last_user_message}}', lastUserMessage || '(vide)')
-            .replace('{{context_excerpt}}', excerpt || '(vide)');
-
-          let out = '';
-          for await (const ev of callLLMStream({
-            providerId: evaluatorProviderId,
-            model: evaluatorModel,
-            userId: options.userId,
-            workspaceId: sessionWorkspaceId,
-            messages: [{ role: 'user', content: evalPrompt }],
-            // Ask for a single token (none|low|medium|high|xhigh).
-            maxOutputTokens: 64,
-            signal: options.signal
-          })) {
-            if (ev.type === 'content_delta') {
-              const d = (ev.data ?? {}) as Record<string, unknown>;
-              const delta = typeof d.delta === 'string' ? d.delta : '';
-              if (delta) out += delta;
-            } else if (ev.type === 'error') {
-              const d = (ev.data ?? {}) as Record<string, unknown>;
-              const reqId = typeof d.request_id === 'string' ? d.request_id : '';
-              const msg =
-                typeof d.message === 'string'
-                  ? d.message
-                  : 'Reasoning effort evaluation failed';
-              throw new Error(reqId ? `${msg} (request_id=${reqId})` : msg);
-            }
-          }
-
-          const token = out.trim().split(/\s+/g)[0]?.toLowerCase() || '';
-          if (token === 'none' || token === 'low' || token === 'medium' || token === 'high' || token === 'xhigh') {
-            reasoningEffortForThisMessage = token;
-            reasoningEffortLabel = token;
-            reasoningEffortBy = evaluatorModel;
-          } else {
-            const preview = out.trim().slice(0, 200);
-            throw new Error(`Invalid effort token from ${evaluatorModel}: "${preview}"`);
-          }
-        }
-      } catch (e) {
-        // Best-effort only: do not block the chat if the classifier fails.
-        // But trace the failure for debugging in the UI timeline.
-        const msg = e instanceof Error ? e.message : String(e ?? 'unknown');
-        const safeMsg = msg.slice(0, 500);
-        // Also log to API logs for debugging (user requested).
-        try {
-          console.error('[chat] reasoning_effort_eval_failed', {
-            assistantMessageId: options.assistantMessageId,
-            sessionId: options.sessionId,
-            model: selectedModel,
-            evaluatorModel,
-            error: safeMsg,
-          });
-        } catch {
-          // ignore
-        }
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'status',
-          { state: 'reasoning_effort_eval_failed', message: safeMsg },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
+        console.error('[chat] reasoning_effort_eval_failed', {
+          assistantMessageId: options.assistantMessageId,
+          sessionId: options.sessionId,
+          model: selectedModel,
+          evaluatorModel: reasoning.evaluatorModel,
+          error: reasoning.failure.message,
+        });
+      } catch {
+        // ignore
       }
     }
-    // Always emit a "selected" status so the UI can display what was used.
-    if (!reasoningEffortBy) {
-      reasoningEffortBy = shouldEvaluateReasoningEffort ? 'fallback' : 'non-gpt-5';
-    }
-    await writeStreamEvent(
-      options.assistantMessageId,
-      'status',
-      { state: 'reasoning_effort_selected', effort: reasoningEffortLabel, by: reasoningEffortBy },
-      streamSeq,
-      options.assistantMessageId
-    );
-    streamSeq += 1;
+    const reasoningEffortForThisMessage = initResult.reasoningEffortForThisMessage;
+    streamSeq = initResult.streamSeq;
 
-    let continueGenerationLoop = true;
-    const consumePendingSteerMessages = async (): Promise<string[]> => {
-      const events = await readStreamEvents(
-        options.assistantMessageId,
-        lastObservedStreamSequence,
-      );
-      if (events.length === 0) return [];
-      lastObservedStreamSequence = events[events.length - 1]?.sequence ?? lastObservedStreamSequence;
+    // BR14b Lot 21a — `continueGenerationLoop` initialization moved into
+    // `ChatRuntime.beginAssistantRunLoop` (above) alongside the other
+    // loop-local state fields. The destructure assigned `loopState.
+    // continueGenerationLoop` to the local `let` so the loop body still
+    // uses the same identifier.
+    // BR14b Lot 21b — `consumePendingSteerMessages` is now consumed by
+    // `ChatRuntime.consumeAssistantStream` inside the mesh stream
+    // consumer (Lot 19 helper kept as a chat-core public export). The
+    // chat-service caller no longer imports it directly.
 
-      const messages: string[] = [];
-      for (const event of events) {
-        if (event.eventType !== 'status') continue;
-        const data = asRecord(event.data);
-        if (!data || data.state !== 'steer_received') continue;
-        const message =
-          typeof data.message === 'string'
-            ? normalizeSteerMessage(data.message)
-            : '';
-        if (message) messages.push(message);
-      }
-      return messages;
-    };
-
+    // BR14b Lot 21a — `writeContextBudgetStatus` (28-line closure pre-Lot
+    // 21a) extracted to `packages/chat-core/src/context-budget.ts`. The
+    // closure captured `streamSeq` + `lastBudgetAnnouncedPct` +
+    // `options.assistantMessageId`. The pure helper now drives the
+    // sequence via `streamSequencer.allocate` and returns the advanced
+    // `lastBudgetAnnouncedPct` cursor; this caller-side wrapper re-syncs
+    // the local `streamSeq` from `peek + 1` after each call so the
+    // remainder of the loop body continues from the same cursor (same
+    // pattern Lot 20 introduced around `evaluateReasoningEffort`).
     const writeContextBudgetStatus = async (
       phase: 'pre_model' | 'pre_tool',
       snapshot: ContextBudgetSnapshot,
       extras?: Record<string, unknown>,
     ) => {
-      if (
-        snapshot.occupancyPct === lastBudgetAnnouncedPct &&
-        snapshot.zone === 'normal'
-      ) {
-        return;
+      const result = await writeContextBudgetStatusPure({
+        streamBuffer: postgresStreamBuffer,
+        streamSequencer: postgresStreamSequencer,
+        streamId: options.assistantMessageId,
+        phase,
+        snapshot,
+        lastBudgetAnnouncedPct,
+        extras,
+      });
+      lastBudgetAnnouncedPct = result.lastBudgetAnnouncedPct;
+      if (result.appended) {
+        streamSeq =
+          (await this.runtime.peekStreamSequence(
+            options.assistantMessageId,
+          )) + 1;
       }
-      await writeStreamEvent(
-        options.assistantMessageId,
-        'status',
-        {
-          state: 'context_budget_update',
-          phase,
-          occupancy_pct: snapshot.occupancyPct,
-          estimated_tokens: snapshot.estimatedTokens,
-          max_tokens: snapshot.maxTokens,
-          zone: snapshot.zone,
-          ...(extras ?? {}),
-        },
-        streamSeq,
-        options.assistantMessageId,
-      );
-      streamSeq += 1;
-      lastBudgetAnnouncedPct = snapshot.occupancyPct;
     };
 
     const compactContextIfNeeded = async (
@@ -3599,9 +3291,6 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           preModelBudget,
         );
       }
-      let steerInterruptionRequested = false;
-      let steerInterruptionBatch: string[] = [];
-
       // Trace: exact payload sent to OpenAI (per iteration)
       await writeChatGenerationTrace({
         enabled: env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
@@ -3632,9 +3321,24 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         }
       });
 
-      let shouldRetryWithoutPreviousResponse = false;
-      try {
-        for await (const event of callLLMStream({
+      // BR14b Lot 21b — 182-line inline mesh stream consumer block
+      // (chat-service.ts lines 3200-3381 pre-Lot 21b) migrated into
+      // `ChatRuntime.consumeAssistantStream`. The runtime mutates the
+      // shared `loopState` in place (contentParts, reasoningParts,
+      // toolCalls, lastErrorMessage, previousResponseId,
+      // pendingResponsesRawInput, steerReasoningReplay,
+      // lastObservedStreamSequence, steerHistoryMessages,
+      // currentMessages) and routes every sequence-allocating write
+      // through `deps.streamSequencer.allocate` + `deps.streamBuffer.append`
+      // (Lot 20 contract). The caller observes the same mutations via
+      // the destructured locals (still pointed at the same arrays) and
+      // re-syncs the `streamSeq` cursor from `peek + 1` after the call.
+      // `previousResponseId` is re-read off `loopState` because the
+      // runtime now owns the `status.response_id` capture.
+      const streamResult = await this.runtime.consumeAssistantStream({
+        streamId: options.assistantMessageId,
+        loopState,
+        request: {
           providerId: selectedProviderId,
           model: selectedModel,
           credential: options.providerApiKey ?? undefined,
@@ -3642,170 +3346,28 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           workspaceId: sessionWorkspaceId,
           messages: currentMessages,
           tools,
-          // on laisse le service openai gérer la compat modèle (gpt-4.1-nano n'a pas reasoning.summary)
           reasoningSummary: 'detailed',
           reasoningEffort: reasoningEffortForThisMessage,
           toolChoice: pass1ToolChoice,
           previousResponseId: previousResponseId ?? undefined,
           rawInput: pendingResponsesRawInput ?? undefined,
-          signal: options.signal
-        })) {
-          const eventType = event.type as StreamEventType;
-          const data = (event.data ?? {}) as Record<string, unknown>;
-          // IMPORTANT: on n'émet pas 'done' ici. On émettra un unique 'done' à la toute fin,
-          // après éventuel 2e pass (sinon l'UI peut se retrouver "terminée" sans contenu).
-          if (eventType === 'done') {
-            continue;
-          }
-          if (eventType === 'error') {
-            const msg = (data as Record<string, unknown>).message;
-            const errorMessage =
-              typeof msg === 'string' ? msg : 'Unknown error';
-            if (
-              steerInterruptionRequested &&
-              errorMessage.toLowerCase().includes('aborted')
-            ) {
-              continue;
-            }
-            lastErrorMessage = errorMessage;
-            await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-            // on laisse le flux se terminer / throw; le catch global gère
-            continue;
-          }
-
-          await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
-          streamSeq += 1;
-
-          // Capture Responses API response_id for proper continuation
-          if (eventType === 'status') {
-            const responseId = typeof (data as Record<string, unknown>).response_id === 'string' ? ((data as Record<string, unknown>).response_id as string) : '';
-            if (responseId) previousResponseId = responseId;
-          }
-
-          if (eventType === 'content_delta') {
-            const delta = typeof data.delta === 'string' ? data.delta : '';
-            if (delta) {
-              contentParts.push(delta);
-            }
-          } else if (eventType === 'reasoning_delta') {
-            const delta = typeof data.delta === 'string' ? data.delta : '';
-            if (delta) {
-              reasoningParts.push(delta);
-              if (steerReasoningReplay.length < STEER_REASONING_REPLAY_MAX_CHARS) {
-                steerReasoningReplay += delta;
-                if (steerReasoningReplay.length > STEER_REASONING_REPLAY_MAX_CHARS) {
-                  steerReasoningReplay = steerReasoningReplay.slice(
-                    -STEER_REASONING_REPLAY_MAX_CHARS,
-                  );
-                }
-              } else {
-                steerReasoningReplay =
-                  `${steerReasoningReplay}${delta}`.slice(
-                    -STEER_REASONING_REPLAY_MAX_CHARS,
-                  );
-              }
-            }
-          } else if (eventType === 'tool_call_start') {
-            const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
-            const existingIndex = toolCalls.findIndex(tc => tc.id === toolCallId);
-            if (existingIndex === -1) {
-              toolCalls.push({
-                id: toolCallId,
-                name: typeof data.name === 'string' ? data.name : '',
-                args: typeof data.args === 'string' ? data.args : ''
-              });
-            } else {
-              const nextName = typeof data.name === 'string' ? data.name : '';
-              const nextArgs = typeof data.args === 'string' ? data.args : '';
-              toolCalls[existingIndex].name = nextName || toolCalls[existingIndex].name;
-              toolCalls[existingIndex].args = (toolCalls[existingIndex].args || '') + (nextArgs || '');
-            }
-          } else if (eventType === 'tool_call_delta') {
-            const toolCallId = typeof data.tool_call_id === 'string' ? data.tool_call_id : '';
-            const delta = typeof data.delta === 'string' ? data.delta : '';
-            const toolCall = toolCalls.find(tc => tc.id === toolCallId);
-            if (toolCall) {
-              toolCall.args += delta;
-            } else {
-              toolCalls.push({ id: toolCallId, name: '', args: delta });
-            }
-          }
-          if (!steerInterruptionRequested) {
-            const pendingSteerMessages = await consumePendingSteerMessages();
-            if (pendingSteerMessages.length > 0) {
-              steerInterruptionRequested = true;
-              steerInterruptionBatch = pendingSteerMessages;
-              await writeStreamEvent(
-                options.assistantMessageId,
-                'status',
-                {
-                  state: 'run_interrupted_for_steer',
-                  steer_count: steerInterruptionBatch.length,
-                  latest_message:
-                    steerInterruptionBatch[steerInterruptionBatch.length - 1] ??
-                    '',
-                },
-                streamSeq,
-                options.assistantMessageId,
-              );
-              streamSeq += 1;
-              break;
-            }
-          }
-          // Note: eventType 'done' est volontairement retardé (voir plus haut)
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error ?? '');
-        if (
-          previousResponseId &&
-          isPreviousResponseNotFoundError(message)
-        ) {
-          shouldRetryWithoutPreviousResponse = true;
-        } else {
-          throw error;
-        }
-      }
-      if (shouldRetryWithoutPreviousResponse) {
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'status',
-          {
-            state: 'response_lineage_reset',
-            reason: 'previous_response_not_found',
-          },
-          streamSeq,
-          options.assistantMessageId,
-        );
-        streamSeq += 1;
-        previousResponseId = null;
-        pendingResponsesRawInput = null;
+          signal: options.signal,
+        },
+      });
+      previousResponseId = loopState.previousResponseId;
+      pendingResponsesRawInput = loopState.pendingResponsesRawInput;
+      currentMessages = loopState.currentMessages as ChatRuntimeMessage[];
+      // BR14b Lot 22a-2 — caller-side `lastErrorMessage` sync removed
+      // because the pass2 fallback (its only post-loop reader) migrated
+      // into `ChatRuntime.runPass2Fallback`. The runtime still maintains
+      // `loopState.lastErrorMessage` for telemetry symmetry.
+      steerReasoningReplay = loopState.steerReasoningReplay;
+      streamSeq =
+        (await this.runtime.peekStreamSequence(options.assistantMessageId)) + 1;
+      if (streamResult.doneReason === 'retry_without_previous_response') {
         continue;
       }
-      if (steerInterruptionRequested && steerInterruptionBatch.length > 0) {
-        pendingResponsesRawInput = null;
-        previousResponseId = null;
-        steerHistoryMessages.push(...steerInterruptionBatch);
-        currentMessages = [
-          ...currentMessages,
-          ...steerInterruptionBatch.map((message) => ({
-            role: 'user' as const,
-            content: message,
-          })),
-        ];
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'status',
-          {
-            state: 'run_resumed_with_steer',
-            steer_count: steerInterruptionBatch.length,
-            latest_message:
-              steerInterruptionBatch[steerInterruptionBatch.length - 1] ?? '',
-          },
-          streamSeq,
-          options.assistantMessageId,
-        );
-        streamSeq += 1;
+      if (streamResult.doneReason === 'steer_interrupted') {
         continue;
       }
 
@@ -3927,1665 +3489,1589 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         }
       };
 
-      for (const toolCall of toolCalls) {
-        if (options.signal?.aborted) throw new Error('AbortError');
-        const toolName = String(toolCall.name || '').trim();
-        if (toolName && localToolNames.has(toolName)) {
-          pendingLocalToolCalls.push({
-            id: toolCall.id,
-            name: toolName,
-            args: parseToolCallArgs(toolCall.args),
-          });
-          await writeStreamEvent(
-            options.assistantMessageId,
-            'tool_call_result',
-            { tool_call_id: toolCall.id, result: { status: 'awaiting_external_result' } },
-            streamSeq,
-            options.assistantMessageId
-          );
-          streamSeq += 1;
-          continue;
-        }
-        
-        try {
-          const args = JSON.parse(toolCall.args || '{}');
-          const projectedResultChars = estimateToolResultProjectionChars(
-            toolCall.name,
-            asRecord(args) ?? {},
-          );
-          let preToolBudget = estimateContextBudget({
-            messages: currentMessages,
-            tools,
-            rawInput: responseToolOutputs,
-            providerId: selectedProviderId,
-            modelId: selectedModel,
-          });
-          await writeContextBudgetStatus('pre_tool', preToolBudget, {
-            tool_name: toolCall.name,
-          });
-          const computeProjected = (snapshot: ContextBudgetSnapshot) => {
-            const projectedTokens =
-              snapshot.estimatedTokens +
-              estimateTokenCountFromChars(projectedResultChars);
-            const projectedPct = Math.min(
-              100,
-              Math.max(0, Math.round((projectedTokens / snapshot.maxTokens) * 100)),
-            );
-            return {
-              projectedTokens,
-              projectedPct,
-              projectedZone: resolveBudgetZone(projectedPct),
-            };
-          };
-          let projectedBudget = computeProjected(preToolBudget);
-          if (projectedBudget.projectedZone === 'hard') {
-            preToolBudget = await compactContextIfNeeded(
-              'pre_tool_hard_threshold',
-              preToolBudget,
-            );
-            projectedBudget = computeProjected(preToolBudget);
-          }
-          if (projectedBudget.projectedZone !== 'normal') {
-            contextBudgetReplanAttempts += 1;
-            const escalationRequired =
-              contextBudgetReplanAttempts > CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS;
-            const deferredResult = {
-              status: 'deferred',
-              code:
-                projectedBudget.projectedZone === 'hard'
-                  ? CONTEXT_BUDGET_HARD_ZONE_CODE
-                  : CONTEXT_BUDGET_SOFT_ZONE_CODE,
-              message:
-                projectedBudget.projectedZone === 'hard'
-                  ? 'Tool call blocked: context budget still above hard threshold after compaction.'
-                  : 'Tool call deferred: projected output would exceed context budget soft threshold.',
-              occupancy_pct: projectedBudget.projectedPct,
-              estimated_tokens: projectedBudget.projectedTokens,
-              max_tokens: preToolBudget.maxTokens,
-              replan_required: true,
-              escalation_required: escalationRequired,
-              suggested_actions: [
-                'Narrow scope and retry tool with smaller payload.',
-                'Use history_analyze for targeted extraction if needed.',
-              ],
-            };
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: deferredResult },
-              streamSeq,
-              options.assistantMessageId,
-            );
-            streamSeq += 1;
-            if (escalationRequired) {
-              await writeStreamEvent(
-                options.assistantMessageId,
-                'status',
-                {
-                  state: 'context_budget_user_escalation_required',
-                  occupancy_pct: projectedBudget.projectedPct,
-                  code: deferredResult.code,
-                },
-                streamSeq,
-                options.assistantMessageId,
-              );
-              streamSeq += 1;
-            }
-            toolResults.push({
-              role: 'tool',
-              content: JSON.stringify(deferredResult),
-              tool_call_id: toolCall.id,
-            });
-            responseToolOutputs.push({
-              type: 'function_call_output',
-              call_id: toolCall.id,
-              output: JSON.stringify(deferredResult),
-            });
-            executedTools.push({
-              toolCallId: toolCall.id,
-              name: toolCall.name || 'unknown_tool',
-              args,
-              result: deferredResult,
-            });
-            continue;
-          }
-          contextBudgetReplanAttempts = 0;
-          const todoOperation: TodoRuntimeToolOperation | null = (() => {
-            if (toolCall.name !== 'plan') return null;
-            const actionRaw =
-              typeof args.action === 'string' ? args.action.trim().toLowerCase() : '';
-            if (
-              actionRaw === 'create' ||
-              actionRaw === 'update_plan' ||
-              actionRaw === 'update_task'
-            ) {
-              return actionRaw;
-            }
-            if (actionRaw.length > 0) {
-              return null;
-            }
-            const hasTaskId =
-              typeof args.taskId === 'string' && args.taskId.trim().length > 0;
-            if (hasTaskId) return 'update_task';
-            const hasTodoId =
-              typeof args.todoId === 'string' && args.todoId.trim().length > 0;
-            if (hasTodoId) return 'update_plan';
-            return 'create';
-          })();
-          if (toolCall.name === 'plan' && !todoOperation) {
-            throw new Error(
-              'plan: action must be one of create|update_plan|update_task',
-            );
-          }
-          let result: unknown;
-
-          if (toolCall.name === 'read_initiative') {
-            if (!allowedByType.usecase.has(args.initiativeId)) {
-              throw new Error('Security: initiativeId does not match allowed contexts');
-            }
-            const readResult = await toolService.readInitiative(args.initiativeId, {
-              workspaceId: sessionWorkspaceId,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = readResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              // Normaliser pour l'UI: toujours fournir result.status
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(readResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'update_initiative') {
-            if (readOnly) {
-              throw new Error('Read-only workspace: initiative update is disabled');
-            }
-            if (!allowedByType.usecase.has(args.initiativeId)) {
-              throw new Error('Security: initiativeId does not match allowed contexts');
-            }
-            const updateResult = await toolService.updateInitiativeFields({
-              initiativeId: args.initiativeId,
-              updates: args.updates || [],
+      // BR14b Lot 21e-2 — the inline per-tool dispatch for-loop body
+      // (228l pre-Lot 21e-2, lines 3514-3741: abort check + local-tool
+      // short-circuit + try-block context-budget gate + executeServerTool
+      // dispatch + success accumulator pushes + catch-block error wrap)
+      // now lives behind `ChatRuntime.consumeToolCalls`. The runtime
+      // owns event emission (`tool_call_result` for local short-circuits
+      // and catch-block errors; gate-emitted `tool_call_result` +
+      // optional escalation status via `applyContextBudgetGate`) and
+      // returns the accumulator deltas + advanced cursors. The
+      // chat-service caller is reduced to a thin invocation + state
+      // sync: spread the returned arrays into the outer accumulators
+      // and re-sync `streamSeq` + `contextBudgetReplanAttempts` from
+      // the result. Behavior preservation STRICT — every event payload,
+      // every accumulator push order, every cursor mutation, the
+      // `todoErrorCall` plan-name gating, the `executeServerTool` return
+      // cast trick (api-side returns `{ result, streamSeq }` typed as
+      // chat-core `ExecuteServerToolResult` per the Lot 21d-3 boundary
+      // opacity), and the gate's deferred-accumulator semantics are
+      // byte-identical to pre-Lot 21e-2.
+      const consumeInput: ConsumeToolCallsInput = {
+        streamId: options.assistantMessageId,
+        loopState,
+        localToolNames,
+        sessionId: options.sessionId,
+        userId: options.userId,
+        workspaceId: sessionWorkspaceId,
+        providerId: selectedProviderId,
+        modelId: selectedModel,
+        tools: (tools ?? null) as ReadonlyArray<unknown> | null,
+        enforceTodoUpdateMode,
+        readOnly,
+        signal: options.signal,
+        contextBudgetReplanAttempts,
+        maxReplanAttempts: CONTEXT_BUDGET_MAX_REPLAN_ATTEMPTS,
+        softZoneCode: CONTEXT_BUDGET_SOFT_ZONE_CODE,
+        hardZoneCode: CONTEXT_BUDGET_HARD_ZONE_CODE,
+        estimateContextBudget: (input) =>
+          estimateContextBudget({
+            messages: input.messages as ChatRuntimeMessage[],
+            tools: input.tools,
+            rawInput: input.rawInput as unknown[],
+            providerId: input.providerId as ProviderId,
+            modelId: input.modelId,
+          }),
+        estimateToolResultProjectionChars: (toolName, args) =>
+          estimateToolResultProjectionChars(toolName, args),
+        writeContextBudgetStatus: async (phase, snapshot, meta) =>
+          writeContextBudgetStatus(phase, snapshot, meta),
+        resolveBudgetZone,
+        estimateTokenCountFromChars,
+        compactContextIfNeeded: (reason, snapshot) =>
+          compactContextIfNeeded(reason, snapshot),
+        markTodoIterationState,
+        todoAutonomousExtensionEnabled,
+        buildExecuteServerToolInput: (ctx) =>
+          ({
+            toolCall: ctx.toolCall,
+            args: ctx.args,
+            todoOperation: ctx.todoOperation as TodoRuntimeToolOperation | null,
+            options: {
               userId: options.userId,
               sessionId: options.sessionId,
-              messageId: options.assistantMessageId,
-              toolCallId: toolCall.id,
+              assistantMessageId: options.assistantMessageId,
               locale: options.locale,
-              workspaceId: sessionWorkspaceId
-            });
-            result = updateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              // Normaliser pour l'UI: toujours fournir result.status
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'organizations_list') {
-            if (!hasContextType('organization')) {
-              throw new Error('Security: organizations_list is only available in organization context');
-            }
-            const listResult = await toolService.listOrganizations({
-              workspaceId: sessionWorkspaceId,
-              idsOnly: !!args.idsOnly,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = listResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'organization_get') {
-            if (!args.organizationId || typeof args.organizationId !== 'string') {
-              throw new Error('Security: organizationId is required');
-            }
-            const allowed = await isAllowedOrganizationId(args.organizationId);
-            if (!allowed) {
-              throw new Error('Security: organizationId does not match allowed contexts');
-            }
-
-            const getResult = await toolService.getOrganization(args.organizationId, {
-              workspaceId: sessionWorkspaceId,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = getResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'organization_update') {
-            if (readOnly) throw new Error('Read-only workspace: organization_update is disabled');
-            if (!args.organizationId || typeof args.organizationId !== 'string') {
-              throw new Error('Security: organizationId is required');
-            }
-            const allowed = await isAllowedOrganizationId(args.organizationId);
-            if (!allowed) {
-              throw new Error('Security: organizationId does not match allowed contexts');
-            }
-            const updateResult = await toolService.updateOrganizationFields({
-              organizationId: args.organizationId,
-              updates: Array.isArray(args.updates) ? args.updates : [],
-              userId: options.userId,
-              sessionId: options.sessionId,
-              messageId: options.assistantMessageId,
-              toolCallId: toolCall.id,
-              locale: options.locale,
-              workspaceId: sessionWorkspaceId
-            });
-            result = updateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'folders_list') {
-            if (!hasContextType('organization') && !hasContextType('folder')) {
-              throw new Error('Security: folders_list is only available in organization/folder context');
-            }
-            const organizationId = typeof args.organizationId === 'string'
-              ? args.organizationId
-              : (allowedByType.organization.values().next().value ?? null);
-            const listResult = await toolService.listFolders({
-              workspaceId: sessionWorkspaceId,
-              organizationId,
-              idsOnly: !!args.idsOnly,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = listResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'folder_get') {
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const getResult = await toolService.getFolder(args.folderId, {
-              workspaceId: sessionWorkspaceId,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = getResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'folder_update') {
-            if (readOnly) throw new Error('Read-only workspace: folder_update is disabled');
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const updateResult = await toolService.updateFolderFields({
-              folderId: args.folderId,
-              updates: Array.isArray(args.updates) ? args.updates : [],
-              userId: options.userId,
-              sessionId: options.sessionId,
-              messageId: options.assistantMessageId,
-              toolCallId: toolCall.id,
-              locale: options.locale,
-              workspaceId: sessionWorkspaceId
-            });
-            result = updateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'initiatives_list') {
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const listResult = await toolService.listInitiativesForFolder(args.folderId, {
-              workspaceId: sessionWorkspaceId,
-              idsOnly: !!args.idsOnly,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = listResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'executive_summary_get') {
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const getResult = await toolService.getExecutiveSummary(args.folderId, {
-              workspaceId: sessionWorkspaceId,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = getResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'executive_summary_update') {
-            if (readOnly) throw new Error('Read-only workspace: executive_summary_update is disabled');
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const updateResult = await toolService.updateExecutiveSummaryFields({
-              folderId: args.folderId,
-              updates: Array.isArray(args.updates) ? args.updates : [],
-              userId: options.userId,
-              sessionId: options.sessionId,
-              messageId: options.assistantMessageId,
-              toolCallId: toolCall.id,
-              locale: options.locale,
-              workspaceId: sessionWorkspaceId
-            });
-            result = updateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'matrix_get') {
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const getResult = await toolService.getMatrix(args.folderId, { workspaceId: sessionWorkspaceId });
-            result = getResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'matrix_update') {
-            if (readOnly) throw new Error('Read-only workspace: matrix_update is disabled');
-            if (!args.folderId || typeof args.folderId !== 'string') {
-              throw new Error('Security: folderId is required');
-            }
-            if (!allowedFolderIds.has(args.folderId)) {
-              throw new Error('Security: folderId does not match allowed contexts');
-            }
-            const updateResult = await toolService.updateMatrix({
-              folderId: args.folderId,
-              matrixConfig: args.matrixConfig,
-              userId: options.userId,
-              sessionId: options.sessionId,
-              messageId: options.assistantMessageId,
-              toolCallId: toolCall.id,
-              locale: options.locale,
-              workspaceId: sessionWorkspaceId
-            });
-            result = updateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'plan' && todoOperation === 'create') {
-            const createToolLabel = 'plan(action=create)';
-            if (readOnly) {
-              throw new Error(`Read-only workspace: ${createToolLabel} is disabled`);
-            }
-            const title = typeof args.title === 'string' ? args.title.trim() : '';
-            if (!title) {
-              throw new Error(`${createToolLabel}: title is required`);
-            }
-            const planId =
-              typeof args.planId === 'string' && args.planId.trim().length > 0
-                ? args.planId.trim()
-                : undefined;
-            const planTitle =
-              typeof args.planTitle === 'string' && args.planTitle.trim().length > 0
-                ? args.planTitle.trim()
-                : undefined;
-            const description =
-              typeof args.description === 'string' && args.description.trim().length > 0
-                ? args.description
-                : undefined;
-            const taskDrafts: unknown[] = Array.isArray(args.tasks)
-              ? (args.tasks as unknown[])
-              : [];
-            const tasks: Array<{ title: string; description?: string }> =
-              taskDrafts
-              .map((item: unknown): { title: string; description?: string } => {
-                const draft = asRecord(item);
-                return {
-                  title: typeof draft?.title === 'string' ? draft.title.trim() : '',
-                  description:
-                    typeof draft?.description === 'string'
-                      ? draft.description
-                      : undefined
-                };
-              })
-              .filter((item) => item.title.length > 0);
-            const metadata = asRecord(args.metadata) ?? undefined;
-
-            const todoResult = await todoOrchestrationService.createTodoFromChat(
-              {
-                userId: options.userId,
-                role: currentUserRole ?? 'editor',
-                workspaceId: sessionWorkspaceId
-              },
-              {
-                title,
-                description,
-                planId,
-                planTitle,
-                tasks,
-                metadata,
-                sessionId: options.sessionId
-              }
-            );
-            const normalizedTodoResult = normalizeTodoRuntimeToolResult(
-              'plan',
-              toolCall.id,
-              todoResult,
-              'create',
-            );
-            markTodoIterationState(normalizedTodoResult);
-            result = normalizedTodoResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: normalizedTodoResult },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'plan' && todoOperation === 'update_plan') {
-            const todoUpdateLabel = 'plan(action=update_plan)';
-            if (readOnly) {
-              throw new Error(`Read-only workspace: ${todoUpdateLabel} is disabled`);
-            }
-            const todoId =
-              typeof args.todoId === 'string' && args.todoId.trim().length > 0
-                ? args.todoId.trim()
-                : '';
-            if (!todoId) {
-              throw new Error(`${todoUpdateLabel}: todoId is required`);
-            }
-            const title =
-              typeof args.title === 'string' && args.title.trim().length > 0
-                ? args.title.trim()
-                : undefined;
-            const description =
-              typeof args.description === 'string'
-                ? args.description
-                : undefined;
-            const ownerUserId =
-              typeof args.ownerUserId === 'string' && args.ownerUserId.trim().length > 0
-                ? args.ownerUserId.trim()
-                : undefined;
-            const status =
-              typeof args.status === 'string' && args.status.trim().length > 0
-                ? args.status.trim()
-                : undefined;
-            const closed = typeof args.closed === 'boolean' ? args.closed : undefined;
-            const metadataRecord = asRecord(args.metadata);
-            const metadata =
-              metadataRecord && Object.keys(metadataRecord).length > 0
-                ? metadataRecord
-                : undefined;
-            const hasStructuralTodoMutationArgs =
-              title !== undefined || description !== undefined || metadata !== undefined;
-            if (
-              enforceTodoUpdateMode &&
-              hasStructuralTodoMutationArgs &&
-              !todoStructuralMutationIntent
-            ) {
-              throw new Error(
-                `${todoUpdateLabel}: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)`,
-              );
-            }
-
-            const updateResult = await todoOrchestrationService.updateTodoFromChat(
-              {
-                userId: options.userId,
-                role: currentUserRole ?? 'editor',
-                workspaceId: sessionWorkspaceId
-              },
-              {
-                todoId,
-                title,
-                description,
-                ownerUserId,
-                status,
-                closed,
-                metadata
-              }
-            );
-            const normalizedTodoUpdateResult = normalizeTodoRuntimeToolResult(
-              'plan',
-              toolCall.id,
-              updateResult,
-              'update_plan',
-            );
-            markTodoIterationState(normalizedTodoUpdateResult);
-            result = normalizedTodoUpdateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: normalizedTodoUpdateResult },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'plan' && todoOperation === 'update_task') {
-            const taskUpdateLabel = 'plan(action=update_task)';
-            if (readOnly) {
-              throw new Error(`Read-only workspace: ${taskUpdateLabel} is disabled`);
-            }
-            const taskId =
-              typeof args.taskId === 'string' && args.taskId.trim().length > 0
-                ? args.taskId.trim()
-                : '';
-            if (!taskId) {
-              throw new Error(`${taskUpdateLabel}: taskId is required`);
-            }
-            const title =
-              typeof args.title === 'string' && args.title.trim().length > 0
-                ? args.title.trim()
-                : undefined;
-            const description =
-              typeof args.description === 'string'
-                ? args.description
-                : undefined;
-            const assigneeUserId =
-              typeof args.assigneeUserId === 'string' && args.assigneeUserId.trim().length > 0
-                ? args.assigneeUserId.trim()
-                : undefined;
-            const status =
-              typeof args.status === 'string' && args.status.trim().length > 0
-                ? args.status.trim()
-                : undefined;
-            const metadataRecord = asRecord(args.metadata);
-            const metadata =
-              metadataRecord && Object.keys(metadataRecord).length > 0
-                ? metadataRecord
-                : undefined;
-            const hasStructuralTaskMutationArgs =
-              title !== undefined || description !== undefined || metadata !== undefined;
-            if (
-              enforceTodoUpdateMode &&
-              hasStructuralTaskMutationArgs &&
-              !todoStructuralMutationIntent
-            ) {
-              throw new Error(
-                `${taskUpdateLabel}: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)`,
-              );
-            }
-
-            const updateResult = await todoOrchestrationService.updateTaskFromChat(
-              {
-                userId: options.userId,
-                role: currentUserRole ?? 'editor',
-                workspaceId: sessionWorkspaceId
-              },
-              {
-                taskId,
-                title,
-                description,
-                assigneeUserId,
-                status,
-                metadata
-              }
-            );
-            const normalizedTaskUpdateResult = normalizeTodoRuntimeToolResult(
-              'plan',
-              toolCall.id,
-              updateResult,
-              'update_task',
-            );
-            markTodoIterationState(normalizedTaskUpdateResult);
-            result = normalizedTaskUpdateResult;
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: normalizedTaskUpdateResult },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'comment_assistant') {
-            const mode = typeof args.mode === 'string' ? args.mode : '';
-            const contextType = typeof args.contextType === 'string' ? args.contextType : '';
-            const contextId = typeof args.contextId === 'string' ? args.contextId.trim() : '';
-            if (!isCommentContextType(contextType) || !contextId) {
-              throw new Error('comment_assistant: contextType and contextId are required');
-            }
-            const allowedContext =
-              allowedCommentContextSet.has(`${contextType}:${contextId}`) ||
-              ((contextType === 'matrix' || contextType === 'executive_summary')
-                && allowedCommentContextSet.has(`folder:${contextId}`));
-            if (!allowedContext) {
-              throw new Error('Security: comment context is not allowed');
-            }
-            const effectiveCommentContexts = allowedCommentContexts.some(
-              (c) => c.contextType === contextType && c.contextId === contextId
-            )
-              ? allowedCommentContexts
-              : [...allowedCommentContexts, { contextType, contextId }];
-
-            if (mode === 'suggest') {
-              const statusFilter = args.status === 'closed' ? 'closed' : 'open';
-              const list = await toolService.listCommentThreadsForContexts({
-                workspaceId: sessionWorkspaceId,
-                contexts: effectiveCommentContexts,
-                status: statusFilter,
-                sectionKey: typeof args.sectionKey === 'string' ? args.sectionKey : null,
-                threadId: typeof args.threadId === 'string' ? args.threadId : null,
-                limit: 200
-              });
-              const proposal = await generateCommentResolutionProposal({
-                threads: list.threads,
-                users: list.users,
-                contextLabel: `${contextType}:${contextId}`,
-                currentUserId: options.userId,
-                currentUserRole: currentUserRole ?? null,
-                maxActions: 5
-              });
-              result = { status: 'completed', proposal, threads: list.threads };
-            } else if (mode === 'resolve') {
-              if (!isExplicitConfirmation(lastUserMessage, args.confirmation)) {
-                throw new Error('Explicit user confirmation is required before resolving comments');
-              }
-              const actions = Array.isArray(args.actions) ? args.actions : [];
-              const applied = await toolService.resolveCommentActions({
-                workspaceId: sessionWorkspaceId,
-                userId: options.userId,
-                allowedContexts: effectiveCommentContexts,
-                actions,
-                toolCallId: toolCall.id
-              });
-              result = { status: 'completed', ...applied };
-            } else {
-              throw new Error(`comment_assistant: unknown mode ${mode}`);
-            }
-
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'web_search') {
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'executing' } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-            const searchResults = await searchWeb(args.query, options.signal);
-            result = { status: 'completed', results: searchResults };
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'web_extract') {
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result: { status: 'executing' } },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-            const urls = Array.isArray(args.urls) ? args.urls : [args.url || args.urls].filter(Boolean);
-            if (!urls || urls.length === 0) {
-              throw new Error('web_extract: urls array must not be empty');
-            }
-            // IMPORTANT: Tavily extract supports arrays — do a single call for all URLs.
-            const extractResult = await extractUrlContent(urls, options.signal);
-            const resultsArray = Array.isArray(extractResult) ? extractResult : [extractResult];
-            result = { status: 'completed', results: resultsArray };
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'documents') {
-            // Security: documents tool must match the effective session context exactly.
-            const allowed = allowedDocContexts;
-            const isAllowed = allowed.some((c) => c.contextType === args.contextType && c.contextId === args.contextId);
-            if (!isAllowed) {
-              throw new Error('Security: context does not match session context');
-            }
-
-            const action = typeof args.action === 'string' ? args.action : '';
-            if (action === 'list') {
-              const list = await toolService.listContextDocuments({
-                workspaceId: sessionWorkspaceId,
-                contextType: args.contextType,
-                contextId: args.contextId,
-              });
-              result = { status: 'completed', ...list };
-            } else if (action === 'get_summary') {
-              const documentId = typeof args.documentId === 'string' ? args.documentId : '';
-              if (!documentId) throw new Error('documents.get_summary: documentId is required');
-              const summary = await toolService.getDocumentSummary({
-                workspaceId: sessionWorkspaceId,
-                contextType: args.contextType,
-                contextId: args.contextId,
-                documentId,
-              });
-              result = { status: 'completed', ...summary };
-            } else if (action === 'get_content') {
-              const documentId = typeof args.documentId === 'string' ? args.documentId : '';
-              if (!documentId) throw new Error('documents.get_content: documentId is required');
-              const maxChars = typeof args.maxChars === 'number' ? args.maxChars : undefined;
-              const content = await toolService.getDocumentContent({
-                workspaceId: sessionWorkspaceId,
-                contextType: args.contextType,
-                contextId: args.contextId,
-                documentId,
-                maxChars,
-                userId: options.userId,
-              });
-              result = { status: 'completed', ...content };
-            } else if (action === 'analyze') {
-              await writeStreamEvent(
-                options.assistantMessageId,
-                'tool_call_result',
-                { tool_call_id: toolCall.id, result: { status: 'executing' } },
-                streamSeq,
-                options.assistantMessageId
-              );
-              streamSeq += 1;
-              const documentId = typeof args.documentId === 'string' ? args.documentId : '';
-              if (!documentId) throw new Error('documents.analyze: documentId is required');
-              const prompt = typeof args.prompt === 'string' ? args.prompt : '';
-              if (!prompt.trim()) throw new Error('documents.analyze: prompt is required');
-              const maxWords = typeof args.maxWords === 'number' ? args.maxWords : undefined;
-              const analysis = await toolService.analyzeDocument({
-                workspaceId: sessionWorkspaceId,
-                contextType: args.contextType,
-                contextId: args.contextId,
-                documentId,
-                prompt,
-                maxWords,
-                userId: options.userId,
-                signal: options.signal
-              });
-              result = { status: 'completed', ...analysis };
-            } else {
-              throw new Error(`documents: unknown action ${action}`);
-            }
-
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'history_analyze') {
-            const question =
-              typeof args.question === 'string' ? args.question.trim() : '';
-            if (!question) {
-              throw new Error('history_analyze: question is required');
-            }
-            const fromMessageId =
-              typeof args.from_message_id === 'string'
-                ? args.from_message_id
-                : undefined;
-            const toMessageId =
-              typeof args.to_message_id === 'string'
-                ? args.to_message_id
-                : undefined;
-            const maxTurns =
-              typeof args.max_turns === 'number' ? args.max_turns : undefined;
-            const targetToolCallId =
-              typeof args.target_tool_call_id === 'string'
-                ? args.target_tool_call_id
-                : undefined;
-            const targetToolResultMessageId =
-              typeof args.target_tool_result_message_id === 'string'
-                ? args.target_tool_result_message_id
-                : undefined;
-            const includeToolResults =
-              typeof args.include_tool_results === 'boolean'
-                ? args.include_tool_results
-                : undefined;
-            const includeSystemMessages =
-              typeof args.include_system_messages === 'boolean'
-                ? args.include_system_messages
-                : undefined;
-            const maxWords =
-              typeof args.max_words === 'number' ? args.max_words : undefined;
-
-            const analysis = await toolService.analyzeHistory({
-              workspaceId: sessionWorkspaceId,
-              sessionId: options.sessionId,
-              question,
-              fromMessageId,
-              toMessageId,
-              maxTurns,
-              targetToolCallId,
-              targetToolResultMessageId,
-              includeToolResults,
-              includeSystemMessages,
-              maxWords,
               signal: options.signal,
-            });
-            result = { status: 'completed', ...analysis };
-            await writeStreamEvent(
-              options.assistantMessageId,
-              'tool_call_result',
-              { tool_call_id: toolCall.id, result },
-              streamSeq,
-              options.assistantMessageId
-            );
-            streamSeq += 1;
-          } else if (toolCall.name === 'solutions_list') {
-            const listResult = await toolService.listSolutions({
-              initiativeId: args.initiativeId,
-              workspaceId: sessionWorkspaceId,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = { status: 'completed', ...listResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-          } else if (toolCall.name === 'solution_get') {
-            const getResult = await toolService.getSolution(args.solutionId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
-            result = { status: 'completed', ...getResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-          } else if (toolCall.name === 'proposals_list') {
-            const listResult = await toolService.listProposals({
-              initiativeId: args.initiativeId,
-              workspaceId: sessionWorkspaceId,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = { status: 'completed', ...listResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-          } else if (toolCall.name === 'proposal_get') {
-            const getResult = await toolService.getProposal(args.proposalId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
-            result = { status: 'completed', ...getResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-          } else if (toolCall.name === 'products_list') {
-            const listResult = await toolService.listProducts({
-              workspaceId: sessionWorkspaceId,
-              initiativeId: typeof args.initiativeId === 'string' ? args.initiativeId : undefined,
-              select: Array.isArray(args.select) ? args.select : null
-            });
-            result = { status: 'completed', ...listResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-          } else if (toolCall.name === 'product_get') {
-            const getResult = await toolService.getProduct(args.productId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
-            result = { status: 'completed', ...getResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-          } else if (toolCall.name === 'gate_review') {
-            const gateResult = await toolService.reviewGate(sessionWorkspaceId, args.initiativeId, args.targetStage);
-            result = { status: 'completed', ...gateResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-          } else if (toolCall.name === 'workspace_list') {
-            const listResult = await toolService.listWorkspacesForUser(options.userId);
-            result = { status: 'completed', ...listResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-          } else if (toolCall.name === 'initiative_search') {
-            const searchResult = await toolService.searchInitiativesCrossWorkspace(options.userId, {
-              query: typeof args.query === 'string' ? args.query : undefined,
-              status: typeof args.status === 'string' ? args.status : undefined,
-              maturityStage: typeof args.maturityStage === 'string' ? args.maturityStage : undefined
-            });
-            result = { status: 'completed', ...searchResult };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-          } else if (toolCall.name === 'task_dispatch') {
-            // task_dispatch delegates to the plan tool's create action
-            const taskResult = await todoOrchestrationService.createTodoFromChat(
-              { userId: options.userId, role: currentUserRole ?? 'editor', workspaceId: args.workspaceId },
-              { title: args.title, description: typeof args.description === 'string' ? args.description : undefined, sessionId: options.sessionId }
-            );
-            result = { ...taskResult, status: 'completed', dispatched: true };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-          } else if (toolCall.name === 'document_generate') {
-            const action = typeof args.action === 'string' ? args.action : 'generate';
-            const rawFormat = typeof args.format === 'string' ? args.format : undefined;
-            if (rawFormat && rawFormat !== 'docx' && rawFormat !== 'pptx') {
-              throw new Error('document_generate: format must be "docx" | "pptx"');
-            }
-            const format = (rawFormat ?? 'docx') as 'docx' | 'pptx';
+            },
+            currentMessages: ctx.currentMessages,
+            tools,
+            responseToolOutputs: ctx.responseToolOutputs,
+            executedTools: ctx.executedTools,
+            selectedProviderId,
+            selectedModel,
+            sessionWorkspaceId,
+            readOnly,
+            currentUserRole,
+            enforceTodoUpdateMode,
+            todoAutonomousExtensionEnabled,
+            todoStructuralMutationIntent,
+            allowedByType,
+            allowedFolderIds,
+            allowedCommentContextSet,
+            allowedCommentContexts,
+            allowedDocContexts,
+            primaryContextType,
+            primaryContextId,
+            vscodeCodeAgentPayload,
+            lastUserMessage,
+            iteration,
+            streamSeq: ctx.streamSeq,
+            getOrganizationIdForFolder,
+            isAllowedOrganizationId,
+            markTodoIterationState,
+            isExplicitConfirmation,
+            hasContextType,
+          }) as unknown as ExecuteServerToolInput,
+        currentMessages,
+      };
+      const consumed = await this.runtime.consumeToolCalls(consumeInput);
+      toolResults.push(...consumed.toolResults);
+      responseToolOutputs.push(...consumed.responseToolOutputs);
+      pendingLocalToolCalls.push(...consumed.pendingLocalToolCalls);
+      executedTools.push(...consumed.executedTools);
+      streamSeq = consumed.streamSeq;
+      contextBudgetReplanAttempts = consumed.contextBudgetReplanAttempts;
 
-            if (action === 'upskill') {
-              if (format === 'pptx') {
-                const { getPptxFreeformSkill } = await import('./pptx-freeform-skill');
-                result = {
-                  status: 'completed',
-                  mode: 'upskill',
-                  format,
-                  skill: getPptxFreeformSkill(),
-                };
-              } else {
-                // Return DOCX creation skill content for LLM learning
-                const { getDocxFreeformSkill } = await import('./docx-freeform-skill');
-                result = {
-                  status: 'completed',
-                  mode: 'upskill',
-                  skill: getDocxFreeformSkill(),
-                };
-              }
-              await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-              streamSeq += 1;
-            } else {
-              // Generate mode: DOCX template generation or DOCX/PPTX freeform sandbox generation.
-              const templateId = typeof args.templateId === 'string' ? args.templateId : undefined;
-              const code = typeof args.code === 'string' ? args.code : undefined;
-              const title = typeof args.title === 'string' ? args.title : undefined;
-              const { entityType, entityId } = resolveDocumentGenerateTarget({
-                entityType: args.entityType,
-                entityId: args.entityId,
-                primaryContextType,
-                primaryContextId,
-              });
-              if (!entityId) throw new Error('document_generate: entityId is required');
-              if (templateId && code) throw new Error('document_generate: templateId and code are mutually exclusive');
-              if (!templateId && !code) throw new Error('document_generate: either templateId or code is required');
-              if (format === 'pptx' && templateId) {
-                throw new Error('document_generate: templateId is not supported for format "pptx"');
-              }
-
-              if (code) {
-                if (format === 'pptx') {
-                  // Freeform PPTX: synchronous sandbox generation (BR-21a).
-                  try {
-                    const freeformResult = await generateFreeformPptx({
-                      code,
-                      entityType: entityType as 'initiative' | 'folder',
-                      entityId,
-                      workspaceId: sessionWorkspaceId,
-                      title,
-                    });
-
-                    const jobId = createId();
-                    const bucket = getDocumentsBucketName();
-                    const objectKey = `pptx-cache/${sessionWorkspaceId}/freeform/${entityType}/${entityId}/${jobId}.pptx`;
-
-                    await putObject({
-                      bucket,
-                      key: objectKey,
-                      body: freeformResult.buffer,
-                      contentType: freeformResult.mimeType,
-                    });
-
-                    const completedPayload = {
-                      state: 'done',
-                      progress: 100,
-                      fileName: freeformResult.fileName,
-                      mimeType: freeformResult.mimeType,
-                      byteLength: freeformResult.buffer.byteLength,
-                      storageBucket: bucket,
-                      storageKey: objectKey,
-                      queueClass: 'publishing',
-                      completedAt: new Date().toISOString(),
-                    };
-
-                    await db.run(sql`
-                      INSERT INTO job_queue (id, type, status, workspace_id, data, result, completed_at)
-                      VALUES (
-                        ${jobId},
-                        'pptx_generate',
-                        'completed',
-                        ${sessionWorkspaceId},
-                        ${JSON.stringify({ entityType, entityId, mode: 'freeform', format: 'pptx' })},
-                        ${JSON.stringify(completedPayload)},
-                        ${completedPayload.completedAt}
-                      )
-                    `);
-
-                    result = {
-                      status: 'completed',
-                      format,
-                      mode: 'freeform',
-                      entityType,
-                      entityId,
-                      jobId,
-                      fileName: freeformResult.fileName,
-                      mimeType: freeformResult.mimeType,
-                      downloadUrl: `/pptx/jobs/${jobId}/download`,
-                    };
-                  } catch (freeformError: unknown) {
-                    const errMsg =
-                      freeformError instanceof Error
-                        ? freeformError.message
-                        : 'Unknown freeform error';
-                    const explicitCode =
-                      typeof (freeformError as { code?: unknown })?.code === 'string'
-                        ? String((freeformError as { code?: unknown }).code)
-                        : '';
-
-                    let errorCode = 'code_runtime_error';
-                    if (
-                      explicitCode === 'code_syntax_error' ||
-                      explicitCode === 'code_runtime_error' ||
-                      explicitCode === 'code_timeout' ||
-                      explicitCode === 'invalid_return_type' ||
-                      explicitCode === 'pptx_packaging_error' ||
-                      explicitCode === 'not_found'
-                    ) {
-                      errorCode = explicitCode;
-                    } else if (errMsg.includes('SyntaxError') || errMsg.includes('syntax')) {
-                      errorCode = 'code_syntax_error';
-                    } else if (errMsg.includes('timeout') || errMsg.includes('Timeout')) {
-                      errorCode = 'code_timeout';
-                    } else if (errMsg.includes('invalid_return_type')) {
-                      errorCode = 'invalid_return_type';
-                    } else if (errMsg.includes('pptx_packaging_error') || errMsg.includes('packaging')) {
-                      errorCode = 'pptx_packaging_error';
-                    } else if (errMsg.includes('not found') || errMsg.includes('Not found')) {
-                      errorCode = 'not_found';
-                    } else if (errMsg.includes('putObject') || errMsg.includes('S3') || errMsg.includes('storage')) {
-                      errorCode = 'storage_error';
-                    }
-
-                    result = {
-                      status: 'error',
-                      code: errorCode,
-                      error: errMsg,
-                    };
-                  }
-                } else {
-                  // Freeform DOCX: synchronous generation per SPEC_EVOL_FREEFORM_DOCX §4
-                  try {
-                    const freeformResult = await generateFreeformDocx({
-                      code,
-                      entityType: entityType as 'initiative' | 'folder',
-                      entityId,
-                      workspaceId: sessionWorkspaceId,
-                    });
-
-                    const jobId = createId();
-                    const bucket = getDocumentsBucketName();
-                    const objectKey = `docx-cache/${sessionWorkspaceId}/freeform/${entityType}/${entityId}/${jobId}.docx`;
-
-                    await putObject({
-                      bucket,
-                      key: objectKey,
-                      body: freeformResult.buffer,
-                      contentType: freeformResult.mimeType,
-                    });
-
-                    const fileName = title
-                      ? `${title.replace(/[^a-zA-Z0-9À-ÿ _-]/g, '')}.docx`
-                      : freeformResult.fileName;
-
-                    const completedPayload = {
-                      state: 'done',
-                      progress: 100,
-                      fileName,
-                      mimeType: freeformResult.mimeType,
-                      byteLength: freeformResult.buffer.byteLength,
-                      storageBucket: bucket,
-                      storageKey: objectKey,
-                      queueClass: 'publishing',
-                      completedAt: new Date().toISOString(),
-                    };
-
-                    await db.run(sql`
-                      INSERT INTO job_queue (id, type, status, workspace_id, data, result, completed_at)
-                      VALUES (
-                        ${jobId},
-                        'docx_generate',
-                        'completed',
-                        ${sessionWorkspaceId},
-                        ${JSON.stringify({ entityType, entityId, mode: 'freeform' })},
-                        ${JSON.stringify(completedPayload)},
-                        ${completedPayload.completedAt}
-                      )
-                    `);
-
-                    result = {
-                      status: 'completed',
-                      mode: 'freeform',
-                      entityType,
-                      entityId,
-                      jobId,
-                      fileName,
-                      mimeType: freeformResult.mimeType,
-                      downloadUrl: `/docx/jobs/${jobId}/download`,
-                    };
-                  } catch (freeformError: unknown) {
-                    const errMsg = freeformError instanceof Error ? freeformError.message : 'Unknown freeform error';
-                    // Map engine error codes per spec §6.2
-                    let errorCode = 'code_runtime_error';
-                    if (errMsg.includes('SyntaxError') || errMsg.includes('syntax')) errorCode = 'code_syntax_error';
-                    else if (errMsg.includes('timeout') || errMsg.includes('Timeout')) errorCode = 'code_timeout';
-                    else if (errMsg.includes('not a Document') || errMsg.includes('invalid_return_type')) errorCode = 'invalid_return_type';
-                    else if (errMsg.includes('not found') || errMsg.includes('Not found')) errorCode = 'not_found';
-                    else if (errMsg.includes('putObject') || errMsg.includes('S3') || errMsg.includes('storage')) errorCode = 'storage_error';
-
-                    result = {
-                      status: 'error',
-                      code: errorCode,
-                      error: errMsg,
-                    };
-                  }
-                }
-              } else {
-                // Template mode (unchanged, DOCX only)
-                result = {
-                  status: 'completed',
-                  message: `Document generation queued for ${entityType} ${entityId} with template ${templateId}. The document will be available for download once processing completes.`,
-                  templateId,
-                  entityType,
-                  entityId,
-                };
-              }
-              await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-              streamSeq += 1;
-            } // end generate action
-          } else if (toolCall.name === 'batch_create_organizations') {
-            if (readOnly) throw new Error('Read-only workspace: batch_create_organizations is disabled');
-            const description = typeof args.description === 'string' ? args.description : '';
-            const targetWorkspaceId = sessionWorkspaceId;
-            if (!description) throw new Error('batch_create_organizations: description is required');
-
-            // Parse organization names from description (comma-separated, numbered list, or newline-separated)
-            const orgNames = description
-              .split(/[,\n]/)
-              .map((s: string) => s.replace(/^\s*\d+[\.\)\-]\s*/, '').trim())
-              .filter((s: string) => s.length > 0 && s.length < 200);
-
-            if (orgNames.length === 0) {
-              throw new Error('batch_create_organizations: no organization names found in description');
-            }
-
-            // Create organizations in DB with status 'generating'
-            const orgRows: Array<{ id: string; name: string }> = [];
-            for (const name of orgNames) {
-              const orgId = createId();
-              await db.insert(organizations).values({
-                id: orgId,
-                workspaceId: targetWorkspaceId,
-                name,
-                status: 'generating',
-                data: {},
-              });
-              orgRows.push({ id: orgId, name });
-            }
-
-            // Launch organization_enrich jobs for each org (lazy import to avoid circular dependency)
-            const { queueManager } = await import('./queue-manager');
-            const enrichJobIds: string[] = [];
-            for (const org of orgRows) {
-              const jobData: OrganizationEnrichJobData = {
-                organizationId: org.id,
-                organizationName: org.name,
-                model: selectedModel,
-                initiatedByUserId: options.userId,
-                locale: options.locale ?? 'fr',
-                wasCreated: true,
-              };
-              const jobId = await queueManager.addJob('organization_enrich', jobData, {
-                workspaceId: targetWorkspaceId,
-              });
-              enrichJobIds.push(jobId);
-            }
-
-            // Poll all enrich jobs until completion (timeout 3min, poll every 2s)
-            const POLL_INTERVAL_MS = 2000;
-            const POLL_TIMEOUT_MS = 180_000;
-            const startTime = Date.now();
-            let allDone = false;
-            while (!allDone && Date.now() - startTime < POLL_TIMEOUT_MS) {
-              await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-              const jobRows = await db
-                .select({ id: jobQueue.id, status: jobQueue.status })
-                .from(jobQueue)
-                .where(inArray(jobQueue.id, enrichJobIds));
-              const statuses = jobRows.map((r) => r.status);
-              allDone = statuses.length === enrichJobIds.length &&
-                statuses.every((s) => s === 'completed' || s === 'failed');
-            }
-
-            // Fetch enriched organizations from DB
-            const enrichedOrgs = await db
-              .select()
-              .from(organizations)
-              .where(inArray(organizations.id, orgRows.map((o) => o.id)));
-
-            const orgResults = enrichedOrgs.map((org) => ({
-              id: org.id,
-              name: org.name,
-              status: org.status,
-              data: org.data,
-            }));
-
-            const failedCount = orgResults.filter((o) => o.status !== 'completed').length;
-            result = {
-              status: failedCount === orgResults.length ? 'error' : 'completed',
-              organizations: orgResults,
-              totalCreated: orgResults.length,
-              totalEnriched: orgResults.filter((o) => o.status === 'completed').length,
-              totalFailed: failedCount,
-              workspaceId: targetWorkspaceId,
-            };
-            await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-          } else {
-            throw new Error(`Unknown tool: ${toolCall.name}`);
-          }
-
-          // Garder une trace pour un éventuel 2e pass "rédaction-only"
-          executedTools.push({ toolCallId: toolCall.id, name: toolCall.name, args, result });
-
-          // Ajouter le résultat au format OpenAI pour continuer le stream
-          toolResults.push({
-            role: 'tool',
-            content: JSON.stringify(result),
-            tool_call_id: toolCall.id
-          });
-
-          // Responses API native continuation: function_call_output attached to call_id
-          responseToolOutputs.push({
-            type: 'function_call_output',
-            call_id: toolCall.id,
-            output: JSON.stringify(result),
-          });
-        } catch (error) {
-          const errorResult = {
-            status: 'error',
-            error: error instanceof Error ? error.message : 'Unknown error'
-          };
-          const todoErrorCall = toolCall.name === 'plan';
-          if (todoErrorCall && todoAutonomousExtensionEnabled) {
-            markTodoIterationState(errorResult);
-          }
-          await writeStreamEvent(
-            options.assistantMessageId,
-            'tool_call_result',
-            { tool_call_id: toolCall.id, result: errorResult },
-            streamSeq,
-            options.assistantMessageId
-          );
-          streamSeq += 1;
-          toolResults.push({
-            role: 'tool',
-            content: JSON.stringify(errorResult),
-            tool_call_id: toolCall.id
-          });
-          responseToolOutputs.push({
-            type: 'function_call_output',
-            call_id: toolCall.id,
-            output: JSON.stringify(errorResult),
-          });
-          executedTools.push({
-            toolCallId: toolCall.id,
-            name: toolCall.name || 'unknown_tool',
-            args: toolCall.args ? (() => { try { return JSON.parse(toolCall.args); } catch { return toolCall.args; } })() : undefined,
-            result: errorResult
-          });
-        }
-      }
-
-      // Trace: executed tool calls for this iteration (args/results)
-      await writeChatGenerationTrace({
-        enabled: env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
+      // BR14b Lot 21e-3 — post-`consumeToolCalls` per-iteration finalization
+      // (Block A trace + todo refresh, Block B `pendingLocalToolCalls`
+      // short-circuit, Block C history append + `needsExplicitToolReplay`
+      // rawInput rebuild) now lives behind `ChatRuntime.finalizeAssistantIteration`.
+      // Two api-side closures cross as Option A callbacks:
+      // `writeChatGenerationTrace` (the chat-trace instrumentation hook) and
+      // `refreshSessionTodoRuntime` (bundles `getSessionTodoRuntime` + snapshot
+      // projection + the api-side `TODO_TERMINAL_STATUSES` /
+      // `TODO_BLOCKING_STATUSES` membership checks). Behavior preservation
+      // STRICT — every event payload shape, every `let` binding semantic from
+      // the inline body is mirrored 1:1 in the runtime method body.
+      const finalizeInput: FinalizeAssistantIterationInput = {
+        streamId: options.assistantMessageId,
+        traceEnabled:
+          env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
         sessionId: options.sessionId,
         assistantMessageId: options.assistantMessageId,
         userId: options.userId,
         workspaceId: sessionWorkspaceId,
-        phase: 'pass1',
         iteration,
-        model: selectedModel || null,
+        modelId: selectedModel || null,
         toolChoice: pass1ToolChoice,
         tools: tools ?? null,
-        openaiMessages: {
-          kind: 'executed_tools',
-          messages: currentMessages,
-          previous_response_id: previousResponseId,
-          responses_input_tool_outputs: responseToolOutputs
-        },
-        toolCalls: toolCalls.map((tc) => {
-          const found = executedTools.find((x) => x.toolCallId === tc.id);
-          return {
-            id: tc.id,
-            name: tc.name,
-            args: found?.args ?? (tc.args ? (() => { try { return JSON.parse(tc.args); } catch { return tc.args; } })() : undefined),
-            result: found?.result
-          };
-        }),
-        meta: { kind: 'executed_tools', callSite: 'ChatService.runAssistantGeneration/pass1/afterTools', openaiApi: 'responses' }
-      });
-
-      if (todoAutonomousExtensionEnabled && !todoAwaitingUserInput) {
-        const refreshedSessionTodo = toSessionTodoRuntimeSnapshot(
-          await todoOrchestrationService.getSessionTodoRuntime(
-            {
-              userId: options.userId,
-              role: currentUserRole ?? 'viewer',
-              workspaceId: sessionWorkspaceId,
-            },
-            options.sessionId,
-          ),
-        );
-        if (!refreshedSessionTodo) {
-          todoContinuationActive = false;
-        } else {
+        currentMessages,
+        previousResponseId,
+        responseToolOutputs,
+        toolCalls,
+        executedTools,
+        writeChatGenerationTrace: async (input) =>
+          writeChatGenerationTrace({
+            enabled: input.enabled,
+            sessionId: input.sessionId,
+            assistantMessageId: input.assistantMessageId,
+            userId: input.userId,
+            workspaceId: input.workspaceId,
+            phase: input.phase,
+            iteration: input.iteration,
+            model: input.model,
+            toolChoice: input.toolChoice,
+            tools: input.tools as
+              | OpenAI.Chat.Completions.ChatCompletionTool[]
+              | null,
+            openaiMessages: input.openaiMessages,
+            toolCalls: input.toolCalls as ChatTraceToolCall[],
+            meta: input.meta,
+          }),
+        todoAutonomousExtensionEnabled,
+        todoAwaitingUserInput,
+        refreshSessionTodoRuntime: async (refreshInput) => {
+          const refreshedSessionTodo = toSessionTodoRuntimeSnapshot(
+            await todoOrchestrationService.getSessionTodoRuntime(
+              {
+                userId: refreshInput.userId,
+                role: refreshInput.currentUserRole ?? 'viewer',
+                workspaceId: refreshInput.workspaceId as string,
+              },
+              refreshInput.sessionId,
+            ),
+          );
+          if (!refreshedSessionTodo) {
+            return {
+              hasRefreshedSessionTodo: false,
+              todoContinuationActive: false,
+              todoAwaitingUserInputAfterRefresh: false,
+            };
+          }
           const refreshedStatus = normalizeTodoRuntimeStatus(
             refreshedSessionTodo.status,
           );
-          todoContinuationActive = !TODO_TERMINAL_STATUSES.has(refreshedStatus);
-          if (TODO_BLOCKING_STATUSES.has(refreshedStatus)) {
-            todoAwaitingUserInput = true;
-          }
-        }
-      }
-
-      if (pendingLocalToolCalls.length > 0) {
-        if (!previousResponseId) {
-          throw new Error(
-            'Unable to pause generation for local tools: missing previous_response_id'
-          );
-        }
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'status',
-          {
-            state: 'awaiting_local_tool_results',
-            previous_response_id: previousResponseId,
-            pending_local_tool_calls: pendingLocalToolCalls.map((item) => ({
-              tool_call_id: item.id,
-              name: item.name,
-              args: item.args,
-            })),
-            local_tool_definitions: localTools.map((tool) => ({
-              name: tool.type === 'function' ? tool.function.name : '',
-              description:
-                tool.type === 'function' ? tool.function.description ?? '' : '',
-              parameters:
-                tool.type === 'function'
-                  ? ((tool.function.parameters ?? {}) as Record<string, unknown>)
-                  : {}
-            })),
-            base_tool_outputs: responseToolOutputs.map((item) => ({
-              call_id: item.call_id,
-              output: item.output,
-            })),
-            vscode_code_agent: vscodeCodeAgentPayload
-              ? {
-                  source: 'vscode',
-                  workspace_key: vscodeCodeAgentPayload.workspaceKey,
-                  workspace_label: vscodeCodeAgentPayload.workspaceLabel,
-                  prompt_global_override:
-                    vscodeCodeAgentPayload.promptGlobalOverride,
-                  prompt_workspace_override:
-                    vscodeCodeAgentPayload.promptWorkspaceOverride,
-                  instruction_include_patterns:
-                    vscodeCodeAgentPayload.instructionIncludePatterns,
-                  instruction_files: vscodeCodeAgentPayload.instructionFiles.map(
-                    (file) => ({
-                      path: file.path,
-                      content: file.content,
-                    }),
-                  ),
-                  system_context: vscodeCodeAgentPayload.systemContext
-                    ? {
-                        working_directory:
-                          vscodeCodeAgentPayload.systemContext.workingDirectory,
-                        is_git_repo:
-                          vscodeCodeAgentPayload.systemContext.isGitRepo,
-                        git_branch:
-                          vscodeCodeAgentPayload.systemContext.gitBranch,
-                        platform: vscodeCodeAgentPayload.systemContext.platform,
-                        os_version: vscodeCodeAgentPayload.systemContext.osVersion,
-                        shell: vscodeCodeAgentPayload.systemContext.shell,
-                        client_date_iso:
-                          vscodeCodeAgentPayload.systemContext.clientDateIso,
-                        client_timezone:
-                          vscodeCodeAgentPayload.systemContext.clientTimezone,
-                      }
-                    : undefined,
-                }
-              : undefined
-          },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
+          return {
+            hasRefreshedSessionTodo: true,
+            todoContinuationActive:
+              !TODO_TERMINAL_STATUSES.has(refreshedStatus),
+            todoAwaitingUserInputAfterRefresh:
+              TODO_BLOCKING_STATUSES.has(refreshedStatus),
+          };
+        },
+        currentUserRole: currentUserRole ?? null,
+        pendingLocalToolCalls,
+        localTools:
+          localTools as unknown as FinalizeAssistantIterationInput['localTools'],
+        vscodeCodeAgentPayload:
+          vscodeCodeAgentPayload as FinalizeAssistantIterationInput['vscodeCodeAgentPayload'],
+        streamSeq,
+        useCodexTransport,
+        providerId: selectedProviderId,
+        contentParts,
+      };
+      const finalized = await this.runtime.finalizeAssistantIteration(
+        finalizeInput,
+      );
+      streamSeq = finalized.streamSeq;
+      currentMessages = finalized.currentMessages as ChatRuntimeMessage[];
+      previousResponseId = finalized.previousResponseId;
+      pendingResponsesRawInput = finalized.pendingResponsesRawInput as
+        | unknown[]
+        | null;
+      todoContinuationActive = finalized.todoContinuationActive;
+      todoAwaitingUserInput = finalized.todoAwaitingUserInput;
+      if (finalized.shouldExitGeneration) {
         return;
       }
-
-      // OPTION 1 (Responses API): on CONTINUE via previous_response_id + function_call_output
-      // -> pas d'injection tool->user JSON, pas de "role:tool" dans messages.
-      // On laisse `previousResponseId` alimenter l'appel suivant.
-      // Pour l'historique local côté modèle, on n'ajoute l'assistant que si non vide.
-      const assistantText = contentParts.join('');
-      if (assistantText.trim()) {
-        currentMessages = [...currentMessages, { role: 'assistant', content: assistantText }];
-      }
-
-      // Non-Responses-API providers (Claude, Mistral, Cohere, Codex) need both
-      // function_call + function_call_output in rawInput so the runtime can
-      // reconstruct the assistant tool_use / tool_calls block before tool results.
-      const needsExplicitToolReplay =
-        useCodexTransport ||
-        selectedProviderId === 'anthropic' ||
-        selectedProviderId === 'mistral' ||
-        selectedProviderId === 'cohere';
-      if (needsExplicitToolReplay) {
-        if (useCodexTransport) previousResponseId = null;
-        pendingResponsesRawInput = toolCalls.flatMap((toolCall) => {
-          const output = responseToolOutputs.find((item) => item.call_id === toolCall.id);
-          return output
-            ? [
-                {
-                  type: 'function_call' as const,
-                  call_id: toolCall.id,
-                  name: toolCall.name,
-                  arguments: toolCall.args || '{}',
-                },
-                output,
-              ]
-            : [];
-        });
-      } else {
-        pendingResponsesRawInput = responseToolOutputs;
-      }
     }
 
-    // Si on arrive ici sans contenu final, on déclenche un 2e pass (sans tools) pour forcer une réponse.
-    // Si le 2e pass échoue => on marque une erreur (et on laisse le job échouer).
-    if (!contentParts.join('').trim()) {
-      const lastUserMessage = [...conversation].reverse().find((m) => m.role === 'user')?.content ?? '';
-      const digest = this.buildToolDigest(executedTools);
-      const pass2System =
-        systemPrompt +
-        `\n\nIMPORTANT: Tu dois maintenant produire une réponse finale à l'utilisateur.\n` +
-        `- Tu n'as pas le droit d'appeler d'outil (tools désactivés).\n` +
-        `- Tu dois répondre en français, de manière concise et actionnable.\n` +
-        `- Si une information manque, dis-le explicitement.\n`;
+    // BR14b Lot 22a-2 — pass2 fallback slice (no-content second pass
+    // with tools disabled) now lives behind `ChatRuntime.runPass2Fallback`.
+    // The runtime owns the guard, message build (system + conversation +
+    // tool digest), buffer resets, optional pass2_prompt trace, mesh
+    // streaming via `deps.mesh.invokeStream`, error event emission, and
+    // the post-stream `'Second pass produced no content'` throw. Behavior
+    // preservation STRICT — verbatim port of the 105-line inline body.
+    const pass2Result = await this.runtime.runPass2Fallback({
+      streamId: options.assistantMessageId,
+      assistantMessageId: options.assistantMessageId,
+      sessionId: options.sessionId,
+      userId: options.userId,
+      workspaceId: sessionWorkspaceId,
+      providerId: selectedProviderId,
+      model: selectedModel,
+      credential: options.providerApiKey ?? undefined,
+      signal: options.signal,
+      reasoningEffort: reasoningEffortForThisMessage,
+      conversation,
+      executedTools,
+      systemPrompt,
+      contentParts,
+      reasoningParts,
+      streamSeq,
+      traceEnabled:
+        env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
+      writeChatGenerationTrace: async (input) =>
+        writeChatGenerationTrace({
+          enabled: input.enabled,
+          sessionId: input.sessionId,
+          assistantMessageId: input.assistantMessageId,
+          userId: input.userId,
+          workspaceId: input.workspaceId,
+          phase: input.phase,
+          iteration: input.iteration,
+          model: input.model,
+          toolChoice: input.toolChoice,
+          tools: input.tools,
+          openaiMessages: input.openaiMessages,
+          toolCalls: input.toolCalls,
+          meta: input.meta,
+        }),
+    });
+    streamSeq = pass2Result.streamSeq;
+    // BR14b Lot 22a-2 — `pass2Result.lastErrorMessage` is exposed by
+    // the runtime for telemetry symmetry but not consumed past this
+    // point (matches the pre-migration inline body which wrote
+    // `lastErrorMessage` without subsequent reads). Kept on the
+    // `RunPass2FallbackResult` shape for unit-test assertion + future
+    // logging hooks.
+    void pass2Result;
 
-      const pass2Messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-        { role: 'system', content: pass2System },
-        ...conversation,
-        {
-          role: 'user',
-          content:
-            `Demande utilisateur: ${lastUserMessage}\n\n` +
-            `Résultats disponibles (outils déjà exécutés):\n${digest}\n\n` +
-            `Rédige maintenant la réponse finale.`
+    // BR14b Lot 21e-3 — terminal finalization slice (single `done` event +
+    // persist final content + touch session updatedAt) now lives behind
+    // `ChatRuntime.emitFinalAssistantTurn`. The runtime uses
+    // `deps.messageStore.updateAssistantContent` + `deps.sessionStore.touchUpdatedAt`
+    // (both wired to the postgres adapters in the constructor) and emits the
+    // `done` stream event via `deps.streamSequencer.allocate` +
+    // `deps.streamBuffer.append` (Lot 20 contract). Behavior preservation
+    // STRICT — verbatim port of the 3-line inline body.
+    const finalTurn = await this.runtime.emitFinalAssistantTurn({
+      streamId: options.assistantMessageId,
+      assistantMessageId: options.assistantMessageId,
+      sessionId: options.sessionId,
+      streamSeq,
+      content: contentParts.join(''),
+      reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null,
+      model: selectedModel || null,
+    });
+    streamSeq = finalTurn.streamSeq;
+  }
+
+  /**
+   * BR14b Lot 21d-2 — `executeServerToolInternal` private method.
+   * PURE CODE MOVEMENT target — completed by Step 3 Groups A-F (30/30
+   * server-tool branches migrated verbatim). The inline if/else-if chain
+   * in `runAssistantGeneration` (post-Lot 21c at lines 3393-4732) is now
+   * a single delegation `const r = await this.executeServerToolInternal({...})`.
+   * No `ChatRuntime` indirection in this lot — `runAssistantGeneration`
+   * still calls this method directly. The context-budget gate at lines
+   * ~3406-3495 STAYS caller-side (deferred to Lot 21e). The `default:`
+   * case throws `Unknown tool: <name>` mirroring the original inline
+   * fallback. The try/catch wrapper around the call STAYS caller-side —
+   * branches may throw and the caller wraps them into `{status:'error',error}`.
+   * Lot 21d-3 will bridge this method into the chat-core
+   * `executeServerTool` Option A callback.
+   */
+  private async executeServerToolInternal(
+    input: ExecuteServerToolInternalInput,
+  ): Promise<ExecuteServerToolInternalResult> {
+    const {
+      toolCall,
+      options,
+      todoOperation,
+      allowedByType,
+      allowedFolderIds,
+      allowedCommentContextSet,
+      allowedCommentContexts,
+      allowedDocContexts,
+      primaryContextType,
+      primaryContextId,
+      selectedModel,
+      sessionWorkspaceId,
+      readOnly,
+      currentUserRole,
+      enforceTodoUpdateMode,
+      todoStructuralMutationIntent,
+      lastUserMessage,
+      hasContextType,
+      isAllowedOrganizationId,
+      isExplicitConfirmation,
+      markTodoIterationState,
+    } = input;
+    // Verbatim alias for the caller-parsed `JSON.parse(toolCall.args || '{}')`
+    // payload — per-branch field access mirrors inline `args.X` reads.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const args = input.args as any;
+    let streamSeq = input.streamSeq;
+    let result: unknown;
+    switch (toolCall.name) {
+      // BR14b Lot 21d-2 Step 3 Group A — verbatim move of inline tool branches
+      // from `runAssistantGeneration` (read_initiative, update_initiative,
+      // organizations_list, organization_get, organization_update).
+      case 'read_initiative': {
+        if (!allowedByType.usecase.has(args.initiativeId)) {
+          throw new Error('Security: initiativeId does not match allowed contexts');
         }
-      ];
-
-      // Réinitialiser buffers pour le contenu final
-      contentParts.length = 0;
-      reasoningParts.length = 0;
-      lastErrorMessage = null;
-
-      try {
-        await writeChatGenerationTrace({
-          enabled: env.CHAT_TRACE_ENABLED === 'true' || env.CHAT_TRACE_ENABLED === '1',
-          sessionId: options.sessionId,
-          assistantMessageId: options.assistantMessageId,
-          userId: options.userId,
+        const readResult = await toolService.readInitiative(args.initiativeId, {
           workspaceId: sessionWorkspaceId,
-          phase: 'pass2',
-          iteration: 1,
-          model: selectedModel || null,
-          toolChoice: 'none',
-          tools: null,
-          openaiMessages: pass2Messages,
-          toolCalls: null,
-          meta: { kind: 'pass2_prompt', callSite: 'ChatService.runAssistantGeneration/pass2/beforeOpenAI', openaiApi: 'responses' }
+          select: Array.isArray(args.select) ? args.select : null
         });
-
-        for await (const event of callLLMStream({
-          providerId: selectedProviderId,
-          model: selectedModel,
-          credential: options.providerApiKey ?? undefined,
-          userId: options.userId,
-          workspaceId: sessionWorkspaceId,
-          messages: pass2Messages,
-          tools: undefined,
-          toolChoice: 'none',
-          reasoningSummary: 'detailed',
-          reasoningEffort: reasoningEffortForThisMessage,
-          signal: options.signal
-        })) {
-          const eventType = event.type as StreamEventType;
-          const data = (event.data ?? {}) as Record<string, unknown>;
-          if (eventType === 'done') {
-            continue;
-          }
-          if (eventType === 'error') {
-            const msg = (data as Record<string, unknown>).message;
-            lastErrorMessage = typeof msg === 'string' ? msg : 'Unknown error';
-            await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
-            streamSeq += 1;
-            continue;
-          }
-          // On stream les deltas pass2 sur le même streamId
-          await writeStreamEvent(options.assistantMessageId, eventType, data, streamSeq, options.assistantMessageId);
-          streamSeq += 1;
-          if (eventType === 'content_delta') {
-            const delta = typeof data.delta === 'string' ? data.delta : '';
-            if (delta) {
-              contentParts.push(delta);
-            }
-          } else if (eventType === 'reasoning_delta') {
-            const delta = typeof data.delta === 'string' ? data.delta : '';
-            if (delta) reasoningParts.push(delta);
-          }
-        }
-      } catch (e) {
-        const message =
-          lastErrorMessage ||
-          (e instanceof Error ? e.message : 'Second pass failed');
-        // Marquer une erreur explicite côté stream
+        result = readResult;
         await writeStreamEvent(
           options.assistantMessageId,
-          'error',
-          { message },
+          'tool_call_result',
+          // Normaliser pour l'UI: toujours fournir result.status
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(readResult as Record<string, unknown>) } },
           streamSeq,
           options.assistantMessageId
         );
         streamSeq += 1;
-        throw e;
+        break;
       }
-
-      if (!contentParts.join('').trim()) {
-        const message = 'Second pass produced no content';
-        await writeStreamEvent(options.assistantMessageId, 'error', { message }, streamSeq, options.assistantMessageId);
+      case 'update_initiative': {
+        if (readOnly) {
+          throw new Error('Read-only workspace: initiative update is disabled');
+        }
+        if (!allowedByType.usecase.has(args.initiativeId)) {
+          throw new Error('Security: initiativeId does not match allowed contexts');
+        }
+        const updateResult = await toolService.updateInitiativeFields({
+          initiativeId: args.initiativeId,
+          updates: args.updates || [],
+          userId: options.userId,
+          sessionId: options.sessionId,
+          messageId: options.assistantMessageId,
+          toolCallId: toolCall.id,
+          locale: options.locale,
+          workspaceId: sessionWorkspaceId
+        });
+        result = updateResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          // Normaliser pour l'UI: toujours fournir result.status
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
         streamSeq += 1;
-        throw new Error(message);
+        break;
       }
+      case 'organizations_list': {
+        if (!hasContextType('organization')) {
+          throw new Error('Security: organizations_list is only available in organization context');
+        }
+        const listResult = await toolService.listOrganizations({
+          workspaceId: sessionWorkspaceId,
+          idsOnly: !!args.idsOnly,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = listResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'organization_get': {
+        if (!args.organizationId || typeof args.organizationId !== 'string') {
+          throw new Error('Security: organizationId is required');
+        }
+        const allowed = await isAllowedOrganizationId(args.organizationId);
+        if (!allowed) {
+          throw new Error('Security: organizationId does not match allowed contexts');
+        }
+
+        const getResult = await toolService.getOrganization(args.organizationId, {
+          workspaceId: sessionWorkspaceId,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = getResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'organization_update': {
+        if (readOnly) throw new Error('Read-only workspace: organization_update is disabled');
+        if (!args.organizationId || typeof args.organizationId !== 'string') {
+          throw new Error('Security: organizationId is required');
+        }
+        const allowed = await isAllowedOrganizationId(args.organizationId);
+        if (!allowed) {
+          throw new Error('Security: organizationId does not match allowed contexts');
+        }
+        const updateResult = await toolService.updateOrganizationFields({
+          organizationId: args.organizationId,
+          updates: Array.isArray(args.updates) ? args.updates : [],
+          userId: options.userId,
+          sessionId: options.sessionId,
+          messageId: options.assistantMessageId,
+          toolCallId: toolCall.id,
+          locale: options.locale,
+          workspaceId: sessionWorkspaceId
+        });
+        result = updateResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      // BR14b Lot 21d-2 Step 3 Group B — verbatim move of inline tool branches
+      // from `runAssistantGeneration` (folders_list, folder_get, folder_update,
+      // initiatives_list, executive_summary_get, executive_summary_update).
+      case 'folders_list': {
+        if (!hasContextType('organization') && !hasContextType('folder')) {
+          throw new Error('Security: folders_list is only available in organization/folder context');
+        }
+        const organizationId = typeof args.organizationId === 'string'
+          ? args.organizationId
+          : (allowedByType.organization.values().next().value ?? null);
+        const listResult = await toolService.listFolders({
+          workspaceId: sessionWorkspaceId,
+          organizationId,
+          idsOnly: !!args.idsOnly,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = listResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'folder_get': {
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const getResult = await toolService.getFolder(args.folderId, {
+          workspaceId: sessionWorkspaceId,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = getResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'folder_update': {
+        if (readOnly) throw new Error('Read-only workspace: folder_update is disabled');
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const updateResult = await toolService.updateFolderFields({
+          folderId: args.folderId,
+          updates: Array.isArray(args.updates) ? args.updates : [],
+          userId: options.userId,
+          sessionId: options.sessionId,
+          messageId: options.assistantMessageId,
+          toolCallId: toolCall.id,
+          locale: options.locale,
+          workspaceId: sessionWorkspaceId
+        });
+        result = updateResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'initiatives_list': {
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const listResult = await toolService.listInitiativesForFolder(args.folderId, {
+          workspaceId: sessionWorkspaceId,
+          idsOnly: !!args.idsOnly,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = listResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'executive_summary_get': {
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const getResult = await toolService.getExecutiveSummary(args.folderId, {
+          workspaceId: sessionWorkspaceId,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = getResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'executive_summary_update': {
+        if (readOnly) throw new Error('Read-only workspace: executive_summary_update is disabled');
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const updateResult = await toolService.updateExecutiveSummaryFields({
+          folderId: args.folderId,
+          updates: Array.isArray(args.updates) ? args.updates : [],
+          userId: options.userId,
+          sessionId: options.sessionId,
+          messageId: options.assistantMessageId,
+          toolCallId: toolCall.id,
+          locale: options.locale,
+          workspaceId: sessionWorkspaceId
+        });
+        result = updateResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      // BR14b Lot 21d-2 Step 3 Group C — verbatim move of inline tool branches
+      // from `runAssistantGeneration` (matrix_get, matrix_update, plan(create),
+      // plan(update_plan), plan(update_task)).
+      case 'matrix_get': {
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const getResult = await toolService.getMatrix(args.folderId, { workspaceId: sessionWorkspaceId });
+        result = getResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'matrix_update': {
+        if (readOnly) throw new Error('Read-only workspace: matrix_update is disabled');
+        if (!args.folderId || typeof args.folderId !== 'string') {
+          throw new Error('Security: folderId is required');
+        }
+        if (!allowedFolderIds.has(args.folderId)) {
+          throw new Error('Security: folderId does not match allowed contexts');
+        }
+        const updateResult = await toolService.updateMatrix({
+          folderId: args.folderId,
+          matrixConfig: args.matrixConfig,
+          userId: options.userId,
+          sessionId: options.sessionId,
+          messageId: options.assistantMessageId,
+          toolCallId: toolCall.id,
+          locale: options.locale,
+          workspaceId: sessionWorkspaceId
+        });
+        result = updateResult;
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'plan': {
+        if (todoOperation === 'create') {
+          const createToolLabel = 'plan(action=create)';
+          if (readOnly) {
+            throw new Error(`Read-only workspace: ${createToolLabel} is disabled`);
+          }
+          const title = typeof args.title === 'string' ? args.title.trim() : '';
+          if (!title) {
+            throw new Error(`${createToolLabel}: title is required`);
+          }
+          const planId =
+            typeof args.planId === 'string' && args.planId.trim().length > 0
+              ? args.planId.trim()
+              : undefined;
+          const planTitle =
+            typeof args.planTitle === 'string' && args.planTitle.trim().length > 0
+              ? args.planTitle.trim()
+              : undefined;
+          const description =
+            typeof args.description === 'string' && args.description.trim().length > 0
+              ? args.description
+              : undefined;
+          const taskDrafts: unknown[] = Array.isArray(args.tasks)
+            ? (args.tasks as unknown[])
+            : [];
+          const tasks: Array<{ title: string; description?: string }> =
+            taskDrafts
+            .map((item: unknown): { title: string; description?: string } => {
+              const draft = asRecord(item);
+              return {
+                title: typeof draft?.title === 'string' ? draft.title.trim() : '',
+                description:
+                  typeof draft?.description === 'string'
+                    ? draft.description
+                    : undefined
+              };
+            })
+            .filter((item) => item.title.length > 0);
+          const metadata = asRecord(args.metadata) ?? undefined;
+
+          const todoResult = await todoOrchestrationService.createTodoFromChat(
+            {
+              userId: options.userId,
+              role: currentUserRole ?? 'editor',
+              workspaceId: sessionWorkspaceId
+            },
+            {
+              title,
+              description,
+              planId,
+              planTitle,
+              tasks,
+              metadata,
+              sessionId: options.sessionId
+            }
+          );
+          const normalizedTodoResult = normalizeTodoRuntimeToolResult(
+            'plan',
+            toolCall.id,
+            todoResult,
+            'create',
+          );
+          markTodoIterationState(normalizedTodoResult);
+          result = normalizedTodoResult;
+          await writeStreamEvent(
+            options.assistantMessageId,
+            'tool_call_result',
+            { tool_call_id: toolCall.id, result: normalizedTodoResult },
+            streamSeq,
+            options.assistantMessageId
+          );
+          streamSeq += 1;
+        } else if (todoOperation === 'update_plan') {
+          const todoUpdateLabel = 'plan(action=update_plan)';
+          if (readOnly) {
+            throw new Error(`Read-only workspace: ${todoUpdateLabel} is disabled`);
+          }
+          const todoId =
+            typeof args.todoId === 'string' && args.todoId.trim().length > 0
+              ? args.todoId.trim()
+              : '';
+          if (!todoId) {
+            throw new Error(`${todoUpdateLabel}: todoId is required`);
+          }
+          const title =
+            typeof args.title === 'string' && args.title.trim().length > 0
+              ? args.title.trim()
+              : undefined;
+          const description =
+            typeof args.description === 'string'
+              ? args.description
+              : undefined;
+          const ownerUserId =
+            typeof args.ownerUserId === 'string' && args.ownerUserId.trim().length > 0
+              ? args.ownerUserId.trim()
+              : undefined;
+          const status =
+            typeof args.status === 'string' && args.status.trim().length > 0
+              ? args.status.trim()
+              : undefined;
+          const closed = typeof args.closed === 'boolean' ? args.closed : undefined;
+          const metadataRecord = asRecord(args.metadata);
+          const metadata =
+            metadataRecord && Object.keys(metadataRecord).length > 0
+              ? metadataRecord
+              : undefined;
+          const hasStructuralTodoMutationArgs =
+            title !== undefined || description !== undefined || metadata !== undefined;
+          if (
+            enforceTodoUpdateMode &&
+            hasStructuralTodoMutationArgs &&
+            !todoStructuralMutationIntent
+          ) {
+            throw new Error(
+              `${todoUpdateLabel}: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)`,
+            );
+          }
+
+          const updateResult = await todoOrchestrationService.updateTodoFromChat(
+            {
+              userId: options.userId,
+              role: currentUserRole ?? 'editor',
+              workspaceId: sessionWorkspaceId
+            },
+            {
+              todoId,
+              title,
+              description,
+              ownerUserId,
+              status,
+              closed,
+              metadata
+            }
+          );
+          const normalizedTodoUpdateResult = normalizeTodoRuntimeToolResult(
+            'plan',
+            toolCall.id,
+            updateResult,
+            'update_plan',
+          );
+          markTodoIterationState(normalizedTodoUpdateResult);
+          result = normalizedTodoUpdateResult;
+          await writeStreamEvent(
+            options.assistantMessageId,
+            'tool_call_result',
+            { tool_call_id: toolCall.id, result: normalizedTodoUpdateResult },
+            streamSeq,
+            options.assistantMessageId
+          );
+          streamSeq += 1;
+        } else if (todoOperation === 'update_task') {
+          const taskUpdateLabel = 'plan(action=update_task)';
+          if (readOnly) {
+            throw new Error(`Read-only workspace: ${taskUpdateLabel} is disabled`);
+          }
+          const taskId =
+            typeof args.taskId === 'string' && args.taskId.trim().length > 0
+              ? args.taskId.trim()
+              : '';
+          if (!taskId) {
+            throw new Error(`${taskUpdateLabel}: taskId is required`);
+          }
+          const title =
+            typeof args.title === 'string' && args.title.trim().length > 0
+              ? args.title.trim()
+              : undefined;
+          const description =
+            typeof args.description === 'string'
+              ? args.description
+              : undefined;
+          const assigneeUserId =
+            typeof args.assigneeUserId === 'string' && args.assigneeUserId.trim().length > 0
+              ? args.assigneeUserId.trim()
+              : undefined;
+          const status =
+            typeof args.status === 'string' && args.status.trim().length > 0
+              ? args.status.trim()
+              : undefined;
+          const metadataRecord = asRecord(args.metadata);
+          const metadata =
+            metadataRecord && Object.keys(metadataRecord).length > 0
+              ? metadataRecord
+              : undefined;
+          const hasStructuralTaskMutationArgs =
+            title !== undefined || description !== undefined || metadata !== undefined;
+          if (
+            enforceTodoUpdateMode &&
+            hasStructuralTaskMutationArgs &&
+            !todoStructuralMutationIntent
+          ) {
+            throw new Error(
+              `${taskUpdateLabel}: structural mutation requires explicit user intent (add/remove/reorder/replace/edit list content)`,
+            );
+          }
+
+          const updateResult = await todoOrchestrationService.updateTaskFromChat(
+            {
+              userId: options.userId,
+              role: currentUserRole ?? 'editor',
+              workspaceId: sessionWorkspaceId
+            },
+            {
+              taskId,
+              title,
+              description,
+              assigneeUserId,
+              status,
+              metadata
+            }
+          );
+          const normalizedTaskUpdateResult = normalizeTodoRuntimeToolResult(
+            'plan',
+            toolCall.id,
+            updateResult,
+            'update_task',
+          );
+          markTodoIterationState(normalizedTaskUpdateResult);
+          result = normalizedTaskUpdateResult;
+          await writeStreamEvent(
+            options.assistantMessageId,
+            'tool_call_result',
+            { tool_call_id: toolCall.id, result: normalizedTaskUpdateResult },
+            streamSeq,
+            options.assistantMessageId
+          );
+          streamSeq += 1;
+        } else {
+          throw new Error(`Unknown tool: ${toolCall.name}`);
+        }
+        break;
+      }
+      // BR14b Lot 21d-2 Step 3 Group D — verbatim move of inline tool branches
+      // from `runAssistantGeneration` (comment_assistant, web_search,
+      // web_extract, documents, history_analyze).
+      case 'comment_assistant': {
+        const mode = typeof args.mode === 'string' ? args.mode : '';
+        const contextType = typeof args.contextType === 'string' ? args.contextType : '';
+        const contextId = typeof args.contextId === 'string' ? args.contextId.trim() : '';
+        if (!isCommentContextType(contextType) || !contextId) {
+          throw new Error('comment_assistant: contextType and contextId are required');
+        }
+        const allowedContext =
+          allowedCommentContextSet.has(`${contextType}:${contextId}`) ||
+          ((contextType === 'matrix' || contextType === 'executive_summary')
+            && allowedCommentContextSet.has(`folder:${contextId}`));
+        if (!allowedContext) {
+          throw new Error('Security: comment context is not allowed');
+        }
+        const effectiveCommentContexts = allowedCommentContexts.some(
+          (c) => c.contextType === contextType && c.contextId === contextId
+        )
+          ? allowedCommentContexts
+          : [...allowedCommentContexts, { contextType, contextId }];
+
+        if (mode === 'suggest') {
+          const statusFilter = args.status === 'closed' ? 'closed' : 'open';
+          const list = await toolService.listCommentThreadsForContexts({
+            workspaceId: sessionWorkspaceId,
+            contexts: effectiveCommentContexts,
+            status: statusFilter,
+            sectionKey: typeof args.sectionKey === 'string' ? args.sectionKey : null,
+            threadId: typeof args.threadId === 'string' ? args.threadId : null,
+            limit: 200
+          });
+          const proposal = await generateCommentResolutionProposal({
+            threads: list.threads,
+            users: list.users,
+            contextLabel: `${contextType}:${contextId}`,
+            currentUserId: options.userId,
+            currentUserRole: currentUserRole ?? null,
+            maxActions: 5
+          });
+          result = { status: 'completed', proposal, threads: list.threads };
+        } else if (mode === 'resolve') {
+          if (!isExplicitConfirmation(lastUserMessage, args.confirmation)) {
+            throw new Error('Explicit user confirmation is required before resolving comments');
+          }
+          const actions = Array.isArray(args.actions) ? args.actions : [];
+          const applied = await toolService.resolveCommentActions({
+            workspaceId: sessionWorkspaceId,
+            userId: options.userId,
+            allowedContexts: effectiveCommentContexts,
+            actions,
+            toolCallId: toolCall.id
+          });
+          result = { status: 'completed', ...applied };
+        } else {
+          throw new Error(`comment_assistant: unknown mode ${mode}`);
+        }
+
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'web_search': {
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'executing' } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        const searchResults = await searchWeb(args.query, options.signal);
+        result = { status: 'completed', results: searchResults };
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'web_extract': {
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result: { status: 'executing' } },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        const urls = Array.isArray(args.urls) ? args.urls : [args.url || args.urls].filter(Boolean);
+        if (!urls || urls.length === 0) {
+          throw new Error('web_extract: urls array must not be empty');
+        }
+        // IMPORTANT: Tavily extract supports arrays — do a single call for all URLs.
+        const extractResult = await extractUrlContent(urls, options.signal);
+        const resultsArray = Array.isArray(extractResult) ? extractResult : [extractResult];
+        result = { status: 'completed', results: resultsArray };
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'documents': {
+        // Security: documents tool must match the effective session context exactly.
+        const allowed = allowedDocContexts;
+        const isAllowed = allowed.some((c) => c.contextType === args.contextType && c.contextId === args.contextId);
+        if (!isAllowed) {
+          throw new Error('Security: context does not match session context');
+        }
+
+        const action = typeof args.action === 'string' ? args.action : '';
+        if (action === 'list') {
+          const list = await toolService.listContextDocuments({
+            workspaceId: sessionWorkspaceId,
+            contextType: args.contextType,
+            contextId: args.contextId,
+          });
+          result = { status: 'completed', ...list };
+        } else if (action === 'get_summary') {
+          const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+          if (!documentId) throw new Error('documents.get_summary: documentId is required');
+          const summary = await toolService.getDocumentSummary({
+            workspaceId: sessionWorkspaceId,
+            contextType: args.contextType,
+            contextId: args.contextId,
+            documentId,
+          });
+          result = { status: 'completed', ...summary };
+        } else if (action === 'get_content') {
+          const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+          if (!documentId) throw new Error('documents.get_content: documentId is required');
+          const maxChars = typeof args.maxChars === 'number' ? args.maxChars : undefined;
+          const content = await toolService.getDocumentContent({
+            workspaceId: sessionWorkspaceId,
+            contextType: args.contextType,
+            contextId: args.contextId,
+            documentId,
+            maxChars,
+            userId: options.userId,
+          });
+          result = { status: 'completed', ...content };
+        } else if (action === 'analyze') {
+          await writeStreamEvent(
+            options.assistantMessageId,
+            'tool_call_result',
+            { tool_call_id: toolCall.id, result: { status: 'executing' } },
+            streamSeq,
+            options.assistantMessageId
+          );
+          streamSeq += 1;
+          const documentId = typeof args.documentId === 'string' ? args.documentId : '';
+          if (!documentId) throw new Error('documents.analyze: documentId is required');
+          const prompt = typeof args.prompt === 'string' ? args.prompt : '';
+          if (!prompt.trim()) throw new Error('documents.analyze: prompt is required');
+          const maxWords = typeof args.maxWords === 'number' ? args.maxWords : undefined;
+          const analysis = await toolService.analyzeDocument({
+            workspaceId: sessionWorkspaceId,
+            contextType: args.contextType,
+            contextId: args.contextId,
+            documentId,
+            prompt,
+            maxWords,
+            userId: options.userId,
+            signal: options.signal
+          });
+          result = { status: 'completed', ...analysis };
+        } else {
+          throw new Error(`documents: unknown action ${action}`);
+        }
+
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      case 'history_analyze': {
+        const question =
+          typeof args.question === 'string' ? args.question.trim() : '';
+        if (!question) {
+          throw new Error('history_analyze: question is required');
+        }
+        const fromMessageId =
+          typeof args.from_message_id === 'string'
+            ? args.from_message_id
+            : undefined;
+        const toMessageId =
+          typeof args.to_message_id === 'string'
+            ? args.to_message_id
+            : undefined;
+        const maxTurns =
+          typeof args.max_turns === 'number' ? args.max_turns : undefined;
+        const targetToolCallId =
+          typeof args.target_tool_call_id === 'string'
+            ? args.target_tool_call_id
+            : undefined;
+        const targetToolResultMessageId =
+          typeof args.target_tool_result_message_id === 'string'
+            ? args.target_tool_result_message_id
+            : undefined;
+        const includeToolResults =
+          typeof args.include_tool_results === 'boolean'
+            ? args.include_tool_results
+            : undefined;
+        const includeSystemMessages =
+          typeof args.include_system_messages === 'boolean'
+            ? args.include_system_messages
+            : undefined;
+        const maxWords =
+          typeof args.max_words === 'number' ? args.max_words : undefined;
+
+        const analysis = await toolService.analyzeHistory({
+          workspaceId: sessionWorkspaceId,
+          sessionId: options.sessionId,
+          question,
+          fromMessageId,
+          toMessageId,
+          maxTurns,
+          targetToolCallId,
+          targetToolResultMessageId,
+          includeToolResults,
+          includeSystemMessages,
+          maxWords,
+          signal: options.signal,
+        });
+        result = { status: 'completed', ...analysis };
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result },
+          streamSeq,
+          options.assistantMessageId
+        );
+        streamSeq += 1;
+        break;
+      }
+      // BR14b Lot 21d-2 Step 3 Group E — verbatim move of inline tool branches
+      // from `runAssistantGeneration` (solutions_list, solution_get, proposals_list,
+      // proposal_get, products_list, product_get, gate_review, workspace_list,
+      // initiative_search, task_dispatch).
+      case 'solutions_list': {
+        const listResult = await toolService.listSolutions({
+          initiativeId: args.initiativeId,
+          workspaceId: sessionWorkspaceId,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = { status: 'completed', ...listResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'solution_get': {
+        const getResult = await toolService.getSolution(args.solutionId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
+        result = { status: 'completed', ...getResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'proposals_list': {
+        const listResult = await toolService.listProposals({
+          initiativeId: args.initiativeId,
+          workspaceId: sessionWorkspaceId,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = { status: 'completed', ...listResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'proposal_get': {
+        const getResult = await toolService.getProposal(args.proposalId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
+        result = { status: 'completed', ...getResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'products_list': {
+        const listResult = await toolService.listProducts({
+          workspaceId: sessionWorkspaceId,
+          initiativeId: typeof args.initiativeId === 'string' ? args.initiativeId : undefined,
+          select: Array.isArray(args.select) ? args.select : null
+        });
+        result = { status: 'completed', ...listResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'product_get': {
+        const getResult = await toolService.getProduct(args.productId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
+        result = { status: 'completed', ...getResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'gate_review': {
+        const gateResult = await toolService.reviewGate(sessionWorkspaceId, args.initiativeId, args.targetStage);
+        result = { status: 'completed', ...gateResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'workspace_list': {
+        const listResult = await toolService.listWorkspacesForUser(options.userId);
+        result = { status: 'completed', ...listResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'initiative_search': {
+        const searchResult = await toolService.searchInitiativesCrossWorkspace(options.userId, {
+          query: typeof args.query === 'string' ? args.query : undefined,
+          status: typeof args.status === 'string' ? args.status : undefined,
+          maturityStage: typeof args.maturityStage === 'string' ? args.maturityStage : undefined
+        });
+        result = { status: 'completed', ...searchResult };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      case 'task_dispatch': {
+        // task_dispatch delegates to the plan tool's create action
+        const taskResult = await todoOrchestrationService.createTodoFromChat(
+          { userId: options.userId, role: currentUserRole ?? 'editor', workspaceId: args.workspaceId },
+          { title: args.title, description: typeof args.description === 'string' ? args.description : undefined, sessionId: options.sessionId }
+        );
+        result = { ...taskResult, status: 'completed', dispatched: true };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      // BR14b Lot 21d-2 Step 3 Group F — verbatim move of inline tool branches
+      // from `runAssistantGeneration` (document_generate, batch_create_organizations).
+      // Step 3 completed by F3 commit: 30/30 server-tool branches migrated.
+      case 'document_generate': {
+        const action = typeof args.action === 'string' ? args.action : 'generate';
+        const rawFormat = typeof args.format === 'string' ? args.format : undefined;
+        if (rawFormat && rawFormat !== 'docx' && rawFormat !== 'pptx') {
+          throw new Error('document_generate: format must be "docx" | "pptx"');
+        }
+        const format = (rawFormat ?? 'docx') as 'docx' | 'pptx';
+
+        if (action === 'upskill') {
+          if (format === 'pptx') {
+            const { getPptxFreeformSkill } = await import('./pptx-freeform-skill');
+            result = {
+              status: 'completed',
+              mode: 'upskill',
+              format,
+              skill: getPptxFreeformSkill(),
+            };
+          } else {
+            // Return DOCX creation skill content for LLM learning
+            const { getDocxFreeformSkill } = await import('./docx-freeform-skill');
+            result = {
+              status: 'completed',
+              mode: 'upskill',
+              skill: getDocxFreeformSkill(),
+            };
+          }
+          await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+          streamSeq += 1;
+        } else {
+          // Generate mode: DOCX template generation or DOCX/PPTX freeform sandbox generation.
+          const templateId = typeof args.templateId === 'string' ? args.templateId : undefined;
+          const code = typeof args.code === 'string' ? args.code : undefined;
+          const title = typeof args.title === 'string' ? args.title : undefined;
+          const { entityType, entityId } = resolveDocumentGenerateTarget({
+            entityType: args.entityType,
+            entityId: args.entityId,
+            primaryContextType,
+            primaryContextId,
+          });
+          if (!entityId) throw new Error('document_generate: entityId is required');
+          if (templateId && code) throw new Error('document_generate: templateId and code are mutually exclusive');
+          if (!templateId && !code) throw new Error('document_generate: either templateId or code is required');
+          if (format === 'pptx' && templateId) {
+            throw new Error('document_generate: templateId is not supported for format "pptx"');
+          }
+
+          if (code) {
+            if (format === 'pptx') {
+              // Freeform PPTX: synchronous sandbox generation (BR-21a).
+              try {
+                const freeformResult = await generateFreeformPptx({
+                  code,
+                  entityType: entityType as 'initiative' | 'folder',
+                  entityId,
+                  workspaceId: sessionWorkspaceId,
+                  title,
+                });
+
+                const jobId = createId();
+                const bucket = getDocumentsBucketName();
+                const objectKey = `pptx-cache/${sessionWorkspaceId}/freeform/${entityType}/${entityId}/${jobId}.pptx`;
+
+                await putObject({
+                  bucket,
+                  key: objectKey,
+                  body: freeformResult.buffer,
+                  contentType: freeformResult.mimeType,
+                });
+
+                const completedPayload = {
+                  state: 'done',
+                  progress: 100,
+                  fileName: freeformResult.fileName,
+                  mimeType: freeformResult.mimeType,
+                  byteLength: freeformResult.buffer.byteLength,
+                  storageBucket: bucket,
+                  storageKey: objectKey,
+                  queueClass: 'publishing',
+                  completedAt: new Date().toISOString(),
+                };
+
+                await db.run(sql`
+                  INSERT INTO job_queue (id, type, status, workspace_id, data, result, completed_at)
+                  VALUES (
+                    ${jobId},
+                    'pptx_generate',
+                    'completed',
+                    ${sessionWorkspaceId},
+                    ${JSON.stringify({ entityType, entityId, mode: 'freeform', format: 'pptx' })},
+                    ${JSON.stringify(completedPayload)},
+                    ${completedPayload.completedAt}
+                  )
+                `);
+
+                result = {
+                  status: 'completed',
+                  format,
+                  mode: 'freeform',
+                  entityType,
+                  entityId,
+                  jobId,
+                  fileName: freeformResult.fileName,
+                  mimeType: freeformResult.mimeType,
+                  downloadUrl: `/pptx/jobs/${jobId}/download`,
+                };
+              } catch (freeformError: unknown) {
+                const errMsg =
+                  freeformError instanceof Error
+                    ? freeformError.message
+                    : 'Unknown freeform error';
+                const explicitCode =
+                  typeof (freeformError as { code?: unknown })?.code === 'string'
+                    ? String((freeformError as { code?: unknown }).code)
+                    : '';
+
+                let errorCode = 'code_runtime_error';
+                if (
+                  explicitCode === 'code_syntax_error' ||
+                  explicitCode === 'code_runtime_error' ||
+                  explicitCode === 'code_timeout' ||
+                  explicitCode === 'invalid_return_type' ||
+                  explicitCode === 'pptx_packaging_error' ||
+                  explicitCode === 'not_found'
+                ) {
+                  errorCode = explicitCode;
+                } else if (errMsg.includes('SyntaxError') || errMsg.includes('syntax')) {
+                  errorCode = 'code_syntax_error';
+                } else if (errMsg.includes('timeout') || errMsg.includes('Timeout')) {
+                  errorCode = 'code_timeout';
+                } else if (errMsg.includes('invalid_return_type')) {
+                  errorCode = 'invalid_return_type';
+                } else if (errMsg.includes('pptx_packaging_error') || errMsg.includes('packaging')) {
+                  errorCode = 'pptx_packaging_error';
+                } else if (errMsg.includes('not found') || errMsg.includes('Not found')) {
+                  errorCode = 'not_found';
+                } else if (errMsg.includes('putObject') || errMsg.includes('S3') || errMsg.includes('storage')) {
+                  errorCode = 'storage_error';
+                }
+
+                result = {
+                  status: 'error',
+                  code: errorCode,
+                  error: errMsg,
+                };
+              }
+            } else {
+              // Freeform DOCX: synchronous generation per SPEC_EVOL_FREEFORM_DOCX §4
+              try {
+                const freeformResult = await generateFreeformDocx({
+                  code,
+                  entityType: entityType as 'initiative' | 'folder',
+                  entityId,
+                  workspaceId: sessionWorkspaceId,
+                });
+
+                const jobId = createId();
+                const bucket = getDocumentsBucketName();
+                const objectKey = `docx-cache/${sessionWorkspaceId}/freeform/${entityType}/${entityId}/${jobId}.docx`;
+
+                await putObject({
+                  bucket,
+                  key: objectKey,
+                  body: freeformResult.buffer,
+                  contentType: freeformResult.mimeType,
+                });
+
+                const fileName = title
+                  ? `${title.replace(/[^a-zA-Z0-9À-ÿ _-]/g, '')}.docx`
+                  : freeformResult.fileName;
+
+                const completedPayload = {
+                  state: 'done',
+                  progress: 100,
+                  fileName,
+                  mimeType: freeformResult.mimeType,
+                  byteLength: freeformResult.buffer.byteLength,
+                  storageBucket: bucket,
+                  storageKey: objectKey,
+                  queueClass: 'publishing',
+                  completedAt: new Date().toISOString(),
+                };
+
+                await db.run(sql`
+                  INSERT INTO job_queue (id, type, status, workspace_id, data, result, completed_at)
+                  VALUES (
+                    ${jobId},
+                    'docx_generate',
+                    'completed',
+                    ${sessionWorkspaceId},
+                    ${JSON.stringify({ entityType, entityId, mode: 'freeform' })},
+                    ${JSON.stringify(completedPayload)},
+                    ${completedPayload.completedAt}
+                  )
+                `);
+
+                result = {
+                  status: 'completed',
+                  mode: 'freeform',
+                  entityType,
+                  entityId,
+                  jobId,
+                  fileName,
+                  mimeType: freeformResult.mimeType,
+                  downloadUrl: `/docx/jobs/${jobId}/download`,
+                };
+              } catch (freeformError: unknown) {
+                const errMsg = freeformError instanceof Error ? freeformError.message : 'Unknown freeform error';
+                // Map engine error codes per spec §6.2
+                let errorCode = 'code_runtime_error';
+                if (errMsg.includes('SyntaxError') || errMsg.includes('syntax')) errorCode = 'code_syntax_error';
+                else if (errMsg.includes('timeout') || errMsg.includes('Timeout')) errorCode = 'code_timeout';
+                else if (errMsg.includes('not a Document') || errMsg.includes('invalid_return_type')) errorCode = 'invalid_return_type';
+                else if (errMsg.includes('not found') || errMsg.includes('Not found')) errorCode = 'not_found';
+                else if (errMsg.includes('putObject') || errMsg.includes('S3') || errMsg.includes('storage')) errorCode = 'storage_error';
+
+                result = {
+                  status: 'error',
+                  code: errorCode,
+                  error: errMsg,
+                };
+              }
+            }
+          } else {
+            // Template mode (unchanged, DOCX only)
+            result = {
+              status: 'completed',
+              message: `Document generation queued for ${entityType} ${entityId} with template ${templateId}. The document will be available for download once processing completes.`,
+              templateId,
+              entityType,
+              entityId,
+            };
+          }
+          await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+          streamSeq += 1;
+        } // end generate action
+        break;
+      }
+      case 'batch_create_organizations': {
+        if (readOnly) throw new Error('Read-only workspace: batch_create_organizations is disabled');
+        const description = typeof args.description === 'string' ? args.description : '';
+        const targetWorkspaceId = sessionWorkspaceId;
+        if (!description) throw new Error('batch_create_organizations: description is required');
+
+        // Parse organization names from description (comma-separated, numbered list, or newline-separated)
+        const orgNames = description
+          .split(/[,\n]/)
+          .map((s: string) => s.replace(/^\s*\d+[\.\)\-]\s*/, '').trim())
+          .filter((s: string) => s.length > 0 && s.length < 200);
+
+        if (orgNames.length === 0) {
+          throw new Error('batch_create_organizations: no organization names found in description');
+        }
+
+        // Create organizations in DB with status 'generating'
+        const orgRows: Array<{ id: string; name: string }> = [];
+        for (const name of orgNames) {
+          const orgId = createId();
+          await db.insert(organizations).values({
+            id: orgId,
+            workspaceId: targetWorkspaceId,
+            name,
+            status: 'generating',
+            data: {},
+          });
+          orgRows.push({ id: orgId, name });
+        }
+
+        // Launch organization_enrich jobs for each org (lazy import to avoid circular dependency)
+        const { queueManager } = await import('./queue-manager');
+        const enrichJobIds: string[] = [];
+        for (const org of orgRows) {
+          const jobData: OrganizationEnrichJobData = {
+            organizationId: org.id,
+            organizationName: org.name,
+            model: selectedModel,
+            initiatedByUserId: options.userId,
+            locale: options.locale ?? 'fr',
+            wasCreated: true,
+          };
+          const jobId = await queueManager.addJob('organization_enrich', jobData, {
+            workspaceId: targetWorkspaceId,
+          });
+          enrichJobIds.push(jobId);
+        }
+
+        // Poll all enrich jobs until completion (timeout 3min, poll every 2s)
+        const POLL_INTERVAL_MS = 2000;
+        const POLL_TIMEOUT_MS = 180_000;
+        const startTime = Date.now();
+        let allDone = false;
+        while (!allDone && Date.now() - startTime < POLL_TIMEOUT_MS) {
+          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+          const jobRows = await db
+            .select({ id: jobQueue.id, status: jobQueue.status })
+            .from(jobQueue)
+            .where(inArray(jobQueue.id, enrichJobIds));
+          const statuses = jobRows.map((r) => r.status);
+          allDone = statuses.length === enrichJobIds.length &&
+            statuses.every((s) => s === 'completed' || s === 'failed');
+        }
+
+        // Fetch enriched organizations from DB
+        const enrichedOrgs = await db
+          .select()
+          .from(organizations)
+          .where(inArray(organizations.id, orgRows.map((o) => o.id)));
+
+        const orgResults = enrichedOrgs.map((org) => ({
+          id: org.id,
+          name: org.name,
+          status: org.status,
+          data: org.data,
+        }));
+
+        const failedCount = orgResults.filter((o) => o.status !== 'completed').length;
+        result = {
+          status: failedCount === orgResults.length ? 'error' : 'completed',
+          organizations: orgResults,
+          totalCreated: orgResults.length,
+          totalEnriched: orgResults.filter((o) => o.status === 'completed').length,
+          totalFailed: failedCount,
+          workspaceId: targetWorkspaceId,
+        };
+        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
+        streamSeq += 1;
+        break;
+      }
+      default:
+        throw new Error(`Unknown tool: ${toolCall.name}`);
     }
-
-    // Un seul terminal: done à la toute fin
-    await writeStreamEvent(options.assistantMessageId, 'done', {}, streamSeq, options.assistantMessageId);
-    streamSeq += 1;
-
-    await db
-      .update(chatMessages)
-      .set({
-        content: contentParts.join(''),
-        reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null,
-        model: selectedModel || null
-      })
-      .where(eq(chatMessages.id, options.assistantMessageId));
-
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, options.sessionId));
+    return { result, streamSeq };
   }
 
   /**
    * Finalise un message assistant à partir des events stream (ex: arrêt utilisateur).
    * - Recompose content/reasoning depuis les deltas.
    * - Émet un event terminal si manquant.
+   */
+  /**
+   * BR14b Lot 9 — first orchestration delegation.
+   * Body moved into `ChatRuntime.finalizeAssistantMessageFromStream`.
+   * Public signature and null-on-skip contract preserved verbatim.
    */
   async finalizeAssistantMessageFromStream(options: {
     assistantMessageId: string;
@@ -5596,75 +5082,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     reasoning: string | null;
     wroteDone: boolean;
   } | null> {
-    const { assistantMessageId, reason, fallbackContent } = options;
-    const [msg] = await db
-      .select({
-        id: chatMessages.id,
-        sessionId: chatMessages.sessionId,
-        role: chatMessages.role,
-        content: chatMessages.content,
-        reasoning: chatMessages.reasoning
-      })
-      .from(chatMessages)
-      .where(eq(chatMessages.id, assistantMessageId))
-      .limit(1);
-
-    if (!msg || msg.role !== 'assistant') return null;
-
-    const events = await readStreamEvents(assistantMessageId);
-    const hasTerminal = events.some((ev) => ev.eventType === 'done' || ev.eventType === 'error');
-
-    const contentParts: string[] = [];
-    const reasoningParts: string[] = [];
-    for (const ev of events) {
-      if (ev.eventType === 'content_delta') {
-        const data = ev.data as { delta?: unknown } | null;
-        const delta = typeof data?.delta === 'string' ? data.delta : '';
-        if (delta) contentParts.push(delta);
-      } else if (ev.eventType === 'reasoning_delta') {
-        const data = ev.data as { delta?: unknown } | null;
-        const delta = typeof data?.delta === 'string' ? data.delta : '';
-        if (delta) reasoningParts.push(delta);
-      }
-    }
-
-    let content = contentParts.join('');
-    if (!content.trim() && fallbackContent) content = fallbackContent;
-
-    const shouldUpdateContent = !msg.content || msg.content.trim().length === 0;
-    if (shouldUpdateContent && content) {
-      await db
-        .update(chatMessages)
-        .set({
-          content,
-          reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null
-        })
-        .where(eq(chatMessages.id, assistantMessageId));
-    }
-
-    let wroteDone = false;
-    if (!hasTerminal) {
-      const seq = await getNextSequence(assistantMessageId);
-      await writeStreamEvent(
-        assistantMessageId,
-        'done',
-        { reason: reason ?? 'cancelled' },
-        seq,
-        assistantMessageId
-      );
-      wroteDone = true;
-    }
-
-    await db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatSessions.id, msg.sessionId));
-
-    return {
-      content,
-      reasoning: reasoningParts.length > 0 ? reasoningParts.join('') : null,
-      wroteDone
-    };
+    return this.runtime.finalizeAssistantMessageFromStream(options);
   }
 }
 
