@@ -8,3 +8,4 @@ export * from './format/parser.js';
 export * from './sandbox/policy.js';
 export * from './sandbox/runtime.js';
 export * from './sandbox/api-surface.js';
+export * from './registry/registry.js';
