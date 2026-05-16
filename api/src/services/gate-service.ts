@@ -1,81 +1,21 @@
-import { db } from '../db/client';
-import { workspaces, initiatives, guardrails } from '../db/schema';
 import { and, eq, or } from 'drizzle-orm';
-import type { WorkspaceType } from './workspace-access';
+import type { GateEvaluationResult } from '@sentropic/flow';
+import { db } from '../db/client';
+import { guardrails, initiatives } from '../db/schema';
+import { resolveGateConfig } from './flow/postgres-approval-gate';
 
-// --- Types ---
-
-export type GateMode = 'free' | 'soft' | 'hard';
-
-export type GateCriteria = {
-  required_fields: string[];
-  guardrail_categories: string[];
-};
-
-export type GateConfig = {
-  mode: GateMode;
-  stages: string[];
-  criteria?: Record<string, GateCriteria>;
-};
-
-export type GateEvaluationResult = {
-  gate_passed: boolean;
-  warnings: string[];
-  blockers: string[];
-};
-
-// --- Default gate configs per workspace type (§6.3) ---
-
-const DEFAULT_GATE_CONFIGS: Record<Exclude<WorkspaceType, 'neutral'>, GateConfig> = {
-  'ai-ideas': {
-    mode: 'free',
-    stages: ['G0', 'G2'],
-  },
-  opportunity: {
-    mode: 'soft',
-    stages: ['G0', 'G2', 'G5', 'G7'],
-    criteria: {
-      G2: { required_fields: ['data.description', 'data.domain'], guardrail_categories: ['scope'] },
-      G5: { required_fields: ['data.solution'], guardrail_categories: ['scope', 'quality'] },
-      G7: { required_fields: [], guardrail_categories: ['approval'] },
-    },
-  },
-  code: {
-    mode: 'free',
-    stages: ['G0', 'G2', 'G5'],
-  },
-};
-
-/**
- * Returns the default gate config for a workspace type.
- * Returns null for neutral workspaces (no initiatives).
- */
-export function getDefaultGateConfig(type: WorkspaceType): GateConfig | null {
-  if (type === 'neutral') return null;
-  return DEFAULT_GATE_CONFIGS[type] ?? null;
-}
-
-/**
- * Resolve the gate config for a workspace.
- * Uses the workspace's custom gate_config if set, otherwise falls back to the default for its type.
- */
-export async function resolveGateConfig(workspaceId: string): Promise<GateConfig | null> {
-  const [ws] = await db
-    .select({ type: workspaces.type, gateConfig: workspaces.gateConfig })
-    .from(workspaces)
-    .where(eq(workspaces.id, workspaceId))
-    .limit(1);
-
-  if (!ws) return null;
-
-  // Use workspace-level override if present
-  if (ws.gateConfig && typeof ws.gateConfig === 'object') {
-    return ws.gateConfig as unknown as GateConfig;
-  }
-
-  // Fall back to default per workspace type
-  return getDefaultGateConfig(ws.type as WorkspaceType);
-}
+// Re-exports from the @sentropic/flow façade (Lot 4 Slice 1 Step 1).
+// Canonical implementations now live in `./flow/postgres-approval-gate.ts`.
+export type {
+  GateConfig,
+  GateCriteria,
+  GateEvaluationResult,
+  GateMode,
+} from '@sentropic/flow';
+export {
+  getDefaultGateConfig,
+  resolveGateConfig,
+} from './flow/postgres-approval-gate';
 
 /**
  * Check if a value at a dot-notation path in the initiative data JSONB is non-empty.
