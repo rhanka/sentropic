@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ui
+  namespace: sentropic
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: ui
+data:
+  # nginx baked into the ui image already proxies /api -> api:8787 in the
+  # production target; the UI itself is served on :5173 (nginx default port
+  # exposed by the existing Dockerfile).
+  PLACEHOLDER: "intentionally empty — kept so kustomize-style overlays can
+patch this CM later."
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+  namespace: sentropic
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: ui
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: ui
+  ports:
+    - name: http
+      port: 5173
+      targetPort: 5173
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui
+  namespace: sentropic
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: ui
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sentropic
+        app.kubernetes.io/component: ui
+    spec:
+      serviceAccountName: sentropic-app
+      containers:
+        - name: ui
+          image: ghcr.io/rhanka/top-ai-ideas-ui:v0.1.0
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 5173
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 30m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
