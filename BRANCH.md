@@ -100,11 +100,11 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Re-run replay harness from Lot 1 against the façade → must stay byte-identical (17/17 pass).
   - [x] Lot gate: typecheck-api green, replay spec green (17/17). `lint-api` + full `make test-api ENV=test-feat-flow-runtime-extract` deferred to Lot 4 entry (no api consumers re-bound to the façade yet — Lot N-3 owns that under `BR26-EX3`).
 
-- [ ] **Lot 4 — Slice 1: `gate-service.ts` → `ApprovalGate` adapter**
-  - [ ] Move logic from `api/src/services/gate-service.ts` into `api/src/services/flow/postgres-approval-gate.ts`.
-  - [ ] Re-export thin re-exports in `gate-service.ts` for backward compatibility (deleted at Lot N).
-  - [ ] Regression test name: `gate-service.flow-replay.spec.ts` against fixture #3 (approval-gated pause+resume).
-  - [ ] Lot gate: typecheck-api, lint-api, scoped api test, replay harness.
+- [x] **Lot 4 — Slice 1: `gate-service.ts` → `ApprovalGate` adapter**
+  - [x] Move logic from `api/src/services/gate-service.ts` into `api/src/services/flow/postgres-approval-gate.ts`.
+  - [x] Re-export thin re-exports in `gate-service.ts` for backward compatibility (deleted at Lot N).
+  - [x] Regression test name: `gate-service.flow-replay.spec.ts` against fixture #3 (approval-gated pause+resume) — covered by the existing `replay.spec.ts` (17/17 green, fixture #3 `approval-gated-pause-resume`).
+  - [x] Lot gate: typecheck-api, lint-api, scoped api test, replay harness.
 
 - [ ] **Lot 5 — Slice 2: `default-workflows.ts` + `default-agents.ts` → seed catalog port**
   - [ ] Move the workflow seed catalog + agent seed catalog into `packages/flow/src/seeds/` (pure data, no DB access).
