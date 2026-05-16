@@ -53,6 +53,10 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
 - **BR19-N1 — `@sentropic/contracts` re-export deferred (Lot 1, note; updated Lot 3)**
   - The Lot 1 checkbox "Re-export shared types from `@sentropic/contracts`" is satisfied vacuously: no `@sentropic/contracts` package exists on this branch baseline (`2d0ddf38`). The package surface that BR-14b/BR-26 will extract (`TenantContext`, `AuthzContext`, `ToolRegistry`, `ResolvedTool`) is not yet authored, so there is no shared type to re-export from.
   - Lot 3 resolution: declared the four shapes locally in `packages/skills/src/registry/authz.ts` with structurally-compatible interfaces. When `@sentropic/contracts` lands (BR-14b / BR-26), `authz.ts` becomes a thin re-export and downstream consumers pick up the canonical types without any API churn. No circular dependency is created.
+- **BR19-N2 — SKILL.md asset packaging deferred (Lot 5 Wave A)**
+  - Foundation bundles read their `SKILL.md` via `readFileSync(import.meta.url + 'SKILL.md')`. In the workspace/test loop this resolves to `src/bundles/.../SKILL.md` (fine). When `@sentropic/skills` is built via `tsc`, the `.md` files are NOT copied to `dist/`. No consumer needs `dist/` yet (api still uses tools.ts), so this is deferred until the api wires `registerFoundationSkills()` at boot — at which point a `package.json#files` glob update or a `prebuild` copy step lands together with the wiring.
+  - Tracking: revisit in the chat-service rebind commit of Lot 5.
+
 - **BR19-D1 — Persistence decision (Lot 3 outcome, BR19-Q6)**
   - Decision: in-memory `SkillRegistry` is sufficient for v0.1. No `skill_metadata` Postgres table is added in this branch; **no `BR19-EX1` is declared** and `api/drizzle/*.sql` is not touched.
   - Rationale: (1) Lot 5 (`tools.ts` migration) only needs runtime registration of built-in skills at API boot — no DB lookup required. (2) Marketplace audit + admin UI listing — the use cases that would justify a `skill_metadata` table — are out of scope (BR-27 / BR-19b). (3) The `SkillRegistry` interface is unchanged regardless of backing store, so a future `PgSkillRegistry` is a drop-in adapter with no breaking change.
@@ -116,6 +120,8 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
 
 - [ ] **Lot 5 — Migrate `tools.ts` to skill bundles (waves)**
   - [ ] Migrate **wave A** (low-risk listers): `web` skill (`web_search`, `web_extract`), `workspace` skill (`workspace_list`, `initiative_search`).
+    - [x] Step 1 — foundation bundle scaffold + `workspace` skill (`workspace_list`, `initiative_search`) via `packages/skills/src/bundles/foundation/` + `registerFoundationSkills(registry)` registrar. 9 new tests; `make test-skills` 76/76 green. Handlers ship as `not bound` guards: legacy `api/src/services/tools.ts` still drives execution until `chat-service` is rebound (deferred to Lot 5 final cleanup commit).
+    - [ ] Step 2 — `web` skill (`web_search`, `web_extract`) added to foundation bundle.
   - [ ] Migrate **wave B** (read-only object skills): `organizations`, `folders`, `initiatives`, `solutions`, `proposals`, `products` skills (each grouping `list`+`get`+optional `update`).
   - [ ] Migrate **wave C** (write/structured skills): `executive_summary`, `matrix`, `documents`, `comment_assistant`, `plan`, `gate_review`, `history_analyze` skills.
   - [ ] Migrate **wave D** (sandbox-backed skills): `document_generate` (uses sandbox, ports the docx-freeform skill), `batch_create_organizations`, `task_dispatch`.

@@ -13,3 +13,4 @@ export * from './registry/authz.js';
 export * from './registry/resolve.js';
 export * from './registry/adapter.js';
 export * from './registry/search-skills-tool.js';
+export * from './bundles/index.js';
