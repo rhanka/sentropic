@@ -94,6 +94,26 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
   - Do not create a dedicated flaky branch from BR14b.
   - If AI nondeterminism appears, document it as evidence only and continue only with user sign-off.
 
+### Recorded flakes (PR #158 CI runs #25949370422 + #25950703020, branch HEAD 8758b2d9)
+
+- `flaky accepted` 2026-05-16 — **`api/tests/ai/chat-sync.test.ts > should generate assistant response with AI`**
+  - Command : `make test-api-ai SCOPE="tests/ai/chat-sync.test.ts tests/ai/executive-summary-auto.test.ts tests/ai/comment-assistant.test.ts" API_TEST_WORKERS=1 ENV=test-refacto-chat-service-core`
+  - CI signature : `AssertionError: expected false to be true` at jobCompleted polling after 10s window, followed by `DrizzleQueryError ... violates foreign key constraint chat_stream_events_message_id_chat_messages_id_fk` 11s later.
+  - Root cause analysis (sub-agent investigation 2026-05-16) : OpenAI took >22s to produce first `content_delta` (vs 10s test polling window) → test fails → `afterEach.cleanupAuthData()` cascades delete on chat_messages → in-flight queue job tries to append stream event for now-deleted message → FK violation 23503 is a downstream symptom of the LLM slow response, NOT a code bug. Test code byte-identical to `main` (`git diff main...HEAD -- api/tests/ai/chat-sync.test.ts` empty). Runtime sub-classes unchanged since Lot 22b closure (`git diff d32a06b9..HEAD -- packages/chat-core/src/runtime*.ts` empty for ordering-relevant files). Reproduced locally 4/4 PASS.
+  - File in AI Flaky Allowlist : `api/tests/ai/**` per `rules/testing.md:41-42`.
+  - User sign-off : **recorded 2026-05-16 by Fabien Antoine** (option "Sign-off flaky maintenant" via AskUserQuestion).
+
+- `flaky accepted` 2026-05-16 — **`e2e/tests/03-chat.spec.ts:203 > Chat > reload + nouvel onglet conservent l'historique reasoning/tools sans appels stream-events legacy`**
+  - Command : `make test-e2e SCOPE=tests/03-*.spec.ts` (CI matrix `group-c, 03`)
+  - CI signature : `expect(runtimeHeader).toBeVisible({ timeout: 45_000 })` at line 249 times out — `runtimeHeader = page.locator('#chat-widget-dialog').getByText(/Raisonnement|Reasoning/i).first()`.
+  - Root cause analysis : Header only renders when `sawReasoning = true` in `ui/src/lib/components/StreamMessage.svelte:461` requiring a `reasoning_delta` event. Provider `gpt-4.1-nano` is not a reasoning model and emits reasoning summaries inconsistently — picked no-reasoning path 3x in a row in CI run #25950703020 (primary + 2 retries). Test text "sans appels stream-events legacy" describes the post-refacto NO-legacy behavior, the test EXISTED pre-Lot-22b (byte-identical to main).
+  - File in AI Flaky Allowlist : `e2e/tests/03-chat.spec.ts` per `rules/testing.md:41-42`.
+  - User sign-off : **recorded 2026-05-16 by Fabien Antoine** (option "Sign-off flaky maintenant" via AskUserQuestion).
+
+### Hardening backlog (out of BR14b scope, dedicated fix branch)
+- `cleanupAuthData()` (`api/tests/utils/auth-helper.ts:67`) runs unconditional `db.delete(users)` with default `cleanup_scope=global` for `test-api-ai` — nukes users while jobs are in flight, masks the LLM-slow signature behind a noisy FK error. Refactor : await pending queue jobs before cascade-delete OR move `test-api-ai` to `cleanup_scope=tracked` (proposed branch : `fix/test-cleanup-race`, post-BR14b merge).
+- Reasoning-event presence in chat e2e tests : currently relies on model emitting `reasoning_delta` opportunistically. Refactor : force a reasoning-capable model (e.g. `gpt-5-thinking`) for tests asserting reasoning UI surface, OR mock the stream event source (proposed in BR-14e or dedicated `fix/e2e-reasoning-deterministic`).
+
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + sidecar scoping**
 - [ ] **Multi-branch**
