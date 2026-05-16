@@ -1,6 +1,17 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-05-07 — BR-14f (Node workspace monorepo infra) is merged on PR #125, `main` is aligned with `origin/main`, and BR-14c (`feat/llm-mesh-sdk`) has been rebased on the current main. Active execution is now BR-14c only. BR-14c scope is corrected to include strict application LLM runtime cutover to `@sentropic/llm-mesh` with no dual runtime path. BR-14g remains the post-BR14c model catalog pivot for GPT-5.5 and Claude Opus 4.7. BR-14b is re-scoped to chat-service core modularization above the mesh runtime. Selected execution order: PR-117 transition ops → BR-14f → BR-14c → BR-14g → BR-14b → BR-14a → BR-14e → BR-14d. BR-16 split → BR-16a + BR-16b + BR-16c. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`.
+Status: Updated 2026-05-14 — BR-14c (`feat/llm-mesh-sdk`) MERGED (PR #141, 2026-05-11), BR-14g (model catalog GPT-5.5 + Opus 4.7) MERGED (PR #146), BR-24 (`chore/node24-actions-upgrade`) MERGED (PR #147), `fix-mistral` MERGED (PR #145). BR-23 (`feat/multi-agent-framework-comparison`) scoping COMPLETED 2026-05-13 — PR #148 open, awaiting `SPEC_VOL` validation; architecture decisions closed in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` (single generic `CheckpointStore<T>`, single composable federated `ToolRegistry`, separate `@sentropic/marketplace`, façade-first `@sentropic/flow` extraction preserving agent templating invariant). BR-14b IN PROGRESS — Lot 1 contracts shipped (`16163ffc` = `@sentropic/contracts` skeleton), Lot 2 events shipped (`9cc76b61` = `@sentropic/events` skeleton); Lot 3 `@sentropic/chat-core` shell pending. BR-14a Lot 0 scoping complete (`c5cc6da1`); implementation blocked on BR-14b merge; target renamed `@sentropic/chat` → `@sentropic/chat-ui`. BR-25 (`chore/rules-skills-audit`) in study mode (17/46 checkboxes). BR-31 (`chore/make-to-nx-study`) STUDY CLOSED 2026-05-13 — recommendation REJECT (commits `681790fa` + `38d8f1d3`); no code change. BR-26 (`feat/openerp-runtime-requirements`) SCAFFOLDED 2026-05-14 (PR #151) — OpenERP project runtime requirements (MCP, OTel hooks, policy hooks, identity, marketplace primitives, sandbox); reserves slots BR-27..30 for OpenERP implementation follow-ups. Original BR-26..30 slots remapped to BR-32..36 to avoid collision. Forthcoming sentropic branches: BR-32 (flow-runtime-extract), BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers). Selected next execution order: BR-14b → BR-14a → BR-32 → BR-19 → BR-33 → BR-35 → BR-36 → BR-14e → BR-14d. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`.
+
+## 0) Repo merge policy (effective 2026-05-13)
+
+Applied at the GitHub repository level on 2026-05-13 after the PR #141 squash incident (loss of intermediate commit history). Reference: `feedback_never_squash_merge` memory.
+
+- Squash merge: **DISABLED**.
+- Rebase merge: **DISABLED**.
+- Merge commit: **ONLY allowed merge strategy**.
+- `delete_branch_on_merge`: **DISABLED** — source branches MUST be preserved post-merge for historical reference and incident forensics.
+
+Every PR going forward must be merged via a merge commit and the source branch left intact. Sub-agents and the conductor must not request alternate merge strategies. Local `git merge --squash` / `git rebase` outside of branch-internal rebase-on-main are equally forbidden during merge-prep.
 
 ## 1) Current state
 
@@ -16,20 +27,25 @@ Status: Updated 2026-05-07 — BR-14f (Node workspace monorepo infra) is merged 
 - BR-08 `feat/model-runtime-claude-mistral-cohere` (scope extended: +Cohere)
 - BR-13 `feat/chrome-plugin-download-distribution`
 - BR-14f `chore/node-workspace-monorepo-14f` — **merged 2026-05-07** (`358e62ef`). Root Node workspace + full-repo container mounts; CI/CD green.
+- BR-14c `feat/llm-mesh-sdk` — **merged 2026-05-11 (PR #141)**. `@sentropic/llm-mesh` published; strict app LLM runtime cutover with no dual path; CI/CD package validation + npm publish wired. PR #141 squash incident triggered the 2026-05-13 repo merge policy (see §0).
+- BR-14g `feat/model-catalog-gpt55-opus47` — **merged (PR #146)**. Model catalog defaults pivoted to GPT-5.5 + Claude Opus 4.7; GPT-5.4 Nano preserved.
+- BR-24 `chore/node24-actions-upgrade` — **merged (PR #147)**. GitHub Actions workflows + third-party actions upgraded for Node 24; CI/CD + Scaleway deploy lanes verified.
+- `fix-mistral` — **merged (PR #145)**. Mistral provider runtime fix on top of BR-14c mesh.
 
 **Ready to merge:**
-- None.
+- None. BR-23 PR is open for `SPEC_VOL` validation but no implementation to merge in this branch (study only).
 
-**Next branches (explicitly queued):**
-- BR-23 `feat/multi-agent-framework-comparison` — compare LangGraph/Agno/Temporal. See `plan/23-BRANCH_feat-multi-agent-framework-comparison.md`.
-- BR-24 `chore/node24-actions-upgrade` — upgrade GitHub Actions workflows and third-party actions for Node 24 compatibility before the runner cutover; verify CI/CD and Scaleway deploy lanes end-to-end.
-- BR-25 `chore/rules-skills-audit` — absorb BR-04B audit learnings. See `plan/25-BRANCH_chore-rules-skills-audit.md`.
+**Active execution:**
+- BR-14b `refacto/chat-service-core` — **in progress**. Lot 1 `@sentropic/contracts` skeleton shipped (`16163ffc`), Lot 2 `@sentropic/events` skeleton shipped (`9cc76b61`); Lot 3 `@sentropic/chat-core` shell pending. Scope exception **BR14b-EX1** absorbs the contracts + events packages into the same branch (single wire-boundary commit per `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` §11 delivery cadence). Façade-first extraction; agent templating invariant preserved (§14 of architecture spec).
+- BR-23 `feat/multi-agent-framework-comparison` — **scoping completed 2026-05-13**. PR open. Awaiting `SPEC_VOL` validation. Decisions closed: 7-package cartography (+ `@sentropic/contracts`, `@sentropic/events`, `@sentropic/marketplace`, `@sentropic/graphify` overlays), single generic `CheckpointStore<T>` with lenient/strict strategy adapters, single federated `ToolRegistry`, façade-first `@sentropic/flow` extraction, harness ↔ skills separation, MCP as transport adapter only.
+- BR-25 `chore/rules-skills-audit` — **study mode**. 17/46 checkboxes; mechanical enforcement design over text rules.
+- BR-14a `feat/chat-ui-sdk` — **Lot 0 scoping complete** (`c5cc6da1`). Implementation blocked on BR-14b merge. Target package renamed `@sentropic/chat` → `@sentropic/chat-ui` per `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` §1.
 
-**Active scoping (Lot 0 in progress):**
-- BR-14c `feat/llm-mesh-sdk` — priority extraction, cutover, and first npm publication: `@sentropic/llm-mesh`, Vercel AI SDK-like access to GPT/Claude/Gemini/Mistral/Cohere with token and Codex-account modes, strict application LLM runtime migration with replaced app-local runtime code removed, plus CI/CD package validation and npm publish.
+**Pending branches (unblocked or near-unblocked):**
+- BR-07, BR-10, BR-11, BR-12, BR-14e, BR-14d, BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22, BR-32 (flow-runtime-extract), BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers) — see §3 catalog for descriptions, dependencies, and priorities.
 
-**Pending branches (unblocked):**
-- BR-07, BR-10, BR-11, BR-12, BR-14g (after BR-14c cutover), BR-14b (after BR-14g), BR-14a, BR-14e, BR-14d, BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22, BR-23, BR-24, BR-25 — see §3 catalog for descriptions, dependencies, and priorities.
+**Study closed (no code):**
+- BR-31 `chore/make-to-nx-study` — **study closed 2026-05-13**. Recommendation **REJECT** with sub-option (optional power-developer adapt). Deliverable: `spec/SPEC_STUDY_MAKE_TO_NX_MIGRATION.md`. Commits `681790fa` (BRANCH.md) + `38d8f1d3` (spec). No further lots; PR open for record.
 
 **Deferred:**
 - BR-09 `feat/sso-google` — deferred post-refacto (OOM resolution required before SSO Google work; exact target TBD by conductor).
@@ -117,20 +133,24 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 |        |                                                  | mounts for `api`/`ui`, so internal packages can be         |                      |                                |
 |        |                                                  | consumed cleanly by future extracted libraries.            |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-14c | feat/llm-mesh-sdk                                | Publish @sentropic/llm-mesh to npm and cut application LLM  | scoping (priority)   | BR-01, BR-08                   |
-|        |                                                  | over to it with no dual runtime path. Covers GPT/Claude/   |                      |                                |
+| BR-14c | feat/llm-mesh-sdk                                | Publish @sentropic/llm-mesh to npm and cut application LLM  | done (PR #141,        | BR-01, BR-08                   |
+|        |                                                  | over to it with no dual runtime path. Covers GPT/Claude/   | 2026-05-11)          |                                |
 |        |                                                  | Gemini/Mistral/Cohere, token auth, Codex account mode,     |                      |                                |
 |        |                                                  | and CI/CD package validation/publication.                  |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-14g | feat/model-catalog-gpt55-opus47                  | Pivot model catalog defaults and compatibility rules to     | plan (after BR-14c)  | BR-14c                         |
+| BR-14g | feat/model-catalog-gpt55-opus47                  | Pivot model catalog defaults and compatibility rules to     | done (PR #146)       | BR-14c                         |
 |        |                                                  | GPT-5.5 and Claude Opus 4.7 while keeping GPT-5.4 Nano.    |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-14b | refacto/chat-service-core                        | Modularize chat-service core above @sentropic/llm-mesh:      | plan (after BR-14g)  | BR-14c, BR-14g                 |
-|        |                                                  | reasoning loop, tool loop, continuation boundaries,         |                      |                                |
-|        |                                                  | reusable chat orchestration, no provider abstraction.       |                      |                                |
+| BR-14b | refacto/chat-service-core                        | Modularize chat-service core above @sentropic/llm-mesh:      | in progress (Lot 1+2 | BR-14c, BR-14g                 |
+|        |                                                  | reasoning loop, tool loop, continuation boundaries,         | done, Lot 3 in        |                                |
+|        |                                                  | reusable chat orchestration, no provider abstraction.       | flight)              |                                |
+|        |                                                  | Also ships @sentropic/contracts (`16163ffc`) and            |                      |                                |
+|        |                                                  | @sentropic/events (`9cc76b61`) via scope exception          |                      |                                |
+|        |                                                  | BR14b-EX1 (single wire-boundary commit).                    |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-14a | feat/chat-ui-sdk                                 | Former BR-14. Extract @sentropic/chat from web, Chrome,      | plan (after BR-14c,  | BR-04 (low), BR-14c            |
-|        |                                                  | and VSCode surfaces as publishable npm lib.                | can scope in parallel)|                                |
+| BR-14a | feat/chat-ui-sdk                                 | Former BR-14. Extract @sentropic/chat-ui (renamed from      | Lot 0 done; impl     | BR-04 (low), BR-14c, BR-14b    |
+|        |                                                  | @sentropic/chat) from web, Chrome, and VSCode surfaces as  | blocked on BR-14b   |                                |
+|        |                                                  | publishable npm lib. Consumes chat-core wire only.          | merge                |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-14e | chore/sentropic-codebase-finalization             | Final codebase naming sweep outside chat/LLM/ops: API/UI   | plan (mandatory)     | BR-14a, BR-14b, BR-14c         |
 |        |                                                  | packages, labels, tests, fixtures, exports, residual       |                      |                                |
@@ -182,16 +202,63 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-22  | fix/rich-markdown-list-stabilization             | Stabilize rich markdown list rendering/editing (freeze on  | plan                 | BR-04                          |
 |        |                                                  | initiative cc884370... in constraints field).              |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-23  | feat/multi-agent-framework-comparison            | Compare LangGraph / Agno / Temporal; recommendation +      | plan                 | BR-04B                         |
-|        |                                                  | runtime extension plan.                                    |                      |                                |
+| BR-23  | feat/multi-agent-framework-comparison            | Compare LangGraph / Agno / Temporal; recommendation +      | study complete; PR   | BR-04B                         |
+|        |                                                  | runtime extension plan. Decisions closed in                | open; SPEC_VOL       |                                |
+|        |                                                  | spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md.                | validation pending   |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-24  | chore/node24-actions-upgrade                     | Update GitHub Actions workflows and third-party actions    | plan                 | BR-00                          |
+| BR-24  | chore/node24-actions-upgrade                     | Update GitHub Actions workflows and third-party actions    | done (PR #147)       | BR-00                          |
 |        |                                                  | to Node 24-compatible versions, then re-verify CI/CD       |                      |                                |
 |        |                                                  | including Scaleway deploy lanes.                           |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-25  | chore/rules-skills-audit                         | Absorb BR-04B audit learnings (2 agents, 13 sessions, 400+ | plan                 | BR-04B                         |
-|        |                                                  | incidents) into rules + skills. Mechanical enforcement     |                      |                                |
+| BR-25  | chore/rules-skills-audit                         | Absorb BR-04B audit learnings (2 agents, 13 sessions, 400+ | study mode (17/46    | BR-04B                         |
+|        |                                                  | incidents) into rules + skills. Mechanical enforcement     | checkboxes)          |                                |
 |        |                                                  | over text rules.                                           |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-26  | feat/openerp-runtime-requirements                | OpenERP project runtime requirements scaffold (spec only): | spec scaffolded      | none (spec only)               |
+|        |                                                  | MCP client/server, OTel hooks, policy hooks, multi-tenant  | (PR #151)            |                                |
+|        |                                                  | identity, marketplace primitives, sandbox API. Follow-ups  |                      |                                |
+|        |                                                  | will fan into BR-27 (MCP) / BR-28 (OTel+policy) / BR-29    |                      |                                |
+|        |                                                  | (identity) / BR-30 (marketplace primitives + sandbox).     |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-27  | (reserved) OpenERP MCP client/server impl        | Reserved slot for OpenERP MCP implementation follow-up     | reserved             | BR-26                          |
+|        |                                                  | from PR #151 OpenERP requirements scaffold.                |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-28  | (reserved) OpenERP OTel + policy hooks impl      | Reserved slot for OpenERP OTel spans + policy hooks impl   | reserved             | BR-26                          |
+|        |                                                  | follow-up from PR #151.                                    |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-29  | (reserved) OpenERP identity primitives impl      | Reserved slot for OpenERP IdentityProvider + RFC 8693      | reserved             | BR-26                          |
+|        |                                                  | token exchange follow-up from PR #151.                     |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-30  | (reserved) OpenERP marketplace primitives + sandbox impl | Reserved slot for OpenERP marketplace publication    | reserved             | BR-26                          |
+|        |                                                  | primitives (AgentDefinition, ApprovalPolicy, capability    |                      |                                |
+|        |                                                  | manifest) + Sandbox API follow-up from PR #151.            |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-32  | feat/flow-runtime-extract                        | Extract @sentropic/flow from todo-orchestration.ts +       | plan                 | BR-14b (Lots 1-3), BR-23       |
+|        |                                                  | queue-manager.ts + default-workflows.ts via façade-first   |                      |                                |
+|        |                                                  | (no rewrite). Preserves agent templating invariant         |                      |                                |
+|        |                                                  | (SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §14). Owns          |                      |                                |
+|        |                                                  | FlowCheckpointStore strict strategy + JobQueue port.       |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-33  | feat/managed-marketplace                         | @sentropic/marketplace package: governance policy +        | plan                 | BR-19                          |
+|        |                                                  | decision engine + audit overlay on top of @sentropic/      |                      |                                |
+|        |                                                  | skills (curate which skills/tools per role/workspace).     |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-34  | feat/graphify-fusion                             | Fuse graphifyy@0.7.10 under @sentropic/graphify; decide    | plan                 | none (standalone)              |
+|        |                                                  | registry transfer vs republish + deprecate upstream.       |                      |                                |
+|        |                                                  | Imported by @sentropic/harness (BR25) as peerDep.          |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-35  | feat/persistence-git-adapter                     | @sentropic/persistence-git adapter implementing            | plan                 | BR-14b                         |
+|        |                                                  | RepoCheckpointStore (shadow git repo at                     |                      |                                |
+|        |                                                  | ~/.sentropic/checkpoints/, à la Gemini CLI).               |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-36  | feat/external-triggers                           | External trigger sources for async externally-triggered    | plan                 | BR-32                          |
+|        |                                                  | flows: webhook, schedule, email-in, file-watch. Either     |                      |                                |
+|        |                                                  | folded into BR-32 or standalone post-BR-32.                |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-31  | chore/make-to-nx-study                           | One-branch study assessing nx as a Make replacement.       | study closed         | none (doc-only)                |
+|        |                                                  | Deliverable: spec/SPEC_STUDY_MAKE_TO_NX_MIGRATION.md       | (recommend REJECT)   |                                |
+|        |                                                  | (status quo + nx simulation + CI before/after + transition |                      |                                |
+|        |                                                  | plan). Recommendation REJECT (commits 681790fa, 38d8f1d3). |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 ```
 
@@ -233,6 +300,12 @@ graph TD
   BR21[BR-21 cv transpose + profiles parked]
   BR22[BR-22 rich markdown list stabilization]
   BR24[BR-24 node24 actions upgrade]
+  BR32[BR-32 flow runtime extract]
+  BR33[BR-33 managed marketplace]
+  BR34[BR-34 graphify fusion]
+  BR35[BR-35 persistence git adapter]
+  BR36[BR-36 external triggers]
+  BR31[BR-31 make to nx study ✗ REJECT]
 
   BR00 --> BR01
   BR00 --> BR02
@@ -287,9 +360,23 @@ graph TD
   BR21a -.->|optional presentation export primitive| BR21
   BR04 --> BR22
   BR00 --> BR24
+
+  BR14b --> BR32
+  BR19 --> BR33
+  BR14b --> BR35
+  BR32 --> BR36
 ```
 
 ## 5) Scheduling post-BR-04
+
+**BR-14 / BR-23 successor waves (2026-05-14 mapping)**:
+- **W1 (in flight)**: BR-14b (`refacto/chat-service-core`) — Lot 3 chat-core shell pending.
+- **W2 (after BR-14b merge)**: BR-14a (`feat/chat-ui-sdk`) ∥ BR-32 (`feat/flow-runtime-extract`).
+- **W3 (after BR-14a/BR-32 merge)**: BR-19 (`feat/agent-sandbox-skills`).
+- **W4 (after BR-19 merge)**: BR-33 (`feat/managed-marketplace`) ∥ BR-35 (`feat/persistence-git-adapter`).
+- **W5 (after BR-32+BR-33 settle)**: BR-36 (`feat/external-triggers`).
+- **Out of waves — backlog**: BR-34 (`feat/graphify-fusion`) standalone, scheduled on capacity.
+- **Out of waves — closed**: BR-31 (`chore/make-to-nx-study`) study closed, recommendation REJECT.
 
 **Wave in progress (2026-04-21)**: this transition branch (README pair, Sentropic URL, repo/DNS/SCW plan, BR-14 split, PR-117 transition TODO) ∥ BR-16a Lot 0 (gdrive SSO + document_summary indexing scoping). Planning-only.
 **PR-117 release ops**: decide and execute repository rename + public DNS/redirect changes, or explicitly hand off each unchecked item to BR-14d with owner/date.
@@ -333,6 +420,12 @@ User UAT on root workspace (`ENV=dev`). Branch development and automated tests r
 - `plan/done/14f-BRANCH_chore-node-workspace-monorepo.md` (BR-14f archived branch pointer)
 - `plan/14d-BRANCH_chore-sentropic-transition-ops.md` (BR-14d branch pointer)
 - `plan/14e-BRANCH_chore-sentropic-codebase-finalization.md` (BR-14e branch pointer)
+- `plan/32-BRANCH_feat-flow-runtime-extract.md` (BR-32 branch pointer)
+- `plan/33-BRANCH_feat-managed-marketplace.md` (BR-33 branch pointer)
+- `plan/34-BRANCH_feat-graphify-fusion.md` (BR-34 branch pointer)
+- `plan/35-BRANCH_feat-persistence-git-adapter.md` (BR-35 branch pointer)
+- `plan/36-BRANCH_feat-external-triggers.md` (BR-36 branch pointer)
+- `plan/31-BRANCH_chore-make-to-nx-study.md` (BR-31 branch pointer — study closed)
 - `spec/SPEC_EVOL_WORKSPACE_TYPES.md` (BR-04)
 - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (residual)
 - `spec/SPEC_EVOL_BR15_AGENT_WORKFLOW_CONFIG_ROBUSTNESS.md` (deferred)
