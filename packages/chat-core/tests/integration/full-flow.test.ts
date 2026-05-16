@@ -1057,4 +1057,158 @@ describe('ChatRuntime integration — inter-lib full-flow composition', () => {
     // Cap not exceeded (well below 6000 chars).
     expect(loopState.steerReasoningReplay.length).toBeLessThan(6000);
   });
+
+  // ---------------------------------------------------------------------
+  // CASE 12 — CodexTransport derivation via initToolLoopState.
+  //
+  // Drives the Lot 22a-1 pre-loop init slice through the façade with
+  // a model selection of `openai/gpt-5.5` AND a `resolveOpenAITransportMode`
+  // dep returning `'codex'`. Proves the runtime composes
+  // `selectedProviderId === 'openai' && selectedModel === 'gpt-5.5' &&
+  // (await resolveOpenAITransportMode()) === 'codex'` correctly through
+  // `ChatRuntimeRunPrepare` and mirrors the result onto
+  // `loopState.useCodexTransport` in-place. Also asserts the negative
+  // path (transport dep unwired) defaults the boolean to `false`.
+  // ---------------------------------------------------------------------
+  it('derives useCodexTransport=true via initToolLoopState on openai+gpt-5.5+codex mode', async () => {
+    fixture = buildFixture({
+      resolveModelSelection: async () => ({
+        provider_id: 'openai',
+        model_id: 'gpt-5.5',
+      }),
+      resolveOpenAITransportMode: async () => 'codex',
+    });
+    await seedSessionAndUserTurn(fixture);
+    const ctx = await fixture.runtime.prepareAssistantRun({
+      userId,
+      sessionId,
+      assistantMessageId,
+    });
+    const prompt = await fixture.runtime.prepareSystemPrompt(ctx, {
+      userId,
+      sessionId,
+      requestedTools: [],
+    });
+    const loopState = await fixture.runtime.beginAssistantRunLoop({
+      assistantMessageId,
+      systemPrompt: prompt.systemPrompt,
+      conversation: ctx.conversation,
+      enforceTodoUpdateMode: false,
+      todoProgressionFocusMode: false,
+      hasActiveSessionTodo: false,
+      baseMaxIterations: 10,
+    });
+    expect(loopState.useCodexTransport).toBe(false);
+
+    const initResult = await fixture.runtime.initToolLoopState({
+      userId,
+      providerId: 'openai',
+      model: 'gpt-5.5',
+      assistantRowModel: 'gpt-5.5',
+      assistantMessageId,
+      sessionWorkspaceId: ctx.sessionWorkspaceId,
+      conversation: ctx.conversation,
+      loopState,
+    });
+    expect(initResult.selectedProviderId).toBe('openai');
+    expect(initResult.selectedModel).toBe('gpt-5.5');
+    expect(initResult.useCodexTransport).toBe(true);
+    // In-place mutation on the shared loopState reference.
+    expect(loopState.useCodexTransport).toBe(true);
+
+    // Negative path: same provider+model, transport dep unwired.
+    const negativeFixture = buildFixture({
+      resolveModelSelection: async () => ({
+        provider_id: 'openai',
+        model_id: 'gpt-5.5',
+      }),
+      resolveOpenAITransportMode: undefined,
+    });
+    await seedSessionAndUserTurn(negativeFixture);
+    const negCtx = await negativeFixture.runtime.prepareAssistantRun({
+      userId,
+      sessionId,
+      assistantMessageId,
+    });
+    const negPrompt = await negativeFixture.runtime.prepareSystemPrompt(negCtx, {
+      userId,
+      sessionId,
+      requestedTools: [],
+    });
+    const negLoopState = await negativeFixture.runtime.beginAssistantRunLoop({
+      assistantMessageId,
+      systemPrompt: negPrompt.systemPrompt,
+      conversation: negCtx.conversation,
+      enforceTodoUpdateMode: false,
+      todoProgressionFocusMode: false,
+      hasActiveSessionTodo: false,
+      baseMaxIterations: 10,
+    });
+    const negResult = await negativeFixture.runtime.initToolLoopState({
+      userId,
+      providerId: 'openai',
+      model: 'gpt-5.5',
+      assistantRowModel: 'gpt-5.5',
+      assistantMessageId,
+      sessionWorkspaceId: negCtx.sessionWorkspaceId,
+      conversation: negCtx.conversation,
+      loopState: negLoopState,
+    });
+    expect(negResult.useCodexTransport).toBe(false);
+    expect(negLoopState.useCodexTransport).toBe(false);
+    // Reset the negative fixture so afterEach hooks only act on `fixture`.
+    negativeFixture.messageStore.reset();
+    negativeFixture.sessionStore.reset();
+    negativeFixture.streamBuffer.reset();
+    negativeFixture.streamSequencer.reset();
+    negativeFixture.checkpointStore.reset();
+    negativeFixture.mesh.reset();
+  });
+
+  // ---------------------------------------------------------------------
+  // CASE 13 — Cross sub-class sibling injection: Session.getSessionHistory
+  // → Checkpoint.listCheckpoints.
+  //
+  // Live-test of the Lot 22b-2 sibling-injection wiring: the
+  // `ChatRuntimeSession.getSessionHistory` body calls
+  // `this.checkpoint.listCheckpoints(...)` against the sibling
+  // `ChatRuntimeCheckpoint` instance the façade passes by reference at
+  // construction time. Creating a checkpoint through the façade's
+  // `createCheckpoint` and then asserting it surfaces in the result of
+  // the façade's `getSessionHistory` proves the cross sub-class injection
+  // is functional end-to-end (Session sub-class reaches Checkpoint
+  // sub-class without going through the deps map).
+  // ---------------------------------------------------------------------
+  it('surfaces createCheckpoint output via getSessionHistory (Session→Checkpoint sibling injection)', async () => {
+    await seedSessionAndUserTurn(fixture);
+
+    // Sibling Checkpoint sub-class creates the checkpoint through the
+    // façade.
+    const checkpoint = await fixture.runtime.createCheckpoint({
+      sessionId,
+      title: 'Snapshot before follow-up',
+      anchorMessageId: assistantMessageId,
+    });
+    expect(checkpoint.anchorMessageId).toBe(assistantMessageId);
+
+    // Sibling Session sub-class reads the same checkpoint by composing
+    // `this.checkpoint.listCheckpoints` internally.
+    const history = await fixture.runtime.getSessionHistory({
+      sessionId,
+      userId,
+    });
+    expect(history.sessionId).toBe(sessionId);
+    expect(history.checkpoints).toHaveLength(1);
+    expect(history.checkpoints[0]?.id).toBe(checkpoint.id);
+    expect(history.checkpoints[0]?.title).toBe('Snapshot before follow-up');
+    expect(history.checkpoints[0]?.anchorMessageId).toBe(assistantMessageId);
+
+    // Cross-check parity with the direct façade-level listCheckpoints
+    // call (same data flowing through both Session→Checkpoint sibling
+    // dispatch and the direct façade delegator).
+    const direct = await fixture.runtime.listCheckpoints({ sessionId });
+    expect(direct.map((row) => row.id)).toEqual(
+      history.checkpoints.map((row) => row.id),
+    );
+  });
 });
