@@ -43,8 +43,12 @@ export interface AgentTemplate<
 
   delete(actor: TActor, id: string): Promise<void>;
 
-  /** Idempotent default-agent seed for a workspace type. */
-  seedForWorkspaceType(workspaceId: string, type: TWorkspaceType): Promise<void>;
+  /**
+   * Idempotent default-agent seed for a workspace type. Takes the
+   * actor because the underlying implementation routes through the
+   * same upsert+authz path used by interactive callers.
+   */
+  seedForWorkspaceType(actor: TActor, type: TWorkspaceType): Promise<void>;
 
   /**
    * Resolve an agent definition into a runtime config: renders
