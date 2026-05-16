@@ -88,14 +88,14 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - [x] Re-export shared types from `@sentropic/contracts` where applicable (no circular dep).
   - [x] Lot gate: typecheck + unit tests on parser (valid/invalid frontmatter, missing fields, malformed YAML).
 
-- [ ] **Lot 2 — Sandbox runtime integration**
-  - [ ] Implement `SandboxRuntime` port in `src/sandbox/runtime.ts` with `isolated-vm` adapter (decision frozen in SPEC_EVOL §2).
+- [x] **Lot 2 — Sandbox runtime integration**
+  - [x] Implement `SandboxRuntime` port in `src/sandbox/runtime.ts` with `isolated-vm` adapter (decision frozen in SPEC_EVOL §2).
     - [x] Step 1: scaffold port + resolved-policy enforcement + `isolated-vm@6.1.2` dep.
     - [x] Step 2: API-surface wrappers (`files.create`, `db.query`, `fetch`).
-    - [ ] Step 3: `execute()` body + unit tests.
-  - [ ] Implement `SandboxPolicy` enforcement: timeout (default 30s), memory cap (128MB), API-surface allowlist (`files.create`, `db.query`, `fetch` only).
-  - [ ] Carry forward the docx-freeform sandbox helpers into a built-in skill bundle as reference implementation.
-  - [ ] Lot gate: typecheck + unit tests (isolation breach attempts, timeout, memory cap, allowlist enforcement).
+    - [x] Step 3: `execute()` body + unit tests (11 cases passing).
+  - [x] Implement `SandboxPolicy` enforcement: timeout (default 30s), memory cap (128MB), API-surface allowlist (`files.create`, `db.query`, `fetch` only).
+  - [ ] Carry forward the docx-freeform sandbox helpers into a built-in skill bundle as reference implementation (deferred to Lot 5 Wave D — `documents` bundle).
+  - [x] Lot gate: typecheck + unit tests (isolation breach attempts, timeout, memory cap, allowlist enforcement). 23/23 green via `make test-skills`.
 
 - [ ] **Lot 3 — `SkillRegistry` (catalog + filter + resolve)**
   - [ ] Implement `SkillRegistry` (`register`, `list`, `get`, `search`, `resolveTools(authz)`) backed by in-memory map; in-memory ref adapter mandatory.
