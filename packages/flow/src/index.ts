@@ -43,3 +43,16 @@ export type {
   GateEvaluationResult,
   GateMode,
 } from './approval-gate.js';
+
+export type {
+  AgentTemplate,
+  ResolvedAgentConfig,
+} from './agent-template.js';
+
+export type {
+  BindingResolutionContext,
+  ConditionOperator,
+  NextTaskComputation,
+  Transitions,
+  WorkflowCondition,
+} from './transitions.js';
