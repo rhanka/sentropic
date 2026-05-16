@@ -168,7 +168,7 @@ The branch must preserve current chat API, streaming, local-tool handoff, tool-r
     - [ ] API tests identified in Lot 0, file-by-file.
 
 - [ ] **Lot 5 — UAT preparation and user checkpoint**
-  - [ ] Prepare a UAT note with exact scenarios: streaming response, local tool handoff, tool-result continuation, cancellation, retry, checkpoint visibility, and error display.
+  - [x] Prepare a UAT note with exact scenarios: streaming response, local tool handoff, tool-result continuation, cancellation, retry, checkpoint visibility, and error display. (see `BRANCH_UAT_NOTE.md`)
   - [ ] Push branch and open/update PR with `BRANCH.md` as body before UAT.
   - [ ] Confirm branch CI status.
   - [ ] Ask user to perform UAT or explicitly waive UAT with reason.
