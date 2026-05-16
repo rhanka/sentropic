@@ -1,0 +1,36 @@
+{
+  "name": "@sentropic/contracts",
+  "version": "0.1.0",
+  "description": "Transverse contracts shared across @sentropic/* packages (tenant, authz, cost, idempotency, checkpoint version, event envelope).",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/entropic.git",
+    "directory": "packages/contracts"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5"
+  }
+}

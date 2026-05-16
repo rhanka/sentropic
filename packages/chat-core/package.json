@@ -1,0 +1,42 @@
+{
+  "name": "@sentropic/chat-core",
+  "version": "0.1.0",
+  "description": "Chat orchestration core for @sentropic/* — port interfaces (CheckpointStore, MessageStore, SessionStore, StreamBuffer, LiveDocumentStore, ToolRegistry, EventSink, JobQueue, AgentRuntime). Adapters live in persistence-* / flow.",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/entropic.git",
+    "directory": "packages/chat-core"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests",
+    "test:coverage": "vitest run tests --coverage"
+  },
+  "dependencies": {
+    "@sentropic/contracts": "*",
+    "@sentropic/events": "*"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5"
+  }
+}
