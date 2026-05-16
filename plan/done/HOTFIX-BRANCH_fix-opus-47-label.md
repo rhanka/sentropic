@@ -50,8 +50,13 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - Reason: `@sentropic/skills` requires its own `typecheck-skills` and `test-skills` Make targets so that the package can satisfy the Make-Only mandate (host Docker calls are forbidden). Targets must mirror the existing `typecheck-llm-mesh` / `test-llm-mesh` pattern.
   - Impact: additive only — no edits to existing targets, no behaviour change for other packages. Limited to two new `.PHONY` targets and one shared image variable reuse (`LLM_MESH_NODE_IMAGE`).
   - Rollback: delete the two new targets in a single revert commit; no downstream consumer outside this branch.
-- **BR19-N1 — `@sentropic/contracts` re-export deferred (Lot 1, note)**
-  - The Lot 1 checkbox "Re-export shared types from `@sentropic/contracts`" is satisfied vacuously: no `@sentropic/contracts` package exists on this branch baseline (`2d0ddf38`). The package surface that BR-14b/BR-26 will extract (`TenantContext`, `AuthzContext`, `ToolRegistry`, `ResolvedTool`) is not yet authored, so there is no shared type to re-export from. Re-exports will be wired in Lot 3 (`SkillRegistry`) when concrete adapter types are introduced. No circular dependency is created.
+- **BR19-N1 — `@sentropic/contracts` re-export deferred (Lot 1, note; updated Lot 3)**
+  - The Lot 1 checkbox "Re-export shared types from `@sentropic/contracts`" is satisfied vacuously: no `@sentropic/contracts` package exists on this branch baseline (`2d0ddf38`). The package surface that BR-14b/BR-26 will extract (`TenantContext`, `AuthzContext`, `ToolRegistry`, `ResolvedTool`) is not yet authored, so there is no shared type to re-export from.
+  - Lot 3 resolution: declared the four shapes locally in `packages/skills/src/registry/authz.ts` with structurally-compatible interfaces. When `@sentropic/contracts` lands (BR-14b / BR-26), `authz.ts` becomes a thin re-export and downstream consumers pick up the canonical types without any API churn. No circular dependency is created.
+- **BR19-D1 — Persistence decision (Lot 3 outcome, BR19-Q6)**
+  - Decision: in-memory `SkillRegistry` is sufficient for v0.1. No `skill_metadata` Postgres table is added in this branch; **no `BR19-EX1` is declared** and `api/drizzle/*.sql` is not touched.
+  - Rationale: (1) Lot 5 (`tools.ts` migration) only needs runtime registration of built-in skills at API boot — no DB lookup required. (2) Marketplace audit + admin UI listing — the use cases that would justify a `skill_metadata` table — are out of scope (BR-27 / BR-19b). (3) The `SkillRegistry` interface is unchanged regardless of backing store, so a future `PgSkillRegistry` is a drop-in adapter with no breaking change.
+  - Rollback: if a downstream branch (BR-27) needs persistence, declare `BR19b-EX1` then and ship one Drizzle migration there; this branch leaves no schema obligation.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -97,12 +102,12 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - [ ] Carry forward the docx-freeform sandbox helpers into a built-in skill bundle as reference implementation (deferred to Lot 5 Wave D — `documents` bundle).
   - [x] Lot gate: typecheck + unit tests (isolation breach attempts, timeout, memory cap, allowlist enforcement). 23/23 green via `make test-skills`.
 
-- [ ] **Lot 3 — `SkillRegistry` (catalog + filter + resolve)**
+- [x] **Lot 3 — `SkillRegistry` (catalog + filter + resolve)**
   - [x] Implement `SkillRegistry` (`register`, `list`, `get`, `search`) backed by in-memory map (Step 1).
   - [x] Implement `resolveTools(authz)` with `AuthzContext` filtering — roles, workspace types, permission mode (Step 2).
   - [x] Implement `SkillsToolRegistry` that adapts `SkillRegistry` to the `ToolRegistry` interface (locally declared until `@sentropic/contracts` exists — see BR19-N1) (Step 3).
-  - [ ] Decide on optional `skill_metadata` table (defer to Lot 3 outcome; if needed declare `BR19-EX1`).
-  - [ ] Lot gate: typecheck + unit tests (filter by role, workspace, search ranking, resolve under AuthzContext).
+  - [x] Persistence decision (BR19-Q6): in-memory only — no `skill_metadata` table. No `BR19-EX1` declared. See `## Feedback Loop` BR19-D1.
+  - [x] Lot gate: typecheck + unit tests — 32/32 green for Lot 3 (registry 14 + resolve 12 + adapter 6); 55/55 across the package.
 
 - [ ] **Lot 4 — `search_skills` meta-tool**
   - [ ] Implement `search_skills(query, context)` callable as a tool: top-K skills by description match (BM25 or embedding-light heuristic — frozen in SPEC_EVOL §5).
