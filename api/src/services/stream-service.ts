@@ -1,156 +1,57 @@
-import { db, pool } from '../db/client';
-import { chatStreamEvents } from '../db/schema';
-import { createId } from '../utils/id';
-import { findPgError } from '../utils/pg-errors';
-import { sql, eq, and, gt } from 'drizzle-orm';
+/**
+ * BR14b Lot 7 — thin delegation shim over the StreamBuffer port.
+ *
+ * Real implementation moved to `./chat/postgres-stream-buffer.ts` which
+ * implements `StreamBuffer` from `@sentropic/chat-core` (imported via
+ * relative path until BR14b wires the package fully into the api Dockerfile).
+ *
+ * Public surface (function names + signatures) is preserved verbatim so
+ * existing call sites in chat-service.ts, queue-manager.ts,
+ * context-document.ts, routes/api/chat.ts, routes/api/queue.ts, and
+ * routes/api/streams.ts compile and behave identically.
+ */
 import type { StreamEventType } from './llm-runtime';
-
-const DEFAULT_SEQUENCE_RETRY_ATTEMPTS = 6;
-const STREAM_SEQUENCE_LOCK_NAMESPACE = 'chat_stream_events';
-
-const isStreamSequenceConflictError = (error: unknown): boolean => {
-  const pgError = findPgError(error, '23505');
-  if (!pgError) return false;
-  return (
-    (pgError.constraint?.includes('chat_stream_events_stream_id_sequence_unique') ?? false) ||
-    (pgError.message?.includes('chat_stream_events_stream_id_sequence_unique') ?? false)
-  );
-};
+import type { StreamEventTypeName } from '../../../packages/chat-core/src/stream-port';
+import { postgresStreamBuffer } from './chat/postgres-stream-buffer';
 
 /**
- * Génère un stream_id unique
- * - Pour générations classiques : `prompt_id` + timestamp (ou `job_id` si disponible)
- * - Pour chat : `message_id` (sera utilisé plus tard)
+ * Generates a unique stream_id
+ * - For classic generations: `prompt_id` + timestamp (or `job_id` if available)
+ * - For chat: `message_id`
  */
-export function generateStreamId(promptId?: string, jobId?: string, messageId?: string): string {
-  if (messageId) {
-    return messageId; // Pour chat, stream_id = message_id
-  }
-  
-  if (jobId) {
-    // IMPORTANT: streamId déterministe pour les jobs
-    // => permet à l'UI de déduire le streamId depuis jobId (sans polling /streams/active)
-    return `job_${jobId}`;
-  }
-  
-  if (promptId) {
-    return `prompt_${promptId}_${Date.now()}`;
-  }
-  
-  // Fallback : générer un ID unique
-  return `stream_${createId()}_${Date.now()}`;
+export function generateStreamId(
+  promptId?: string,
+  jobId?: string,
+  messageId?: string,
+): string {
+  return postgresStreamBuffer.generateStreamId(promptId, jobId, messageId);
 }
 
 /**
- * Écrit un événement de streaming dans la base de données
- * et envoie un NOTIFY PostgreSQL pour temps réel
+ * Writes a streaming event to the database and emits a PostgreSQL NOTIFY
+ * for realtime SSE consumers.
  */
-async function notifyStreamEvent(
-  streamId: string,
-  eventType: StreamEventType,
-  sequence: number,
-): Promise<void> {
-  const notifyPayload = JSON.stringify({
-    stream_id: streamId,
-    sequence,
-    event_type: eventType,
-  });
-
-  const client = await pool.connect();
-  try {
-    await client.query(`NOTIFY stream_events, '${notifyPayload.replace(/'/g, "''")}'`);
-  } finally {
-    client.release();
-  }
-}
-
 export async function writeStreamEvent(
   streamId: string,
   eventType: StreamEventType,
   data: unknown,
   sequence: number,
-  messageId?: string | null
+  messageId?: string | null,
 ): Promise<number> {
-  const eventId = createId();
-  let nextSequence = Number.isFinite(sequence) && sequence > 0 ? Math.floor(sequence) : 1;
-
-  for (let attempt = 1; attempt <= DEFAULT_SEQUENCE_RETRY_ATTEMPTS; attempt += 1) {
-    try {
-      // Écrire l'événement dans chat_stream_events
-      await db.insert(chatStreamEvents).values({
-        id: eventId,
-        messageId: messageId || null,
-        streamId,
-        eventType,
-        data,
-        sequence: nextSequence,
-      });
-
-      await notifyStreamEvent(streamId, eventType, nextSequence);
-      return nextSequence;
-    } catch (error) {
-      if (
-        isStreamSequenceConflictError(error) &&
-        attempt < DEFAULT_SEQUENCE_RETRY_ATTEMPTS
-      ) {
-        nextSequence = await getNextSequence(streamId);
-        continue;
-      }
-      throw error;
-    }
-  }
-
-  throw new Error('Unable to append stream event');
+  return postgresStreamBuffer.append(
+    streamId,
+    eventType as StreamEventTypeName,
+    data,
+    sequence,
+    messageId,
+  );
 }
 
 /**
- * Récupère le prochain numéro de séquence pour un stream_id
+ * Returns the next sequence number for `streamId` (= MAX(sequence) + 1).
  */
 export async function getNextSequence(streamId: string): Promise<number> {
-  const result = await db
-    .select({ maxSequence: sql<number>`MAX(${chatStreamEvents.sequence})` })
-    .from(chatStreamEvents)
-    .where(eq(chatStreamEvents.streamId, streamId));
-
-  const maxSequence = result[0]?.maxSequence ?? 0;
-  return maxSequence + 1;
-}
-
-async function appendStreamEventAtomically(
-  streamId: string,
-  eventType: StreamEventType,
-  data: unknown,
-  messageId?: string | null,
-): Promise<number> {
-  const eventId = createId();
-  let insertedSequence = 1;
-
-  await db.transaction(async (tx) => {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${STREAM_SEQUENCE_LOCK_NAMESPACE}), hashtext(${streamId}))`,
-    );
-
-    const result = await tx
-      .select({
-        maxSequence: sql<number>`COALESCE(MAX(${chatStreamEvents.sequence}), 0)`,
-      })
-      .from(chatStreamEvents)
-      .where(eq(chatStreamEvents.streamId, streamId));
-
-    insertedSequence = Number(result[0]?.maxSequence ?? 0) + 1;
-
-    await tx.insert(chatStreamEvents).values({
-      id: eventId,
-      messageId: messageId || null,
-      streamId,
-      eventType,
-      data,
-      sequence: insertedSequence,
-    });
-  });
-
-  await notifyStreamEvent(streamId, eventType, insertedSequence);
-  return insertedSequence;
+  return postgresStreamBuffer.getNextSequence(streamId);
 }
 
 type SequenceRetryDeps = {
@@ -167,6 +68,10 @@ type SequenceRetryDeps = {
 /**
  * Writes a stream event with optimistic sequence assignment and retries when
  * a concurrent insert hits the unique (stream_id, sequence) constraint.
+ *
+ * Default path (no `options.deps`) uses an atomic advisory-lock + MAX+1
+ * transaction. The `deps` path preserves the legacy injection contract used
+ * by `api/tests/unit/stream-service.test.ts`.
  */
 export async function writeStreamEventWithSequenceRetry(
   streamId: string,
@@ -178,118 +83,60 @@ export async function writeStreamEventWithSequenceRetry(
     deps?: SequenceRetryDeps;
   },
 ): Promise<number> {
-  if (!options?.deps) {
-    return appendStreamEventAtomically(
-      streamId,
-      eventType,
-      data,
-      options?.messageId ?? null,
-    );
-  }
-
-  const maxAttempts = Math.max(
-    1,
-    options?.maxAttempts ?? DEFAULT_SEQUENCE_RETRY_ATTEMPTS,
+  return postgresStreamBuffer.appendWithSequenceRetry(
+    streamId,
+    eventType as StreamEventTypeName,
+    data,
+    {
+      messageId: options?.messageId ?? null,
+      maxAttempts: options?.maxAttempts,
+      deps: options?.deps as
+        | import('../../../packages/chat-core/src/stream-port').SequenceRetryDeps
+        | undefined,
+    },
   );
-  const getNextSequenceFn = options?.deps?.getNextSequenceFn ?? getNextSequence;
-  const writeStreamEventFn = options?.deps?.writeStreamEventFn ?? writeStreamEvent;
-  let attempt = 0;
-  let lastError: unknown;
-
-  while (attempt < maxAttempts) {
-    const sequence = await getNextSequenceFn(streamId);
-    try {
-      const insertedSequence = await writeStreamEventFn(
-        streamId,
-        eventType,
-        data,
-        sequence,
-        options?.messageId ?? null,
-      );
-      return typeof insertedSequence === 'number'
-        ? insertedSequence
-        : sequence;
-    } catch (error) {
-      if (isStreamSequenceConflictError(error) && attempt < maxAttempts - 1) {
-        attempt += 1;
-        lastError = error;
-        continue;
-      }
-      throw error;
-    }
-  }
-
-  throw lastError ?? new Error('Unable to append stream event');
 }
 
 /**
- * Lit les événements d'un stream depuis la base de données
- * Utile pour rehydratation ou relecture
+ * Reads events for a stream from the database (rehydration / replay).
  */
 export async function readStreamEvents(
   streamId: string,
   sinceSequence?: number,
-  limit?: number
-): Promise<Array<{
-  id: string;
-  messageId: string | null;
-  streamId: string;
-  eventType: string;
-  data: unknown;
-  sequence: number;
-  createdAt: Date;
-}>> {
-  const conditions = sinceSequence !== undefined
-    ? and(eq(chatStreamEvents.streamId, streamId), gt(chatStreamEvents.sequence, sinceSequence))
-    : eq(chatStreamEvents.streamId, streamId);
-
-  const q = db
-    .select()
-    .from(chatStreamEvents)
-    .where(conditions)
-    .orderBy(chatStreamEvents.sequence);
-  const events = limit ? await q.limit(limit) : await q;
-
-  return events.map(event => ({
-    id: event.id,
-    messageId: event.messageId,
-    streamId: event.streamId,
-    eventType: event.eventType,
-    data: event.data,
-    sequence: event.sequence,
-    createdAt: event.createdAt
+  limit?: number,
+): Promise<
+  Array<{
+    id: string;
+    messageId: string | null;
+    streamId: string;
+    eventType: string;
+    data: unknown;
+    sequence: number;
+    createdAt: Date;
+  }>
+> {
+  const rows = await postgresStreamBuffer.read(streamId, {
+    sinceSequence,
+    limit,
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    messageId: row.messageId,
+    streamId: row.streamId,
+    eventType: row.eventType,
+    data: row.data,
+    sequence: row.sequence,
+    createdAt: row.createdAt,
   }));
 }
 
 /**
- * Liste des stream_ids "actifs" (démarrés mais pas encore terminés).
- * Utilisé par le widget monitor pour s'abonner à tous les streams en cours.
+ * Lists "active" stream_ids (started but not yet finished).
+ * Used by the monitor widget to subscribe to all in-flight streams.
  */
-export async function listActiveStreamIds(options?: { sinceMinutes?: number; limit?: number }): Promise<string[]> {
-  const sinceMinutes = options?.sinceMinutes ?? 360; // 6h par défaut
-  const limit = options?.limit ?? 200;
-  const sinceDate = new Date(Date.now() - sinceMinutes * 60_000);
-
-  const rows = (await db.all(sql`
-    SELECT DISTINCT e.stream_id AS "streamId"
-    FROM chat_stream_events e
-    WHERE e.created_at >= ${sinceDate}
-      AND EXISTS (
-        SELECT 1
-        FROM chat_stream_events s
-        WHERE s.stream_id = e.stream_id
-          AND s.event_type = 'status'
-          AND (s.data->>'state') = 'started'
-      )
-      AND NOT EXISTS (
-        SELECT 1
-        FROM chat_stream_events d
-        WHERE d.stream_id = e.stream_id
-          AND d.event_type = 'done'
-      )
-    ORDER BY e.stream_id
-    LIMIT ${limit}
-  `)) as Array<{ streamId: string }>;
-
-  return rows.map(r => r.streamId).filter(Boolean);
+export async function listActiveStreamIds(options?: {
+  sinceMinutes?: number;
+  limit?: number;
+}): Promise<string[]> {
+  return postgresStreamBuffer.listActive(options);
 }

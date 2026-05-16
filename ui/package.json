@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "build:ext": "vite build --config ./chrome-ext/vite.config.ext.ts && node ./chrome-ext/copy-assets.js && node ./chrome-ext/package-extension-zip.js",
     "dev:ext": "vite build --config ./chrome-ext/vite.config.ext.ts --watch",
@@ -50,7 +50,7 @@
     "tailwindcss": "^3.4.4",
     "typescript": "^5.9.3",
     "vite": "^7.3.3",
-    "vitest": "^1.5.0"
+    "vitest": "^3.0.0"
   },
   "overrides": {
     "flatted": "^3.4.2",

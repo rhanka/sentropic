@@ -206,7 +206,7 @@
     };
   };
 
-  const isTerminalStatus = (s?: string) => s === 'completed' || s === 'failed' || s === 'done';
+  const isTerminalStatus = (s?: string) => s === 'completed' || s === 'failed' || s === 'done' || s === 'cancelled';
 
   // Limite d'historique: sur les cartes/jobs on veut souvent un historique court,
   // tandis que sur le chat on garde davantage d'étapes.
@@ -856,7 +856,7 @@
     hasAcknowledgement =
       typeof acknowledgementText === 'string' &&
       acknowledgementText.trim().length > 0;
-    showStartup = !!st.sawStarted && !hasSteps && !hasContent && !finalText;
+    showStartup = !!st.sawStarted && !hasSteps && !hasContent && !finalText && !isTerminalStatus(status);
     toolsCount = st.toolCallIds.size;
     const passiveHistoryShell = summarizePassiveHistoryShell(runtimeSummary);
     hasPassiveHistoryShell =
