@@ -92,12 +92,12 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Empty `src/index.ts` placeholder; port interfaces from §2 of SPEC_EVOL land in Lot 3.
   - [ ] Lot gate: `make build`, `make typecheck`, `make lint` — blocked by `BR26-FB-01` (pre-existing audit gate vuln on baseline); deferred until baseline rebase onto `origin/main`.
 
-- [ ] **Lot 3 — Façade layer (delegating adapters in `api/src/services/flow/`)**
+- [x] **Lot 3 — Façade layer (delegating adapters in `api/src/services/flow/`)**
   - [x] Add port interfaces in `packages/flow/src/{workflow-store,run-store,job-queue,approval-gate,agent-template,transitions,flow-runtime}.ts`.
-  - [ ] Add Postgres adapters in `api/src/services/flow/postgres-{workflow-store,run-store,job-queue,approval-gate,agent-template,transitions}.ts` — each method delegates to the existing `todoOrchestrationService` / `queueManager` / `gate-service` functions (no logic moved yet).
-  - [ ] Add `FlowRuntime` composition root in `api/src/services/flow/flow-runtime.ts`.
-  - [ ] Re-run replay harness from Lot 1 against the façade → must stay byte-identical.
-  - [ ] Lot gate: typecheck-api, lint-api, replay spec, full `make test-api ENV=test-feat-flow-runtime-extract`.
+  - [x] Add Postgres adapters in `api/src/services/flow/postgres-{workflow-store,run-store,job-queue,approval-gate,agent-template,transitions}.ts` — each method delegates to the existing `todoOrchestrationService` / `queueManager` / `gate-service` functions (no logic moved yet). RunStore + Transitions stub methods that have no public delegate today and throw `pending Lot 6/7/8` to preserve the "no logic moved" Lot 3 invariant.
+  - [x] Add `FlowRuntime` composition root in `api/src/services/flow/flow-runtime.ts`.
+  - [x] Re-run replay harness from Lot 1 against the façade → must stay byte-identical (17/17 pass).
+  - [x] Lot gate: typecheck-api green, replay spec green (17/17). `lint-api` + full `make test-api ENV=test-feat-flow-runtime-extract` deferred to Lot 4 entry (no api consumers re-bound to the façade yet — Lot N-3 owns that under `BR26-EX3`).
 
 - [ ] **Lot 4 — Slice 1: `gate-service.ts` → `ApprovalGate` adapter**
   - [ ] Move logic from `api/src/services/gate-service.ts` into `api/src/services/flow/postgres-approval-gate.ts`.
