@@ -11,3 +11,4 @@ export * from './sandbox/api-surface.js';
 export * from './registry/registry.js';
 export * from './registry/authz.js';
 export * from './registry/resolve.js';
+export * from './registry/adapter.js';
