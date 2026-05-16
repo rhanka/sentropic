@@ -51,7 +51,7 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - Mirror the exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- **BR26-FB-01** (Lot 2, severity: `attention`, status: `open`): baseline `29b2c243` predates `origin/main` security fixes (`fix/security-high-vulnerabilities` merged at `edbe7d24`). The api Dockerfile audit gate (`npm audit --audit-level=high --omit=dev --workspaces --include-workspace-root`) fails on this branch as soon as any change invalidates the Docker layer cache, due to the Svelte `devalue` high-severity advisory (GHSA-77vg-94rm-hx3p). Lot 2 lockfile addition for `@sentropic/flow` triggers cache invalidation, surfacing the failure. Resolution path: rebase the branch onto `origin/main` (picks up vite/flatted/fast-xml-builder/svelte fixes) before Lot 3 or earlier. Recorded by Lot 2 sub-agent; deferred to conductor decision.
+- **BR26-FB-01** (Lot 2, severity: `attention`, status: `resolved`): baseline `29b2c243` predates `origin/main` security fixes (`fix/security-high-vulnerabilities` merged at `edbe7d24`). The api Dockerfile audit gate (`npm audit --audit-level=high --omit=dev --workspaces --include-workspace-root`) fails on this branch as soon as any change invalidates the Docker layer cache, due to the Svelte `devalue` high-severity advisory (GHSA-77vg-94rm-hx3p). Lot 2 lockfile addition for `@sentropic/flow` triggers cache invalidation, surfacing the failure. Resolution path: rebase the branch onto `origin/main` (picks up vite/flatted/fast-xml-builder/svelte fixes) before Lot 3 or earlier. Recorded by Lot 2 sub-agent; deferred to conductor decision. **Resolved at Lot 3 by merge commit `4e9209cb` (Lot 3 baseline) which incorporates `origin/main` PR #152 + PR #157 (vite, flatted, fast-xml-builder, sveltekit/devalue HIGH advisories).**
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -92,7 +92,7 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [ ] Lot gate: `make build`, `make typecheck`, `make lint` — blocked by `BR26-FB-01` (pre-existing audit gate vuln on baseline); deferred until baseline rebase onto `origin/main`.
 
 - [ ] **Lot 3 — Façade layer (delegating adapters in `api/src/services/flow/`)**
-  - [ ] Add port interfaces in `packages/flow/src/{workflow-store,run-store,job-queue,approval-gate,agent-template,transitions,flow-runtime}.ts`.
+  - [x] Add port interfaces in `packages/flow/src/{workflow-store,run-store,job-queue,approval-gate,agent-template,transitions,flow-runtime}.ts`.
   - [ ] Add Postgres adapters in `api/src/services/flow/postgres-{workflow-store,run-store,job-queue,approval-gate,agent-template,transitions}.ts` — each method delegates to the existing `todoOrchestrationService` / `queueManager` / `gate-service` functions (no logic moved yet).
   - [ ] Add `FlowRuntime` composition root in `api/src/services/flow/flow-runtime.ts`.
   - [ ] Re-run replay harness from Lot 1 against the façade → must stay byte-identical.
