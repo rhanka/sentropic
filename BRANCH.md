@@ -17,7 +17,7 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
 - UAT qualification runs against the live `poc-k8s` tenant after image publication and must record cluster evidence in this file or `docs/uat/2026-05-16-deploy-poc-k8s.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text is English.
-- Branch identity: BR-37, branch `feat/deploy-poc-k8s`, worktree `tmp/feat-deploy-poc-k8s`, current HEAD `941fbf7c`.
+- Branch identity: BR-37, branch `feat/deploy-poc-k8s`, worktree `tmp/feat-deploy-poc-k8s`; recovered implementation commit `941fbf7c`.
 - Local slot 0 ports, only for local gates if needed: API `9185`, UI `5385`, Maildev `1285`.
 - Live k8s UAT uses `KUBECONFIG=$HOME/.kube/poc.yaml` and temporary port-forwards for api/ui/maildev.
 
@@ -76,7 +76,7 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & recovery**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/security.md`, `rules/testing.md`, and `plan/BRANCH_TEMPLATE.md`.
-  - [x] Confirm branch `feat/deploy-poc-k8s`, worktree `tmp/feat-deploy-poc-k8s`, HEAD `941fbf7c`, clean worktree.
+  - [x] Confirm branch `feat/deploy-poc-k8s`, worktree `tmp/feat-deploy-poc-k8s`, recovered implementation commit `941fbf7c`.
   - [x] Confirm tracking branch `origin/feat-deploy-poc-k8s`, ahead/behind `0/0`.
   - [x] Confirm branch diff against `origin/main`: 10 files, 689 insertions, app code untouched.
   - [x] Identify stale `BRANCH.md` content from `fix/security-remaining-vulns`.
