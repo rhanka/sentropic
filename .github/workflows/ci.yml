@@ -38,6 +38,7 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/llm-mesh/**'
+              - 'packages/flow/**'
             ui:
               - 'ui/**'
             llm_mesh:
