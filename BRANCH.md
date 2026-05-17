@@ -54,6 +54,8 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
 - **BR37-FL1** (severity: `attention`, status: `open`): Cost target is intentionally not numeric in this branch. The recovered conversation confirms POC-only scope and the user challenged the cost-target question. Do not block live UAT on a numeric cost target.
 - **BR37-FL2** (severity: `blocked`, status: `open`): Live cluster UAT still requires operator evidence: namespace/quota/baseline applied, GHCR image pull path public or pull-secreted, secrets bundled, rollout healthy, api/ui/maildev smoke checks green.
 - **BR37-FL3** (severity: `attention`, status: `open`): Current branch is `ahead 1` and `behind 140` versus `origin/main`. Before merge, re-check PR #160 against current `origin/main` and resolve any drift from BR-14b/PR #163 and later merges.
+- **BR37-FL4** (severity: `blocked`, status: `open`): 2026-05-17 K8s handoff says to run secret bundling, then `KUBECONFIG=~/.kube/poc.yaml make scw-deploy` from `~/src/remote`. Verification found `~/src/remote` has `scw-deploy`, `scw-undeploy`, and `scw-port-forward`, but no `scw-bundle-secret` target. Action: use this BR-37 worktree for `scw-bundle-secret`, then run the relevant deploy target from the intended repo, or add/restore a secret target in `~/src/remote` if the remote control-plane requires one.
+- **BR37-FL5** (severity: `attention`, status: `open`): Active remote session `session-sess-apr95chl` verified in namespace `sentropic-remote`: pod `Running` for ~2d, PVC `session-sess-apr95chl-workspace` bound, secret `session-sess-apr95chl-auth` present. Do not clean it up unless the owner confirms it is no longer wanted.
 
 ## AI Flaky tests
 - Not applicable. This branch does not change AI runtime behavior.
@@ -100,6 +102,9 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
   - [x] Confirm PR #160 CI/checks were reported green by recovered GitHub context, including image jobs.
 
 - [ ] **Lot 3 — Live poc-k8s UAT**
+  - [x] Verify K8s handoff command surface: this BR-37 worktree owns `scw-bundle-secret`; `~/src/remote` owns remote control-plane `scw-deploy` only.
+  - [x] Verify active remote session `session-sess-apr95chl` exists and should not be cleaned without owner confirmation.
+  - [ ] Resolve whether the next deploy is the Sentropic app workload from this branch or the `sentropic-remote` control-plane from `~/src/remote`.
   - [ ] Confirm `poc-k8s` operator side is applied: namespace `sentropic`, ResourceQuota, LimitRange, NetworkPolicy baseline.
   - [ ] Confirm GHCR api/ui image pull path: packages public or namespace pull secret configured.
   - [ ] Bundle secrets: `make scw-bundle-secret KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s`.
