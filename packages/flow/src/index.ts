@@ -63,3 +63,26 @@ export type {
   StartInitiativeGenerationParams,
   StartWorkflowParams,
 } from './flow-runtime.js';
+
+// ---------------------------------------------------------------------------
+// Seed catalogs (pure data) — BR-26 Lot 5
+// ---------------------------------------------------------------------------
+
+export type {
+  DefaultWorkflowDefinition,
+  DefaultWorkflowTaskDefinition,
+  DefaultWorkflowTransitionDefinition,
+  GenerationAgentKey,
+  InitiativeGenerationWorkflowTaskKey,
+  WorkspaceTypeWorkflowSeed,
+} from './seeds/workflows.js';
+
+export {
+  CODE_ANALYSIS_WORKFLOW,
+  DEFAULT_USE_CASE_GENERATION_WORKFLOW,
+  OPPORTUNITY_IDENTIFICATION_WORKFLOW,
+  OPPORTUNITY_QUALIFICATION_WORKFLOW,
+  USE_CASE_GENERATION_WORKFLOW_KEY,
+  WORKSPACE_TYPE_WORKFLOW_SEEDS,
+  getWorkflowSeedsForType,
+} from './seeds/workflows.js';
