@@ -18,17 +18,27 @@ State of this branch (`feat/deploy-poc-k8s`) :
 
 ## Step-by-step UAT
 
+### Operator handoff notes (2026-05-17)
+
+- K8s handoff says to run secret bundling first, then deploy from `~/src/remote`.
+- Verified command surface:
+  - This BR-37 Sentropic worktree owns `scw-bundle-secret`, `scw-deploy`, `scw-undeploy`, and `scw-status` for the Sentropic app workload.
+  - `~/src/remote` owns `scw-deploy`, `scw-undeploy`, and `scw-port-forward` for the `sentropic-remote` control-plane, but does not currently expose a `scw-bundle-secret` target.
+- If the next deploy is the Sentropic app workload, run the commands below from this BR-37 worktree.
+- If the next deploy is the `sentropic-remote` control-plane, run `make -C ~/src/remote scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml` after confirming whether a secret-bundling step is still required.
+- Active session note: `session-sess-apr95chl` is running in namespace `sentropic-remote` with its PVC and auth Secret present. Do not clean it up unless the owner confirms it is no longer wanted.
+
 ```bash
 # 0) sanity
-KUBECONFIG=~/.kube/poc.yaml kubectl -n sentropic get all
+make scw-status KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
 # expected: empty (or `No resources found` — the tenant namespace exists, the workload does not yet)
 
 # 1) inject secrets from your local .env
-KUBECONFIG=~/.kube/poc.yaml make scw-bundle-secret
+make scw-bundle-secret KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
 # expected: "Secrets sentropic-postgres + sentropic-api ready in sentropic."
 
 # 2) deploy
-KUBECONFIG=~/.kube/poc.yaml make scw-deploy
+make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
 # expected: "deployment.apps/api successfully rolled out", same for ui
 # expected: kubectl get pods shows api, ui, maildev (1/1 each) + postgres-0 (1/1)
 
@@ -86,6 +96,6 @@ Quota usage (`kubectl -n sentropic describe resourcequota tenant-quota`) should 
 ## Cleanup
 
 ```bash
-KUBECONFIG=~/.kube/poc.yaml make scw-undeploy
+make scw-undeploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
 # the namespace + RQ + LimitRange + NetworkPolicy stay (owned by poc-k8s)
 ```
