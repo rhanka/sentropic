@@ -790,6 +790,10 @@ export class QueueManager {
       return;
     }
 
+    if (this.shouldSkipWorkflowDispatch('completion', params.workflow.workflowRunId)) {
+      return;
+    }
+
     const runtimeState = await this.getWorkflowRunStateSnapshot(params.workflow.workflowRunId);
     if (!runtimeState) return;
 
@@ -1204,6 +1208,10 @@ export class QueueManager {
     taskInstanceKey: string;
     item?: unknown;
   }): Promise<WorkflowDispatchDescriptor[]> {
+    if (this.shouldSkipWorkflowDispatch(`task:${params.taskKey}`, params.workflowRunId)) {
+      return [];
+    }
+
     const task = params.runtimeDefinition.tasks.get(params.taskKey);
     if (!task) return [];
 
@@ -1365,6 +1373,9 @@ export class QueueManager {
     );
     const dispatched: WorkflowDispatchDescriptor[] = [];
     for (const transition of matchingTransitions) {
+      if (this.shouldSkipWorkflowDispatch('transitions', params.workflowRunId)) {
+        return dispatched;
+      }
       const conditionMatches = this.evaluateWorkflowCondition(transition.condition, params.state);
       if (!conditionMatches) {
         continue;
@@ -1390,6 +1401,9 @@ export class QueueManager {
           continue;
         }
         for (const [index, item] of sourceItems.entries()) {
+          if (this.shouldSkipWorkflowDispatch('fanout', params.workflowRunId)) {
+            return dispatched;
+          }
           dispatched.push(
             ...(await this.dispatchWorkflowTask({
               workspaceId: params.workspaceId,
@@ -1461,6 +1475,9 @@ export class QueueManager {
   }): Promise<WorkflowDispatchDescriptor[]> {
     const dispatched: WorkflowDispatchDescriptor[] = [];
     for (const transition of params.runtimeDefinition.transitions) {
+      if (this.shouldSkipWorkflowDispatch('joins', params.workflowRunId)) {
+        return dispatched;
+      }
       if (transition.transitionType !== 'join' || !transition.toTaskKey) {
         continue;
       }
@@ -1490,6 +1507,17 @@ export class QueueManager {
       );
     }
     return dispatched;
+  }
+
+  private shouldSkipWorkflowDispatch(scope: string, workflowRunId: string): boolean {
+    if (!this.cancelAllInProgress) {
+      return false;
+    }
+
+    console.log(
+      `⏹️ Queue cancellation in progress; skipping workflow dispatch (${scope}) for run ${workflowRunId}`,
+    );
+    return true;
   }
 
   async dispatchWorkflowEntryTasks(params: {
