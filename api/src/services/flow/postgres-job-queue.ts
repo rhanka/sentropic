@@ -5,6 +5,10 @@ import type {
   QueuedJob,
   WorkflowDispatchDescriptor,
 } from '@sentropic/flow';
+import { eq, sql } from 'drizzle-orm';
+import { db, pool } from '../../db/client';
+import { ADMIN_WORKSPACE_ID, jobQueue } from '../../db/schema';
+import { createId } from '../../utils/id';
 import {
   queueManager,
   type Job,
@@ -25,13 +29,93 @@ import {
  *
  * Per spec/SPEC_EVOL_BR26_FLOW_FACADE.md §3.
  */
+type PostgresJobQueueRuntimeHooks = {
+  canAcceptJob?: (type: JobType) => boolean;
+  notifyJobEvent?: (jobId: string) => Promise<void>;
+  getJobController?: (jobId: string) => AbortController | undefined;
+  startProcessing?: () => void;
+};
+
 export class PostgresJobQueue implements JobQueue<JobType, JobData> {
-  enqueue(type: JobType, data: JobData, options?: EnqueueOptions): Promise<string> {
-    return queueManager.addJob(type, data, options);
+  private hooks: PostgresJobQueueRuntimeHooks = {};
+
+  setRuntimeHooks(hooks: PostgresJobQueueRuntimeHooks): void {
+    this.hooks = hooks;
   }
 
-  cancelJob(jobId: string, reason?: string): Promise<{ status: string } | null> {
-    return queueManager.cancelJob(jobId, reason);
+  private async notifyJobEvent(jobId: string): Promise<void> {
+    if (this.hooks.notifyJobEvent) {
+      await this.hooks.notifyJobEvent(jobId);
+      return;
+    }
+    const notifyPayload = JSON.stringify({ job_id: jobId });
+    const client = await pool.connect();
+    try {
+      await client.query(`NOTIFY job_events, '${notifyPayload.replace(/'/g, "''")}'`);
+    } finally {
+      client.release();
+    }
+  }
+
+  async enqueue(type: JobType, data: JobData, options?: EnqueueOptions): Promise<string> {
+    if (this.hooks.canAcceptJob && !this.hooks.canAcceptJob(type)) {
+      throw new Error('Queue is paused or cancelling; job not accepted');
+    }
+
+    const jobId = createId();
+    const workspaceId = options?.workspaceId ?? ADMIN_WORKSPACE_ID;
+    const maxRetries = Number.isFinite(options?.maxRetries as number)
+      ? Number(options?.maxRetries)
+      : 0;
+    const payload = {
+      ...(data as unknown as Record<string, unknown>),
+      _retry: {
+        attempt: 0,
+        maxRetries: Math.max(0, Math.floor(maxRetries)),
+      },
+    };
+
+    await db.run(sql`
+      INSERT INTO job_queue (id, type, data, status, created_at, workspace_id)
+      VALUES (${jobId}, ${type}, ${JSON.stringify(payload)}, 'pending', ${new Date()}, ${workspaceId})
+    `);
+    await this.notifyJobEvent(jobId);
+
+    console.log(`📝 Job ${jobId} (${type}) added to queue`);
+    this.hooks.startProcessing?.();
+
+    return jobId;
+  }
+
+  async cancelJob(jobId: string, reason: string = 'cancelled'): Promise<{ status: string } | null> {
+    const [row] = await db
+      .select({ id: jobQueue.id, type: jobQueue.type, status: jobQueue.status })
+      .from(jobQueue)
+      .where(eq(jobQueue.id, jobId))
+      .limit(1);
+    if (!row) return null;
+
+    const isChat = row.type === 'chat_message';
+    const nextStatus = isChat ? 'completed' : 'failed';
+    await db.run(sql`
+      UPDATE job_queue
+      SET status = ${nextStatus},
+          completed_at = ${new Date()},
+          error = ${`Job cancelled: ${reason}`}
+      WHERE id = ${jobId}
+    `);
+    await this.notifyJobEvent(jobId);
+
+    const controller = this.hooks.getJobController?.(jobId);
+    if (controller) {
+      try {
+        controller.abort(new DOMException(reason, 'AbortError'));
+      } catch {
+        // ignore
+      }
+    }
+
+    return { status: nextStatus };
   }
 
   cancelAll(reason?: string): Promise<void> {

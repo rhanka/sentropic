@@ -122,6 +122,7 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Lot gate: typecheck-api, lint-api, scoped api test, replay harness fixtures #4 + #5 + #6.
 
 - [ ] **Lot 7 — Slice 4: `JobQueue` extraction (lease, DLQ, heartbeat, idempotency)**
+  - [x] Move job admission/idempotency retry metadata (`addJob` → `PostgresJobQueue.enqueue`) and single-job terminal cancellation (`cancelJob` → `PostgresJobQueue.cancelJob`) behind the `JobQueue` adapter.
   - [ ] Move queue lease/dispatch/cancel/drain methods from `queue-manager.ts` into `packages/flow/src/job-queue.ts` + Postgres adapter.
   - [ ] Preserve invariants §4.2 (job idempotency), §4.7 (tenant scoping), §4.8 (DLQ semantics).
   - [ ] Regression: all 6 fixtures.
