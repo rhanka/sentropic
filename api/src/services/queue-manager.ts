@@ -29,7 +29,6 @@ import {
   executionRuns,
   users,
   workflowDefinitionTasks,
-  workflowRunState,
   workflowTaskTransitions,
   workflowTaskResults,
   workspaceMemberships,
@@ -59,6 +58,7 @@ import { generateFreeformDocx } from './docx-generation';
 import type { CommentContextType } from './context-comments';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
 import type { ProviderId } from './provider-runtime';
+import { postgresRunStore } from './flow/postgres-run-store';
 
 function parseOrgData(value: unknown): Record<string, unknown> {
   if (!value) return {};
@@ -165,19 +165,6 @@ function readGeneratedInitiatives(value: unknown): WorkflowGeneratedInitiative[]
 
 function jobDataToRecord(jobData: JobData): Record<string, unknown> {
   return isRecord(jobData) ? jobData : {};
-}
-
-function deepMergeState(base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
-  const next: Record<string, unknown> = { ...base };
-  for (const [key, patchValue] of Object.entries(patch)) {
-    const currentValue = next[key];
-    if (isRecord(currentValue) && isRecord(patchValue)) {
-      next[key] = deepMergeState(currentValue, patchValue);
-      continue;
-    }
-    next[key] = patchValue;
-  }
-  return next;
 }
 
 type WorkflowTaskRuntimeStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
@@ -661,18 +648,7 @@ export class QueueManager {
     currentTaskKey: string | null;
     currentTaskInstanceKey: string | null;
   } | null> {
-    const [row] = await db
-      .select({
-        status: workflowRunState.status,
-        state: workflowRunState.state,
-        version: workflowRunState.version,
-        currentTaskKey: workflowRunState.currentTaskKey,
-        currentTaskInstanceKey: workflowRunState.currentTaskInstanceKey,
-      })
-      .from(workflowRunState)
-      .where(eq(workflowRunState.runId, runId))
-      .limit(1);
-
+    const row = await postgresRunStore.getSnapshot(runId);
     if (!row) return null;
     return {
       status: row.status,
@@ -687,15 +663,7 @@ export class QueueManager {
     runId: string,
     status: 'in_progress' | 'completed' | 'failed',
   ): Promise<void> {
-    const now = new Date();
-    await db
-      .update(executionRuns)
-      .set({
-        status,
-        completedAt: status === 'completed' || status === 'failed' ? now : null,
-        updatedAt: now,
-      })
-      .where(eq(executionRuns.id, runId));
+    await postgresRunStore.markRunStatus(runId, status);
   }
 
   private async mergeWorkflowRunState(params: {
@@ -709,37 +677,20 @@ export class QueueManager {
       const current = await this.getWorkflowRunStateSnapshot(params.runId);
       if (!current) return;
 
-      const nextState = params.statePatch ? deepMergeState(current.state, params.statePatch) : current.state;
-      const now = new Date();
-      const nextVersion = current.version + (params.statePatch ? 1 : 0);
-
-      const updatedRows = await db
-        .update(workflowRunState)
-        .set({
-          status: params.status ?? current.status,
-          state: nextState,
-          version: nextVersion,
-          currentTaskKey:
-            Object.prototype.hasOwnProperty.call(params, 'currentTaskKey')
-              ? (params.currentTaskKey ?? null)
-              : current.currentTaskKey,
-          currentTaskInstanceKey:
-            Object.prototype.hasOwnProperty.call(params, 'currentTaskInstanceKey')
-              ? (params.currentTaskInstanceKey ?? null)
-              : current.currentTaskInstanceKey,
-          checkpointedAt: now,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(workflowRunState.runId, params.runId),
-            eq(workflowRunState.version, current.version),
-          ),
-        )
-        .returning({ runId: workflowRunState.runId });
-
-      if (updatedRows.length > 0) {
+      try {
+        await postgresRunStore.mergeState({
+          runId: params.runId,
+          expectedVersion: current.version,
+          patch: params.statePatch,
+          status: params.status,
+          currentTaskKey: params.currentTaskKey,
+          currentTaskInstanceKey: params.currentTaskInstanceKey,
+        });
         return;
+      } catch (error) {
+        if (!(error instanceof Error) || !/version conflict/i.test(error.message)) {
+          throw error;
+        }
       }
     }
 
@@ -759,46 +710,19 @@ export class QueueManager {
     startedAt?: Date | null;
     completedAt?: Date | null;
   }): Promise<void> {
-    const now = new Date();
-    const insertValues = {
+    await postgresRunStore.upsertTaskResult({
       runId: params.workflow.workflowRunId,
-      workspaceId: params.workspaceId,
-      workflowDefinitionId: params.workflow.workflowDefinitionId,
       taskKey: params.workflow.taskKey,
       taskInstanceKey: params.taskInstanceKey,
       status: params.status,
-      inputPayload: params.inputPayload ?? {},
+      input: params.inputPayload ?? {},
       output: params.output ?? {},
       statePatch: params.statePatch ?? {},
       attempts: params.attempts ?? 1,
       lastError: params.lastError ?? null,
-      startedAt: params.startedAt ?? now,
-      completedAt: params.completedAt ?? null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    const updateSet = {
-      status: params.status,
-      inputPayload: params.inputPayload ?? {},
-      output: params.output ?? {},
-      statePatch: params.statePatch ?? {},
-      attempts: params.attempts ?? 1,
-      lastError: params.lastError ?? null,
-      ...(params.startedAt !== undefined ? { startedAt: params.startedAt } : {}),
-      ...(params.completedAt !== undefined ? { completedAt: params.completedAt } : {}),
-      updatedAt: now,
-    };
-    await db
-      .insert(workflowTaskResults)
-      .values(insertValues)
-      .onConflictDoUpdate({
-        target: [
-          workflowTaskResults.runId,
-          workflowTaskResults.taskKey,
-          workflowTaskResults.taskInstanceKey,
-        ],
-        set: updateSet,
-      });
+      startedAt: params.startedAt,
+      completedAt: params.completedAt,
+    });
   }
 
   private async markWorkflowTaskStarted(params: {
