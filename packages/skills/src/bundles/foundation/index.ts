@@ -3,6 +3,9 @@ import type { Skill } from '../../types/skill.js';
 import { foldersSkill } from './folders/index.js';
 import { initiativesSkill } from './initiatives/index.js';
 import { organizationsSkill } from './organizations/index.js';
+import { productsSkill } from './products/index.js';
+import { proposalsSkill } from './proposals/index.js';
+import { solutionsSkill } from './solutions/index.js';
 import { webSkill } from './web/index.js';
 import { workspaceSkill } from './workspace/index.js';
 
@@ -21,8 +24,9 @@ import { workspaceSkill } from './workspace/index.js';
  *   - `web` — online search and page extraction (`web_search`,
  *     `web_extract`).
  *
- * Wave B will add `organizations`, `folders`, `initiatives`, … bundles —
- * each as a sibling of `./workspace/`.
+ * Wave B contents:
+ *   - `organizations`, `folders`, `initiatives`, `solutions`, `proposals`,
+ *     `products` — workspace-scoped object metadata and guard handlers.
  */
 export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   workspaceSkill,
@@ -30,6 +34,9 @@ export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   organizationsSkill,
   foldersSkill,
   initiativesSkill,
+  solutionsSkill,
+  proposalsSkill,
+  productsSkill,
 ]);
 
 /**
@@ -57,3 +64,6 @@ export { webSkill } from './web/index.js';
 export { organizationsSkill } from './organizations/index.js';
 export { foldersSkill } from './folders/index.js';
 export { initiativesSkill } from './initiatives/index.js';
+export { solutionsSkill } from './solutions/index.js';
+export { proposalsSkill } from './proposals/index.js';
+export { productsSkill } from './products/index.js';
