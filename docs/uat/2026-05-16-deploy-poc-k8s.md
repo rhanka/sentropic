@@ -20,13 +20,18 @@ State of this branch (`feat/deploy-poc-k8s`) :
 
 ### Operator handoff notes (2026-05-17)
 
-- K8s handoff says to run secret bundling first, then deploy from `~/src/remote`.
-- Verified command surface:
-  - This BR-37 Sentropic worktree owns `scw-bundle-secret`, `scw-deploy`, `scw-undeploy`, and `scw-status` for the Sentropic app workload.
-  - `~/src/remote` owns `scw-deploy`, `scw-undeploy`, and `scw-port-forward` for the `sentropic-remote` control-plane, but does not currently expose a `scw-bundle-secret` target.
-- If the next deploy is the Sentropic app workload, run the commands below from this BR-37 worktree.
-- If the next deploy is the `sentropic-remote` control-plane, run `make -C ~/src/remote scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml` after confirming whether a secret-bundling step is still required.
-- Active session note: `session-sess-apr95chl` is running in namespace `sentropic-remote` with its PVC and auth Secret present. Do not clean it up unless the owner confirms it is no longer wanted.
+- The next deploy target is the Sentropic app workload. Run the commands below
+  from this BR-37 worktree.
+- Session `session-sess-apr95chl` is no longer wanted and now absent from the
+  cluster: pod, PVC, and auth Secret all return `NotFound`.
+- The `sentropic` tenant baseline was applied on 2026-05-17: namespace,
+  ResourceQuota, LimitRange, NetworkPolicy, and tenant ServiceAccount exist.
+- The api/ui manifests target the branch image tag `feat-deploy-poc-k8s`.
+- Secrets were bundled on 2026-05-17 from the root `.env`: `sentropic-postgres`
+  and `sentropic-api` exist in namespace `sentropic`.
+- Remaining rollout gate: GHCR currently rejects anonymous pulls with `403` for
+  both branch-tagged api/ui images. Make the packages public or configure a
+  namespace `imagePullSecret` before applying the workload.
 
 ```bash
 # 0) sanity

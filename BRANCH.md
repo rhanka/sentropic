@@ -52,10 +52,11 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
 - **BR37-EX2** (status: `accepted`): Conditional GitHub workflow `.github/workflows/build-and-push-images.yml`. Reason: Kapsule needs published production images for api and ui. Impact: branch/main/tag image builds to GHCR. Rollback: delete the workflow.
 - **BR37-EX3** (status: `deferred`): Register BR-37 in `PLAN.md` and add `plan/37-BRANCH_feat-deploy-poc-k8s.md`. Reason: roadmap hygiene after recovery from stale `BRANCH.md`. Impact: docs-only. Rollback: revert roadmap/stub additions. Owner: conductor. Non-blocking for POC code; blocking for roadmap accuracy.
 - **BR37-FL1** (severity: `attention`, status: `open`): Cost target is intentionally not numeric in this branch. The recovered conversation confirms POC-only scope and the user challenged the cost-target question. Do not block live UAT on a numeric cost target.
-- **BR37-FL2** (severity: `blocked`, status: `open`): Live cluster UAT still requires operator evidence: namespace/quota/baseline applied, GHCR image pull path public or pull-secreted, secrets bundled, rollout healthy, api/ui/maildev smoke checks green.
-- **BR37-FL3** (severity: `attention`, status: `open`): Current branch is `ahead 1` and `behind 140` versus `origin/main`. Before merge, re-check PR #160 against current `origin/main` and resolve any drift from BR-14b/PR #163 and later merges.
-- **BR37-FL4** (severity: `blocked`, status: `open`): 2026-05-17 K8s handoff says to run secret bundling, then `KUBECONFIG=~/.kube/poc.yaml make scw-deploy` from `~/src/remote`. Verification found `~/src/remote` has `scw-deploy`, `scw-undeploy`, and `scw-port-forward`, but no `scw-bundle-secret` target. Action: use this BR-37 worktree for `scw-bundle-secret`, then run the relevant deploy target from the intended repo, or add/restore a secret target in `~/src/remote` if the remote control-plane requires one.
-- **BR37-FL5** (severity: `attention`, status: `open`): Active remote session `session-sess-apr95chl` verified in namespace `sentropic-remote`: pod `Running` for ~2d, PVC `session-sess-apr95chl-workspace` bound, secret `session-sess-apr95chl-auth` present. Do not clean it up unless the owner confirms it is no longer wanted.
+- **BR37-FL2** (severity: `blocked`, status: `open`): Live cluster UAT still requires GHCR image pull path public or pull-secreted, rollout healthy, api/ui/maildev smoke checks green. Namespace/quota/baseline and secrets are now applied.
+- **BR37-FL3** (severity: `fixed`, status: `closed`): Branch drift was resolved on 2026-05-17 by merging `origin/main` into `feat/deploy-poc-k8s`; PR #160 reports `mergeStateStatus=CLEAN` and CI green at head `3efe0d9b`.
+- **BR37-FL4** (severity: `fixed`, status: `closed`): The next deploy target is confirmed as the Sentropic app workload from this BR-37 worktree. Do not use the remote control-plane repo for this UAT.
+- **BR37-FL5** (severity: `fixed`, status: `closed`): Session `session-sess-apr95chl` is no longer wanted. Verification on 2026-05-17 returned `NotFound` for pod, PVC, and auth Secret, so no cleanup action remains.
+- **BR37-FL6** (severity: `fixed`, status: `closed`): Manifests previously referenced static `v0.1.0` GHCR tags while the branch workflow publishes `feat-deploy-poc-k8s` and short-SHA tags. Fixed 2026-05-17 by pointing api/ui manifests at the branch tag for POC rollout. Rollback: retag a release image and update the manifest tags before production handoff.
 
 ## AI Flaky tests
 - Not applicable. This branch does not change AI runtime behavior.
@@ -100,14 +101,14 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
   - [x] Add `deploy/scw/README.md` with operator prerequisites, secret bundle, deploy, smoke, pause/resume, and cleanup notes.
   - [x] Add `docs/uat/2026-05-16-deploy-poc-k8s.md` with live UAT checklist and known limitations.
   - [x] Confirm PR #160 CI/checks were reported green by recovered GitHub context, including image jobs.
+  - [x] Align api/ui manifest tags with the branch image workflow tag `feat-deploy-poc-k8s`.
 
 - [ ] **Lot 3 — Live poc-k8s UAT**
-  - [x] Verify K8s handoff command surface: this BR-37 worktree owns `scw-bundle-secret`; `~/src/remote` owns remote control-plane `scw-deploy` only.
-  - [x] Verify active remote session `session-sess-apr95chl` exists and should not be cleaned without owner confirmation.
-  - [ ] Resolve whether the next deploy is the Sentropic app workload from this branch or the `sentropic-remote` control-plane from `~/src/remote`.
-  - [ ] Confirm `poc-k8s` operator side is applied: namespace `sentropic`, ResourceQuota, LimitRange, NetworkPolicy baseline.
+  - [x] Confirm next deploy target is the Sentropic app workload from this BR-37 worktree.
+  - [x] Verify obsolete session `session-sess-apr95chl` is already absent: pod, PVC, and auth Secret all return `NotFound`.
+  - [x] Confirm `poc-k8s` operator side is applied: namespace `sentropic`, ResourceQuota, LimitRange, NetworkPolicy baseline.
+  - [x] Bundle secrets from root `.env`: `sentropic-postgres` and `sentropic-api`.
   - [ ] Confirm GHCR api/ui image pull path: packages public or namespace pull secret configured.
-  - [ ] Bundle secrets: `make scw-bundle-secret KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s`.
   - [ ] Deploy workload: `make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s`.
   - [ ] Snapshot workload: `make scw-status KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s`.
   - [ ] Port-forward api via `poc-k8s` Make target and verify `/api/v1/health`.
