@@ -1,0 +1,197 @@
+# SPEC_STUDY - BR14a Chat UI SDK Scope
+
+Status: Lot 1 package-boundary study.
+
+## Goal
+
+Extract the reusable chat UI surface as `@sentropic/chat-ui`, not `@sentropic/chat`.
+
+`@sentropic/chat-ui` is the Svelte reference UI package for chat sessions, stream rendering, optimistic client state, local-tool handoff, and host integration. It consumes the `@sentropic/chat-core` wire contract through HTTP/SSE client boundaries only. It does not reach into `@sentropic/llm-mesh`, API internals, persistence adapters, or workflow orchestration.
+
+## Inventory Summary
+
+| Area | Current files | Package decision |
+| --- | --- | --- |
+| Svelte chat shell | `ui/src/lib/components/ChatPanel.svelte`, `ChatWidget.svelte`, `StreamMessage.svelte` | Move reusable render/state behavior into package components. Keep app-owned wrappers for route context, workspace stores, comments, document upload, Google Drive picker, navigation, and Sentropic app stores until explicit adapter props replace them. |
+| Stream client state | `ui/src/lib/stores/streamHub.ts` | Move as package client store after injecting auth/workspace/base-url/host transport dependencies. Current direct dependencies on app config, session, workspace scope, `window`, EventSource, Chrome runtime, and VSCode shim must become adapter inputs. |
+| UI layout state | `ui/src/lib/stores/chatWidgetLayout.ts` | Move to package as a small Svelte store. |
+| Local tool client state | `ui/src/lib/stores/localTools.ts`, `ui/src/lib/utils/localToolStreamSync.ts` | Split package-owned tool definitions, execution state, permission prompt shapes, and pending-tool parsing from host-owned execution transport. Chrome and VSCode remain host adapters. |
+| Chat run projection | `ui/src/lib/utils/chat-run-projection.ts` | Move to package client utilities. It is pure stream-event projection logic. |
+| Steering client | `ui/src/lib/utils/chat-steer.ts` | Move only after replacing `apiPost` with package `ChatTransport`. |
+| Tool scope | `ui/src/lib/utils/chat-tool-scope.ts` | Move generic toggle/default logic, but keep app-specific workspace/tool catalog ownership outside the package. |
+| Web handoff | `ui/src/lib/core/chatwidget-handoff.ts` | Move shape constants/types or re-export them from package. Storage ownership remains host-owned. |
+| Chrome bridge | `ui/src/lib/upstream/injected-script.ts` | Stay app/host-owned. The package only exposes the host adapter interface consumed by the chat UI. DOM injection and extension bridge code are not package core. |
+| VSCode bridge/runtime | `ui/vscode-ext/auth-bridge.ts`, `extension.ts`, `host-handler.ts`, `local-tools.ts`, `stream-proxy.ts`, `vscode-bridge.ts`, `webview-entry.ts` | Stay host-owned. Package supplies UI components, client stores, transport/replay primitives, and adapter types. VSCode extension activation, secrets, workspace inspection, local command execution, webview HTML, and message bridge remain outside the package. |
+| Chat-core/server wire | `packages/chat-core/src/types.ts`, `stream-port.ts`, `stream-sequencer-port.ts`, `api/src/routes/api/chat.ts`, `api/src/routes/api/streams.ts`, `api/src/services/chat-service.ts` | Package consumes current HTTP/SSE behavior and prepares for the versioned `chat-core` stream protocol. It must not import API source directly. |
+
+## Final Package Shape
+
+Target package: `packages/chat-ui`, package name `@sentropic/chat-ui`.
+
+Public entrypoints:
+
+```ts
+@sentropic/chat-ui
+@sentropic/chat-ui/svelte
+@sentropic/chat-ui/client
+@sentropic/chat-ui/renderers
+@sentropic/chat-ui/hosts
+```
+
+`@sentropic/chat-ui` re-exports the stable public surface. Sub-entrypoints keep consumers from importing private paths and let non-Svelte consumers use client contracts without component code.
+
+## Svelte Exports
+
+`@sentropic/chat-ui/svelte` exports:
+
+- `ChatWidget.svelte`: full chat launcher/panel shell. Props must accept a host adapter, context provider, initial state, display mode, and optional feature flags. It must not import app route stores directly.
+- `ChatPanel.svelte`: session/message composer and timeline UI. Props must accept sessions, active session id, context provider, transport, tool definitions, renderer registry, and callbacks for session/title/document/comment integration.
+- `StreamMessage.svelte`: stream replay/render component. Props keep the current stream-focused shape: `streamId`, `status`, `initialEvents`, `subscriptionMode`, `runtimeSummary`, `onTerminal`, `onStreamEvent`, `onGeneratedFile`, and `onTodoRuntime`.
+
+Package components may depend on Svelte, `svelte/store`, `svelte-i18n` only through injected dictionaries/labels, `svelte-streamdown`, and UI/icon dependencies already required by the extracted components. App-owned components such as document pickers, comments, workspace menus, and entity-specific cards must be passed as renderers or slots instead of imported directly.
+
+## Stores And Client Exports
+
+`@sentropic/chat-ui/client` exports:
+
+- `createStreamHub(options)`: instance-based replacement for the singleton `streamHub`. Options include `baseUrl`, `getAuthState`, `getWorkspaceId`, `eventSourceFactory`, `extensionPortFactory`, `windowTarget`, replay limits, and optional logger.
+- `createChatWidgetLayoutStore(initial?)`: package-owned layout store for `floating` / `docked` state.
+- `createLocalToolsStore(adapter)`: local-tool availability, definitions, executions, permission prompts, and policy operations through an injected adapter.
+- `projectAssistantRunSegments`, `mergeProjectionHistoryEvents`, `appendLiveProjectionEvent`, `countLinkedSteerMessages`, `getLinkedSteerMessageIds`.
+- `postChatSteer(transport, input)` and timeline helper `insertSteerMessageInTimeline`.
+- `parsePendingLocalToolCallsFromStatusPayload`, `shouldResetLocalToolStateForFreshRound`, `filterPermissionPromptsForPendingStream`.
+- `computeToolToggleDefaults`, `computeVisibleToolToggleIds`, `computeEnabledToolIds`, `filterToolTogglesByWorkspaceType`.
+
+The package must avoid global singletons for stream, session, or local-tool state. Consumers can create one client per web app, Chrome side panel, VSCode webview, or embedded widget.
+
+## Transport And Replay Boundary
+
+`@sentropic/chat-ui/client` owns browser-side transport interfaces, not server behavior.
+
+Primary interface:
+
+```ts
+export interface ChatTransport {
+  createSession(input: CreateChatSessionInput): Promise<CreateChatSessionResult>;
+  listSessions(): Promise<ListChatSessionsResult>;
+  getBootstrap(sessionId: string): Promise<ChatSessionBootstrap>;
+  getHistory(sessionId: string, options?: HistoryOptions): AsyncIterable<ChatHistoryItem>;
+  sendMessage(input: SendChatMessageInput): Promise<SendChatMessageResult>;
+  stopAssistantMessage(messageId: string): Promise<void>;
+  steerAssistantMessage(messageId: string, input: SteerInput): Promise<SteerResult>;
+  setFeedback(messageId: string, input: FeedbackInput): Promise<void>;
+  editMessage(messageId: string, input: EditMessageInput): Promise<EditMessageResult>;
+  retryMessage(messageId: string, input: RetryMessageInput): Promise<RetryMessageResult>;
+  submitToolResult(messageId: string, input: ToolResultInput): Promise<ToolResultSubmitResult>;
+}
+```
+
+Replay interface:
+
+```ts
+export interface ChatStreamClient {
+  subscribe(input: StreamSubscribeInput, onEvent: (event: ChatUiStreamEvent) => void): Unsubscribe;
+  replay(input: StreamReplayInput): Promise<ChatUiStreamEvent[]>;
+}
+```
+
+Current app wire behavior:
+
+- Chat REST endpoints live under `/api/v1/chat/*`.
+- `POST /chat/messages` returns `sessionId`, `userMessageId`, `assistantMessageId`, `streamId`, and `jobId`.
+- `GET /chat/sessions/:id/bootstrap` returns messages, todo runtime, checkpoints, documents, and assistant runtime details.
+- `GET /chat/sessions/:id/history` streams NDJSON history for large sessions.
+- `POST /chat/messages/:id/tool-results` accepts local-tool output and resumes generation when all pending local tools are satisfied.
+- `GET /streams/sse` emits `job_update`, entity/comment/lock/presence/workspace events, and chat stream event types `reasoning_delta`, `content_delta`, `tool_call_start`, `tool_call_delta`, `tool_call_result`, `status`, `error`, `done`.
+- Current replay is cursor/sequence based through `/streams/sse?streamIds=...&cursor=...` plus `streamHub` in-memory history. The package must expose replay behind `ChatStreamClient` so BR14b's future `GET /sessions/:id/events?fromSeq=N` contract can replace the current endpoint without component rewrites.
+
+The transport must preserve sequence ordering, dedupe by sequence, aggregate text/tool-argument deltas for late subscribers, handle gap catch-up, and keep stop/steer/retry/tool-result continuation as explicit client methods.
+
+## Renderer Registry Boundary
+
+`@sentropic/chat-ui/renderers` exports a renderer registry:
+
+```ts
+export interface ToolResultRenderer<Props = unknown> {
+  id: string;
+  canRender(input: ToolResultRenderInput): boolean;
+  component: SvelteComponentLike<Props>;
+  mapProps(input: ToolResultRenderInput): Props;
+}
+
+export interface RendererRegistry {
+  register(renderer: ToolResultRenderer): void;
+  resolve(input: ToolResultRenderInput): ToolResultRenderer | null;
+}
+```
+
+Default package renderers:
+
+- Markdown/text fallback for unknown tool results.
+- JSON fallback with bounded depth.
+- Generated file cards when the stream exposes file metadata.
+- Todo/plan runtime cards for `plan` tool results.
+- Permission/local-tool prompt renderer shell.
+
+App-registered renderers:
+
+- Sentropic business objects such as initiatives, folders, organizations, opportunities, proposals, products, gates, comments, and document-source cards.
+- Chrome tab action/read cards.
+- VSCode local tool cards.
+
+The registry boundary prevents `StreamMessage.svelte` and `ChatPanel.svelte` from importing application-specific render code while preserving current tool-call rendering.
+
+## Host Adapter Boundary
+
+`@sentropic/chat-ui/hosts` exports host adapter types and minimal factories.
+
+Common adapter:
+
+```ts
+export interface ChatUiHostAdapter {
+  kind: 'web' | 'chrome' | 'vscode' | string;
+  transport: ChatTransport;
+  streamClient: ChatStreamClient;
+  localTools?: LocalToolHostAdapter;
+  auth?: ChatAuthAdapter;
+  navigation?: ChatNavigationAdapter;
+  storage?: ChatStorageAdapter;
+  contextProvider?: ChatContextProvider;
+  renderers?: RendererRegistry;
+}
+```
+
+Web adapter:
+
+- Owns app auth/session wiring, workspace scope, REST fetch, native EventSource, navigation, local storage handoff, and app toasts.
+- Keeps Sentropic route context, comments, document upload, Google Drive picker, entity stores, and workspace RBAC outside the package unless passed through typed callbacks/renderers.
+
+Chrome adapter:
+
+- Owns extension runtime messaging, side panel/floating shell host, stream proxy port, tab permission policy, `tab_read` / `tab_action` execution, origin-scoped consent, settings endpoint, and injected-script bridge.
+- Package local-tool UI calls the adapter; it never imports `chrome.runtime` directly.
+
+VSCode adapter:
+
+- Owns `acquireVsCodeApi`, webview host bridge, extension activation, session token persistence, secrets, workspace mapping, code-agent prompt profile, stream proxy, local command/file/git tools, permission policy, and host messaging.
+- Package components mount inside the webview through the adapter; they never import VSCode APIs or Node modules.
+
+## Non-Goals
+
+- No direct import from `@sentropic/llm-mesh`.
+- No provider, model, credential, retry, fallback, quota, cost, or model catalog abstraction.
+- No server persistence, database schema, Drizzle, Postgres, or stream storage implementation.
+- No chat reasoning loop, tool loop, continuation, checkpoint runtime, queue runtime, or workflow orchestration.
+- No Hono route implementation inside `@sentropic/chat-ui`.
+- No Chrome extension service-worker implementation.
+- No VSCode extension activation, Node tool execution, secret storage, or file-system access.
+- No repository/package metadata, Makefile, workflow, or npm publication wiring in Lot 1.
+- No behavior change or code movement before this package boundary is accepted.
+
+## Lot 2 Implementation Notes
+
+- Start with package-owned copies and app wrappers before rewiring imports.
+- Replace hardcoded `$lib/*` imports inside moved Svelte components with explicit props, adapters, renderers, or package utilities.
+- Convert `streamHub` from singleton to `createStreamHub`; keep an app singleton wrapper in `ui/src/lib/stores/streamHub.ts` during adoption.
+- Keep current API endpoints stable in Lot 2/3; introduce compatibility shims only if the package boundary cannot consume current wire behavior.
+- Use current tests as contract anchors: `ui/tests/stores/streamHub.test.ts`, stream projection tests, tool-scope tests, local-tool sync tests, upstream bridge tests, and VSCode extension tests.

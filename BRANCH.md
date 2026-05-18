@@ -116,6 +116,8 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
 - [ ] `attention`: Before Lot 2, reconcile public package name drift: current architecture says `@sentropic/chat-ui`, while `README.md`, `TODO.md`, and orchestration spec still mention `@sentropic/chat`.
 - [ ] `attention`: Before package publication wiring, open `BR14a-EX1` for `Makefile`, `.github/workflows/**`, root package metadata, and lockfiles.
 - [ ] `attention`: Before merge, record Web, Chrome, and VSCode UAT as passed, or record explicit user waiver.
+- [ ] `attention`: Lot 1 gate note: `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2` failed before typecheck because empty `REGISTRY` produced invalid Docker tag `/top-ai-ideas-ui:1864cb`; rerun with `REGISTRY=local` passed with 0 errors and 6 existing Svelte warnings.
+- [ ] `attention`: Lot 1 gate note: `make test-ui SCOPE=tests/stores/streamHub.test.ts REGISTRY=local API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2` failed 12/15 tests because the test mock for `EventSource` is not constructable under current Vitest (`TypeError: ... is not a constructor` at `src/lib/stores/streamHub.ts:510`); no Lot 1 code changed streamHub behavior.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -167,7 +169,7 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Create this relaunch `BRANCH.md`.
 
 - [ ] **Lot 1 - Inventory and package boundary design**
-  - [ ] Inventory current web chat UI files and decide which code moves to `packages/chat-ui/src`:
+  - [x] Inventory current web chat UI files and decide which code moves to `packages/chat-ui/src`:
     - `ui/src/lib/components/ChatPanel.svelte`
     - `ui/src/lib/components/ChatWidget.svelte`
     - `ui/src/lib/components/StreamMessage.svelte`
@@ -178,7 +180,7 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - `ui/src/lib/utils/chat-steer.ts`
     - `ui/src/lib/utils/chat-tool-scope.ts`
     - `ui/src/lib/utils/localToolStreamSync.ts`
-  - [ ] Inventory current host adapter files and classify what stays app-owned:
+  - [x] Inventory current host adapter files and classify what stays app-owned:
     - `ui/src/lib/core/chatwidget-handoff.ts`
     - `ui/src/lib/upstream/injected-script.ts`
     - `ui/vscode-ext/auth-bridge.ts`
@@ -188,14 +190,14 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - `ui/vscode-ext/stream-proxy.ts`
     - `ui/vscode-ext/vscode-bridge.ts`
     - `ui/vscode-ext/webview-entry.ts`
-  - [ ] Inventory current chat-core/server wire assumptions from:
+  - [x] Inventory current chat-core/server wire assumptions from:
     - `packages/chat-core/src/types.ts`
     - `packages/chat-core/src/stream-port.ts`
     - `packages/chat-core/src/stream-sequencer-port.ts`
     - `api/src/routes/api/chat.ts`
     - `api/src/routes/api/streams.ts`
     - `api/src/services/chat-service.ts`
-  - [ ] Write `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` with final package shape:
+  - [x] Write `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` with final package shape:
     - public Svelte component exports;
     - client store exports;
     - transport/replay client boundary;
@@ -203,8 +205,8 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - host adapter boundary for web, Chrome, and VSCode;
     - explicit non-goals: mesh/provider access, server persistence, workflow orchestration.
   - [ ] Lot gate:
-    - [ ] No application behavior change.
-    - [ ] No code movement before package boundary is documented.
+    - [x] No application behavior change.
+    - [x] No code movement before package boundary is documented.
     - [ ] Run `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
     - [ ] Run `make test-ui SCOPE=tests/stores/streamHub.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
     - [ ] Commit with `git add BRANCH.md spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`, then `make commit MSG="docs: define BR14a chat ui sdk scope" ENV=test-feat-chat-ui-sdk-v2`.
