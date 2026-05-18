@@ -58,6 +58,7 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
 - **BR37-FL5** (severity: `fixed`, status: `closed`): Session `session-sess-apr95chl` is no longer wanted. Verification on 2026-05-17 returned `NotFound` for pod, PVC, and auth Secret, so no cleanup action remains.
 - **BR37-FL6** (severity: `fixed`, status: `closed`): Manifests previously referenced static `v0.1.0` GHCR tags while the branch workflow publishes `feat-deploy-poc-k8s` and short-SHA tags. Fixed 2026-05-17 by pointing api/ui manifests at the branch tag for POC rollout. Rollback: retag a release image and update the manifest tags before production handoff.
 - **BR37-FL7** (severity: `fixed`, status: `closed`): BR-37 intentionally consumes the Sentropic transition plan for POC deployment artifacts only. `TRANSITION.md` keeps the broad codebase/DNS/Scaleway rename under BR-14e/BR-14d, but the Kapsule UAT image pull gate needs final POC image names now. Fixed by publishing branch images as `ghcr.io/rhanka/sentropic-api` and `ghcr.io/rhanka/sentropic-ui`, updating manifests/docs, and leaving app-code, DNS, OAuth, dashboards, and broader Scaleway renames deferred.
+- **BR37-FL8** (severity: `fixed`, status: `closed`): The image workflow originally used only the last ref path segment, so branch `feat/deploy-poc-k8s` published `deploy-poc-k8s` while manifests expected `feat-deploy-poc-k8s`. Fixed by deriving tags from `GITHUB_REF_NAME` and replacing `/` with `-`, keeping api/ui manifests aligned with the branch tag.
 
 ## AI Flaky tests
 - Not applicable. This branch does not change AI runtime behavior.
@@ -104,6 +105,7 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
   - [x] Confirm PR #160 CI/checks were reported green by recovered GitHub context, including image jobs.
   - [x] Align api/ui manifest tags with the branch image workflow tag `feat-deploy-poc-k8s`.
   - [x] Rename BR-37 POC GHCR artifacts from `top-ai-ideas-api/ui` to `sentropic-api/ui`; leave broader transition items to BR-14e/BR-14d.
+  - [x] Preserve the full branch slug in GHCR image tags so `feat/deploy-poc-k8s` publishes `feat-deploy-poc-k8s`.
 
 - [ ] **Lot 3 — Live poc-k8s UAT**
   - [x] Confirm next deploy target is the Sentropic app workload from this BR-37 worktree.
