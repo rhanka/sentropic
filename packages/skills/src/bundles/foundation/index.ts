@@ -2,6 +2,8 @@ import type { SkillRegistry } from '../../registry/registry.js';
 import type { Skill } from '../../types/skill.js';
 import { executiveSummarySkill } from './executive_summary/index.js';
 import { foldersSkill } from './folders/index.js';
+import { gateReviewSkill } from './gate_review/index.js';
+import { historyAnalyzeSkill } from './history_analyze/index.js';
 import { initiativesSkill } from './initiatives/index.js';
 import { matrixSkill } from './matrix/index.js';
 import { organizationsSkill } from './organizations/index.js';
@@ -33,6 +35,10 @@ import { workspaceSkill } from './workspace/index.js';
  * Wave C package-only first sub-lot:
  *   - `executive_summary`, `matrix` — structured folder analysis metadata with
  *     not-bound handlers only. API runtime rebind stays deferred.
+ *
+ * Wave C package-only second sub-lot:
+ *   - `history_analyze`, `gate_review` — structured/read-only analysis skills
+ *     with not-bound handlers only. API runtime rebind stays deferred.
  */
 export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   workspaceSkill,
@@ -45,6 +51,8 @@ export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   productsSkill,
   executiveSummarySkill,
   matrixSkill,
+  historyAnalyzeSkill,
+  gateReviewSkill,
 ]);
 
 /**
@@ -77,3 +85,5 @@ export { proposalsSkill } from './proposals/index.js';
 export { productsSkill } from './products/index.js';
 export { executiveSummarySkill } from './executive_summary/index.js';
 export { matrixSkill } from './matrix/index.js';
+export { historyAnalyzeSkill } from './history_analyze/index.js';
+export { gateReviewSkill } from './gate_review/index.js';
