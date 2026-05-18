@@ -44,7 +44,7 @@ jobs:
         id: tags
         run: |
           set -eu
-          REF="${GITHUB_REF##*/}"
+          REF="${GITHUB_REF_NAME:-${GITHUB_REF#refs/heads/}}"
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "tags=${{ matrix.image }}:${REF},${{ matrix.image }}:latest" >> "$GITHUB_OUTPUT"
           else
