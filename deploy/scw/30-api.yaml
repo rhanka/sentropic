@@ -58,7 +58,7 @@ spec:
       serviceAccountName: sentropic-app
       containers:
         - name: api
-          image: ghcr.io/rhanka/top-ai-ideas-api:v0.1.0
+          image: ghcr.io/rhanka/top-ai-ideas-api:feat-deploy-poc-k8s
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
