@@ -79,7 +79,7 @@ describe('streamHub', () => {
     vi.useFakeTimers();
     
     // Mock EventSource constructor to capture instance
-    global.EventSource = vi.fn((url: string, options?: any) => {
+    global.EventSource = vi.fn(function (this: EventSource, url: string, options?: any) {
       mockEventSource = new MockEventSource(url, options);
       return mockEventSource;
     }) as any;
