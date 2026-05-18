@@ -39,8 +39,10 @@ Two namespace-scoped Secrets must exist before applying the manifests:
 - `sentropic-api` — `DATABASE_URL`, every `*_API_KEY`, `MAIL_USERNAME`,
   `MAIL_PASSWORD`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_PICKER_API_KEY`.
 
-`make scw-bundle-secret` reads `~/src/sentropic/.env` and creates both
-in-cluster, replacing the previous version. Re-run after rotating a key.
+The api and ui manifests intentionally target the `feat-deploy-poc-k8s` GHCR
+tag produced by this branch's image workflow. `make scw-bundle-secret` reads
+`~/src/sentropic/.env` and creates both in-cluster, replacing the previous
+version. Re-run after rotating a key.
 
 ## Deploy
 
