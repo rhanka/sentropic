@@ -7,7 +7,10 @@ import {
   foldersSkill,
   initiativesSkill,
   organizationsSkill,
+  productsSkill,
+  proposalsSkill,
   registerFoundationSkills,
+  solutionsSkill,
   webSkill,
   workspaceSkill,
 } from '../../src/bundles/foundation/index.js';
@@ -49,6 +52,24 @@ const WAVE_B_SKILLS = [
     tools: ['initiatives_list', 'read_initiative', 'update_initiative'],
     bodyTitle: 'Initiatives skill',
   },
+  {
+    skill: solutionsSkill,
+    name: 'solutions',
+    tools: ['solutions_list', 'solution_get'],
+    bodyTitle: 'Solutions skill',
+  },
+  {
+    skill: proposalsSkill,
+    name: 'proposals',
+    tools: ['proposals_list', 'proposal_get'],
+    bodyTitle: 'Proposals skill',
+  },
+  {
+    skill: productsSkill,
+    name: 'products',
+    tools: ['products_list', 'product_get'],
+    bodyTitle: 'Products skill',
+  },
 ] as const;
 
 const FOUNDATION_SKILL_NAMES = [
@@ -57,6 +78,9 @@ const FOUNDATION_SKILL_NAMES = [
   'organizations',
   'folders',
   'initiatives',
+  'solutions',
+  'proposals',
+  'products',
 ] as const;
 
 const FOUNDATION_TOOL_NAMES = [
@@ -68,7 +92,13 @@ const FOUNDATION_TOOL_NAMES = [
   'organization_get',
   'organization_update',
   'organizations_list',
+  'product_get',
+  'products_list',
+  'proposal_get',
+  'proposals_list',
   'read_initiative',
+  'solution_get',
+  'solutions_list',
   'update_initiative',
   'web_extract',
   'web_search',
@@ -166,7 +196,7 @@ describe('foundation bundle — Wave A', () => {
 
   describe('FOUNDATION_SKILLS / registerFoundationSkills', () => {
     it('keeps Wave A skills as the foundation registration prefix', () => {
-      expect(FOUNDATION_SKILLS).toHaveLength(5);
+      expect(FOUNDATION_SKILLS).toHaveLength(FOUNDATION_SKILL_NAMES.length);
       expect(FOUNDATION_SKILLS[0]).toBe(workspaceSkill);
       expect(FOUNDATION_SKILLS[1]).toBe(webSkill);
     });
@@ -260,12 +290,18 @@ describe('foundation bundle — Wave B object skills', () => {
       'organizations',
       'folders',
       'initiatives',
+      'solutions',
+      'proposals',
+      'products',
     ]);
     expect(FOUNDATION_SKILLS.map((s) => s.metadata.name)).toEqual(names);
     expect(reg.list({ category: 'object' }).map((m) => m.name)).toEqual([
       'organizations',
       'folders',
       'initiatives',
+      'solutions',
+      'proposals',
+      'products',
     ]);
   });
 
@@ -301,11 +337,24 @@ describe('foundation bundle — Wave B object skills', () => {
         .resolveTools(
           buildAuthz({
             permissionMode: 'allowlist',
-            allowedTools: ['organization_get', 'folder_get'],
+            allowedTools: [
+              'organization_get',
+              'folder_get',
+              'solution_get',
+              'proposal_get',
+              'product_get',
+            ],
           }),
         )
         .map((t) => t.name)
         .sort(),
-    ).toEqual(['folder_get', 'organization_get', SEARCH_SKILLS_TOOL_NAME].sort());
+    ).toEqual([
+      'folder_get',
+      'organization_get',
+      'product_get',
+      'proposal_get',
+      'solution_get',
+      SEARCH_SKILLS_TOOL_NAME,
+    ].sort());
   });
 });
