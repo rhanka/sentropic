@@ -123,7 +123,7 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
 - [ ] **Lot 5 — Migrate `tools.ts` to skill bundles (waves)**
   - [ ] Migrate **wave A** (low-risk listers): `web` skill (`web_search`, `web_extract`), `workspace` skill (`workspace_list`, `initiative_search`).
     - [x] Step 1 — foundation bundle scaffold + `workspace` skill (`workspace_list`, `initiative_search`) via `packages/skills/src/bundles/foundation/` + `registerFoundationSkills(registry)` registrar. 9 new tests; `make test-skills` 76/76 green. Handlers ship as `not bound` guards: legacy `api/src/services/tools.ts` still drives execution until `chat-service` is rebound (deferred to Lot 5 final cleanup commit).
-    - [ ] Step 2 — `web` skill (`web_search`, `web_extract`) added to foundation bundle.
+    - [x] Step 2 — `web` skill (`web_search`, `web_extract`) added to foundation bundle.
   - [ ] Migrate **wave B** (read-only object skills): `organizations`, `folders`, `initiatives`, `solutions`, `proposals`, `products` skills (each grouping `list`+`get`+optional `update`).
   - [ ] Migrate **wave C** (write/structured skills): `executive_summary`, `matrix`, `documents`, `comment_assistant`, `plan`, `gate_review`, `history_analyze` skills.
   - [ ] Migrate **wave D** (sandbox-backed skills): `document_generate` (uses sandbox, ports the docx-freeform skill), `batch_create_organizations`, `task_dispatch`.
