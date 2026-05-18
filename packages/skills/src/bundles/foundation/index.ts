@@ -1,5 +1,6 @@
 import type { SkillRegistry } from '../../registry/registry.js';
 import type { Skill } from '../../types/skill.js';
+import { webSkill } from './web/index.js';
 import { workspaceSkill } from './workspace/index.js';
 
 /**
@@ -14,12 +15,15 @@ import { workspaceSkill } from './workspace/index.js';
  * Wave A contents (frozen):
  *   - `workspace` — cross-workspace navigation (`workspace_list`,
  *     `initiative_search`).
+ *   - `web` — online search and page extraction (`web_search`,
+ *     `web_extract`).
  *
  * Wave B will add `organizations`, `folders`, `initiatives`, … bundles —
  * each as a sibling of `./workspace/`.
  */
 export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   workspaceSkill,
+  webSkill,
 ]);
 
 /**
@@ -43,3 +47,4 @@ export function registerFoundationSkills(
 }
 
 export { workspaceSkill } from './workspace/index.js';
+export { webSkill } from './web/index.js';
