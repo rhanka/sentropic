@@ -1912,34 +1912,12 @@ export class QueueManager {
    * - autres => status "failed".
    */
   async cancelJob(jobId: string, reason: string = 'cancelled'): Promise<{ status: string } | null> {
-    const [row] = await db
-      .select({ id: jobQueue.id, type: jobQueue.type, status: jobQueue.status })
-      .from(jobQueue)
-      .where(eq(jobQueue.id, jobId))
-      .limit(1);
-    if (!row) return null;
-
-    const isChat = row.type === 'chat_message';
-    const nextStatus = isChat ? 'completed' : 'failed';
-    await db.run(sql`
-      UPDATE job_queue
-      SET status = ${nextStatus},
-          completed_at = ${new Date()},
-          error = ${`Job cancelled: ${reason}`}
-      WHERE id = ${jobId}
-    `);
-    await this.notifyJobEvent(jobId);
-
-    const controller = this.jobControllers.get(jobId);
-    if (controller) {
-      try {
-        controller.abort(new DOMException(reason, 'AbortError'));
-      } catch {
-        // ignore
-      }
-    }
-
-    return { status: nextStatus };
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    postgresJobQueue.setRuntimeHooks({
+      notifyJobEvent: (id) => this.notifyJobEvent(id),
+      getJobController: (id) => this.jobControllers.get(id),
+    });
+    return postgresJobQueue.cancelJob(jobId, reason);
   }
 
   async drain(timeoutMs: number = 10000): Promise<void> {
@@ -1975,35 +1953,23 @@ export class QueueManager {
       maxRetries?: number;
     }
   ): Promise<string> {
-    if (this.cancelAllInProgress || this.paused) {
-      console.warn(`⏸️ Queue paused/cancelling, refusing to enqueue job ${type}`);
-      throw new Error('Queue is paused or cancelling; job not accepted');
-    }
-    const jobId = createId();
-    const workspaceId = opts?.workspaceId ?? ADMIN_WORKSPACE_ID;
-    const maxRetries = Number.isFinite(opts?.maxRetries as number) ? Number(opts?.maxRetries) : 0;
-    const payload = {
-      ...(data as unknown as Record<string, unknown>),
-      _retry: {
-        attempt: 0,
-        maxRetries: Math.max(0, Math.floor(maxRetries)),
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    postgresJobQueue.setRuntimeHooks({
+      canAcceptJob: (jobType) => {
+        if (this.cancelAllInProgress || this.paused) {
+          console.warn(`⏸️ Queue paused/cancelling, refusing to enqueue job ${jobType}`);
+          return false;
+        }
+        return true;
       },
-    };
-    
-    await db.run(sql`
-      INSERT INTO job_queue (id, type, data, status, created_at, workspace_id)
-      VALUES (${jobId}, ${type}, ${JSON.stringify(payload)}, 'pending', ${new Date()}, ${workspaceId})
-    `);
-    await this.notifyJobEvent(jobId);
-    
-    console.log(`📝 Job ${jobId} (${type}) added to queue`);
-    
-    // Démarrer le traitement si pas déjà en cours
-    if (!this.isProcessing) {
-      this.processJobs().catch(console.error);
-    }
-    
-    return jobId;
+      notifyJobEvent: (id) => this.notifyJobEvent(id),
+      startProcessing: () => {
+        if (!this.isProcessing) {
+          this.processJobs().catch(console.error);
+        }
+      },
+    });
+    return postgresJobQueue.enqueue(type, data, opts);
   }
 
   /**
