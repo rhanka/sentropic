@@ -6,6 +6,8 @@ import {
   FOUNDATION_SKILLS,
   executiveSummarySkill,
   foldersSkill,
+  gateReviewSkill,
+  historyAnalyzeSkill,
   initiativesSkill,
   matrixSkill,
   organizationsSkill,
@@ -80,6 +82,7 @@ const WAVE_C_SKILLS = [
     name: 'executive_summary',
     tools: ['executive_summary_get', 'executive_summary_update'],
     bodyTitle: 'Executive summary skill',
+    workspaceTypes: ['ai-ideas', 'opportunity'],
     updateTool: 'executive_summary_update',
   },
   {
@@ -87,7 +90,21 @@ const WAVE_C_SKILLS = [
     name: 'matrix',
     tools: ['matrix_get', 'matrix_update'],
     bodyTitle: 'Matrix skill',
+    workspaceTypes: ['ai-ideas', 'opportunity'],
     updateTool: 'matrix_update',
+  },
+  {
+    skill: historyAnalyzeSkill,
+    name: 'history_analyze',
+    tools: ['history_analyze'],
+    bodyTitle: 'History analyze skill',
+  },
+  {
+    skill: gateReviewSkill,
+    name: 'gate_review',
+    tools: ['gate_review'],
+    bodyTitle: 'Gate review skill',
+    workspaceTypes: ['ai-ideas', 'opportunity'],
   },
 ] as const;
 
@@ -102,6 +119,8 @@ const FOUNDATION_SKILL_NAMES = [
   'products',
   'executive_summary',
   'matrix',
+  'history_analyze',
+  'gate_review',
 ] as const;
 
 const FOUNDATION_TOOL_NAMES = [
@@ -112,6 +131,7 @@ const FOUNDATION_TOOL_NAMES = [
   'folders_list',
   'initiative_search',
   'initiatives_list',
+  'history_analyze',
   'matrix_get',
   'matrix_update',
   'organization_get',
@@ -125,6 +145,7 @@ const FOUNDATION_TOOL_NAMES = [
   'solution_get',
   'solutions_list',
   'update_initiative',
+  'gate_review',
   'web_extract',
   'web_search',
   'workspace_list',
@@ -342,6 +363,7 @@ describe('foundation bundle — Wave B object skills', () => {
         .map((t) => t.name)
         .sort(),
     ).toEqual([
+      'history_analyze',
       'initiative_search',
       'web_extract',
       'web_search',
@@ -353,6 +375,7 @@ describe('foundation bundle — Wave B object skills', () => {
         .map((t) => t.name)
         .sort(),
     ).toEqual([
+      'history_analyze',
       'initiative_search',
       'web_extract',
       'web_search',
@@ -388,26 +411,42 @@ describe('foundation bundle — Wave B object skills', () => {
 
 describe('foundation bundle — Wave C structured skills', () => {
   it('parses every structured skill metadata, tools, body, and handlers', () => {
-    for (const { skill, name, tools, bodyTitle, updateTool } of WAVE_C_SKILLS) {
+    for (const {
+      skill,
+      name,
+      tools,
+      bodyTitle,
+      workspaceTypes,
+      updateTool,
+    } of WAVE_C_SKILLS) {
       expect(skill.metadata.name).toBe(name);
       expect(skill.metadata.version).toBe('0.1.0');
       expect(skill.metadata.category).toBe('analysis');
-      expect(skill.metadata.contextFilter?.workspaceTypes).toEqual([
-        'ai-ideas',
-        'opportunity',
-      ]);
+      if (workspaceTypes) {
+        expect(skill.metadata.contextFilter?.workspaceTypes).toEqual(workspaceTypes);
+      } else {
+        expect(skill.metadata.contextFilter).toBeUndefined();
+      }
       expect(skill.metadata.toolNames).toEqual(tools);
       expect(skill.tools.map((t) => t.name)).toEqual(tools);
       expect(skill.body).toContain(bodyTitle);
       expect(Object.keys(skill.handlers ?? {}).sort()).toEqual(
         [...tools].sort(),
       );
-      expect(skill.tools.find((tool) => tool.name === updateTool)?.sideEffect).toBe(
-        true,
-      );
-      expect(
-        skill.tools.find((tool) => tool.name === updateTool)?.requiresApproval,
-      ).toBe(true);
+      if (updateTool) {
+        expect(skill.tools.find((tool) => tool.name === updateTool)?.sideEffect).toBe(
+          true,
+        );
+        expect(
+          skill.tools.find((tool) => tool.name === updateTool)?.requiresApproval,
+        ).toBe(true);
+      } else {
+        for (const toolName of tools) {
+          const tool = skill.tools.find((candidate) => candidate.name === toolName);
+          expect(tool?.sideEffect).not.toBe(true);
+          expect(tool?.requiresApproval).not.toBe(true);
+        }
+      }
     }
   });
 
@@ -439,11 +478,15 @@ describe('foundation bundle — Wave C structured skills', () => {
       'products',
       'executive_summary',
       'matrix',
+      'history_analyze',
+      'gate_review',
     ]);
     expect(FOUNDATION_SKILLS.map((s) => s.metadata.name)).toEqual(names);
     expect(reg.list({ category: 'analysis' }).map((m) => m.name)).toEqual([
       'executive_summary',
       'matrix',
+      'history_analyze',
+      'gate_review',
     ]);
   });
 
@@ -457,6 +500,7 @@ describe('foundation bundle — Wave C structured skills', () => {
         .map((t) => t.name)
         .sort(),
     ).toEqual([
+      'history_analyze',
       'initiative_search',
       'web_extract',
       'web_search',
@@ -467,12 +511,24 @@ describe('foundation bundle — Wave C structured skills', () => {
       adapter
         .resolveTools(
           buildAuthz({
+            tenant: { tenantId: 't-1', workspaceType: 'opportunity' },
             permissionMode: 'allowlist',
-            allowedTools: ['executive_summary_get', 'matrix_get'],
+            allowedTools: [
+              'executive_summary_get',
+              'matrix_get',
+              'history_analyze',
+              'gate_review',
+            ],
           }),
         )
         .map((t) => t.name)
         .sort(),
-    ).toEqual(['executive_summary_get', 'matrix_get', SEARCH_SKILLS_TOOL_NAME].sort());
+    ).toEqual([
+      'executive_summary_get',
+      'matrix_get',
+      'history_analyze',
+      'gate_review',
+      SEARCH_SKILLS_TOOL_NAME,
+    ].sort());
   });
 });
