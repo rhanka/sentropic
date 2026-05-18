@@ -4,8 +4,10 @@ import { InMemorySkillRegistry } from '../../src/registry/registry.js';
 import { createSkillsToolRegistry } from '../../src/registry/adapter.js';
 import {
   FOUNDATION_SKILLS,
+  executiveSummarySkill,
   foldersSkill,
   initiativesSkill,
+  matrixSkill,
   organizationsSkill,
   productsSkill,
   proposalsSkill,
@@ -72,6 +74,23 @@ const WAVE_B_SKILLS = [
   },
 ] as const;
 
+const WAVE_C_SKILLS = [
+  {
+    skill: executiveSummarySkill,
+    name: 'executive_summary',
+    tools: ['executive_summary_get', 'executive_summary_update'],
+    bodyTitle: 'Executive summary skill',
+    updateTool: 'executive_summary_update',
+  },
+  {
+    skill: matrixSkill,
+    name: 'matrix',
+    tools: ['matrix_get', 'matrix_update'],
+    bodyTitle: 'Matrix skill',
+    updateTool: 'matrix_update',
+  },
+] as const;
+
 const FOUNDATION_SKILL_NAMES = [
   'workspace',
   'web',
@@ -81,14 +100,20 @@ const FOUNDATION_SKILL_NAMES = [
   'solutions',
   'proposals',
   'products',
+  'executive_summary',
+  'matrix',
 ] as const;
 
 const FOUNDATION_TOOL_NAMES = [
+  'executive_summary_get',
+  'executive_summary_update',
   'folder_get',
   'folder_update',
   'folders_list',
   'initiative_search',
   'initiatives_list',
+  'matrix_get',
+  'matrix_update',
   'organization_get',
   'organization_update',
   'organizations_list',
@@ -280,11 +305,11 @@ describe('foundation bundle — Wave B object skills', () => {
     }
   });
 
-  it('registers Wave A and Wave B foundation skills in stable order', () => {
+  it('keeps Wave A and Wave B foundation skills as a stable registration prefix', () => {
     const reg = new InMemorySkillRegistry();
     const names = registerFoundationSkills(reg);
 
-    expect(names).toEqual([
+    expect(names.slice(0, 8)).toEqual([
       'workspace',
       'web',
       'organizations',
@@ -294,7 +319,9 @@ describe('foundation bundle — Wave B object skills', () => {
       'proposals',
       'products',
     ]);
-    expect(FOUNDATION_SKILLS.map((s) => s.metadata.name)).toEqual(names);
+    expect(FOUNDATION_SKILLS.map((s) => s.metadata.name).slice(0, 8)).toEqual(
+      names.slice(0, 8),
+    );
     expect(reg.list({ category: 'object' }).map((m) => m.name)).toEqual([
       'organizations',
       'folders',
@@ -356,5 +383,96 @@ describe('foundation bundle — Wave B object skills', () => {
       'solution_get',
       SEARCH_SKILLS_TOOL_NAME,
     ].sort());
+  });
+});
+
+describe('foundation bundle — Wave C structured skills', () => {
+  it('parses every structured skill metadata, tools, body, and handlers', () => {
+    for (const { skill, name, tools, bodyTitle, updateTool } of WAVE_C_SKILLS) {
+      expect(skill.metadata.name).toBe(name);
+      expect(skill.metadata.version).toBe('0.1.0');
+      expect(skill.metadata.category).toBe('analysis');
+      expect(skill.metadata.contextFilter?.workspaceTypes).toEqual([
+        'ai-ideas',
+        'opportunity',
+      ]);
+      expect(skill.metadata.toolNames).toEqual(tools);
+      expect(skill.tools.map((t) => t.name)).toEqual(tools);
+      expect(skill.body).toContain(bodyTitle);
+      expect(Object.keys(skill.handlers ?? {}).sort()).toEqual(
+        [...tools].sort(),
+      );
+      expect(skill.tools.find((tool) => tool.name === updateTool)?.sideEffect).toBe(
+        true,
+      );
+      expect(
+        skill.tools.find((tool) => tool.name === updateTool)?.requiresApproval,
+      ).toBe(true);
+    }
+  });
+
+  it('handlers throw a "not bound" error when invoked', () => {
+    for (const { skill, name, tools } of WAVE_C_SKILLS) {
+      for (const toolName of tools) {
+        expect(() =>
+          skill.handlers?.[toolName]?.({
+            toolName,
+            input: {},
+          }),
+        ).toThrow(new RegExp(`${name} skill handler "${toolName}" is not bound`));
+      }
+    }
+  });
+
+  it('registers Wave A, Wave B, and package-only Wave C foundation skills in stable order', () => {
+    const reg = new InMemorySkillRegistry();
+    const names = registerFoundationSkills(reg);
+
+    expect(names).toEqual([
+      'workspace',
+      'web',
+      'organizations',
+      'folders',
+      'initiatives',
+      'solutions',
+      'proposals',
+      'products',
+      'executive_summary',
+      'matrix',
+    ]);
+    expect(FOUNDATION_SKILLS.map((s) => s.metadata.name)).toEqual(names);
+    expect(reg.list({ category: 'analysis' }).map((m) => m.name)).toEqual([
+      'executive_summary',
+      'matrix',
+    ]);
+  });
+
+  it('resolves structured tools only for allowed workspace types and allowlists', () => {
+    const reg = new InMemorySkillRegistry();
+    registerFoundationSkills(reg);
+    const adapter = createSkillsToolRegistry(reg);
+
+    expect(
+      withoutMeta(adapter.resolveTools(buildAuthz({ tenant: { tenantId: 't-1' } })))
+        .map((t) => t.name)
+        .sort(),
+    ).toEqual([
+      'initiative_search',
+      'web_extract',
+      'web_search',
+      'workspace_list',
+    ]);
+
+    expect(
+      adapter
+        .resolveTools(
+          buildAuthz({
+            permissionMode: 'allowlist',
+            allowedTools: ['executive_summary_get', 'matrix_get'],
+          }),
+        )
+        .map((t) => t.name)
+        .sort(),
+    ).toEqual(['executive_summary_get', 'matrix_get', SEARCH_SKILLS_TOOL_NAME].sort());
   });
 });

@@ -128,6 +128,7 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
     - [x] Step 1 — `organizations`, `folders`, `initiatives` foundation object skills added as metadata bundles with not-bound handler guards. 9 tools registered; `make typecheck-skills ENV=test-feat-agent-sandbox-skills` and `make test-skills ENV=test-feat-agent-sandbox-skills` pass.
     - [x] Step 2 — `solutions`, `proposals`, `products` foundation object skills.
   - [ ] Migrate **wave C** (write/structured skills): `executive_summary`, `matrix`, `documents`, `comment_assistant`, `plan`, `gate_review`, `history_analyze` skills.
+    - [x] Step 1 — package-only first sub-lot: `executive_summary` + `matrix` foundation skills added under `packages/skills/src/bundles/foundation/` with legacy `api/src/services/tools.ts` schemas and `not bound` handler guards only. 4 tools registered; API/chat-service rebind remains deferred. `make typecheck-skills ENV=test-feat-agent-sandbox-skills` and `make test-skills ENV=test-feat-agent-sandbox-skills` pass.
   - [ ] Migrate **wave D** (sandbox-backed skills): `document_generate` (uses sandbox, ports the docx-freeform skill), `batch_create_organizations`, `task_dispatch`.
   - [ ] Refactor `api/src/services/chat-service.ts` tool dispatch to consume `SkillsToolRegistry.resolveTools(authz)`; delete the legacy `if toolCall.name === '...'` branches in one cleanup commit.
   - [ ] Delete `api/src/services/tools.ts` after final wave (`no legacy fallback` rule).
