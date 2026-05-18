@@ -1,11 +1,12 @@
 /**
- * Authorization context types declared LOCALLY in `@sentropic/skills`.
+ * Authorization context types exposed by `@sentropic/skills`.
  *
- * Per BR19-N1 (BRANCH.md Feedback Loop), `@sentropic/contracts` does not yet
- * exist on this branch baseline. The shapes below mirror the planned contract
- * surface that BR-14b/BR-26 will lift into `@sentropic/contracts`. When that
- * package lands, this file becomes a thin re-export and the structural
- * compatibility is preserved (no runtime churn for downstream consumers).
+ * BR19-N1 initially expected these to become direct `@sentropic/contracts`
+ * re-exports. The contract package now exists, but its `AuthzContext` is the
+ * transverse caller/tool-allowance envelope used by chat-core. Skills still
+ * needs local roles, permissions, and workspace type filters for catalog
+ * resolution. Keep the existing skills API stable and provide an explicit
+ * adapter from the contract shape instead of aliasing incompatible types.
  *
  * Design constraints frozen in SPEC_EVOL_BR19 §3:
  *   - `roles` and `workspaceTypes` mirror `ContextFilter` for AND-combined
@@ -17,10 +18,44 @@
  */
 
 /**
- * Per-tenant context (workspace, organisation, …). Kept narrow on purpose;
- * concrete adapters extend it without breaking structural compatibility.
+ * Exact transverse tenant context shape currently exported by
+ * `@sentropic/contracts`. Declared structurally here to avoid coupling the
+ * package typecheck target to a built `packages/contracts/dist` artifact.
  */
-export interface TenantContext {
+export interface ContractTenantContext {
+  readonly tenantId: string;
+  readonly workspaceId: string;
+  readonly userId: string;
+  readonly sessionId?: string;
+  readonly runId?: string;
+}
+
+/**
+ * Exact transverse permission mode shape currently exported by
+ * `@sentropic/contracts`.
+ */
+export type ContractPermissionMode =
+  | 'untrusted'
+  | 'on-request'
+  | 'on-failure'
+  | 'never'
+  | 'granular';
+
+/**
+ * Exact transverse authz context shape currently exported by
+ * `@sentropic/contracts`.
+ */
+export interface ContractAuthzContext {
+  readonly caller: ContractTenantContext;
+  readonly allowedTools: ReadonlySet<string>;
+  readonly permissionMode: ContractPermissionMode;
+}
+
+/**
+ * Per-tenant context (workspace, organisation, ...). Kept compatible with the
+ * contract tenant context while preserving the BR19 `workspaceType` filter.
+ */
+export interface TenantContext extends Partial<ContractTenantContext> {
   /** Tenant / workspace id. Required for audit; not used for authz directly. */
   readonly tenantId: string;
   /**
@@ -58,6 +93,47 @@ export interface AuthzContext {
    * Ignored in 'open' mode.
    */
   readonly allowedTools: ReadonlyArray<string>;
+}
+
+export interface ContractAuthzAdapterOptions {
+  readonly workspaceType?: string;
+  readonly roles?: ReadonlyArray<string>;
+  readonly permissions?: ReadonlyArray<string>;
+  /**
+   * Override the skills exposure mode when the caller already made a
+   * marketplace/governance decision outside `@sentropic/skills`.
+   */
+  readonly permissionMode?: PermissionMode;
+}
+
+function defaultSkillsPermissionMode(authz: ContractAuthzContext): PermissionMode {
+  if (authz.permissionMode === 'granular' || authz.permissionMode === 'untrusted') {
+    return 'allowlist';
+  }
+  if (authz.allowedTools.size > 0) {
+    return 'allowlist';
+  }
+  return 'open';
+}
+
+/**
+ * Convert the transverse `@sentropic/contracts` authz envelope into the richer
+ * catalog-filtering context consumed by `@sentropic/skills`.
+ */
+export function authzContextFromContract(
+  authz: ContractAuthzContext,
+  options: ContractAuthzAdapterOptions = {},
+): AuthzContext {
+  return {
+    tenant: {
+      ...authz.caller,
+      workspaceType: options.workspaceType,
+    },
+    roles: options.roles ?? [],
+    permissions: options.permissions ?? [],
+    permissionMode: options.permissionMode ?? defaultSkillsPermissionMode(authz),
+    allowedTools: Array.from(authz.allowedTools),
+  };
 }
 
 /**
