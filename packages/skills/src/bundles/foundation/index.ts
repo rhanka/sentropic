@@ -1,7 +1,9 @@
 import type { SkillRegistry } from '../../registry/registry.js';
 import type { Skill } from '../../types/skill.js';
+import { executiveSummarySkill } from './executive_summary/index.js';
 import { foldersSkill } from './folders/index.js';
 import { initiativesSkill } from './initiatives/index.js';
+import { matrixSkill } from './matrix/index.js';
 import { organizationsSkill } from './organizations/index.js';
 import { productsSkill } from './products/index.js';
 import { proposalsSkill } from './proposals/index.js';
@@ -27,6 +29,10 @@ import { workspaceSkill } from './workspace/index.js';
  * Wave B contents:
  *   - `organizations`, `folders`, `initiatives`, `solutions`, `proposals`,
  *     `products` — workspace-scoped object metadata and guard handlers.
+ *
+ * Wave C package-only first sub-lot:
+ *   - `executive_summary`, `matrix` — structured folder analysis metadata with
+ *     not-bound handlers only. API runtime rebind stays deferred.
  */
 export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   workspaceSkill,
@@ -37,6 +43,8 @@ export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   solutionsSkill,
   proposalsSkill,
   productsSkill,
+  executiveSummarySkill,
+  matrixSkill,
 ]);
 
 /**
@@ -67,3 +75,5 @@ export { initiativesSkill } from './initiatives/index.js';
 export { solutionsSkill } from './solutions/index.js';
 export { proposalsSkill } from './proposals/index.js';
 export { productsSkill } from './products/index.js';
+export { executiveSummarySkill } from './executive_summary/index.js';
+export { matrixSkill } from './matrix/index.js';
