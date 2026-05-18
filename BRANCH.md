@@ -108,12 +108,12 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Regression test name: `gate-service.flow-replay.spec.ts` against fixture #3 (approval-gated pause+resume) — covered by the existing `replay.spec.ts` (17/17 green, fixture #3 `approval-gated-pause-resume`).
   - [x] Lot gate: typecheck-api, lint-api, scoped api test, replay harness.
 
-- [ ] **Lot 5 — Slice 2: `default-workflows.ts` → seed catalog port; agent catalog deferred**
+- [x] **Lot 5 — Slice 2: `default-workflows.ts` → seed catalog port; agent catalog deferred**
   - [x] Move the workflow seed catalog into `packages/flow/src/seeds/workflows.ts` (pure data, no DB access). `api/src/config/default-workflows.ts` reduced to a thin re-export.
   - [!] Move the agent seed catalog into `packages/flow/src/seeds/agents/` — deferred to BR-27, see `BR26-FB-02`.
-  - [ ] `seedAgentsForType` / `seedWorkflowsForType` adapters keep the upsert behavior in `api/src/services/flow/postgres-workflow-store.ts`.
-  - [ ] Regression: re-seed an empty test DB → resulting rows byte-identical to current main.
-  - [x] Lot gate (partial, workflows-only): typecheck-api green, replay harness 17/17 green at commit `15955902`. Agent move still pending; full Lot gate re-runs when agent seeds land.
+  - [x] `seedAgentsForType` / `seedWorkflowsForType` adapters keep the upsert behavior via `api/src/services/flow/postgres-agent-template.ts` and `api/src/services/flow/postgres-workflow-store.ts`.
+  - [x] Regression: re-seed an empty test DB → covered by `tests/api/generic-dispatch.test.ts` (ai-ideas, opportunity, code, neutral, idempotent re-seed).
+  - [x] Lot gate (workflows-only): `make typecheck-api`, `make lint-api`, replay harness 17/17, generic dispatch seed regression 11/11 green on 2026-05-17. Agent catalog move remains deferred by `BR26-FB-02`; Lot 6 may resume after conductor confirmation.
 
 - [ ] **Lot 6 — Slice 3: `workflow_run_state` CRUD → `RunStore`**
   - [ ] Move snapshot/merge/version OCC logic from `queue-manager.ts` into `packages/flow/src/run-store.ts` + Postgres adapter.
