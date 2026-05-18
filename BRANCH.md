@@ -1,0 +1,390 @@
+# Feature: BR-14a Chat UI SDK Relaunch
+
+## Objective
+Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surface as `@sentropic/chat-ui`, consuming `@sentropic/chat-core` wire contracts and never reaching directly into `@sentropic/llm-mesh`.
+
+## Scope / Guardrails
+- Scope is limited to chat UI package extraction and adoption by the web app, Chrome extension download surface, and VSCode webview where the current codebase already exposes chat behavior.
+- Relaunch baseline is `origin/main` at `74f71e3b` after BR-14b merge; the superseded worktree `tmp/feat-chat-ui-sdk` and branch `feat/chat-ui-sdk` must remain untouched.
+- Historical references to `@sentropic/chat` in `README.md`, `TODO.md`, and `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md` are stale for this branch; the implementation target is `@sentropic/chat-ui` per `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md`.
+- `@sentropic/chat-ui` consumes `@sentropic/chat-core` only through HTTP/SSE or exported wire/client contracts. It must not define provider, model, credential, retry, quota, or mesh abstractions.
+- Server behavior stays in `api/src/**` and `packages/chat-core/**`; this branch may add narrow compatibility shims only when required by UI extraction.
+- One migration max in `api/drizzle/*.sql` if later implementation proves a schema change is unavoidable; no migration is expected for this branch.
+- Make-only workflow, no direct Docker/npm commands.
+- Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT and existing branch work; do not switch or clean it.
+- Branch development must happen in isolated worktree `tmp/feat-chat-ui-sdk-v2`.
+- Automated test campaigns must run on dedicated environments, never on root `ENV=dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new code, comments, docs, package metadata, and PR text must be English.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (planning scope)**:
+  - `BRANCH.md`
+- **Allowed Paths (implementation scope)**:
+  - `packages/chat-ui/**`
+  - `ui/src/lib/components/ChatPanel.svelte`
+  - `ui/src/lib/components/ChatWidget.svelte`
+  - `ui/src/lib/components/StreamMessage.svelte`
+  - `ui/src/lib/core/chatwidget-handoff.ts`
+  - `ui/src/lib/stores/chatWidgetLayout.ts`
+  - `ui/src/lib/stores/localTools.ts`
+  - `ui/src/lib/stores/streamHub.ts`
+  - `ui/src/lib/utils/chat-run-projection.ts`
+  - `ui/src/lib/utils/chat-steer.ts`
+  - `ui/src/lib/utils/chat-tool-scope.ts`
+  - `ui/src/lib/utils/localToolStreamSync.ts`
+  - `ui/src/lib/upstream/injected-script.ts`
+  - `ui/vscode-ext/**`
+  - `ui/tests/components/ChatPanel-docx-cards.test.ts`
+  - `ui/tests/stores/streamHub.test.ts`
+  - `ui/tests/upstream/bridge.test.ts`
+  - `ui/tests/upstream/injected-script.test.ts`
+  - `ui/tests/utils/chat-run-projection.test.ts`
+  - `ui/tests/utils/chat-steer.test.ts`
+  - `ui/tests/utils/chat-tool-scope.test.ts`
+  - `ui/tests/utils/localToolStreamSync.test.ts`
+  - `ui/tests/utils/extension-auth-ui.test.ts`
+  - `ui/tests/vscode-ext/**`
+  - `api/src/routes/api/chat.ts`
+  - `api/src/routes/api/streams.ts`
+  - `api/src/services/chat-service.ts`
+  - `api/src/services/chat-session-history.ts`
+  - `api/src/services/chat/**`
+  - `api/tests/ai/chat-sync.test.ts`
+  - `api/tests/ai/chat-tools.test.ts`
+  - `api/tests/api/chat-bootstrap-contract.test.ts`
+  - `api/tests/api/chat-checkpoint-contract.test.ts`
+  - `api/tests/api/chat-feedback.test.ts`
+  - `api/tests/api/chat-history-analyze-tool.test.ts`
+  - `api/tests/api/chat-message-actions.test.ts`
+  - `api/tests/api/chat-permissions.test.ts`
+  - `api/tests/api/chat-summary-contract.test.ts`
+  - `api/tests/api/chat-tools.test.ts`
+  - `api/tests/api/chat.test.ts`
+  - `api/tests/api/streams.test.ts`
+  - `api/tests/unit/chat-checkpoint-runtime.test.ts`
+  - `api/tests/unit/chat-service-batch-create-orgs.test.ts`
+  - `api/tests/unit/chat-service-document-generate-pptx.test.ts`
+  - `api/tests/unit/chat-service-document-generate.test.ts`
+  - `api/tests/unit/chat-service-tab-tools.test.ts`
+  - `api/tests/unit/chat-service-tools.test.ts`
+  - `api/tests/unit/chat-session-history-docx.test.ts`
+  - `api/tests/unit/chat-summary-runtime.test.ts`
+  - `api/tests/unit/stream-service.test.ts`
+  - `e2e/tests/03-chat.spec.ts`
+  - `e2e/tests/03-chat-mobile-docked-nav.spec.ts`
+  - `e2e/tests/03-chat-chrome-extension.spec.ts`
+  - `e2e/tests/03-chat-chrome-extension-auth.spec.ts`
+  - `e2e/tests/06-streams.spec.ts`
+  - `e2e/tests/08-chat-heavy.spec.ts`
+  - `e2e/tests/08-chat-workspace-switch.spec.ts`
+  - `e2e/tests/vscode/01-vscode-chat-streaming.spec.ts`
+  - `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`
+  - `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`
+  - `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `rules/**`
+  - `tmp/feat-chat-ui-sdk/**`
+  - `tmp/refacto-chat-service-core/**`
+  - `plan/14a-BRANCH_feat-chat-ui-sdk.md`
+  - any old BR-14a branch/worktree file outside `tmp/feat-chat-ui-sdk-v2`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile`
+  - `.github/workflows/**`
+  - `package.json`
+  - `package-lock.json`
+  - `api/package.json`
+  - `api/package-lock.json`
+  - `ui/package.json`
+  - `ui/package-lock.json`
+  - `api/drizzle/*.sql`
+  - `README.md`
+  - `TODO.md`
+  - deployment, DNS, repository, registry, or secret configuration; default owner remains BR-14d.
+- **Exception process**:
+  - Declare exception ID `BR14a-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, rollback strategy, and user approval status.
+  - No exception is active at relaunch.
+
+## Feedback Loop
+- [x] `clarification`: Relaunch is required. Old `feat/chat-ui-sdk` is clean but stale: `git rev-list --left-right --count origin/main...feat/chat-ui-sdk` returned `167 2`, and its only branch delta is `BRANCH.md`.
+- [x] `clarification`: Recreate from `origin/main` is safe because old BR-14a contains docs-only Lot 0 commits and BR-14b is now merged into `origin/main`.
+- [x] `clarification`: New worktree created at `tmp/feat-chat-ui-sdk-v2` on branch `feat/chat-ui-sdk-v2`; old worktree and branch were not modified.
+- [ ] `attention`: Before Lot 2, reconcile public package name drift: current architecture says `@sentropic/chat-ui`, while `README.md`, `TODO.md`, and orchestration spec still mention `@sentropic/chat`.
+- [ ] `attention`: Before package publication wiring, open `BR14a-EX1` for `Makefile`, `.github/workflows/**`, root package metadata, and lockfiles.
+- [ ] `attention`: Before merge, record Web, Chrome, and VSCode UAT as passed, or record explicit user waiver.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** for BR-14a because Web, Chrome, and VSCode must converge on one shared `@sentropic/chat-ui` contract and one integrated UAT campaign.
+- [ ] **Multi-branch** only if package scaffold, Web adoption, and extension adoption need independent CI branches after Lot 1 inventory.
+- Rationale: The package boundary is shared and must be validated as one public UI SDK. Splitting early would create competing adapter shapes for the same chat-core wire protocol.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only after lots that change user-facing chat behavior.
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main BR-14a branch.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot.
+- Execution flow:
+  - Develop and run tests in `tmp/feat-chat-ui-sdk-v2`.
+  - Push branch before UAT only when implementation lots are ready.
+  - Run user UAT from root workspace on `ENV=dev`.
+  - Switch back to `tmp/feat-chat-ui-sdk-v2` after UAT.
+
+## Environment Mapping
+- [x] Worktree: `tmp/feat-chat-ui-sdk-v2`.
+- [x] Branch: `feat/chat-ui-sdk-v2`.
+- [x] Branch ENV: `feat-chat-ui-sdk-v2`.
+- [x] Test ENV: `test-feat-chat-ui-sdk-v2`.
+- [x] E2E ENV: `e2e-feat-chat-ui-sdk-v2`.
+- [x] Reserved branch slot: BR-14 slot 1 for relaunch.
+- [x] Branch dev ports: `API_PORT=9071`, `UI_PORT=5271`, `MAILDEV_UI_PORT=1171`, with `ENV=feat-chat-ui-sdk-v2` last.
+- [x] E2E ports: `API_PORT=9071`, `UI_PORT=5271`, `MAILDEV_UI_PORT=1171`, with `ENV=e2e-feat-chat-ui-sdk-v2` last.
+- [x] Root UAT remains reserved for user dev on `ENV=dev`.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 - Relaunch baseline & constraints**
+  - [x] Read mandatory rules: `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`.
+  - [x] Read project context: `README.md`, `TODO.md`, `PLAN.md`.
+  - [x] Read branch references: old `tmp/feat-chat-ui-sdk/BRANCH.md`, `plan/14a-BRANCH_feat-chat-ui-sdk.md`, and `plan/BRANCH_TEMPLATE.md`.
+  - [x] Confirm old worktree status: `tmp/feat-chat-ui-sdk` is clean and `feat/chat-ui-sdk` is `ahead 2, behind 167` relative to `origin/main`.
+  - [x] Confirm old branch delta is docs-only: `git diff --name-status origin/main...feat/chat-ui-sdk` returns only `A BRANCH.md`.
+  - [x] Confirm BR-14b dependency is cleared in current `origin/main`: `packages/chat-core/**`, `packages/contracts/**`, and `packages/events/**` exist.
+  - [x] Create isolated worktree `tmp/feat-chat-ui-sdk-v2` from `origin/main`.
+  - [x] Confirm branch name `feat/chat-ui-sdk-v2`.
+  - [x] Record branch scope boundaries and forbidden old-worktree touchpoints.
+  - [x] Record environment mapping and port allocation.
+  - [x] Record target package name as `@sentropic/chat-ui`.
+  - [x] Create this relaunch `BRANCH.md`.
+
+- [ ] **Lot 1 - Inventory and package boundary design**
+  - [ ] Inventory current web chat UI files and decide which code moves to `packages/chat-ui/src`:
+    - `ui/src/lib/components/ChatPanel.svelte`
+    - `ui/src/lib/components/ChatWidget.svelte`
+    - `ui/src/lib/components/StreamMessage.svelte`
+    - `ui/src/lib/stores/streamHub.ts`
+    - `ui/src/lib/stores/chatWidgetLayout.ts`
+    - `ui/src/lib/stores/localTools.ts`
+    - `ui/src/lib/utils/chat-run-projection.ts`
+    - `ui/src/lib/utils/chat-steer.ts`
+    - `ui/src/lib/utils/chat-tool-scope.ts`
+    - `ui/src/lib/utils/localToolStreamSync.ts`
+  - [ ] Inventory current host adapter files and classify what stays app-owned:
+    - `ui/src/lib/core/chatwidget-handoff.ts`
+    - `ui/src/lib/upstream/injected-script.ts`
+    - `ui/vscode-ext/auth-bridge.ts`
+    - `ui/vscode-ext/extension.ts`
+    - `ui/vscode-ext/host-handler.ts`
+    - `ui/vscode-ext/local-tools.ts`
+    - `ui/vscode-ext/stream-proxy.ts`
+    - `ui/vscode-ext/vscode-bridge.ts`
+    - `ui/vscode-ext/webview-entry.ts`
+  - [ ] Inventory current chat-core/server wire assumptions from:
+    - `packages/chat-core/src/types.ts`
+    - `packages/chat-core/src/stream-port.ts`
+    - `packages/chat-core/src/stream-sequencer-port.ts`
+    - `api/src/routes/api/chat.ts`
+    - `api/src/routes/api/streams.ts`
+    - `api/src/services/chat-service.ts`
+  - [ ] Write `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` with final package shape:
+    - public Svelte component exports;
+    - client store exports;
+    - transport/replay client boundary;
+    - renderer registry boundary for tool results;
+    - host adapter boundary for web, Chrome, and VSCode;
+    - explicit non-goals: mesh/provider access, server persistence, workflow orchestration.
+  - [ ] Lot gate:
+    - [ ] No application behavior change.
+    - [ ] No code movement before package boundary is documented.
+    - [ ] Run `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run `make test-ui SCOPE=tests/stores/streamHub.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Commit with `git add BRANCH.md spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`, then `make commit MSG="docs: define BR14a chat ui sdk scope" ENV=test-feat-chat-ui-sdk-v2`.
+
+- [ ] **Lot 2 - Package scaffold and public UI contract**
+  - [ ] Open `BR14a-EX1` for package/workspace metadata if `package-lock.json` or package scripts must change.
+  - [ ] Create `packages/chat-ui/package.json` for `@sentropic/chat-ui` with Svelte-compatible exports, `type: module`, `sideEffects` limited to Svelte style/runtime needs, and dependencies only on packages already used by extracted UI code.
+  - [ ] Create `packages/chat-ui/tsconfig.json` aligned with existing package TypeScript settings.
+  - [ ] Create `packages/chat-ui/src/index.ts` exporting the public surface.
+  - [ ] Create `packages/chat-ui/src/client/transport.ts` for chat-core HTTP/SSE client primitives.
+  - [ ] Create `packages/chat-ui/src/client/replay.ts` for stream replay and `fromSeq` handling.
+  - [ ] Create `packages/chat-ui/src/renderers/registry.ts` for tool result renderer registration and JSON fallback.
+  - [ ] Create `packages/chat-ui/src/hosts/types.ts` for web, Chrome, and VSCode host adapter interfaces.
+  - [ ] Create `packages/chat-ui/src/components/ChatPanel.svelte`, `ChatWidget.svelte`, and `StreamMessage.svelte` as package-owned copies before rewiring app imports.
+  - [ ] Create package tests:
+    - `packages/chat-ui/tests/transport.test.ts`
+    - `packages/chat-ui/tests/replay.test.ts`
+    - `packages/chat-ui/tests/renderer-registry.test.ts`
+    - `packages/chat-ui/tests/host-adapter-types.test.ts`
+  - [ ] Lot gate:
+    - [ ] Run package scoped typecheck target after adding it: `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run package tests after adding target: `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Commit package scaffold and tests with selective `git add`, then `make commit MSG="feat: scaffold sentropic chat ui package" ENV=test-feat-chat-ui-sdk-v2`.
+
+- [ ] **Lot 3 - Web app adoption**
+  - [ ] Replace web imports so `ui/src/lib/components/ChatPanel.svelte`, `ChatWidget.svelte`, and `StreamMessage.svelte` either re-export package components or become thin app-specific wrappers.
+  - [ ] Move shared `streamHub`, chat run projection, steering, tool scope, and local tool sync logic into `packages/chat-ui/src` when the code is UI-generic.
+  - [ ] Keep route-specific, workspace-specific, and authentication-specific logic in `ui/src/**` host adapters.
+  - [ ] Preserve these web behaviors:
+    - desktop floating widget and docked panel;
+    - mobile full-screen/bottom-sheet layout;
+    - markdown streaming;
+    - tool-call rendering;
+    - attachments;
+    - context/tool menu;
+    - interruption;
+    - retry, rollback, copy, and feedback controls;
+    - SSE resync after navigation or refresh.
+  - [ ] Update UI tests:
+    - `ui/tests/components/ChatPanel-docx-cards.test.ts`
+    - `ui/tests/stores/streamHub.test.ts`
+    - `ui/tests/utils/chat-run-projection.test.ts`
+    - `ui/tests/utils/chat-steer.test.ts`
+    - `ui/tests/utils/chat-tool-scope.test.ts`
+    - `ui/tests/utils/localToolStreamSync.test.ts`
+    - `ui/tests/utils/todo-chat-rendering.test.ts`
+  - [ ] Lot gate:
+    - [ ] Run `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run `make test-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run `make build-ui-image API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Commit with selective `git add`, then `make commit MSG="feat: consume chat ui package in web app" ENV=test-feat-chat-ui-sdk-v2`.
+
+- [ ] **Lot 4 - API and chat-core compatibility check**
+  - [ ] Confirm `@sentropic/chat-ui` does not require direct imports from `api/src/**`.
+  - [ ] Confirm `api/src/routes/api/chat.ts` and `api/src/routes/api/streams.ts` provide every wire event and replay behavior consumed by the package.
+  - [ ] If a narrow response-shape or header compatibility fix is required, update only the allowed API chat files.
+  - [ ] Update API tests when compatibility changes are made:
+    - `api/tests/api/chat-bootstrap-contract.test.ts`
+    - `api/tests/api/chat-checkpoint-contract.test.ts`
+    - `api/tests/api/chat-message-actions.test.ts`
+    - `api/tests/api/chat-permissions.test.ts`
+    - `api/tests/api/chat-summary-contract.test.ts`
+    - `api/tests/api/chat.test.ts`
+    - `api/tests/api/streams.test.ts`
+    - `api/tests/unit/stream-service.test.ts`
+  - [ ] Lot gate:
+    - [ ] Run `make typecheck-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run `make test-api SCOPE=tests/api/chat.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run `make test-api SCOPE=tests/api/streams.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Commit only if API compatibility changes were required, then `make commit MSG="fix: align chat api wire contract for chat ui" ENV=test-feat-chat-ui-sdk-v2`.
+
+- [ ] **Lot 5 - Chrome and VSCode adoption**
+  - [ ] Confirm whether Chrome extension behavior is currently built from web app assets or a separate package surface; document the result in `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`.
+  - [ ] Rewire Chrome-facing upstream bridge code only where it consumes shared chat UI client/state behavior:
+    - `ui/src/lib/upstream/injected-script.ts`
+    - `ui/tests/upstream/bridge.test.ts`
+    - `ui/tests/upstream/injected-script.test.ts`
+    - `ui/tests/utils/extension-auth-ui.test.ts`
+  - [ ] Rewire VSCode webview and host bridge to consume package client/state contracts where applicable:
+    - `ui/vscode-ext/webview-entry.ts`
+    - `ui/vscode-ext/vscode-bridge.ts`
+    - `ui/vscode-ext/stream-proxy.ts`
+    - `ui/vscode-ext/local-tools.ts`
+    - `ui/vscode-ext/host-handler.ts`
+  - [ ] Preserve VSCode authentication bridge, local tool permissions, checkpoint/summary flows, and host messaging.
+  - [ ] Update tests:
+    - `ui/tests/vscode-ext/auth-bridge.test.ts`
+    - `ui/tests/vscode-ext/extension-runtime.test.ts`
+    - `ui/tests/vscode-ext/host-bridge-runtime.test.ts`
+    - `ui/tests/vscode-ext/local-tools.test.ts`
+    - `ui/tests/vscode-ext/stream-proxy.test.ts`
+    - `ui/tests/vscode-ext/theme-parity.test.ts`
+    - `ui/tests/vscode-ext/tool-permissions.test.ts`
+    - `ui/tests/vscode-ext/vscode-bridge.test.ts`
+  - [ ] Lot gate:
+    - [ ] Run `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run `make test-ui SCOPE=tests/upstream API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run `make test-ui SCOPE=tests/vscode-ext API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Commit with selective `git add`, then `make commit MSG="feat: adopt chat ui package in extension surfaces" ENV=test-feat-chat-ui-sdk-v2`.
+
+- [ ] **Lot 6 - Package validation and publication wiring**
+  - [ ] Open `BR14a-EX1` before changing `Makefile`, `.github/workflows/**`, and package metadata.
+  - [ ] Add Make targets mirroring existing package patterns:
+    - `typecheck-chat-ui`
+    - `test-chat-ui`
+    - `build-chat-ui`
+    - `pack-chat-ui`
+    - `publish-chat-ui`
+    - `publish-chat-ui-token` only if bootstrap token publishing is required.
+  - [ ] Add CI path filters and validation job for `packages/chat-ui/**`.
+  - [ ] Add main-only publish job for `@sentropic/chat-ui` using the same skip-if-version-exists safety pattern as `publish-llm-mesh`.
+  - [ ] Add package README/API notes:
+    - `packages/chat-ui/README.md`
+    - public exports;
+    - host adapter examples;
+    - stream replay behavior;
+    - renderer registry behavior;
+    - non-goals and dependency rules.
+  - [ ] Lot gate:
+    - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run `make build-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run `make pack-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Commit with selective `git add`, then `make commit MSG="ci: validate and publish chat ui package" ENV=test-feat-chat-ui-sdk-v2`.
+
+- [ ] **Lot N-2 - UAT**
+  - [ ] Web app:
+    - [ ] Chat widget opens and closes in desktop floating mode.
+    - [ ] Chat panel docks and undocks without layout regression.
+    - [ ] Mobile chat opens as the expected full-screen or bottom-sheet surface.
+    - [ ] A new chat session can be created from an initiative, organization, and workspace context.
+    - [ ] Message send, streaming response, markdown rendering, final persistence, and refresh history behave as before.
+    - [ ] Tool-call rendering, permission prompts, attachments, context/tool menu, interruption, retry, rollback, copy, and feedback controls behave as before.
+    - [ ] SSE resync/history remains stable after navigation and page refresh.
+  - [ ] Chrome-facing surface:
+    - [ ] Chrome extension download endpoint and UI still expose a valid package.
+    - [ ] Side panel/floating chat behavior remains usable if extension assets are produced from the web bundle.
+    - [ ] Endpoint/settings flow remains usable.
+    - [ ] Runtime permission prompts remain scoped to origin/action.
+    - [ ] `tab_read` and `tab_action` flows still require consent and return usable results to chat.
+  - [ ] VSCode extension:
+    - [ ] VSCode chat webview loads.
+    - [ ] User can send a message and receive streamed output.
+    - [ ] Local tool permissions remain explicit.
+    - [ ] Summary/checkpoint flows remain stable.
+    - [ ] Host messaging and authentication bridge remain stable.
+  - [ ] Merge gate:
+    - [ ] UAT passed for all impacted surfaces, or explicit user waiver recorded.
+    - [ ] No merge without UAT passed or waiver.
+
+- [ ] **Lot N-1 - Docs consolidation**
+  - [ ] Update `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` with final package decisions.
+  - [ ] Update `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` only if actual package dependencies differ from the study.
+  - [ ] Update `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md` to replace stale `@sentropic/chat` wording with `@sentropic/chat-ui` where BR-14a is described.
+  - [ ] Update `README.md` and `TODO.md` naming only under an approved `BR14a-EXn` if the conductor wants public docs synchronized in this branch.
+  - [ ] Record BR-07 handoff notes for UI npm/pretest consumption.
+  - [ ] Lot gate:
+    - [ ] Run docs-only review for stale package names using `rg -n "@sentropic/chat|@sentropic/chat-ui|BR-14a|chat-ui" README.md TODO.md PLAN.md spec plan`.
+    - [ ] Commit docs with selective `git add`, then `make commit MSG="docs: consolidate chat ui package contract" ENV=test-feat-chat-ui-sdk-v2`.
+
+- [ ] **Lot N - Final validation**
+  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make test-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make typecheck-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make test-api API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make build-api build-ui-image API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=e2e-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=e2e-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make test-e2e E2E_SPEC=tests/03-chat-mobile-docked-nav.spec.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=e2e-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make test-e2e E2E_SPEC=tests/03-chat-chrome-extension.spec.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=e2e-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make test-e2e E2E_SPEC=tests/03-chat-chrome-extension-auth.spec.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=e2e-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make test-e2e E2E_SPEC=tests/06-streams.spec.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=e2e-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make test-e2e E2E_SPEC=tests/08-chat-heavy.spec.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=e2e-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make test-e2e E2E_SPEC=tests/08-chat-workspace-switch.spec.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=e2e-feat-chat-ui-sdk-v2`.
+  - [ ] Run `make test-e2e E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=e2e-feat-chat-ui-sdk-v2`.
+  - [ ] Retest AI flaky tests only under the acceptance rule and document signatures.
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted.
+  - [ ] Create/update PR using `BRANCH.md` text as PR body only after implementation is ready.
+  - [ ] Run/verify branch CI on that PR and resolve blockers.
+  - [ ] Confirm UAT + CI are both OK, or record explicit user waiver for UAT.
+  - [ ] Commit removal of `BRANCH.md`, push, and merge only after gates are satisfied.
