@@ -1,5 +1,8 @@
 import type { SkillRegistry } from '../../registry/registry.js';
 import type { Skill } from '../../types/skill.js';
+import { foldersSkill } from './folders/index.js';
+import { initiativesSkill } from './initiatives/index.js';
+import { organizationsSkill } from './organizations/index.js';
 import { webSkill } from './web/index.js';
 import { workspaceSkill } from './workspace/index.js';
 
@@ -24,6 +27,9 @@ import { workspaceSkill } from './workspace/index.js';
 export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   workspaceSkill,
   webSkill,
+  organizationsSkill,
+  foldersSkill,
+  initiativesSkill,
 ]);
 
 /**
@@ -48,3 +54,6 @@ export function registerFoundationSkills(
 
 export { workspaceSkill } from './workspace/index.js';
 export { webSkill } from './web/index.js';
+export { organizationsSkill } from './organizations/index.js';
+export { foldersSkill } from './folders/index.js';
+export { initiativesSkill } from './initiatives/index.js';
