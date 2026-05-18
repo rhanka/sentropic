@@ -14,9 +14,9 @@ Apply them first; the Makefile in this repo will not create them.
 - `10-rbac.yaml` — namespace-scoped ServiceAccount used by every Pod.
 - `20-postgres.yaml` — Postgres 17 StatefulSet + headless Service + 1Gi PVC on
   `scw-bssd` + ConfigMap (`POSTGRES_DB`, `POSTGRES_USER`).
-- `30-api.yaml` — `top-ai-ideas-api` Deployment + ClusterIP Service (port 8787)
+- `30-api.yaml` — `sentropic-api` GHCR image + ClusterIP Service (port 8787)
   + non-secret ConfigMap.
-- `40-ui.yaml` — `top-ai-ideas-ui` Deployment + ClusterIP Service (port 5173)
+- `40-ui.yaml` — `sentropic-ui` GHCR image + ClusterIP Service (port 5173)
   + placeholder ConfigMap for future overlays.
 - `50-maildev.yaml` — dev SMTP capture Deployment + ClusterIP Service (1025
   SMTP, 1080 UI).
@@ -39,8 +39,9 @@ Two namespace-scoped Secrets must exist before applying the manifests:
 - `sentropic-api` — `DATABASE_URL`, every `*_API_KEY`, `MAIL_USERNAME`,
   `MAIL_PASSWORD`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_PICKER_API_KEY`.
 
-The api and ui manifests intentionally target the `feat-deploy-poc-k8s` GHCR
-tag produced by this branch's image workflow. `make scw-bundle-secret` reads
+The api and ui manifests intentionally target the `feat-deploy-poc-k8s` tag
+on `ghcr.io/rhanka/sentropic-api` and `ghcr.io/rhanka/sentropic-ui`, produced
+by this branch's image workflow. `make scw-bundle-secret` reads
 `~/src/sentropic/.env` and creates both in-cluster, replacing the previous
 version. Re-run after rotating a key.
 
