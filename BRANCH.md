@@ -9,7 +9,7 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
 - No database schema migration.
 - No docker-compose replacement.
 - No dev/CI migration to Kubernetes.
-- BR-37 is separate from BR-14d: BR-37 owns the POC tenant workload; BR-14d owns DNS, production secrets transition, public hostnames, registry renames, and final Sentropic ops.
+- BR-37 is separate from BR-14d: BR-37 owns the POC tenant workload and its POC GHCR image names; BR-14d owns DNS, production secrets transition, public hostnames, broader registry migration, and final Sentropic ops.
 - Make-only workflow for this repo; no direct Docker commands.
 - Root workspace is reserved for user dev/UAT on `ENV=dev` and must remain stable.
 - Branch development happens in isolated worktree `tmp/feat-deploy-poc-k8s`.
@@ -57,6 +57,7 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
 - **BR37-FL4** (severity: `fixed`, status: `closed`): The next deploy target is confirmed as the Sentropic app workload from this BR-37 worktree. Do not use the remote control-plane repo for this UAT.
 - **BR37-FL5** (severity: `fixed`, status: `closed`): Session `session-sess-apr95chl` is no longer wanted. Verification on 2026-05-17 returned `NotFound` for pod, PVC, and auth Secret, so no cleanup action remains.
 - **BR37-FL6** (severity: `fixed`, status: `closed`): Manifests previously referenced static `v0.1.0` GHCR tags while the branch workflow publishes `feat-deploy-poc-k8s` and short-SHA tags. Fixed 2026-05-17 by pointing api/ui manifests at the branch tag for POC rollout. Rollback: retag a release image and update the manifest tags before production handoff.
+- **BR37-FL7** (severity: `fixed`, status: `closed`): BR-37 intentionally consumes the Sentropic transition plan for POC deployment artifacts only. `TRANSITION.md` keeps the broad codebase/DNS/Scaleway rename under BR-14e/BR-14d, but the Kapsule UAT image pull gate needs final POC image names now. Fixed by publishing branch images as `ghcr.io/rhanka/sentropic-api` and `ghcr.io/rhanka/sentropic-ui`, updating manifests/docs, and leaving app-code, DNS, OAuth, dashboards, and broader Scaleway renames deferred.
 
 ## AI Flaky tests
 - Not applicable. This branch does not change AI runtime behavior.
@@ -102,13 +103,14 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
   - [x] Add `docs/uat/2026-05-16-deploy-poc-k8s.md` with live UAT checklist and known limitations.
   - [x] Confirm PR #160 CI/checks were reported green by recovered GitHub context, including image jobs.
   - [x] Align api/ui manifest tags with the branch image workflow tag `feat-deploy-poc-k8s`.
+  - [x] Rename BR-37 POC GHCR artifacts from `top-ai-ideas-api/ui` to `sentropic-api/ui`; leave broader transition items to BR-14e/BR-14d.
 
 - [ ] **Lot 3 — Live poc-k8s UAT**
   - [x] Confirm next deploy target is the Sentropic app workload from this BR-37 worktree.
   - [x] Verify obsolete session `session-sess-apr95chl` is already absent: pod, PVC, and auth Secret all return `NotFound`.
   - [x] Confirm `poc-k8s` operator side is applied: namespace `sentropic`, ResourceQuota, LimitRange, NetworkPolicy baseline.
   - [x] Bundle secrets from root `.env`: `sentropic-postgres` and `sentropic-api`.
-  - [ ] Confirm GHCR api/ui image pull path: packages public or namespace pull secret configured.
+  - [ ] Confirm GHCR api/ui image pull path: `sentropic-api` and `sentropic-ui` packages public or namespace pull secret configured.
   - [ ] Deploy workload: `make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s`.
   - [ ] Snapshot workload: `make scw-status KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s`.
   - [ ] Port-forward api via `poc-k8s` Make target and verify `/api/v1/health`.
@@ -131,4 +133,4 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
 - [ ] Public DNS.
 - [ ] Cert-manager ClusterIssuer and final Ingress hosts.
 - [ ] Full dev/CI migration to Kubernetes or k3d.
-- [ ] Scaleway object, registry, secret, workflow, and dashboard rename finalization.
+- [ ] Remaining production Scaleway object, secret, workflow, dashboard, DNS, OAuth, and residual codebase rename finalization.

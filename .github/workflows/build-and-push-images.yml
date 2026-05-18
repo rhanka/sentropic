@@ -22,11 +22,11 @@ jobs:
           - name: api
             dockerfile: api/Dockerfile
             target: production
-            image: ghcr.io/rhanka/top-ai-ideas-api
+            image: ghcr.io/rhanka/sentropic-api
           - name: ui
             dockerfile: ui/Dockerfile
             target: production
-            image: ghcr.io/rhanka/top-ai-ideas-ui
+            image: ghcr.io/rhanka/sentropic-ui
     steps:
       - uses: actions/checkout@v4
 
@@ -65,7 +65,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
           # GHCR packages default to private; toggle to public manually after the
           # first run via the UI (https://github.com/users/rhanka/packages/
-          # container/top-ai-ideas-{api,ui}/settings → Change visibility →
+          # container/sentropic-{api,ui}/settings → Change visibility →
           # Public) so Kapsule kubelet can pull anonymously. Owner-only
           # admin:packages PAT could PATCH visibility automatically; out of
           # scope for the default GITHUB_TOKEN.
