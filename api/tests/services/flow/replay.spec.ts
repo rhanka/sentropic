@@ -1,4 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { db } from '../../../src/db/client';
+import {
+  executionRuns,
+  workflowRunState,
+  workflowTaskResults,
+} from '../../../src/db/schema';
+import { postgresRunStore } from '../../../src/services/flow/postgres-run-store';
+import { cleanupAuthData, createAuthenticatedUser } from '../../utils/auth-helper';
+import { createId } from '../../../src/utils/id';
 import {
   GOLDEN_DIR,
   assertSequenceMonotonic,
@@ -54,6 +64,145 @@ describe('BR-26 golden trace replay', () => {
     const fixtures = loadAllFixtures();
     const ids = fixtures.map((f) => f.fixtureId).sort();
     expect(ids).toEqual(EXPECTED_FIXTURES);
+  });
+
+  describe('RunStore adapter regressions', () => {
+    let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
+    let runId: string;
+
+    beforeEach(async () => {
+      user = await createAuthenticatedUser('editor');
+      runId = createId();
+      const now = new Date();
+      await db.insert(executionRuns).values({
+        id: runId,
+        workspaceId: user.workspaceId!,
+        planId: null,
+        todoId: null,
+        taskId: null,
+        workflowDefinitionId: null,
+        agentDefinitionId: null,
+        mode: 'full_auto',
+        status: 'in_progress',
+        startedByUserId: user.id,
+        startedAt: now,
+        completedAt: null,
+        metadata: { fixture: 'br26-run-store' },
+        createdAt: now,
+        updatedAt: now,
+      });
+    });
+
+    afterEach(async () => {
+      if (user?.workspaceId) {
+        await db.delete(workflowTaskResults).where(eq(workflowTaskResults.workspaceId, user.workspaceId));
+        await db.delete(workflowRunState).where(eq(workflowRunState.workspaceId, user.workspaceId));
+        await db.delete(executionRuns).where(eq(executionRuns.workspaceId, user.workspaceId));
+      }
+      await cleanupAuthData();
+    });
+
+    it('resume-after-crash: merges checkpoint state with a monotonic version bump and rejects stale OCC', async () => {
+      const checkpoint = loadFixture(join(GOLDEN_DIR, 'resume-after-crash.jsonl'));
+      const seed = checkpoint.input.seed as {
+        checkpointVersion: number;
+        checkpointState: Record<string, unknown>;
+      };
+      await db.insert(workflowRunState).values({
+        runId,
+        workspaceId: user.workspaceId!,
+        workflowDefinitionId: null,
+        status: 'in_progress',
+        state: seed.checkpointState,
+        version: seed.checkpointVersion,
+        currentTaskKey: 'matrix_prepare',
+        currentTaskInstanceKey: 'main',
+      });
+
+      const before = await postgresRunStore.getSnapshot(runId);
+      expect(before?.version).toBe(2);
+
+      const after = await postgresRunStore.mergeState({
+        runId,
+        expectedVersion: before!.version,
+        patch: { qualification: { finalized: true } },
+        status: 'completed',
+        currentTaskKey: 'qualification_finalize',
+        currentTaskInstanceKey: 'main',
+      });
+
+      expect(after.version).toBe(3);
+      expect(after.status).toBe('completed');
+      expect(after.state).toEqual({
+        qualification: { prepared: true, matrixReady: true, finalized: true },
+      });
+
+      await expect(
+        postgresRunStore.mergeState({
+          runId,
+          expectedVersion: before!.version,
+          patch: { qualification: { stale: true } },
+        }),
+      ).rejects.toThrow(/version conflict/i);
+    });
+
+    it('cancel-mid-loop: records partial task output and cancelled run status without bumping state version', async () => {
+      const cancel = loadFixture(join(GOLDEN_DIR, 'cancel-mid-loop.jsonl'));
+      const partialState = cancel.finalState.workflowRunState;
+      await db.insert(workflowRunState).values({
+        runId,
+        workspaceId: user.workspaceId!,
+        workflowDefinitionId: null,
+        status: 'in_progress',
+        state: partialState,
+        version: 4,
+        currentTaskKey: 'chat_turn',
+        currentTaskInstanceKey: 'main',
+      });
+
+      await postgresRunStore.upsertTaskResult({
+        runId,
+        taskKey: 'chat_turn',
+        taskInstanceKey: 'main',
+        status: 'cancelled',
+        input: { prompt: 'cancel me' },
+        output: { partialToolResults: 2 },
+        statePatch: {},
+        attempts: 1,
+        lastError: null,
+      });
+      const after = await postgresRunStore.mergeState({
+        runId,
+        expectedVersion: 4,
+        status: 'cancelled',
+        currentTaskKey: 'chat_turn',
+        currentTaskInstanceKey: 'main',
+      });
+      await postgresRunStore.markRunStatus(runId, 'cancelled');
+
+      expect(after.version).toBe(4);
+      expect(after.status).toBe('cancelled');
+      const [taskResult] = await db
+        .select({
+          status: workflowTaskResults.status,
+          output: workflowTaskResults.output,
+          attempts: workflowTaskResults.attempts,
+        })
+        .from(workflowTaskResults)
+        .where(eq(workflowTaskResults.runId, runId))
+        .limit(1);
+      expect(taskResult).toEqual({
+        status: 'cancelled',
+        output: { partialToolResults: 2 },
+        attempts: 1,
+      });
+      const [run] = await db
+        .select({ status: executionRuns.status })
+        .from(executionRuns)
+        .where(eq(executionRuns.id, runId))
+        .limit(1);
+      expect(run?.status).toBe('cancelled');
+    });
   });
 
   it('every fixture is well-formed JSONL with input + events + final_state', () => {
