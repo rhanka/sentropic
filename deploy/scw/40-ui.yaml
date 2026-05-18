@@ -54,7 +54,7 @@ spec:
       serviceAccountName: sentropic-app
       containers:
         - name: ui
-          image: ghcr.io/rhanka/top-ai-ideas-ui:feat-deploy-poc-k8s
+          image: ghcr.io/rhanka/sentropic-ui:feat-deploy-poc-k8s
           imagePullPolicy: Always
           ports:
             - name: http
