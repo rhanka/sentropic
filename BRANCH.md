@@ -117,7 +117,7 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
 - [ ] `attention`: Before package publication wiring, open `BR14a-EX1` for `Makefile`, `.github/workflows/**`, root package metadata, and lockfiles.
 - [ ] `attention`: Before merge, record Web, Chrome, and VSCode UAT as passed, or record explicit user waiver.
 - [ ] `attention`: Lot 1 gate note: `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2` failed before typecheck because empty `REGISTRY` produced invalid Docker tag `/top-ai-ideas-ui:1864cb`; rerun with `REGISTRY=local` passed with 0 errors and 6 existing Svelte warnings.
-- [ ] `attention`: Lot 1 gate note: `make test-ui SCOPE=tests/stores/streamHub.test.ts REGISTRY=local API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2` failed 12/15 tests because the test mock for `EventSource` is not constructable under current Vitest (`TypeError: ... is not a constructor` at `src/lib/stores/streamHub.ts:510`); no Lot 1 code changed streamHub behavior.
+- [x] `closed`: Lot 1 gate note: `make test-ui SCOPE=tests/stores/streamHub.test.ts REGISTRY=local API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2` failed 12/15 tests because the test mock for `EventSource` was not constructable under current Vitest (`TypeError: ... is not a constructor` at `src/lib/stores/streamHub.ts:510`). Fixed the test-only mock to use a constructable function; rerun passed 15/15.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -168,7 +168,7 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Record target package name as `@sentropic/chat-ui`.
   - [x] Create this relaunch `BRANCH.md`.
 
-- [ ] **Lot 1 - Inventory and package boundary design**
+- [x] **Lot 1 - Inventory and package boundary design**
   - [x] Inventory current web chat UI files and decide which code moves to `packages/chat-ui/src`:
     - `ui/src/lib/components/ChatPanel.svelte`
     - `ui/src/lib/components/ChatWidget.svelte`
@@ -207,9 +207,9 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [ ] Lot gate:
     - [x] No application behavior change.
     - [x] No code movement before package boundary is documented.
-    - [ ] Run `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Run `make test-ui SCOPE=tests/stores/streamHub.test.ts API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Commit with `git add BRANCH.md spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`, then `make commit MSG="docs: define BR14a chat ui sdk scope" ENV=test-feat-chat-ui-sdk-v2`.
+    - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2` (0 errors, 6 existing Svelte warnings). The same command without `REGISTRY=local` fails before typecheck on an invalid Docker tag; tracked in Feedback Loop.
+    - [x] Run `make test-ui SCOPE=tests/stores/streamHub.test.ts REGISTRY=local API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2` (15/15).
+    - [x] Commit with `git add BRANCH.md spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`, then `make commit MSG="docs: define BR14a chat ui sdk scope" ENV=test-feat-chat-ui-sdk-v2`.
 
 - [ ] **Lot 2 - Package scaffold and public UI contract**
   - [ ] Open `BR14a-EX1` for package/workspace metadata if `package-lock.json` or package scripts must change.
