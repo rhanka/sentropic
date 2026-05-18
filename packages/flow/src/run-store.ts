@@ -32,21 +32,27 @@ export interface WorkflowRunStateSnapshot<TState = unknown> {
 
 export interface MergeStateParams<TState = unknown> {
   runId: string;
-  patch: Partial<TState> | TState;
+  patch?: Partial<TState> | TState;
   expectedVersion: number;
+  status?: RunStatus | string;
   currentTaskKey?: string | null;
   currentTaskInstanceKey?: string | null;
 }
+
+export type TaskResultStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 
 export interface TaskResultParams<TInput = unknown, TOutput = unknown> {
   runId: string;
   taskKey: string;
   taskInstanceKey: string;
+  status?: TaskResultStatus;
   input?: TInput;
   output?: TOutput;
   statePatch?: Record<string, unknown>;
   attempts?: number;
-  lastError?: string | null;
+  lastError?: string | Record<string, unknown> | null;
+  startedAt?: Date | null;
+  completedAt?: Date | null;
 }
 
 export type RunStatus =

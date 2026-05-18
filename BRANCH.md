@@ -115,11 +115,11 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Regression: re-seed an empty test DB → covered by `tests/api/generic-dispatch.test.ts` (ai-ideas, opportunity, code, neutral, idempotent re-seed).
   - [x] Lot gate (workflows-only): `make typecheck-api`, `make lint-api`, replay harness 17/17, generic dispatch seed regression 11/11 green on 2026-05-17. Agent catalog move remains deferred by `BR26-FB-02`; Lot 6 may resume after conductor confirmation.
 
-- [ ] **Lot 6 — Slice 3: `workflow_run_state` CRUD → `RunStore`**
-  - [ ] Move snapshot/merge/version OCC logic from `queue-manager.ts` into `packages/flow/src/run-store.ts` + Postgres adapter.
-  - [ ] Preserve invariant §4.6 (checkpoint monotonicity).
-  - [ ] Regression: fixture #5 (resume-after-crash) + #6 (cancel-mid-loop).
-  - [ ] Lot gate: typecheck-api, lint-api, scoped api test, replay harness fixtures #4 + #5 + #6.
+- [x] **Lot 6 — Slice 3: `workflow_run_state` CRUD → `RunStore`**
+  - [x] Move snapshot/merge/version OCC logic from `queue-manager.ts` into `packages/flow/src/run-store.ts` + Postgres adapter.
+  - [x] Preserve invariant §4.6 (checkpoint monotonicity).
+  - [x] Regression: fixture #5 (resume-after-crash) + #6 (cancel-mid-loop).
+  - [x] Lot gate: typecheck-api, lint-api, scoped api test, replay harness fixtures #4 + #5 + #6.
 
 - [ ] **Lot 7 — Slice 4: `JobQueue` extraction (lease, DLQ, heartbeat, idempotency)**
   - [ ] Move queue lease/dispatch/cancel/drain methods from `queue-manager.ts` into `packages/flow/src/job-queue.ts` + Postgres adapter.
