@@ -4,6 +4,9 @@ import { InMemorySkillRegistry } from '../../src/registry/registry.js';
 import { createSkillsToolRegistry } from '../../src/registry/adapter.js';
 import {
   FOUNDATION_SKILLS,
+  foldersSkill,
+  initiativesSkill,
+  organizationsSkill,
   registerFoundationSkills,
   webSkill,
   workspaceSkill,
@@ -22,6 +25,55 @@ const buildAuthz = (overrides: Partial<AuthzContext> = {}): AuthzContext => ({
   allowedTools: [],
   ...overrides,
 });
+
+const WAVE_B_SKILLS = [
+  {
+    skill: organizationsSkill,
+    name: 'organizations',
+    tools: [
+      'organizations_list',
+      'organization_get',
+      'organization_update',
+    ],
+    bodyTitle: 'Organizations skill',
+  },
+  {
+    skill: foldersSkill,
+    name: 'folders',
+    tools: ['folders_list', 'folder_get', 'folder_update'],
+    bodyTitle: 'Folders skill',
+  },
+  {
+    skill: initiativesSkill,
+    name: 'initiatives',
+    tools: ['initiatives_list', 'read_initiative', 'update_initiative'],
+    bodyTitle: 'Initiatives skill',
+  },
+] as const;
+
+const FOUNDATION_SKILL_NAMES = [
+  'workspace',
+  'web',
+  'organizations',
+  'folders',
+  'initiatives',
+] as const;
+
+const FOUNDATION_TOOL_NAMES = [
+  'folder_get',
+  'folder_update',
+  'folders_list',
+  'initiative_search',
+  'initiatives_list',
+  'organization_get',
+  'organization_update',
+  'organizations_list',
+  'read_initiative',
+  'update_initiative',
+  'web_extract',
+  'web_search',
+  'workspace_list',
+] as const;
 
 describe('foundation bundle — Wave A', () => {
   describe('workspace skill', () => {
@@ -113,8 +165,8 @@ describe('foundation bundle — Wave A', () => {
   });
 
   describe('FOUNDATION_SKILLS / registerFoundationSkills', () => {
-    it('exposes exactly the foundation Wave A skills', () => {
-      expect(FOUNDATION_SKILLS).toHaveLength(2);
+    it('keeps Wave A skills as the foundation registration prefix', () => {
+      expect(FOUNDATION_SKILLS).toHaveLength(5);
       expect(FOUNDATION_SKILLS[0]).toBe(workspaceSkill);
       expect(FOUNDATION_SKILLS[1]).toBe(webSkill);
     });
@@ -123,8 +175,8 @@ describe('foundation bundle — Wave A', () => {
       const reg = new InMemorySkillRegistry();
       const names = registerFoundationSkills(reg);
 
-      expect(names).toEqual(['workspace', 'web']);
-      expect(reg.list().map((m) => m.name)).toEqual(['workspace', 'web']);
+      expect(names).toEqual(FOUNDATION_SKILL_NAMES);
+      expect(reg.list().map((m) => m.name)).toEqual(FOUNDATION_SKILL_NAMES);
       expect(reg.get('workspace')).toBe(workspaceSkill);
       expect(reg.get('web')).toBe(webSkill);
       expect(reg.list({ category: 'web' }).map((m) => m.name)).toEqual(['web']);
@@ -143,11 +195,8 @@ describe('foundation bundle — Wave A', () => {
 
       const tools = withoutMeta(adapter.resolveTools(buildAuthz()));
       expect(tools.map((t) => t.name).sort()).toEqual([
-        'initiative_search',
-        'web_extract',
-        'web_search',
-        'workspace_list',
-      ]);
+        ...FOUNDATION_TOOL_NAMES,
+      ].sort());
       expect(tools.find((t) => t.name === 'workspace_list')?.skillName).toBe(
         'workspace',
       );
@@ -166,5 +215,97 @@ describe('foundation bundle — Wave A', () => {
         expect(tool.skillName).toBe('web');
       }
     });
+  });
+});
+
+describe('foundation bundle — Wave B object skills', () => {
+  it('parses every object skill metadata, tools, body, and handlers', () => {
+    for (const { skill, name, tools, bodyTitle } of WAVE_B_SKILLS) {
+      expect(skill.metadata.name).toBe(name);
+      expect(skill.metadata.version).toBe('0.1.0');
+      expect(skill.metadata.category).toBe('object');
+      expect(skill.metadata.contextFilter?.workspaceTypes).toEqual([
+        'ai-ideas',
+        'opportunity',
+      ]);
+      expect(skill.metadata.toolNames).toEqual(tools);
+      expect(skill.tools.map((t) => t.name)).toEqual(tools);
+      expect(skill.body).toContain(bodyTitle);
+      expect(Object.keys(skill.handlers ?? {}).sort()).toEqual(
+        [...tools].sort(),
+      );
+    }
+  });
+
+  it('handlers throw a "not bound" error when invoked', () => {
+    for (const { skill, name, tools } of WAVE_B_SKILLS) {
+      for (const toolName of tools) {
+        expect(() =>
+          skill.handlers?.[toolName]?.({
+            toolName,
+            input: {},
+          }),
+        ).toThrow(new RegExp(`${name} skill handler "${toolName}" is not bound`));
+      }
+    }
+  });
+
+  it('registers Wave A and Wave B foundation skills in stable order', () => {
+    const reg = new InMemorySkillRegistry();
+    const names = registerFoundationSkills(reg);
+
+    expect(names).toEqual([
+      'workspace',
+      'web',
+      'organizations',
+      'folders',
+      'initiatives',
+    ]);
+    expect(FOUNDATION_SKILLS.map((s) => s.metadata.name)).toEqual(names);
+    expect(reg.list({ category: 'object' }).map((m) => m.name)).toEqual([
+      'organizations',
+      'folders',
+      'initiatives',
+    ]);
+  });
+
+  it('resolves object tools only for allowed workspace types and allowlists', () => {
+    const reg = new InMemorySkillRegistry();
+    registerFoundationSkills(reg);
+    const adapter = createSkillsToolRegistry(reg);
+
+    expect(
+      withoutMeta(adapter.resolveTools(buildAuthz({ tenant: { tenantId: 't-1' } })))
+        .map((t) => t.name)
+        .sort(),
+    ).toEqual([
+      'initiative_search',
+      'web_extract',
+      'web_search',
+      'workspace_list',
+    ]);
+
+    expect(
+      withoutMeta(adapter.resolveTools(buildAuthz({ tenant: { tenantId: 't-1', workspaceType: 'code' } })))
+        .map((t) => t.name)
+        .sort(),
+    ).toEqual([
+      'initiative_search',
+      'web_extract',
+      'web_search',
+      'workspace_list',
+    ]);
+
+    expect(
+      adapter
+        .resolveTools(
+          buildAuthz({
+            permissionMode: 'allowlist',
+            allowedTools: ['organization_get', 'folder_get'],
+          }),
+        )
+        .map((t) => t.name)
+        .sort(),
+    ).toEqual(['folder_get', 'organization_get', SEARCH_SKILLS_TOOL_NAME].sort());
   });
 });
