@@ -32,6 +32,16 @@ import {
  *
  * Per spec/SPEC_EVOL_BR26_FLOW_FACADE.md §3.
  */
+type WorkflowTransitionsDispatchParams = {
+  workspaceId: string;
+  workflowRunId: string;
+  workflowDefinitionId: string;
+  runtimeDefinition: unknown;
+  runContext: Record<string, unknown>;
+  state: Record<string, unknown>;
+  fromTaskKey: string | null;
+};
+
 type PostgresJobQueueRuntimeHooks = {
   canAcceptJob?: (type: JobType) => boolean;
   notifyJobEvent?: (jobId: string) => Promise<void>;
@@ -40,6 +50,17 @@ type PostgresJobQueueRuntimeHooks = {
   iterateJobControllers?: () => Iterable<[string, AbortController]>;
   setCancelAllInProgress?: (value: boolean) => void;
   getActiveJobCount?: () => number;
+  loadWorkflowRuntimeDefinition?: (
+    workspaceId: string,
+    workflowDefinitionId: string,
+  ) => Promise<unknown>;
+  getWorkflowRunStateSnapshot?: (
+    workflowRunId: string,
+  ) => Promise<{ state: Record<string, unknown> } | null>;
+  getWorkflowRunContext?: (workflowRunId: string) => Promise<Record<string, unknown>>;
+  dispatchWorkflowTransitions?: (
+    params: WorkflowTransitionsDispatchParams,
+  ) => Promise<WorkflowDispatchDescriptor[]>;
 };
 
 export class PostgresJobQueue implements JobQueue<JobType, JobData> {
@@ -267,12 +288,38 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData> {
     return queueManager.reloadSettings();
   }
 
-  dispatchWorkflowEntryTasks(
+  async dispatchWorkflowEntryTasks(
     params: DispatchWorkflowEntryParams,
   ): Promise<WorkflowDispatchDescriptor<JobType>[]> {
-    return queueManager.dispatchWorkflowEntryTasks(params) as Promise<
-      WorkflowDispatchDescriptor<JobType>[]
-    >;
+    if (
+      !this.hooks.loadWorkflowRuntimeDefinition ||
+      !this.hooks.getWorkflowRunStateSnapshot ||
+      !this.hooks.getWorkflowRunContext ||
+      !this.hooks.dispatchWorkflowTransitions
+    ) {
+      return queueManager.dispatchWorkflowEntryTasks(params) as Promise<
+        WorkflowDispatchDescriptor<JobType>[]
+      >;
+    }
+
+    const runtimeDefinition = await this.hooks.loadWorkflowRuntimeDefinition(
+      params.workspaceId,
+      params.workflowDefinitionId,
+    );
+    const runtimeState = await this.hooks.getWorkflowRunStateSnapshot(params.workflowRunId);
+    if (!runtimeState) {
+      throw new Error(`Workflow run state not found for ${params.workflowRunId}`);
+    }
+    const runContext = await this.hooks.getWorkflowRunContext(params.workflowRunId);
+    return (await this.hooks.dispatchWorkflowTransitions({
+      workspaceId: params.workspaceId,
+      workflowRunId: params.workflowRunId,
+      workflowDefinitionId: params.workflowDefinitionId,
+      runtimeDefinition,
+      runContext,
+      state: runtimeState.state,
+      fromTaskKey: null,
+    })) as WorkflowDispatchDescriptor<JobType>[];
   }
 }
 
