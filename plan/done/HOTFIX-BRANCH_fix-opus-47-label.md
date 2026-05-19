@@ -64,6 +64,23 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - Rationale: (1) Lot 5 (`tools.ts` migration) only needs runtime registration of built-in skills at API boot — no DB lookup required. (2) Marketplace audit + admin UI listing — the use cases that would justify a `skill_metadata` table — are out of scope (BR-27 / BR-19b). (3) The `SkillRegistry` interface is unchanged regardless of backing store, so a future `PgSkillRegistry` is a drop-in adapter with no breaking change.
   - Rollback: if a downstream branch (BR-27) needs persistence, declare `BR19b-EX1` then and ship one Drizzle migration there; this branch leaves no schema obligation.
 
+- **BR19-D2 — PR draft sync discipline (2026-05-19)**
+  - Decision: PR #166 draft already open and CI-green; keep `gh pr edit --body-file BRANCH.md` after EACH BRANCH.md update so PR body never drifts from the source of truth.
+  - Rationale: workflow rule mandates PR body = exact BRANCH.md text. GitHub does NOT auto-sync; manual `gh pr edit` is required.
+  - Action: every push that touches BRANCH.md → follow-up `gh pr edit 166 --body-file BRANCH.md`.
+
+- **BR19-D3 — Atomic rebind in single Wave D closing commit (2026-05-19)**
+  - Decision: bind all foundation skills handlers + remove legacy `if toolCall.name === '...'` dispatch + delete `tools.ts` in one closing commit (split into 2 sub-commits ONLY if >150 lines: bind-all then delete-legacy, both in the same push).
+  - Rationale: master rule "no legacy fallback / zero dual paths" forbids progressive rebind with fallback.
+
+- **BR19-D4 — Wave D order: document_generate first (2026-05-19)**
+  - Decision: implement `document_generate` (port docx-freeform) FIRST in Wave D, then `batch_create_organizations`, then `task_dispatch`.
+  - Rationale: forces sandbox runtime end-to-end + BR19-N2 packaging surface early.
+
+- **BR19-D5 — BR19-N2 closure timing: start of Wave D (2026-05-19)**
+  - Decision: resolve SKILL.md packaging in dist/ at the start of Wave D, before `document_generate`. Preferred impl: `package.json#files` glob (no new make target, no BR19-EX touch).
+  - Closes: BR19-N2.
+
 ## AI Flaky tests
 - Acceptance rule:
   - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
@@ -130,6 +147,7 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - [ ] Migrate **wave C** (write/structured skills): `executive_summary`, `matrix`, `documents`, `comment_assistant`, `plan`, `gate_review`, `history_analyze` skills.
     - [x] Step 1 — package-only first sub-lot: `executive_summary` + `matrix` foundation skills added under `packages/skills/src/bundles/foundation/` with legacy `api/src/services/tools.ts` schemas and `not bound` handler guards only. 4 tools registered; API/chat-service rebind remains deferred. `make typecheck-skills ENV=test-feat-agent-sandbox-skills` and `make test-skills ENV=test-feat-agent-sandbox-skills` pass.
     - [x] Step 2 — package-only second sub-lot: `history_analyze` + `gate_review` foundation skills added under `packages/skills/src/bundles/foundation/` with legacy `api/src/services/tools.ts` schemas and `not bound` handler guards only. 2 tools registered; `history_analyze` remains base/cross-workspace while `gate_review` stays filtered to `ai-ideas` and `opportunity`. API/chat-service rebind remains deferred.
+    - [x] Step 3 — package-only third sub-lot: `documents` + `comment_assistant` + `plan` foundation skills added under `packages/skills/src/bundles/foundation/` with legacy `api/src/services/tools.ts` schemas and `not bound` handler guards only. 3 tools registered; API/chat-service rebind remains deferred. `make typecheck-skills ENV=test-feat-agent-sandbox-skills` and `make test-skills ENV=test-feat-agent-sandbox-skills` pass.
   - [ ] Migrate **wave D** (sandbox-backed skills): `document_generate` (uses sandbox, ports the docx-freeform skill), `batch_create_organizations`, `task_dispatch`.
   - [ ] Refactor `api/src/services/chat-service.ts` tool dispatch to consume `SkillsToolRegistry.resolveTools(authz)`; delete the legacy `if toolCall.name === '...'` branches in one cleanup commit.
   - [ ] Delete `api/src/services/tools.ts` after final wave (`no legacy fallback` rule).
