@@ -18,7 +18,10 @@
     }
   },
   "files": [
-    "dist",
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/bundles/**/*.md",
+    "src/bundles/**/*.md",
     "README.md",
     "LICENSE"
   ],

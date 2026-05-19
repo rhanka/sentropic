@@ -55,9 +55,10 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - Resolution: keep the existing `@sentropic/skills` authz API stable and add a minimal adapter in `packages/skills/src/registry/authz.ts`: `ContractTenantContext`, `ContractPermissionMode`, `ContractAuthzContext`, `ContractAuthzAdapterOptions`, and `authzContextFromContract()`.
   - Rationale: a direct re-export would break skills callers and remove BR19's role/workspace/permission filtering semantics. The adapter maps contract `caller` into the local `tenant`, converts `ReadonlySet` allowlists to arrays, keeps `granular`/`untrusted` restrictive by default, and lets downstream governance pass roles, permissions, workspace type, or an explicit local exposure mode.
   - Verification: covered by `packages/skills/tests/registry/authz.test.ts`; `make typecheck-skills ENV=test-feat-agent-sandbox-skills` and `make test-skills ENV=test-feat-agent-sandbox-skills` pass on this worktree.
-- **BR19-N2 — SKILL.md asset packaging deferred (Lot 5 Wave A)**
-  - Foundation bundles read their `SKILL.md` via `readFileSync(import.meta.url + 'SKILL.md')`. In the workspace/test loop this resolves to `src/bundles/.../SKILL.md` (fine). When `@sentropic/skills` is built via `tsc`, the `.md` files are NOT copied to `dist/`. No consumer needs `dist/` yet (api still uses tools.ts), so this is deferred until the api wires `registerFoundationSkills()` at boot — at which point a `package.json#files` glob update or a `prebuild` copy step lands together with the wiring.
-  - Tracking: revisit in the chat-service rebind commit of Lot 5.
+- **BR19-N2 — SKILL.md asset packaging — CLOSED (2026-05-19, Wave D step 1)**
+  - Resolution: `packages/skills/package.json#files` now ships `src/bundles/**/*.md` AND `dist/bundles/**/*.md` AND `dist/**/*.{js,d.ts}` (in addition to `README.md` / `LICENSE`). Both workspace mode (parser reads from `src/bundles/.../SKILL.md` via `import.meta.url`) and any future `dist/`-published consumer continue to find the asset. No new Make target and no `BR19-EX` declared (BR19-EX4 untouched).
+  - Verification: `make test-skills ENV=test-feat-agent-sandbox-skills` 99/99 green on the closing commit.
+  - Closes: per BR19-D5 timing decision.
 
 - **BR19-D1 — Persistence decision (Lot 3 outcome, BR19-Q6)**
   - Decision: in-memory `SkillRegistry` is sufficient for v0.1. No `skill_metadata` Postgres table is added in this branch; **no `BR19-EX1` is declared** and `api/drizzle/*.sql` is not touched.
