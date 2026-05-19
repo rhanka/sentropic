@@ -105,12 +105,12 @@
   import { downloadGeneratedFile, type GeneratedFileCard } from '$lib/utils/docx';
   import { renderMarkdownWithRefs } from '$lib/utils/markdown';
   import { generateInjectedScript } from '$lib/upstream/injected-script';
-  import { postChatSteer } from '$lib/utils/chat-steer';
+  import { postChatSteer } from '@sentropic/chat-ui/utils/chat-steer';
   import {
     filterPermissionPromptsForPendingStream,
     parsePendingLocalToolCallsFromStatusPayload,
     shouldResetLocalToolStateForFreshRound,
-  } from '$lib/utils/localToolStreamSync';
+  } from '@sentropic/chat-ui/utils/localToolStreamSync';
   import {
     EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
     VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
@@ -118,7 +118,7 @@
     computeToolToggleDefaults,
     computeVisibleToolToggleIds,
     isExtensionRestrictedToolsetMode as computeIsExtensionRestrictedToolsetMode,
-  } from '$lib/utils/chat-tool-scope';
+  } from '@sentropic/chat-ui/utils/chat-tool-scope';
   import {
     USER_AI_SETTINGS_UPDATED_EVENT,
     type UserAISettingsUpdatedPayload,
@@ -134,7 +134,7 @@
     mergeProjectionHistoryEvents,
     projectAssistantRunSegments,
     type ProjectedRunSegment,
-  } from '$lib/utils/chat-run-projection';
+  } from '@sentropic/chat-ui/utils/chat-run-projection';
 
   type ChatSession = {
     id: string;

@@ -4,7 +4,7 @@ import {
   filterPermissionPromptsForPendingStream,
   parsePendingLocalToolCallsFromStatusPayload,
   shouldResetLocalToolStateForFreshRound,
-} from '../../src/lib/utils/localToolStreamSync';
+} from '@sentropic/chat-ui/utils/localToolStreamSync';
 
 describe('localToolStreamSync', () => {
   it('parses pending local tool calls from awaiting status payload', () => {
