@@ -10,6 +10,10 @@ import {
   resolveWorkflowBindingValue,
   sanitizeJobResultForPublic,
   type GenerationPromptOverride,
+  type WorkflowDispatchDescriptor as FlowWorkflowDispatchDescriptor,
+  type WorkflowRuntimeDefinition,
+  type WorkflowTaskExecutionDefinition,
+  type WorkflowTransitionDefinition,
 } from '@sentropic/flow';
 import { createId } from '../utils/id';
 import { enrichOrganization, type OrganizationData } from './context-organization';
@@ -287,35 +291,7 @@ export interface GenerationWorkflowRuntimeContext {
   agentMap: Record<string, string>; // task key → agent definition ID
 }
 
-type WorkflowTaskExecutionDefinition = {
-  taskKey: string;
-  orderIndex: number;
-  agentDefinitionId: string | null;
-  metadata: Record<string, unknown>;
-};
-
-type WorkflowTransitionDefinition = {
-  fromTaskKey: string | null;
-  toTaskKey: string | null;
-  transitionType: string;
-  condition: Record<string, unknown>;
-  metadata: Record<string, unknown>;
-};
-
-type WorkflowRuntimeDefinition = {
-  tasks: Map<string, WorkflowTaskExecutionDefinition>;
-  transitions: WorkflowTransitionDefinition[];
-  agentMap: Record<string, string>;
-  agentIdsByKey: Record<string, string>;
-};
-
-type WorkflowDispatchDescriptor = {
-  taskKey: string;
-  taskInstanceKey: string;
-  executor: string;
-  jobType?: JobType;
-  jobId?: string;
-};
+type WorkflowDispatchDescriptor = FlowWorkflowDispatchDescriptor<JobType>;
 
 export interface OrganizationEnrichJobData {
   organizationId: string;
