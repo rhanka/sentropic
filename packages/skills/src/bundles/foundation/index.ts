@@ -1,5 +1,6 @@
 import type { SkillRegistry } from '../../registry/registry.js';
 import type { Skill } from '../../types/skill.js';
+import { documentsSkill } from './documents/index.js';
 import { executiveSummarySkill } from './executive_summary/index.js';
 import { foldersSkill } from './folders/index.js';
 import { gateReviewSkill } from './gate_review/index.js';
@@ -39,6 +40,11 @@ import { workspaceSkill } from './workspace/index.js';
  * Wave C package-only second sub-lot:
  *   - `history_analyze`, `gate_review` — structured/read-only analysis skills
  *     with not-bound handlers only. API runtime rebind stays deferred.
+ *
+ * Wave C package-only third sub-lot:
+ *   - `documents`, `comment_assistant`, `plan` — content access, comment
+ *     workflow, and plan/todo orchestration skills with not-bound handlers
+ *     only. API runtime rebind stays deferred.
  */
 export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   workspaceSkill,
@@ -53,6 +59,7 @@ export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   matrixSkill,
   historyAnalyzeSkill,
   gateReviewSkill,
+  documentsSkill,
 ]);
 
 /**
@@ -87,3 +94,4 @@ export { executiveSummarySkill } from './executive_summary/index.js';
 export { matrixSkill } from './matrix/index.js';
 export { historyAnalyzeSkill } from './history_analyze/index.js';
 export { gateReviewSkill } from './gate_review/index.js';
+export { documentsSkill } from './documents/index.js';
