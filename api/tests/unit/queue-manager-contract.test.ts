@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { resolveGenerationPromptOverrideFromConfig } from '@sentropic/flow';
 import {
   buildGeneratedInitiativePayloadForPersistence,
   normalizeAutoGenerationSectionKeys,
-  resolveGenerationPromptOverrideFromConfig,
 } from '../../src/services/queue-manager';
 import type { InitiativeDetail } from '../../src/services/context-initiative';
 
