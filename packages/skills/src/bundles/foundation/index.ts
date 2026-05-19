@@ -1,5 +1,6 @@
 import type { SkillRegistry } from '../../registry/registry.js';
 import type { Skill } from '../../types/skill.js';
+import { commentAssistantSkill } from './comment_assistant/index.js';
 import { documentsSkill } from './documents/index.js';
 import { executiveSummarySkill } from './executive_summary/index.js';
 import { foldersSkill } from './folders/index.js';
@@ -60,6 +61,7 @@ export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   historyAnalyzeSkill,
   gateReviewSkill,
   documentsSkill,
+  commentAssistantSkill,
 ]);
 
 /**
@@ -95,3 +97,4 @@ export { matrixSkill } from './matrix/index.js';
 export { historyAnalyzeSkill } from './history_analyze/index.js';
 export { gateReviewSkill } from './gate_review/index.js';
 export { documentsSkill } from './documents/index.js';
+export { commentAssistantSkill } from './comment_assistant/index.js';
