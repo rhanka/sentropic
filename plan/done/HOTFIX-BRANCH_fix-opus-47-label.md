@@ -81,6 +81,13 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - Decision: resolve SKILL.md packaging in dist/ at the start of Wave D, before `document_generate`. Preferred impl: `package.json#files` glob (no new make target, no BR19-EX touch).
   - Closes: BR19-N2.
 
+- **BR19-F1 — AI test flaky accepted on `b4128c1a` (2026-05-19)**
+  - Command: GitHub Actions matrix job `test-api-unit-integration (ai, initiative-generation-async,executive-summary-sync)` (equivalent local: `make test-api-ai ENV=test-feat-agent-sandbox-skills` scoped to `initiative-generation-async,executive-summary-sync`).
+  - Failed run: https://github.com/rhanka/sentropic/actions/runs/26117075967/job/76809528377 (commit `b4128c1a`).
+  - Re-run on same commit: PASS. Per BR19 AI Flaky acceptance rule (non-systematic = at least one success on same commit + same command), accepted as flaky.
+  - Wave C Step 3 diff scope: only `packages/skills/src/bundles/foundation/{documents,comment_assistant,plan}/**` + `packages/skills/tests/bundles/foundation.test.ts`. No code path overlap with `initiative-generation-async` or `executive-summary-sync` execution paths — flakiness is provider/model nondeterminism unrelated to BR19.
+  - Sign-off required before merge (Lot 9).
+
 ## AI Flaky tests
 - Acceptance rule:
   - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
