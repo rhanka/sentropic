@@ -1525,24 +1525,20 @@ export class QueueManager {
     workflowRunId: string;
     workflowDefinitionId: string;
   }): Promise<WorkflowDispatchDescriptor[]> {
-    const runtimeDefinition = await this.loadWorkflowRuntimeDefinition(
-      params.workspaceId,
-      params.workflowDefinitionId,
-    );
-    const runtimeState = await this.getWorkflowRunStateSnapshot(params.workflowRunId);
-    if (!runtimeState) {
-      throw new Error(`Workflow run state not found for ${params.workflowRunId}`);
-    }
-    const runContext = await this.getWorkflowRunContext(params.workflowRunId);
-    return this.dispatchWorkflowTransitions({
-      workspaceId: params.workspaceId,
-      workflowRunId: params.workflowRunId,
-      workflowDefinitionId: params.workflowDefinitionId,
-      runtimeDefinition,
-      runContext,
-      state: runtimeState.state,
-      fromTaskKey: null,
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    postgresJobQueue.setRuntimeHooks({
+      loadWorkflowRuntimeDefinition: (ws, id) =>
+        this.loadWorkflowRuntimeDefinition(ws, id),
+      getWorkflowRunStateSnapshot: (id) => this.getWorkflowRunStateSnapshot(id),
+      getWorkflowRunContext: (id) => this.getWorkflowRunContext(id),
+      dispatchWorkflowTransitions: (p) =>
+        this.dispatchWorkflowTransitions(
+          p as Parameters<QueueManager['dispatchWorkflowTransitions']>[0],
+        ),
     });
+    return postgresJobQueue.dispatchWorkflowEntryTasks(params) as Promise<
+      WorkflowDispatchDescriptor[]
+    >;
   }
 
   private async resolveGenerationPromptOverride(
