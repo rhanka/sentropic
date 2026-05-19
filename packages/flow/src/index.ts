@@ -65,6 +65,8 @@ export {
   resolveWorkflowBindingValue,
 } from './condition-eval.js';
 
+export { parseJsonField, sanitizeJobResultForPublic } from './job-helpers.js';
+
 export type {
   FlowRuntime,
   FlowRuntimePorts,
