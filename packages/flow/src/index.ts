@@ -72,6 +72,12 @@ export type { GenerationPromptOverride } from './agent-prompt-overrides.js';
 export { resolveGenerationPromptOverrideFromConfig } from './agent-prompt-overrides.js';
 
 export type {
+  WorkflowRuntimeDefinition,
+  WorkflowTaskExecutionDefinition,
+  WorkflowTransitionDefinition,
+} from './workflow-types.js';
+
+export type {
   FlowRuntime,
   FlowRuntimePorts,
   StartInitiativeGenerationParams,
