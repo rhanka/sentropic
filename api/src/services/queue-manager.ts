@@ -74,7 +74,7 @@ function parseOrgData(value: unknown): Record<string, unknown> {
   return {};
 }
 
-function parseJsonField<T = unknown>(value: unknown): T | null {
+export function parseJsonField<T = unknown>(value: unknown): T | null {
   if (value == null) return null;
   if (typeof value === 'object') return value as T;
   if (typeof value !== 'string' || !value.trim()) return null;
@@ -238,7 +238,7 @@ export const resolveGenerationPromptOverrideFromConfig = (
   return { promptId, promptTemplate, outputSchema };
 };
 
-function sanitizeJobResultForPublic(result: unknown): unknown {
+export function sanitizeJobResultForPublic(result: unknown): unknown {
   if (!result || typeof result !== 'object') return result;
   const copy = { ...(result as Record<string, unknown>) };
   if (typeof copy.contentBase64 === 'string') {
@@ -4236,68 +4236,16 @@ export class QueueManager {
    * Obtenir le statut d'un job
    */
   async getJobStatus(jobId: string, opts?: { includeBinaryResult?: boolean }): Promise<Job | null> {
-    const result = await db
-      .select()
-      .from(jobQueue)
-      .where(eq(jobQueue.id, jobId))
-      .limit(1);
-    
-    if (!result || result.length === 0) return null;
-    
-    const row = result[0];
-    const job = {
-      id: row.id,
-      type: row.type as JobType,
-      data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
-      result:
-        opts?.includeBinaryResult === true
-          ? parseJsonField(row.result)
-          : sanitizeJobResultForPublic(parseJsonField(row.result)),
-      status: row.status as Job['status'],
-      workspaceId: row.workspaceId,
-      // Drizzle retourne createdAt, startedAt, completedAt en camelCase
-      createdAt: row.createdAt.toISOString(),
-      startedAt: row.startedAt || undefined,
-      completedAt: row.completedAt || undefined,
-      error: row.error || undefined
-    } satisfies Omit<Job, 'streamId'>;
-
-    return {
-      ...job,
-      streamId: getPublicJobStreamId(job),
-    };
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    return postgresJobQueue.getJobStatus(jobId, opts) as Promise<Job | null>;
   }
 
   /**
    * Obtenir tous les jobs
    */
   async getAllJobs(opts?: { workspaceId?: string }): Promise<Job[]> {
-    const results = await db
-      .select()
-      .from(jobQueue)
-      .where(opts?.workspaceId ? eq(jobQueue.workspaceId, opts.workspaceId) : undefined)
-      .orderBy(desc(jobQueue.createdAt));
-    
-    return results.map((row) => {
-      const job = {
-      id: row.id,
-      type: row.type as JobType,
-      data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
-      result: sanitizeJobResultForPublic(parseJsonField(row.result)),
-      status: row.status as Job['status'],
-      workspaceId: row.workspaceId,
-      // Drizzle retourne createdAt, startedAt, completedAt en camelCase
-      createdAt: row.createdAt.toISOString(),
-      startedAt: row.startedAt || undefined,
-      completedAt: row.completedAt || undefined,
-      error: row.error || undefined
-      } satisfies Omit<Job, 'streamId'>;
-
-      return {
-        ...job,
-        streamId: getPublicJobStreamId(job),
-      };
-    });
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    return postgresJobQueue.listJobs(opts) as Promise<Job[]>;
   }
 
   async findLatestDocxJobBySource(params: {
