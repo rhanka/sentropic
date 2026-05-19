@@ -4,6 +4,7 @@ import { InMemorySkillRegistry } from '../../src/registry/registry.js';
 import { createSkillsToolRegistry } from '../../src/registry/adapter.js';
 import {
   FOUNDATION_SKILLS,
+  documentsSkill,
   executiveSummarySkill,
   foldersSkill,
   gateReviewSkill,
@@ -121,9 +122,11 @@ const FOUNDATION_SKILL_NAMES = [
   'matrix',
   'history_analyze',
   'gate_review',
+  'documents',
 ] as const;
 
 const FOUNDATION_TOOL_NAMES = [
+  'documents',
   'executive_summary_get',
   'executive_summary_update',
   'folder_get',
@@ -363,6 +366,7 @@ describe('foundation bundle — Wave B object skills', () => {
         .map((t) => t.name)
         .sort(),
     ).toEqual([
+      'documents',
       'history_analyze',
       'initiative_search',
       'web_extract',
@@ -375,6 +379,7 @@ describe('foundation bundle — Wave B object skills', () => {
         .map((t) => t.name)
         .sort(),
     ).toEqual([
+      'documents',
       'history_analyze',
       'initiative_search',
       'web_extract',
@@ -463,11 +468,11 @@ describe('foundation bundle — Wave C structured skills', () => {
     }
   });
 
-  it('registers Wave A, Wave B, and package-only Wave C foundation skills in stable order', () => {
+  it('registers Wave A, Wave B, and package-only Wave C step 1+2 foundation skills as a stable prefix', () => {
     const reg = new InMemorySkillRegistry();
     const names = registerFoundationSkills(reg);
 
-    expect(names).toEqual([
+    expect(names.slice(0, 12)).toEqual([
       'workspace',
       'web',
       'organizations',
@@ -500,6 +505,7 @@ describe('foundation bundle — Wave C structured skills', () => {
         .map((t) => t.name)
         .sort(),
     ).toEqual([
+      'documents',
       'history_analyze',
       'initiative_search',
       'web_extract',
@@ -530,5 +536,74 @@ describe('foundation bundle — Wave C structured skills', () => {
       'gate_review',
       SEARCH_SKILLS_TOOL_NAME,
     ].sort());
+  });
+});
+
+describe('foundation bundle — Wave C step 3 content/action skills', () => {
+  describe('documents skill', () => {
+    it('parses SKILL.md metadata, tools, body, and handlers', () => {
+      expect(documentsSkill.metadata.name).toBe('documents');
+      expect(documentsSkill.metadata.version).toBe('0.1.0');
+      expect(documentsSkill.metadata.category).toBe('content');
+      expect(documentsSkill.metadata.contextFilter).toBeUndefined();
+      expect(documentsSkill.metadata.toolNames).toEqual(['documents']);
+      expect(documentsSkill.tools.map((t) => t.name)).toEqual(['documents']);
+      expect(documentsSkill.body).toContain('Documents skill');
+      expect(Object.keys(documentsSkill.handlers ?? {})).toEqual(['documents']);
+    });
+
+    it('declares the unified documents inputSchema with required action/contextType/contextId', () => {
+      const [tool] = documentsSkill.tools;
+      expect(tool?.inputSchema?.required).toEqual(['action', 'contextType', 'contextId']);
+      const props = (tool?.inputSchema as { properties?: Record<string, { enum?: string[] }> })
+        ?.properties;
+      expect(props?.action?.enum).toEqual(['list', 'get_summary', 'get_content', 'analyze']);
+      expect(props?.contextType?.enum).toEqual([
+        'organization',
+        'folder',
+        'initiative',
+        'chat_session',
+      ]);
+      expect(tool?.sideEffect).toBeUndefined();
+      expect(tool?.requiresApproval).toBeUndefined();
+    });
+
+    it('handlers throw a "not bound" error when invoked', () => {
+      expect(() =>
+        documentsSkill.handlers?.documents?.({
+          toolName: 'documents',
+          input: { action: 'list', contextType: 'folder', contextId: 'f-1' },
+        }),
+      ).toThrow(/documents skill handler "documents" is not bound/);
+    });
+  });
+
+  it('appends step 3 skills after Wave A/B/C step 1+2 and exposes them cross-workspace', () => {
+    const reg = new InMemorySkillRegistry();
+    const names = registerFoundationSkills(reg);
+
+    expect(names).toEqual([
+      'workspace',
+      'web',
+      'organizations',
+      'folders',
+      'initiatives',
+      'solutions',
+      'proposals',
+      'products',
+      'executive_summary',
+      'matrix',
+      'history_analyze',
+      'gate_review',
+      'documents',
+    ]);
+    expect(FOUNDATION_SKILLS.map((s) => s.metadata.name)).toEqual(names);
+    expect(reg.list({ category: 'content' }).map((m) => m.name)).toEqual(['documents']);
+
+    const adapter = createSkillsToolRegistry(reg);
+    const baseTools = withoutMeta(adapter.resolveTools(buildAuthz({ tenant: { tenantId: 't-1' } })))
+      .map((t) => t.name)
+      .sort();
+    expect(baseTools).toContain('documents');
   });
 });
