@@ -6,8 +6,10 @@ import {
   getPathValue,
   isRecord,
   parseJsonField,
+  resolveGenerationPromptOverrideFromConfig,
   resolveWorkflowBindingValue,
   sanitizeJobResultForPublic,
+  type GenerationPromptOverride,
 } from '@sentropic/flow';
 import { createId } from '../utils/id';
 import { enrichOrganization, type OrganizationData } from './context-organization';
@@ -202,35 +204,6 @@ function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkfl
     agentMap,
   };
 }
-
-type GenerationPromptOverride = {
-  promptId: string;
-  promptTemplate?: string;
-  outputSchema?: Record<string, unknown>;
-};
-
-export const resolveGenerationPromptOverrideFromConfig = (
-  rawConfig: unknown,
-  fallbackPromptId: string,
-): GenerationPromptOverride => {
-  const config =
-    rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
-      ? (rawConfig as Record<string, unknown>)
-      : {};
-  const promptId =
-    typeof config.promptId === 'string' && config.promptId.trim().length > 0
-      ? config.promptId.trim()
-      : fallbackPromptId;
-  const promptTemplate =
-    typeof config.promptTemplate === 'string' && config.promptTemplate.trim().length > 0
-      ? config.promptTemplate
-      : undefined;
-  const outputSchema =
-    config.outputSchema && typeof config.outputSchema === 'object' && !Array.isArray(config.outputSchema)
-      ? (config.outputSchema as Record<string, unknown>)
-      : undefined;
-  return { promptId, promptTemplate, outputSchema };
-};
 
 function isSameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
