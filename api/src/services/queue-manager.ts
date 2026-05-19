@@ -1,6 +1,7 @@
 import { db, pool } from '../db/client';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
+  buildWorkflowTaskInstanceKey,
   evaluateWorkflowCondition,
   getPathValue,
   isRecord,
@@ -986,29 +987,6 @@ export class QueueManager {
     return inserted.length > 0;
   }
 
-  private buildWorkflowTaskInstanceKey(
-    item: unknown,
-    index: number,
-    metadata: Record<string, unknown>,
-    fallbackTaskKey: string,
-  ): string {
-    const fanout = isRecord(metadata.fanout) ? metadata.fanout : {};
-    const configuredPath = typeof fanout.instanceKeyPath === 'string' ? fanout.instanceKeyPath : null;
-    if (configuredPath) {
-      const configuredValue = getPathValue(item, configuredPath);
-      if (typeof configuredValue === 'string' && configuredValue.trim()) {
-        return configuredValue.trim();
-      }
-    }
-    if (isRecord(item)) {
-      const candidateId = typeof item.id === 'string' ? item.id.trim() : '';
-      if (candidateId) return candidateId;
-      const candidateKey = typeof item.key === 'string' ? item.key.trim() : '';
-      if (candidateKey) return candidateKey;
-    }
-    return `${fallbackTaskKey}:${index}`;
-  }
-
   private async isWorkflowJoinTransitionReady(params: {
     workflowRunId: string;
     runtimeDefinition: WorkflowRuntimeDefinition;
@@ -1077,7 +1055,7 @@ export class QueueManager {
       const instanceKeyMetadata = upstreamFanoutTransition?.metadata ?? params.transition.metadata;
       return expectedItems.every((item, index) =>
         completedInstanceKeys.has(
-          this.buildWorkflowTaskInstanceKey(item, index, instanceKeyMetadata, joinedTaskKey),
+          buildWorkflowTaskInstanceKey(item, index, instanceKeyMetadata, joinedTaskKey),
         ),
       );
     }
@@ -1327,7 +1305,7 @@ export class QueueManager {
               runContext: params.runContext,
               state: params.state,
               taskKey: transition.toTaskKey,
-              taskInstanceKey: this.buildWorkflowTaskInstanceKey(
+              taskInstanceKey: buildWorkflowTaskInstanceKey(
                 item,
                 index,
                 transition.metadata,
