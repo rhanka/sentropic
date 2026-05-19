@@ -6,7 +6,7 @@ import {
   VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
   isExtensionRestrictedToolsetMode,
   type ChatToolScopeToggle,
-} from '../../src/lib/utils/chat-tool-scope';
+} from '@sentropic/chat-ui/utils/chat-tool-scope';
 
 const TOGGLES: ChatToolScopeToggle[] = [
   { id: 'documents', toolIds: ['documents'] },
