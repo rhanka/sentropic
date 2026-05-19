@@ -4,7 +4,9 @@ import {
   evaluateWorkflowCondition,
   getPathValue,
   isRecord,
+  parseJsonField,
   resolveWorkflowBindingValue,
+  sanitizeJobResultForPublic,
 } from '@sentropic/flow';
 import { createId } from '../utils/id';
 import { enrichOrganization, type OrganizationData } from './context-organization';
@@ -78,17 +80,6 @@ function parseOrgData(value: unknown): Record<string, unknown> {
     }
   }
   return {};
-}
-
-export function parseJsonField<T = unknown>(value: unknown): T | null {
-  if (value == null) return null;
-  if (typeof value === 'object') return value as T;
-  if (typeof value !== 'string' || !value.trim()) return null;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return null;
-  }
 }
 
 function readStringArray(value: unknown): string[] {
@@ -239,16 +230,6 @@ export const resolveGenerationPromptOverrideFromConfig = (
       : undefined;
   return { promptId, promptTemplate, outputSchema };
 };
-
-export function sanitizeJobResultForPublic(result: unknown): unknown {
-  if (!result || typeof result !== 'object') return result;
-  const copy = { ...(result as Record<string, unknown>) };
-  if (typeof copy.contentBase64 === 'string') {
-    delete copy.contentBase64;
-    copy.hasContent = true;
-  }
-  return copy;
-}
 
 function isSameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
