@@ -13,6 +13,7 @@ import {
   initiativesSkill,
   matrixSkill,
   organizationsSkill,
+  planSkill,
   productsSkill,
   proposalsSkill,
   registerFoundationSkills,
@@ -125,6 +126,7 @@ const FOUNDATION_SKILL_NAMES = [
   'gate_review',
   'documents',
   'comment_assistant',
+  'plan',
 ] as const;
 
 const FOUNDATION_TOOL_NAMES = [
@@ -143,6 +145,7 @@ const FOUNDATION_TOOL_NAMES = [
   'organization_get',
   'organization_update',
   'organizations_list',
+  'plan',
   'product_get',
   'products_list',
   'proposal_get',
@@ -373,6 +376,7 @@ describe('foundation bundle — Wave B object skills', () => {
       'documents',
       'history_analyze',
       'initiative_search',
+      'plan',
       'web_extract',
       'web_search',
       'workspace_list',
@@ -387,6 +391,7 @@ describe('foundation bundle — Wave B object skills', () => {
       'documents',
       'history_analyze',
       'initiative_search',
+      'plan',
       'web_extract',
       'web_search',
       'workspace_list',
@@ -514,6 +519,7 @@ describe('foundation bundle — Wave C structured skills', () => {
       'documents',
       'history_analyze',
       'initiative_search',
+      'plan',
       'web_extract',
       'web_search',
       'workspace_list',
@@ -625,6 +631,47 @@ describe('foundation bundle — Wave C step 3 content/action skills', () => {
     });
   });
 
+  describe('plan skill', () => {
+    it('parses SKILL.md metadata, tools, body, and handlers', () => {
+      expect(planSkill.metadata.name).toBe('plan');
+      expect(planSkill.metadata.version).toBe('0.1.0');
+      expect(planSkill.metadata.category).toBe('workflow');
+      expect(planSkill.metadata.contextFilter).toBeUndefined();
+      expect(planSkill.metadata.toolNames).toEqual(['plan']);
+      expect(planSkill.tools.map((t) => t.name)).toEqual(['plan']);
+      expect(planSkill.body).toContain('Plan skill');
+      expect(Object.keys(planSkill.handlers ?? {})).toEqual(['plan']);
+    });
+
+    it('declares the create/update_plan/update_task inputSchema with required action', () => {
+      const [tool] = planSkill.tools;
+      expect(tool?.inputSchema?.required).toEqual(['action']);
+      const props = (tool?.inputSchema as { properties?: Record<string, { enum?: string[] }> })
+        ?.properties;
+      expect(props?.action?.enum).toEqual(['create', 'update_plan', 'update_task']);
+      expect(props?.status?.enum).toEqual([
+        'todo',
+        'planned',
+        'in_progress',
+        'blocked',
+        'done',
+        'deferred',
+        'cancelled',
+      ]);
+      expect(tool?.sideEffect).toBeUndefined();
+      expect(tool?.requiresApproval).toBeUndefined();
+    });
+
+    it('handlers throw a "not bound" error when invoked', () => {
+      expect(() =>
+        planSkill.handlers?.plan?.({
+          toolName: 'plan',
+          input: { action: 'create', planTitle: 'My checklist' },
+        }),
+      ).toThrow(/plan skill handler "plan" is not bound/);
+    });
+  });
+
   it('appends step 3 skills after Wave A/B/C step 1+2 and exposes them cross-workspace', () => {
     const reg = new InMemorySkillRegistry();
     const names = registerFoundationSkills(reg);
@@ -644,12 +691,14 @@ describe('foundation bundle — Wave C step 3 content/action skills', () => {
       'gate_review',
       'documents',
       'comment_assistant',
+      'plan',
     ]);
     expect(FOUNDATION_SKILLS.map((s) => s.metadata.name)).toEqual(names);
     expect(reg.list({ category: 'content' }).map((m) => m.name)).toEqual(['documents']);
     expect(reg.list({ category: 'workflow' }).map((m) => m.name)).toEqual([
       'workspace',
       'comment_assistant',
+      'plan',
     ]);
 
     const adapter = createSkillsToolRegistry(reg);
@@ -658,5 +707,6 @@ describe('foundation bundle — Wave C step 3 content/action skills', () => {
       .sort();
     expect(baseTools).toContain('documents');
     expect(baseTools).toContain('comment_assistant');
+    expect(baseTools).toContain('plan');
   });
 });
