@@ -122,8 +122,13 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Lot gate: typecheck-api, lint-api, scoped api test, replay harness fixtures #4 + #5 + #6.
 
 - [ ] **Lot 7 — Slice 4: `JobQueue` extraction (lease, DLQ, heartbeat, idempotency)**
-  - [x] Move job admission/idempotency retry metadata (`addJob` → `PostgresJobQueue.enqueue`) and single-job terminal cancellation (`cancelJob` → `PostgresJobQueue.cancelJob`) behind the `JobQueue` adapter.
-  - [ ] Move queue lease/dispatch/cancel/drain methods from `queue-manager.ts` into `packages/flow/src/job-queue.ts` + Postgres adapter.
+  - [x] Slice 7.0 — Job admission/idempotency (`addJob` → `PostgresJobQueue.enqueue`) and single-job terminal cancellation (`cancelJob` → `PostgresJobQueue.cancelJob`) behind the `JobQueue` adapter. Defensive dispatch guards in `queue-manager.ts` skip workflow dispatch (`completion`, `task`, `transitions`, `fanout`, `joins`) when `cancelAllInProgress` is set. Commit `92ea96f2`.
+  - [x] Slice 7.A — Read methods (`getJobStatus`, `getAllJobs`) moved to `PostgresJobQueue.getJobStatus`/`listJobs`. `queue-manager` exports `parseJsonField` + `sanitizeJobResultForPublic` helpers and its public methods delegate to the adapter. Commit `01b84481`.
+  - [x] Slice 7.B — Bulk cancellation (`cancelAllProcessing` → `PostgresJobQueue.cancelAll`; `cancelProcessingForWorkspace` → `PostgresJobQueue.cancelByWorkspace`) moved with `iterateJobControllers` + `setCancelAllInProgress` + `getJobController` + `notifyJobEvent` hooks. Commit `5c0560bd`.
+  - [x] Slice 7.C — `drain` moved to `PostgresJobQueue.drain` with `getActiveJobCount` hook. `cancelAll`'s internal `await this.drain()` now resolves without going back through `queue-manager`. Commit `468dcfc5`.
+  - [ ] Slice 7.D — `pause` / `resume` / `reloadSettings` extraction (state-flag setters + `processJobs()` trigger hook). Low-value mechanical move; can be folded into Slice 7.E or done first as a quick polish.
+  - [ ] Slice 7.E — **Dispatch graph** (`dispatchWorkflowEntryTasks` + `dispatchWorkflowTransitions` + `dispatchWorkflowTask` + fanout/joins + `dispatchTaskCompletion`). ~500 lines, deeply tied to `loadWorkflowRuntimeDefinition` / `getWorkflowRunStateSnapshot` / `getWorkflowRunContext`. Needs companion run-store + workflow-store adapter accessors to migrate cleanly.
+  - [ ] Slice 7.F — **Lease / processing loop** (`processJobs()` ~125 lines + `processSingleJob` + heartbeat + DLQ retry + `notifyJobEvent` + settings reload + class-based concurrency). The bulk of `queue-manager.ts` (~3500 lines of the file). Pulls in every executor binding (`organization_enrich`, `initiative_*`, `executive_summary`, `chat_message`, `document_summary`, `docx_generate`, …).
   - [ ] Preserve invariants §4.2 (job idempotency), §4.7 (tenant scoping), §4.8 (DLQ semantics).
   - [ ] Regression: all 6 fixtures.
   - [ ] Lot gate: typecheck-api, lint-api, full `make test-api`.
