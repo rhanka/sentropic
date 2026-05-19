@@ -9,48 +9,58 @@
     "url": "git+https://github.com/rhanka/sentropic.git",
     "directory": "packages/chat-ui"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./src/index.ts",
+      "svelte": "./src/index.ts",
+      "import": "./src/index.ts"
     },
     "./client/transport": {
-      "types": "./dist/client/transport.d.ts",
-      "import": "./dist/client/transport.js"
+      "types": "./src/client/transport.ts",
+      "svelte": "./src/client/transport.ts",
+      "import": "./src/client/transport.ts"
     },
     "./client/replay": {
-      "types": "./dist/client/replay.d.ts",
-      "import": "./dist/client/replay.js"
+      "types": "./src/client/replay.ts",
+      "svelte": "./src/client/replay.ts",
+      "import": "./src/client/replay.ts"
     },
     "./renderers/registry": {
-      "types": "./dist/renderers/registry.d.ts",
-      "import": "./dist/renderers/registry.js"
+      "types": "./src/renderers/registry.ts",
+      "svelte": "./src/renderers/registry.ts",
+      "import": "./src/renderers/registry.ts"
     },
     "./hosts/types": {
-      "types": "./dist/hosts/types.d.ts",
-      "import": "./dist/hosts/types.js"
+      "types": "./src/hosts/types.ts",
+      "svelte": "./src/hosts/types.ts",
+      "import": "./src/hosts/types.ts"
     },
     "./stores/chatWidgetLayout": {
-      "types": "./dist/stores/chatWidgetLayout.d.ts",
-      "import": "./dist/stores/chatWidgetLayout.js"
+      "types": "./src/stores/chatWidgetLayout.ts",
+      "svelte": "./src/stores/chatWidgetLayout.ts",
+      "import": "./src/stores/chatWidgetLayout.ts"
     },
     "./utils/chat-run-projection": {
-      "types": "./dist/utils/chat-run-projection.d.ts",
-      "import": "./dist/utils/chat-run-projection.js"
+      "types": "./src/utils/chat-run-projection.ts",
+      "svelte": "./src/utils/chat-run-projection.ts",
+      "import": "./src/utils/chat-run-projection.ts"
     },
     "./utils/chat-steer": {
-      "types": "./dist/utils/chat-steer.d.ts",
-      "import": "./dist/utils/chat-steer.js"
+      "types": "./src/utils/chat-steer.ts",
+      "svelte": "./src/utils/chat-steer.ts",
+      "import": "./src/utils/chat-steer.ts"
     },
     "./utils/chat-tool-scope": {
-      "types": "./dist/utils/chat-tool-scope.d.ts",
-      "import": "./dist/utils/chat-tool-scope.js"
+      "types": "./src/utils/chat-tool-scope.ts",
+      "svelte": "./src/utils/chat-tool-scope.ts",
+      "import": "./src/utils/chat-tool-scope.ts"
     },
     "./utils/localToolStreamSync": {
-      "types": "./dist/utils/localToolStreamSync.d.ts",
-      "import": "./dist/utils/localToolStreamSync.js"
+      "types": "./src/utils/localToolStreamSync.ts",
+      "svelte": "./src/utils/localToolStreamSync.ts",
+      "import": "./src/utils/localToolStreamSync.ts"
     },
     "./components/ChatPanel.svelte": {
       "svelte": "./src/components/ChatPanel.svelte"
@@ -64,7 +74,7 @@
   },
   "files": [
     "dist",
-    "src/components",
+    "src",
     "README.md",
     "LICENSE"
   ],
