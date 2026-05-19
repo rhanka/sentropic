@@ -14,6 +14,7 @@ export * from './client/replay.js';
 export * from './renderers/registry.js';
 export * from './hosts/types.js';
 export * from './stores/chatWidgetLayout.js';
+export * from './stores/localTools.js';
 export * from './utils/chat-run-projection.js';
 export * from './utils/chat-steer.js';
 export * from './utils/chat-tool-scope.js';
