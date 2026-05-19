@@ -27,7 +27,7 @@
     List,
     Settings,
   } from '@lucide/svelte';
-  import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
+  import { chatWidgetLayout } from '@sentropic/chat-ui/stores/chatWidgetLayout';
   import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
   import {
     deleteLocalToolPermissionPolicy,
