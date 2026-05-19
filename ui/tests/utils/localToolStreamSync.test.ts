@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isLocalToolName } from '../../src/lib/stores/localTools';
+import { isLocalToolName } from '@sentropic/chat-ui/stores/localTools';
 import {
   filterPermissionPromptsForPendingStream,
   parsePendingLocalToolCallsFromStatusPayload,
