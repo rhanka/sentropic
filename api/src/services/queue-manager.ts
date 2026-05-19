@@ -1877,16 +1877,14 @@ export class QueueManager {
   }
 
   async cancelAllProcessing(reason: string = 'cancel-all'): Promise<void> {
-    this.cancelAllInProgress = true;
-    for (const [, controller] of this.jobControllers.entries()) {
-      try {
-        controller.abort(new DOMException(reason, 'AbortError'));
-      } catch {
-        // Ignore abort errors if controller is already aborted
-      }
-    }
-    await this.drain();
-    this.cancelAllInProgress = false;
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    postgresJobQueue.setRuntimeHooks({
+      iterateJobControllers: () => this.jobControllers.entries(),
+      setCancelAllInProgress: (v) => {
+        this.cancelAllInProgress = v;
+      },
+    });
+    return postgresJobQueue.cancelAll(reason);
   }
 
   /**
@@ -1894,44 +1892,12 @@ export class QueueManager {
    * This prevents leakage/cost when a user purges their own job history.
    */
   async cancelProcessingForWorkspace(workspaceId: string, reason: string = 'purge-mine'): Promise<void> {
-    // Mark DB rows as failed first (best-effort) so other readers see them as cancelled.
-    let processingIds: string[] = [];
-    try {
-      const rows = (await db.all(sql`
-        SELECT id FROM job_queue
-        WHERE status = 'processing' AND workspace_id = ${workspaceId}
-      `)) as Array<{ id: string }>;
-      processingIds = rows.map((r) => r.id);
-    } catch (e) {
-      console.warn('⚠️ Failed to load processing jobs for workspace cancellation:', e);
-    }
-
-    if (processingIds.length === 0) return;
-
-    try {
-      await db.run(sql`
-        UPDATE job_queue
-        SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error = ${`Job cancelled by ${reason}`}
-        WHERE status = 'processing' AND workspace_id = ${workspaceId}
-      `);
-    } catch (e) {
-      // ignore
-    }
-
-    for (const jobId of processingIds) {
-      const controller = this.jobControllers.get(jobId);
-      if (!controller) continue;
-      try {
-        controller.abort(new DOMException(reason, 'AbortError'));
-      } catch {
-        // ignore
-      }
-      try {
-        await this.notifyJobEvent(jobId);
-      } catch {
-        // ignore
-      }
-    }
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    postgresJobQueue.setRuntimeHooks({
+      notifyJobEvent: (id) => this.notifyJobEvent(id),
+      getJobController: (id) => this.jobControllers.get(id),
+    });
+    return postgresJobQueue.cancelByWorkspace(workspaceId, reason);
   }
 
   /**
