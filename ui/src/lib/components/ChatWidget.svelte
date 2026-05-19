@@ -34,7 +34,7 @@
     listLocalToolPermissionPolicies,
     upsertLocalToolPermissionPolicy,
     type LocalToolPermissionPolicyEntry,
-  } from '$lib/stores/localTools';
+  } from '@sentropic/chat-ui/stores/localTools';
   import {
     resolveCodeAgentPromptProfile,
     type CodeAgentPromptSource,

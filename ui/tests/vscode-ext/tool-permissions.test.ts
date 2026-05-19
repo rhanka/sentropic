@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   deleteLocalToolPermissionPolicy,
   listLocalToolPermissionPolicies,
+  setLocalToolsAdapter,
   upsertLocalToolPermissionPolicy,
-} from '../../src/lib/stores/localTools';
+} from '@sentropic/chat-ui/stores/localTools';
 
 describe('vscode extension tool permissions bridge', () => {
   beforeEach(() => {
+    setLocalToolsAdapter(null);
     delete (globalThis as any).chrome;
   });
 

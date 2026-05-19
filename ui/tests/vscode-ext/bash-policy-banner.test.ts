@@ -4,10 +4,12 @@ import {
   LocalToolPermissionRequiredError,
   decideLocalToolPermission,
   executeLocalTool,
-} from '../../src/lib/stores/localTools';
+  setLocalToolsAdapter,
+} from '@sentropic/chat-ui/stores/localTools';
 
 describe('vscode bash policy banner bridge', () => {
   beforeEach(() => {
+    setLocalToolsAdapter(null);
     delete (globalThis as any).chrome;
   });
 
