@@ -69,6 +69,39 @@ export interface WorkflowBindingResolutionContext {
   item?: unknown;
 }
 
+/**
+ * Compute the per-instance task key for a fanout dispatch.
+ *
+ * Resolves in priority order:
+ * 1. metadata.fanout.instanceKeyPath applied against the item
+ * 2. item.id if present
+ * 3. item.key if present
+ * 4. `${fallbackTaskKey}:${index}` synthetic fallback
+ */
+export function buildWorkflowTaskInstanceKey(
+  item: unknown,
+  index: number,
+  metadata: Record<string, unknown>,
+  fallbackTaskKey: string,
+): string {
+  const fanout = isRecord(metadata.fanout) ? metadata.fanout : {};
+  const configuredPath =
+    typeof fanout.instanceKeyPath === 'string' ? fanout.instanceKeyPath : null;
+  if (configuredPath) {
+    const configuredValue = getPathValue(item, configuredPath);
+    if (typeof configuredValue === 'string' && configuredValue.trim()) {
+      return configuredValue.trim();
+    }
+  }
+  if (isRecord(item)) {
+    const candidateId = typeof item.id === 'string' ? item.id.trim() : '';
+    if (candidateId) return candidateId;
+    const candidateKey = typeof item.key === 'string' ? item.key.trim() : '';
+    if (candidateKey) return candidateKey;
+  }
+  return `${fallbackTaskKey}:${index}`;
+}
+
 export function resolveWorkflowBindingValue(
   binding: unknown,
   context: WorkflowBindingResolutionContext,

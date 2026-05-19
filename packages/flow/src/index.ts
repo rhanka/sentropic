@@ -59,6 +59,7 @@ export type {
 
 export type { WorkflowBindingResolutionContext } from './condition-eval.js';
 export {
+  buildWorkflowTaskInstanceKey,
   evaluateWorkflowCondition,
   getPathValue,
   isRecord,
