@@ -4,6 +4,7 @@ import { InMemorySkillRegistry } from '../../src/registry/registry.js';
 import { createSkillsToolRegistry } from '../../src/registry/adapter.js';
 import {
   FOUNDATION_SKILLS,
+  commentAssistantSkill,
   documentsSkill,
   executiveSummarySkill,
   foldersSkill,
@@ -123,9 +124,11 @@ const FOUNDATION_SKILL_NAMES = [
   'history_analyze',
   'gate_review',
   'documents',
+  'comment_assistant',
 ] as const;
 
 const FOUNDATION_TOOL_NAMES = [
+  'comment_assistant',
   'documents',
   'executive_summary_get',
   'executive_summary_update',
@@ -366,6 +369,7 @@ describe('foundation bundle — Wave B object skills', () => {
         .map((t) => t.name)
         .sort(),
     ).toEqual([
+      'comment_assistant',
       'documents',
       'history_analyze',
       'initiative_search',
@@ -379,6 +383,7 @@ describe('foundation bundle — Wave B object skills', () => {
         .map((t) => t.name)
         .sort(),
     ).toEqual([
+      'comment_assistant',
       'documents',
       'history_analyze',
       'initiative_search',
@@ -505,6 +510,7 @@ describe('foundation bundle — Wave C structured skills', () => {
         .map((t) => t.name)
         .sort(),
     ).toEqual([
+      'comment_assistant',
       'documents',
       'history_analyze',
       'initiative_search',
@@ -578,6 +584,47 @@ describe('foundation bundle — Wave C step 3 content/action skills', () => {
     });
   });
 
+  describe('comment_assistant skill', () => {
+    it('parses SKILL.md metadata, tools, body, and handlers', () => {
+      expect(commentAssistantSkill.metadata.name).toBe('comment_assistant');
+      expect(commentAssistantSkill.metadata.version).toBe('0.1.0');
+      expect(commentAssistantSkill.metadata.category).toBe('workflow');
+      expect(commentAssistantSkill.metadata.contextFilter).toBeUndefined();
+      expect(commentAssistantSkill.metadata.toolNames).toEqual(['comment_assistant']);
+      expect(commentAssistantSkill.tools.map((t) => t.name)).toEqual(['comment_assistant']);
+      expect(commentAssistantSkill.body).toContain('Comment assistant skill');
+      expect(Object.keys(commentAssistantSkill.handlers ?? {})).toEqual([
+        'comment_assistant',
+      ]);
+    });
+
+    it('declares the suggest/resolve inputSchema with required mode/contextType/contextId', () => {
+      const [tool] = commentAssistantSkill.tools;
+      expect(tool?.inputSchema?.required).toEqual(['mode', 'contextType', 'contextId']);
+      const props = (tool?.inputSchema as { properties?: Record<string, { enum?: string[] }> })
+        ?.properties;
+      expect(props?.mode?.enum).toEqual(['suggest', 'resolve']);
+      expect(props?.contextType?.enum).toEqual([
+        'organization',
+        'folder',
+        'initiative',
+        'matrix',
+        'executive_summary',
+      ]);
+      expect(tool?.sideEffect).toBeUndefined();
+      expect(tool?.requiresApproval).toBeUndefined();
+    });
+
+    it('handlers throw a "not bound" error when invoked', () => {
+      expect(() =>
+        commentAssistantSkill.handlers?.comment_assistant?.({
+          toolName: 'comment_assistant',
+          input: { mode: 'suggest', contextType: 'folder', contextId: 'f-1' },
+        }),
+      ).toThrow(/comment_assistant skill handler "comment_assistant" is not bound/);
+    });
+  });
+
   it('appends step 3 skills after Wave A/B/C step 1+2 and exposes them cross-workspace', () => {
     const reg = new InMemorySkillRegistry();
     const names = registerFoundationSkills(reg);
@@ -596,14 +643,20 @@ describe('foundation bundle — Wave C step 3 content/action skills', () => {
       'history_analyze',
       'gate_review',
       'documents',
+      'comment_assistant',
     ]);
     expect(FOUNDATION_SKILLS.map((s) => s.metadata.name)).toEqual(names);
     expect(reg.list({ category: 'content' }).map((m) => m.name)).toEqual(['documents']);
+    expect(reg.list({ category: 'workflow' }).map((m) => m.name)).toEqual([
+      'workspace',
+      'comment_assistant',
+    ]);
 
     const adapter = createSkillsToolRegistry(reg);
     const baseTools = withoutMeta(adapter.resolveTools(buildAuthz({ tenant: { tenantId: 't-1' } })))
       .map((t) => t.name)
       .sort();
     expect(baseTools).toContain('documents');
+    expect(baseTools).toContain('comment_assistant');
   });
 });
