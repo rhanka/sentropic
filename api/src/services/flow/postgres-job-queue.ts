@@ -39,6 +39,7 @@ type PostgresJobQueueRuntimeHooks = {
   startProcessing?: () => void;
   iterateJobControllers?: () => Iterable<[string, AbortController]>;
   setCancelAllInProgress?: (value: boolean) => void;
+  getActiveJobCount?: () => number;
 };
 
 export class PostgresJobQueue implements JobQueue<JobType, JobData> {
@@ -180,8 +181,15 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData> {
     }
   }
 
-  drain(timeoutMs?: number): Promise<void> {
-    return queueManager.drain(timeoutMs);
+  async drain(timeoutMs: number = 10000): Promise<void> {
+    const getActiveCount = this.hooks.getActiveJobCount;
+    if (!getActiveCount) {
+      return queueManager.drain(timeoutMs);
+    }
+    const start = Date.now();
+    while (getActiveCount() > 0 && Date.now() - start < timeoutMs) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
   }
 
   async getJobStatus(

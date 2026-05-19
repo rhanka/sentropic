@@ -1883,6 +1883,7 @@ export class QueueManager {
       setCancelAllInProgress: (v) => {
         this.cancelAllInProgress = v;
       },
+      getActiveJobCount: () => this.jobControllers.size,
     });
     return postgresJobQueue.cancelAll(reason);
   }
@@ -1915,10 +1916,11 @@ export class QueueManager {
   }
 
   async drain(timeoutMs: number = 10000): Promise<void> {
-    const start = Date.now();
-    while (this.jobControllers.size > 0 && Date.now() - start < timeoutMs) {
-      await new Promise((r) => setTimeout(r, 100));
-    }
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    postgresJobQueue.setRuntimeHooks({
+      getActiveJobCount: () => this.jobControllers.size,
+    });
+    return postgresJobQueue.drain(timeoutMs);
   }
 
   private queueClassSqlExpr(): string {
