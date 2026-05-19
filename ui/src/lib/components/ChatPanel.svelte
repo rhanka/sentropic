@@ -63,7 +63,7 @@
     type LocalToolPermissionDecision,
     type LocalToolPermissionRequest,
     type LocalToolName,
-  } from '$lib/stores/localTools';
+  } from '@sentropic/chat-ui/stores/localTools';
   import {
     Send,
     ThumbsUp,
