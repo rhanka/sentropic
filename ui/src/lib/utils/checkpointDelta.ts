@@ -1,4 +1,4 @@
-import { parsePendingLocalToolCallsFromStatusPayload } from '$lib/utils/localToolStreamSync';
+import { parsePendingLocalToolCallsFromStatusPayload } from '@sentropic/chat-ui/utils/localToolStreamSync';
 import { isLocalToolName } from '$lib/stores/localTools';
 
 export type CheckpointSummaryLike = {
