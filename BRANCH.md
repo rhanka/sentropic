@@ -238,33 +238,33 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - [ ] Run `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
     - [ ] Commit package scaffold and tests with selective `git add`, then `make commit MSG="feat: scaffold sentropic chat ui package" ENV=test-feat-chat-ui-sdk-v2`.
 
-- [ ] **Lot 3 - Web app adoption**
-  - [ ] Replace web imports so `ui/src/lib/components/ChatPanel.svelte`, `ChatWidget.svelte`, and `StreamMessage.svelte` either re-export package components or become thin app-specific wrappers.
-  - [ ] Move shared `streamHub`, chat run projection, steering, tool scope, and local tool sync logic into `packages/chat-ui/src` when the code is UI-generic.
-  - [ ] Keep route-specific, workspace-specific, and authentication-specific logic in `ui/src/**` host adapters.
-  - [ ] Preserve these web behaviors:
-    - desktop floating widget and docked panel;
-    - mobile full-screen/bottom-sheet layout;
-    - markdown streaming;
-    - tool-call rendering;
-    - attachments;
-    - context/tool menu;
-    - interruption;
-    - retry, rollback, copy, and feedback controls;
-    - SSE resync after navigation or refresh.
-  - [ ] Update UI tests:
-    - `ui/tests/components/ChatPanel-docx-cards.test.ts`
-    - `ui/tests/stores/streamHub.test.ts`
-    - `ui/tests/utils/chat-run-projection.test.ts`
-    - `ui/tests/utils/chat-steer.test.ts`
-    - `ui/tests/utils/chat-tool-scope.test.ts`
-    - `ui/tests/utils/localToolStreamSync.test.ts`
-    - `ui/tests/utils/todo-chat-rendering.test.ts`
-  - [ ] Lot gate:
-    - [ ] Run `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Run `make test-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Run `make build-ui-image API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Commit with selective `git add`, then `make commit MSG="feat: consume chat ui package in web app" ENV=test-feat-chat-ui-sdk-v2`.
+- [x] **Lot 3 - Web app adoption**
+  - [x] Replace web imports so `ui/src/lib/components/ChatPanel.svelte`, `ChatWidget.svelte`, and `StreamMessage.svelte` either re-export package components or become thin app-specific wrappers. (Kept as thin app-specific wrappers in `ui/src/lib/components/` per `deferred` Feedback Loop item: 30+ `$lib/*` deps require host adapter / context provider / transport / renderer registry prop-injection before the package copies can be activated; their internal `chatWidgetLayout` and `$lib/utils/{chat-run-projection,chat-steer,chat-tool-scope,localToolStreamSync}` imports were rewired to `@sentropic/chat-ui/{stores,utils}/*`.)
+  - [x] Move shared `streamHub`, chat run projection, steering, tool scope, and local tool sync logic into `packages/chat-ui/src` when the code is UI-generic. (Moved `chat-run-projection`, `chat-steer`, `chat-tool-scope`, `localToolStreamSync`, and `chatWidgetLayout` into `packages/chat-ui/src/{utils,stores}/`. `streamHub` and `localTools` deferred per Feedback Loop: streamHub is an app-wide SSE hub with hard auth/workspace/config deps and 8 non-chat consumers requiring `createStreamHub(options)` adapter work; `localTools` requires Chrome/VSCode runtime adapter injection.)
+  - [x] Keep route-specific, workspace-specific, and authentication-specific logic in `ui/src/**` host adapters. (Layout, routes, ChatPanel/ChatWidget/StreamMessage component shells, `localTools`, `streamHub`, `chatwidget-handoff`, `upstream/injected-script` stay app-owned.)
+  - [x] Preserve these web behaviors:
+    - desktop floating widget and docked panel; (no behavior change: `chatWidgetLayout` store moved but re-exports identical `writable` shape; `ChatWidget.svelte` imports unchanged.)
+    - mobile full-screen/bottom-sheet layout; (no behavior change: same component shell.)
+    - markdown streaming; (no behavior change: `StreamMessage.svelte` keeps `streamHub` consumption from `$lib/stores/streamHub`.)
+    - tool-call rendering; (no behavior change: ChatPanel keeps existing rendering code paths.)
+    - attachments; (no behavior change: ChatPanel google-drive/documents wiring untouched.)
+    - context/tool menu; (no behavior change: `chat-tool-scope` exported logic identical, moved to package.)
+    - interruption; (no behavior change: `postChatSteer` signature unchanged, moved to package.)
+    - retry, rollback, copy, and feedback controls; (no behavior change: ChatPanel uses unchanged `apiPost` calls.)
+    - SSE resync after navigation or refresh. (no behavior change: `streamHub` singleton and consumers untouched.)
+  - [x] Update UI tests:
+    - [x] `ui/tests/components/ChatPanel-docx-cards.test.ts` (pure-function tests still pass; no import change needed since file tests inline functions copied from ChatPanel.svelte).
+    - [x] `ui/tests/stores/streamHub.test.ts` (no rewire needed; streamHub stays in `ui/src/lib/stores/`).
+    - [x] `ui/tests/utils/chat-run-projection.test.ts` (rewired to `@sentropic/chat-ui/utils/chat-run-projection`).
+    - [x] `ui/tests/utils/chat-steer.test.ts` (rewired to `@sentropic/chat-ui/utils/chat-steer`).
+    - [x] `ui/tests/utils/chat-tool-scope.test.ts` (rewired to `@sentropic/chat-ui/utils/chat-tool-scope`) + `ui/tests/chat-tool-scope-workspace-type.test.ts` (same rewire).
+    - [x] `ui/tests/utils/localToolStreamSync.test.ts` (rewired to `@sentropic/chat-ui/utils/localToolStreamSync`).
+    - [x] `ui/tests/utils/todo-chat-rendering.test.ts` (no rewire needed; tests `$lib/utils/markdown`, not moved).
+  - [x] Lot gate:
+    - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9073 UI_PORT=5273 MAILDEV_UI_PORT=1173 ENV=test-feat-chat-ui-sdk-v2-lot3` — `svelte-check found 0 errors and 6 warnings in 5 files` (baseline preserved).
+    - [x] Run `make test-ui REGISTRY=local API_PORT=9073 UI_PORT=5273 MAILDEV_UI_PORT=1173 ENV=test-feat-chat-ui-sdk-v2-lot3` — 368/370 passed; 2 failures in out-of-scope `ui/tests/utils/google-drive-picker.test.ts` reproducible on `origin/main` (tracked in Feedback Loop).
+    - [x] Run `make build-ui-image REGISTRY=local API_PORT=9073 UI_PORT=5273 MAILDEV_UI_PORT=1173 ENV=test-feat-chat-ui-sdk-v2-lot3` — image built clean (sha256:2dd5b456..., tag `local/top-ai-ideas-ui:531ae4`).
+    - [x] Commits on `feat/chat-ui-sdk-v2-lot3` since baseline `28e1b1f3`: `f3c0d916` (package additions), `393b2a8d` (chatWidgetLayout adoption + ui dep + BR14a-EX1), `9bc1c7cb` (utils adoption + deletes), `5e90cb63` (package-lock regen under BR14a-EX1), `603fbe70` (exports point to src/ for vite/svelte-check), `51b0d3dd` (BRANCH.md feedback loop updates).
 
 - [ ] **Lot 4 - API and chat-core compatibility check**
   - [ ] Confirm `@sentropic/chat-ui` does not require direct imports from `api/src/**`.
