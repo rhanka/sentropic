@@ -1,0 +1,65 @@
+{
+  "name": "@sentropic/chat-ui",
+  "version": "0.1.0",
+  "description": "Svelte reference UI package for @sentropic/* chat sessions: stream rendering, optimistic client state, local-tool handoff, renderer registry, and host adapter contracts. Consumes @sentropic/chat-core wire contracts over HTTP/SSE only.",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/chat-ui"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client/transport": {
+      "types": "./dist/client/transport.d.ts",
+      "import": "./dist/client/transport.js"
+    },
+    "./client/replay": {
+      "types": "./dist/client/replay.d.ts",
+      "import": "./dist/client/replay.js"
+    },
+    "./renderers/registry": {
+      "types": "./dist/renderers/registry.d.ts",
+      "import": "./dist/renderers/registry.js"
+    },
+    "./hosts/types": {
+      "types": "./dist/hosts/types.d.ts",
+      "import": "./dist/hosts/types.js"
+    },
+    "./components/ChatPanel.svelte": {
+      "svelte": "./src/components/ChatPanel.svelte"
+    },
+    "./components/ChatWidget.svelte": {
+      "svelte": "./src/components/ChatWidget.svelte"
+    },
+    "./components/StreamMessage.svelte": {
+      "svelte": "./src/components/StreamMessage.svelte"
+    }
+  },
+  "files": [
+    "dist",
+    "src/components",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": [
+    "**/*.svelte"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5"
+  }
+}

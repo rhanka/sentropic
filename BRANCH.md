@@ -118,6 +118,7 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
 - [ ] `attention`: Before merge, record Web, Chrome, and VSCode UAT as passed, or record explicit user waiver.
 - [ ] `attention`: Lot 1 gate note: `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2` failed before typecheck because empty `REGISTRY` produced invalid Docker tag `/top-ai-ideas-ui:1864cb`; rerun with `REGISTRY=local` passed with 0 errors and 6 existing Svelte warnings.
 - [x] `closed`: Lot 1 gate note: `make test-ui SCOPE=tests/stores/streamHub.test.ts REGISTRY=local API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2` failed 12/15 tests because the test mock for `EventSource` was not constructable under current Vitest (`TypeError: ... is not a constructor` at `src/lib/stores/streamHub.ts:510`). Fixed the test-only mock to use a constructable function; rerun passed 15/15.
+- [ ] `attention`: Lot 2 gate runs `typecheck-ui` workspace-wide; verify root `package.json` workspaces glob includes `packages/chat-ui`. If not picked up, defer dedicated `typecheck-chat-ui` to Lot 6 under `BR14a-EX1`.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -213,22 +214,22 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
 
 - [ ] **Lot 2 - Package scaffold and public UI contract**
   - [ ] Open `BR14a-EX1` for package/workspace metadata if `package-lock.json` or package scripts must change.
-  - [ ] Create `packages/chat-ui/package.json` for `@sentropic/chat-ui` with Svelte-compatible exports, `type: module`, `sideEffects` limited to Svelte style/runtime needs, and dependencies only on packages already used by extracted UI code.
-  - [ ] Create `packages/chat-ui/tsconfig.json` aligned with existing package TypeScript settings.
-  - [ ] Create `packages/chat-ui/src/index.ts` exporting the public surface.
-  - [ ] Create `packages/chat-ui/src/client/transport.ts` for chat-core HTTP/SSE client primitives.
-  - [ ] Create `packages/chat-ui/src/client/replay.ts` for stream replay and `fromSeq` handling.
-  - [ ] Create `packages/chat-ui/src/renderers/registry.ts` for tool result renderer registration and JSON fallback.
-  - [ ] Create `packages/chat-ui/src/hosts/types.ts` for web, Chrome, and VSCode host adapter interfaces.
-  - [ ] Create `packages/chat-ui/src/components/ChatPanel.svelte`, `ChatWidget.svelte`, and `StreamMessage.svelte` as package-owned copies before rewiring app imports.
-  - [ ] Create package tests:
+  - [x] Create `packages/chat-ui/package.json` for `@sentropic/chat-ui` with Svelte-compatible exports, `type: module`, `sideEffects` limited to Svelte style/runtime needs, and dependencies only on packages already used by extracted UI code.
+  - [x] Create `packages/chat-ui/tsconfig.json` aligned with existing package TypeScript settings.
+  - [x] Create `packages/chat-ui/src/index.ts` exporting the public surface.
+  - [x] Create `packages/chat-ui/src/client/transport.ts` for chat-core HTTP/SSE client primitives.
+  - [x] Create `packages/chat-ui/src/client/replay.ts` for stream replay and `fromSeq` handling.
+  - [x] Create `packages/chat-ui/src/renderers/registry.ts` for tool result renderer registration and JSON fallback.
+  - [x] Create `packages/chat-ui/src/hosts/types.ts` for web, Chrome, and VSCode host adapter interfaces.
+  - [x] Create `packages/chat-ui/src/components/ChatPanel.svelte`, `ChatWidget.svelte`, and `StreamMessage.svelte` as package-owned copies before rewiring app imports.
+  - [x] Create package tests:
     - `packages/chat-ui/tests/transport.test.ts`
     - `packages/chat-ui/tests/replay.test.ts`
     - `packages/chat-ui/tests/renderer-registry.test.ts`
     - `packages/chat-ui/tests/host-adapter-types.test.ts`
   - [ ] Lot gate:
-    - [ ] Run package scoped typecheck target after adding it: `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Run package tests after adding target: `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
+    - [ ] Run package scoped typecheck target after adding it: `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2` (deferred to Lot 6 under `BR14a-EX1`).
+    - [ ] Run package tests after adding target: `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2` (deferred to Lot 6 under `BR14a-EX1`).
     - [ ] Run `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
     - [ ] Commit package scaffold and tests with selective `git add`, then `make commit MSG="feat: scaffold sentropic chat ui package" ENV=test-feat-chat-ui-sdk-v2`.
 
