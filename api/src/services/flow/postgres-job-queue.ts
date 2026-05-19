@@ -5,12 +5,15 @@ import type {
   QueuedJob,
   WorkflowDispatchDescriptor,
 } from '@sentropic/flow';
-import { eq, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { db, pool } from '../../db/client';
 import { ADMIN_WORKSPACE_ID, jobQueue } from '../../db/schema';
 import { createId } from '../../utils/id';
 import {
+  getPublicJobStreamId,
+  parseJsonField,
   queueManager,
+  sanitizeJobResultForPublic,
   type Job,
   type JobData,
   type JobType,
@@ -130,17 +133,67 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData> {
     return queueManager.drain(timeoutMs);
   }
 
-  getJobStatus(
+  async getJobStatus(
     jobId: string,
     opts?: { includeBinaryResult?: boolean },
   ): Promise<QueuedJob<JobType, JobData> | null> {
-    return queueManager.getJobStatus(jobId, opts) as Promise<
-      QueuedJob<JobType, JobData> | null
-    >;
+    const result = await db
+      .select()
+      .from(jobQueue)
+      .where(eq(jobQueue.id, jobId))
+      .limit(1);
+
+    if (!result || result.length === 0) return null;
+
+    const row = result[0];
+    const job = {
+      id: row.id,
+      type: row.type as JobType,
+      data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
+      result:
+        opts?.includeBinaryResult === true
+          ? parseJsonField(row.result)
+          : sanitizeJobResultForPublic(parseJsonField(row.result)),
+      status: row.status as Job['status'],
+      workspaceId: row.workspaceId,
+      createdAt: row.createdAt.toISOString(),
+      startedAt: row.startedAt || undefined,
+      completedAt: row.completedAt || undefined,
+      error: row.error || undefined,
+    } satisfies Omit<Job, 'streamId'>;
+
+    return {
+      ...job,
+      streamId: getPublicJobStreamId(job),
+    } as QueuedJob<JobType, JobData>;
   }
 
-  listJobs(opts?: { workspaceId?: string }): Promise<QueuedJob<JobType, JobData>[]> {
-    return queueManager.getAllJobs(opts) as Promise<QueuedJob<JobType, JobData>[]>;
+  async listJobs(opts?: { workspaceId?: string }): Promise<QueuedJob<JobType, JobData>[]> {
+    const results = await db
+      .select()
+      .from(jobQueue)
+      .where(opts?.workspaceId ? eq(jobQueue.workspaceId, opts.workspaceId) : undefined)
+      .orderBy(desc(jobQueue.createdAt));
+
+    return results.map((row) => {
+      const job = {
+        id: row.id,
+        type: row.type as JobType,
+        data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
+        result: sanitizeJobResultForPublic(parseJsonField(row.result)),
+        status: row.status as Job['status'],
+        workspaceId: row.workspaceId,
+        createdAt: row.createdAt.toISOString(),
+        startedAt: row.startedAt || undefined,
+        completedAt: row.completedAt || undefined,
+        error: row.error || undefined,
+      } satisfies Omit<Job, 'streamId'>;
+
+      return {
+        ...job,
+        streamId: getPublicJobStreamId(job),
+      } as QueuedJob<JobType, JobData>;
+    });
   }
 
   pause(): void {
