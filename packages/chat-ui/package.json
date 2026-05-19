@@ -42,6 +42,11 @@
       "svelte": "./src/stores/chatWidgetLayout.ts",
       "import": "./src/stores/chatWidgetLayout.ts"
     },
+    "./stores/localTools": {
+      "types": "./src/stores/localTools.ts",
+      "svelte": "./src/stores/localTools.ts",
+      "import": "./src/stores/localTools.ts"
+    },
     "./utils/chat-run-projection": {
       "types": "./src/utils/chat-run-projection.ts",
       "svelte": "./src/utils/chat-run-projection.ts",
