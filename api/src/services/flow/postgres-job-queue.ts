@@ -37,6 +37,8 @@ type PostgresJobQueueRuntimeHooks = {
   notifyJobEvent?: (jobId: string) => Promise<void>;
   getJobController?: (jobId: string) => AbortController | undefined;
   startProcessing?: () => void;
+  iterateJobControllers?: () => Iterable<[string, AbortController]>;
+  setCancelAllInProgress?: (value: boolean) => void;
 };
 
 export class PostgresJobQueue implements JobQueue<JobType, JobData> {
@@ -121,12 +123,61 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData> {
     return { status: nextStatus };
   }
 
-  cancelAll(reason?: string): Promise<void> {
-    return queueManager.cancelAllProcessing(reason);
+  async cancelAll(reason: string = 'cancel-all'): Promise<void> {
+    this.hooks.setCancelAllInProgress?.(true);
+    const iter = this.hooks.iterateJobControllers?.() ?? [];
+    for (const [, controller] of iter) {
+      try {
+        controller.abort(new DOMException(reason, 'AbortError'));
+      } catch {
+        // ignore abort errors if controller is already aborted
+      }
+    }
+    await this.drain();
+    this.hooks.setCancelAllInProgress?.(false);
   }
 
-  cancelByWorkspace(workspaceId: string, reason?: string): Promise<void> {
-    return queueManager.cancelProcessingForWorkspace(workspaceId, reason);
+  async cancelByWorkspace(
+    workspaceId: string,
+    reason: string = 'purge-mine',
+  ): Promise<void> {
+    let processingIds: string[] = [];
+    try {
+      const rows = (await db.all(sql`
+        SELECT id FROM job_queue
+        WHERE status = 'processing' AND workspace_id = ${workspaceId}
+      `)) as Array<{ id: string }>;
+      processingIds = rows.map((r) => r.id);
+    } catch (e) {
+      console.warn('⚠️ Failed to load processing jobs for workspace cancellation:', e);
+    }
+
+    if (processingIds.length === 0) return;
+
+    try {
+      await db.run(sql`
+        UPDATE job_queue
+        SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error = ${`Job cancelled by ${reason}`}
+        WHERE status = 'processing' AND workspace_id = ${workspaceId}
+      `);
+    } catch {
+      // ignore
+    }
+
+    for (const jobId of processingIds) {
+      const controller = this.hooks.getJobController?.(jobId);
+      if (!controller) continue;
+      try {
+        controller.abort(new DOMException(reason, 'AbortError'));
+      } catch {
+        // ignore
+      }
+      try {
+        await this.notifyJobEvent(jobId);
+      } catch {
+        // ignore
+      }
+    }
   }
 
   drain(timeoutMs?: number): Promise<void> {
