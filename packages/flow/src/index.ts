@@ -68,6 +68,9 @@ export {
 
 export { parseJsonField, sanitizeJobResultForPublic } from './job-helpers.js';
 
+export type { GenerationPromptOverride } from './agent-prompt-overrides.js';
+export { resolveGenerationPromptOverrideFromConfig } from './agent-prompt-overrides.js';
+
 export type {
   FlowRuntime,
   FlowRuntimePorts,
