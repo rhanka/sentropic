@@ -1,5 +1,11 @@
 import { db, pool } from '../db/client';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import {
+  evaluateWorkflowCondition,
+  getPathValue,
+  isRecord,
+  resolveWorkflowBindingValue,
+} from '@sentropic/flow';
 import { createId } from '../utils/id';
 import { enrichOrganization, type OrganizationData } from './context-organization';
 import {
@@ -83,10 +89,6 @@ export function parseJsonField<T = unknown>(value: unknown): T | null {
   } catch {
     return null;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 function readStringArray(value: unknown): string[] {
@@ -855,75 +857,6 @@ export class QueueManager {
     await this.markExecutionRunStatus(params.workflow.workflowRunId, 'failed');
   }
 
-  private getPathValue(source: unknown, path: string): unknown {
-    if (!path) return source;
-    const segments = path.split('.').filter(Boolean);
-    let current: unknown = source;
-    for (const segment of segments) {
-      if (!isRecord(current)) return undefined;
-      current = current[segment];
-    }
-    return current;
-  }
-
-  private evaluateWorkflowCondition(condition: unknown, state: Record<string, unknown>): boolean {
-    if (!isRecord(condition) || Object.keys(condition).length === 0) {
-      return true;
-    }
-    if (Array.isArray(condition.all)) {
-      return condition.all.every((entry) => this.evaluateWorkflowCondition(entry, state));
-    }
-    if (Array.isArray(condition.any)) {
-      return condition.any.some((entry) => this.evaluateWorkflowCondition(entry, state));
-    }
-    if (condition.not !== undefined) {
-      return !this.evaluateWorkflowCondition(condition.not, state);
-    }
-    const path = typeof condition.path === 'string' ? condition.path : '';
-    const operator = typeof condition.operator === 'string' ? condition.operator : 'eq';
-    const currentValue = path ? this.getPathValue(state, path) : undefined;
-    switch (operator) {
-      case 'eq':
-        return currentValue === condition.value;
-      case 'truthy':
-        return Boolean(currentValue);
-      case 'not_empty':
-        if (Array.isArray(currentValue)) return currentValue.length > 0;
-        if (typeof currentValue === 'string') return currentValue.trim().length > 0;
-        return Boolean(currentValue);
-      default:
-        return false;
-    }
-  }
-
-  private resolveWorkflowBindingValue(
-    binding: unknown,
-    context: {
-      state: Record<string, unknown>;
-      run: Record<string, unknown>;
-      item?: unknown;
-    },
-  ): unknown {
-    if (typeof binding === 'string') {
-      if (binding === '$state') return context.state;
-      if (binding.startsWith('$state.')) return this.getPathValue(context.state, binding.slice('$state.'.length));
-      if (binding === '$run') return context.run;
-      if (binding.startsWith('$run.')) return this.getPathValue(context.run, binding.slice('$run.'.length));
-      if (binding === '$item') return context.item;
-      if (binding.startsWith('$item.')) return this.getPathValue(context.item, binding.slice('$item.'.length));
-      return binding;
-    }
-    if (Array.isArray(binding)) {
-      return binding.map((entry) => this.resolveWorkflowBindingValue(entry, context));
-    }
-    if (isRecord(binding)) {
-      return Object.fromEntries(
-        Object.entries(binding).map(([key, value]) => [key, this.resolveWorkflowBindingValue(value, context)]),
-      );
-    }
-    return binding;
-  }
-
   private async loadWorkflowRuntimeDefinition(
     workspaceId: string,
     workflowDefinitionId: string,
@@ -1081,7 +1014,7 @@ export class QueueManager {
     const fanout = isRecord(metadata.fanout) ? metadata.fanout : {};
     const configuredPath = typeof fanout.instanceKeyPath === 'string' ? fanout.instanceKeyPath : null;
     if (configuredPath) {
-      const configuredValue = this.getPathValue(item, configuredPath);
+      const configuredValue = getPathValue(item, configuredPath);
       if (typeof configuredValue === 'string' && configuredValue.trim()) {
         return configuredValue.trim();
       }
@@ -1146,7 +1079,7 @@ export class QueueManager {
 
     const expectedSourcePath = typeof join.expectedSourcePath === 'string' ? join.expectedSourcePath : null;
     if (expectedSourcePath) {
-      const expectedItems = this.getPathValue(params.state, expectedSourcePath);
+      const expectedItems = getPathValue(params.state, expectedSourcePath);
       const allowEmpty = join.allowEmpty === true;
       if (!Array.isArray(expectedItems)) {
         return false;
@@ -1158,7 +1091,7 @@ export class QueueManager {
         (transition) =>
           transition.transitionType === 'fanout' &&
           transition.toTaskKey === joinedTaskKey &&
-          this.getPathValue(transition.metadata, 'fanout.sourcePath') === expectedSourcePath,
+          getPathValue(transition.metadata, 'fanout.sourcePath') === expectedSourcePath,
       );
       const instanceKeyMetadata = upstreamFanoutTransition?.metadata ?? params.transition.metadata;
       return expectedItems.every((item, index) =>
@@ -1184,7 +1117,7 @@ export class QueueManager {
     const rules = Array.isArray(selection.rules) ? selection.rules : [];
     for (const rule of rules) {
       if (!isRecord(rule)) continue;
-      if (!this.evaluateWorkflowCondition(rule.condition, state)) continue;
+      if (!evaluateWorkflowCondition(rule.condition, state)) continue;
       const agentKey = typeof rule.agentKey === 'string' ? rule.agentKey : null;
       if (agentKey && agentIdsByKey[agentKey]) {
         return agentIdsByKey[agentKey];
@@ -1218,7 +1151,7 @@ export class QueueManager {
     const metadata = isRecord(task.metadata) ? task.metadata : {};
     const executor = typeof metadata.executor === 'string' ? metadata.executor : 'noop';
     const inputBindings = isRecord(metadata.inputBindings) ? metadata.inputBindings : {};
-    const resolvedPayload = this.resolveWorkflowBindingValue(inputBindings, {
+    const resolvedPayload = resolveWorkflowBindingValue(inputBindings, {
       state: params.state,
       run: params.runContext,
       item: params.item,
@@ -1376,7 +1309,7 @@ export class QueueManager {
       if (this.shouldSkipWorkflowDispatch('transitions', params.workflowRunId)) {
         return dispatched;
       }
-      const conditionMatches = this.evaluateWorkflowCondition(transition.condition, params.state);
+      const conditionMatches = evaluateWorkflowCondition(transition.condition, params.state);
       if (!conditionMatches) {
         continue;
       }
@@ -1396,7 +1329,7 @@ export class QueueManager {
         if (!sourcePath) {
           continue;
         }
-        const sourceItems = this.getPathValue(params.state, sourcePath);
+        const sourceItems = getPathValue(params.state, sourcePath);
         if (!Array.isArray(sourceItems)) {
           continue;
         }
@@ -1481,7 +1414,7 @@ export class QueueManager {
       if (transition.transitionType !== 'join' || !transition.toTaskKey) {
         continue;
       }
-      if (!this.evaluateWorkflowCondition(transition.condition, params.state)) {
+      if (!evaluateWorkflowCondition(transition.condition, params.state)) {
         continue;
       }
       const isReady = await this.isWorkflowJoinTransitionReady({

@@ -57,6 +57,14 @@ export type {
   WorkflowCondition,
 } from './transitions.js';
 
+export type { WorkflowBindingResolutionContext } from './condition-eval.js';
+export {
+  evaluateWorkflowCondition,
+  getPathValue,
+  isRecord,
+  resolveWorkflowBindingValue,
+} from './condition-eval.js';
+
 export type {
   FlowRuntime,
   FlowRuntimePorts,
