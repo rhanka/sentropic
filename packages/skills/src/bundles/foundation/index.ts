@@ -9,6 +9,7 @@ import { historyAnalyzeSkill } from './history_analyze/index.js';
 import { initiativesSkill } from './initiatives/index.js';
 import { matrixSkill } from './matrix/index.js';
 import { organizationsSkill } from './organizations/index.js';
+import { planSkill } from './plan/index.js';
 import { productsSkill } from './products/index.js';
 import { proposalsSkill } from './proposals/index.js';
 import { solutionsSkill } from './solutions/index.js';
@@ -62,6 +63,7 @@ export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   gateReviewSkill,
   documentsSkill,
   commentAssistantSkill,
+  planSkill,
 ]);
 
 /**
@@ -98,3 +100,4 @@ export { historyAnalyzeSkill } from './history_analyze/index.js';
 export { gateReviewSkill } from './gate_review/index.js';
 export { documentsSkill } from './documents/index.js';
 export { commentAssistantSkill } from './comment_assistant/index.js';
+export { planSkill } from './plan/index.js';
