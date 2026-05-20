@@ -1622,16 +1622,6 @@ export class QueueManager {
     return postgresJobQueue.drain(timeoutMs);
   }
 
-  private queueClassSqlExpr(): string {
-    return `
-      CASE type
-        WHEN 'docx_generate' THEN 'publishing'
-        WHEN 'chat_message' THEN 'chat'
-        ELSE 'ai'
-      END
-    `;
-  }
-
   /**
    * Ajouter un job à la queue
    */
@@ -1674,7 +1664,8 @@ export class QueueManager {
    * lives in `@sentropic/flow/processing-loop` as `runProcessingLoop`
    * (pure function). Per-job logic (`processJob`) and SQL helpers
    * (`getProcessingCountByClass`, `claimPendingJobsByClass`,
-   * `hasAnyPending`) stay here and are wired as deps callbacks.
+   * `hasAnyPending`) live behind the JobQueue adapter and are wired
+   * as deps callbacks.
    * Behavior-preserving — replay byte-identical.
    */
   async processJobs(): Promise<void> {
@@ -1687,10 +1678,15 @@ export class QueueManager {
       return;
     }
 
-    await flowRunProcessingLoop<JobQueueRow>(this.buildProcessingLoopDeps());
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    await flowRunProcessingLoop<JobQueueRow>(this.buildProcessingLoopDeps(postgresJobQueue));
   }
 
-  private buildProcessingLoopDeps(): ProcessingLoopDeps<JobQueueRow> {
+  private buildProcessingLoopDeps(jobQueueAdapter: {
+    getProcessingCountByClass(queueClass: QueueClass): Promise<number>;
+    claimPendingJobsByClass(queueClass: QueueClass, limit: number): Promise<JobQueueRow[]>;
+    hasAnyPending(): Promise<boolean>;
+  }): ProcessingLoopDeps<JobQueueRow> {
     return {
       getSettings: () => ({
         maxAi: this.maxConcurrentJobs,
@@ -1703,80 +1699,14 @@ export class QueueManager {
         this.isProcessing = value;
       },
       getProcessingCountByClass: (queueClass) =>
-        this.getProcessingCountByClass(queueClass),
+        jobQueueAdapter.getProcessingCountByClass(queueClass),
       claimPendingJobsByClass: (queueClass, limit) =>
-        this.claimPendingJobsByClass(queueClass, limit),
-      hasAnyPending: () => this.hasAnyPendingJob(),
+        jobQueueAdapter.claimPendingJobsByClass(queueClass, limit),
+      hasAnyPending: () => jobQueueAdapter.hasAnyPending(),
       notifyJobEvent: (id) => this.notifyJobEvent(id),
       getJobId: (row) => row.id,
       processJob: (row) => this.processJob(row),
     };
-  }
-
-  private async getProcessingCountByClass(queueClass: QueueClass): Promise<number> {
-    const queueClassExpr = sql.raw(this.queueClassSqlExpr());
-    try {
-      const rows = (await db.all(sql`
-        SELECT COUNT(*)::int AS count
-        FROM job_queue
-        WHERE status = 'processing'
-          AND ${queueClassExpr} = ${queueClass}
-      `)) as Array<{ count: number }>;
-      return rows?.[0]?.count ?? 0;
-    } catch {
-      return 0;
-    }
-  }
-
-  private async hasAnyPendingJob(): Promise<boolean> {
-    const rows = await db
-      .select({ id: sql<string>`id` })
-      .from(jobQueue)
-      .where(eq(jobQueue.status, 'pending'))
-      .limit(1);
-    return rows.length > 0;
-  }
-
-  private async claimPendingJobsByClass(
-    queueClass: QueueClass,
-    limit: number,
-  ): Promise<JobQueueRow[]> {
-    if (limit <= 0) return [];
-    const queueClassExpr = sql.raw(this.queueClassSqlExpr());
-    const orderByExpr =
-      queueClass === 'ai'
-        ? sql.raw(
-            "CASE type WHEN 'chat_message' THEN 0 WHEN 'matrix_generate' THEN 1 WHEN 'initiative_list' THEN 1 ELSE 2 END, created_at ASC",
-          )
-        : sql.raw('created_at ASC');
-    const now = new Date();
-    const rows = (await db.all(sql`
-      WITH picked AS (
-        SELECT id
-        FROM job_queue
-        WHERE status = 'pending'
-          AND ${queueClassExpr} = ${queueClass}
-        ORDER BY ${orderByExpr}
-        LIMIT ${limit}
-        FOR UPDATE SKIP LOCKED
-      )
-      UPDATE job_queue q
-      SET status = 'processing', started_at = ${now}
-      FROM picked
-      WHERE q.id = picked.id
-      RETURNING
-        q.id AS "id",
-        q.type AS "type",
-        q.status AS "status",
-        q.workspace_id AS "workspaceId",
-        q.data AS "data",
-        q.result AS "result",
-        q.error AS "error",
-        q.created_at AS "createdAt",
-        q.started_at AS "startedAt",
-        q.completed_at AS "completedAt"
-    `)) as JobQueueRow[];
-    return rows ?? [];
   }
 
   /**
