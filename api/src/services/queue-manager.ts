@@ -14,8 +14,11 @@ import {
   parseJsonField,
   resolveGenerationPromptOverrideFromConfig,
   resolveWorkflowBindingValue,
+  runProcessingLoop as flowRunProcessingLoop,
   sanitizeJobResultForPublic,
   type GenerationPromptOverride,
+  type ProcessingLoopDeps,
+  type QueueClass,
   type WorkflowDispatchDeps,
   type WorkflowDispatchDescriptor as FlowWorkflowDispatchDescriptor,
   type WorkflowRuntimeContext,
@@ -1448,7 +1451,14 @@ export class QueueManager {
   }
 
   /**
-   * Traiter les jobs en attente
+   * Traiter les jobs en attente.
+   *
+   * Real reorganization (BR-26 Lot 7 slice F.1): the outer loop body
+   * lives in `@sentropic/flow/processing-loop` as `runProcessingLoop`
+   * (pure function). Per-job logic (`processJob`) and SQL helpers
+   * (`getProcessingCountByClass`, `claimPendingJobsByClass`,
+   * `hasAnyPending`) stay here and are wired as deps callbacks.
+   * Behavior-preserving — replay byte-identical.
    */
   async processJobs(): Promise<void> {
     if (this.isProcessing) {
@@ -1460,120 +1470,96 @@ export class QueueManager {
       return;
     }
 
-    this.isProcessing = true;
-    console.log('🚀 Starting job processing...');
+    await flowRunProcessingLoop<JobQueueRow>(this.buildProcessingLoopDeps());
+  }
 
+  private buildProcessingLoopDeps(): ProcessingLoopDeps<JobQueueRow> {
+    return {
+      getSettings: () => ({
+        maxAi: this.maxConcurrentJobs,
+        maxPublishing: this.maxPublishingJobs,
+        intervalMs: this.processingInterval,
+      }),
+      isPaused: () => this.paused,
+      isCancelAllInProgress: () => this.cancelAllInProgress,
+      setProcessing: (value) => {
+        this.isProcessing = value;
+      },
+      getProcessingCountByClass: (queueClass) =>
+        this.getProcessingCountByClass(queueClass),
+      claimPendingJobsByClass: (queueClass, limit) =>
+        this.claimPendingJobsByClass(queueClass, limit),
+      hasAnyPending: () => this.hasAnyPendingJob(),
+      notifyJobEvent: (id) => this.notifyJobEvent(id),
+      getJobId: (row) => row.id,
+      processJob: (row) => this.processJob(row),
+    };
+  }
+
+  private async getProcessingCountByClass(queueClass: QueueClass): Promise<number> {
+    const queueClassExpr = sql.raw(this.queueClassSqlExpr());
     try {
-      const inFlight = new Set<Promise<void>>();
-      const queueClassExpr = sql.raw(this.queueClassSqlExpr());
-      const queueClasses: Array<'ai' | 'chat' | 'publishing'> = ['chat', 'publishing', 'ai'];
-
-      const sleep = async (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-      const getProcessingCountByClass = async (
-        queueClass: 'ai' | 'chat' | 'publishing'
-      ): Promise<number> => {
-        try {
-          const rows = (await db.all(sql`
-            SELECT COUNT(*)::int AS count
-            FROM job_queue
-            WHERE status = 'processing'
-              AND ${queueClassExpr} = ${queueClass}
-          `)) as Array<{ count: number }>;
-          return rows?.[0]?.count ?? 0;
-        } catch {
-          return 0;
-        }
-      };
-
-      const hasAnyPending = async (): Promise<boolean> => {
-        const rows = await db
-          .select({ id: sql<string>`id` })
-          .from(jobQueue)
-          .where(eq(jobQueue.status, 'pending'))
-          .limit(1);
-        return rows.length > 0;
-      };
-
-      const claimPendingJobsByClass = async (
-        queueClass: 'ai' | 'chat' | 'publishing',
-        limit: number
-      ): Promise<JobQueueRow[]> => {
-        if (limit <= 0) return [];
-        const orderByExpr =
-          queueClass === 'ai'
-            ? sql.raw(
-                "CASE type WHEN 'chat_message' THEN 0 WHEN 'matrix_generate' THEN 1 WHEN 'initiative_list' THEN 1 ELSE 2 END, created_at ASC"
-              )
-            : sql.raw('created_at ASC');
-        const now = new Date();
-        const rows = (await db.all(sql`
-          WITH picked AS (
-            SELECT id
-            FROM job_queue
-            WHERE status = 'pending'
-              AND ${queueClassExpr} = ${queueClass}
-            ORDER BY ${orderByExpr}
-            LIMIT ${limit}
-            FOR UPDATE SKIP LOCKED
-          )
-          UPDATE job_queue q
-          SET status = 'processing', started_at = ${now}
-          FROM picked
-          WHERE q.id = picked.id
-          RETURNING
-            q.id AS "id",
-            q.type AS "type",
-            q.status AS "status",
-            q.workspace_id AS "workspaceId",
-            q.data AS "data",
-            q.result AS "result",
-            q.error AS "error",
-            q.created_at AS "createdAt",
-            q.started_at AS "startedAt",
-            q.completed_at AS "completedAt"
-        `)) as JobQueueRow[];
-        return rows ?? [];
-      };
-
-      while (!this.paused) {
-        if (this.cancelAllInProgress) break;
-
-        for (const queueClass of queueClasses) {
-          const classLimit = queueClass === 'publishing' ? this.maxPublishingJobs : this.maxConcurrentJobs;
-          const classProcessing = await getProcessingCountByClass(queueClass);
-          const slots = Math.max(0, classLimit - classProcessing);
-          if (slots <= 0) continue;
-
-          const claimedJobs = await claimPendingJobsByClass(queueClass, slots);
-          for (const job of claimedJobs) {
-            await this.notifyJobEvent(job.id);
-            const p = this.processJob(job).finally(() => {
-              inFlight.delete(p);
-            });
-            inFlight.add(p);
-          }
-        }
-
-        // If nothing is running and nothing is pending, we're done.
-        if (inFlight.size === 0) {
-          const more = await hasAnyPending();
-          if (!more) break;
-          // No local work but pending exists: either slots=0 (global limit reached) or a race. Wait briefly.
-          await sleep(200);
-          continue;
-        }
-
-        // Wait for at least one job to finish, then continue filling.
-        // IMPORTANT: do not block indefinitely on long-running jobs.
-        // New jobs can be enqueued while we are waiting; we must periodically wake up to claim
-        // additional pending jobs (up to the configured global concurrency).
-        await Promise.race([Promise.race(inFlight), sleep(this.processingInterval)]);
-      }
-    } finally {
-      this.isProcessing = false;
-      console.log('✅ Job processing completed');
+      const rows = (await db.all(sql`
+        SELECT COUNT(*)::int AS count
+        FROM job_queue
+        WHERE status = 'processing'
+          AND ${queueClassExpr} = ${queueClass}
+      `)) as Array<{ count: number }>;
+      return rows?.[0]?.count ?? 0;
+    } catch {
+      return 0;
     }
+  }
+
+  private async hasAnyPendingJob(): Promise<boolean> {
+    const rows = await db
+      .select({ id: sql<string>`id` })
+      .from(jobQueue)
+      .where(eq(jobQueue.status, 'pending'))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  private async claimPendingJobsByClass(
+    queueClass: QueueClass,
+    limit: number,
+  ): Promise<JobQueueRow[]> {
+    if (limit <= 0) return [];
+    const queueClassExpr = sql.raw(this.queueClassSqlExpr());
+    const orderByExpr =
+      queueClass === 'ai'
+        ? sql.raw(
+            "CASE type WHEN 'chat_message' THEN 0 WHEN 'matrix_generate' THEN 1 WHEN 'initiative_list' THEN 1 ELSE 2 END, created_at ASC",
+          )
+        : sql.raw('created_at ASC');
+    const now = new Date();
+    const rows = (await db.all(sql`
+      WITH picked AS (
+        SELECT id
+        FROM job_queue
+        WHERE status = 'pending'
+          AND ${queueClassExpr} = ${queueClass}
+        ORDER BY ${orderByExpr}
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE job_queue q
+      SET status = 'processing', started_at = ${now}
+      FROM picked
+      WHERE q.id = picked.id
+      RETURNING
+        q.id AS "id",
+        q.type AS "type",
+        q.status AS "status",
+        q.workspace_id AS "workspaceId",
+        q.data AS "data",
+        q.result AS "result",
+        q.error AS "error",
+        q.created_at AS "createdAt",
+        q.started_at AS "startedAt",
+        q.completed_at AS "completedAt"
+    `)) as JobQueueRow[];
+    return rows ?? [];
   }
 
   /**
