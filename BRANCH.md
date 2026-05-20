@@ -75,22 +75,21 @@ Replace the Gemini 3.1 Pro catalog entry with Gemini 3.5 Flash without adding a 
   - [x] Confirm scope boundaries.
 
 - [ ] **Lot 1 — Replace Gemini Pro catalog entry**
-  - [ ] Add failing tests that expect Gemini catalog to expose `gemini-3.5-flash` and no longer expose `gemini-3.1-pro-preview-customtools`.
-  - [ ] Replace the llm-mesh Gemini Pro profile with Gemini 3.5 Flash.
-  - [ ] Update chat-service context budget metadata for the new model id.
-  - [ ] Add a legacy cutover from `gemini-3.1-pro-preview-customtools` to `gemini-3.5-flash`.
+  - [x] Add failing tests that expect Gemini catalog to expose `gemini-3.5-flash` and no longer expose `gemini-3.1-pro-preview-customtools`.
+  - [x] Replace the llm-mesh Gemini Pro profile with Gemini 3.5 Flash.
+  - [x] Update chat-service context budget metadata for the new model id.
+  - [x] Add a legacy cutover from `gemini-3.1-pro-preview-customtools` to `gemini-3.5-flash`.
   - [ ] Update API/UI/package tests that reference the replaced Gemini model.
   - [ ] Update specs that document the active Gemini catalog.
   - [ ] Lot gate:
-    - [ ] Red test observed before implementation.
-    - [ ] `make test-llm-mesh ENV=test-fix-gemini-35-flash`
-    - [ ] `make test-api-unit SCOPE=tests/unit/model-selection-legacy.test.ts ENV=test-fix-gemini-35-flash`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/models.test.ts ENV=test-fix-gemini-35-flash`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/me.test.ts ENV=test-fix-gemini-35-flash`
-    - [ ] `make test-ui SCOPE=tests/utils/user-ai-settings-events.test.ts ENV=test-fix-gemini-35-flash`
-    - [ ] `make typecheck-llm-mesh ENV=test-fix-gemini-35-flash`
-    - [ ] `make typecheck-api ENV=test-fix-gemini-35-flash`
-    - [ ] `make lint-api ENV=test-fix-gemini-35-flash`
+    - [x] Red test observed before implementation: `make test-llm-mesh ENV=test-fix-gemini-35-flash` failed on missing `gemini-3.5-flash` catalog profile.
+    - [x] `make test-llm-mesh ENV=test-fix-gemini-35-flash`
+    - [ ] `make test-api-unit SCOPE="tests/unit/model-selection-legacy.test.ts tests/unit/gemini-tool-handoff.test.ts tests/unit/llm-runtime-stream.test.ts tests/unit/chat-service-tools.test.ts" API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
+    - [x] `make test-api-endpoints SCOPE="tests/api/models.test.ts tests/api/me.test.ts" API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
+    - [ ] `make test-ui SCOPE=tests/utils/user-ai-settings-events.test.ts API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
+    - [x] `make typecheck-llm-mesh ENV=test-fix-gemini-35-flash`
+    - [x] `make typecheck-api API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
+    - [x] `make lint-api API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
 
 - [ ] **Lot N-2 — UAT**
   - [ ] Web app settings: model selector shows `Gemini 3.5 Flash` under Gemini.
