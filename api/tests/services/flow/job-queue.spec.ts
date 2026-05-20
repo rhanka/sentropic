@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { runJob } from '@sentropic/flow';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../src/db/client';
 import {
@@ -144,12 +145,60 @@ describe('PostgresJobQueue adapter', () => {
     'matrix_generate',
     'initiative_list',
     'initiative_detail',
+    'organization_enrich',
+    'docx_generate',
   ])('registers %s on the flow job runner bridge', (jobType) => {
     const deps = (queueManager as unknown as {
       getJobRunnerDeps: () => { executors: Record<string, unknown> };
     }).getJobRunnerDeps();
 
     expect(deps.executors[jobType]).toEqual(expect.any(Function));
+  });
+
+  it('passes job identity context to migrated executor bindings', async () => {
+    const executor = vi.fn().mockResolvedValue(undefined);
+    const row = {
+      id: 'job-context-test',
+      type: 'docx_generate',
+      workspaceId: 'workspace-context-test',
+      data: JSON.stringify({ templateId: 'usecase-onepage' }),
+    };
+
+    await runJob(row, {
+      parseJobData: (jobRow: typeof row) => JSON.parse(jobRow.data),
+      getJobId: (jobRow: typeof row) => jobRow.id,
+      getJobType: (jobRow: typeof row) => jobRow.type,
+      getWorkspaceId: (jobRow: typeof row) => jobRow.workspaceId,
+      getWorkflowContext: () => null,
+      getWorkflowTaskInstanceKey: () => 'main',
+      buildRetryJobData: (data: unknown) => data,
+      claimReadStatus: async () => 'processing',
+      registerController: vi.fn(),
+      unregisterController: vi.fn(),
+      markWorkflowTaskStarted: vi.fn(),
+      completeWorkflowTask: vi.fn(),
+      failWorkflowTask: vi.fn(),
+      upsertWorkflowTaskResultForRetry: vi.fn(),
+      markJobCompleted: vi.fn(),
+      markJobFailed: vi.fn(),
+      requeueJobForRetry: vi.fn(),
+      notifyJobEvent: vi.fn(),
+      executors: {
+        docx_generate: executor,
+      },
+      onAbortedCancellation: async () => false,
+      onTerminalFailure: vi.fn(),
+    } as any);
+
+    expect(executor).toHaveBeenCalledWith(
+      { templateId: 'usecase-onepage' },
+      expect.any(AbortSignal),
+      expect.objectContaining({
+        jobId: 'job-context-test',
+        jobType: 'docx_generate',
+        workspaceId: 'workspace-context-test',
+      }),
+    );
   });
 
   it('queueManager.cancelJob delegates cancellation to the JobQueue adapter', async () => {

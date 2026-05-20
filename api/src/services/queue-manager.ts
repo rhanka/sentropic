@@ -1086,6 +1086,8 @@ export class QueueManager {
       },
       notifyJobEvent: (jobId) => this.notifyJobEvent(jobId),
       executors: {
+        docx_generate: (data, signal, context) =>
+          this.processDocxGenerate(data as DocxGenerateJobData, context.jobId, signal),
         executive_summary: (data, signal) =>
           this.processExecutiveSummary(data as ExecutiveSummaryJobData, signal),
         initiative_detail: (data, signal) =>
@@ -1094,6 +1096,8 @@ export class QueueManager {
           this.processInitiativeList(data as InitiativeListJobData, signal),
         matrix_generate: (data, signal) =>
           this.processMatrixGenerate(data as MatrixGenerateJobData, signal),
+        organization_enrich: (data, signal, context) =>
+          this.processOrganizationEnrich(data as OrganizationEnrichJobData, context.jobId, signal),
         organization_batch_create: (data, signal) =>
           this.processOrganizationBatchCreate(data as OrganizationBatchCreateJobData, signal),
         organization_targets_join: (data, signal) =>
@@ -1825,26 +1829,12 @@ export class QueueManager {
       // Traiter selon le type
       let workflowCompletion: WorkflowTaskCompletion | undefined;
       switch (jobType) {
-        case 'organization_enrich':
-          workflowCompletion = (await this.processOrganizationEnrich(
-            jobData as OrganizationEnrichJobData,
-            jobId,
-            controller.signal,
-          )) ?? undefined;
-          break;
         case 'chat_message':
           await this.processChatMessage(jobData as ChatMessageJobData, controller.signal);
           break;
         case 'document_summary':
           await this.processDocumentSummary(
             jobData as DocumentSummaryJobData,
-            jobId,
-            controller.signal
-          );
-          break;
-        case 'docx_generate':
-          await this.processDocxGenerate(
-            jobData as DocxGenerateJobData,
             jobId,
             controller.signal
           );

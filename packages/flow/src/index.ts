@@ -121,6 +121,7 @@ export { runProcessingLoop } from './processing-loop.js';
 export type {
   JobClaimStatus,
   JobRunnerDeps,
+  JobRunnerExecutorContext,
   JobRunnerExecutor,
   RunJobCompletionParams,
   RunJobFailureParams,
