@@ -1088,6 +1088,8 @@ export class QueueManager {
       executors: {
         executive_summary: (data, signal) =>
           this.processExecutiveSummary(data as ExecutiveSummaryJobData, signal),
+        organization_targets_join: (data, signal) =>
+          this.processOrganizationTargetsJoin(data as OrganizationTargetsJoinJobData, signal),
       },
       // Slice 7.F.4a — no abort/terminal hooks yet; they are bound by
       // slices 7.F.4i (chat_message abort) and 7.F.4j (document_summary
@@ -1825,12 +1827,6 @@ export class QueueManager {
         case 'organization_batch_create':
           workflowCompletion = (await this.processOrganizationBatchCreate(
             jobData as OrganizationBatchCreateJobData,
-            controller.signal,
-          )) ?? undefined;
-          break;
-        case 'organization_targets_join':
-          workflowCompletion = (await this.processOrganizationTargetsJoin(
-            jobData as OrganizationTargetsJoinJobData,
             controller.signal,
           )) ?? undefined;
           break;
