@@ -21,6 +21,7 @@ jobs:
       ui: ${{ steps.filter.outputs.ui }}
       ai: ${{ steps.filter.outputs.ai }}
       llm_mesh: ${{ steps.filter.outputs.llm_mesh }}
+      chat_ui: ${{ steps.filter.outputs.chat_ui }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -45,6 +46,12 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/llm-mesh/**'
+              - '.github/workflows/ci.yml'
+            chat_ui:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/chat-ui/**'
               - '.github/workflows/ci.yml'
 
   # Build E2E Docker image
@@ -120,6 +127,23 @@ jobs:
         run: make build-llm-mesh
       - name: Pack LLM Mesh
         run: make pack-llm-mesh
+
+  validate-chat-ui:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.chat_ui == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Chat UI
+        run: make typecheck-chat-ui
+      - name: Test Chat UI
+        run: make test-chat-ui
+      - name: Build Chat UI
+        run: make build-chat-ui
+      - name: Pack Chat UI
+        run: make pack-chat-ui
 
   # Build API Docker image (independent from API tests)
   build-api-image:
@@ -571,6 +595,20 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Publish LLM Mesh
         run: make publish-llm-mesh
+
+  publish-chat-ui:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-chat-ui, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    if: needs.changes.outputs.chat_ui == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish Chat UI
+        run: make publish-chat-ui
 
   # Deploy API
   deploy-api:
