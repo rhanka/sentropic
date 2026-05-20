@@ -119,11 +119,15 @@ export type {
 export { runProcessingLoop } from './processing-loop.js';
 
 export type {
+  LoadQueueSettingsDeps,
   PauseQueueDeps,
+  QueueRuntimeSettings,
+  QueueSettingsSource,
   ReloadQueueSettingsDeps,
   ResumeQueueDeps,
 } from './job-queue-controls.js';
 export {
+  loadQueueSettings,
   pauseQueue,
   reloadQueueSettings,
   resumeQueue,
