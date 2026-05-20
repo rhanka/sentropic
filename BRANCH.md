@@ -52,7 +52,7 @@ Allow uploaded XLSX workbooks and Google Sheets imports to enter the existing do
 - [x] `clarification`: This branch intentionally follows the `BRANCH.md` lot method without adding a numbered roadmap entry in `PLAN.md`.
 - [x] `clarification`: Isolated worktree created at `tmp/feat-xlsx-gsheet-indexing` on branch `feat/xlsx-gsheet-indexing` from `origin/main` (`74f71e3b`).
 - [x] `clarification`: Root workspace is currently on `uat/br14a` with untracked UAT artifacts; this branch will not touch or clean root.
-- [ ] `attention`: Before UAT, push the branch and run user UAT from root `ENV=dev` only after confirming HEAD parity.
+- [x] `validation`: Branch pushed for UAT; final local/remote HEAD parity is verified before handoff.
 - [x] `validation` XLSX-T1 — Red/green spreadsheet coverage:
   - Red: `make test-api-unit SCOPE=tests/unit/document-text.test.ts API_PORT=9090 UI_PORT=5290 MAILDEV_UI_PORT=1190 ENV=test-feat-xlsx-gsheet-indexing` failed because current XLSX extraction flattened cells and did not preserve worksheet names or rows.
   - Red: `make test-api-unit SCOPE=tests/unit/google-drive-client.test.ts API_PORT=9090 UI_PORT=5290 MAILDEV_UI_PORT=1190 ENV=test-feat-xlsx-gsheet-indexing` failed because Google Sheets ingestion still exported `text/csv`.
@@ -123,8 +123,8 @@ Allow uploaded XLSX workbooks and Google Sheets imports to enter the existing do
     - [x] Commit with selective `git add`, then `make commit MSG="feat: support spreadsheet document indexing" ENV=test-feat-xlsx-gsheet-indexing`.
 
 - [ ] **Lot N-2 - UAT handoff**
-  - [ ] Push branch before UAT.
-  - [ ] Confirm UAT HEAD parity between pushed branch and local worktree.
+  - [x] Push branch before UAT.
+  - [x] Confirm UAT HEAD parity between pushed branch and local worktree.
   - [ ] Web app UAT:
     - [ ] Attach a local `.xlsx` workbook through an existing document surface and confirm indexing reaches `ready`.
     - [ ] Import a Google Sheet through Google Drive and confirm indexing reaches `ready`.
