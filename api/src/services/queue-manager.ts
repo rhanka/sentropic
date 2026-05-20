@@ -111,6 +111,10 @@ function readStringArray(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function isVitestRuntime(): boolean {
+  return process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST || process.env.VITEST_WORKER_ID);
+}
+
 type WorkflowOrganizationTarget = {
   organizationId: string;
   organizationName: string;
@@ -1646,6 +1650,9 @@ export class QueueManager {
       },
       notifyJobEvent: (id) => this.notifyJobEvent(id),
       startProcessing: () => {
+        if (isVitestRuntime()) {
+          return;
+        }
         if (!this.isProcessing) {
           this.processJobs().catch(console.error);
         }
@@ -1677,6 +1684,26 @@ export class QueueManager {
 
     const { postgresJobQueue } = await import('./flow/postgres-job-queue');
     await flowRunProcessingLoop<JobQueueRow>(this.buildProcessingLoopDeps(postgresJobQueue));
+  }
+
+  async processJobsForWorkspace(workspaceId: string): Promise<void> {
+    if (this.isProcessing) {
+      return;
+    }
+
+    if (this.paused) {
+      return;
+    }
+
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    const scopedJobQueueAdapter = {
+      getProcessingCountByClass: (queueClass: QueueClass) =>
+        postgresJobQueue.getProcessingCountByClass(queueClass, { workspaceId }),
+      claimPendingJobsByClass: (queueClass: QueueClass, limit: number) =>
+        postgresJobQueue.claimPendingJobsByClass(queueClass, limit, { workspaceId }),
+      hasAnyPending: () => postgresJobQueue.hasAnyPending({ workspaceId }),
+    };
+    await flowRunProcessingLoop<JobQueueRow>(this.buildProcessingLoopDeps(scopedJobQueueAdapter));
   }
 
   private buildProcessingLoopDeps(jobQueueAdapter: {

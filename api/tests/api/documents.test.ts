@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { app as sharedApp } from '../../src/app';
 import { createAuthenticatedUser, cleanupAuthData, authenticatedRequest } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
 import { contextDocuments, jobQueue, workspaces, workspaceMemberships } from '../../src/db/schema';
@@ -18,8 +19,7 @@ vi.mock('../../src/services/storage-s3', async () => {
 });
 
 async function importApp() {
-  const mod = await import('../../src/app');
-  return mod.app as any;
+  return sharedApp as any;
 }
 
 async function authenticatedMultipartRequest(app: any, path: string, sessionToken: string, form: FormData) {
