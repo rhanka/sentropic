@@ -14,6 +14,7 @@ import {
   type GenerationPromptOverride,
   type WorkflowDispatchDeps,
   type WorkflowDispatchDescriptor as FlowWorkflowDispatchDescriptor,
+  type WorkflowRuntimeContext,
   type WorkflowRuntimeDefinition,
   type WorkflowTaskExecutionDefinition,
   type WorkflowTransitionDefinition,
@@ -286,13 +287,7 @@ export type MatrixMode = 'organization' | 'generate' | 'default';
 
 export type GenerationWorkflowTaskKey = string;
 
-export interface GenerationWorkflowRuntimeContext {
-  workflowRunId: string;
-  workflowDefinitionId: string;
-  taskKey: string;
-  agentDefinitionId: string | null;
-  agentMap: Record<string, string>; // task key → agent definition ID
-}
+export type GenerationWorkflowRuntimeContext = WorkflowRuntimeContext;
 
 type WorkflowDispatchDescriptor = FlowWorkflowDispatchDescriptor<JobType>;
 
