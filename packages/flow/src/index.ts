@@ -78,6 +78,19 @@ export type {
 } from './workflow-types.js';
 
 export type {
+  DispatchScope,
+  ExecutionRunStatus,
+  WorkflowDispatchDeps,
+  WorkflowJoinsDispatchParams,
+  WorkflowTaskRuntimeStatus,
+  WorkflowTransitionsDispatchParams,
+} from './dispatch.js';
+export {
+  dispatchReadyWorkflowJoins,
+  dispatchWorkflowTransitions,
+} from './dispatch.js';
+
+export type {
   FlowRuntime,
   FlowRuntimePorts,
   StartInitiativeGenerationParams,
