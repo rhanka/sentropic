@@ -57,7 +57,7 @@ Replace the Gemini 3.1 Pro catalog entry with Gemini 3.5 Flash without adding a 
 - UAT checkpoints are listed inside Lot N-2.
 - Execution flow:
   - [x] Develop and run tests in `tmp/fix-gemini-35-flash`.
-  - [ ] Push branch before UAT.
+  - [x] Push branch before UAT.
   - [ ] Run user UAT from root workspace on the pushed branch or deployment target selected by the user.
   - [ ] Switch back to `tmp/fix-gemini-35-flash` after UAT.
 
