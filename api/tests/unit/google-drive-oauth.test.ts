@@ -46,6 +46,24 @@ describe('Google Drive OAuth helpers', () => {
     }
   });
 
+  it('ignores loopback app return config when the current API host is public', () => {
+    const previous = process.env.AUTH_CALLBACK_BASE_URL;
+    process.env.AUTH_CALLBACK_BASE_URL = 'http://localhost:5173';
+    try {
+      expect(
+        resolveGoogleDriveAppReturnBaseUrl({
+          requestApiBaseUrl: 'https://top-ai-ideas-api.sent-tech.ca',
+        }),
+      ).toBe('https://top-ai-ideas.sent-tech.ca');
+    } finally {
+      if (previous === undefined) {
+        delete process.env.AUTH_CALLBACK_BASE_URL;
+      } else {
+        process.env.AUTH_CALLBACK_BASE_URL = previous;
+      }
+    }
+  });
+
   it('builds an authorization URL with narrow Drive scope and offline access', () => {
     const { state } = createGoogleDriveOAuthState({
       userId: 'user-1',
