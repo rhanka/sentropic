@@ -1,6 +1,7 @@
 import type { SkillRegistry } from '../../registry/registry.js';
 import type { Skill } from '../../types/skill.js';
 import { commentAssistantSkill } from './comment_assistant/index.js';
+import { documentGenerateSkill } from './document_generate/index.js';
 import { documentsSkill } from './documents/index.js';
 import { executiveSummarySkill } from './executive_summary/index.js';
 import { foldersSkill } from './folders/index.js';
@@ -47,6 +48,11 @@ import { workspaceSkill } from './workspace/index.js';
  *   - `documents`, `comment_assistant`, `plan` — content access, comment
  *     workflow, and plan/todo orchestration skills with not-bound handlers
  *     only. API runtime rebind stays deferred.
+ *
+ * Wave D step 1.A (first bound sandbox skill):
+ *   - `document_generate` — DOCX/PPTX generation. Bound handler covers the
+ *     freeform-DOCX V8 sub-path only; other sub-paths throw deferred-errors
+ *     until Wave D step 1.B/1.C complete.
  */
 export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   workspaceSkill,
@@ -64,6 +70,7 @@ export const FOUNDATION_SKILLS: ReadonlyArray<Skill> = Object.freeze([
   documentsSkill,
   commentAssistantSkill,
   planSkill,
+  documentGenerateSkill,
 ]);
 
 /**
@@ -101,3 +108,4 @@ export { gateReviewSkill } from './gate_review/index.js';
 export { documentsSkill } from './documents/index.js';
 export { commentAssistantSkill } from './comment_assistant/index.js';
 export { planSkill } from './plan/index.js';
+export { documentGenerateSkill } from './document_generate/index.js';
