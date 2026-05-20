@@ -118,6 +118,17 @@ export type {
 } from './processing-loop.js';
 export { runProcessingLoop } from './processing-loop.js';
 
+export type {
+  JobClaimStatus,
+  JobRunnerDeps,
+  JobRunnerExecutor,
+  RunJobCompletionParams,
+  RunJobFailureParams,
+  RunJobRetryParams,
+  RunJobWorkflowParams,
+} from './job-runner.js';
+export { runJob } from './job-runner.js';
+
 // ---------------------------------------------------------------------------
 // Seed catalogs (pure data) — BR-26 Lot 5
 // ---------------------------------------------------------------------------
