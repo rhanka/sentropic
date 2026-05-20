@@ -124,6 +124,11 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - Impact: additive only — no edits to existing targets' command shape, no changes to other targets' behaviour. Two lines edited.
   - Rollback: remove `docx@9.5.1` from the two inline lists; revert `package.json` add.
 
+- **BR19-EX6 — `api/Dockerfile` (additive only, Wave D step 1.A fix)**
+  - Reason: Wave D Step 1.A added `docx@9.5.1` as a dependency of `@sentropic/skills` (BR19-EX5). The root `package.json` declares `"workspaces": ["api", "ui", "packages/*"]`, so `npm ci --workspaces` at Docker build time expects all workspace manifests to be available. `api/Dockerfile` currently COPYs only the `api/`, `ui/`, and `packages/llm-mesh/` package.json files before `npm ci`; the missing `packages/skills/package.json` corrupts the workspace install when `docx` is in the lockfile but the manifest isn't present, degrading runtime module resolution and breaking E2E `03-chat.spec.ts:203` recurrently on `0794fdf0` (2 fails after rerun).
+  - Impact: additive only — ONE new `COPY packages/skills/package.json ./packages/skills/package.json` line, inserted immediately after the existing llm-mesh COPY and before `RUN ... npm ci --workspaces`. No other Dockerfile edits, no behaviour change for other workspaces.
+  - Rollback: delete the one new COPY line.
+
 - **BR19-F1 — AI test flaky accepted on `b4128c1a` (2026-05-19)**
   - Command: GitHub Actions matrix job `test-api-unit-integration (ai, initiative-generation-async,executive-summary-sync)` (equivalent local: `make test-api-ai ENV=test-feat-agent-sandbox-skills` scoped to `initiative-generation-async,executive-summary-sync`).
   - Failed run: https://github.com/rhanka/sentropic/actions/runs/26117075967/job/76809528377 (commit `b4128c1a`).
