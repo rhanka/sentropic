@@ -13,6 +13,7 @@ import {
   workflowTaskTransitions,
 } from '../../../src/db/schema';
 import { postgresJobQueue } from '../../../src/services/flow/postgres-job-queue';
+import { chatService } from '../../../src/services/chat-service';
 import { queueManager } from '../../../src/services/queue-manager';
 import { createId } from '../../../src/utils/id';
 import { cleanupAuthData, createAuthenticatedUser } from '../../utils/auth-helper';
@@ -147,6 +148,7 @@ describe('PostgresJobQueue adapter', () => {
     'initiative_detail',
     'organization_enrich',
     'docx_generate',
+    'chat_message',
   ])('registers %s on the flow job runner bridge', (jobType) => {
     const deps = (queueManager as unknown as {
       getJobRunnerDeps: () => { executors: Record<string, unknown> };
@@ -199,6 +201,54 @@ describe('PostgresJobQueue adapter', () => {
         workspaceId: 'workspace-context-test',
       }),
     );
+  });
+
+  it('handles aborted chat_message cancellation through the flow job runner hook', async () => {
+    const jobId = createId();
+    const assistantMessageId = createId();
+    await db.insert(jobQueue).values({
+      id: jobId,
+      type: 'chat_message',
+      status: 'processing',
+      workspaceId: ADMIN_WORKSPACE_ID,
+      data: JSON.stringify({ assistantMessageId }),
+      createdAt: new Date(),
+    });
+    const finalizeSpy = vi
+      .spyOn(chatService, 'finalizeAssistantMessageFromStream')
+      .mockResolvedValue({ content: 'partial', reasoning: null, wroteDone: true });
+    const deps = (queueManager as unknown as {
+      getJobRunnerDeps: () => {
+        onAbortedCancellation: (row: unknown, error: unknown, jobData: unknown) => Promise<boolean>;
+      };
+    }).getJobRunnerDeps();
+
+    const handled = await deps.onAbortedCancellation(
+      {
+        id: jobId,
+        type: 'chat_message',
+        workspaceId: ADMIN_WORKSPACE_ID,
+        data: JSON.stringify({ assistantMessageId }),
+      },
+      new DOMException('Request was aborted', 'AbortError'),
+      { assistantMessageId },
+    );
+
+    expect(handled).toBe(true);
+    expect(finalizeSpy).toHaveBeenCalledWith({
+      assistantMessageId,
+      reason: 'Request was aborted',
+      fallbackContent: 'Réponse interrompue.',
+    });
+    const [row] = await db
+      .select({ status: jobQueue.status, error: jobQueue.error })
+      .from(jobQueue)
+      .where(eq(jobQueue.id, jobId))
+      .limit(1);
+    expect(row).toMatchObject({
+      status: 'completed',
+      error: 'Request was aborted',
+    });
   });
 
   it('queueManager.cancelJob delegates cancellation to the JobQueue adapter', async () => {
