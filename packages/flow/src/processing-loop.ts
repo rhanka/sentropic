@@ -11,10 +11,8 @@
  *
  * Per-job logic (`processJob` — ~600 LOC with all executor bindings)
  * STAYS in `queue-manager.ts` and is passed in via `deps.processJob`.
- * The SQL helpers (`getProcessingCountByClass`, `claimPendingJobsByClass`,
- * `hasAnyPending`) also stay in queue-manager (they hold the
- * `queueClassSqlExpr()` SQL fragment and drizzle bindings) and are
- * passed in via deps callbacks. Settings (`maxAi`, `maxPublishing`,
+ * Claim/count/pending reads live behind deps callbacks, usually backed
+ * by a concrete JobQueue adapter. Settings (`maxAi`, `maxPublishing`,
  * `intervalMs`) are read from `deps.getSettings()` once at loop entry.
  *
  * Behavior-preserving extraction — replay byte-identical with the

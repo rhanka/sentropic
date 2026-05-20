@@ -13,6 +13,8 @@
  * Per spec/SPEC_EVOL_BR26_FLOW_FACADE.md §2.
  */
 
+import type { QueueClass } from './processing-loop.js';
+
 export interface QueuedJob<TJobType = string, TJobData = unknown> {
   id: string;
   type: TJobType;
@@ -51,7 +53,11 @@ export interface WorkflowDispatchDescriptor<TJobType = string> {
   jobId?: string;
 }
 
-export interface JobQueue<TJobType = string, TJobData = unknown> {
+export interface JobQueue<
+  TJobType = string,
+  TJobData = unknown,
+  TClaimedJob = unknown,
+> {
   /** Admit a job into the queue and return its id. */
   enqueue(type: TJobType, data: TJobData, options?: EnqueueOptions): Promise<string>;
 
@@ -73,6 +79,12 @@ export interface JobQueue<TJobType = string, TJobData = unknown> {
   ): Promise<QueuedJob<TJobType, TJobData> | null>;
 
   listJobs(opts?: { workspaceId?: string }): Promise<QueuedJob<TJobType, TJobData>[]>;
+
+  getProcessingCountByClass(queueClass: QueueClass): Promise<number>;
+
+  claimPendingJobsByClass(queueClass: QueueClass, limit: number): Promise<TClaimedJob[]>;
+
+  hasAnyPending(): Promise<boolean>;
 
   pause(): void;
   resume(): void;

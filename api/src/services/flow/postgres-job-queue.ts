@@ -4,12 +4,13 @@ import {
   type DispatchWorkflowEntryParams,
   type EnqueueOptions,
   type JobQueue,
+  type QueueClass,
   type QueuedJob,
   type WorkflowDispatchDescriptor,
 } from '@sentropic/flow';
 import { desc, eq, sql } from 'drizzle-orm';
 import { db, pool } from '../../db/client';
-import { ADMIN_WORKSPACE_ID, jobQueue } from '../../db/schema';
+import { ADMIN_WORKSPACE_ID, jobQueue, type JobQueueRow } from '../../db/schema';
 import { createId } from '../../utils/id';
 import {
   getPublicJobStreamId,
@@ -63,7 +64,7 @@ type PostgresJobQueueRuntimeHooks = {
   ) => Promise<WorkflowDispatchDescriptor[]>;
 };
 
-export class PostgresJobQueue implements JobQueue<JobType, JobData> {
+export class PostgresJobQueue implements JobQueue<JobType, JobData, JobQueueRow> {
   private hooks: PostgresJobQueueRuntimeHooks = {};
 
   setRuntimeHooks(hooks: PostgresJobQueueRuntimeHooks): void {
@@ -274,6 +275,82 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData> {
         streamId: getPublicJobStreamId(job),
       } as QueuedJob<JobType, JobData>;
     });
+  }
+
+  private queueClassSqlExpr(): string {
+    return `
+      CASE type
+        WHEN 'docx_generate' THEN 'publishing'
+        WHEN 'chat_message' THEN 'chat'
+        ELSE 'ai'
+      END
+    `;
+  }
+
+  async getProcessingCountByClass(queueClass: QueueClass): Promise<number> {
+    const queueClassExpr = sql.raw(this.queueClassSqlExpr());
+    try {
+      const rows = (await db.all(sql`
+        SELECT COUNT(*)::int AS count
+        FROM job_queue
+        WHERE status = 'processing'
+          AND ${queueClassExpr} = ${queueClass}
+      `)) as Array<{ count: number }>;
+      return rows?.[0]?.count ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  async hasAnyPending(): Promise<boolean> {
+    const rows = await db
+      .select({ id: sql<string>`id` })
+      .from(jobQueue)
+      .where(eq(jobQueue.status, 'pending'))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  async claimPendingJobsByClass(
+    queueClass: QueueClass,
+    limit: number,
+  ): Promise<JobQueueRow[]> {
+    if (limit <= 0) return [];
+    const queueClassExpr = sql.raw(this.queueClassSqlExpr());
+    const orderByExpr =
+      queueClass === 'ai'
+        ? sql.raw(
+            "CASE type WHEN 'chat_message' THEN 0 WHEN 'matrix_generate' THEN 1 WHEN 'initiative_list' THEN 1 ELSE 2 END, created_at ASC",
+          )
+        : sql.raw('created_at ASC');
+    const now = new Date();
+    const rows = (await db.all(sql`
+      WITH picked AS (
+        SELECT id
+        FROM job_queue
+        WHERE status = 'pending'
+          AND ${queueClassExpr} = ${queueClass}
+        ORDER BY ${orderByExpr}
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE job_queue q
+      SET status = 'processing', started_at = ${now}
+      FROM picked
+      WHERE q.id = picked.id
+      RETURNING
+        q.id AS "id",
+        q.type AS "type",
+        q.status AS "status",
+        q.workspace_id AS "workspaceId",
+        q.data AS "data",
+        q.result AS "result",
+        q.error AS "error",
+        q.created_at AS "createdAt",
+        q.started_at AS "startedAt",
+        q.completed_at AS "completedAt"
+    `)) as JobQueueRow[];
+    return rows ?? [];
   }
 
   pause(): void {
