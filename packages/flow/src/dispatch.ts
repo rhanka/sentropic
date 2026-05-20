@@ -76,6 +76,7 @@ export interface WorkflowDispatchDeps<TJobType = string> {
   mergeRunState(params: {
     runId: string;
     status?: WorkflowTaskRuntimeStatus;
+    statePatch?: Record<string, unknown>;
     currentTaskKey?: string | null;
     currentTaskInstanceKey?: string | null;
   }): Promise<void>;
@@ -116,6 +117,51 @@ export interface WorkflowDispatchDeps<TJobType = string> {
     data: Record<string, unknown>,
     opts?: EnqueueJobOptions,
   ): Promise<string>;
+  /** Load the runtime workflow definition (tasks + transitions + agent map). */
+  loadRuntimeDefinition(
+    workspaceId: string,
+    workflowDefinitionId: string,
+  ): Promise<WorkflowRuntimeDefinition>;
+  /** Read the current persisted run-state snapshot (state + version). */
+  getRunStateSnapshot(
+    workflowRunId: string,
+  ): Promise<{ state: Record<string, unknown> } | null>;
+  /** Read the run-level metadata context (origin, requester, …). */
+  getRunContext(workflowRunId: string): Promise<Record<string, unknown>>;
+}
+
+export interface WorkflowTaskCompletion {
+  output?: Record<string, unknown>;
+  statePatch?: Record<string, unknown>;
+  currentTaskKey?: string | null;
+  currentTaskInstanceKey?: string | null;
+  runStatus?: WorkflowTaskRuntimeStatus;
+}
+
+export interface MarkWorkflowTaskStartedParams {
+  workflow: WorkflowRuntimeContext;
+  workspaceId: string;
+  taskInstanceKey: string;
+  inputPayload: Record<string, unknown>;
+  attempts: number;
+}
+
+export interface CompleteWorkflowTaskParams {
+  workflow: WorkflowRuntimeContext;
+  workspaceId: string;
+  taskInstanceKey: string;
+  inputPayload: Record<string, unknown>;
+  attempts: number;
+  completion?: WorkflowTaskCompletion;
+}
+
+export interface FailWorkflowTaskParams {
+  workflow: WorkflowRuntimeContext;
+  workspaceId: string;
+  taskInstanceKey: string;
+  inputPayload: Record<string, unknown>;
+  attempts: number;
+  error: unknown;
 }
 
 /**
@@ -508,4 +554,155 @@ export async function dispatchWorkflowTask<TJobType extends string = string>(
   }
 
   throw new Error(`Unsupported workflow executor "${executor}" for task ${params.taskKey}`);
+}
+
+/**
+ * Mark a workflow task as `in_progress` and bump the run state to
+ * `in_progress` with the (taskKey, instanceKey) pointer. Used by the
+ * executor when a leased job starts.
+ *
+ * Real reorganization (BR-26 Lot 7): ex `QueueManager.markWorkflowTaskStarted`.
+ */
+export async function markWorkflowTaskStarted<TJobType extends string = string>(
+  params: MarkWorkflowTaskStartedParams,
+  deps: WorkflowDispatchDeps<TJobType>,
+): Promise<void> {
+  const startedAt = new Date();
+  await deps.upsertTaskResult({
+    workflow: params.workflow,
+    workspaceId: params.workspaceId,
+    taskInstanceKey: params.taskInstanceKey,
+    status: 'in_progress',
+    inputPayload: params.inputPayload,
+    output: {},
+    statePatch: {},
+    attempts: params.attempts,
+    lastError: null,
+    startedAt,
+    completedAt: null,
+  });
+  await deps.mergeRunState({
+    runId: params.workflow.workflowRunId,
+    status: 'in_progress',
+    currentTaskKey: params.workflow.taskKey,
+    currentTaskInstanceKey: params.taskInstanceKey,
+  });
+  await deps.markExecutionStatus(params.workflow.workflowRunId, 'in_progress');
+}
+
+/**
+ * Complete a workflow task: upsert result with the output + state
+ * patch, merge into run state, then either finalize the run (when
+ * `completion.runStatus === 'completed'`) or fan out to downstream
+ * transitions + ready joins.
+ *
+ * Real reorganization (BR-26 Lot 7): ex `QueueManager.completeWorkflowTask`.
+ * Behavior-preserving — replay byte-identical.
+ */
+export async function completeWorkflowTask<TJobType extends string = string>(
+  params: CompleteWorkflowTaskParams,
+  deps: WorkflowDispatchDeps<TJobType>,
+): Promise<void> {
+  const completedAt = new Date();
+  const output = params.completion?.output ?? {};
+  const statePatch = params.completion?.statePatch ?? {};
+  await deps.upsertTaskResult({
+    workflow: params.workflow,
+    workspaceId: params.workspaceId,
+    taskInstanceKey: params.taskInstanceKey,
+    status: 'completed',
+    inputPayload: params.inputPayload,
+    output,
+    statePatch,
+    attempts: params.attempts,
+    lastError: null,
+    startedAt: undefined,
+    completedAt,
+  });
+  await deps.mergeRunState({
+    runId: params.workflow.workflowRunId,
+    status: params.completion?.runStatus ?? 'in_progress',
+    statePatch,
+    currentTaskKey: params.completion?.currentTaskKey,
+    currentTaskInstanceKey: params.completion?.currentTaskInstanceKey,
+  });
+  const nextRunStatus = params.completion?.runStatus ?? 'in_progress';
+  if (nextRunStatus === 'completed') {
+    await deps.markExecutionStatus(params.workflow.workflowRunId, 'completed');
+    return;
+  }
+
+  if (deps.canSkipDispatch('completion', params.workflow.workflowRunId)) {
+    return;
+  }
+
+  const runtimeState = await deps.getRunStateSnapshot(params.workflow.workflowRunId);
+  if (!runtimeState) return;
+
+  const runtimeDefinition = await deps.loadRuntimeDefinition(
+    params.workspaceId,
+    params.workflow.workflowDefinitionId,
+  );
+  const runContext = await deps.getRunContext(params.workflow.workflowRunId);
+  await dispatchWorkflowTransitions<TJobType>(
+    {
+      workspaceId: params.workspaceId,
+      workflowRunId: params.workflow.workflowRunId,
+      workflowDefinitionId: params.workflow.workflowDefinitionId,
+      runtimeDefinition,
+      runContext,
+      state: runtimeState.state,
+      fromTaskKey: params.workflow.taskKey,
+    },
+    deps,
+  );
+  await dispatchReadyWorkflowJoins<TJobType>(
+    {
+      workspaceId: params.workspaceId,
+      workflowRunId: params.workflow.workflowRunId,
+      workflowDefinitionId: params.workflow.workflowDefinitionId,
+      runtimeDefinition,
+      runContext,
+      state: runtimeState.state,
+    },
+    deps,
+  );
+}
+
+/**
+ * Mark a workflow task as `failed` and propagate the failure up to
+ * the run status. No downstream dispatch (a failed task short-circuits
+ * the run).
+ *
+ * Real reorganization (BR-26 Lot 7): ex `QueueManager.failWorkflowTask`.
+ */
+export async function failWorkflowTask<TJobType extends string = string>(
+  params: FailWorkflowTaskParams,
+  deps: WorkflowDispatchDeps<TJobType>,
+): Promise<void> {
+  const completedAt = new Date();
+  const errorPayload = {
+    name: params.error instanceof Error ? params.error.name : 'Error',
+    message: params.error instanceof Error ? params.error.message : String(params.error),
+  };
+  await deps.upsertTaskResult({
+    workflow: params.workflow,
+    workspaceId: params.workspaceId,
+    taskInstanceKey: params.taskInstanceKey,
+    status: 'failed',
+    inputPayload: params.inputPayload,
+    output: {},
+    statePatch: {},
+    attempts: params.attempts,
+    lastError: errorPayload,
+    startedAt: undefined,
+    completedAt,
+  });
+  await deps.mergeRunState({
+    runId: params.workflow.workflowRunId,
+    status: 'failed',
+    currentTaskKey: params.workflow.taskKey,
+    currentTaskInstanceKey: params.taskInstanceKey,
+  });
+  await deps.markExecutionStatus(params.workflow.workflowRunId, 'failed');
 }
