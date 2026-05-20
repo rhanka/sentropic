@@ -5,6 +5,7 @@ import { createSkillsToolRegistry } from '../../src/registry/adapter.js';
 import {
   FOUNDATION_SKILLS,
   commentAssistantSkill,
+  documentGenerateSkill,
   documentsSkill,
   executiveSummarySkill,
   foldersSkill,
@@ -127,10 +128,12 @@ const FOUNDATION_SKILL_NAMES = [
   'documents',
   'comment_assistant',
   'plan',
+  'document_generate',
 ] as const;
 
 const FOUNDATION_TOOL_NAMES = [
   'comment_assistant',
+  'document_generate',
   'documents',
   'executive_summary_get',
   'executive_summary_update',
@@ -373,6 +376,7 @@ describe('foundation bundle — Wave B object skills', () => {
         .sort(),
     ).toEqual([
       'comment_assistant',
+      'document_generate',
       'documents',
       'history_analyze',
       'initiative_search',
@@ -388,6 +392,7 @@ describe('foundation bundle — Wave B object skills', () => {
         .sort(),
     ).toEqual([
       'comment_assistant',
+      'document_generate',
       'documents',
       'history_analyze',
       'initiative_search',
@@ -516,6 +521,7 @@ describe('foundation bundle — Wave C structured skills', () => {
         .sort(),
     ).toEqual([
       'comment_assistant',
+      'document_generate',
       'documents',
       'history_analyze',
       'initiative_search',
@@ -692,6 +698,7 @@ describe('foundation bundle — Wave C step 3 content/action skills', () => {
       'documents',
       'comment_assistant',
       'plan',
+      'document_generate',
     ]);
     expect(FOUNDATION_SKILLS.map((s) => s.metadata.name)).toEqual(names);
     expect(reg.list({ category: 'content' }).map((m) => m.name)).toEqual(['documents']);
@@ -708,5 +715,39 @@ describe('foundation bundle — Wave C step 3 content/action skills', () => {
     expect(baseTools).toContain('documents');
     expect(baseTools).toContain('comment_assistant');
     expect(baseTools).toContain('plan');
+    expect(baseTools).toContain('document_generate');
+  });
+
+  describe('document_generate skill (Wave D step 1.A)', () => {
+    it('parses SKILL.md metadata, tools, body, and bound handler', () => {
+      expect(documentGenerateSkill.metadata.name).toBe('document_generate');
+      expect(documentGenerateSkill.metadata.version).toBe('0.1.0');
+      expect(documentGenerateSkill.metadata.category).toBe('document');
+      expect(documentGenerateSkill.metadata.contextFilter).toBeUndefined();
+      expect(documentGenerateSkill.metadata.toolNames).toEqual(['document_generate']);
+      expect(documentGenerateSkill.tools.map((t) => t.name)).toEqual(['document_generate']);
+      expect(documentGenerateSkill.body).toContain('Document generate skill');
+      expect(Object.keys(documentGenerateSkill.handlers ?? {})).toEqual([
+        'document_generate',
+      ]);
+    });
+
+    it('declares the documentGenerateTool schema with required action and dual-mode mutex', () => {
+      const [tool] = documentGenerateSkill.tools;
+      expect(tool?.inputSchema?.required).toEqual(['action']);
+      const props = (tool?.inputSchema as { properties?: Record<string, { enum?: string[] }> })
+        ?.properties;
+      expect(props?.action?.enum).toEqual(['upskill', 'generate']);
+      expect(props?.format?.enum).toEqual(['docx', 'pptx']);
+      expect(props?.entityType?.enum).toEqual(['initiative', 'folder']);
+      expect(tool?.sideEffect).toBe(true);
+      expect(tool?.requiresApproval).toBe(false);
+    });
+
+    it('declares the freeform-DOCX sandbox policy in metadata', () => {
+      expect(documentGenerateSkill.metadata.sandbox?.surface).toEqual(['files.create']);
+      expect(documentGenerateSkill.metadata.sandbox?.timeoutMs).toBe(30000);
+      expect(documentGenerateSkill.metadata.sandbox?.memoryMb).toBe(128);
+    });
   });
 });
