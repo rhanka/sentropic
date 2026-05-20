@@ -104,5 +104,5 @@ Replace the Gemini 3.1 Pro catalog entry with Gemini 3.5 Flash without adding a 
   - [x] Review `git diff --stat` and scope boundaries.
   - [x] Run targeted verification commands.
   - [x] Commit runtime/docs alignment with `make commit MSG="test: align gemini flash runtime coverage"`.
-  - [ ] Push branch before UAT.
-  - [ ] Hand off UAT instructions to the user.
+  - [x] Push branch before UAT.
+  - [x] Hand off UAT instructions to the user.
