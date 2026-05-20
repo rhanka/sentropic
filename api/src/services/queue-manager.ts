@@ -1088,6 +1088,12 @@ export class QueueManager {
       executors: {
         executive_summary: (data, signal) =>
           this.processExecutiveSummary(data as ExecutiveSummaryJobData, signal),
+        initiative_detail: (data, signal) =>
+          this.processInitiativeDetail(data as InitiativeDetailJobData, signal),
+        initiative_list: (data, signal) =>
+          this.processInitiativeList(data as InitiativeListJobData, signal),
+        matrix_generate: (data, signal) =>
+          this.processMatrixGenerate(data as MatrixGenerateJobData, signal),
         organization_batch_create: (data, signal) =>
           this.processOrganizationBatchCreate(data as OrganizationBatchCreateJobData, signal),
         organization_targets_join: (data, signal) =>
@@ -1825,15 +1831,6 @@ export class QueueManager {
             jobId,
             controller.signal,
           )) ?? undefined;
-          break;
-        case 'matrix_generate':
-          workflowCompletion = (await this.processMatrixGenerate(jobData as MatrixGenerateJobData, controller.signal)) ?? undefined;
-          break;
-        case 'initiative_list':
-          workflowCompletion = (await this.processInitiativeList(jobData as InitiativeListJobData, controller.signal)) ?? undefined;
-          break;
-        case 'initiative_detail':
-          workflowCompletion = (await this.processInitiativeDetail(jobData as InitiativeDetailJobData, controller.signal)) ?? undefined;
           break;
         case 'chat_message':
           await this.processChatMessage(jobData as ChatMessageJobData, controller.signal);
