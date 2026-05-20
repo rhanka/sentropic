@@ -19,6 +19,25 @@ export interface ReloadQueueSettingsDeps {
   loadSettings(): Promise<void>;
 }
 
+export interface QueueSettingsSource {
+  concurrency: number;
+  publishingConcurrency: number;
+  processingInterval: number;
+}
+
+export interface QueueRuntimeSettings {
+  maxAi: number;
+  maxPublishing: number;
+  intervalMs: number;
+}
+
+export interface LoadQueueSettingsDeps {
+  readSettings(): Promise<QueueSettingsSource>;
+  applySettings(settings: QueueRuntimeSettings): void;
+  logSettings?(settings: QueueRuntimeSettings): void;
+  warnLoadFailure?(error: unknown): void;
+}
+
 export function pauseQueue(deps: PauseQueueDeps): void {
   deps.setPaused(true);
 }
@@ -34,4 +53,21 @@ export async function reloadQueueSettings(
   deps: ReloadQueueSettingsDeps,
 ): Promise<void> {
   await deps.loadSettings();
+}
+
+export async function loadQueueSettings(
+  deps: LoadQueueSettingsDeps,
+): Promise<void> {
+  try {
+    const settings = await deps.readSettings();
+    const runtimeSettings = {
+      maxAi: settings.concurrency,
+      maxPublishing: settings.publishingConcurrency,
+      intervalMs: settings.processingInterval,
+    };
+    deps.applySettings(runtimeSettings);
+    deps.logSettings?.(runtimeSettings);
+  } catch (error) {
+    deps.warnLoadFailure?.(error);
+  }
 }
