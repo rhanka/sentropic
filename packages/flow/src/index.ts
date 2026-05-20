@@ -79,21 +79,28 @@ export type {
 } from './workflow-types.js';
 
 export type {
+  CompleteWorkflowTaskParams,
   DispatchScope,
   EnqueueJobOptions,
   ExecutionRunStatus,
+  FailWorkflowTaskParams,
+  MarkWorkflowTaskStartedParams,
   ReserveTaskDispatchParams,
   UpsertTaskResultParams,
   WorkflowDispatchDeps,
   WorkflowJoinsDispatchParams,
+  WorkflowTaskCompletion,
   WorkflowTaskDispatchParams,
   WorkflowTaskRuntimeStatus,
   WorkflowTransitionsDispatchParams,
 } from './dispatch.js';
 export {
+  completeWorkflowTask,
   dispatchReadyWorkflowJoins,
   dispatchWorkflowTask,
   dispatchWorkflowTransitions,
+  failWorkflowTask,
+  markWorkflowTaskStarted,
   resolveWorkflowTaskAgentDefinitionId,
 } from './dispatch.js';
 

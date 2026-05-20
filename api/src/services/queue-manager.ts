@@ -2,12 +2,15 @@ import { db, pool } from '../db/client';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   buildWorkflowTaskInstanceKey,
+  completeWorkflowTask as flowCompleteWorkflowTask,
   dispatchReadyWorkflowJoins as flowDispatchReadyWorkflowJoins,
   dispatchWorkflowTask as flowDispatchWorkflowTask,
   dispatchWorkflowTransitions as flowDispatchWorkflowTransitions,
   evaluateWorkflowCondition,
+  failWorkflowTask as flowFailWorkflowTask,
   getPathValue,
   isRecord,
+  markWorkflowTaskStarted as flowMarkWorkflowTaskStarted,
   parseJsonField,
   resolveGenerationPromptOverrideFromConfig,
   resolveWorkflowBindingValue,
@@ -17,6 +20,7 @@ import {
   type WorkflowDispatchDescriptor as FlowWorkflowDispatchDescriptor,
   type WorkflowRuntimeContext,
   type WorkflowRuntimeDefinition,
+  type WorkflowTaskCompletion,
   type WorkflowTaskExecutionDefinition,
   type WorkflowTransitionDefinition,
 } from '@sentropic/flow';
@@ -173,14 +177,6 @@ function jobDataToRecord(jobData: JobData): Record<string, unknown> {
 }
 
 type WorkflowTaskRuntimeStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
-
-type WorkflowTaskCompletion = {
-  output?: Record<string, unknown>;
-  statePatch?: Record<string, unknown>;
-  currentTaskKey?: string | null;
-  currentTaskInstanceKey?: string | null;
-  runStatus?: WorkflowTaskRuntimeStatus;
-};
 
 function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkflowRuntimeContext | null {
   if (!value || typeof value !== 'object') return null;
@@ -663,27 +659,16 @@ export class QueueManager {
     taskInstanceKey: string;
     jobData: JobData;
   }): Promise<void> {
-    const startedAt = new Date();
-    await this.upsertWorkflowTaskResult({
-      workflow: params.workflow,
-      workspaceId: params.workspaceId,
-      taskInstanceKey: params.taskInstanceKey,
-      status: 'in_progress',
-      inputPayload: jobDataToRecord(params.jobData),
-      output: {},
-      statePatch: {},
-      attempts: this.getJobAttempt(params.jobData),
-      lastError: null,
-      startedAt,
-      completedAt: null,
-    });
-    await this.mergeWorkflowRunState({
-      runId: params.workflow.workflowRunId,
-      status: 'in_progress',
-      currentTaskKey: params.workflow.taskKey,
-      currentTaskInstanceKey: params.taskInstanceKey,
-    });
-    await this.markExecutionRunStatus(params.workflow.workflowRunId, 'in_progress');
+    return flowMarkWorkflowTaskStarted<JobType>(
+      {
+        workflow: params.workflow,
+        workspaceId: params.workspaceId,
+        taskInstanceKey: params.taskInstanceKey,
+        inputPayload: jobDataToRecord(params.jobData),
+        attempts: this.getJobAttempt(params.jobData),
+      },
+      this.buildFlowDispatchDeps(),
+    );
   }
 
   private async completeWorkflowTask(params: {
@@ -693,64 +678,17 @@ export class QueueManager {
     jobData: JobData;
     completion?: WorkflowTaskCompletion;
   }): Promise<void> {
-    const completedAt = new Date();
-    const output = params.completion?.output ?? {};
-    const statePatch = params.completion?.statePatch ?? {};
-    await this.upsertWorkflowTaskResult({
-      workflow: params.workflow,
-      workspaceId: params.workspaceId,
-      taskInstanceKey: params.taskInstanceKey,
-      status: 'completed',
-      inputPayload: jobDataToRecord(params.jobData),
-      output,
-      statePatch,
-      attempts: this.getJobAttempt(params.jobData),
-      lastError: null,
-      startedAt: undefined,
-      completedAt,
-    });
-    await this.mergeWorkflowRunState({
-      runId: params.workflow.workflowRunId,
-      status: params.completion?.runStatus ?? 'in_progress',
-      statePatch,
-      currentTaskKey: params.completion?.currentTaskKey,
-      currentTaskInstanceKey: params.completion?.currentTaskInstanceKey,
-    });
-    const nextRunStatus = params.completion?.runStatus ?? 'in_progress';
-    if (nextRunStatus === 'completed') {
-      await this.markExecutionRunStatus(params.workflow.workflowRunId, 'completed');
-      return;
-    }
-
-    if (this.shouldSkipWorkflowDispatch('completion', params.workflow.workflowRunId)) {
-      return;
-    }
-
-    const runtimeState = await this.getWorkflowRunStateSnapshot(params.workflow.workflowRunId);
-    if (!runtimeState) return;
-
-    const runtimeDefinition = await this.loadWorkflowRuntimeDefinition(
-      params.workspaceId,
-      params.workflow.workflowDefinitionId,
+    return flowCompleteWorkflowTask<JobType>(
+      {
+        workflow: params.workflow,
+        workspaceId: params.workspaceId,
+        taskInstanceKey: params.taskInstanceKey,
+        inputPayload: jobDataToRecord(params.jobData),
+        attempts: this.getJobAttempt(params.jobData),
+        completion: params.completion,
+      },
+      this.buildFlowDispatchDeps(),
     );
-    const runContext = await this.getWorkflowRunContext(params.workflow.workflowRunId);
-    await this.dispatchWorkflowTransitions({
-      workspaceId: params.workspaceId,
-      workflowRunId: params.workflow.workflowRunId,
-      workflowDefinitionId: params.workflow.workflowDefinitionId,
-      runtimeDefinition,
-      runContext,
-      state: runtimeState.state,
-      fromTaskKey: params.workflow.taskKey,
-    });
-    await this.dispatchReadyWorkflowJoins({
-      workspaceId: params.workspaceId,
-      workflowRunId: params.workflow.workflowRunId,
-      workflowDefinitionId: params.workflow.workflowDefinitionId,
-      runtimeDefinition,
-      runContext,
-      state: runtimeState.state,
-    });
   }
 
   private async failWorkflowTask(params: {
@@ -760,31 +698,17 @@ export class QueueManager {
     jobData: JobData;
     error: unknown;
   }): Promise<void> {
-    const completedAt = new Date();
-    const errorPayload = {
-      name: params.error instanceof Error ? params.error.name : 'Error',
-      message: params.error instanceof Error ? params.error.message : String(params.error),
-    };
-    await this.upsertWorkflowTaskResult({
-      workflow: params.workflow,
-      workspaceId: params.workspaceId,
-      taskInstanceKey: params.taskInstanceKey,
-      status: 'failed',
-      inputPayload: jobDataToRecord(params.jobData),
-      output: {},
-      statePatch: {},
-      attempts: this.getJobAttempt(params.jobData),
-      lastError: errorPayload,
-      startedAt: undefined,
-      completedAt,
-    });
-    await this.mergeWorkflowRunState({
-      runId: params.workflow.workflowRunId,
-      status: 'failed',
-      currentTaskKey: params.workflow.taskKey,
-      currentTaskInstanceKey: params.taskInstanceKey,
-    });
-    await this.markExecutionRunStatus(params.workflow.workflowRunId, 'failed');
+    return flowFailWorkflowTask<JobType>(
+      {
+        workflow: params.workflow,
+        workspaceId: params.workspaceId,
+        taskInstanceKey: params.taskInstanceKey,
+        inputPayload: jobDataToRecord(params.jobData),
+        attempts: this.getJobAttempt(params.jobData),
+        error: params.error,
+      },
+      this.buildFlowDispatchDeps(),
+    );
   }
 
   private async loadWorkflowRuntimeDefinition(
@@ -1039,6 +963,9 @@ export class QueueManager {
       reserveTaskDispatch: (p) => this.reserveWorkflowTaskDispatch(p),
       upsertTaskResult: (p) => this.upsertWorkflowTaskResult(p),
       enqueueJob: (type, data, opts) => this.addJob(type, data as unknown as JobData, opts),
+      loadRuntimeDefinition: (ws, id) => this.loadWorkflowRuntimeDefinition(ws, id),
+      getRunStateSnapshot: (id) => this.getWorkflowRunStateSnapshot(id),
+      getRunContext: (id) => this.getWorkflowRunContext(id),
     };
   }
 
