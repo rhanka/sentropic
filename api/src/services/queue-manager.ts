@@ -14,9 +14,11 @@ import {
   parseJsonField,
   resolveGenerationPromptOverrideFromConfig,
   resolveWorkflowBindingValue,
+  runJob as flowRunJob,
   runProcessingLoop as flowRunProcessingLoop,
   sanitizeJobResultForPublic,
   type GenerationPromptOverride,
+  type JobRunnerDeps,
   type ProcessingLoopDeps,
   type QueueClass,
   type WorkflowDispatchDeps,
@@ -482,6 +484,7 @@ export class QueueManager {
   private paused = false;
   private cancelAllInProgress = false;
   private jobControllers: Map<string, AbortController> = new Map();
+  private cachedJobRunnerDeps: JobRunnerDeps<JobQueueRow, JobType, JobData> | null = null;
 
   constructor() {
     this.loadSettings();
@@ -970,6 +973,131 @@ export class QueueManager {
       getRunStateSnapshot: (id) => this.getWorkflowRunStateSnapshot(id),
       getRunContext: (id) => this.getWorkflowRunContext(id),
     };
+  }
+
+  /**
+   * Lazily build the `JobRunnerDeps` adapter for `@sentropic/flow/runJob`.
+   * Cached on the instance so we don't reallocate per job. Bound to
+   * private QueueManager methods + db helpers.
+   *
+   * Slice 7.F.4a — only `executive_summary` is registered in
+   * `executors`; other job types fall through to the legacy in-place
+   * `switch` in `processJob`. Slices 7.F.4b..j register the remaining
+   * 9 bindings.
+   */
+  private getJobRunnerDeps(): JobRunnerDeps<JobQueueRow, JobType, JobData> {
+    if (this.cachedJobRunnerDeps) {
+      return this.cachedJobRunnerDeps;
+    }
+    this.cachedJobRunnerDeps = {
+      parseJobData: (row) => JSON.parse(row.data) as JobData,
+      getJobId: (row) => row.id,
+      getJobType: (row) => row.type as JobType,
+      getWorkspaceId: (row) => row.workspaceId ?? ADMIN_WORKSPACE_ID,
+      getWorkflowContext: (data) => this.getGenerationWorkflowContextForJobData(data),
+      getWorkflowTaskInstanceKey: (type, data) =>
+        this.getWorkflowTaskInstanceKey(type, data),
+      buildRetryJobData: (data, nextAttempt, retryMax) => {
+        const dataRecord = jobDataToRecord(data);
+        const next =
+          data && typeof data === 'object'
+            ? { ...dataRecord, _retry: { attempt: nextAttempt, maxRetries: retryMax } }
+            : { _retry: { attempt: nextAttempt, maxRetries: retryMax } };
+        return next as unknown as JobData;
+      },
+      claimReadStatus: async (jobId) => {
+        const [current] = await db
+          .select({ status: jobQueue.status })
+          .from(jobQueue)
+          .where(eq(jobQueue.id, jobId))
+          .limit(1);
+        return current?.status ?? null;
+      },
+      registerController: (jobId, controller) => {
+        this.jobControllers.set(jobId, controller);
+      },
+      unregisterController: (jobId) => {
+        this.jobControllers.delete(jobId);
+      },
+      markWorkflowTaskStarted: (params) =>
+        this.markWorkflowTaskStarted({
+          workflow: params.workflow,
+          workspaceId: params.workspaceId,
+          taskInstanceKey: params.taskInstanceKey,
+          jobData: params.jobData,
+        }),
+      completeWorkflowTask: (params) =>
+        this.completeWorkflowTask({
+          workflow: params.workflow,
+          workspaceId: params.workspaceId,
+          taskInstanceKey: params.taskInstanceKey,
+          jobData: params.jobData,
+          completion: params.completion,
+        }),
+      failWorkflowTask: (params) =>
+        this.failWorkflowTask({
+          workflow: params.workflow,
+          workspaceId: params.workspaceId,
+          taskInstanceKey: params.taskInstanceKey,
+          jobData: params.jobData,
+          error: params.error,
+        }),
+      upsertWorkflowTaskResultForRetry: (params) =>
+        this.upsertWorkflowTaskResult({
+          workflow: params.workflow,
+          workspaceId: params.workspaceId,
+          taskInstanceKey: params.taskInstanceKey,
+          status: 'pending',
+          inputPayload: jobDataToRecord(params.nextJobData),
+          output: {},
+          statePatch: {},
+          attempts: params.retryAttempt + 1,
+          lastError: {
+            name: 'Error',
+            message: params.errorMessage,
+          },
+          startedAt: null,
+          completedAt: null,
+        }),
+      markJobCompleted: async (jobId) => {
+        await db.run(sql`
+          UPDATE job_queue
+          SET status = 'completed', completed_at = ${new Date()}
+          WHERE id = ${jobId}
+        `);
+      },
+      markJobFailed: async (jobId, errorMessage) => {
+        await db.run(sql`
+          UPDATE job_queue
+          SET status = 'failed', error = ${errorMessage}
+          WHERE id = ${jobId}
+        `);
+      },
+      requeueJobForRetry: async ({ jobId, nextJobData, retryAttempt, retryMax, errorMessage }) => {
+        await db.run(sql`
+          UPDATE job_queue
+          SET status = 'pending',
+              data = ${JSON.stringify(nextJobData)},
+              error = ${`retry ${retryAttempt}/${retryMax}: ${errorMessage}`},
+              started_at = NULL,
+              completed_at = NULL
+          WHERE id = ${jobId}
+        `);
+      },
+      notifyJobEvent: (jobId) => this.notifyJobEvent(jobId),
+      executors: {
+        executive_summary: (data, signal) =>
+          this.processExecutiveSummary(data as ExecutiveSummaryJobData, signal),
+      },
+      // Slice 7.F.4a — no abort/terminal hooks yet; they are bound by
+      // slices 7.F.4i (chat_message abort) and 7.F.4j (document_summary
+      // terminal mirror). The `executive_summary` binding has neither
+      // an abort branch nor a terminal-failure side-effect so these
+      // no-ops are behaviorally correct.
+      onAbortedCancellation: async () => false,
+      onTerminalFailure: async () => {},
+    };
+    return this.cachedJobRunnerDeps;
   }
 
   private async dispatchWorkflowTransitions(params: {
@@ -1566,6 +1694,18 @@ export class QueueManager {
    * Traiter un job individuel
    */
   private async processJob(job: JobQueueRow): Promise<void> {
+    // Two-path bridge (BR26 Lot 7 slice 7.F.4): job types whose
+    // executor binding has been migrated to `@sentropic/flow/runJob`
+    // route through the package shell; the remaining ones fall
+    // through to the legacy in-place `switch` below. Slices
+    // 7.F.4a..j peel one executor at a time until the switch is
+    // empty and the legacy body can be deleted.
+    const runnerDeps = this.getJobRunnerDeps();
+    const candidateJobType = job.type as JobType;
+    if (runnerDeps.executors[candidateJobType]) {
+      return flowRunJob<JobQueueRow, JobType, JobData>(job, runnerDeps);
+    }
+
     const jobId = job.id;
     const jobType = job.type as JobType;
     const jobData = JSON.parse(job.data) as JobData;
@@ -1702,9 +1842,6 @@ export class QueueManager {
           break;
         case 'initiative_detail':
           workflowCompletion = (await this.processInitiativeDetail(jobData as InitiativeDetailJobData, controller.signal)) ?? undefined;
-          break;
-        case 'executive_summary':
-          workflowCompletion = (await this.processExecutiveSummary(jobData as ExecutiveSummaryJobData, controller.signal)) ?? undefined;
           break;
         case 'chat_message':
           await this.processChatMessage(jobData as ChatMessageJobData, controller.signal);
