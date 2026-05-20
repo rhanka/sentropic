@@ -119,7 +119,7 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
   - [x] Patch `deploy/scw/30-api.yaml` to image `${SCW_REGISTRY_HOST}/sentropic-api:feat-deploy-poc-k8s` with `imagePullPolicy: Always`.
   - [x] Patch `deploy/scw/40-ui.yaml` to image `${SCW_REGISTRY_HOST}/sentropic-ui:feat-deploy-poc-k8s` with `imagePullPolicy: Always`.
   - [x] Patch `deploy/scw/10-rbac.yaml` to add `imagePullSecrets: [{ name: sentropic-registry }]` on ServiceAccount `sentropic-app`.
-  - [ ] Update `deploy/scw/README.md` to replace GHCR references by SCW Registry and document operator prerequisite `make tenant-registry-secret TENANT=sentropic SCW_REGISTRY_TOKEN=<token>` in `~/src/poc-k8s/`.
+  - [x] Update `deploy/scw/README.md` to replace GHCR references by SCW Registry and document operator prerequisite `make tenant-registry-secret TENANT=sentropic SCW_REGISTRY_TOKEN=<token>` in `~/src/poc-k8s/`.
   - [ ] User action: create SCW API key read-only on Registry via `scw iam api-key create` and provide the token to the operator.
   - [ ] User action: create GH secret `KUBECONFIG_POC_B64` (base64 of `~/.kube/poc.yaml`).
   - [ ] Operator action (out of BR37 repo): add `tenant-registry-secret` target in `~/src/poc-k8s/Makefile` and apply it once for the `sentropic` namespace.

@@ -11,13 +11,15 @@ Apply them first; the Makefile in this repo will not create them.
 
 ## Files
 
-- `10-rbac.yaml` — namespace-scoped ServiceAccount used by every Pod.
+- `10-rbac.yaml` — namespace-scoped ServiceAccount used by every Pod, with
+  `imagePullSecrets: [{ name: sentropic-registry }]` so every Pod can pull
+  from the SCW Container Registry.
 - `20-postgres.yaml` — Postgres 17 StatefulSet + headless Service + 1Gi PVC on
   `scw-bssd` + ConfigMap (`POSTGRES_DB`, `POSTGRES_USER`).
-- `30-api.yaml` — `sentropic-api` GHCR image + ClusterIP Service (port 8787)
-  + non-secret ConfigMap.
-- `40-ui.yaml` — `sentropic-ui` GHCR image + ClusterIP Service (port 5173)
-  + placeholder ConfigMap for future overlays.
+- `30-api.yaml` — `sentropic-api` SCW Container Registry image + ClusterIP
+  Service (port 8787) + non-secret ConfigMap.
+- `40-ui.yaml` — `sentropic-ui` SCW Container Registry image + ClusterIP
+  Service (port 5173) + placeholder ConfigMap for future overlays.
 - `50-maildev.yaml` — dev SMTP capture Deployment + ClusterIP Service (1025
   SMTP, 1080 UI).
 - `60-ingress.yaml` — optional Traefik Ingress with cert-manager TLS. Replace
@@ -29,7 +31,13 @@ Apply them first; the Makefile in this repo will not create them.
 make kubeconfig                 # ~/.kube/poc.yaml
 make apply-platform             # cert-manager + traefik labels
 make apply-sentropic            # namespace + RQ + LimitRange + NetPol
+make tenant-registry-secret TENANT=sentropic SCW_REGISTRY_TOKEN=<token>
 ```
+
+The last target creates the `sentropic-registry` `dockerconfigjson` Secret
+in the `sentropic` namespace. `<token>` is an SCW IAM API key with
+**read-only** access to the SCW Container Registry, created via
+`scw iam api-key create`. Rotate the token by re-running the target.
 
 ## Secret bundle (operator side, once)
 
@@ -39,11 +47,18 @@ Two namespace-scoped Secrets must exist before applying the manifests:
 - `sentropic-api` — `DATABASE_URL`, every `*_API_KEY`, `MAIL_USERNAME`,
   `MAIL_PASSWORD`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_PICKER_API_KEY`.
 
-The api and ui manifests intentionally target the `feat-deploy-poc-k8s` tag
-on `ghcr.io/rhanka/sentropic-api` and `ghcr.io/rhanka/sentropic-ui`, produced
-by this branch's image workflow. `make scw-bundle-secret` reads
-`~/src/sentropic/.env` and creates both in-cluster, replacing the previous
-version. Re-run after rotating a key.
+The api and ui manifests target the `feat-deploy-poc-k8s` alias tag on
+`rg.fr-par.scw.cloud/sentropic/sentropic-api` and
+`rg.fr-par.scw.cloud/sentropic/sentropic-ui`. The `publish-{api,ui}-image`
+jobs in `.github/workflows/ci.yml` push two tags per image: a
+content-hash sha1 (immutable, used by `make publish-{api,ui}-image`) and a
+floating branch alias (`feat-deploy-poc-k8s` on the BR-37 branch, `main`
+after merge). `imagePullPolicy: Always` plus the post-publish
+`deploy-poc-k8s` CI job (`kubectl -n sentropic rollout restart
+deployment/api deployment/ui`) guarantee Kapsule picks up the latest digest
+without any imperative `kubectl set image`. `make scw-bundle-secret`
+reads `~/src/sentropic/.env` and creates both Secrets in-cluster,
+replacing the previous version. Re-run after rotating a key.
 
 ## Deploy
 
