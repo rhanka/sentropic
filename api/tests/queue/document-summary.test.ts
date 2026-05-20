@@ -149,7 +149,7 @@ describe('Queue - document_summary', () => {
       clipped: false
     });
 
-    await queueManager.processJobs();
+    await queueManager.processJobsForWorkspace(workspaceId);
 
     const [doc] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, docId)).limit(1);
     expect(doc?.status).toBe('ready');
@@ -197,7 +197,7 @@ describe('Queue - document_summary', () => {
     mockGetObjectBytes.mockResolvedValueOnce(new Uint8Array([1, 2, 3]));
     mockExtract.mockRejectedValueOnce(new Error('boom'));
 
-    await queueManager.processJobs();
+    await queueManager.processJobsForWorkspace(workspaceId);
 
     const [doc] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, docId)).limit(1);
     expect(doc?.status).toBe('failed');
@@ -291,7 +291,7 @@ describe('Queue - document_summary', () => {
     });
     mockGenerateDocumentSummary.mockResolvedValueOnce('Résumé Drive');
 
-    await queueManager.processJobs();
+    await queueManager.processJobsForWorkspace(workspaceId);
 
     expect(mockGetObjectBytes).not.toHaveBeenCalled();
     expect(mockResolveGoogleDriveFileMetadata).toHaveBeenCalledTimes(1);
@@ -397,7 +397,7 @@ describe('Queue - document_summary', () => {
     });
     mockExtract.mockRejectedValueOnce(new Error('extract failed'));
 
-    await queueManager.processJobs();
+    await queueManager.processJobsForWorkspace(workspaceId);
 
     const [doc] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, docId)).limit(1);
     expect(doc?.status).toBe('failed');

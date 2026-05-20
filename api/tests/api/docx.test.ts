@@ -476,12 +476,44 @@ describe('DOCX API', () => {
 
   it('processes publishing jobs even when AI queue slots are saturated', async () => {
     processJobsSpy.mockRestore();
-    // This test exercises the global queue scheduler with processJobs unmocked.
-    // Keep it independent from pending jobs created by earlier endpoint files.
-    await db.delete(jobQueue);
+    // This test exercises the scheduler with processJobs unmocked, while
+    // isolating the adapter reads from pending jobs created by parallel files.
+    await db.delete(jobQueue).where(eq(jobQueue.workspaceId, user.workspaceId));
 
+    const { postgresJobQueue } = await import('../../src/services/flow/postgres-job-queue');
     const processJobSpy = vi.spyOn(queueManager as unknown as { processJob: (job: unknown) => Promise<void> }, 'processJob')
       .mockResolvedValue();
+    const getProcessingCountSpy = vi
+      .spyOn(postgresJobQueue, 'getProcessingCountByClass')
+      .mockImplementation(async (queueClass) => (queueClass === 'publishing' ? 0 : 1));
+    const claimPendingJobsSpy = vi
+      .spyOn(postgresJobQueue, 'claimPendingJobsByClass')
+      .mockImplementation(async (queueClass, limit) => {
+        if (queueClass !== 'publishing' || limit <= 0) return [];
+
+        const [pendingDocxJob] = await db
+          .select()
+          .from(jobQueue)
+          .where(and(eq(jobQueue.id, docxPendingJobId), eq(jobQueue.status, 'pending')))
+          .limit(1);
+        if (!pendingDocxJob) return [];
+
+        const startedAt = new Date().toISOString();
+        await db
+          .update(jobQueue)
+          .set({ status: 'processing', startedAt })
+          .where(eq(jobQueue.id, docxPendingJobId));
+
+        return [{ ...pendingDocxJob, status: 'processing', startedAt }];
+      });
+    const hasAnyPendingSpy = vi.spyOn(postgresJobQueue, 'hasAnyPending').mockImplementation(async () => {
+      const rows = await db
+        .select({ id: jobQueue.id })
+        .from(jobQueue)
+        .where(and(eq(jobQueue.workspaceId, user.workspaceId), eq(jobQueue.status, 'pending')))
+        .limit(1);
+      return rows.length > 0;
+    });
     const originalAiConcurrency = (queueManager as unknown as { maxConcurrentJobs: number }).maxConcurrentJobs;
     const originalPublishingConcurrency = (queueManager as unknown as { maxPublishingJobs: number }).maxPublishingJobs;
     const originalProcessingInterval = (queueManager as unknown as { processingInterval: number }).processingInterval;
@@ -543,6 +575,9 @@ describe('DOCX API', () => {
       expect(docxRow?.status).toBe('processing');
     } finally {
       processJobSpy.mockRestore();
+      getProcessingCountSpy.mockRestore();
+      claimPendingJobsSpy.mockRestore();
+      hasAnyPendingSpy.mockRestore();
       (queueManager as unknown as { maxConcurrentJobs: number }).maxConcurrentJobs = originalAiConcurrency;
       (queueManager as unknown as { maxPublishingJobs: number }).maxPublishingJobs = originalPublishingConcurrency;
       (queueManager as unknown as { processingInterval: number }).processingInterval = originalProcessingInterval;
