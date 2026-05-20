@@ -12,8 +12,11 @@ import {
   isRecord,
   markWorkflowTaskStarted as flowMarkWorkflowTaskStarted,
   parseJsonField,
+  pauseQueue,
+  reloadQueueSettings,
   resolveGenerationPromptOverrideFromConfig,
   resolveWorkflowBindingValue,
+  resumeQueue,
   runJob as flowRunJob,
   runProcessingLoop as flowRunProcessingLoop,
   sanitizeJobResultForPublic,
@@ -1541,18 +1544,29 @@ export class QueueManager {
    * Recharger les paramètres de configuration
    */
   async reloadSettings(): Promise<void> {
-    await this.loadSettings();
+    await reloadQueueSettings({
+      loadSettings: () => this.loadSettings(),
+    });
   }
 
   pause(): void {
-    this.paused = true;
+    pauseQueue({
+      setPaused: (value) => {
+        this.paused = value;
+      },
+    });
   }
 
   resume(): void {
-    this.paused = false;
-    if (!this.isProcessing) {
-      this.processJobs().catch(console.error);
-    }
+    resumeQueue({
+      setPaused: (value) => {
+        this.paused = value;
+      },
+      isProcessing: () => this.isProcessing,
+      startProcessing: () => {
+        this.processJobs().catch(console.error);
+      },
+    });
   }
 
   async cancelAllProcessing(reason: string = 'cancel-all'): Promise<void> {
