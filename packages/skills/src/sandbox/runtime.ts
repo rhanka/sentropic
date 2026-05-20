@@ -10,6 +10,10 @@ import {
   buildSandboxApiSurface,
   type SandboxApiSurface,
 } from './api-surface.js';
+import {
+  DOCX_BRIDGE_BOOTSTRAP,
+  type DocxHostBridge,
+} from './docx-host-bridge.js';
 
 /**
  * Standardized error codes surfaced as `SandboxResult.errorCode` so chat-core
@@ -69,12 +73,23 @@ export interface SandboxHostAdapters {
 }
 
 /**
+ * Optional per-call host bridges. Bridges expose host-side helper APIs into
+ * the isolate via synchronous `ivm.Reference` proxies. Used by V8-bound
+ * skill handlers that need rich host objects (e.g. DOCX document builders)
+ * without leaking the underlying libraries' modules into the isolate.
+ */
+export interface SandboxExecuteBridges {
+  readonly docx?: DocxHostBridge;
+}
+
+/**
  * Optional per-call overrides. `policyOverride` is reserved for testing —
  * production callers should always rely on `skill.metadata.sandbox`.
  */
 export interface SandboxExecuteOptions {
   readonly policyOverride?: SandboxPolicy;
   readonly signal?: AbortSignal;
+  readonly bridges?: SandboxExecuteBridges;
 }
 
 /**
@@ -154,7 +169,7 @@ export interface IsolatedVmScript {
  * the bridges. The final `return` value of `__userMain` is copied back to the
  * host as the sandbox result.
  */
-function buildSandboxBootstrap(userCode: string): string {
+function buildSandboxBootstrap(userCode: string, withDocxBridge: boolean): string {
   return `
 "use strict";
 const __noop = async () => { throw new Error('sandbox: host bridge not exposed'); };
@@ -174,6 +189,7 @@ const db = (typeof __hostDbQuery !== 'undefined' && __hostDbQuery)
 const fetch = (typeof __hostFetch !== 'undefined' && __hostFetch)
   ? __callBridge(__hostFetch)
   : undefined;
+${withDocxBridge ? DOCX_BRIDGE_BOOTSTRAP : ''}
 const __userMain = async (input) => {
 ${userCode}
 };
@@ -226,6 +242,22 @@ async function injectApiSurface(
   }
 
   await context.global.set('__userInput', new ivm.ExternalCopy(args).copyInto());
+}
+
+/**
+ * Install the docx host bridge references onto the isolate context. Each
+ * `__hostDocx*` reference is a sync host function (invoked via `applySync`
+ * from the isolate). No host modules are leaked — only `ivm.Reference`s
+ * wrapping pure functions over a host-side handle map.
+ */
+async function injectDocxBridge(
+  ivm: IsolatedVmModuleShape,
+  context: IsolatedVmContext,
+  bridge: DocxHostBridge,
+): Promise<void> {
+  for (const [name, fn] of Object.entries(bridge.hostFns)) {
+    await context.global.set(name, new ivm.Reference(fn));
+  }
 }
 
 /**
@@ -317,7 +349,12 @@ export function createIsolatedVmRuntime(
         context = await isolate.createContext();
         await injectApiSurface(resolvedIvm, context, surface, args);
 
-        const bootstrap = buildSandboxBootstrap(skill.sandboxEntry);
+        const docxBridge = opts.bridges?.docx;
+        if (docxBridge) {
+          await injectDocxBridge(resolvedIvm, context, docxBridge);
+        }
+
+        const bootstrap = buildSandboxBootstrap(skill.sandboxEntry, Boolean(docxBridge));
         script = await isolate.compileScript(bootstrap);
 
         const raw = await script.run(context, {
