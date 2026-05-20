@@ -1,8 +1,11 @@
 import { createDocxHostBridge } from '../../../sandbox/docx-host-bridge.js';
+import { createPptxHostBridge } from '../../../sandbox/pptx-host-bridge.js';
 import type { SandboxRuntime } from '../../../sandbox/runtime.js';
 import type { Skill, SkillToolHandler, SkillToolInvocation, SkillToolResult } from '../../../types/skill.js';
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const PPTX_MIME =
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
 /**
  * Skill name advertised by `document_generate.SKILL.md`. Single tool, same
@@ -17,7 +20,7 @@ export const documentGenerateToolName = 'document_generate';
  */
 const DEFERRED_PREFIX = "document_generate sub-path";
 
-const DEFERRED_SUFFIX = "is deferred to Wave D step 1.B/1.C; only freeform-DOCX is bound in step 1.A";
+const DEFERRED_SUFFIX = "is deferred to Wave D step 1.C; only freeform-DOCX (step 1.A) and freeform-PPTX (step 1.B) are bound";
 
 /**
  * Throw a deferred-sub-path error with a stable descriptor used by tests.
@@ -111,7 +114,8 @@ export function createDocumentGenerateHandler(skill: Skill): SkillToolHandler {
     const templateId = input.templateId;
 
     // ------------------------------------------------------------------
-    // Sub-path routing (only freeform DOCX is bound in step 1.A).
+    // Sub-path routing (freeform DOCX bound in step 1.A; freeform PPTX
+    // bound in step 1.B; upskill + template DOCX deferred to step 1.C).
     // ------------------------------------------------------------------
     if (action === 'upskill') {
       throwDeferred(`action=upskill&format=${format}`);
@@ -119,21 +123,20 @@ export function createDocumentGenerateHandler(skill: Skill): SkillToolHandler {
     if (action !== 'generate') {
       throwDeferred(`action=${action || '<missing>'}`);
     }
-    if (format === 'pptx') {
-      throwDeferred('action=generate&format=pptx');
-    }
-    if (format !== 'docx') {
+    if (format !== 'docx' && format !== 'pptx') {
       throwDeferred(`action=generate&format=${format}`);
     }
     if (templateId) {
-      throwDeferred(`action=generate&format=docx&templateId=${templateId}`);
+      // PPTX template renderers do not exist in legacy; this guard targets the
+      // DOCX template renderers (`usecase-onepage` / `executive-synthesis-multipage`).
+      throwDeferred(`action=generate&format=${format}&templateId=${templateId}`);
     }
     if (!code || typeof code !== 'string' || code.length === 0) {
-      throwDeferred('action=generate&format=docx&(no-code-no-templateId)');
+      throwDeferred(`action=generate&format=${format}&(no-code-no-templateId)`);
     }
 
     // ------------------------------------------------------------------
-    // Bound path: V8 sandbox + docx-host-bridge.
+    // Bound path: V8 sandbox + docx/pptx host bridge.
     // ------------------------------------------------------------------
     if (!isCallerWithDeps(invocation.caller)) {
       throw new Error(
@@ -142,7 +145,10 @@ export function createDocumentGenerateHandler(skill: Skill): SkillToolHandler {
     }
     const caller = invocation.caller;
 
-    const bridge = createDocxHostBridge();
+    const isPptx = format === 'pptx';
+    const docxBridge = isPptx ? undefined : createDocxHostBridge();
+    const pptxBridge = isPptx ? createPptxHostBridge() : undefined;
+
     // The user-supplied `code` is the sandbox entrypoint for this invocation.
     // We clone the skill so the runtime's `skill.sandboxEntry` check finds
     // the per-call code while keeping the bundle skill object immutable.
@@ -154,9 +160,14 @@ export function createDocumentGenerateHandler(skill: Skill): SkillToolHandler {
       sandboxEntry: code,
     };
     const result = await caller.sandboxRuntime.execute(perCallSkill, {}, {
-      bridges: { docx: bridge },
+      bridges: {
+        ...(docxBridge ? { docx: docxBridge } : {}),
+        ...(pptxBridge ? { pptx: pptxBridge } : {}),
+      },
     });
     if (!result.ok) {
+      docxBridge?.reset();
+      pptxBridge?.reset();
       return {
         output: null,
         isError: true,
@@ -169,7 +180,9 @@ export function createDocumentGenerateHandler(skill: Skill): SkillToolHandler {
 
     let buffer: Buffer;
     try {
-      buffer = await bridge.packToBuffer(result.output as string);
+      buffer = isPptx
+        ? await pptxBridge!.packToBuffer(result.output as string)
+        : await docxBridge!.packToBuffer(result.output as string);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
@@ -178,14 +191,16 @@ export function createDocumentGenerateHandler(skill: Skill): SkillToolHandler {
         errorMessage: `document_generate packToBuffer failure: ${message}`,
       };
     } finally {
-      bridge.reset();
+      docxBridge?.reset();
+      pptxBridge?.reset();
     }
 
     const titleSlug = slugify(input.title ?? caller.title ?? '') || 'document';
-    const fileName = `${titleSlug}.docx`;
+    const fileName = isPptx ? `${titleSlug}.pptx` : `${titleSlug}.docx`;
+    const mimeType = isPptx ? PPTX_MIME : DOCX_MIME;
     const artefact = await caller.filesAdapter.create({
       name: fileName,
-      mimeType: DOCX_MIME,
+      mimeType,
       content: new Uint8Array(buffer),
     });
 
