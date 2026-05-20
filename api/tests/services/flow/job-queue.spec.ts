@@ -320,6 +320,50 @@ describe('PostgresJobQueue adapter', () => {
     });
   });
 
+  it('claims pending jobs by queue class through the JobQueue adapter', async () => {
+    const chatJobId = createId();
+    const publishingJobId = createId();
+    const aiJobId = createId();
+    await db.insert(jobQueue).values([
+      {
+        id: chatJobId,
+        type: 'chat_message',
+        status: 'pending',
+        workspaceId: ADMIN_WORKSPACE_ID,
+        data: JSON.stringify({ assistantMessageId: createId() }),
+        createdAt: new Date(),
+      },
+      {
+        id: publishingJobId,
+        type: 'docx_generate',
+        status: 'pending',
+        workspaceId: ADMIN_WORKSPACE_ID,
+        data: JSON.stringify({ templateId: 'usecase-onepage' }),
+        createdAt: new Date(),
+      },
+      {
+        id: aiJobId,
+        type: 'initiative_list',
+        status: 'pending',
+        workspaceId: ADMIN_WORKSPACE_ID,
+        data: JSON.stringify({ folderId: createId(), matrix: [] }),
+        createdAt: new Date(),
+      },
+    ]);
+
+    const [chatJob] = await postgresJobQueue.claimPendingJobsByClass('chat', 1);
+    const [publishingJob] = await postgresJobQueue.claimPendingJobsByClass('publishing', 1);
+    const [aiJob] = await postgresJobQueue.claimPendingJobsByClass('ai', 1);
+
+    expect(chatJob?.id).toBe(chatJobId);
+    expect(publishingJob?.id).toBe(publishingJobId);
+    expect(aiJob?.id).toBe(aiJobId);
+    await expect(postgresJobQueue.getProcessingCountByClass('chat')).resolves.toBe(1);
+    await expect(postgresJobQueue.getProcessingCountByClass('publishing')).resolves.toBe(1);
+    await expect(postgresJobQueue.getProcessingCountByClass('ai')).resolves.toBe(1);
+    await expect(postgresJobQueue.hasAnyPending()).resolves.toBe(false);
+  });
+
   it('queueManager.cancelJob delegates cancellation to the JobQueue adapter', async () => {
     const jobId = createId();
     await db.insert(jobQueue).values({
