@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   buildWorkflowTaskInstanceKey,
   dispatchReadyWorkflowJoins as flowDispatchReadyWorkflowJoins,
+  dispatchWorkflowTask as flowDispatchWorkflowTask,
   dispatchWorkflowTransitions as flowDispatchWorkflowTransitions,
   evaluateWorkflowCondition,
   getPathValue,
@@ -1010,32 +1011,6 @@ export class QueueManager {
     return completedInstanceKeys.has('main');
   }
 
-  private resolveWorkflowTaskAgentDefinitionId(
-    task: WorkflowTaskExecutionDefinition,
-    state: Record<string, unknown>,
-    agentIdsByKey: Record<string, string>,
-  ): string | null {
-    const metadata = isRecord(task.metadata) ? task.metadata : {};
-    const selection = isRecord(metadata.agentSelection) ? metadata.agentSelection : null;
-    if (!selection) {
-      return task.agentDefinitionId;
-    }
-    const rules = Array.isArray(selection.rules) ? selection.rules : [];
-    for (const rule of rules) {
-      if (!isRecord(rule)) continue;
-      if (!evaluateWorkflowCondition(rule.condition, state)) continue;
-      const agentKey = typeof rule.agentKey === 'string' ? rule.agentKey : null;
-      if (agentKey && agentIdsByKey[agentKey]) {
-        return agentIdsByKey[agentKey];
-      }
-    }
-    const defaultAgentKey = typeof selection.defaultAgentKey === 'string' ? selection.defaultAgentKey : null;
-    if (defaultAgentKey && agentIdsByKey[defaultAgentKey]) {
-      return agentIdsByKey[defaultAgentKey];
-    }
-    return task.agentDefinitionId;
-  }
-
   private async dispatchWorkflowTask(params: {
     workspaceId: string;
     workflowRunId: string;
@@ -1047,155 +1022,7 @@ export class QueueManager {
     taskInstanceKey: string;
     item?: unknown;
   }): Promise<WorkflowDispatchDescriptor[]> {
-    if (this.shouldSkipWorkflowDispatch(`task:${params.taskKey}`, params.workflowRunId)) {
-      return [];
-    }
-
-    const task = params.runtimeDefinition.tasks.get(params.taskKey);
-    if (!task) return [];
-
-    const metadata = isRecord(task.metadata) ? task.metadata : {};
-    const executor = typeof metadata.executor === 'string' ? metadata.executor : 'noop';
-    const inputBindings = isRecord(metadata.inputBindings) ? metadata.inputBindings : {};
-    const resolvedPayload = resolveWorkflowBindingValue(inputBindings, {
-      state: params.state,
-      run: params.runContext,
-      item: params.item,
-    });
-    const inputPayload = isRecord(resolvedPayload) ? resolvedPayload : {};
-    const agentDefinitionId = this.resolveWorkflowTaskAgentDefinitionId(
-      task,
-      params.state,
-      params.runtimeDefinition.agentIdsByKey,
-    );
-    const workflowContext: GenerationWorkflowRuntimeContext = {
-      workflowRunId: params.workflowRunId,
-      workflowDefinitionId: params.workflowDefinitionId,
-      taskKey: params.taskKey,
-      agentDefinitionId,
-      agentMap: {
-        ...params.runtimeDefinition.agentMap,
-        ...(agentDefinitionId ? { [params.taskKey]: agentDefinitionId } : {}),
-      },
-    };
-
-    const existingStatus = await this.getWorkflowTaskResultStatus(
-      params.workflowRunId,
-      params.taskKey,
-      params.taskInstanceKey,
-    );
-    if (existingStatus && existingStatus !== 'failed') {
-      return [];
-    }
-    if (!existingStatus) {
-      const reserved = await this.reserveWorkflowTaskDispatch({
-        workflowRunId: params.workflowRunId,
-        workflowDefinitionId: params.workflowDefinitionId,
-        workspaceId: params.workspaceId,
-        taskKey: params.taskKey,
-        taskInstanceKey: params.taskInstanceKey,
-        inputPayload,
-      });
-      if (!reserved) {
-        return [];
-      }
-    }
-
-    if (executor === 'noop') {
-      const now = new Date();
-      await this.upsertWorkflowTaskResult({
-        workflow: workflowContext,
-        workspaceId: params.workspaceId,
-        taskInstanceKey: params.taskInstanceKey,
-        status: 'completed',
-        inputPayload,
-        output: {},
-        statePatch: {},
-        attempts: 1,
-        lastError: null,
-        startedAt: now,
-        completedAt: now,
-      });
-      await this.mergeWorkflowRunState({
-        runId: params.workflowRunId,
-        status: 'in_progress',
-        currentTaskKey: params.taskKey,
-        currentTaskInstanceKey: params.taskInstanceKey,
-      });
-      return this.dispatchWorkflowTransitions({
-        workspaceId: params.workspaceId,
-        workflowRunId: params.workflowRunId,
-        workflowDefinitionId: params.workflowDefinitionId,
-        runtimeDefinition: params.runtimeDefinition,
-        runContext: params.runContext,
-        state: params.state,
-        fromTaskKey: params.taskKey,
-      });
-    }
-
-    if (executor === 'job') {
-      const jobType = typeof metadata.jobType === 'string' ? (metadata.jobType as JobType) : null;
-      if (!jobType) {
-        throw new Error(`Workflow task ${params.taskKey} is missing metadata.jobType`);
-      }
-      await this.upsertWorkflowTaskResult({
-        workflow: workflowContext,
-        workspaceId: params.workspaceId,
-        taskInstanceKey: params.taskInstanceKey,
-        status: 'pending',
-        inputPayload,
-        output: {},
-        statePatch: {},
-        attempts: 0,
-        lastError: null,
-        startedAt: null,
-        completedAt: null,
-      });
-      let jobId: string;
-      try {
-        jobId = await this.addJob(
-          jobType,
-          {
-            ...inputPayload,
-            workflow: workflowContext,
-          } as JobData,
-          { workspaceId: params.workspaceId, maxRetries: 1 },
-        );
-      } catch (error) {
-        await this.upsertWorkflowTaskResult({
-          workflow: workflowContext,
-          workspaceId: params.workspaceId,
-          taskInstanceKey: params.taskInstanceKey,
-          status: 'failed',
-          inputPayload,
-          output: {},
-          statePatch: {},
-          attempts: 0,
-          lastError: {
-            name: error instanceof Error ? error.name : 'Error',
-            message: error instanceof Error ? error.message : String(error),
-          },
-          startedAt: null,
-          completedAt: new Date(),
-        });
-        throw error;
-      }
-      await this.mergeWorkflowRunState({
-        runId: params.workflowRunId,
-        status: 'in_progress',
-        currentTaskKey: params.taskKey,
-        currentTaskInstanceKey: params.taskInstanceKey,
-      });
-      return [{
-        taskKey: params.taskKey,
-        taskInstanceKey: params.taskInstanceKey,
-        executor,
-        jobType,
-        jobId,
-      }];
-    }
-
-    throw new Error(`Unsupported workflow executor "${executor}" for task ${params.taskKey}`);
+    return flowDispatchWorkflowTask<JobType>(params, this.buildFlowDispatchDeps());
   }
 
   private buildFlowDispatchDeps(): WorkflowDispatchDeps<JobType> {
@@ -1207,6 +1034,11 @@ export class QueueManager {
         this.markExecutionRunStatus(runId, status),
       dispatchTask: (p) => this.dispatchWorkflowTask(p),
       isJoinReady: (p) => this.isWorkflowJoinTransitionReady(p),
+      getTaskResultStatus: (runId, taskKey, instanceKey) =>
+        this.getWorkflowTaskResultStatus(runId, taskKey, instanceKey),
+      reserveTaskDispatch: (p) => this.reserveWorkflowTaskDispatch(p),
+      upsertTaskResult: (p) => this.upsertWorkflowTaskResult(p),
+      enqueueJob: (type, data, opts) => this.addJob(type, data as unknown as JobData, opts),
     };
   }
 
