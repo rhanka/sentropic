@@ -1088,6 +1088,8 @@ export class QueueManager {
       executors: {
         chat_message: (data, signal) =>
           this.processChatMessage(data as ChatMessageJobData, signal),
+        document_summary: (data, signal, context) =>
+          this.processDocumentSummary(data as DocumentSummaryJobData, context.jobId, signal),
         docx_generate: (data, signal, context) =>
           this.processDocxGenerate(data as DocxGenerateJobData, context.jobId, signal),
         executive_summary: (data, signal) =>
@@ -1134,8 +1136,35 @@ export class QueueManager {
         await this.notifyJobEvent(row.id);
         return true;
       },
-      // Slice 7.F.4j will bind the document_summary terminal mirror.
-      onTerminalFailure: async () => {},
+      onTerminalFailure: async (row, error, jobData) => {
+        if (row.type !== 'document_summary') {
+          return;
+        }
+        try {
+          const documentId =
+            typeof (jobData as { documentId?: unknown })?.documentId === 'string'
+              ? (jobData as { documentId: string }).documentId
+              : null;
+          if (!documentId) {
+            return;
+          }
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          const safe = this.sanitizePgText(`Échec: ${message}`).slice(0, 5000);
+          await db.run(sql`
+            UPDATE context_documents
+            SET status = 'failed',
+                data = jsonb_set(coalesce(data, '{}'::jsonb), '{summary}', to_jsonb(${safe}::text), true),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ${documentId}
+          `);
+
+          const streamId = `document_${documentId}`;
+          const sequence = await getNextSequence(streamId);
+          await writeStreamEvent(streamId, 'error', { message }, sequence);
+        } catch {
+          // ignore
+        }
+      },
     };
     return this.cachedJobRunnerDeps;
   }
@@ -1734,242 +1763,8 @@ export class QueueManager {
    * Traiter un job individuel
    */
   private async processJob(job: JobQueueRow): Promise<void> {
-    // Two-path bridge (BR26 Lot 7 slice 7.F.4): job types whose
-    // executor binding has been migrated to `@sentropic/flow/runJob`
-    // route through the package shell; the remaining ones fall
-    // through to the legacy in-place `switch` below. Slices
-    // 7.F.4a..j peel one executor at a time until the switch is
-    // empty and the legacy body can be deleted.
     const runnerDeps = this.getJobRunnerDeps();
-    const candidateJobType = job.type as JobType;
-    if (runnerDeps.executors[candidateJobType]) {
-      return flowRunJob<JobQueueRow, JobType, JobData>(job, runnerDeps);
-    }
-
-    const jobId = job.id;
-    const jobType = job.type as JobType;
-    const jobData = JSON.parse(job.data) as JobData;
-    const workflow = this.getGenerationWorkflowContextForJobData(jobData);
-    const workflowTaskInstanceKey = this.getWorkflowTaskInstanceKey(jobType, jobData);
-    const workspaceId = job.workspaceId ?? ADMIN_WORKSPACE_ID;
-
-    const getRetryMeta = (value: unknown): { attempt: number; maxRetries: number } => {
-      if (!value || typeof value !== 'object') return { attempt: 0, maxRetries: 0 };
-      const retry = (value as { _retry?: unknown })._retry;
-      if (!retry || typeof retry !== 'object') return { attempt: 0, maxRetries: 0 };
-      const attemptRaw = (retry as { attempt?: unknown }).attempt;
-      const maxRaw = (retry as { maxRetries?: unknown }).maxRetries;
-      const attempt = typeof attemptRaw === 'number' && Number.isFinite(attemptRaw) ? attemptRaw : Number(attemptRaw);
-      const maxRetries = typeof maxRaw === 'number' && Number.isFinite(maxRaw) ? maxRaw : Number(maxRaw);
-      return {
-        attempt: Number.isFinite(attempt) ? Math.max(0, Math.floor(attempt)) : 0,
-        maxRetries: Number.isFinite(maxRetries) ? Math.max(0, Math.floor(maxRetries)) : 0,
-      };
-    };
-
-    const { attempt: retryAttempt, maxRetries: retryMax } = getRetryMeta(jobData);
-
-    const isRetryableInitiativeError = (err: unknown): boolean => {
-      const msg = err instanceof Error ? err.message : String(err);
-      const lowerMsg = msg.toLowerCase();
-      // JSON/format issues (LLM returned non-JSON or concatenated junk)
-      if (msg.includes('Erreur lors du parsing') || msg.includes('Invalid JSON') || msg.includes('Unexpected non-whitespace character') || msg.includes('No JSON object boundaries')) {
-        return true;
-      }
-      // Missing scores arrays leading to validateScores crash
-      if (msg.includes("Cannot read properties of undefined (reading 'map')")) {
-        return true;
-      }
-      // Transient network/OpenAI-ish issues (best-effort)
-      if (
-        msg.includes('429') ||
-        lowerMsg.includes('rate limit') ||
-        msg.includes('ECONNRESET') ||
-        msg.includes('ETIMEDOUT') ||
-        msg.includes('ENOTFOUND')
-      ) {
-        return true;
-      }
-      return false;
-    };
-
-    const isRetryableWorkflowError = (err: unknown): boolean => {
-      if (isRetryableInitiativeError(err)) {
-        return true;
-      }
-      const msg = err instanceof Error ? err.message : String(err);
-      const lowerMsg = msg.toLowerCase();
-      return (
-        lowerMsg.includes('aborterror') ||
-        lowerMsg.includes('terminated') ||
-        lowerMsg.includes('stream aborted') ||
-        lowerMsg.includes('aborted') ||
-        lowerMsg.includes('timed out') ||
-        lowerMsg.includes('timeout') ||
-        lowerMsg.includes('temporarily unavailable') ||
-        lowerMsg.includes('upstream') ||
-        lowerMsg.includes('overloaded') ||
-        lowerMsg.includes('econnreset') ||
-        lowerMsg.includes('etimedout') ||
-        lowerMsg.includes('enotfound')
-      );
-    };
-
-    let controller: AbortController | null = null;
-
-    try {
-      console.log(`🔄 Processing job ${jobId} (${jobType})`);
-
-      // Safety: the job may have been purged between claim and processing start.
-      // Also protects against any unexpected double-processing: only proceed if job is still processing.
-      const [current] = await db
-        .select({ status: jobQueue.status })
-        .from(jobQueue)
-        .where(eq(jobQueue.id, jobId))
-        .limit(1);
-      if (!current || current.status !== 'processing') {
-        console.log(`⏭️ Skipping job ${jobId}: missing or not processing (likely purged/claimed elsewhere)`);
-        return;
-      }
-
-      controller = new AbortController();
-      this.jobControllers.set(jobId, controller);
-
-      if (workflow) {
-        await this.markWorkflowTaskStarted({
-          workflow,
-          workspaceId,
-          taskInstanceKey: workflowTaskInstanceKey,
-          jobData,
-        });
-      }
-
-      // Traiter selon le type
-      let workflowCompletion: WorkflowTaskCompletion | undefined;
-      switch (jobType) {
-        case 'document_summary':
-          await this.processDocumentSummary(
-            jobData as DocumentSummaryJobData,
-            jobId,
-            controller.signal
-          );
-          break;
-        default:
-          throw new Error(`Unknown job type: ${jobType}`);
-      }
-
-      if (workflow) {
-        await this.completeWorkflowTask({
-          workflow,
-          workspaceId,
-          taskInstanceKey: workflowTaskInstanceKey,
-          jobData,
-          completion: workflowCompletion,
-        });
-      }
-
-      // Marquer comme terminé
-      await db.run(sql`
-        UPDATE job_queue 
-        SET status = 'completed', completed_at = ${new Date()}
-        WHERE id = ${jobId}
-      `);
-      await this.notifyJobEvent(jobId);
-
-      console.log(`✅ Job ${jobId} completed successfully`);
-    } catch (error) {
-      console.error(`❌ Job ${jobId} failed:`, error);
-
-      // Retry logic (bounded) for workflow jobs on transient/provider failures.
-      // IMPORTANT: only suppress retries for explicit local cancellations.
-      const wasCancelledLocally = controller?.signal.aborted === true;
-      if (workflow && retryMax > 0 && retryAttempt < retryMax && !wasCancelledLocally && isRetryableWorkflowError(error)) {
-        const nextAttempt = retryAttempt + 1;
-        const jobDataRecord = jobDataToRecord(jobData);
-        const nextData =
-          jobData && typeof jobData === 'object'
-            ? { ...jobDataRecord, _retry: { attempt: nextAttempt, maxRetries: retryMax } }
-            : { _retry: { attempt: nextAttempt, maxRetries: retryMax } };
-        const msg = error instanceof Error ? error.message : 'Unknown error';
-        await this.upsertWorkflowTaskResult({
-          workflow,
-          workspaceId,
-          taskInstanceKey: workflowTaskInstanceKey,
-          status: 'pending',
-          inputPayload: nextData,
-          output: {},
-          statePatch: {},
-          attempts: retryAttempt + 1,
-          lastError: {
-            name: error instanceof Error ? error.name : 'Error',
-            message: msg,
-          },
-          startedAt: null,
-          completedAt: null,
-        });
-        await db.run(sql`
-          UPDATE job_queue
-          SET status = 'pending',
-              data = ${JSON.stringify(nextData)},
-              error = ${`retry ${nextAttempt}/${retryMax}: ${msg}`},
-              started_at = NULL,
-              completed_at = NULL
-          WHERE id = ${jobId}
-        `);
-        await this.notifyJobEvent(jobId);
-        console.warn(`🔁 Retrying job ${jobId} (${jobType}) attempt ${nextAttempt}/${retryMax}`);
-        return;
-      }
-
-      if (workflow) {
-        await this.failWorkflowTask({
-          workflow,
-          workspaceId,
-          taskInstanceKey: workflowTaskInstanceKey,
-          jobData,
-          error,
-        });
-      }
-
-      // Marquer comme échoué
-      await db.run(sql`
-        UPDATE job_queue 
-        SET status = 'failed', error = ${error instanceof Error ? error.message : 'Unknown error'}
-        WHERE id = ${jobId}
-      `);
-      await this.notifyJobEvent(jobId);
-
-      // Best-effort: also propagate failure to context_documents for document_summary jobs,
-      // so the UI can show `failed` without having to inspect job_queue.
-      if (jobType === 'document_summary') {
-        try {
-          const docId =
-            typeof (jobData as { documentId?: unknown })?.documentId === 'string'
-              ? (jobData as { documentId: string }).documentId
-              : null;
-          if (docId) {
-            const msg = error instanceof Error ? error.message : 'Unknown error';
-            const safe = this.sanitizePgText(`Échec: ${msg}`).slice(0, 5000);
-            await db.run(sql`
-              UPDATE context_documents
-              SET status = 'failed',
-                  data = jsonb_set(coalesce(data, '{}'::jsonb), '{summary}', to_jsonb(${safe}), true),
-                  updated_at = CURRENT_TIMESTAMP
-              WHERE id = ${docId}
-            `);
-
-            // Best-effort: also stream an error for observers (streamId derived from documentId).
-            const streamId = `document_${docId}`;
-            const seq = await getNextSequence(streamId);
-            await writeStreamEvent(streamId, 'error', { message: msg }, seq);
-          }
-        } catch {
-          // ignore
-        }
-      }
-    } finally {
-      this.jobControllers.delete(jobId);
-    }
+    return flowRunJob<JobQueueRow, JobType, JobData>(job, runnerDeps);
   }
 
   /**

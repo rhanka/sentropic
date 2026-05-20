@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../../src/db/client';
 import {
   ADMIN_WORKSPACE_ID,
+  contextDocuments,
   executionRuns,
   jobQueue,
   workflowDefinitionTasks,
@@ -18,10 +19,25 @@ import { queueManager } from '../../../src/services/queue-manager';
 import { createId } from '../../../src/utils/id';
 import { cleanupAuthData, createAuthenticatedUser } from '../../utils/auth-helper';
 
+const streamEvents: Array<{ streamId: string; eventType: string; data: unknown; sequence: number }> = [];
+let seqByStream = new Map<string, number>();
+vi.mock('../../../src/services/stream-service', async () => ({
+  getNextSequence: async (streamId: string) => {
+    const next = (seqByStream.get(streamId) ?? 0) + 1;
+    seqByStream.set(streamId, next);
+    return next;
+  },
+  writeStreamEvent: async (streamId: string, eventType: string, data: unknown, sequence: number) => {
+    streamEvents.push({ streamId, eventType, data, sequence });
+  },
+}));
+
 describe('PostgresJobQueue adapter', () => {
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
 
   beforeEach(async () => {
+    streamEvents.length = 0;
+    seqByStream = new Map<string, number>();
     user = await createAuthenticatedUser('editor');
   });
 
@@ -29,6 +45,7 @@ describe('PostgresJobQueue adapter', () => {
     (queueManager as unknown as { cancelAllInProgress: boolean }).cancelAllInProgress = false;
     vi.restoreAllMocks();
     await db.delete(jobQueue).where(eq(jobQueue.workspaceId, ADMIN_WORKSPACE_ID));
+    await db.delete(contextDocuments).where(eq(contextDocuments.contextId, 'job-queue-terminal-failure-test'));
     await db.delete(workflowTaskResults).where(eq(workflowTaskResults.workspaceId, user.workspaceId));
     await db.delete(workflowRunState).where(eq(workflowRunState.workspaceId, user.workspaceId));
     await db.delete(executionRuns).where(eq(executionRuns.workspaceId, user.workspaceId));
@@ -149,6 +166,7 @@ describe('PostgresJobQueue adapter', () => {
     'organization_enrich',
     'docx_generate',
     'chat_message',
+    'document_summary',
   ])('registers %s on the flow job runner bridge', (jobType) => {
     const deps = (queueManager as unknown as {
       getJobRunnerDeps: () => { executors: Record<string, unknown> };
@@ -248,6 +266,57 @@ describe('PostgresJobQueue adapter', () => {
     expect(row).toMatchObject({
       status: 'completed',
       error: 'Request was aborted',
+    });
+  });
+
+  it('mirrors document_summary terminal failures through the flow job runner hook', async () => {
+    const documentId = createId();
+    await db.insert(contextDocuments).values({
+      id: documentId,
+      workspaceId: ADMIN_WORKSPACE_ID,
+      contextType: 'organization',
+      contextId: 'job-queue-terminal-failure-test',
+      filename: 'failure.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 42,
+      sourceType: 'local',
+      storageKey: 'documents/failure.pdf',
+      status: 'processing',
+      data: {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const deps = (queueManager as unknown as {
+      getJobRunnerDeps: () => {
+        onTerminalFailure: (row: unknown, error: unknown, jobData: unknown) => Promise<void>;
+      };
+    }).getJobRunnerDeps();
+
+    await deps.onTerminalFailure(
+      {
+        id: createId(),
+        type: 'document_summary',
+        workspaceId: ADMIN_WORKSPACE_ID,
+        data: JSON.stringify({ documentId }),
+      },
+      new Error('Summarizer exploded'),
+      { documentId },
+    );
+
+    const [doc] = await db
+      .select({ status: contextDocuments.status, data: contextDocuments.data })
+      .from(contextDocuments)
+      .where(eq(contextDocuments.id, documentId))
+      .limit(1);
+    expect(doc).toMatchObject({
+      status: 'failed',
+      data: expect.objectContaining({ summary: 'Échec: Summarizer exploded' }),
+    });
+    expect(streamEvents).toContainEqual({
+      streamId: `document_${documentId}`,
+      eventType: 'error',
+      data: { message: 'Summarizer exploded' },
+      sequence: 1,
     });
   });
 
