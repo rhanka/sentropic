@@ -60,6 +60,12 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
   - Verification: `make test-skills ENV=test-feat-agent-sandbox-skills` 99/99 green on the closing commit.
   - Closes: per BR19-D5 timing decision.
 
+- **BR19-N3 — `caller.templateRenderer` adapter introduced (2026-05-20, Wave D step 1.C)**
+  - Context: `document_generate` template DOCX sub-path (`action=generate && format=docx && templateId != null`) routes to legacy `generateDocxForEntity` (in `api/src/services/docx-generation.ts`) which loads workspace/initiative/folder records from the DB and renders an in-template Word document. `@sentropic/skills` MUST NOT import API/DB code, so the legacy function cannot be ported into the bundle.
+  - Resolution: introduce a thin injected adapter `TemplateRenderer` (in `packages/skills/src/types/adapters.ts`) with `renderTemplate(args): Promise<{ buffer, fileName, mimeType }>` mirroring the existing `DocxGenerateRequest` shape (templateId, entityType, entityId, workspaceId, optional provided/controls/locale). The bundle handler calls `caller.templateRenderer.renderTemplate(...)`; if `caller.templateRenderer == null`, throws a clear deferred-binding error.
+  - Wire-up: deferred to BR19-D3 (Wave D closing rebind) — chat-service will provide the adapter wrapping `generateDocxForEntity`, then delete `tools.ts` legacy dispatch.
+  - Impact: pure interface addition in `packages/skills/src/types/`; no runtime DB knowledge in the package.
+
 - **BR19-D1 — Persistence decision (Lot 3 outcome, BR19-Q6)**
   - Decision: in-memory `SkillRegistry` is sufficient for v0.1. No `skill_metadata` Postgres table is added in this branch; **no `BR19-EX1` is declared** and `api/drizzle/*.sql` is not touched.
   - Rationale: (1) Lot 5 (`tools.ts` migration) only needs runtime registration of built-in skills at API boot — no DB lookup required. (2) Marketplace audit + admin UI listing — the use cases that would justify a `skill_metadata` table — are out of scope (BR-27 / BR-19b). (3) The `SkillRegistry` interface is unchanged regardless of backing store, so a future `PgSkillRegistry` is a drop-in adapter with no breaking change.
