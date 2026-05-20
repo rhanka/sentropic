@@ -37,14 +37,34 @@ import type { WorkflowTaskCompletion } from './dispatch.js';
 // ---------------------------------------------------------------------------
 
 /**
+ * Identity context passed to each executor binding. Most job executors
+ * only need `(data, signal)`, but publishing/streaming jobs also need
+ * the claimed queue row identity to write status/result side-effects.
+ */
+export interface JobRunnerExecutorContext<
+  TJobRow = unknown,
+  TJobType extends string = string,
+> {
+  row: TJobRow;
+  jobId: string;
+  jobType: TJobType;
+  workspaceId: string;
+  workflowTaskInstanceKey: string;
+}
+
+/**
  * Executor binding: a partial implementation of a single job type's
  * business logic. Returns an optional `WorkflowTaskCompletion` which
  * `runJob` will forward to `completeWorkflowTask` (so executors can
  * patch the run state / mark the run finished).
  */
-export type JobRunnerExecutor<TJobData = unknown> = (
+export type JobRunnerExecutor<
+  TJobData = unknown,
+  TContext = JobRunnerExecutorContext,
+> = (
   data: TJobData,
   signal: AbortSignal,
+  context: TContext,
 ) => Promise<WorkflowTaskCompletion | void>;
 
 /**
@@ -143,7 +163,9 @@ export interface JobRunnerDeps<
   notifyJobEvent(jobId: string): Promise<void>;
 
   // -- executor registry -----------------------------------------------------
-  executors: Partial<Record<TJobType, JobRunnerExecutor<TJobData>>>;
+  executors: Partial<
+    Record<TJobType, JobRunnerExecutor<TJobData, JobRunnerExecutorContext<TJobRow, TJobType>>>
+  >;
 
   // -- failure hooks (no-op in 7.F.4a; bound by later slices) ----------------
   /**
@@ -323,7 +345,14 @@ export async function runJob<
     if (!executor) {
       throw new Error(`Unknown job type: ${jobType}`);
     }
-    const workflowCompletion = (await executor(jobData, controller.signal)) ?? undefined;
+    const workflowCompletion =
+      (await executor(jobData, controller.signal, {
+        row,
+        jobId,
+        jobType,
+        workspaceId,
+        workflowTaskInstanceKey,
+      })) ?? undefined;
 
     if (workflow) {
       await deps.completeWorkflowTask({
