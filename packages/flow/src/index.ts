@@ -111,6 +111,13 @@ export type {
   StartWorkflowParams,
 } from './flow-runtime.js';
 
+export type {
+  ProcessingLoopDeps,
+  ProcessingLoopSettings,
+  QueueClass,
+} from './processing-loop.js';
+export { runProcessingLoop } from './processing-loop.js';
+
 // ---------------------------------------------------------------------------
 // Seed catalogs (pure data) — BR-26 Lot 5
 // ---------------------------------------------------------------------------
