@@ -39,3 +39,22 @@ export interface WorkflowRuntimeDefinition {
   agentMap: Record<string, string>;
   agentIdsByKey: Record<string, string>;
 }
+
+/**
+ * Workflow context attached to job payloads + task results so the
+ * runtime can resolve back to the originating run + task + agent
+ * after a queue lease.
+ *
+ * Real reorganization (BR-26 Lot 7): lifted from
+ * `api/src/services/queue-manager.ts` where it lived as
+ * `GenerationWorkflowRuntimeContext`. queue-manager keeps the
+ * historical name as an alias.
+ */
+export interface WorkflowRuntimeContext {
+  workflowRunId: string;
+  workflowDefinitionId: string;
+  taskKey: string;
+  agentDefinitionId: string | null;
+  /** task key → agent definition ID */
+  agentMap: Record<string, string>;
+}

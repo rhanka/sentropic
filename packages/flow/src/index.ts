@@ -72,6 +72,7 @@ export type { GenerationPromptOverride } from './agent-prompt-overrides.js';
 export { resolveGenerationPromptOverrideFromConfig } from './agent-prompt-overrides.js';
 
 export type {
+  WorkflowRuntimeContext,
   WorkflowRuntimeDefinition,
   WorkflowTaskExecutionDefinition,
   WorkflowTransitionDefinition,
