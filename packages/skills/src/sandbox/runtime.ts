@@ -14,6 +14,10 @@ import {
   DOCX_BRIDGE_BOOTSTRAP,
   type DocxHostBridge,
 } from './docx-host-bridge.js';
+import {
+  PPTX_BRIDGE_BOOTSTRAP,
+  type PptxHostBridge,
+} from './pptx-host-bridge.js';
 
 /**
  * Standardized error codes surfaced as `SandboxResult.errorCode` so chat-core
@@ -80,6 +84,7 @@ export interface SandboxHostAdapters {
  */
 export interface SandboxExecuteBridges {
   readonly docx?: DocxHostBridge;
+  readonly pptx?: PptxHostBridge;
 }
 
 /**
@@ -169,7 +174,11 @@ export interface IsolatedVmScript {
  * the bridges. The final `return` value of `__userMain` is copied back to the
  * host as the sandbox result.
  */
-function buildSandboxBootstrap(userCode: string, withDocxBridge: boolean): string {
+function buildSandboxBootstrap(
+  userCode: string,
+  withDocxBridge: boolean,
+  withPptxBridge: boolean,
+): string {
   return `
 "use strict";
 const __noop = async () => { throw new Error('sandbox: host bridge not exposed'); };
@@ -190,6 +199,7 @@ const fetch = (typeof __hostFetch !== 'undefined' && __hostFetch)
   ? __callBridge(__hostFetch)
   : undefined;
 ${withDocxBridge ? DOCX_BRIDGE_BOOTSTRAP : ''}
+${withPptxBridge ? PPTX_BRIDGE_BOOTSTRAP : ''}
 const __userMain = async (input) => {
 ${userCode}
 };
@@ -254,6 +264,21 @@ async function injectDocxBridge(
   ivm: IsolatedVmModuleShape,
   context: IsolatedVmContext,
   bridge: DocxHostBridge,
+): Promise<void> {
+  for (const [name, fn] of Object.entries(bridge.hostFns)) {
+    await context.global.set(name, new ivm.Reference(fn));
+  }
+}
+
+/**
+ * Install the pptx host bridge references onto the isolate context. Mirror of
+ * `injectDocxBridge` — exposes each `__hostPptx*` host function as an
+ * `ivm.Reference`. No host modules are leaked.
+ */
+async function injectPptxBridge(
+  ivm: IsolatedVmModuleShape,
+  context: IsolatedVmContext,
+  bridge: PptxHostBridge,
 ): Promise<void> {
   for (const [name, fn] of Object.entries(bridge.hostFns)) {
     await context.global.set(name, new ivm.Reference(fn));
@@ -354,7 +379,16 @@ export function createIsolatedVmRuntime(
           await injectDocxBridge(resolvedIvm, context, docxBridge);
         }
 
-        const bootstrap = buildSandboxBootstrap(skill.sandboxEntry, Boolean(docxBridge));
+        const pptxBridge = opts.bridges?.pptx;
+        if (pptxBridge) {
+          await injectPptxBridge(resolvedIvm, context, pptxBridge);
+        }
+
+        const bootstrap = buildSandboxBootstrap(
+          skill.sandboxEntry,
+          Boolean(docxBridge),
+          Boolean(pptxBridge),
+        );
         script = await isolate.compileScript(bootstrap);
 
         const raw = await script.run(context, {
