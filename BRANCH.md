@@ -74,19 +74,19 @@ Replace the Gemini 3.1 Pro catalog entry with Gemini 3.5 Flash without adding a 
   - [x] Confirm command style: `make ... ENV=test-fix-gemini-35-flash` with `ENV` last.
   - [x] Confirm scope boundaries.
 
-- [ ] **Lot 1 — Replace Gemini Pro catalog entry**
+- [x] **Lot 1 — Replace Gemini Pro catalog entry**
   - [x] Add failing tests that expect Gemini catalog to expose `gemini-3.5-flash` and no longer expose `gemini-3.1-pro-preview-customtools`.
   - [x] Replace the llm-mesh Gemini Pro profile with Gemini 3.5 Flash.
   - [x] Update chat-service context budget metadata for the new model id.
   - [x] Add a legacy cutover from `gemini-3.1-pro-preview-customtools` to `gemini-3.5-flash`.
-  - [ ] Update API/UI/package tests that reference the replaced Gemini model.
-  - [ ] Update specs that document the active Gemini catalog.
-  - [ ] Lot gate:
+  - [x] Update API/UI/package tests that reference the replaced Gemini model.
+  - [x] Update specs that document the active Gemini catalog.
+  - [x] Lot gate:
     - [x] Red test observed before implementation: `make test-llm-mesh ENV=test-fix-gemini-35-flash` failed on missing `gemini-3.5-flash` catalog profile.
     - [x] `make test-llm-mesh ENV=test-fix-gemini-35-flash`
-    - [ ] `make test-api-unit SCOPE="tests/unit/model-selection-legacy.test.ts tests/unit/gemini-tool-handoff.test.ts tests/unit/llm-runtime-stream.test.ts tests/unit/chat-service-tools.test.ts" API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
+    - [x] `make test-api-unit SCOPE="tests/unit/model-selection-legacy.test.ts tests/unit/gemini-tool-handoff.test.ts tests/unit/llm-runtime-stream.test.ts tests/unit/chat-service-tools.test.ts" API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
     - [x] `make test-api-endpoints SCOPE="tests/api/models.test.ts tests/api/me.test.ts" API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
-    - [ ] `make test-ui SCOPE=tests/utils/user-ai-settings-events.test.ts API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
+    - [x] `make test-ui SCOPE=tests/utils/user-ai-settings-events.test.ts API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
     - [x] `make typecheck-llm-mesh ENV=test-fix-gemini-35-flash`
     - [x] `make typecheck-api API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
     - [x] `make lint-api API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
@@ -97,12 +97,12 @@ Replace the Gemini 3.1 Pro catalog entry with Gemini 3.5 Flash without adding a 
   - [ ] Chat model picker shows `Gemini 3.5 Flash` and can save it as the user default.
   - [ ] Existing Gemini Flash Lite remains available.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Update existing specs only; no temporary branch spec required.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Update existing specs only; no temporary branch spec required.
 
 - [ ] **Lot N — Final validation**
-  - [ ] Review `git diff --stat` and scope boundaries.
-  - [ ] Run targeted verification commands.
-  - [ ] Commit with `make commit MSG="fix: replace gemini pro with flash"`.
+  - [x] Review `git diff --stat` and scope boundaries.
+  - [x] Run targeted verification commands.
+  - [x] Commit runtime/docs alignment with `make commit MSG="test: align gemini flash runtime coverage"`.
   - [ ] Push branch before UAT.
   - [ ] Hand off UAT instructions to the user.
