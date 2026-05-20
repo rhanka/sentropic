@@ -1088,6 +1088,8 @@ export class QueueManager {
       executors: {
         executive_summary: (data, signal) =>
           this.processExecutiveSummary(data as ExecutiveSummaryJobData, signal),
+        organization_batch_create: (data, signal) =>
+          this.processOrganizationBatchCreate(data as OrganizationBatchCreateJobData, signal),
         organization_targets_join: (data, signal) =>
           this.processOrganizationTargetsJoin(data as OrganizationTargetsJoinJobData, signal),
       },
@@ -1821,12 +1823,6 @@ export class QueueManager {
           workflowCompletion = (await this.processOrganizationEnrich(
             jobData as OrganizationEnrichJobData,
             jobId,
-            controller.signal,
-          )) ?? undefined;
-          break;
-        case 'organization_batch_create':
-          workflowCompletion = (await this.processOrganizationBatchCreate(
-            jobData as OrganizationBatchCreateJobData,
             controller.signal,
           )) ?? undefined;
           break;
