@@ -112,9 +112,9 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
 
 - [ ] **Lot 2.5 — CI/CD redressement (SCW Registry + Kapsule rollout)**
   - [ ] Delete `.github/workflows/build-and-push-images.yml` (BR37-EX2 revoked).
-  - [ ] Amend `ci.yml` `publish-api-image` job with env override `API_IMAGE_NAME=sentropic-api` and a step that pushes a dual alias tag (`feat-deploy-poc-k8s` on branch, `main` on main).
-  - [ ] Amend `ci.yml` `publish-ui-image` job with the same pattern and `UI_IMAGE_NAME=sentropic-ui`.
-  - [ ] Add new job `deploy-poc-k8s` in `ci.yml` with `needs: [publish-api-image, publish-ui-image]`, branch-conditional, that loads kubeconfig from `KUBECONFIG_POC_B64` GH secret, runs `kubectl -n sentropic rollout restart deployment/api deployment/ui` and `kubectl rollout status` with timeout. (BR37-EX4)
+  - [x] Amend `ci.yml` `publish-api-image` job with env override `API_IMAGE_NAME=sentropic-api` and a step that pushes a dual alias tag (`feat-deploy-poc-k8s` on branch, `main` on main).
+  - [x] Amend `ci.yml` `publish-ui-image` job with the same pattern and `UI_IMAGE_NAME=sentropic-ui`.
+  - [x] Add new job `deploy-poc-k8s` in `ci.yml` with `needs: [publish-api-image, publish-ui-image]`, branch-conditional, that loads kubeconfig from `KUBECONFIG_POC_B64` GH secret, runs `kubectl -n sentropic rollout restart deployment/api deployment/ui` and `kubectl rollout status` with timeout. (BR37-EX4)
   - [ ] Patch `deploy/scw/30-api.yaml` to image `${SCW_REGISTRY_HOST}/sentropic-api:feat-deploy-poc-k8s` with `imagePullPolicy: Always`.
   - [ ] Patch `deploy/scw/40-ui.yaml` to image `${SCW_REGISTRY_HOST}/sentropic-ui:feat-deploy-poc-k8s` with `imagePullPolicy: Always`.
   - [ ] Patch `deploy/scw/10-rbac.yaml` to add `imagePullSecrets: [{ name: sentropic-registry }]` on ServiceAccount `sentropic-app`.
