@@ -139,6 +139,14 @@ describe('PostgresJobQueue adapter', () => {
     return { workflowDefinitionId, workflowRunId };
   };
 
+  it('registers organization_batch_create on the flow job runner bridge', () => {
+    const deps = (queueManager as unknown as {
+      getJobRunnerDeps: () => { executors: Record<string, unknown> };
+    }).getJobRunnerDeps();
+
+    expect(deps.executors.organization_batch_create).toEqual(expect.any(Function));
+  });
+
   it('queueManager.cancelJob delegates cancellation to the JobQueue adapter', async () => {
     const jobId = createId();
     await db.insert(jobQueue).values({
