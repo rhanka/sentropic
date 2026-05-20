@@ -80,15 +80,21 @@ export type {
 
 export type {
   DispatchScope,
+  EnqueueJobOptions,
   ExecutionRunStatus,
+  ReserveTaskDispatchParams,
+  UpsertTaskResultParams,
   WorkflowDispatchDeps,
   WorkflowJoinsDispatchParams,
+  WorkflowTaskDispatchParams,
   WorkflowTaskRuntimeStatus,
   WorkflowTransitionsDispatchParams,
 } from './dispatch.js';
 export {
   dispatchReadyWorkflowJoins,
+  dispatchWorkflowTask,
   dispatchWorkflowTransitions,
+  resolveWorkflowTaskAgentDefinitionId,
 } from './dispatch.js';
 
 export type {
