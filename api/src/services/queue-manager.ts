@@ -1086,6 +1086,8 @@ export class QueueManager {
       },
       notifyJobEvent: (jobId) => this.notifyJobEvent(jobId),
       executors: {
+        chat_message: (data, signal) =>
+          this.processChatMessage(data as ChatMessageJobData, signal),
         docx_generate: (data, signal, context) =>
           this.processDocxGenerate(data as DocxGenerateJobData, context.jobId, signal),
         executive_summary: (data, signal) =>
@@ -1103,12 +1105,36 @@ export class QueueManager {
         organization_targets_join: (data, signal) =>
           this.processOrganizationTargetsJoin(data as OrganizationTargetsJoinJobData, signal),
       },
-      // Slice 7.F.4a — no abort/terminal hooks yet; they are bound by
-      // slices 7.F.4i (chat_message abort) and 7.F.4j (document_summary
-      // terminal mirror). The `executive_summary` binding has neither
-      // an abort branch nor a terminal-failure side-effect so these
-      // no-ops are behaviorally correct.
-      onAbortedCancellation: async () => false,
+      onAbortedCancellation: async (row, error, jobData) => {
+        if (row.type !== 'chat_message') {
+          return false;
+        }
+        const assistantMessageId =
+          typeof (jobData as { assistantMessageId?: unknown })?.assistantMessageId === 'string'
+            ? ((jobData as { assistantMessageId: string }).assistantMessageId as string)
+            : null;
+        const reason = error instanceof Error ? error.message : 'cancelled';
+        if (assistantMessageId) {
+          try {
+            await chatService.finalizeAssistantMessageFromStream({
+              assistantMessageId,
+              reason,
+              fallbackContent: 'Réponse interrompue.',
+            });
+          } catch {
+            // ignore
+          }
+        }
+
+        await db.run(sql`
+          UPDATE job_queue
+          SET status = 'completed', completed_at = ${new Date()}, error = ${reason}
+          WHERE id = ${row.id}
+        `);
+        await this.notifyJobEvent(row.id);
+        return true;
+      },
+      // Slice 7.F.4j will bind the document_summary terminal mirror.
       onTerminalFailure: async () => {},
     };
     return this.cachedJobRunnerDeps;
@@ -1743,14 +1769,6 @@ export class QueueManager {
 
     const { attempt: retryAttempt, maxRetries: retryMax } = getRetryMeta(jobData);
 
-    const isAbort = (err: unknown): boolean => {
-      if (!err) return false;
-      if (err instanceof DOMException && err.name === 'AbortError') return true;
-      if (err instanceof Error && err.name === 'AbortError') return true;
-      const msg = err instanceof Error ? err.message : String(err);
-      return msg.includes('AbortError') || msg.includes('aborted') || msg.includes('Request was aborted');
-    };
-
     const isRetryableInitiativeError = (err: unknown): boolean => {
       const msg = err instanceof Error ? err.message : String(err);
       const lowerMsg = msg.toLowerCase();
@@ -1829,9 +1847,6 @@ export class QueueManager {
       // Traiter selon le type
       let workflowCompletion: WorkflowTaskCompletion | undefined;
       switch (jobType) {
-        case 'chat_message':
-          await this.processChatMessage(jobData as ChatMessageJobData, controller.signal);
-          break;
         case 'document_summary':
           await this.processDocumentSummary(
             jobData as DocumentSummaryJobData,
@@ -1916,33 +1931,6 @@ export class QueueManager {
         });
       }
 
-      // Annulation utilisateur: pour le chat, on finalise avec le contenu partiel.
-      if (jobType === 'chat_message' && isAbort(error)) {
-        const assistantMessageId =
-          typeof (jobData as { assistantMessageId?: unknown })?.assistantMessageId === 'string'
-            ? ((jobData as { assistantMessageId: string }).assistantMessageId as string)
-            : null;
-        if (assistantMessageId) {
-          try {
-            await chatService.finalizeAssistantMessageFromStream({
-              assistantMessageId,
-              reason: error instanceof Error ? error.message : 'cancelled',
-              fallbackContent: 'Réponse interrompue.'
-            });
-          } catch {
-            // ignore
-          }
-        }
-
-        await db.run(sql`
-          UPDATE job_queue 
-          SET status = 'completed', completed_at = ${new Date()}, error = ${error instanceof Error ? error.message : 'cancelled'}
-          WHERE id = ${jobId}
-        `);
-        await this.notifyJobEvent(jobId);
-        return;
-      }
-      
       // Marquer comme échoué
       await db.run(sql`
         UPDATE job_queue 
