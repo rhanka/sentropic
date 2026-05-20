@@ -243,8 +243,8 @@ export const modelProfiles = [
   },
   {
     providerId: 'gemini',
-    modelId: 'gemini-3.1-pro-preview-customtools',
-    label: 'Gemini 3.1 Pro',
+    modelId: 'gemini-3.5-flash',
+    label: 'Gemini 3.5 Flash',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('gemini', 'advanced'),

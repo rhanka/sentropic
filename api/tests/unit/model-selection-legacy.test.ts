@@ -43,6 +43,25 @@ describe('model selection legacy cutovers', () => {
     });
   });
 
+  it('maps gemini-3.1-pro-preview-customtools to gemini-3.5-flash', () => {
+    expect(findLegacyModelCutoverRule('gemini-3.1-pro-preview-customtools')).toEqual({
+      providerId: 'gemini',
+      fromModelId: 'gemini-3.1-pro-preview-customtools',
+      toModelId: 'gemini-3.5-flash',
+    });
+
+    expect(
+      normalizeLegacyModelSelection({
+        providerId: 'gemini',
+        modelId: 'gemini-3.1-pro-preview-customtools',
+      })
+    ).toEqual({
+      providerId: 'gemini',
+      modelId: 'gemini-3.5-flash',
+      migrated: true,
+    });
+  });
+
   it('leaves non-legacy ids unchanged', () => {
     expect(
       normalizeLegacyModelSelection({

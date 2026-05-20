@@ -70,8 +70,8 @@ describe('createLlmMesh', () => {
   it('supports explicit provider/model selection pairs', async () => {
     const model = {
       providerId: 'gemini' as const,
-      modelId: 'gemini-3.1-pro-preview-customtools',
-      label: 'Gemini 3.1 Pro',
+      modelId: 'gemini-3.5-flash',
+      label: 'Gemini 3.5 Flash',
       reasoningTier: 'advanced' as const,
       defaultTaskHints: ['chat'] as const,
       capabilities: {
@@ -82,9 +82,9 @@ describe('createLlmMesh', () => {
     const adapter = buildAdapter(model);
     const mesh = createLlmMesh({ registry: createProviderRegistry([adapter]) });
 
-    await mesh.generate({ providerId: 'gemini', modelId: 'gemini-3.1-pro-preview-customtools', messages: userMessage, auth: { type: 'environment-token', envVar: 'GEMINI_API_KEY' } });
+    await mesh.generate({ providerId: 'gemini', modelId: 'gemini-3.5-flash', messages: userMessage, auth: { type: 'environment-token', envVar: 'GEMINI_API_KEY' } });
 
-    expect(adapter.generate).toHaveBeenCalledWith(expect.objectContaining({ providerId: 'gemini', modelId: 'gemini-3.1-pro-preview-customtools' }), expect.anything());
+    expect(adapter.generate).toHaveBeenCalledWith(expect.objectContaining({ providerId: 'gemini', modelId: 'gemini-3.5-flash' }), expect.anything());
   });
 
   it('fails early when the selected model does not support requested tools', async () => {
@@ -117,11 +117,11 @@ describe('createLlmMesh', () => {
 
   it('does not mark reasoning catalog models as unsupported', () => {
     const cohereReasoning = getModelProfile('cohere', 'command-a-reasoning-08-2025');
-    const geminiPro = getModelProfile('gemini', 'gemini-3.1-pro-preview-customtools');
+    const geminiFlash = getModelProfile('gemini', 'gemini-3.5-flash');
 
     expect(cohereReasoning?.reasoningTier).toBe('advanced');
     expect(cohereReasoning?.capabilities.reasoning.support).not.toBe('unsupported');
-    expect(geminiPro?.reasoningTier).toBe('advanced');
-    expect(geminiPro?.capabilities.reasoning.support).not.toBe('unsupported');
+    expect(geminiFlash?.reasoningTier).toBe('advanced');
+    expect(geminiFlash?.capabilities.reasoning.support).not.toBe('unsupported');
   });
 });
