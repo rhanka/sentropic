@@ -35,10 +35,12 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - `ui/src/lib/utils/chat-tool-scope.ts`
   - `ui/src/lib/utils/localToolStreamSync.ts`
   - `ui/src/lib/upstream/injected-script.ts`
+  - `ui/src/lib/upstream/chrome-host-adapter.ts`
   - `ui/vscode-ext/**`
   - `ui/tests/components/ChatPanel-docx-cards.test.ts`
   - `ui/tests/stores/streamHub.test.ts`
   - `ui/tests/upstream/bridge.test.ts`
+  - `ui/tests/upstream/chrome-host-adapter.test.ts`
   - `ui/tests/upstream/injected-script.test.ts`
   - `ui/tests/utils/chat-run-projection.test.ts`
   - `ui/tests/utils/chat-steer.test.ts`
@@ -130,6 +132,9 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
 - [x] `closed`: Lot 4 audit — `replayFromSeq(cursor)` (replay.ts) wraps `transport.openStream(sessionId, fromSeq)` and consumes raw `MessageEvent.data` payloads through an async iterable. Since `openStream` itself is forward-looking (see preceding `attention` item), the replay client inherits the same deferred reconciliation. The async-iterable contract, close-on-error path, and queue-then-yield semantics are self-contained in the package and do not depend on any specific server route shape, so no API change is needed to support the iterable behavior itself. Closed: contract is self-consistent; URL alignment tracked above.
 - [x] `closed`: Lot 4 audit — verified the production wire events emitted by `api/src/routes/api/streams.ts` SSE match the chat event types listed in `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` line 105 (`reasoning_delta`, `content_delta`, `tool_call_start`, `tool_call_delta`, `tool_call_result`, `status`, `error`, `done`) via `sseEvent({ eventType, streamId, sequence, data })` and the per-stream allow-list at streams.ts:332-339 (chat streamId == assistantMessageId, scoped to session owner). The current package transport returns raw `MessageEvent.data` so it does not interpret event types — consumers parse JSON at the boundary. No wire-event gap on the API side.
 - [ ] `attention`: Lot 3 gate run of `make test-ui` reported 2 failures in `ui/tests/utils/google-drive-picker.test.ts` (`google drive picker utils > returns selected file ids from the picker callback` and `... returns an empty selection when the picker is cancelled`). Signature: `TypeError: () => docsView is not a constructor` at `ui/src/lib/utils/google-drive-picker.ts:212`. Verified out-of-scope for Lot 3 (file not in Allowed Paths; no commit on this branch touches `ui/src/lib/utils/google-drive-picker.ts` or its test since baseline `28e1b1f3`). Identical signature reproducible on `origin/main` (`74f71e3b`) per `git log --oneline 28e1b1f3 -- ui/tests/utils/google-drive-picker.test.ts` returning only pre-existing commits `33d59ac0` and `91b0c7a0`. Likely vitest mock-constructability regression unrelated to chat-ui adoption. Recommend dedicated `fix/google-drive-picker-vitest-constructor` branch; do not in-line fix under BR-14a scope.
+- [x] `closed`: Lot 5 audit — Chrome upstream surface (`ui/src/lib/upstream/injected-script.ts`) is a self-contained ES5 IIFE for cross-origin content-script injection over `window.postMessage` and never imported the legacy `localTools` store. Bridge protocol unit tests (`ui/tests/upstream/{bridge,injected-script}.test.ts`) and `ui/tests/utils/extension-auth-ui.test.ts` likewise have zero coupling to the store. New `ui/src/lib/upstream/chrome-host-adapter.ts` exposes a `createChromeLocalToolsAdapter` factory implementing the package `LocalToolsAdapter` contract on top of `chrome.runtime.sendMessage`, so future Lot 6 consumers (or alternative entry points) can inject it explicitly via `setLocalToolsAdapter(...)` without depending on the package's `globalThis.chrome` fallback. Verified Chrome runtime continues to satisfy the contract natively when no adapter is injected (existing extension code paths unchanged).
+- [x] `closed`: Lot 5 audit — VSCode webview now installs an explicit `LocalToolsAdapter` via `createVsCodeLocalToolsAdapter({ bridge })` + `setLocalToolsAdapter(...)` in `ui/vscode-ext/webview-entry.ts` boot. Adapter routes `tool_execute`, `tool_permission_decide`, and `extension_tool_permissions_{list,upsert,delete}` envelopes through the existing `VsCodeBridge` (`runtime.local_tools.*` commands). `installExtensionRuntimeShim` retains responsibility for all non-local-tool extension messages (auth, config, workspace mapping, stream proxy) so the auth bridge, checkpoint/summary flows, and host messaging remain bit-identical. Host-side `ui/vscode-ext/local-tools.ts` (`VsCodeLocalToolsRuntime`) is unchanged — it is the backend served by the new adapter, not a package consumer.
+- [ ] `attention`: Lot 4 transport URL drifts (`openStream`/`postMessage`/`replayFromSeq` rows above) remain unreconciled in Lot 5 because no production consumer is wired to `createDefaultTransport` yet (verified again: `grep -rn createDefaultTransport ui/src api/src` returns only tests). Recommend reconciliation at BR-14b per-session SSE delivery, BR-14a Lot 6 (publication wiring) if a real consumer lands first, or a follow-up `fix/chat-ui-transport-wire-alignment` branch. No regression today.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -283,34 +288,26 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - [x] Run `make test-api REGISTRY=local SCOPE=tests/api/streams.test.ts API_PORT=9074 UI_PORT=5274 MAILDEV_UI_PORT=1174 ENV=test-feat-chat-ui-sdk-v2-lot4` — 2/2 passed (3.84s).
     - [x] No API compatibility changes were required; skipping `fix:` commit. Documenting Lot 4 audit findings via `docs(br14a)` commit instead.
 
-- [ ] **Lot 5 - Chrome and VSCode adoption**
-  - [ ] Confirm whether Chrome extension behavior is currently built from web app assets or a separate package surface; document the result in `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`.
-  - [ ] Rewire Chrome-facing upstream bridge code only where it consumes shared chat UI client/state behavior:
-    - `ui/src/lib/upstream/injected-script.ts`
-    - `ui/tests/upstream/bridge.test.ts`
-    - `ui/tests/upstream/injected-script.test.ts`
-    - `ui/tests/utils/extension-auth-ui.test.ts`
-  - [ ] Rewire VSCode webview and host bridge to consume package client/state contracts where applicable:
-    - `ui/vscode-ext/webview-entry.ts`
-    - `ui/vscode-ext/vscode-bridge.ts`
-    - `ui/vscode-ext/stream-proxy.ts`
-    - `ui/vscode-ext/local-tools.ts`
-    - `ui/vscode-ext/host-handler.ts`
-  - [ ] Preserve VSCode authentication bridge, local tool permissions, checkpoint/summary flows, and host messaging.
-  - [ ] Update tests:
-    - `ui/tests/vscode-ext/auth-bridge.test.ts`
-    - `ui/tests/vscode-ext/extension-runtime.test.ts`
-    - `ui/tests/vscode-ext/host-bridge-runtime.test.ts`
-    - `ui/tests/vscode-ext/local-tools.test.ts`
-    - `ui/tests/vscode-ext/stream-proxy.test.ts`
-    - `ui/tests/vscode-ext/theme-parity.test.ts`
-    - `ui/tests/vscode-ext/tool-permissions.test.ts`
-    - `ui/tests/vscode-ext/vscode-bridge.test.ts`
-  - [ ] Lot gate:
-    - [ ] Run `make typecheck-ui API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Run `make test-ui SCOPE=tests/upstream API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Run `make test-ui SCOPE=tests/vscode-ext API_PORT=9071 UI_PORT=5271 MAILDEV_UI_PORT=1171 ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Commit with selective `git add`, then `make commit MSG="feat: adopt chat ui package in extension surfaces" ENV=test-feat-chat-ui-sdk-v2`.
+- [x] **Lot 5 - Chrome and VSCode adoption**
+  - [x] Confirm whether Chrome extension behavior is currently built from web app assets or a separate package surface; document the result in `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`. (Audited: Chrome surface is the same SvelteKit web build delivered as a side-panel / content-script bundle; `ui/src/lib/upstream/injected-script.ts` is a self-contained IIFE injected into external pages over `window.postMessage` and does not import `@sentropic/chat-ui`. Local-tool transport on Chrome flows natively through `chrome.runtime.sendMessage`, which already satisfies the package `LocalToolsAdapter` contract added in Lot 5 commit 1.)
+  - [x] Rewire Chrome-facing upstream bridge code only where it consumes shared chat UI client/state behavior. Added explicit `createChromeLocalToolsAdapter` in `ui/src/lib/upstream/chrome-host-adapter.ts` implementing the package `LocalToolsAdapter` contract on top of `chrome.runtime.sendMessage`. `injected-script.ts`, `tests/upstream/bridge.test.ts`, `tests/upstream/injected-script.test.ts`, and `tests/utils/extension-auth-ui.test.ts` audited: none import the legacy localTools store, so no further rewire is required.
+  - [x] Rewire VSCode webview and host bridge to consume package client/state contracts where applicable. Added `ui/vscode-ext/local-tools-adapter.ts` exposing `createVsCodeLocalToolsAdapter` (package `LocalToolsAdapter` impl backed by the existing `VsCodeBridge`) and wired it through `setLocalToolsAdapter(...)` in `ui/vscode-ext/webview-entry.ts` boot path. `vscode-bridge.ts`, `stream-proxy.ts`, `host-handler.ts`, and the host-side `local-tools.ts` runtime audited: they sit on the host process side of the bridge and remain the single backend served by the webview adapter — no public chat-ui-package surface is appropriate for them.
+  - [x] Preserve VSCode authentication bridge, local tool permissions, checkpoint/summary flows, and host messaging. (`installExtensionRuntimeShim` still installs `globalThis.chrome.runtime` for non-localTools messages — auth status/connect, config get/set, workspace mapping, stream proxy — unchanged; the new adapter only owns local-tool envelopes.)
+  - [x] Update tests:
+    - [x] `ui/tests/vscode-ext/auth-bridge.test.ts` (no change required — covers auth bridge, untouched by adapter wiring; passes 2/2)
+    - [x] `ui/tests/vscode-ext/extension-runtime.test.ts` (no change required — covers shim; passes 3/3)
+    - [x] `ui/tests/vscode-ext/host-bridge-runtime.test.ts` (no change required — passes 2/2)
+    - [x] `ui/tests/vscode-ext/local-tools.test.ts` (no change required — host runtime unchanged; passes 11/11)
+    - [x] `ui/tests/vscode-ext/stream-proxy.test.ts` (no change required — passes 2/2)
+    - [x] `ui/tests/vscode-ext/theme-parity.test.ts` (no change required — passes 3/3)
+    - [x] `ui/tests/vscode-ext/tool-permissions.test.ts` (no change required — passes 2/2)
+    - [x] `ui/tests/vscode-ext/vscode-bridge.test.ts` (no change required — passes 4/4)
+    - [x] Added `ui/tests/vscode-ext/local-tools-adapter.test.ts` (5 tests) and `ui/tests/upstream/chrome-host-adapter.test.ts` (4 tests) covering the new adapters.
+  - [x] Lot gate:
+    - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9075 UI_PORT=5275 MAILDEV_UI_PORT=1175 ENV=test-feat-chat-ui-sdk-v2-lot5` — `svelte-check found 0 errors and 6 warnings in 5 files` (baseline preserved).
+    - [x] Run `make test-ui REGISTRY=local SCOPE=tests/upstream API_PORT=9075 UI_PORT=5275 MAILDEV_UI_PORT=1175 ENV=test-feat-chat-ui-sdk-v2-lot5` — 31/31 passed (3 files: injected-script 16, chrome-host-adapter 4, bridge 11).
+    - [x] Run `make test-ui REGISTRY=local SCOPE=tests/vscode-ext API_PORT=9075 UI_PORT=5275 MAILDEV_UI_PORT=1175 ENV=test-feat-chat-ui-sdk-v2-lot5` — 49/49 passed across 14 files including new `local-tools-adapter.test.ts` (5/5).
+    - [x] Commits on `feat/chat-ui-sdk-v2-lot5` since baseline `3ebc6549`: `d8ff6a8f` (VSCode webview LocalToolsAdapter wiring), `0b942e1a` (Chrome host adapter), `c360ebf1` (Chrome adapter tests), `3f9a00fc` (VSCode adapter tests).
 
 - [ ] **Lot 6 - Package validation and publication wiring**
   - [ ] Open `BR14a-EX1` before changing `Makefile`, `.github/workflows/**`, and package metadata.
