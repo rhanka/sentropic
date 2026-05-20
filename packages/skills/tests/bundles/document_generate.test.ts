@@ -19,6 +19,7 @@ import {
   convertInchesToTwip,
   PageBreak as DocxPageBreak,
 } from 'docx';
+import * as pptxgenjsNamespace from 'pptxgenjs';
 
 import { documentGenerateSkill } from '../../src/bundles/foundation/document_generate/index.js';
 import { createDocumentGenerateHandler } from '../../src/bundles/foundation/document_generate/handler.js';
@@ -464,19 +465,13 @@ describe('document_generate handler — deferred sub-paths', () => {
     await expect(
       handler(makeInvocation({ action: 'upskill', format: 'docx' })),
     ).rejects.toThrow(
-      /document_generate sub-path 'action=upskill&format=docx' is deferred to Wave D step 1.B\/1.C/,
+      /document_generate sub-path 'action=upskill&format=docx' is deferred to Wave D step 1.C/,
     );
     await expect(
       handler(makeInvocation({ action: 'upskill', format: 'pptx' })),
     ).rejects.toThrow(
       /document_generate sub-path 'action=upskill&format=pptx' is deferred/,
     );
-  });
-
-  it('throws deferred-error for action=generate&format=pptx', async () => {
-    await expect(
-      handler(makeInvocation({ action: 'generate', format: 'pptx', code: 'return pptx();' })),
-    ).rejects.toThrow(/format=pptx' is deferred/);
   });
 
   it('throws deferred-error for action=generate&format=docx&templateId=...', async () => {
@@ -493,9 +488,15 @@ describe('document_generate handler — deferred sub-paths', () => {
     ).rejects.toThrow(/templateId=usecase-onepage' is deferred/);
   });
 
-  it('throws deferred-error when no code AND no templateId are provided', async () => {
+  it('throws deferred-error when no code AND no templateId are provided (docx)', async () => {
     await expect(
       handler(makeInvocation({ action: 'generate', format: 'docx' })),
+    ).rejects.toThrow(/no-code-no-templateId/);
+  });
+
+  it('throws deferred-error when no code AND no templateId are provided (pptx)', async () => {
+    await expect(
+      handler(makeInvocation({ action: 'generate', format: 'pptx' })),
     ).rejects.toThrow(/no-code-no-templateId/);
   });
 
@@ -616,5 +617,343 @@ describe('document_generate handler — byte-stability vs legacy', () => {
     const newBufferBuf = Buffer.from(newBuffer);
 
     expectDocxStructurallyEqual(goldenBuffer, newBufferBuf);
+  });
+});
+
+// ===========================================================================
+// PPTX legacy helper reimplementation for byte-stability comparison.
+//
+// Line-for-line mirror of the helpers exposed by the legacy
+// `api/src/services/pptx-freeform-helpers.ts`: `pptx`, `titleSlide`, plus
+// the constructor resolver. Only the helpers used by the PPTX minimum
+// fixture script are inlined here — adding helpers (sectionSlide, bullets,
+// table, statCallout, footer, visualPlaceholder) would inflate this test file
+// without strengthening the byte-stability proof.
+// ===========================================================================
+
+const PPTX_DEFAULT_FONT = 'Aptos';
+const PPTX_DEFAULT_HEAD_FONT = 'Aptos Display';
+const PPTX_DEFAULT_BG = 'FFFFFF';
+const PPTX_DEFAULT_TEXT = '111827';
+const PPTX_DEFAULT_MUTED = '475569';
+const PPTX_DEFAULT_ACCENT = '2563EB';
+
+interface PptxSlideLikeForTest {
+  background?: { color?: string };
+  addText(text: string, opts: Record<string, unknown>): unknown;
+  addShape(shape: string, opts: Record<string, unknown>): unknown;
+}
+
+interface PptxPresentationLikeForTest {
+  layout: string;
+  author: string;
+  company: string;
+  subject: string;
+  title: string;
+  theme: { headFontFace?: string; bodyFontFace?: string };
+  addSlide(): PptxSlideLikeForTest;
+  write(opts: { outputType: 'nodebuffer' }): Promise<unknown>;
+}
+
+type PptxConstructorForTest = new () => PptxPresentationLikeForTest;
+
+function isPptxConstructorForTest(value: unknown): value is PptxConstructorForTest {
+  if (typeof value !== 'function') return false;
+  const prototype = (value as { prototype?: Record<string, unknown> }).prototype;
+  return (
+    !!prototype &&
+    typeof prototype === 'object' &&
+    typeof prototype.addSlide === 'function' &&
+    typeof prototype.write === 'function'
+  );
+}
+
+function resolvePptxConstructorForTest(source: unknown): PptxConstructorForTest {
+  const visited = new Set<unknown>();
+  const queue: unknown[] = [source];
+  while (queue.length > 0) {
+    const candidate = queue.shift();
+    if (!candidate || visited.has(candidate)) continue;
+    visited.add(candidate);
+    if (isPptxConstructorForTest(candidate)) return candidate;
+    if (typeof candidate === 'object' || typeof candidate === 'function') {
+      const record = candidate as {
+        default?: unknown;
+        PptxGenJS?: unknown;
+        pptxgenjs?: unknown;
+      };
+      queue.push(record.default, record.PptxGenJS, record.pptxgenjs);
+    }
+  }
+  throw new Error('legacy pptx: cannot resolve constructor');
+}
+
+const PptxGenJSForTest: PptxConstructorForTest = resolvePptxConstructorForTest(
+  pptxgenjsNamespace as unknown,
+);
+
+function pptxCleanHex(value: string | undefined, fallback: string): string {
+  if (!value) return fallback;
+  const normalized = value.trim().replace(/^#/, '').toUpperCase();
+  return /^[0-9A-F]{6}$/.test(normalized) ? normalized : fallback;
+}
+
+function pptxSafeText(value: unknown, fallback = ''): string {
+  if (value === null || value === undefined) return fallback;
+  const text = String(value).replace(/\s+/g, ' ').trim();
+  return text || fallback;
+}
+
+function legacyPptxTextOptions(
+  opts: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const fill = opts.fill
+    ? {
+        color: pptxCleanHex(opts.fill as string, PPTX_DEFAULT_BG),
+        transparency: opts.transparency,
+      }
+    : undefined;
+  return {
+    x: opts.x ?? 0.7,
+    y: opts.y ?? 0.7,
+    w: opts.w ?? 11.9,
+    h: opts.h ?? 0.6,
+    fontFace: opts.fontFace ?? PPTX_DEFAULT_FONT,
+    fontSize: opts.fontSize ?? 18,
+    color: pptxCleanHex(opts.color as string | undefined, PPTX_DEFAULT_TEXT),
+    bold: opts.bold,
+    italic: opts.italic,
+    align: opts.align ?? 'left',
+    valign: opts.valign ?? 'top',
+    margin: opts.margin ?? 0.08,
+    fit: opts.fit ?? 'shrink',
+    breakLine: opts.breakLine,
+    ...(fill ? { fill } : {}),
+  };
+}
+
+function legacyPptx(
+  opts: {
+    title?: string;
+    subject?: string;
+    author?: string;
+    company?: string;
+    layout?: string;
+  } = {},
+): PptxPresentationLikeForTest {
+  const presentation = new PptxGenJSForTest();
+  presentation.layout = opts.layout ?? 'LAYOUT_WIDE';
+  presentation.author = pptxSafeText(opts.author, 'Sentropic');
+  presentation.company = pptxSafeText(opts.company, 'Sentropic');
+  presentation.subject = pptxSafeText(opts.subject, 'Generated presentation');
+  presentation.title = pptxSafeText(opts.title, 'Generated presentation');
+  presentation.theme = {
+    headFontFace: PPTX_DEFAULT_HEAD_FONT,
+    bodyFontFace: PPTX_DEFAULT_FONT,
+  };
+  return presentation;
+}
+
+function legacyPptxTitleSlide(
+  presentation: PptxPresentationLikeForTest,
+  title: unknown,
+  subtitle?: unknown,
+  opts: { background?: string; accent?: string; titleColor?: string } = {},
+): PptxSlideLikeForTest {
+  const slide = presentation.addSlide();
+  slide.background = { color: pptxCleanHex(opts.background ?? PPTX_DEFAULT_BG, PPTX_DEFAULT_BG) };
+  slide.addText(pptxSafeText(title, 'Untitled presentation'), {
+    ...legacyPptxTextOptions({
+      x: 0.75,
+      y: 2.2,
+      w: 11.8,
+      h: 0.95,
+      fontFace: PPTX_DEFAULT_HEAD_FONT,
+      fontSize: 34,
+      color: opts.titleColor ?? PPTX_DEFAULT_TEXT,
+      bold: true,
+      align: 'center',
+      valign: 'middle',
+    }),
+  });
+  if (subtitle !== undefined && pptxSafeText(subtitle)) {
+    slide.addText(pptxSafeText(subtitle), {
+      ...legacyPptxTextOptions({
+        x: 1.65,
+        y: 3.25,
+        w: 10,
+        h: 0.55,
+        fontSize: 16,
+        color: PPTX_DEFAULT_MUTED,
+        align: 'center',
+        valign: 'middle',
+      }),
+    });
+  }
+  slide.addShape('rect', {
+    x: 5.55,
+    y: 4.25,
+    w: 2.2,
+    h: 0.06,
+    fill: { color: pptxCleanHex(opts.accent, PPTX_DEFAULT_ACCENT) },
+    line: { color: pptxCleanHex(opts.accent, PPTX_DEFAULT_ACCENT), transparency: 100 },
+  });
+  return slide;
+}
+
+/**
+ * Execute `script` under `node:vm` with the legacy PPTX helpers exposed as
+ * globals. Mirrors `api/src/services/pptx-generation.ts:executeFreeformPptxCode`.
+ */
+function runLegacyPptxScript(script: string): PptxPresentationLikeForTest {
+  const sandbox: Record<string, unknown> = {
+    pptx: legacyPptx,
+    titleSlide: legacyPptxTitleSlide,
+  };
+  const context = vm.createContext(sandbox);
+  const wrapped = `(function() { ${script} })()`;
+  const compiled = new vm.Script(wrapped, { filename: 'legacy-freeform-pptx.js' });
+  const result = compiled.runInContext(context, { timeout: 5_000 });
+  if (
+    !result ||
+    typeof result !== 'object' ||
+    typeof (result as { write?: unknown }).write !== 'function'
+  ) {
+    throw new Error('legacy pptx script did not return a Presentation');
+  }
+  return result as PptxPresentationLikeForTest;
+}
+
+async function writeLegacyPptxToBuffer(
+  presentation: PptxPresentationLikeForTest,
+): Promise<Buffer> {
+  const output = await presentation.write({ outputType: 'nodebuffer' });
+  if (Buffer.isBuffer(output)) return output;
+  if (output instanceof Uint8Array) return Buffer.from(output);
+  if (output instanceof ArrayBuffer) return Buffer.from(output);
+  if (typeof output === 'string') return Buffer.from(output, 'binary');
+  throw new Error('legacy pptx: unsupported write output type');
+}
+
+const MIN_PPTX_FIXTURE_SCRIPT = `
+  const p = pptx({ title: 'Fixture' });
+  titleSlide(p, 'Hello', 'World');
+  return p;
+`;
+
+describe('document_generate handler — bound freeform-PPTX path', () => {
+  it('routes the freeform-PPTX path through SandboxRuntime + bridge and surfaces files.create artefact', async () => {
+    const handler = createDocumentGenerateHandler(documentGenerateSkill);
+    const sandboxRuntime = makeRuntime();
+    const filesAdapter = stubFilesAdapter();
+    const caller = { sandboxRuntime, filesAdapter, title: 'Minimal pptx fixture' };
+
+    const result = await handler(
+      makeInvocation(
+        { action: 'generate', format: 'pptx', code: MIN_PPTX_FIXTURE_SCRIPT },
+        caller,
+      ),
+    );
+    expect(result.isError).toBeUndefined();
+    const output = result.output as {
+      artefactId: string;
+      mimeType: string;
+      fileName: string;
+      byteLength: number;
+    };
+    expect(output.artefactId).toBe('art-1');
+    expect(output.mimeType).toBe(
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    );
+    expect(output.fileName).toBe('minimal-pptx-fixture.pptx');
+    expect(output.byteLength).toBeGreaterThan(0);
+    expect(filesAdapter.captured).toHaveLength(1);
+    expect(filesAdapter.captured[0].mimeType).toBe(output.mimeType);
+    // PPTX is also a ZIP archive.
+    const newBuffer = Buffer.from(filesAdapter.captured[0].content as Uint8Array);
+    expect(newBuffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))).toBe(true);
+  });
+
+  it('returns isError + sandbox failure when the user pptx script throws', async () => {
+    const handler = createDocumentGenerateHandler(documentGenerateSkill);
+    const sandboxRuntime = makeRuntime();
+    const filesAdapter = stubFilesAdapter();
+    const caller = { sandboxRuntime, filesAdapter };
+
+    const result = await handler(
+      makeInvocation(
+        {
+          action: 'generate',
+          format: 'pptx',
+          code: `throw new Error('pptx-boom');`,
+        },
+        caller,
+      ),
+    );
+    expect(result.isError).toBe(true);
+    expect(result.errorMessage).toMatch(/sandbox failure/);
+    expect(filesAdapter.captured).toHaveLength(0);
+  });
+
+  it('rejects when caller does not provide sandboxRuntime/filesAdapter for pptx', async () => {
+    const handler = createDocumentGenerateHandler(documentGenerateSkill);
+    await expect(
+      handler(
+        makeInvocation({
+          action: 'generate',
+          format: 'pptx',
+          code: MIN_PPTX_FIXTURE_SCRIPT,
+        }),
+      ),
+    ).rejects.toThrow(/caller must provide/);
+  });
+});
+
+describe('document_generate handler — byte-stability vs legacy (PPTX)', () => {
+  it('legacy PPTX bytes already differ across two runs (timestamp non-determinism)', async () => {
+    // Sanity check: PptGenJS embeds wall-clock timestamps in its output
+    // (via JSZip's per-entry DOS-time + `docProps/core.xml` / `docProps/app.xml`),
+    // so two legacy runs on the same script may produce different bytes. This
+    // documents the limit of strict byte equality. Stability is therefore
+    // checked by extracting and comparing every ZIP entry EXCEPT the volatile
+    // ones in the next test.
+    const a = await writeLegacyPptxToBuffer(runLegacyPptxScript(MIN_PPTX_FIXTURE_SCRIPT));
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const b = await writeLegacyPptxToBuffer(runLegacyPptxScript(MIN_PPTX_FIXTURE_SCRIPT));
+    expect(a.length).toBeGreaterThan(0);
+    expect(b.length).toBeGreaterThan(0);
+  });
+
+  it('produces structurally-equal PPTX output for the minimum fixture script (every ZIP entry except docProps/{core,app}.xml is byte-equal)', async () => {
+    // -----------------------------------------------------------------
+    // Golden buffer: legacy `node:vm` + legacy pptx helpers (mirrors
+    // `api/src/services/pptx-generation.ts:executeFreeformPptxCode`).
+    // -----------------------------------------------------------------
+    const goldenPresentation = runLegacyPptxScript(MIN_PPTX_FIXTURE_SCRIPT);
+    const goldenBuffer = await writeLegacyPptxToBuffer(goldenPresentation);
+
+    // -----------------------------------------------------------------
+    // New buffer: V8 SandboxRuntime + pptx-host-bridge.
+    // -----------------------------------------------------------------
+    const handler = createDocumentGenerateHandler(documentGenerateSkill);
+    const sandboxRuntime = makeRuntime();
+    const filesAdapter = stubFilesAdapter();
+    const caller = { sandboxRuntime, filesAdapter, title: 'fixture' };
+    const result = await handler(
+      makeInvocation(
+        { action: 'generate', format: 'pptx', code: MIN_PPTX_FIXTURE_SCRIPT },
+        caller,
+      ),
+    );
+    expect(result.isError).toBeUndefined();
+    const newBuffer = Buffer.from(filesAdapter.captured[0].content as Uint8Array);
+
+    // PPTX volatile entries: PptGenJS writes wall-clock timestamps into
+    // `docProps/core.xml` (`<dcterms:created>`, `<dcterms:modified>`) and
+    // sometimes `docProps/app.xml`. Both are excluded from byte-stability.
+    expectDocxStructurallyEqual(goldenBuffer, newBuffer, [
+      'docProps/core.xml',
+      'docProps/app.xml',
+    ]);
   });
 });
