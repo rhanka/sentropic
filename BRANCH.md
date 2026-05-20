@@ -9,7 +9,7 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
 - No database schema migration.
 - No docker-compose replacement.
 - No dev/CI migration to Kubernetes.
-- BR-37 is separate from BR-14d: BR-37 owns the POC tenant workload and its POC GHCR image names; BR-14d owns DNS, production secrets transition, public hostnames, broader registry migration, and final Sentropic ops.
+- BR-37 is separate from BR-14d: BR-37 owns the POC tenant workload and its POC SCW Container Registry image names; BR-14d owns DNS, production secrets transition, public hostnames, broader registry migration, and final Sentropic ops.
 - Make-only workflow for this repo; no direct Docker commands.
 - Root workspace is reserved for user dev/UAT on `ENV=dev` and must remain stable.
 - Branch development happens in isolated worktree `tmp/feat-deploy-poc-k8s`.
@@ -39,7 +39,8 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
   - `api/drizzle/*.sql`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile` (`BR37-EX1`, append-only `scw-*` targets)
-  - `.github/workflows/build-and-push-images.yml` (`BR37-EX2`, new image workflow only)
+  - `.github/workflows/build-and-push-images.yml` (`BR37-EX2`, deletion — redressement: duplicates `ci.yml` publish jobs)
+  - `.github/workflows/ci.yml` (`BR37-EX4`, add `deploy-poc-k8s` job + amend `publish-{api,ui}-image` to push dual tag and SCW image name override)
   - `PLAN.md` (`BR37-EX3`, roadmap registration only)
   - `plan/37-BRANCH_feat-deploy-poc-k8s.md` (`BR37-EX3`, branch stub only)
 - **Exception process**:
@@ -49,16 +50,18 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
 
 ## Feedback Loop
 - **BR37-EX1** (status: `accepted`): Conditional `Makefile` change for `scw-deploy`, `scw-undeploy`, `scw-bundle-secret`, and `scw-status`. Reason: the repo needs Make-only operator entrypoints for the tenant workload. Impact: append-only deploy/status/secret targets, no existing target behavior changed. Rollback: remove the appended `Scaleway Kapsule` Makefile block.
-- **BR37-EX2** (status: `accepted`): Conditional GitHub workflow `.github/workflows/build-and-push-images.yml`. Reason: Kapsule needs published production images for api and ui. Impact: branch/main/tag image builds to GHCR. Rollback: delete the workflow.
+- **BR37-EX2** (status: `revoked`): The dedicated `.github/workflows/build-and-push-images.yml` was a design duplication of the existing `ci.yml` publish jobs. Removed during the 2026-05-19 BR37 redressement; image publish reuses the existing `publish-{api,ui}-image` jobs of `ci.yml` (SCW Registry path with `DOCKER_PASSWORD=SCW_SECRET_KEY`). Rollback: restore the deleted workflow from git history.
 - **BR37-EX3** (status: `deferred`): Register BR-37 in `PLAN.md` and add `plan/37-BRANCH_feat-deploy-poc-k8s.md`. Reason: roadmap hygiene after recovery from stale `BRANCH.md`. Impact: docs-only. Rollback: revert roadmap/stub additions. Owner: conductor. Non-blocking for POC code; blocking for roadmap accuracy.
+- **BR37-EX4** (status: `accepted`): Conditional `.github/workflows/ci.yml` change to add the `deploy-poc-k8s` job (rollout on Kapsule after `publish-api-image` + `publish-ui-image`) and amend the existing `publish-{api,ui}-image` jobs to override `API_IMAGE_NAME=sentropic-api` / `UI_IMAGE_NAME=sentropic-ui` and push a dual tag (sha1 content-hash + branch/main alias). Reason: aligns Kapsule rollout with the existing CD path, zero duplication. Impact: one new job + alias tag step on two existing jobs. Rollback: revert ci.yml changes.
 - **BR37-FL1** (severity: `attention`, status: `open`): Cost target is intentionally not numeric in this branch. The recovered conversation confirms POC-only scope and the user challenged the cost-target question. Do not block live UAT on a numeric cost target.
-- **BR37-FL2** (severity: `blocked`, status: `open`): Live cluster UAT still requires GHCR image pull path public or pull-secreted, rollout healthy, api/ui/maildev smoke checks green. Namespace/quota/baseline and secrets are now applied.
+- **BR37-FL2** (severity: `blocked`, status: `in-progress`): Live cluster UAT requires the SCW Registry pull-secret in the `sentropic` namespace, rollout healthy, api/ui/maildev smoke checks green. Pull path is provisioned **operator-side** via `make tenant-registry-secret TENANT=sentropic SCW_REGISTRY_TOKEN=<token>` in `~/src/poc-k8s/` (separate commit, separate repo). BR37 documents the prerequisite in `deploy/scw/README.md` and adds `imagePullSecrets: [{ name: sentropic-registry }]` on `ServiceAccount sentropic-app` in `deploy/scw/10-rbac.yaml`. The SCW IAM API key read-only on Registry is created via `scw iam api-key create`. Namespace/quota/baseline and secrets are already applied.
 - **BR37-FL3** (severity: `fixed`, status: `closed`): Branch drift was resolved on 2026-05-17 by merging `origin/main` into `feat/deploy-poc-k8s`; PR #160 reports `mergeStateStatus=CLEAN` and CI green at head `3efe0d9b`.
 - **BR37-FL4** (severity: `fixed`, status: `closed`): The next deploy target is confirmed as the Sentropic app workload from this BR-37 worktree. Do not use the remote control-plane repo for this UAT.
 - **BR37-FL5** (severity: `fixed`, status: `closed`): Session `session-sess-apr95chl` is no longer wanted. Verification on 2026-05-17 returned `NotFound` for pod, PVC, and auth Secret, so no cleanup action remains.
 - **BR37-FL6** (severity: `fixed`, status: `closed`): Manifests previously referenced static `v0.1.0` GHCR tags while the branch workflow publishes `feat-deploy-poc-k8s` and short-SHA tags. Fixed 2026-05-17 by pointing api/ui manifests at the branch tag for POC rollout. Rollback: retag a release image and update the manifest tags before production handoff.
 - **BR37-FL7** (severity: `fixed`, status: `closed`): BR-37 intentionally consumes the Sentropic transition plan for POC deployment artifacts only. `TRANSITION.md` keeps the broad codebase/DNS/Scaleway rename under BR-14e/BR-14d, but the Kapsule UAT image pull gate needs final POC image names now. Fixed by publishing branch images as `ghcr.io/rhanka/sentropic-api` and `ghcr.io/rhanka/sentropic-ui`, updating manifests/docs, and leaving app-code, DNS, OAuth, dashboards, and broader Scaleway renames deferred.
 - **BR37-FL8** (severity: `fixed`, status: `closed`): The image workflow originally used only the last ref path segment, so branch `feat/deploy-poc-k8s` published `deploy-poc-k8s` while manifests expected `feat-deploy-poc-k8s`. Fixed by deriving tags from `GITHUB_REF_NAME` and replacing `/` with `-`, keeping api/ui manifests aligned with the branch tag.
+- **BR37-FL9** (severity: `attention`, status: `in-progress`): Design redressement on 2026-05-19. Image publish was duplicated between the BR37-specific `build-and-push-images.yml` (GHCR path) and the existing `ci.yml` publish jobs (SCW Registry path used for the legacy Scaleway Containers Service deploy). Decision: drop the duplicate workflow, reuse `publish-{api,ui}-image` of `ci.yml` with image name override `sentropic-{api,ui}` and dual tag push (sha1 content-hash + branch alias `feat-deploy-poc-k8s` during PR, then `main` post-merge). New `deploy-poc-k8s` job in `ci.yml` runs `kubectl rollout restart` on Kapsule after publish. Tag strategy: manifests reference the floating branch/main alias with `imagePullPolicy: Always` and no imperative `kubectl set image` or envsubst. Kubeconfig sourced from new GH secret `KUBECONFIG_POC_B64`. AI flaky `tests/03-chat.spec.ts` cleared by rerun on 2026-05-19 (CI run 26035260832 second attempt green; allowlist per `rules/testing.md:42`).
 
 ## AI Flaky tests
 - Not applicable. This branch does not change AI runtime behavior.
@@ -107,12 +110,26 @@ Lift the Sentropic api + ui + postgres + maildev stack onto the shared `poc-k8s`
   - [x] Rename BR-37 POC GHCR artifacts from `top-ai-ideas-api/ui` to `sentropic-api/ui`; leave broader transition items to BR-14e/BR-14d.
   - [x] Preserve the full branch slug in GHCR image tags so `feat/deploy-poc-k8s` publishes `feat-deploy-poc-k8s`.
 
+- [ ] **Lot 2.5 — CI/CD redressement (SCW Registry + Kapsule rollout)**
+  - [ ] Delete `.github/workflows/build-and-push-images.yml` (BR37-EX2 revoked).
+  - [ ] Amend `ci.yml` `publish-api-image` job with env override `API_IMAGE_NAME=sentropic-api` and a step that pushes a dual alias tag (`feat-deploy-poc-k8s` on branch, `main` on main).
+  - [ ] Amend `ci.yml` `publish-ui-image` job with the same pattern and `UI_IMAGE_NAME=sentropic-ui`.
+  - [ ] Add new job `deploy-poc-k8s` in `ci.yml` with `needs: [publish-api-image, publish-ui-image]`, branch-conditional, that loads kubeconfig from `KUBECONFIG_POC_B64` GH secret, runs `kubectl -n sentropic rollout restart deployment/api deployment/ui` and `kubectl rollout status` with timeout. (BR37-EX4)
+  - [ ] Patch `deploy/scw/30-api.yaml` to image `${SCW_REGISTRY_HOST}/sentropic-api:feat-deploy-poc-k8s` with `imagePullPolicy: Always`.
+  - [ ] Patch `deploy/scw/40-ui.yaml` to image `${SCW_REGISTRY_HOST}/sentropic-ui:feat-deploy-poc-k8s` with `imagePullPolicy: Always`.
+  - [ ] Patch `deploy/scw/10-rbac.yaml` to add `imagePullSecrets: [{ name: sentropic-registry }]` on ServiceAccount `sentropic-app`.
+  - [ ] Update `deploy/scw/README.md` to replace GHCR references by SCW Registry and document operator prerequisite `make tenant-registry-secret TENANT=sentropic SCW_REGISTRY_TOKEN=<token>` in `~/src/poc-k8s/`.
+  - [ ] User action: create SCW API key read-only on Registry via `scw iam api-key create` and provide the token to the operator.
+  - [ ] User action: create GH secret `KUBECONFIG_POC_B64` (base64 of `~/.kube/poc.yaml`).
+  - [ ] Operator action (out of BR37 repo): add `tenant-registry-secret` target in `~/src/poc-k8s/Makefile` and apply it once for the `sentropic` namespace.
+  - [ ] At PR merge to main: edit manifests `:feat-deploy-poc-k8s` to `:main` and remove the branch alias from ci.yml publish steps.
+
 - [ ] **Lot 3 — Live poc-k8s UAT**
   - [x] Confirm next deploy target is the Sentropic app workload from this BR-37 worktree.
   - [x] Verify obsolete session `session-sess-apr95chl` is already absent: pod, PVC, and auth Secret all return `NotFound`.
   - [x] Confirm `poc-k8s` operator side is applied: namespace `sentropic`, ResourceQuota, LimitRange, NetworkPolicy baseline.
   - [x] Bundle secrets from root `.env`: `sentropic-postgres` and `sentropic-api`.
-  - [ ] Confirm GHCR api/ui image pull path: `sentropic-api` and `sentropic-ui` packages public or namespace pull secret configured.
+  - [ ] Verify Kapsule pull-secret `sentropic-registry` exists in namespace via `kubectl -n sentropic get secret sentropic-registry`.
   - [ ] Deploy workload: `make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s`.
   - [ ] Snapshot workload: `make scw-status KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s`.
   - [ ] Port-forward api via `poc-k8s` Make target and verify `/api/v1/health`.
