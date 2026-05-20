@@ -2,6 +2,8 @@ import { db, pool } from '../db/client';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   buildWorkflowTaskInstanceKey,
+  dispatchReadyWorkflowJoins as flowDispatchReadyWorkflowJoins,
+  dispatchWorkflowTransitions as flowDispatchWorkflowTransitions,
   evaluateWorkflowCondition,
   getPathValue,
   isRecord,
@@ -10,6 +12,7 @@ import {
   resolveWorkflowBindingValue,
   sanitizeJobResultForPublic,
   type GenerationPromptOverride,
+  type WorkflowDispatchDeps,
   type WorkflowDispatchDescriptor as FlowWorkflowDispatchDescriptor,
   type WorkflowRuntimeDefinition,
   type WorkflowTaskExecutionDefinition,
@@ -1200,6 +1203,18 @@ export class QueueManager {
     throw new Error(`Unsupported workflow executor "${executor}" for task ${params.taskKey}`);
   }
 
+  private buildFlowDispatchDeps(): WorkflowDispatchDeps<JobType> {
+    return {
+      canSkipDispatch: (scope, workflowRunId) =>
+        this.shouldSkipWorkflowDispatch(scope, workflowRunId),
+      mergeRunState: (p) => this.mergeWorkflowRunState(p),
+      markExecutionStatus: (runId, status) =>
+        this.markExecutionRunStatus(runId, status),
+      dispatchTask: (p) => this.dispatchWorkflowTask(p),
+      isJoinReady: (p) => this.isWorkflowJoinTransitionReady(p),
+    };
+  }
+
   private async dispatchWorkflowTransitions(params: {
     workspaceId: string;
     workflowRunId: string;
@@ -1209,101 +1224,7 @@ export class QueueManager {
     state: Record<string, unknown>;
     fromTaskKey: string | null;
   }): Promise<WorkflowDispatchDescriptor[]> {
-    const matchingTransitions = params.runtimeDefinition.transitions.filter(
-      (transition) => transition.fromTaskKey === params.fromTaskKey,
-    );
-    const dispatched: WorkflowDispatchDescriptor[] = [];
-    for (const transition of matchingTransitions) {
-      if (this.shouldSkipWorkflowDispatch('transitions', params.workflowRunId)) {
-        return dispatched;
-      }
-      const conditionMatches = evaluateWorkflowCondition(transition.condition, params.state);
-      if (!conditionMatches) {
-        continue;
-      }
-      if (transition.transitionType === 'end' || !transition.toTaskKey) {
-        await this.mergeWorkflowRunState({
-          runId: params.workflowRunId,
-          status: 'completed',
-          currentTaskKey: params.fromTaskKey,
-          currentTaskInstanceKey: 'main',
-        });
-        await this.markExecutionRunStatus(params.workflowRunId, 'completed');
-        continue;
-      }
-      if (transition.transitionType === 'fanout') {
-        const fanout = isRecord(transition.metadata.fanout) ? transition.metadata.fanout : {};
-        const sourcePath = typeof fanout.sourcePath === 'string' ? fanout.sourcePath : null;
-        if (!sourcePath) {
-          continue;
-        }
-        const sourceItems = getPathValue(params.state, sourcePath);
-        if (!Array.isArray(sourceItems)) {
-          continue;
-        }
-        for (const [index, item] of sourceItems.entries()) {
-          if (this.shouldSkipWorkflowDispatch('fanout', params.workflowRunId)) {
-            return dispatched;
-          }
-          dispatched.push(
-            ...(await this.dispatchWorkflowTask({
-              workspaceId: params.workspaceId,
-              workflowRunId: params.workflowRunId,
-              workflowDefinitionId: params.workflowDefinitionId,
-              runtimeDefinition: params.runtimeDefinition,
-              runContext: params.runContext,
-              state: params.state,
-              taskKey: transition.toTaskKey,
-              taskInstanceKey: buildWorkflowTaskInstanceKey(
-                item,
-                index,
-                transition.metadata,
-                transition.toTaskKey,
-              ),
-              item,
-            })),
-          );
-        }
-        continue;
-      }
-      if (transition.transitionType === 'join') {
-        const isReady = await this.isWorkflowJoinTransitionReady({
-          workflowRunId: params.workflowRunId,
-          runtimeDefinition: params.runtimeDefinition,
-          transition,
-          state: params.state,
-        });
-        if (!isReady) {
-          continue;
-        }
-        dispatched.push(
-          ...(await this.dispatchWorkflowTask({
-            workspaceId: params.workspaceId,
-            workflowRunId: params.workflowRunId,
-            workflowDefinitionId: params.workflowDefinitionId,
-            runtimeDefinition: params.runtimeDefinition,
-            runContext: params.runContext,
-            state: params.state,
-            taskKey: transition.toTaskKey,
-            taskInstanceKey: 'main',
-          })),
-        );
-        continue;
-      }
-      dispatched.push(
-        ...(await this.dispatchWorkflowTask({
-          workspaceId: params.workspaceId,
-          workflowRunId: params.workflowRunId,
-          workflowDefinitionId: params.workflowDefinitionId,
-          runtimeDefinition: params.runtimeDefinition,
-          runContext: params.runContext,
-          state: params.state,
-          taskKey: transition.toTaskKey,
-          taskInstanceKey: 'main',
-        })),
-      );
-    }
-    return dispatched;
+    return flowDispatchWorkflowTransitions<JobType>(params, this.buildFlowDispatchDeps());
   }
 
   private async dispatchReadyWorkflowJoins(params: {
@@ -1314,40 +1235,7 @@ export class QueueManager {
     runContext: Record<string, unknown>;
     state: Record<string, unknown>;
   }): Promise<WorkflowDispatchDescriptor[]> {
-    const dispatched: WorkflowDispatchDescriptor[] = [];
-    for (const transition of params.runtimeDefinition.transitions) {
-      if (this.shouldSkipWorkflowDispatch('joins', params.workflowRunId)) {
-        return dispatched;
-      }
-      if (transition.transitionType !== 'join' || !transition.toTaskKey) {
-        continue;
-      }
-      if (!evaluateWorkflowCondition(transition.condition, params.state)) {
-        continue;
-      }
-      const isReady = await this.isWorkflowJoinTransitionReady({
-        workflowRunId: params.workflowRunId,
-        runtimeDefinition: params.runtimeDefinition,
-        transition,
-        state: params.state,
-      });
-      if (!isReady) {
-        continue;
-      }
-      dispatched.push(
-        ...(await this.dispatchWorkflowTask({
-          workspaceId: params.workspaceId,
-          workflowRunId: params.workflowRunId,
-          workflowDefinitionId: params.workflowDefinitionId,
-          runtimeDefinition: params.runtimeDefinition,
-          runContext: params.runContext,
-          state: params.state,
-          taskKey: transition.toTaskKey,
-          taskInstanceKey: 'main',
-        })),
-      );
-    }
-    return dispatched;
+    return flowDispatchReadyWorkflowJoins<JobType>(params, this.buildFlowDispatchDeps());
   }
 
   private shouldSkipWorkflowDispatch(scope: string, workflowRunId: string): boolean {
