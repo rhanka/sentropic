@@ -534,10 +534,11 @@ jobs:
   publish-ui-image:
     runs-on: ubuntu-latest
     needs: [changes, test-e2e, e2e-vscode, security-container]
-    if: (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
+    if: (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/deploy-poc-k8s')
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+      UI_IMAGE_NAME: sentropic-ui
     steps:
       - uses: actions/checkout@v6
       - name: Check if UI image is up to date
@@ -556,14 +557,24 @@ jobs:
       - name: Publish UI image
         if: steps.image-check.outcome == 'failure'
         run: make publish-ui-image
+      - name: Push branch alias tag (UI)
+        run: |
+          set -eu
+          ALIAS="${GITHUB_REF_NAME//\//-}"
+          UI_VERSION="$(make -s version | awk '/^UI_VERSION:/ {print $2}')"
+          # Ensure canonical tag is present locally (it may not be if image-check passed)
+          docker pull "${REGISTRY}/${UI_IMAGE_NAME}:${UI_VERSION}"
+          docker tag  "${REGISTRY}/${UI_IMAGE_NAME}:${UI_VERSION}" "${REGISTRY}/${UI_IMAGE_NAME}:${ALIAS}"
+          docker push "${REGISTRY}/${UI_IMAGE_NAME}:${ALIAS}"
 
   publish-api-image:
     runs-on: ubuntu-latest
     needs: [changes, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
-    if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
+    if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/deploy-poc-k8s')
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+      API_IMAGE_NAME: sentropic-api
     steps:
       - uses: actions/checkout@v6
       - name: Check if API image is up to date
@@ -582,6 +593,15 @@ jobs:
       - name: Publish API image
         if: steps.image-check.outcome == 'failure'
         run: make publish-api-image
+      - name: Push branch alias tag (API)
+        run: |
+          set -eu
+          ALIAS="${GITHUB_REF_NAME//\//-}"
+          API_VERSION="$(make -s version | awk '/^API_VERSION:/ {print $2}')"
+          # Ensure canonical tag is present locally (it may not be if image-check passed)
+          docker pull "${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}"
+          docker tag  "${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}" "${REGISTRY}/${API_IMAGE_NAME}:${ALIAS}"
+          docker push "${REGISTRY}/${API_IMAGE_NAME}:${ALIAS}"
 
   publish-llm-mesh:
     runs-on: ubuntu-latest
@@ -664,3 +684,32 @@ jobs:
     - name: Deploy to GitHub Pages
       id: deployment
       uses: actions/deploy-pages@v5
+
+  # Deploy POC Kapsule tenant after api+ui images are published with branch alias.
+  # Triggered on main and on the BR-37 branch. Requires GH secret KUBECONFIG_POC_B64
+  # (base64 of ~/.kube/poc.yaml). See deploy/scw/README.md and BRANCH.md Lot 2.5.
+  deploy-poc-k8s:
+    runs-on: ubuntu-latest
+    needs: [publish-api-image, publish-ui-image]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/deploy-poc-k8s'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Decode kubeconfig from secret
+        env:
+          KUBECONFIG_POC_B64: ${{ secrets.KUBECONFIG_POC_B64 }}
+        run: |
+          set -eu
+          if [ -z "${KUBECONFIG_POC_B64:-}" ]; then
+            echo "::error::GH secret KUBECONFIG_POC_B64 is missing or empty. See BRANCH.md Lot 2.5 user action item."
+            exit 1
+          fi
+          printf '%s' "${KUBECONFIG_POC_B64}" | base64 -d > kubeconfig.yaml
+          chmod 600 kubeconfig.yaml
+      - name: Rollout restart api + ui on Kapsule
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig.yaml
+        run: |
+          set -eu
+          kubectl -n sentropic rollout restart deployment/api deployment/ui
+          kubectl -n sentropic rollout status  deployment/api --timeout=300s
+          kubectl -n sentropic rollout status  deployment/ui  --timeout=300s
