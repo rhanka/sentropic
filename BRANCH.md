@@ -135,8 +135,8 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
 - [x] `closed`: Lot 5 audit — Chrome upstream surface (`ui/src/lib/upstream/injected-script.ts`) is a self-contained ES5 IIFE for cross-origin content-script injection over `window.postMessage` and never imported the legacy `localTools` store. Bridge protocol unit tests (`ui/tests/upstream/{bridge,injected-script}.test.ts`) and `ui/tests/utils/extension-auth-ui.test.ts` likewise have zero coupling to the store. New `ui/src/lib/upstream/chrome-host-adapter.ts` exposes a `createChromeLocalToolsAdapter` factory implementing the package `LocalToolsAdapter` contract on top of `chrome.runtime.sendMessage`, so future Lot 6 consumers (or alternative entry points) can inject it explicitly via `setLocalToolsAdapter(...)` without depending on the package's `globalThis.chrome` fallback. Verified Chrome runtime continues to satisfy the contract natively when no adapter is injected (existing extension code paths unchanged).
 - [x] `closed`: Lot 5 audit — VSCode webview now installs an explicit `LocalToolsAdapter` via `createVsCodeLocalToolsAdapter({ bridge })` + `setLocalToolsAdapter(...)` in `ui/vscode-ext/webview-entry.ts` boot. Adapter routes `tool_execute`, `tool_permission_decide`, and `extension_tool_permissions_{list,upsert,delete}` envelopes through the existing `VsCodeBridge` (`runtime.local_tools.*` commands). `installExtensionRuntimeShim` retains responsibility for all non-local-tool extension messages (auth, config, workspace mapping, stream proxy) so the auth bridge, checkpoint/summary flows, and host messaging remain bit-identical. Host-side `ui/vscode-ext/local-tools.ts` (`VsCodeLocalToolsRuntime`) is unchanged — it is the backend served by the new adapter, not a package consumer.
 - [ ] `attention`: Lot 4 transport URL drifts (`openStream`/`postMessage`/`replayFromSeq` rows above) remain unreconciled in Lot 5 because no production consumer is wired to `createDefaultTransport` yet (verified again: `grep -rn createDefaultTransport ui/src api/src` returns only tests). Recommend reconciliation at BR-14b per-session SSE delivery, BR-14a Lot 6 (publication wiring) if a real consumer lands first, or a follow-up `fix/chat-ui-transport-wire-alignment` branch. No regression today.
-- [ ] `BR14a-EX1-extended`: Lot 6 extends the previously declared `BR14a-EX1` (Lot 3 workspace wiring) to cover the package publication wiring touchpoints. Conditional Paths touched: `Makefile` (ADD only: `typecheck-chat-ui`, `test-chat-ui`, `build-chat-ui`, `pack-chat-ui`, `publish-chat-ui`, `publish-chat-ui-token` — no existing target modified), `.github/workflows/ci.yml` (ADD only: `chat_ui` path filter, `validate-chat-ui` job, main-only `publish-chat-ui` job — no existing job modified), `packages/chat-ui/README.md` (upgrade public surface examples), and `packages/chat-ui/package.json` (only if exports map needs publish-mode adjustment — see deviation note). Rationale: package publication requires Make + CI wiring symmetrical to `@sentropic/llm-mesh`. Pattern: mirror `publish-llm-mesh` Make targets and CI jobs verbatim (only `llm-mesh` → `chat-ui` substitution); deviations documented inline. Impact: no runtime behavior change; new dormant Make targets and CI jobs only activate when `packages/chat-ui/**` changes; OIDC publish runs only on `main` with `skip-if-version-exists` safety. Rollback: revert Lot 6 commits (`Makefile`, `.github/workflows/ci.yml`, `packages/chat-ui/README.md`, optional `packages/chat-ui/package.json`). User approval: implicit via launch packet directive to mirror publish-llm-mesh.
-- [ ] `attention`: Lot 6 exports-map deviation note: `@sentropic/llm-mesh/package.json` exports point to `./dist/index.js` / `./dist/index.d.ts` because llm-mesh ships only TypeScript that compiles to dist. `@sentropic/chat-ui/package.json` exports currently point to `./src/*.ts` with a `"svelte"` condition so SvelteKit/Vite consumers can resolve raw `.ts` and `.svelte` source through the workspace symlink (per Lot 3 commit `603fbe70`). Publish-mode resolution from `dist/` would require either a dual-mode exports map (`"node"` → `dist`, `"svelte"` → `src`) or migrating consumers to a build artefact. For Lot 6, keep exports as-is: `tsc -p tsconfig.json` (`build-chat-ui`) emits `.js`/`.d.ts` from `src/` into `dist/` and `files` already includes both `dist` and `src`, so the published tarball ships both. `npm pack --dry-run` (`pack-chat-ui`) validates inclusion. Defer dual-mode exports tuning to a follow-up branch only if downstream Node consumers require pure `dist/` resolution.
+- [x] `BR14a-EX1-extended`: Lot 6 extended the previously declared `BR14a-EX1` (Lot 3 workspace wiring) to cover package publication wiring. Conditional Paths touched: `Makefile` (ADD-only: 6 new chat-ui targets, no existing target modified), `.github/workflows/ci.yml` (ADD-only: `chat_ui` filter + `validate-chat-ui` job + main-only `publish-chat-ui` job, no existing job modified), `packages/chat-ui/README.md` (upgrade only). `packages/chat-ui/package.json` NOT modified (exports kept as-is per deviation note). Pattern compliance: 100% verbatim mirror of `publish-llm-mesh` / `validate-llm-mesh` with only `llm-mesh` → `chat-ui` substitution; lone deviations (1) svelte symlink in typecheck/build/test targets because chat-ui depends on `svelte/store` while llm-mesh has zero runtime deps, (2) test target follows `test-pkg-chat-core` two-step rm/symlink pattern rather than `test-llm-mesh` single-step NODE_PATH because the latter does not work when the test imports a package whose TS declarations must be resolved by Node's resolver. Gate evidence: 0 typecheck errors, 29/29 tests, clean dist build, `sentropic-chat-ui-0.1.0.tgz` produced (60 files, 104.9 kB). Rollback path: revert commits `ac600219`, `c9cd974f`, `8d024b70`, `625d058e`. Closed on 2026-05-19.
+- [x] `attention`: Lot 6 exports-map deviation note: `@sentropic/llm-mesh/package.json` exports point to `./dist/index.js` / `./dist/index.d.ts` because llm-mesh ships only TypeScript that compiles to dist. `@sentropic/chat-ui/package.json` exports currently point to `./src/*.ts` with a `"svelte"` condition so SvelteKit/Vite consumers can resolve raw `.ts` and `.svelte` source through the workspace symlink (per Lot 3 commit `603fbe70`). Publish-mode resolution from `dist/` would require either a dual-mode exports map (`"node"` → `dist`, `"svelte"` → `src`) or migrating consumers to a build artefact. For Lot 6, kept exports as-is: `tsc -p tsconfig.json` (`build-chat-ui`) emits `.js`/`.d.ts` from `src/` into `dist/` and `files` already includes both `dist` and `src`, so the published tarball ships both (confirmed by `pack-chat-ui` output listing both `dist/**` and `src/**` under 60 files). Decision: defer dual-mode exports tuning to a follow-up branch only if downstream Node consumers require pure `dist/` resolution. Closed for Lot 6.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -311,30 +311,26 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - [x] Run `make test-ui REGISTRY=local SCOPE=tests/vscode-ext API_PORT=9075 UI_PORT=5275 MAILDEV_UI_PORT=1175 ENV=test-feat-chat-ui-sdk-v2-lot5` — 49/49 passed across 14 files including new `local-tools-adapter.test.ts` (5/5).
     - [x] Commits on `feat/chat-ui-sdk-v2-lot5` since baseline `3ebc6549`: `d8ff6a8f` (VSCode webview LocalToolsAdapter wiring), `0b942e1a` (Chrome host adapter), `c360ebf1` (Chrome adapter tests), `3f9a00fc` (VSCode adapter tests).
 
-- [ ] **Lot 6 - Package validation and publication wiring**
+- [x] **Lot 6 - Package validation and publication wiring**
   - [x] Open `BR14a-EX1` before changing `Makefile`, `.github/workflows/**`, and package metadata. (Declared as `BR14a-EX1-extended` in Feedback Loop.)
-  - [ ] Add Make targets mirroring existing package patterns:
-    - `typecheck-chat-ui`
-    - `test-chat-ui`
-    - `build-chat-ui`
-    - `pack-chat-ui`
-    - `publish-chat-ui`
-    - `publish-chat-ui-token` only if bootstrap token publishing is required.
-  - [ ] Add CI path filters and validation job for `packages/chat-ui/**`.
-  - [ ] Add main-only publish job for `@sentropic/chat-ui` using the same skip-if-version-exists safety pattern as `publish-llm-mesh`.
-  - [ ] Add package README/API notes:
-    - `packages/chat-ui/README.md`
-    - public exports;
-    - host adapter examples;
-    - stream replay behavior;
-    - renderer registry behavior;
-    - non-goals and dependency rules.
-  - [ ] Lot gate:
-    - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Run `make build-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Run `make pack-chat-ui ENV=test-feat-chat-ui-sdk-v2`.
-    - [ ] Commit with selective `git add`, then `make commit MSG="ci: validate and publish chat ui package" ENV=test-feat-chat-ui-sdk-v2`.
+  - [x] Add Make targets mirroring existing package patterns:
+    - [x] `typecheck-chat-ui` (Makefile:603 — mirrors `typecheck-llm-mesh` with svelte symlink for module resolution).
+    - [x] `test-chat-ui` (Makefile:684 — mirrors `test-pkg-chat-core` two-step pattern with svelte symlink, supports `tests/local-tools-store.test.ts` which imports `svelte/store`).
+    - [x] `build-chat-ui` (Makefile:607 — mirrors `build-llm-mesh`).
+    - [x] `pack-chat-ui` (Makefile:612 — mirrors `pack-llm-mesh`, depends on `build-chat-ui`).
+    - [x] `publish-chat-ui` (Makefile:616 — mirrors `publish-llm-mesh` verbatim incl. OIDC env vars and skip-if-version-exists guard).
+    - [x] `publish-chat-ui-token` (Makefile:631 — mirrors `publish-llm-mesh-token` for bootstrap; reuses existing `NPM_TOKEN_FILE` var).
+  - [x] Add CI path filters and validation job for `packages/chat-ui/**`. (`.github/workflows/ci.yml`: `chat_ui` filter added at L49, `validate-chat-ui` job added at L125 mirroring `validate-llm-mesh`.)
+  - [x] Add main-only publish job for `@sentropic/chat-ui` using the same skip-if-version-exists safety pattern as `publish-llm-mesh`. (`.github/workflows/ci.yml`: `publish-chat-ui` job at L595 mirrors `publish-llm-mesh` verbatim with `chat_ui` filter and same dependency chain.)
+  - [x] Add package README/API notes:
+    - [x] `packages/chat-ui/README.md` upgraded with concrete public-export listing, web/Chrome/VSCode host adapter examples, stream replay (`fromSeq` cursor + event types), renderer registry (`register`/`get`/`default` fallback), non-goals, and dependency rules.
+  - [x] Lot gate:
+    - [x] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot6` — 0 errors.
+    - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot6` — 29/29 passed across 5 files (host-adapter-types 5, replay 4, renderer-registry 6, transport 6, local-tools-store 8).
+    - [x] Run `make build-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot6` — clean dist/ output (index.js + d.ts + per-module d.ts/js for client, hosts, renderers, stores, utils).
+    - [x] Run `make pack-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot6` — `sentropic-chat-ui-0.1.0.tgz` produced, 60 files, 104.9 kB packed / 528.2 kB unpacked, includes both `dist/` artifacts and `src/` Svelte sources per files list.
+    - [x] Did NOT run `make publish-chat-ui` (main-only via CI; per launch packet directive).
+    - [x] Commits on `feat/chat-ui-sdk-v2-lot6` since baseline `2fd18b36`: `ac600219` (BR14a-EX1 extension docs), `c9cd974f` (Makefile targets), `8d024b70` (CI workflow jobs), `625d058e` (README upgrade), plus this gate-evidence commit.
 
 - [ ] **Lot N-2 - UAT**
   - [ ] Web app:
