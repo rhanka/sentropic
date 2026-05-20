@@ -10,6 +10,7 @@ import {
   failWorkflowTask as flowFailWorkflowTask,
   getPathValue,
   isRecord,
+  loadQueueSettings,
   markWorkflowTaskStarted as flowMarkWorkflowTaskStarted,
   parseJsonField,
   pauseQueue,
@@ -1527,17 +1528,22 @@ export class QueueManager {
    * Charger les paramètres de configuration
    */
   private async loadSettings(): Promise<void> {
-    try {
-      const settings = await settingsService.getAISettings();
-      this.maxConcurrentJobs = settings.concurrency;
-      this.maxPublishingJobs = settings.publishingConcurrency;
-      this.processingInterval = settings.processingInterval;
-      console.log(
-        `🔧 Queue settings loaded: aiConcurrency=${this.maxConcurrentJobs}, publishingConcurrency=${this.maxPublishingJobs}, interval=${this.processingInterval}ms`
-      );
-    } catch (error) {
-      console.warn('⚠️ Failed to load queue settings, using defaults:', error);
-    }
+    await loadQueueSettings({
+      readSettings: () => settingsService.getAISettings(),
+      applySettings: (settings) => {
+        this.maxConcurrentJobs = settings.maxAi;
+        this.maxPublishingJobs = settings.maxPublishing;
+        this.processingInterval = settings.intervalMs;
+      },
+      logSettings: (settings) => {
+        console.log(
+          `🔧 Queue settings loaded: aiConcurrency=${settings.maxAi}, publishingConcurrency=${settings.maxPublishing}, interval=${settings.intervalMs}ms`
+        );
+      },
+      warnLoadFailure: (error) => {
+        console.warn('⚠️ Failed to load queue settings, using defaults:', error);
+      },
+    });
   }
 
   /**
