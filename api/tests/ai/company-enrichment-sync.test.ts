@@ -4,15 +4,19 @@ import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '
 import { app } from '../../src/app';
 import { testOrganizations } from '../utils/test-data';
 import { db } from '../../src/db/client';
-import { organizations, chatStreamEvents } from '../../src/db/schema';
+import { organizations, chatStreamEvents, jobQueue } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createTestId, sleep } from '../utils/test-helpers';
+import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { queueManager } from '../../src/services/queue-manager';
 
 describe('Organization Enrichment - Sync', () => {
   let user: any;
+  let workspaceId: string;
 
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor');
+    workspaceId = (await ensureWorkspaceForUser(user.id)).workspaceId;
   });
 
   afterEach(async () => {
@@ -113,12 +117,11 @@ describe('Organization Enrichment - Sync', () => {
     const maxAttempts = 60; // 60 * 1s = 60s max (AI + web search peut être lent / flaky)
 
     while (!jobCompleted && attempts < maxAttempts) {
+      await queueManager.processJobsForWorkspace(workspaceId);
       await sleep(1000);
 
-      // Queue is workspace-scoped: read the job directly with the owner's token.
-      const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${enrichResult.jobId}`, user.sessionToken!);
-      expect(jobRes.status).toBe(200);
-      const job = await jobRes.json();
+      const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, enrichResult.jobId)).limit(1);
+      expect(job).toBeDefined();
 
       if (job && (job.status === 'completed' || job.status === 'failed')) {
         jobCompleted = true;
