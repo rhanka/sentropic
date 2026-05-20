@@ -177,7 +177,7 @@ cloc-test: ## (deprecated) Alias for test-cloc
 	@$(MAKE) --no-print-directory test-cloc
 
 .PHONY: test-count
-test-count: ## Count tests (files + test cases): UI unit, API unit (excluding ai), API integration (ai), E2E
+test-count: ## Count tests (files + test cases): UI, API, E2E, and package modules
 	@TEST_REGEX='(^|[^[:alnum:]_])(test|it)(\.(skip|only|each|concurrent|fails|todo|fixme))*[[:space:]]*[(]'; \
 	ui_files=$$(find ui/tests -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print | wc -l | tr -d ' '); \
 	ui_tests=$$(find ui/tests -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print0 | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
@@ -187,8 +187,10 @@ test-count: ## Count tests (files + test cases): UI unit, API unit (excluding ai
 	api_ai_tests=$$(find api/tests/ai -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print0 2>/dev/null | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
 	e2e_files=$$(find e2e/tests -type f -name "*.spec.ts" ! -path "e2e/tests/fixtures/*" ! -path "e2e/tests/helpers/*" -print | wc -l | tr -d ' '); \
 	e2e_tests=$$(find e2e/tests -type f -name "*.spec.ts" ! -path "e2e/tests/fixtures/*" ! -path "e2e/tests/helpers/*" -print0 | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
-	total_files=$$((ui_files + api_unit_files + api_ai_files + e2e_files)); \
-	total_tests=$$((ui_tests + api_unit_tests + api_ai_tests + e2e_tests)); \
+	package_files=$$(find packages -path "*/tests/*" -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print 2>/dev/null | wc -l | tr -d ' '); \
+	package_tests=$$(find packages -path "*/tests/*" -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print0 2>/dev/null | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
+	total_files=$$((ui_files + api_unit_files + api_ai_files + e2e_files + package_files)); \
+	total_tests=$$((ui_tests + api_unit_tests + api_ai_tests + e2e_tests + package_tests)); \
 	echo "📊 Comptage des tests (approx.)"; \
 	echo ""; \
 	printf "%-28s %10s %10s\n" "Scope" "Fichiers" "Tests"; \
@@ -197,6 +199,7 @@ test-count: ## Count tests (files + test cases): UI unit, API unit (excluding ai
 	printf "%-28s %10s %10s\n" "API (unitaires, sans ai)" "$$api_unit_files" "$$api_unit_tests"; \
 	printf "%-28s %10s %10s\n" "API (integration = ai)" "$$api_ai_files" "$$api_ai_tests"; \
 	printf "%-28s %10s %10s\n" "E2E (Playwright)" "$$e2e_files" "$$e2e_tests"; \
+	printf "%-28s %10s %10s\n" "Packages (modules)" "$$package_files" "$$package_tests"; \
 	printf "%-28s %10s %10s\n" "TOTAL" "$$total_files" "$$total_tests"; \
 	echo ""; \
 	echo "Note: comptage basé sur occurrences de test()/it() (+ .only/.skip/.each/.concurrent/.fails/.todo/.fixme)."
