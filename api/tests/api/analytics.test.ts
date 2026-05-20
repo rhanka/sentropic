@@ -5,6 +5,7 @@ import { createTestId, sleep } from '../utils/test-helpers';
 import { db } from '../../src/db/client';
 import { folders, workspaces } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
+import { queueManager } from '../../src/services/queue-manager';
 
 describe('Analytics API', () => {
   let user: any;
@@ -133,6 +134,7 @@ describe('Analytics API', () => {
       expect(data.folder_id).toBe(folderId);
 
       // Attendre que le job échoue (validation asynchrone)
+      await queueManager.processJobsForWorkspace(workspaceId);
       let jobStatus: string = 'pending';
       let attempts = 0;
       const maxAttempts = 10;
