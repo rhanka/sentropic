@@ -1,9 +1,9 @@
-# UAT — sentropic on the poc-k8s Kapsule cluster
+# UAT — sentropic on the poc-k8s Kubernetes cluster
 
 State of this branch (`feat/deploy-poc-k8s`) :
 
 - New `deploy/scw/` tenant manifests (RBAC + Postgres StatefulSet + api/ui Deployments + maildev + optional Ingress).
-- New `.github/workflows/build-and-push-images.yml` building `sentropic-api` and `sentropic-ui` to GHCR on every tag `v*` and every push to this branch / `main`.
+- Updated `.github/workflows/ci.yml` publishing `sentropic-api` and `sentropic-ui` to the SCW Container Registry, then running the neutral `deploy-k8s` job on branch/main pushes.
 - New Makefile targets `scw-deploy`, `scw-undeploy`, `scw-bundle-secret`, `scw-status`.
 - This UAT note.
 
@@ -11,10 +11,9 @@ State of this branch (`feat/deploy-poc-k8s`) :
 
 1. **Cluster up** : `~/src/poc-k8s` bootstrapped, `~/.kube/poc.yaml` fetched.
    `make -C ~/src/poc-k8s apply-platform apply-sentropic` already done.
-2. **Images public on GHCR** : after the first workflow run, toggle
-   <https://github.com/users/rhanka/packages/container/sentropic-api/settings>
-   and `…/sentropic-ui/settings` to "Public" (one click each).
-3. **`.env` populated** with at minimum: `POSTGRES_PASSWORD` (otherwise defaults to `app`), `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `MAIL_USERNAME`, `MAIL_PASSWORD`. Other keys are optional and only needed for the features that depend on them.
+2. **Registry pull secret ready** : create an SCW IAM API key with read-only access to the SCW Container Registry, then run `make -C ~/src/poc-k8s tenant-registry-secret TENANT=sentropic SCW_REGISTRY_TOKEN=<token>`.
+3. **GitHub kubeconfig secret ready** : create repository secret `KUBECONFIG_B64` with the base64 content of `~/.kube/poc.yaml`.
+4. **`.env` populated** with at minimum: `POSTGRES_PASSWORD` (otherwise defaults to `app`), `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `MAIL_USERNAME`, `MAIL_PASSWORD`. Other keys are optional and only needed for the features that depend on them.
 
 ## Step-by-step UAT
 
@@ -26,13 +25,12 @@ State of this branch (`feat/deploy-poc-k8s`) :
   cluster: pod, PVC, and auth Secret all return `NotFound`.
 - The `sentropic` tenant baseline was applied on 2026-05-17: namespace,
   ResourceQuota, LimitRange, NetworkPolicy, and tenant ServiceAccount exist.
-- The api/ui manifests target `ghcr.io/rhanka/sentropic-api:feat-deploy-poc-k8s`
-  and `ghcr.io/rhanka/sentropic-ui:feat-deploy-poc-k8s`.
+- The api/ui manifests target `rg.fr-par.scw.cloud/sentropic/sentropic-api:feat-deploy-poc-k8s`
+  and `rg.fr-par.scw.cloud/sentropic/sentropic-ui:feat-deploy-poc-k8s`.
 - Secrets were bundled on 2026-05-17 from the root `.env`: `sentropic-postgres`
   and `sentropic-api` exist in namespace `sentropic`.
-- Remaining rollout gate: GHCR currently rejects anonymous pulls with `403` for
-  both branch-tagged api/ui images. Make the packages public or configure a
-  namespace `imagePullSecret` before applying the workload.
+- Remaining rollout gate: the namespace must have the `sentropic-registry`
+  imagePullSecret before applying the workload.
 
 ```bash
 # 0) sanity

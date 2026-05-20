@@ -1,4 +1,4 @@
-# Optional ingress exposing the UI + API publicly through the Kapsule-bundled
+# Optional ingress exposing the UI + API publicly through the cluster-managed
 # Traefik. Replace the placeholder hosts before applying and ensure cert-manager
 # + a `letsencrypt` ClusterIssuer are installed, OR strip the `tls:` section to
 # fall back to plain HTTP.
