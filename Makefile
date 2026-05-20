@@ -185,8 +185,8 @@ test-count: ## Count tests (files + test cases): UI, API, E2E, and package modul
 	api_unit_tests=$$(find api/tests -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) ! -path "api/tests/ai/*" -print0 | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
 	api_ai_files=$$(find api/tests/ai -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print 2>/dev/null | wc -l | tr -d ' '); \
 	api_ai_tests=$$(find api/tests/ai -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print0 2>/dev/null | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
-	e2e_files=$$(find e2e/tests -type f -name "*.spec.ts" ! -path "e2e/tests/fixtures/*" ! -path "e2e/tests/helpers/*" -print | wc -l | tr -d ' '); \
-	e2e_tests=$$(find e2e/tests -type f -name "*.spec.ts" ! -path "e2e/tests/fixtures/*" ! -path "e2e/tests/helpers/*" -print0 | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
+	e2e_files=$$(find e2e/tests -type f -name "*.spec.ts" ! -path "e2e/tests/fixtures/*" ! -path "e2e/tests/helpers/*" ! -path "e2e/tests/dev/_scratch*" -print | wc -l | tr -d ' '); \
+	e2e_tests=$$(find e2e/tests -type f -name "*.spec.ts" ! -path "e2e/tests/fixtures/*" ! -path "e2e/tests/helpers/*" ! -path "e2e/tests/dev/_scratch*" -print0 | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
 	package_files=$$(find packages -path "*/tests/*" -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print 2>/dev/null | wc -l | tr -d ' '); \
 	package_tests=$$(find packages -path "*/tests/*" -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print0 2>/dev/null | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
 	total_files=$$((ui_files + api_unit_files + api_ai_files + e2e_files + package_files)); \
