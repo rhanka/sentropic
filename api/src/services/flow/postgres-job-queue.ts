@@ -8,7 +8,7 @@ import {
   type QueuedJob,
   type WorkflowDispatchDescriptor,
 } from '@sentropic/flow';
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db, pool } from '../../db/client';
 import { ADMIN_WORKSPACE_ID, jobQueue, type JobQueueRow } from '../../db/schema';
 import { createId } from '../../utils/id';
@@ -41,6 +41,10 @@ type WorkflowTransitionsDispatchParams = {
   runContext: Record<string, unknown>;
   state: Record<string, unknown>;
   fromTaskKey: string | null;
+};
+
+type JobQueueScope = {
+  workspaceId?: string;
 };
 
 type PostgresJobQueueRuntimeHooks = {
@@ -287,14 +291,18 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData, JobQueueRow>
     `;
   }
 
-  async getProcessingCountByClass(queueClass: QueueClass): Promise<number> {
+  async getProcessingCountByClass(queueClass: QueueClass, opts?: JobQueueScope): Promise<number> {
     const queueClassExpr = sql.raw(this.queueClassSqlExpr());
+    const workspaceFilter = opts?.workspaceId
+      ? sql`AND workspace_id = ${opts.workspaceId}`
+      : sql``;
     try {
       const rows = (await db.all(sql`
         SELECT COUNT(*)::int AS count
         FROM job_queue
         WHERE status = 'processing'
           AND ${queueClassExpr} = ${queueClass}
+          ${workspaceFilter}
       `)) as Array<{ count: number }>;
       return rows?.[0]?.count ?? 0;
     } catch {
@@ -302,11 +310,15 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData, JobQueueRow>
     }
   }
 
-  async hasAnyPending(): Promise<boolean> {
+  async hasAnyPending(opts?: JobQueueScope): Promise<boolean> {
     const rows = await db
       .select({ id: sql<string>`id` })
       .from(jobQueue)
-      .where(eq(jobQueue.status, 'pending'))
+      .where(
+        opts?.workspaceId
+          ? and(eq(jobQueue.status, 'pending'), eq(jobQueue.workspaceId, opts.workspaceId))
+          : eq(jobQueue.status, 'pending'),
+      )
       .limit(1);
     return rows.length > 0;
   }
@@ -314,9 +326,13 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData, JobQueueRow>
   async claimPendingJobsByClass(
     queueClass: QueueClass,
     limit: number,
+    opts?: JobQueueScope,
   ): Promise<JobQueueRow[]> {
     if (limit <= 0) return [];
     const queueClassExpr = sql.raw(this.queueClassSqlExpr());
+    const workspaceFilter = opts?.workspaceId
+      ? sql`AND workspace_id = ${opts.workspaceId}`
+      : sql``;
     const orderByExpr =
       queueClass === 'ai'
         ? sql.raw(
@@ -330,6 +346,7 @@ export class PostgresJobQueue implements JobQueue<JobType, JobData, JobQueueRow>
         FROM job_queue
         WHERE status = 'pending'
           AND ${queueClassExpr} = ${queueClass}
+          ${workspaceFilter}
         ORDER BY ${orderByExpr}
         LIMIT ${limit}
         FOR UPDATE SKIP LOCKED
