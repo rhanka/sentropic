@@ -1,6 +1,6 @@
 # SPEC_STUDY - BR14a Chat UI SDK Scope
 
-Status: Lot 1 package-boundary study.
+Status: Lot 8 modular refactor contract.
 
 ## Goal
 
@@ -23,6 +23,75 @@ Extract the reusable chat UI surface as `@sentropic/chat-ui`, not `@sentropic/ch
 | Chrome bridge | `ui/src/lib/upstream/injected-script.ts` | Stay app/host-owned. The package only exposes the host adapter interface consumed by the chat UI. DOM injection and extension bridge code are not package core. |
 | VSCode bridge/runtime | `ui/vscode-ext/auth-bridge.ts`, `extension.ts`, `host-handler.ts`, `local-tools.ts`, `stream-proxy.ts`, `vscode-bridge.ts`, `webview-entry.ts` | Stay host-owned. Package supplies UI components, client stores, transport/replay primitives, and adapter types. VSCode extension activation, secrets, workspace inspection, local command execution, webview HTML, and message bridge remain outside the package. |
 | Chat-core/server wire | `packages/chat-core/src/types.ts`, `stream-port.ts`, `stream-sequencer-port.ts`, `api/src/routes/api/chat.ts`, `api/src/routes/api/streams.ts`, `api/src/services/chat-service.ts` | Package consumes current HTTP/SSE behavior and prepares for the versioned `chat-core` stream protocol. It must not import API source directly. |
+
+## Lot 8 Dependency Map
+
+Current large-file line counts:
+
+| File | Lines | Current role | Refactor target |
+| --- | ---: | --- | --- |
+| `ui/src/lib/components/ChatPanel.svelte` | 6107 | App chat session, comments, documents, local tools, runtime projection, composer, history, and API orchestration. | App wrapper plus extracted package timeline/composer/state modules. |
+| `ui/src/lib/components/ChatWidget.svelte` | 3249 | App launcher, dock/floating shell, sessions header, jobs tab, comments tab, extension settings, Chrome/VSCode auth/config surfaces. | App wrapper around package widget shell; jobs/comments/extension settings stay app-owned. |
+| `ui/src/lib/components/StreamMessage.svelte` | 1212 | Stream event projection, reasoning/tool/content rendering, smoothing, history hydration, generated file callback. | First package component to activate, with stream client and labels injected. |
+| `ui/src/lib/stores/streamHub.ts` | 533 | App-wide SSE singleton for chat streams, job updates, entity updates, workspace/comment/lock/presence updates, Chrome proxy, VSCode detection, auth/workspace URL construction. | Package `createStreamHub(options)` plus app singleton wrapper that injects host dependencies. |
+| `ui/src/lib/stores/queue.ts` | 203 | App-owned jobs API store and queue actions. | Remains app-owned. Package receives jobs panel/badges as injected UI state. |
+| `ui/src/lib/components/QueueMonitor.svelte` | 271 | App-owned jobs panel and job stream-history viewer. | Remains app-owned; may reuse package `StreamMessage` through app wrapper. |
+| `packages/chat-ui/src/components/{ChatPanel,ChatWidget,StreamMessage}.svelte` | 10568 total | Current package copies still import `$lib/*` and mirror the app files. | Treat as inactive scaffolding until Lots 10-13 remove all app imports. |
+
+Dependency summary:
+
+- `ChatPanel.svelte` depends on app auth/session (`$lib/stores/session`), app navigation/context, comments API, document upload and Google Drive picker, entity stores (`folders`, `organizations`, `initiatives`), workspace scope/RBAC, app REST helpers, app `streamHub`, local-tool store, generated document helpers, markdown helpers, injected Chrome script generation, checkpoint delta helpers, and package pure utilities.
+- `ChatWidget.svelte` depends on app API client init, session auth, queue store/actions, `streamHub`, folders route state, handoff state, extension auth/config utilities, code-agent prompt profile logic, `QueueMonitor`, app `ChatPanel`, and `MenuPopover`.
+- `StreamMessage.svelte` only has two hard app dependencies: app `streamHub` and generated-file card types. Its remaining dependencies are Svelte, icons, `svelte-streamdown`, and labels. This makes it the safest first component activation.
+- `streamHub.ts` has three separable layers: event normalization/history, subscription/replay dispatch, and app transport setup. Only the first two layers belong in `@sentropic/chat-ui`; auth, workspace scoping, base URL, EventSource, Chrome proxy, VSCode runtime detection, and browser globals are host concerns.
+- `queue.ts` and `QueueMonitor.svelte` are not chat UI package core. They represent Sentropic job tracking and queue control, even when a job renders chat stream history.
+
+## Lot 8 Modular Contract
+
+Package-owned modules:
+
+- Stream event model, including normalized chat event names, `StreamHubEvent`, subscription keys, replay limits, per-stream history, dedupe, and delta aggregation.
+- Stream hub factory, implemented as `createStreamHub(options)` with no global singleton.
+- Stream rendering state for reasoning, tool calls, content deltas, terminal status, smoothing, passive history hydration, todo runtime cards, and generated file notifications.
+- Chat timeline projection and composer draft state, independent from Sentropic route stores and REST helpers.
+- Local-tools state machine, permission prompt shapes, pending-tool parsing, and host adapter contracts.
+- Renderer registry and default fallback renderers.
+- Host adapter types and small host factory helpers that do not import app stores.
+
+App-owned modules:
+
+- Auth/session stores, workspace scope/RBAC, route context, navigation, toasts, local storage handoff, and API client initialization.
+- Chat session REST orchestration until it is expressed through a host-supplied `ChatTransport`.
+- Comments, mentions, thread assignment, section labels, and comment-mode UI.
+- Session documents, generated document download, upload, Google Drive picker/connectors, and document-source menus.
+- Entity stores and labels for folders, organizations, initiatives, opportunities, and dashboards.
+- Jobs and queue tracking: `ui/src/lib/stores/queue.ts`, `ui/src/lib/components/QueueMonitor.svelte`, `/queue/*` API calls, active/failed badges, purge/cancel/retry/delete actions.
+- Chrome extension runtime messaging, injected script bridge, side-panel configuration, tab permissions, and endpoint/settings UI.
+- VSCode extension activation, bridge, auth, workspace mapping, stream proxy, local command/file/git execution, and settings UI.
+
+Injected across the boundary:
+
+- `transport`: chat session/message/checkpoint/feedback/tool-result REST client.
+- `streamClient`: stream subscribe/replay client, usually backed by the app `streamHub` wrapper.
+- `contextProvider`: active route/workspace/entity context.
+- `labels`: i18n strings or label resolver used by package components.
+- `rendererRegistry`: app-specific tool result/card renderers.
+- `localToolsAdapter`: Chrome or VSCode local-tool transport.
+- `jobsPanel`: optional app-owned queue panel renderer.
+- `commentsPanel`: optional app-owned comment panel renderer.
+- `documentAdapter`: upload, Google Drive import, generated file download, and session document callbacks.
+- `callbacks`: session selected/created/deleted, terminal stream status, feedback, retry, rollback, copy, and scroll/focus hooks.
+
+Activation order:
+
+1. Extract `streamHub` internals into package factory files while keeping `ui/src/lib/stores/streamHub.ts` as the app singleton wrapper.
+2. Activate package `StreamMessage.svelte`; the app wrapper injects the app stream client, labels, and generated-file handling.
+3. Split `ChatPanel.svelte` into package timeline/composer/state modules plus `ui/src/lib/components/chat/AppChatPanel.svelte`.
+4. Activate package `ChatWidget.svelte` as a launcher/layout shell; keep jobs, comments, and extension settings app-owned and injected.
+5. Add host adapters and rewire app wrappers to consume the package implementations.
+6. Add throughput/history regression tests before full UAT.
+
+Graphify note: the manual import and responsibility map is sufficiently concrete for Lot 8. Graphify is reserved for a later audit only if the app/package dependency graph becomes ambiguous during code movement.
 
 ## Final Package Shape
 
