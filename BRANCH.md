@@ -493,18 +493,18 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11c`.
 
 - [ ] **Lot 11d - ChatComposer package shell**
-  - [ ] Add RED boundary tests in `packages/chat-ui/tests/chat-composer-boundary.test.ts` proving `packages/chat-ui/src/components/ChatComposer.svelte` exists, imports no `$lib/*`, and exposes props for mode, value, disabled states, menu toggles, context/tool sections, primary action, and event callbacks.
-  - [ ] Add RED UI wrapper tests in `ui/tests/components/chat/ChatComposer-wrapper.test.ts` proving the app wrapper injects app context/tool menus and forwards send/steer/comment callbacks.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11d` and confirm the package boundary test fails because `ChatComposer.svelte` does not exist.
-  - [ ] Create `packages/chat-ui/src/components/ChatComposer.svelte` as a render-only composer shell with stable dimensions and injected context/tool menu renderers.
-  - [ ] Add `packages/chat-ui/src/components/ChatComposer.svelte.d.ts` and export subpath `@sentropic/chat-ui/components/ChatComposer.svelte`.
-  - [ ] Create `ui/src/lib/components/chat/ChatComposerWrapper.svelte` to adapt app i18n, context/tool menu state, rich markdown input, send/steer/comment callbacks, and mobile sizing to package props.
-  - [ ] Replace the composer footer block in `ui/src/lib/components/ChatPanel.svelte` with the app composer wrapper; keep `sendMessage`, `sendComposerSteer`, `sendCommentMessage`, focus, and DOM measuring app-owned.
-  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11d`.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11d`.
-  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11d`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11d`.
-  - [ ] Run `wc -l ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/chat/ChatComposerWrapper.svelte packages/chat-ui/src/components/ChatComposer.svelte`.
+  - [x] Add RED boundary tests in `packages/chat-ui/tests/chat-composer-boundary.test.ts` proving `packages/chat-ui/src/components/ChatComposer.svelte` exists, imports no `$lib/*`, and exposes props for mode, value, disabled states, snippets, and keydown binding.
+  - [x] Add RED UI wrapper tests in `ui/tests/components/chat/ChatComposer-wrapper.test.ts` proving the app wrapper imports package `ChatComposer.svelte` and forwards app snippets.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11d` and confirm the package boundary test fails because `ChatComposer.svelte` does not exist; other package tests passed 55/55.
+  - [x] Create `packages/chat-ui/src/components/ChatComposer.svelte` as a render-only composer shell with stable dimensions, owned composer surface styles, and injected surface/floating/left/right render snippets.
+  - [x] Add `packages/chat-ui/src/components/ChatComposer.svelte.d.ts` and export subpath `@sentropic/chat-ui/components/ChatComposer.svelte`.
+  - [x] Create `ui/src/lib/components/chat/ChatComposerWrapper.svelte` to adapt app i18n, context/tool menu state, rich markdown input, send/steer/comment callbacks, and mobile sizing to package props.
+  - [x] Replace the composer footer block in `ui/src/lib/components/ChatPanel.svelte` with the app composer wrapper; keep `sendMessage`, `sendComposerSteer`, `sendCommentMessage`, focus, and DOM measuring app-owned.
+  - [x] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11d` — exited 0.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11d` — 58/58 passed across 13 files.
+  - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11d` — `svelte-check found 0 errors and 6 warnings in 5 files`.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11d` — 21/21 passed across 4 files.
+  - [x] Run `wc -l ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/chat/ChatComposerWrapper.svelte packages/chat-ui/src/components/ChatComposer.svelte` — `ChatPanel.svelte` 5946 lines, `ChatComposerWrapper.svelte` 38 lines, `ChatComposer.svelte` 76 lines.
   - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract chat composer shell" ENV=test-feat-chat-ui-sdk-v2-lot11d`.
   - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11d`.
 
