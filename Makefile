@@ -1481,7 +1481,7 @@ up-maildev: ## Start MailDev service in detached mode
 down-maildev: ## Stop MailDev service
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml stop maildev
 
-# === Scaleway Kapsule (poc-k8s tenant) ===================================
+# === Scaleway Kubernetes (poc-k8s tenant) =================================
 # Tenant-scoped Make targets. The namespace + ResourceQuota + LimitRange +
 # NetworkPolicy baseline are NOT applied here; they live in
 # https://github.com/rhanka/poc-k8s/tree/main/tenants/sentropic — run
@@ -1490,8 +1490,11 @@ down-maildev: ## Stop MailDev service
 SCW_NAMESPACE ?= sentropic
 SCW_ENV_FILE  ?= .env
 KUBECONFIG    ?= $(HOME)/.kube/poc.yaml
+GH_REPO ?= rhanka/sentropic
+GH_K8S_SECRET_NAME ?= KUBECONFIG_B64
+GH_DEPLOY_RUN_ID ?=
 
-.PHONY: scw-deploy scw-undeploy scw-bundle-secret scw-status
+.PHONY: scw-deploy scw-undeploy scw-bundle-secret scw-status gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy
 
 scw-deploy: ## Apply tenant manifests on the poc cluster (SCW_INGRESS=1 includes 60-ingress.yaml)
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/10-rbac.yaml
@@ -1548,3 +1551,19 @@ scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (
 scw-status: ## Snapshot of the sentropic tenant on the poc cluster
 	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get deploy,statefulset,svc,ingress 2>/dev/null || true
 	@echo "" ; KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get pods -o wide 2>/dev/null || true
+
+gh-k8s-secret: ## Create/update GH Actions secret KUBECONFIG_B64 from $(KUBECONFIG)
+	@test -s "$(KUBECONFIG)" || (echo "ERROR: missing or empty KUBECONFIG=$(KUBECONFIG)" >&2; exit 1)
+	@command -v gh >/dev/null 2>&1 || (echo "ERROR: gh CLI is required" >&2; exit 1)
+	@echo "Setting GitHub Actions secret $(GH_K8S_SECRET_NAME) in $(GH_REPO) from $(KUBECONFIG)."
+	@echo "The secret value is piped to gh and is not printed or written to disk."
+	@base64 "$(KUBECONFIG)" | tr -d '\n' | gh secret set "$(GH_K8S_SECRET_NAME)" --repo "$(GH_REPO)"
+	@echo "GitHub Actions secret $(GH_K8S_SECRET_NAME) updated in $(GH_REPO)."
+
+gh-k8s-secret-check: ## Check that the GH Actions kubeconfig secret exists
+	@command -v gh >/dev/null 2>&1 || (echo "ERROR: gh CLI is required" >&2; exit 1)
+	@gh secret list --repo "$(GH_REPO)" | awk -v name="$(GH_K8S_SECRET_NAME)" 'BEGIN { found=0 } $$1 == name { found=1 } END { if (found) { printf "OK: GitHub Actions secret %s exists\n", name; exit 0 } printf "ERROR: GitHub Actions secret %s not found\n", name; exit 1 }'
+
+gh-k8s-rerun-deploy: ## Rerun failed jobs of a GitHub Actions deploy run (GH_DEPLOY_RUN_ID=...)
+	@test -n "$(GH_DEPLOY_RUN_ID)" || (echo "ERROR: GH_DEPLOY_RUN_ID is required, for example GH_DEPLOY_RUN_ID=26159456218" >&2; exit 1)
+	gh run rerun "$(GH_DEPLOY_RUN_ID)" --failed --repo "$(GH_REPO)"

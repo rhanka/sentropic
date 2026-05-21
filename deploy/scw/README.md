@@ -60,12 +60,25 @@ without any imperative `kubectl set image`. `make scw-bundle-secret`
 reads `~/src/sentropic/.env` and creates both Secrets in-cluster,
 replacing the previous version. Re-run after rotating a key.
 
+## GitHub deploy secret (operator side, once)
+
+The CI `deploy-k8s` job needs the GitHub Actions secret `KUBECONFIG_B64`.
+Create or update it from the local cluster kubeconfig with:
+
+```bash
+make gh-k8s-secret KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
+make gh-k8s-secret-check ENV=test-feat-deploy-poc-k8s
+```
+
+The target base64-encodes `KUBECONFIG` in memory and pipes it to
+`gh secret set`; it does not print the secret value or write it to disk.
+
 ## Deploy
 
 ```bash
-KUBECONFIG=~/.kube/poc.yaml make scw-bundle-secret
-KUBECONFIG=~/.kube/poc.yaml make scw-deploy                  # base stack
-KUBECONFIG=~/.kube/poc.yaml make scw-deploy SCW_INGRESS=1    # + Ingress
+make scw-bundle-secret KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
+make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
+make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml SCW_INGRESS=1 ENV=test-feat-deploy-poc-k8s
 ```
 
 ## Smoke test
@@ -92,7 +105,7 @@ Postgres is a StatefulSet; pause it with
 ## Cleanup
 
 ```bash
-KUBECONFIG=~/.kube/poc.yaml make scw-undeploy
+make scw-undeploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
 ```
 
 This removes the workload (Deployments, Services, Secrets created here,
