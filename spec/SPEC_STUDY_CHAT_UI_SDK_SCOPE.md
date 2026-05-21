@@ -1,6 +1,6 @@
 # SPEC_STUDY - BR14a Chat UI SDK Scope
 
-Status: Lot 8 modular refactor contract.
+Status: Lot 10 StreamMessage package activation.
 
 ## Goal
 
@@ -32,17 +32,18 @@ Current large-file line counts:
 | --- | ---: | --- | --- |
 | `ui/src/lib/components/ChatPanel.svelte` | 6107 | App chat session, comments, documents, local tools, runtime projection, composer, history, and API orchestration. | App wrapper plus extracted package timeline/composer/state modules. |
 | `ui/src/lib/components/ChatWidget.svelte` | 3249 | App launcher, dock/floating shell, sessions header, jobs tab, comments tab, extension settings, Chrome/VSCode auth/config surfaces. | App wrapper around package widget shell; jobs/comments/extension settings stay app-owned. |
-| `ui/src/lib/components/StreamMessage.svelte` | 1212 | Stream event projection, reasoning/tool/content rendering, smoothing, history hydration, generated file callback. | First package component to activate, with stream client and labels injected. |
+| `ui/src/lib/components/StreamMessage.svelte` | 75 | App wrapper that injects the app `streamHub` into the package component and preserves the previous public prop surface. | Keep as compatibility wrapper while package owns stream rendering. |
 | `ui/src/lib/stores/streamHub.ts` | 533 | App-wide SSE singleton for chat streams, job updates, entity updates, workspace/comment/lock/presence updates, Chrome proxy, VSCode detection, auth/workspace URL construction. | Package `createStreamHub(options)` plus app singleton wrapper that injects host dependencies. |
 | `ui/src/lib/stores/queue.ts` | 203 | App-owned jobs API store and queue actions. | Remains app-owned. Package receives jobs panel/badges as injected UI state. |
 | `ui/src/lib/components/QueueMonitor.svelte` | 271 | App-owned jobs panel and job stream-history viewer. | Remains app-owned; may reuse package `StreamMessage` through app wrapper. |
-| `packages/chat-ui/src/components/{ChatPanel,ChatWidget,StreamMessage}.svelte` | 10568 total | Current package copies still import `$lib/*` and mirror the app files. | Treat as inactive scaffolding until Lots 10-13 remove all app imports. |
+| `packages/chat-ui/src/components/StreamMessage.svelte` | 1134 | Package stream renderer with injected `streamClient`, generated-file types from package contracts, and pure projection/smoothing helpers in `packages/chat-ui/src/state/`. | Active package component consumed by the app wrapper. |
+| `packages/chat-ui/src/components/{ChatPanel,ChatWidget}.svelte` | 9356 total | Current package copies still import `$lib/*` and mirror the app files. | Treat as inactive scaffolding until Lots 11-13 remove all app imports. |
 
 Dependency summary:
 
 - `ChatPanel.svelte` depends on app auth/session (`$lib/stores/session`), app navigation/context, comments API, document upload and Google Drive picker, entity stores (`folders`, `organizations`, `initiatives`), workspace scope/RBAC, app REST helpers, app `streamHub`, local-tool store, generated document helpers, markdown helpers, injected Chrome script generation, checkpoint delta helpers, and package pure utilities.
 - `ChatWidget.svelte` depends on app API client init, session auth, queue store/actions, `streamHub`, folders route state, handoff state, extension auth/config utilities, code-agent prompt profile logic, `QueueMonitor`, app `ChatPanel`, and `MenuPopover`.
-- `StreamMessage.svelte` only has two hard app dependencies: app `streamHub` and generated-file card types. Its remaining dependencies are Svelte, icons, `svelte-streamdown`, and labels. This makes it the safest first component activation.
+- `StreamMessage.svelte` no longer imports app `$lib/*` modules. The app wrapper owns the concrete `streamHub` singleton injection, while the package component owns stream rendering and helper state.
 - `streamHub.ts` has three separable layers: event normalization/history, subscription/replay dispatch, and app transport setup. Only the first two layers belong in `@sentropic/chat-ui`; auth, workspace scoping, base URL, EventSource, Chrome proxy, VSCode runtime detection, and browser globals are host concerns.
 - `queue.ts` and `QueueMonitor.svelte` are not chat UI package core. They represent Sentropic job tracking and queue control, even when a job renders chat stream history.
 
@@ -115,7 +116,7 @@ Public entrypoints:
 
 - `ChatWidget.svelte`: full chat launcher/panel shell. Props must accept a host adapter, context provider, initial state, display mode, and optional feature flags. It must not import app route stores directly.
 - `ChatPanel.svelte`: session/message composer and timeline UI. Props must accept sessions, active session id, context provider, transport, tool definitions, renderer registry, and callbacks for session/title/document/comment integration.
-- `StreamMessage.svelte`: stream replay/render component. Props keep the current stream-focused shape: `streamId`, `status`, `initialEvents`, `subscriptionMode`, `runtimeSummary`, `onTerminal`, `onStreamEvent`, `onGeneratedFile`, and `onTodoRuntime`.
+- `StreamMessage.svelte`: stream replay/render component. Props keep the current stream-focused shape: injected `streamClient`, injected `labels`, `streamId`, `status`, `initialEvents`, `subscriptionMode`, `runtimeSummary`, `onTerminal`, `onStreamEvent`, `onGeneratedFile`, and `onTodoRuntime`.
 
 Package components may depend on Svelte, `svelte/store`, `svelte-i18n` only through injected dictionaries/labels, `svelte-streamdown`, and UI/icon dependencies already required by the extracted components. App-owned components such as document pickers, comments, workspace menus, and entity-specific cards must be passed as renderers or slots instead of imported directly.
 

@@ -143,9 +143,10 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
 - [x] `closed`: Lot 5 audit — Chrome upstream surface (`ui/src/lib/upstream/injected-script.ts`) is a self-contained ES5 IIFE for cross-origin content-script injection over `window.postMessage` and never imported the legacy `localTools` store. Bridge protocol unit tests (`ui/tests/upstream/{bridge,injected-script}.test.ts`) and `ui/tests/utils/extension-auth-ui.test.ts` likewise have zero coupling to the store. New `ui/src/lib/upstream/chrome-host-adapter.ts` exposes a `createChromeLocalToolsAdapter` factory implementing the package `LocalToolsAdapter` contract on top of `chrome.runtime.sendMessage`, so future Lot 6 consumers (or alternative entry points) can inject it explicitly via `setLocalToolsAdapter(...)` without depending on the package's `globalThis.chrome` fallback. Verified Chrome runtime continues to satisfy the contract natively when no adapter is injected (existing extension code paths unchanged).
 - [x] `closed`: Lot 5 audit — VSCode webview now installs an explicit `LocalToolsAdapter` via `createVsCodeLocalToolsAdapter({ bridge })` + `setLocalToolsAdapter(...)` in `ui/vscode-ext/webview-entry.ts` boot. Adapter routes `tool_execute`, `tool_permission_decide`, and `extension_tool_permissions_{list,upsert,delete}` envelopes through the existing `VsCodeBridge` (`runtime.local_tools.*` commands). `installExtensionRuntimeShim` retains responsibility for all non-local-tool extension messages (auth, config, workspace mapping, stream proxy) so the auth bridge, checkpoint/summary flows, and host messaging remain bit-identical. Host-side `ui/vscode-ext/local-tools.ts` (`VsCodeLocalToolsRuntime`) is unchanged — it is the backend served by the new adapter, not a package consumer.
 - [ ] `attention`: Lot 4 transport URL drifts (`openStream`/`postMessage`/`replayFromSeq` rows above) remain unreconciled in Lot 5 because no production consumer is wired to `createDefaultTransport` yet (verified again: `grep -rn createDefaultTransport ui/src api/src` returns only tests). Recommend reconciliation at BR-14b per-session SSE delivery, BR-14a Lot 6 (publication wiring) if a real consumer lands first, or a follow-up `fix/chat-ui-transport-wire-alignment` branch. No regression today.
-- [ ] `attention`: Lot 8 dependency map confirms `packages/chat-ui/src/components/{ChatPanel,ChatWidget,StreamMessage}.svelte` are still app-coupled copies with `$lib/*` imports. Treat them as inactive scaffolding until Lots 10-13 remove app imports and activate the package implementations. No final UAT before package component imports are clean.
+- [x] `closed`: Lot 10 removed `$lib/*` imports from `packages/chat-ui/src/components/StreamMessage.svelte` and activated it behind the app wrapper. `ChatPanel.svelte` and `ChatWidget.svelte` remain app-coupled scaffolding until Lots 11-13. No final UAT before all package component imports are clean.
 - [x] `BR14a-EX1-extended`: Lot 6 extended the previously declared `BR14a-EX1` (Lot 3 workspace wiring) to cover package publication wiring. Conditional Paths touched: `Makefile` (ADD-only: 6 new chat-ui targets, no existing target modified), `.github/workflows/ci.yml` (ADD-only: `chat_ui` filter + `validate-chat-ui` job + main-only `publish-chat-ui` job, no existing job modified), `packages/chat-ui/README.md` (upgrade only). `packages/chat-ui/package.json` NOT modified (exports kept as-is per deviation note). Pattern compliance: 100% verbatim mirror of `publish-llm-mesh` / `validate-llm-mesh` with only `llm-mesh` → `chat-ui` substitution; lone deviations (1) svelte symlink in typecheck/build/test targets because chat-ui depends on `svelte/store` while llm-mesh has zero runtime deps, (2) test target follows `test-pkg-chat-core` two-step rm/symlink pattern rather than `test-llm-mesh` single-step NODE_PATH because the latter does not work when the test imports a package whose TS declarations must be resolved by Node's resolver. Gate evidence: 0 typecheck errors, 29/29 tests, clean dist build, `sentropic-chat-ui-0.1.0.tgz` produced (60 files, 104.9 kB). Rollback path: revert commits `ac600219`, `c9cd974f`, `8d024b70`, `625d058e`. Closed on 2026-05-19.
 - [x] `BR14a-EX2`: Conditional Path touched: `Makefile` (`test-count` only). Rationale: BR-14a adds package-level modules, but `make test-count` only counted `ui/`, `api/`, and `e2e/`, hiding module tests from UAT reporting. Impact: reporting-only target now includes `packages/*/tests` in the total, prints a package row, and excludes local `e2e/tests/dev/_scratch*` debug specs from the E2E count; no build, runtime, or test execution behavior changes. Rollback: revert the `test-count` hunk in `Makefile`. Closed on 2026-05-20.
+- [x] `BR14a-EX3`: Conditional Path touched: `package-lock.json` (lock sync only). Rationale: Lot 10 activates `packages/chat-ui/src/components/StreamMessage.svelte`, which makes `@lucide/svelte` and `svelte-streamdown` active package peer dependencies; labels/i18n remain host-injected. Impact: lock metadata for `packages/chat-ui` stays consistent with `packages/chat-ui/package.json`; no runtime code change. Rollback: revert the `packages/chat-ui` peer dependency metadata and the generated lockfile hunk. Closed on 2026-05-20.
 - [x] `attention`: Lot 6 exports-map deviation note: `@sentropic/llm-mesh/package.json` exports point to `./dist/index.js` / `./dist/index.d.ts` because llm-mesh ships only TypeScript that compiles to dist. `@sentropic/chat-ui/package.json` exports currently point to `./src/*.ts` with a `"svelte"` condition so SvelteKit/Vite consumers can resolve raw `.ts` and `.svelte` source through the workspace symlink (per Lot 3 commit `603fbe70`). Publish-mode resolution from `dist/` would require either a dual-mode exports map (`"node"` → `dist`, `"svelte"` → `src`) or migrating consumers to a build artefact. For Lot 6, kept exports as-is: `tsc -p tsconfig.json` (`build-chat-ui`) emits `.js`/`.d.ts` from `src/` into `dist/` and `files` already includes both `dist` and `src`, so the published tarball ships both (confirmed by `pack-chat-ui` output listing both `dist/**` and `src/**` under 60 files). Decision: defer dual-mode exports tuning to a follow-up branch only if downstream Node consumers require pure `dist/` resolution. Closed for Lot 6.
 
 ## AI Flaky tests
@@ -367,7 +368,7 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - `ui/src/lib/components/QueueMonitor.svelte`
     - `packages/chat-ui/src/**`
     - Line counts recorded: `ChatPanel.svelte` 6107, `ChatWidget.svelte` 3249, `StreamMessage.svelte` 1212, `streamHub.ts` 533, `queue.ts` 203, `QueueMonitor.svelte` 271, package component copies 10568 total.
-    - Current package component copies still have `$lib/*` imports; recorded as inactive scaffolding until activation lots.
+    - Lot 8 current-state package component copies still had `$lib/*` imports; recorded as inactive scaffolding until activation lots.
   - [x] Use graphify only if the manual import map remains ambiguous; any graphify output must be treated as analysis evidence and must not replace the file-level refactor plan. (Manual import map is concrete; graphify not run for Lot 8.)
   - [x] Update `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` with the final module boundary:
     - package-owned: stream event model, stream hub factory, replay cursor, stream projection, stream rendering, chat timeline/composer shell, local-tools state machine, renderer registry, host adapter types.
@@ -379,7 +380,7 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - `StreamMessage.svelte` props for `streamClient`, `streamId`, `status`, `initialEvents`, `runtimeSummary`, `subscriptionMode`, `contentSmoothing`, and callbacks.
   - [ ] Lot gate:
     - [x] No behavior change. Lot 8 changes only `BRANCH.md` and `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`.
-    - [x] Run `rg -n "\\$lib/|from 'api/|@sentropic/llm-mesh|chrome\\.runtime|__TOPAI_VSCODE_RUNTIME__" packages/chat-ui/src` — expected current-state hits: host/localTools comments mention `chrome.runtime`; package Svelte copies still import `$lib/*` (`ChatPanel`, `ChatWidget`, `StreamMessage`). This is the documented isolation gap for Lots 10-13.
+    - [x] Run `rg -n "\\$lib/|from 'api/|@sentropic/llm-mesh|chrome\\.runtime|__TOPAI_VSCODE_RUNTIME__" packages/chat-ui/src` — Lot 8 expected hits: host/localTools comments mention `chrome.runtime`; package Svelte copies still import `$lib/*` (`ChatPanel`, `ChatWidget`, `StreamMessage`). This was the documented isolation gap for Lots 10-13.
     - [x] Run `make test-count ENV=test-feat-chat-ui-sdk-v2` — UI 57/379, API non-ai 132/982, API ai 9/30, E2E 44/227, Packages 29/284, TOTAL 271/1902.
     - [ ] Commit scope/spec plan with selective `git add BRANCH.md spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`, then `make commit MSG="docs: lock chat ui modular refactor contract" ENV=test-feat-chat-ui-sdk-v2`.
 
@@ -418,26 +419,31 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract stream hub factory to chat ui" ENV=test-feat-chat-ui-sdk-v2-lot9`.
 
 - [ ] **Lot 10 - StreamMessage package activation**
-  - [ ] Make `packages/chat-ui/src/components/StreamMessage.svelte` the real implementation:
+  - [x] Make `packages/chat-ui/src/components/StreamMessage.svelte` the real implementation:
     - remove every `$lib/*` import from the package component.
-    - inject labels/i18n through props or a package-local label resolver.
     - keep `svelte-streamdown` as the markdown renderer dependency.
     - consume stream events through injected `streamClient` instead of the app `streamHub` singleton.
     - keep passive history hydration via `initialEvents` and `runtimeSummary`.
-  - [ ] Convert `ui/src/lib/components/StreamMessage.svelte` into a wrapper that injects the app `streamHub`, app labels, and app-specific generated-file handling.
-  - [ ] Add package tests:
-    - `packages/chat-ui/tests/stream-message-projection.test.ts` — reasoning/tool/content/done event projection.
-    - `packages/chat-ui/tests/stream-message-smoothing.test.ts` — large delta smoothing and terminal flush.
-  - [ ] Update UI tests:
+    - extract pure projection helpers into `packages/chat-ui/src/state/streamMessageProjection.ts`.
+    - extract smoothing helpers into `packages/chat-ui/src/state/streamMessageSmoothing.ts`.
+    - add `.svelte.d.ts` declarations and exports-map entries for package component subpaths.
+    - inject labels through the app wrapper, declare active renderer dependencies as package peers, and sync the root lockfile under `BR14a-EX3`.
+  - [x] Convert `ui/src/lib/components/StreamMessage.svelte` into a wrapper that injects the app `streamHub`, app labels, and app-specific generated-file handling.
+  - [x] Add package tests:
+    - `packages/chat-ui/tests/stream-message-boundary.test.ts` — package component has no `$lib/*` app imports and uses injected `streamClient`.
+    - `packages/chat-ui/tests/stream-message-projection.test.ts` — reasoning section-break, todo-runtime checklist, and collapsed preview helper projection.
+    - `packages/chat-ui/tests/stream-message-smoothing.test.ts` — smoothing thresholds and chunk pump behavior.
+  - [x] Update UI tests:
     - `ui/tests/components/ChatPanel-docx-cards.test.ts`
     - add `ui/tests/components/chat/StreamMessage-wrapper.test.ts` for app wrapper injection.
   - [ ] Lot gate:
-    - [ ] Run `rg -n "\\$lib/" packages/chat-ui/src/components/StreamMessage.svelte` and confirm no hits.
-    - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot10`.
-    - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot10`.
-    - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-chat-ui-sdk-v2-lot10`.
-    - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-chat-ui-sdk-v2-lot10`.
-    - [ ] Commit with selective `git add`, then `make commit MSG="refactor: activate package stream message" ENV=test-feat-chat-ui-sdk-v2-lot10`.
+    - [x] Run `rg -n "\\$lib/" packages/chat-ui/src/components/StreamMessage.svelte` — no hits, exit 1 as expected for no matches.
+    - [x] Run `make lock-root ENV=test-feat-chat-ui-sdk-v2-lot10` — lockfile synchronized; npm audit summary remains 10 vulnerabilities (3 low, 7 moderate).
+    - [x] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot10` — exited 0.
+    - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot10` — 43/43 passed across 9 files.
+    - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-chat-ui-sdk-v2-lot10` — `svelte-check found 0 errors and 6 warnings in 5 files`.
+    - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-chat-ui-sdk-v2-lot10` — 17/17 passed across 2 files.
+    - [x] Commit with selective `git add`, then `make commit MSG="refactor: activate package stream message" ENV=test-feat-chat-ui-sdk-v2-lot10`.
 
 - [ ] **Lot 11 - Chat timeline and composer decomposition**
   - [ ] Create package timeline/composer modules:

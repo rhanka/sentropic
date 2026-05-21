@@ -42,6 +42,16 @@
       "svelte": "./src/client/streamHub.ts",
       "import": "./src/client/streamHub.ts"
     },
+    "./state/streamMessageProjection": {
+      "types": "./src/state/streamMessageProjection.ts",
+      "svelte": "./src/state/streamMessageProjection.ts",
+      "import": "./src/state/streamMessageProjection.ts"
+    },
+    "./state/streamMessageSmoothing": {
+      "types": "./src/state/streamMessageSmoothing.ts",
+      "svelte": "./src/state/streamMessageSmoothing.ts",
+      "import": "./src/state/streamMessageSmoothing.ts"
+    },
     "./renderers/registry": {
       "types": "./src/renderers/registry.ts",
       "svelte": "./src/renderers/registry.ts",
@@ -83,13 +93,19 @@
       "import": "./src/utils/localToolStreamSync.ts"
     },
     "./components/ChatPanel.svelte": {
-      "svelte": "./src/components/ChatPanel.svelte"
+      "types": "./src/components/ChatPanel.svelte.d.ts",
+      "svelte": "./src/components/ChatPanel.svelte",
+      "import": "./src/components/ChatPanel.svelte"
     },
     "./components/ChatWidget.svelte": {
-      "svelte": "./src/components/ChatWidget.svelte"
+      "types": "./src/components/ChatWidget.svelte.d.ts",
+      "svelte": "./src/components/ChatWidget.svelte",
+      "import": "./src/components/ChatWidget.svelte"
     },
     "./components/StreamMessage.svelte": {
-      "svelte": "./src/components/StreamMessage.svelte"
+      "types": "./src/components/StreamMessage.svelte.d.ts",
+      "svelte": "./src/components/StreamMessage.svelte",
+      "import": "./src/components/StreamMessage.svelte"
     }
   },
   "files": [
@@ -110,7 +126,9 @@
     "test": "vitest run tests"
   },
   "peerDependencies": {
-    "svelte": "^5.0.0"
+    "@lucide/svelte": "^0.562.0",
+    "svelte": "^5.0.0",
+    "svelte-streamdown": "^3.0.1"
   },
   "devDependencies": {
     "typescript": "5.4.5"
