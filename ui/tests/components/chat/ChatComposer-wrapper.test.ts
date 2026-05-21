@@ -6,7 +6,10 @@ const wrapperPath = resolve(
   process.cwd(),
   'src/lib/components/chat/ChatComposerWrapper.svelte',
 );
-const panelPath = resolve(process.cwd(), 'src/lib/components/ChatPanel.svelte');
+const appPanelPath = resolve(
+  process.cwd(),
+  'src/lib/components/chat/AppChatPanel.svelte',
+);
 
 describe('ChatComposer app wrapper', () => {
   it('wraps the package composer shell and forwards app snippets', () => {
@@ -21,8 +24,8 @@ describe('ChatComposer app wrapper', () => {
     expect(source).toContain('renderRightActions');
   });
 
-  it('is used by ChatPanel for the composer shell', () => {
-    const source = readFileSync(panelPath, 'utf8');
+  it('is used by AppChatPanel for the composer shell', () => {
+    const source = readFileSync(appPanelPath, 'utf8');
     expect(source).toContain(
       "import ChatComposerWrapper from '$lib/components/chat/ChatComposerWrapper.svelte'",
     );
