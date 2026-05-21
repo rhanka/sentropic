@@ -27,6 +27,21 @@
       "svelte": "./src/client/replay.ts",
       "import": "./src/client/replay.ts"
     },
+    "./client/streamTypes": {
+      "types": "./src/client/streamTypes.ts",
+      "svelte": "./src/client/streamTypes.ts",
+      "import": "./src/client/streamTypes.ts"
+    },
+    "./client/streamHistory": {
+      "types": "./src/client/streamHistory.ts",
+      "svelte": "./src/client/streamHistory.ts",
+      "import": "./src/client/streamHistory.ts"
+    },
+    "./client/streamHub": {
+      "types": "./src/client/streamHub.ts",
+      "svelte": "./src/client/streamHub.ts",
+      "import": "./src/client/streamHub.ts"
+    },
     "./renderers/registry": {
       "types": "./src/renderers/registry.ts",
       "svelte": "./src/renderers/registry.ts",
