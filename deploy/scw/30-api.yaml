@@ -45,6 +45,8 @@ metadata:
     app.kubernetes.io/component: api
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: sentropic
@@ -58,7 +60,7 @@ spec:
       serviceAccountName: sentropic-app
       containers:
         - name: api
-          image: rg.fr-par.scw.cloud/sentropic/sentropic-api:feat-deploy-poc-k8s
+          image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:feat-deploy-poc-k8s
           imagePullPolicy: Always
           envFrom:
             - configMapRef:
@@ -74,6 +76,13 @@ spec:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 60
           livenessProbe:
             httpGet:
               path: /api/v1/health

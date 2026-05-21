@@ -1490,14 +1490,22 @@ down-maildev: ## Stop MailDev service
 SCW_NAMESPACE ?= sentropic
 SCW_ENV_FILE  ?= .env
 KUBECONFIG    ?= $(HOME)/.kube/poc.yaml
+SCW_REGISTRY_SECRET ?= sentropic-registry
+SCW_LOG_SELECTOR ?= app.kubernetes.io/name=sentropic,app.kubernetes.io/component=api
+SCW_LOG_TAIL ?= 200
+SCW_LOG_PREVIOUS ?= 0
+SCW_API_SMOKE_PORT ?= 18787
+SCW_UI_SMOKE_PORT ?= 15173
+SCW_MAILDEV_SMOKE_PORT ?= 11080
 GH_REPO ?= rhanka/sentropic
 GH_K8S_SECRET_NAME ?= KUBECONFIG_B64
 GH_DEPLOY_RUN_ID ?=
 
-.PHONY: scw-deploy scw-undeploy scw-bundle-secret scw-status gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy
+.PHONY: scw-deploy scw-undeploy scw-bundle-secret scw-registry-secret scw-status scw-debug scw-logs scw-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
 
 scw-deploy: ## Apply tenant manifests on the poc cluster (SCW_INGRESS=1 includes 60-ingress.yaml)
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/10-rbac.yaml
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/15-networkpolicy.yaml
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/20-postgres.yaml
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/30-api.yaml
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/40-ui.yaml
@@ -1514,6 +1522,7 @@ scw-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/40-ui.yaml --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/30-api.yaml --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/20-postgres.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/15-networkpolicy.yaml --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/10-rbac.yaml --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete secret sentropic-postgres sentropic-api --ignore-not-found
 
@@ -1548,9 +1557,65 @@ scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f -
 	@echo "==> Secrets sentropic-postgres + sentropic-api ready in $(SCW_NAMESPACE)."
 
+scw-registry-secret: ## Create/update the SCW Registry pull secret from $(SCW_ENV_FILE)
+	@test -f $(SCW_ENV_FILE) || { echo "missing $(SCW_ENV_FILE)" >&2; exit 1; }
+	@set -eu ; \
+	set -a ; source "$(SCW_ENV_FILE)" ; set +a ; \
+	registry="$${REGISTRY:?missing REGISTRY in $(SCW_ENV_FILE)}" ; \
+	username="$${DOCKER_USERNAME:?missing DOCKER_USERNAME in $(SCW_ENV_FILE)}" ; \
+	password="$${SCW_REGISTRY_TOKEN:-$${DOCKER_PASSWORD:-}}" ; \
+	[ -n "$$password" ] || { echo "missing SCW_REGISTRY_TOKEN or DOCKER_PASSWORD in $(SCW_ENV_FILE)" >&2; exit 1; } ; \
+	registry="$${registry#https://}" ; registry="$${registry#http://}" ; registry="$${registry%%/*}" ; \
+	echo "Creating/updating image pull secret $(SCW_REGISTRY_SECRET) in $(SCW_NAMESPACE) for $$registry." ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) create secret docker-registry $(SCW_REGISTRY_SECRET) \
+	  --docker-server="$$registry" \
+	  --docker-username="$$username" \
+	  --docker-password="$$password" \
+	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
+	echo "==> Image pull secret $(SCW_REGISTRY_SECRET) ready in $(SCW_NAMESPACE)."
+
 scw-status: ## Snapshot of the sentropic tenant on the poc cluster
 	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get deploy,statefulset,svc,ingress 2>/dev/null || true
 	@echo "" ; KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get pods -o wide 2>/dev/null || true
+
+scw-debug: ## Show pod descriptions and recent events for the sentropic tenant
+	@echo "==> Pods"
+	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get pods -o wide
+	@echo ""
+	@echo "==> Network policies"
+	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get networkpolicy -o wide
+	@echo ""
+	@echo "==> Pod descriptions"
+	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) describe pods -l app.kubernetes.io/name=sentropic
+	@echo ""
+	@echo "==> Recent events"
+	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get events --sort-by=.lastTimestamp
+
+scw-logs: ## Show recent logs for a tenant pod selector (SCW_LOG_SELECTOR=..., SCW_LOG_TAIL=...)
+	@if [ "$(SCW_LOG_PREVIOUS)" = "1" ]; then \
+	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) logs -l "$(SCW_LOG_SELECTOR)" --tail="$(SCW_LOG_TAIL)" --all-containers=true --prefix=true --previous; \
+	else \
+	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) logs -l "$(SCW_LOG_SELECTOR)" --tail="$(SCW_LOG_TAIL)" --all-containers=true --prefix=true; \
+	fi
+
+scw-smoke: ## Smoke-test api, ui, and maildev through temporary port-forwards
+	@set -eu ; \
+	smoke() { \
+	  name="$$1"; local_port="$$2"; remote_port="$$3"; path="$$4"; log="$$(mktemp)"; \
+	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) port-forward "svc/$$name" "$$local_port:$$remote_port" >"$$log" 2>&1 & pid="$$!"; \
+	  ok=0; \
+	  for _ in $$(seq 1 30); do \
+	    if curl -fsS "http://127.0.0.1:$$local_port$$path" >/dev/null 2>&1; then ok=1; break; fi; \
+	    sleep 1; \
+	  done; \
+	  kill "$$pid" >/dev/null 2>&1 || true; \
+	  wait "$$pid" >/dev/null 2>&1 || true; \
+	  if [ "$$ok" != "1" ]; then echo "ERROR: $$name smoke failed"; cat "$$log"; rm -f "$$log"; exit 1; fi; \
+	  rm -f "$$log"; echo "OK: $$name $$path"; \
+	}; \
+	smoke api "$(SCW_API_SMOKE_PORT)" 8787 /api/v1/health; \
+	smoke ui "$(SCW_UI_SMOKE_PORT)" 5173 /; \
+	smoke maildev "$(SCW_MAILDEV_SMOKE_PORT)" 1080 /
 
 gh-k8s-secret: ## Create/update GH Actions secret KUBECONFIG_B64 from $(KUBECONFIG)
 	@test -s "$(KUBECONFIG)" || (echo "ERROR: missing or empty KUBECONFIG=$(KUBECONFIG)" >&2; exit 1)
@@ -1567,3 +1632,7 @@ gh-k8s-secret-check: ## Check that the GH Actions kubeconfig secret exists
 gh-k8s-rerun-deploy: ## Rerun failed jobs of a GitHub Actions deploy run (GH_DEPLOY_RUN_ID=...)
 	@test -n "$(GH_DEPLOY_RUN_ID)" || (echo "ERROR: GH_DEPLOY_RUN_ID is required, for example GH_DEPLOY_RUN_ID=26159456218" >&2; exit 1)
 	gh run rerun "$(GH_DEPLOY_RUN_ID)" --failed --repo "$(GH_REPO)"
+
+gh-k8s-watch: ## Watch a GitHub Actions deploy run until completion (GH_DEPLOY_RUN_ID=...)
+	@test -n "$(GH_DEPLOY_RUN_ID)" || (echo "ERROR: GH_DEPLOY_RUN_ID is required, for example GH_DEPLOY_RUN_ID=26159456218" >&2; exit 1)
+	gh run watch "$(GH_DEPLOY_RUN_ID)" --repo "$(GH_REPO)" --interval 30 --exit-status
