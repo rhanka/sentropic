@@ -174,4 +174,50 @@ describe('AppFlowRuntime', () => {
       }),
     );
   });
+
+  it('starts initiative generation without delegating back to todoOrchestrationService.startInitiativeGenerationWorkflow', async () => {
+    const legacyStartInitiative = vi
+      .spyOn(todoOrchestrationService, 'startInitiativeGenerationWorkflow')
+      .mockRejectedValue(new Error('legacy startInitiative delegate should not be called'));
+
+    const result = await flowRuntime.startInitiativeGenerationWorkflow({
+      actor,
+      input: {
+        folderId: 'folder-flow-runtime-start',
+        matrixMode: 'generate',
+        matrixSource: 'prompt',
+        input: 'Build an AI adoption shortlist',
+        model: 'gpt-4',
+        initiativeCount: 4,
+        locale: 'fr',
+        autoCreateOrganizations: true,
+        orgIds: ['org-a', 'org-b'],
+      },
+    });
+
+    expect(legacyStartInitiative).not.toHaveBeenCalled();
+    expect(result.workflowRunId).toBeTruthy();
+    expect(result.workflowDefinitionId).toBeTruthy();
+    expect(result.agentMap.generation_context_prepare).toBeTruthy();
+    expect(result.agentMap.generation_usecase_list).toBeTruthy();
+
+    const [state] = await db
+      .select({ state: workflowRunState.state, currentTaskKey: workflowRunState.currentTaskKey })
+      .from(workflowRunState)
+      .where(and(eq(workflowRunState.runId, result.workflowRunId), eq(workflowRunState.workspaceId, actor.workspaceId)))
+      .limit(1);
+    expect(state).toEqual(
+      expect.objectContaining({
+        currentTaskKey: 'generation_create_organizations',
+        state: expect.objectContaining({
+          inputs: expect.objectContaining({
+            folderId: 'folder-flow-runtime-start',
+            matrixSource: 'prompt',
+            autoCreateOrganizations: true,
+            orgIds: ['org-a', 'org-b'],
+          }),
+        }),
+      }),
+    );
+  });
 });
