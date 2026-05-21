@@ -721,11 +721,12 @@ jobs:
           fi
           printf '%s' "${KUBECONFIG_B64}" | base64 -d > kubeconfig.yaml
           chmod 600 kubeconfig.yaml
-      - name: Rollout restart api + ui on Kubernetes
+      - name: Apply manifests and restart api + ui on Kubernetes
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig.yaml
         run: |
           set -eu
+          make scw-deploy KUBECONFIG="${KUBECONFIG}" ENV=ci-k8s
           kubectl -n sentropic rollout restart deployment/api deployment/ui
           kubectl -n sentropic rollout status  deployment/api --timeout=300s
           kubectl -n sentropic rollout status  deployment/ui  --timeout=300s
