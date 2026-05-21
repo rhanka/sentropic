@@ -62,9 +62,10 @@ jobs in `.github/workflows/ci.yml` push two tags per image: a
 content-hash sha1 (immutable, used by `make publish-{api,ui}-image`) and a
 floating branch alias (`feat-deploy-poc-k8s` on the BR-37 branch, `main`
 after merge). `imagePullPolicy: Always` plus the post-publish
-`deploy-k8s` CI job (`kubectl -n sentropic rollout restart
-deployment/api deployment/ui`) guarantee Kubernetes picks up the latest digest
-without any imperative `kubectl set image`. `make scw-bundle-secret`
+`deploy-k8s` CI job (`make scw-deploy`, then `kubectl -n sentropic rollout
+restart deployment/api deployment/ui`) guarantee Kubernetes picks up manifest
+changes and the latest digest without any imperative `kubectl set image`.
+`make scw-bundle-secret`
 reads `~/src/sentropic/.env` and creates both Secrets in-cluster,
 replacing the previous version. Re-run after rotating a key.
 
