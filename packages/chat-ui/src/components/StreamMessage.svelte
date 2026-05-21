@@ -1,11 +1,35 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import { ChevronDown, Loader2 } from '@lucide/svelte';
   import { Streamdown } from 'svelte-streamdown';
-  import { _ } from 'svelte-i18n';
-  import type { GeneratedFileCard } from '$lib/utils/docx';
+  import type {
+    GeneratedFileCard,
+    StreamHubClient,
+    StreamHubEvent,
+  } from '../client/streamTypes.js';
+  import {
+    asRecord,
+    buildTodoRuntimeChecklist,
+    needsReasoningSectionBreak,
+    normalizeTaskStatus,
+    summarizePreviewText,
+  } from '../state/streamMessageProjection.js';
+  import {
+    shouldAnimateSmoothDelta,
+    takeSmoothChunk,
+  } from '../state/streamMessageSmoothing.js';
 
+  type StreamMessageClient = Pick<StreamHubClient, 'setStream' | 'delete'>;
+  type LabelOptions = { values?: Record<string, unknown> };
+  export type StreamMessageLabelResolver = (
+    key: string,
+    options?: LabelOptions,
+  ) => string;
+
+  const defaultLabelResolver: StreamMessageLabelResolver = (key) => key;
+
+  export let streamClient: StreamMessageClient;
+  export let labels: StreamMessageLabelResolver = defaultLabelResolver;
   export let streamId: string;
   export let status: string | undefined;
   export let maxHistory = 10;
@@ -150,14 +174,6 @@
     }
   };
 
-  const smoothStepSize = (pendingLength: number): number => {
-    if (pendingLength > 2400) return 48;
-    if (pendingLength > 1200) return 32;
-    if (pendingLength > 600) return 20;
-    if (pendingLength > 240) return 12;
-    return 6;
-  };
-
   const runSmoothPump = () => {
     if (smoothTimer || !smoothPendingText) return;
     const tick = () => {
@@ -165,10 +181,9 @@
         smoothTimer = null;
         return;
       }
-      const size = smoothStepSize(smoothPendingText.length);
-      const next = smoothPendingText.slice(0, size);
-      smoothPendingText = smoothPendingText.slice(size);
-      smoothedContentText = `${smoothedContentText}${next}`;
+      const { chunk, remaining } = takeSmoothChunk(smoothPendingText);
+      smoothPendingText = remaining;
+      smoothedContentText = `${smoothedContentText}${chunk}`;
       smoothTimer = setTimeout(tick, 18);
     };
     smoothTimer = setTimeout(tick, 0);
@@ -176,10 +191,12 @@
 
   const pushSmoothedDelta = (delta: string) => {
     if (!delta) return;
-    const shouldAnimate =
-      delta.length >= smoothChunkThreshold ||
-      smoothPendingText.length > 0 ||
-      smoothTimer !== null;
+    const shouldAnimate = shouldAnimateSmoothDelta({
+      delta,
+      pendingText: smoothPendingText,
+      hasTimer: smoothTimer !== null,
+      threshold: smoothChunkThreshold,
+    });
     if (!shouldAnimate) {
       smoothedContentText = st.contentText || '';
       return;
@@ -220,13 +237,6 @@
       return;
     }
     st.steps = [...st.steps, { title, body, kind: st.stepKind ?? 'other' }].slice(-stepLimit);
-  };
-
-  const needsReasoningSectionBreak = (prev: string, delta: string): boolean => {
-    if (!prev) return false;
-    if (!delta || !delta.startsWith('**')) return false;
-    // Only insert a break if the previous content does not end with whitespace (space/tab/newline).
-    return !/\s$/.test(prev);
   };
 
   const parseTodoToolCard = (
@@ -281,87 +291,6 @@
     value: string | undefined,
   ): value is 'plan' => value === 'plan';
 
-  const asRecord = (value: unknown): Record<string, unknown> | null => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-    return value as Record<string, unknown>;
-  };
-
-  const normalizeTaskStatus = (value: unknown): string =>
-    typeof value === 'string' && value.trim().length > 0 ? value.trim().toLowerCase() : 'todo';
-
-  const asTaskList = (value: unknown): TodoToolTask[] => {
-    if (!Array.isArray(value)) return [];
-    return value
-      .map((entry): TodoToolTask | null => {
-        const item = asRecord(entry);
-        if (!item) return null;
-        const title = String(item.title ?? '').trim();
-        if (!title) return null;
-        const id = String(item.id ?? '').trim();
-        const status = normalizeTaskStatus(item.status ?? item.derivedStatus);
-        return id ? { id, title, status } : { title, status };
-      })
-      .filter((entry): entry is TodoToolTask => entry !== null);
-  };
-
-  const escapeMarkdownText = (value: string): string =>
-    value.replace(/([\\`*_{}\[\]()#+.!|>~-])/g, '\\$1');
-
-  const buildTodoRuntimeChecklist = (
-    toolName: 'plan',
-    rawResult: unknown,
-  ): string | null => {
-    const result = asRecord(rawResult) ?? {};
-    const runtime = asRecord(result.todoRuntime) ?? result;
-    const operation = String(runtime.operation ?? '').trim();
-    const todo = asRecord(runtime.todo);
-    const activeTodo = asRecord(runtime.activeTodo);
-    const task = asRecord(runtime.task);
-
-    const todoTitle = String(todo?.title ?? activeTodo?.title ?? '').trim();
-    const todoId = String(runtime.todoId ?? todo?.id ?? activeTodo?.id ?? '').trim();
-    const headerLabel = todoTitle
-      ? `Plan ${todoTitle}`
-      : todoId
-        ? `Plan ${todoId}`
-        : 'Plan';
-
-    const tasksFromRuntime = asTaskList(runtime.tasks);
-    const tasksFromResult = asTaskList(result.tasks);
-    let taskItems = tasksFromRuntime.length > 0 ? tasksFromRuntime : tasksFromResult;
-
-    if (taskItems.length === 0 && task) {
-      const taskTitle = String(task.title ?? '').trim();
-      if (taskTitle) {
-        taskItems = [{
-          id: String(task.id ?? '').trim() || undefined,
-          title: taskTitle,
-          status: normalizeTaskStatus(task.status ?? task.derivedStatus),
-        }];
-      }
-    }
-
-    if (taskItems.length === 0) return null;
-
-    const lines = [headerLabel];
-    for (const item of taskItems) {
-      const done = normalizeTaskStatus(item.status) === 'done';
-      const safeTitle = escapeMarkdownText(item.title);
-      lines.push(done ? `- [x] ~~${safeTitle}~~` : `- [ ] ${safeTitle}`);
-    }
-    if (operation === 'update_task' && taskItems.length === 1) {
-      lines.push(`_Task status: ${normalizeTaskStatus(taskItems[0].status)}_`);
-    }
-    return lines.join('\n');
-  };
-
-  const summarizePreviewText = (value: string): string => {
-    const normalized = value.trim();
-    if (!normalized) return '';
-    if (normalized.length <= 320) return normalized;
-    return `${normalized.slice(-320)}`;
-  };
-
   const applyEvent = (
     eventType: string,
     data: any,
@@ -389,14 +318,14 @@
         st.sawStarted = true;
         // Option B: libellé explicite pour la phase de démarrage
         st.stepKind = 'startup';
-        st.stepTitle = $_('stream.preparing');
+        st.stepTitle = labels('stream.preparing');
         st.startedAtMs = ts;
       } else if (state === 'reasoning_effort_selected') {
         const effort = String(data?.effort ?? '').trim() || 'unknown';
         const by = String(data?.by ?? '').trim();
         const label = by ? `${effort} (via ${by})` : effort;
         st.stepKind = 'reasoning';
-        st.stepTitle = $_('stream.reasoningEffort');
+        st.stepTitle = labels('stream.reasoningEffort');
         st.auxText = label;
         if (collectDetails) upsertStep(st.stepTitle, label);
       } else if (state === 'reasoning_effort') {
@@ -405,13 +334,13 @@
         const it = data?.iteration != null ? String(data.iteration) : '';
         const label = `${effort}${phase ? ` — ${phase}${it ? ` #${it}` : ''}` : ''}`;
         st.stepKind = 'reasoning';
-        st.stepTitle = $_('stream.reasoningEffort');
+        st.stepTitle = labels('stream.reasoningEffort');
         st.auxText = label;
         if (collectDetails) upsertStep(st.stepTitle, label);
       } else if (state === 'reasoning_effort_eval_failed') {
-        const msg = String(data?.message ?? '').trim() || $_('stream.unknownError');
+        const msg = String(data?.message ?? '').trim() || labels('stream.unknownError');
         st.stepKind = 'reasoning';
-        st.stepTitle = $_('stream.reasoningEffortFailed');
+        st.stepTitle = labels('stream.reasoningEffortFailed');
         st.auxText = msg;
         if (collectDetails) upsertStep(st.stepTitle, msg);
       } else if (state === 'context_budget_update') {
@@ -424,44 +353,44 @@
         st.contextBudgetPct = pct;
         st.contextBudgetZone = zone;
         const line = pct === null
-          ? $_('stream.contextBudget')
-          : $_('stream.contextOccupancy', { values: { pct } });
+          ? labels('stream.contextBudget')
+          : labels('stream.contextOccupancy', { values: { pct } });
         st.stepKind = 'status';
-        st.stepTitle = $_('stream.contextBudget');
+        st.stepTitle = labels('stream.contextBudget');
         st.auxText = line;
         if (collectDetails) upsertStep(st.stepTitle, line);
       } else if (state === 'context_compaction_started') {
-        st.contextCompactionStrip = $_('stream.contextCompactionInProgress');
+        st.contextCompactionStrip = labels('stream.contextCompactionInProgress');
         st.stepKind = 'status';
-        st.stepTitle = $_('stream.contextCompaction');
-        st.auxText = $_('stream.contextCompactionInProgress');
+        st.stepTitle = labels('stream.contextCompaction');
+        st.auxText = labels('stream.contextCompactionInProgress');
         if (collectDetails) upsertStep(st.stepTitle, st.auxText);
       } else if (state === 'context_compaction_done') {
-        st.contextCompactionStrip = $_('stream.contextCompactionDone');
+        st.contextCompactionStrip = labels('stream.contextCompactionDone');
         st.stepKind = 'status';
-        st.stepTitle = $_('stream.contextCompaction');
-        st.auxText = $_('stream.contextCompactionDone');
+        st.stepTitle = labels('stream.contextCompaction');
+        st.auxText = labels('stream.contextCompactionDone');
         if (collectDetails) upsertStep(st.stepTitle, st.auxText);
       } else if (state === 'context_compaction_failed') {
-        st.contextCompactionStrip = $_('stream.contextCompactionFailed');
+        st.contextCompactionStrip = labels('stream.contextCompactionFailed');
         st.stepKind = 'status';
-        st.stepTitle = $_('stream.contextCompaction');
-        st.auxText = String(data?.message ?? $_('stream.unknownError'));
+        st.stepTitle = labels('stream.contextCompaction');
+        st.auxText = String(data?.message ?? labels('stream.unknownError'));
         if (collectDetails) upsertStep(st.stepTitle, st.auxText);
       } else if (state === 'context_budget_user_escalation_required') {
         st.stepKind = 'status';
-        st.stepTitle = $_('stream.contextBudgetEscalation');
-        st.auxText = $_('stream.contextBudgetEscalationBody');
+        st.stepTitle = labels('stream.contextBudgetEscalation');
+        st.auxText = labels('stream.contextBudgetEscalationBody');
         if (collectDetails) upsertStep(st.stepTitle, st.auxText);
       } else {
         st.stepKind = 'status';
-        st.stepTitle = $_('stream.status', { values: { state } });
+        st.stepTitle = labels('stream.status', { values: { state } });
       }
     } else if (eventType === 'reasoning_delta') {
       st.sawReasoning = true;
       st.sawStarted = false;
       st.stepKind = 'reasoning';
-      st.stepTitle = $_('stream.reasoning');
+      st.stepTitle = labels('stream.reasoning');
       const delta = String(data?.delta ?? '');
       if (collectDetails) {
         const prev = st.auxText || '';
@@ -476,7 +405,7 @@
       st.sawStarted = false;
       const name = String(data?.name ?? 'unknown');
       st.stepKind = 'tool';
-      st.stepTitle = $_('stream.tool', { values: { name } });
+      st.stepTitle = labels('stream.tool', { values: { name } });
       const toolId = String(data?.tool_call_id ?? '').trim();
       if (toolId) st.toolCallIds.add(toolId);
       if (toolId && name && name !== 'unknown') st.toolNameById[toolId] = name;
@@ -499,8 +428,8 @@
       const toolName = st.toolNameById[toolId];
       st.stepKind = 'tool';
       st.stepTitle = toolName
-        ? $_('stream.toolArgs', { values: { name: toolName } })
-        : $_('stream.toolArgsFallback');
+        ? labels('stream.toolArgs', { values: { name: toolName } })
+        : labels('stream.toolArgsFallback');
       if (collectDetails) {
         st.auxText = st.toolArgsById[toolId];
         upsertStep(st.stepTitle, st.auxText);
@@ -521,7 +450,7 @@
       })();
       const label = toolName ? `${toolName} (${err ? 'error' : status})` : (err ? 'erreur' : status);
       st.stepKind = 'tool';
-      st.stepTitle = $_('stream.tool', { values: { name: label } });
+      st.stepTitle = labels('stream.tool', { values: { name: label } });
       st.auxText = '';
       let toolResultBody: string | undefined;
       if (err) {
@@ -579,7 +508,7 @@
     } else if (eventType === 'content_delta') {
       st.sawStarted = false;
       st.stepKind = 'content';
-      st.stepTitle = $_('stream.response');
+      st.stepTitle = labels('stream.response');
       const delta = String(data?.delta ?? '');
       if (collectContent) {
         st.contentText = (st.contentText || '') + delta;
@@ -594,8 +523,8 @@
     } else if (eventType === 'done' || eventType === 'error') {
       st.endedAtMs = ts;
       st.stepKind = eventType === 'done' ? 'content' : 'status';
-      st.stepTitle = eventType === 'done' ? $_('stream.done') : $_('stream.error');
-      if (eventType === 'error') st.auxText = String(data?.message ?? $_('stream.unknownError'));
+      st.stepTitle = eventType === 'done' ? labels('stream.done') : labels('stream.error');
+      if (eventType === 'error') st.auxText = String(data?.message ?? labels('stream.unknownError'));
       if (smoothPendingText) {
         smoothPendingText = '';
         cancelSmoothTimer();
@@ -681,8 +610,8 @@
       return {
         visible: true,
         heading: [
-          `${$_('stream.reasoning')}${effortLabel ? ` ${effortLabel}` : ''} ${formatDuration(summary.durationMs)}`.trim(),
-          $_('stream.toolCalls', {
+          `${labels('stream.reasoning')}${effortLabel ? ` ${effortLabel}` : ''} ${formatDuration(summary.durationMs)}`.trim(),
+          labels('stream.toolCalls', {
             values: { count: Math.max(1, summary.toolCount) },
           }),
         ].join(' - '),
@@ -691,13 +620,13 @@
     if (summary.hasReasoning) {
       return {
         visible: true,
-        heading: `${$_('stream.reasoning')}${effortLabel ? ` ${effortLabel}` : ''} ${formatDuration(summary.durationMs)}`.trim(),
+        heading: `${labels('stream.reasoning')}${effortLabel ? ` ${effortLabel}` : ''} ${formatDuration(summary.durationMs)}`.trim(),
       };
     }
     if (summary.hasTools) {
       return {
         visible: true,
-        heading: $_('stream.toolCalls', {
+        heading: labels('stream.toolCalls', {
           values: { count: Math.max(1, summary.toolCount) },
         }),
       };
@@ -705,7 +634,7 @@
     if (summary.contextBudgetPct !== null) {
       return {
         visible: true,
-        heading: $_('stream.contextOccupancy', {
+        heading: labels('stream.contextOccupancy', {
           values: { pct: summary.contextBudgetPct },
         }),
       };
@@ -778,14 +707,14 @@
     if (!id) return;
     subKey = makeKey();
     subscribedTo = id;
-    streamHub.setStream(subKey, id, handle);
+    streamClient.setStream(subKey, id, handle);
     // Hydratation non bloquante : on affiche tout de suite, puis on charge le détail
     void hydrateHistory();
   };
 
   const unsubscribe = () => {
     if (!subscribedTo) return;
-    streamHub.delete(subKey);
+    streamClient.delete(subKey);
     subscribedTo = null;
   };
 
@@ -794,7 +723,7 @@
     st = {
       startedAtMs: Date.now(),
       endedAtMs: null,
-      stepTitle: $_('stream.inProgress'),
+      stepTitle: labels('stream.inProgress'),
       stepKind: 'other',
       auxText: '',
       contentText: '',
@@ -966,7 +895,7 @@
     {/if}
     {#if showDetailLoader}
       <div class="flex items-center justify-between gap-2 mt-0.5">
-        <div class="text-[11px] text-slate-500">{$_('stream.detailLoading')}</div>
+        <div class="text-[11px] text-slate-500">{labels('stream.detailLoading')}</div>
         <!-- Réserver exactement la même hauteur/largeur que le chevron, sans interaction -->
         <button
           class="text-slate-500 p-1 rounded opacity-0 pointer-events-none shrink-0"
@@ -984,19 +913,19 @@
           {#if subscriptionMode === 'passive' && !showRuntimeInlinePreview && passiveHistoryShellHeading}
             {passiveHistoryShellHeading}
           {:else if hasSteps}
-            {#if st.sawReasoning}{$_('stream.reasoning')} {Math.max(0, Math.floor(durationMs / 60000))}m{String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, '0')}s{/if}
+            {#if st.sawReasoning}{labels('stream.reasoning')} {Math.max(0, Math.floor(durationMs / 60000))}m{String(Math.max(0, Math.floor(durationMs / 1000)) % 60).padStart(2, '0')}s{/if}
             {#if st.sawReasoning && toolsCount > 0}, {/if}
-            {#if toolsCount > 0}{$_('stream.toolCalls', { values: { count: toolsCount } })}{/if}
+            {#if toolsCount > 0}{labels('stream.toolCalls', { values: { count: toolsCount } })}{/if}
             {#if st.contextBudgetPct !== null}
               {#if st.sawReasoning || toolsCount > 0}, {/if}
-              {$_('stream.contextOccupancy', { values: { pct: st.contextBudgetPct } })}
+              {labels('stream.contextOccupancy', { values: { pct: st.contextBudgetPct } })}
             {/if}
           {/if}
         </div>
         <button
           class="text-slate-500 hover:text-slate-700 p-1 rounded hover:bg-slate-100 shrink-0"
           type="button"
-          aria-label={st.expanded ? $_('stream.actions.collapseDetails') : $_('stream.actions.expandDetails')}
+          aria-label={st.expanded ? labels('stream.actions.collapseDetails') : labels('stream.actions.expandDetails')}
           on:click={async () => {
             const shouldHydrateDetails =
               deferCollapsedDetails &&
@@ -1062,11 +991,11 @@
         {#if showStartup && showRuntimeInlinePreview}
           <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
             <Loader2 class="w-3.5 h-3.5 animate-spin" />
-            <span>{$_('stream.preparing')}</span>
+            <span>{labels('stream.preparing')}</span>
           </div>
         {/if}
         {#if hasSteps && !hasContent && showRuntimeInlinePreview}
-          <div class="text-[11px] text-slate-500">{$_('stream.stepRunning', { values: { title: st.stepTitle || $_('stream.inProgress') } })}</div>
+          <div class="text-[11px] text-slate-500">{labels('stream.stepRunning', { values: { title: st.stepTitle || labels('stream.inProgress') } })}</div>
           {#if st.auxText}
             <div
               class="stream-aux-markdown mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll [&_*]:text-slate-400"
@@ -1084,7 +1013,7 @@
     {:else}
       <!-- job -->
       {#if !showStartup && !hasSteps && !isTerminalStatus(status) && (placeholderTitle || placeholderBody)}
-        <div class="text-[11px] text-slate-500 mt-0.5">{placeholderTitle ?? $_('stream.inProgress')}</div>
+        <div class="text-[11px] text-slate-500 mt-0.5">{placeholderTitle ?? labels('stream.inProgress')}</div>
         {#if placeholderBody}
           <div class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll" use:scrollToEnd>
             {placeholderBody}
@@ -1094,11 +1023,11 @@
       {#if showStartup}
         <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
           <Loader2 class="w-3.5 h-3.5 animate-spin" />
-          <span>{$_('stream.preparing')}</span>
+          <span>{labels('stream.preparing')}</span>
         </div>
       {/if}
       {#if hasSteps && !isTerminalStatus(status)}
-        <div class="text-[11px] text-slate-500">{$_('stream.stepRunning', { values: { title: st.stepTitle || $_('stream.inProgress') } })}</div>
+        <div class="text-[11px] text-slate-500">{labels('stream.stepRunning', { values: { title: st.stepTitle || labels('stream.inProgress') } })}</div>
         {#if st.auxText}
           <div class="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap break-words max-h-16 overflow-y-auto slim-scroll" use:scrollToEnd>
             {st.auxText}
