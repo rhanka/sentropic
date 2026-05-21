@@ -14,6 +14,8 @@ Apply them first; the Makefile in this repo will not create them.
 - `10-rbac.yaml` — namespace-scoped ServiceAccount used by every Pod, with
   `imagePullSecrets: [{ name: sentropic-registry }]` so every Pod can pull
   from the SCW Container Registry.
+- `15-networkpolicy.yaml` — workload-scoped ingress allowances for the
+  tenant default-deny baseline: api -> postgres, api -> maildev, ui -> api.
 - `20-postgres.yaml` — Postgres 17 StatefulSet + headless Service + 1Gi PVC on
   `scw-bssd` + ConfigMap (`POSTGRES_DB`, `POSTGRES_USER`).
 - `30-api.yaml` — `sentropic-api` SCW Container Registry image + ClusterIP
@@ -31,13 +33,19 @@ Apply them first; the Makefile in this repo will not create them.
 make kubeconfig                 # ~/.kube/poc.yaml
 make apply-platform             # cert-manager + traefik labels
 make apply-sentropic            # namespace + RQ + LimitRange + NetPol
-make tenant-registry-secret TENANT=sentropic SCW_REGISTRY_TOKEN=<token>
 ```
 
-The last target creates the `sentropic-registry` `dockerconfigjson` Secret
-in the `sentropic` namespace. `<token>` is an SCW IAM API key with
-**read-only** access to the SCW Container Registry, created via
-`scw iam api-key create`. Rotate the token by re-running the target.
+The namespace pull secret is managed from this repo with:
+
+```bash
+make scw-registry-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s
+```
+
+The target creates the `sentropic-registry` `dockerconfigjson` Secret in the
+`sentropic` namespace. It reads `REGISTRY`, `DOCKER_USERNAME`, and either
+`SCW_REGISTRY_TOKEN` or `DOCKER_PASSWORD` from `SCW_ENV_FILE`; it does not
+print the secret value. Prefer a token with **read-only** access to the SCW
+Container Registry. Rotate the token by re-running the target.
 
 ## Secret bundle (operator side, once)
 
@@ -48,8 +56,8 @@ Two namespace-scoped Secrets must exist before applying the manifests:
   `MAIL_PASSWORD`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_PICKER_API_KEY`.
 
 The api and ui manifests target the `feat-deploy-poc-k8s` alias tag on
-`rg.fr-par.scw.cloud/sentropic/sentropic-api` and
-`rg.fr-par.scw.cloud/sentropic/sentropic-ui`. The `publish-{api,ui}-image`
+`rg.fr-par.scw.cloud/nc-reg/sentropic-api` and
+`rg.fr-par.scw.cloud/nc-reg/sentropic-ui`. The `publish-{api,ui}-image`
 jobs in `.github/workflows/ci.yml` push two tags per image: a
 content-hash sha1 (immutable, used by `make publish-{api,ui}-image`) and a
 floating branch alias (`feat-deploy-poc-k8s` on the BR-37 branch, `main`
@@ -76,7 +84,8 @@ The target base64-encodes `KUBECONFIG` in memory and pipes it to
 ## Deploy
 
 ```bash
-make scw-bundle-secret KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
+make scw-bundle-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s
+make scw-registry-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s
 make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
 make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml SCW_INGRESS=1 ENV=test-feat-deploy-poc-k8s
 ```
@@ -84,6 +93,8 @@ make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml SCW_INGRESS=1 ENV=test-feat-depl
 ## Smoke test
 
 ```bash
+make scw-smoke KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
+
 make -C ~/src/poc-k8s tenant-port-forward TENANT=sentropic SVC=api PORT=8787 &
 curl http://localhost:8787/api/v1/health
 make -C ~/src/poc-k8s tenant-port-forward TENANT=sentropic SVC=ui PORT=5173 &
