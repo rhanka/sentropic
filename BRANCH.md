@@ -462,17 +462,17 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11a`.
 
 - [ ] **Lot 11b - ChatPanel draft and composer action state**
-  - [ ] Add RED package tests in `packages/chat-ui/tests/chat-draft.test.ts` for draft sync, primary action selection, multiline height state, steer acknowledgement timeout state, and optimistic steer message shape.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11b` and confirm `chat-draft.test.ts` fails because `packages/chat-ui/src/state/chatDraft.ts` does not exist.
-  - [ ] Create `packages/chat-ui/src/state/chatDraft.ts` with pure helpers for `syncDraftFromInput`, `resolveComposerPrimaryAction`, `createOptimisticSteerMessage`, `shouldShowSteerAction`, and `resolveComposerHeightState`.
-  - [ ] Export `@sentropic/chat-ui/state/chatDraft` from `packages/chat-ui/package.json` and `packages/chat-ui/src/index.ts`.
-  - [ ] Replace local composer/draft helper branches in `ui/src/lib/components/ChatPanel.svelte` with calls to package helpers while leaving `sendMessage`, `sendComposerSteer`, API calls, and DOM focus app-owned.
-  - [ ] Keep comment-mode send behavior app-owned; package helpers only choose whether the primary action is `comment_send`, `chat_send`, `steer_send`, or `disabled`.
-  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11b`.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11b`.
-  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11b`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11b`.
-  - [ ] Run `wc -l ui/src/lib/components/ChatPanel.svelte packages/chat-ui/src/state/chatDraft.ts`.
+  - [x] Add RED package tests in `packages/chat-ui/tests/chat-draft.test.ts` for draft sync, primary action selection, multiline height state, steer acknowledgement timeout state, and optimistic steer message shape.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11b` and confirm `chat-draft.test.ts` fails because `packages/chat-ui/src/state/chatDraft.ts` does not exist; other package tests passed 48/48.
+  - [x] Create `packages/chat-ui/src/state/chatDraft.ts` with pure helpers for `syncDraftFromInput`, `resolveComposerPrimaryAction`, `createOptimisticSteerMessage`, `shouldShowSteerAction`, `resolveComposerHeightState`, and acknowledgement timeout state.
+  - [x] Export `@sentropic/chat-ui/state/chatDraft` from `packages/chat-ui/package.json` and `packages/chat-ui/src/index.ts`.
+  - [x] Replace local composer/draft helper branches in `ui/src/lib/components/ChatPanel.svelte` with calls to package helpers while leaving `sendMessage`, `sendComposerSteer`, API calls, and DOM focus app-owned.
+  - [x] Keep comment-mode send behavior app-owned; package helpers only choose whether the primary action is `comment_send`, `chat_send`, `steer_send`, or `disabled`.
+  - [x] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11b` — exited 0.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11b` — 52/52 passed across 11 files.
+  - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11b` — `svelte-check found 0 errors and 6 warnings in 5 files`.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11b` — 17/17 passed across 2 files.
+  - [x] Run `wc -l ui/src/lib/components/ChatPanel.svelte packages/chat-ui/src/state/chatDraft.ts` — `ChatPanel.svelte` 5929 lines, `chatDraft.ts` 217 lines.
   - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract chat composer draft state" ENV=test-feat-chat-ui-sdk-v2-lot11b`.
   - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11b`.
 

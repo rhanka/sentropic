@@ -42,6 +42,11 @@
       "svelte": "./src/client/streamHub.ts",
       "import": "./src/client/streamHub.ts"
     },
+    "./state/chatDraft": {
+      "types": "./src/state/chatDraft.ts",
+      "svelte": "./src/state/chatDraft.ts",
+      "import": "./src/state/chatDraft.ts"
+    },
     "./state/chatProjection": {
       "types": "./src/state/chatProjection.ts",
       "svelte": "./src/state/chatProjection.ts",
