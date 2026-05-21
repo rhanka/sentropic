@@ -121,6 +121,11 @@
       "types": "./src/components/ChatTimeline.svelte.d.ts",
       "svelte": "./src/components/ChatTimeline.svelte",
       "import": "./src/components/ChatTimeline.svelte"
+    },
+    "./components/ChatComposer.svelte": {
+      "types": "./src/components/ChatComposer.svelte.d.ts",
+      "svelte": "./src/components/ChatComposer.svelte",
+      "import": "./src/components/ChatComposer.svelte"
     }
   },
   "files": [
