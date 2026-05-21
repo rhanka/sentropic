@@ -384,18 +384,19 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - [ ] Commit scope/spec plan with selective `git add BRANCH.md spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`, then `make commit MSG="docs: lock chat ui modular refactor contract" ENV=test-feat-chat-ui-sdk-v2`.
 
 - [ ] **Lot 9 - Stream hub factory extraction**
-  - [ ] Create package stream client files:
+  - [x] Create package stream client files:
     - `packages/chat-ui/src/client/streamHub.ts` — `createStreamHub(options)` instance factory replacing app singleton internals.
     - `packages/chat-ui/src/client/streamTypes.ts` — shared `StreamHubEvent`, stream event names, replay limits, subscription types.
     - `packages/chat-ui/src/client/streamHistory.ts` — bounded replay cache, consecutive delta aggregation, per-stream dedupe.
-  - [ ] Keep `ui/src/lib/stores/streamHub.ts` as a thin app-owned wrapper that injects:
+  - [x] Keep `ui/src/lib/stores/streamHub.ts` as a thin app-owned wrapper that injects:
     - `getApiBaseUrl`
     - `isAuthenticated`
     - `getScopedWorkspaceIdForUser`
     - browser `EventSource`
     - Chrome extension port factory
     - VSCode runtime detection and reconnect strategy
-  - [ ] Preserve non-chat subscribers:
+    - Wrapper size reduced from 533 lines to 66 lines; package stream core is split across `streamHub.ts`, `streamHistory.ts`, and `streamTypes.ts`.
+  - [x] Preserve non-chat subscribers:
     - `job_update`
     - `organization_update`
     - `folder_update`
@@ -405,14 +406,15 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - `presence_update`
     - `workspace_update`
     - `workspace_membership_update`
-  - [ ] Update tests:
-    - `packages/chat-ui/tests/streamHub.test.ts` — cache replay, per-stream replay, delta aggregation, reconnect scheduling, no auth/no subscriber close behavior.
+  - [x] Update tests:
+    - `packages/chat-ui/tests/streamHub.test.ts` — cache replay, per-stream replay, delta aggregation, injected extension proxy, no auth/no subscriber close behavior.
     - `ui/tests/stores/streamHub.test.ts` — app wrapper URL construction, workspace scope, EventSource wiring, extension proxy wiring.
   - [ ] Lot gate:
-    - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot9`.
-    - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot9`.
-    - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9079 UI_PORT=5279 MAILDEV_UI_PORT=1179 ENV=test-feat-chat-ui-sdk-v2-lot9`.
-    - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/stores/streamHub.test.ts API_PORT=9079 UI_PORT=5279 MAILDEV_UI_PORT=1179 ENV=test-feat-chat-ui-sdk-v2-lot9`.
+    - [x] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot9` — exited 0.
+    - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot9` — 34/34 passed across 6 files.
+    - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9079 UI_PORT=5279 MAILDEV_UI_PORT=1179 ENV=test-feat-chat-ui-sdk-v2-lot9` — `svelte-check found 0 errors and 6 warnings in 5 files`.
+    - [x] Run `make test-ui REGISTRY=local SCOPE=tests/stores/streamHub.test.ts API_PORT=9079 UI_PORT=5279 MAILDEV_UI_PORT=1179 ENV=test-feat-chat-ui-sdk-v2-lot9` — 15/15 passed.
+    - [x] Run `make test-count ENV=test-feat-chat-ui-sdk-v2` — UI 57/379, API non-ai 132/982, API ai 9/30, E2E 44/227, Packages 30/289, TOTAL 272/1907.
     - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract stream hub factory to chat ui" ENV=test-feat-chat-ui-sdk-v2-lot9`.
 
 - [ ] **Lot 10 - StreamMessage package activation**
