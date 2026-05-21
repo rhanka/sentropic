@@ -19,14 +19,14 @@ describe('user ai settings events', () => {
 
     emitUserAISettingsUpdated({
       defaultProviderId: 'gemini',
-      defaultModel: 'gemini-3.1-pro-preview-customtools',
+      defaultModel: 'gemini-3.5-flash',
     });
 
     window.removeEventListener(USER_AI_SETTINGS_UPDATED_EVENT, handler);
 
     expect(capturedDetail).toEqual({
       defaultProviderId: 'gemini',
-      defaultModel: 'gemini-3.1-pro-preview-customtools',
+      defaultModel: 'gemini-3.5-flash',
     });
     expect(capturedType).toBe(USER_AI_SETTINGS_UPDATED_EVENT);
     expect(capturedIsCustomEvent).toBe(true);
@@ -49,7 +49,7 @@ describe('user ai settings events', () => {
     });
     emitUserAISettingsUpdated({
       defaultProviderId: 'gemini',
-      defaultModel: 'gemini-3.1-pro-preview-customtools',
+      defaultModel: 'gemini-3.5-flash',
     });
 
     window.removeEventListener(USER_AI_SETTINGS_UPDATED_EVENT, handler);
@@ -58,7 +58,7 @@ describe('user ai settings events', () => {
       { defaultProviderId: 'openai', defaultModel: 'gpt-5.5' },
       {
         defaultProviderId: 'gemini',
-        defaultModel: 'gemini-3.1-pro-preview-customtools',
+        defaultModel: 'gemini-3.5-flash',
       },
     ]);
   });
