@@ -520,8 +520,8 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Run `make test-ui REGISTRY=local SCOPE=tests/utils/chat-run-projection.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e` — 6/6 passed.
   - [x] Run `make test-ui REGISTRY=local SCOPE=tests/utils/chat-steer.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e` — 5/5 passed.
   - [x] Run `wc -l ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/chat/AppChatPanel.svelte ui/src/lib/chat/context-provider.ts ui/src/lib/chat/document-adapter.ts ui/src/lib/chat/comment-adapter.ts ui/src/lib/chat/session-adapter.ts` — `ChatPanel.svelte` 67 lines, `AppChatPanel.svelte` 5946 lines; adapter files absent by design in this lot.
-  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: split app chat panel wrapper" ENV=test-feat-chat-ui-sdk-v2-lot11e`.
-  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11e`.
+  - [x] Commit with selective `git add`, then `make commit MSG="refactor: split app chat panel wrapper" ENV=test-feat-chat-ui-sdk-v2-lot11e`.
+  - [x] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11e`.
 
 - [ ] **Lot 11f - AppChatPanel adapter extraction**
   - [ ] Add RED UI tests for route/workspace context helper extraction into `ui/src/lib/chat/context-provider.ts`.
