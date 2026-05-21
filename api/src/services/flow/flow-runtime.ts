@@ -212,10 +212,38 @@ export class AppFlowRuntime
       StartInitiativeGenerationWorkflowInput
     >,
   ): Promise<StartInitiativeGenerationWorkflowDispatchResult> {
-    return todoOrchestrationService.startAndDispatchInitiativeGenerationWorkflow(
-      params.actor,
-      params.input,
-    );
+    return this.startAndDispatchDirect(params);
+  }
+
+  private async startAndDispatchDirect(
+    params: StartInitiativeGenerationParams<
+      TodoActor,
+      StartInitiativeGenerationWorkflowInput
+    >,
+  ): Promise<StartInitiativeGenerationWorkflowDispatchResult> {
+    const workflowRuntime = await this.startInitiativeGenerationWorkflow(params);
+    const dispatched = await this.ports.jobQueue.dispatchWorkflowEntryTasks({
+      workspaceId: params.actor.workspaceId,
+      workflowRunId: workflowRuntime.workflowRunId,
+      workflowDefinitionId: workflowRuntime.workflowDefinitionId,
+    });
+    const matrixJobId = dispatched.find((entry) => entry.jobType === 'matrix_generate')?.jobId;
+    const primaryDispatch =
+      dispatched.find((entry) => entry.jobType === 'initiative_list') ??
+      dispatched.find((entry) => entry.jobType === 'organization_batch_create') ??
+      dispatched[0];
+    const resolvedJobId = primaryDispatch?.jobId;
+    if (!resolvedJobId) {
+      throw new TodoOrchestrationError(500, 'No generation job could be dispatched');
+    }
+
+    return {
+      workflowRunId: workflowRuntime.workflowRunId,
+      workflowDefinitionId: workflowRuntime.workflowDefinitionId,
+      agentMap: workflowRuntime.agentMap,
+      jobId: resolvedJobId,
+      matrixJobId,
+    };
   }
 
   async pauseRun(actor: TodoActor, runId: string): Promise<void> {

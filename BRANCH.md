@@ -165,6 +165,7 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Slice 8.1a — Add package helpers for generic workflow start metadata, run state, and task assignments.
   - [x] Slice 8.1b — Move generic `startWorkflow` run creation into `AppFlowRuntime` and dispatch through the `JobQueue` port.
   - [x] Slice 8.1c — Add a FlowRuntime regression proving generic workflow start no longer delegates to legacy `todoOrchestrationService.startWorkflow`.
+  - [x] Slice 8.2 — Move `startAndDispatch` composition into `AppFlowRuntime`; it now dispatches through the `JobQueue` port instead of the legacy orchestration method.
   - [ ] Move the workflow start + transition evaluation + agent resolution logic into `packages/flow/src/flow-runtime.ts` + Postgres adapter composition.
   - [ ] `api/src/services/todo-orchestration.ts` becomes a thin re-export of the façade only.
   - [ ] Regression: all 6 fixtures.
