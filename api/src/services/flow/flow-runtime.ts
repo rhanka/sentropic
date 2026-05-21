@@ -1,10 +1,27 @@
-import type {
-  FlowRuntime,
-  FlowRuntimePorts,
-  StartInitiativeGenerationParams,
-  StartWorkflowParams,
-} from '@sentropic/flow';
 import {
+  buildGenericWorkflowRunMetadata,
+  buildGenericWorkflowRunState,
+  buildGenericWorkflowStartedPayload,
+  buildWorkflowTaskAssignments,
+  getFirstWorkflowAgentDefinitionId,
+  getFirstWorkflowTaskKey,
+  type FlowRuntime,
+  type FlowRuntimePorts,
+  type StartInitiativeGenerationParams,
+  type StartWorkflowParams,
+} from '@sentropic/flow';
+import { and, asc, eq } from 'drizzle-orm';
+import { db } from '../../db/client';
+import {
+  executionEvents,
+  executionRuns,
+  workflowDefinitionTasks,
+  workflowDefinitions,
+  workflowRunState,
+} from '../../db/schema';
+import { createId } from '../../utils/id';
+import {
+  TodoOrchestrationError,
   todoOrchestrationService,
   type StartInitiativeGenerationWorkflowInput,
   type TodoActor,
@@ -75,11 +92,106 @@ export class AppFlowRuntime
   startWorkflow(
     params: StartWorkflowParams<TodoActor, AppStartWorkflowInput>,
   ): Promise<AppStartWorkflowRuntime> {
-    return todoOrchestrationService.startWorkflow(
-      params.actor,
-      params.input.workflowKey,
-      params.input.metadata,
-    );
+    return this.startWorkflowDirect(params);
+  }
+
+  private async startWorkflowDirect(
+    params: StartWorkflowParams<TodoActor, AppStartWorkflowInput>,
+  ): Promise<AppStartWorkflowRuntime> {
+    const workflowKey = params.input.workflowKey;
+    const metadata = params.input.metadata;
+    const [wfDef] = await db
+      .select()
+      .from(workflowDefinitions)
+      .where(
+        and(
+          eq(workflowDefinitions.workspaceId, params.actor.workspaceId),
+          eq(workflowDefinitions.key, workflowKey),
+        ),
+      )
+      .limit(1);
+
+    if (!wfDef) {
+      throw new TodoOrchestrationError(404, `Workflow not found: ${workflowKey}`);
+    }
+
+    const wfTasks = await db
+      .select({
+        taskKey: workflowDefinitionTasks.taskKey,
+        agentDefinitionId: workflowDefinitionTasks.agentDefinitionId,
+      })
+      .from(workflowDefinitionTasks)
+      .where(
+        and(
+          eq(workflowDefinitionTasks.workspaceId, params.actor.workspaceId),
+          eq(workflowDefinitionTasks.workflowDefinitionId, wfDef.id),
+        ),
+      )
+      .orderBy(asc(workflowDefinitionTasks.orderIndex), asc(workflowDefinitionTasks.createdAt));
+
+    const taskAssignments = buildWorkflowTaskAssignments(wfTasks) as WorkflowTaskAssignments;
+    const workflowRunId = createId();
+    const now = new Date();
+
+    await db.insert(executionRuns).values({
+      id: workflowRunId,
+      workspaceId: params.actor.workspaceId,
+      planId: null,
+      todoId: null,
+      taskId: null,
+      workflowDefinitionId: wfDef.id,
+      agentDefinitionId: getFirstWorkflowAgentDefinitionId(wfTasks),
+      mode: 'full_auto',
+      status: 'in_progress',
+      startedByUserId: params.actor.userId,
+      startedAt: now,
+      completedAt: null,
+      metadata: buildGenericWorkflowRunMetadata({ workflowKey, metadata }),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(executionEvents).values({
+      id: createId(),
+      workspaceId: params.actor.workspaceId,
+      runId: workflowRunId,
+      eventType: 'workflow_started',
+      actorType: 'user',
+      actorId: params.actor.userId,
+      payload: buildGenericWorkflowStartedPayload({
+        workflowKey,
+        workflowDefinitionId: wfDef.id,
+        metadata,
+      }),
+      sequence: 1,
+      createdAt: now,
+    });
+
+    await db.insert(workflowRunState).values({
+      runId: workflowRunId,
+      workspaceId: params.actor.workspaceId,
+      workflowDefinitionId: wfDef.id,
+      status: 'in_progress',
+      state: buildGenericWorkflowRunState({ workflowKey, metadata }),
+      version: 1,
+      currentTaskKey: getFirstWorkflowTaskKey(wfTasks),
+      currentTaskInstanceKey: 'main',
+      checkpointedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await this.ports.jobQueue.dispatchWorkflowEntryTasks({
+      workspaceId: params.actor.workspaceId,
+      workflowRunId,
+      workflowDefinitionId: wfDef.id,
+    });
+
+    return {
+      workflowRunId,
+      workflowDefinitionId: wfDef.id,
+      taskAssignments,
+    };
   }
 
   startInitiativeGenerationWorkflow(
