@@ -16,6 +16,73 @@ import type { RunStore } from './run-store.js';
 import type { Transitions } from './transitions.js';
 import type { WorkflowStore } from './workflow-store.js';
 
+export type WorkflowTaskAssignments = Record<string, string | null>;
+
+export interface WorkflowStartTaskAssignment {
+  taskKey: string;
+  agentDefinitionId: string | null;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value && typeof value === 'object' && !Array.isArray(value));
+
+export const normalizeFlowMetadata = (value: unknown): Record<string, unknown> =>
+  isRecord(value) ? value : {};
+
+export function buildWorkflowTaskAssignments(
+  tasks: readonly WorkflowStartTaskAssignment[],
+): WorkflowTaskAssignments {
+  const assignments: WorkflowTaskAssignments = {};
+  for (const task of tasks) {
+    assignments[task.taskKey] = task.agentDefinitionId ?? null;
+  }
+  return assignments;
+}
+
+export function getFirstWorkflowAgentDefinitionId(
+  tasks: readonly WorkflowStartTaskAssignment[],
+): string | null {
+  return tasks.length > 0 ? (tasks[0]?.agentDefinitionId ?? null) : null;
+}
+
+export function getFirstWorkflowTaskKey(
+  tasks: readonly WorkflowStartTaskAssignment[],
+): string | null {
+  return tasks.length > 0 ? (tasks[0]?.taskKey ?? null) : null;
+}
+
+export function buildGenericWorkflowRunMetadata(params: {
+  workflowKey: string;
+  metadata?: Record<string, unknown>;
+}): Record<string, unknown> {
+  return {
+    workflowKey: params.workflowKey,
+    ...normalizeFlowMetadata(params.metadata),
+  };
+}
+
+export function buildGenericWorkflowStartedPayload(params: {
+  workflowKey: string;
+  workflowDefinitionId: string;
+  metadata?: Record<string, unknown>;
+}): Record<string, unknown> {
+  return {
+    workflowKey: params.workflowKey,
+    workflowDefinitionId: params.workflowDefinitionId,
+    ...normalizeFlowMetadata(params.metadata),
+  };
+}
+
+export function buildGenericWorkflowRunState(params: {
+  workflowKey: string;
+  metadata?: Record<string, unknown>;
+}): Record<string, unknown> {
+  return {
+    workflowKey: params.workflowKey,
+    inputs: normalizeFlowMetadata(params.metadata),
+  };
+}
+
 export interface StartWorkflowParams<TActor = unknown, TInput = unknown> {
   actor: TActor;
   workflowDefinitionId: string;
