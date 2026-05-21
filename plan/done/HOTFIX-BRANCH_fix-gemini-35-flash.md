@@ -42,10 +42,10 @@ Replace the Gemini 3.1 Pro catalog entry with Gemini 3.5 Flash without adding a 
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- [ ] No active blocker.
+- [x] No active blocker.
 
 ## AI Flaky tests
-- [ ] No AI flaky test accepted.
+- [x] No AI flaky test accepted.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -58,11 +58,11 @@ Replace the Gemini 3.1 Pro catalog entry with Gemini 3.5 Flash without adding a 
 - Execution flow:
   - [x] Develop and run tests in `tmp/fix-gemini-35-flash`.
   - [x] Push branch before UAT.
-  - [ ] Run user UAT from root workspace on the pushed branch or deployment target selected by the user.
-  - [ ] Switch back to `tmp/fix-gemini-35-flash` after UAT.
+  - [x] Run user UAT from root workspace on `uat/gemini-35-flash`.
+  - [x] Switch root back to `main` and continue finalization in `tmp/fix-gemini-35-flash` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`.
   - [x] Read `rules/workflow.md`.
   - [x] Read `README.md`, `TODO.md`, and `PLAN.md`.
@@ -91,18 +91,19 @@ Replace the Gemini 3.1 Pro catalog entry with Gemini 3.5 Flash without adding a 
     - [x] `make typecheck-api API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
     - [x] `make lint-api API_PORT=8795 UI_PORT=5185 MAILDEV_UI_PORT=1085 ENV=test-fix-gemini-35-flash`
 
-- [ ] **Lot N-2 — UAT**
-  - [ ] Web app settings: model selector shows `Gemini 3.5 Flash` under Gemini.
-  - [ ] Web app settings: model selector does not show `Gemini 3.1 Pro`.
-  - [ ] Chat model picker shows `Gemini 3.5 Flash` and can save it as the user default.
-  - [ ] Existing Gemini Flash Lite remains available.
+- [x] **Lot N-2 — UAT**
+  - [x] Web app settings: model selector shows `Gemini 3.5 Flash` under Gemini.
+  - [x] Web app settings: model selector does not show `Gemini 3.1 Pro`.
+  - [x] Chat model picker shows `Gemini 3.5 Flash` and can save it as the user default.
+  - [x] Existing Gemini Flash Lite remains available.
 
 - [x] **Lot N-1 — Docs consolidation**
   - [x] Update existing specs only; no temporary branch spec required.
 
-- [ ] **Lot N — Final validation**
+- [x] **Lot N — Final validation**
   - [x] Review `git diff --stat` and scope boundaries.
   - [x] Run targeted verification commands.
   - [x] Commit runtime/docs alignment with `make commit MSG="test: align gemini flash runtime coverage"`.
   - [x] Push branch before UAT.
   - [x] Hand off UAT instructions to the user.
+  - [x] Move completed branch plan to `plan/done/HOTFIX-BRANCH_fix-gemini-35-flash.md`.
