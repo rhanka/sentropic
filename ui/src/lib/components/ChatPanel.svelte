@@ -26,6 +26,7 @@
     type MentionMember,
   } from '$lib/utils/comments';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
+  import ChatComposerWrapper from '$lib/components/chat/ChatComposerWrapper.svelte';
   import ChatTimelineWrapper from '$lib/components/chat/ChatTimelineWrapper.svelte';
   import { Streamdown } from 'svelte-streamdown';
   import EditableInput from '$lib/components/EditableInput.svelte';
@@ -5573,28 +5574,7 @@
     </div>
   {/if}
 
-  <div class="chat-composer-footer p-2 border-t border-slate-200">
-    <div>
-      <div class="relative">
-        <div
-          class="chat-composer-surface relative w-full min-w-0 rounded px-2 text-xs composer-rich slim-scroll overflow-y-auto overflow-x-hidden"
-          class:composer-single-line={!composerIsMultiline}
-          class:bg-white={($workspaceCanComment && !commentThreadResolved) ||
-            mode !== 'comments'}
-          class:bg-slate-50={mode === 'comments' &&
-            (!$workspaceCanComment || commentThreadResolved)}
-          style={`max-height: ${composerMaxHeight}px;`}
-          bind:this={composerEl}
-          role="textbox"
-          aria-label={$_('chat.composer.ariaLabel')}
-          aria-disabled={mode === 'comments' &&
-            (!$workspaceCanComment || commentThreadResolved)}
-          tabindex={mode === 'comments' &&
-          (!$workspaceCanComment || commentThreadResolved)
-            ? -1
-            : 0}
-          on:keydown={handleKeyDown}
-        >
+  {#snippet renderComposerSurface()}
           {#if mode === 'ai'}
             {#if sessionDocsError}
               <div
@@ -5678,7 +5658,9 @@
               disabled={!$workspaceCanComment || commentThreadResolved}
             />
           {/if}
-        </div>
+  {/snippet}
+
+  {#snippet renderFloatingLayer()}
         {#if mode === 'comments' && showMentionMenu}
           <div
             class="absolute bottom-12 left-0 z-30 w-64 rounded-lg border border-slate-200 bg-white shadow-lg p-2"
@@ -5718,9 +5700,9 @@
             {/if}
           </div>
         {/if}
-      </div>
+  {/snippet}
 
-      <div class="flex items-center gap-1.5">
+  {#snippet renderLeftControls()}
         {#if mode === 'ai'}
           <MenuPopover
             placement="up"
@@ -5867,7 +5849,9 @@
             {/if}
           </select>
         {/if}
-        <div class="ml-auto flex items-center gap-2">
+  {/snippet}
+
+  {#snippet renderRightActions()}
         {#if composerSteerReady && activeAssistantMessage}
           <button
             class="chat-composer-stop-button rounded text-slate-600 w-8 h-8 flex items-center justify-center hover:bg-slate-100 disabled:opacity-60"
@@ -5901,10 +5885,31 @@
             <Send class="w-4 h-4" />
           {/if}
         </button>
-        </div>
-      </div>
-    </div>
-  </div>
+  {/snippet}
+
+  <ChatComposerWrapper
+    mode={mode}
+    value={mode === 'comments' ? commentInput : input}
+    disabled={mode === 'comments' &&
+      (!$workspaceCanComment || commentThreadResolved)}
+    isMultiline={composerIsMultiline}
+    maxHeight={composerMaxHeight}
+    surfaceEnabled={($workspaceCanComment && !commentThreadResolved) ||
+      mode !== 'comments'}
+    surfaceDisabled={mode === 'comments' &&
+      (!$workspaceCanComment || commentThreadResolved)}
+    ariaLabel={$_('chat.composer.ariaLabel')}
+    tabIndex={mode === 'comments' &&
+    (!$workspaceCanComment || commentThreadResolved)
+      ? -1
+      : 0}
+    bind:composerElement={composerEl}
+    onKeyDown={handleKeyDown}
+    {renderComposerSurface}
+    {renderFloatingLayer}
+    {renderLeftControls}
+    {renderRightActions}
+  />
 </div>
 
 <style>
