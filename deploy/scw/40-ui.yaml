@@ -41,6 +41,8 @@ metadata:
     app.kubernetes.io/component: ui
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: sentropic
@@ -54,7 +56,7 @@ spec:
       serviceAccountName: sentropic-app
       containers:
         - name: ui
-          image: rg.fr-par.scw.cloud/sentropic/sentropic-ui:feat-deploy-poc-k8s
+          image: rg.fr-par.scw.cloud/nc-reg/sentropic-ui:feat-deploy-poc-k8s
           imagePullPolicy: Always
           ports:
             - name: http
