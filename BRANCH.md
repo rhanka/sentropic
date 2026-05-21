@@ -505,25 +505,39 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11d` — `svelte-check found 0 errors and 6 warnings in 5 files`.
   - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11d` — 21/21 passed across 4 files.
   - [x] Run `wc -l ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/chat/ChatComposerWrapper.svelte packages/chat-ui/src/components/ChatComposer.svelte` — `ChatPanel.svelte` 5946 lines, `ChatComposerWrapper.svelte` 38 lines, `ChatComposer.svelte` 76 lines.
-  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract chat composer shell" ENV=test-feat-chat-ui-sdk-v2-lot11d`.
-  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11d`.
+  - [x] Commit with selective `git add`, then `make commit MSG="refactor: extract chat composer shell" ENV=test-feat-chat-ui-sdk-v2-lot11d`.
+  - [x] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11d`.
 
-- [ ] **Lot 11e - AppChatPanel wrapper and adapter files**
-  - [ ] Add RED static test `ui/tests/components/chat/AppChatPanel-boundary.test.ts` proving public `ui/src/lib/components/ChatPanel.svelte` is a wrapper around `ui/src/lib/components/chat/AppChatPanel.svelte`.
-  - [ ] Create `ui/src/lib/components/chat/AppChatPanel.svelte` by moving the remaining app-owned ChatPanel implementation.
-  - [ ] Replace `ui/src/lib/components/ChatPanel.svelte` with a wrapper that forwards the existing public props, bindings, and exported methods to `AppChatPanel.svelte`.
-  - [ ] Create `ui/src/lib/chat/context-provider.ts` only for route/workspace/entity context selection helpers currently inside ChatPanel.
-  - [ ] Create `ui/src/lib/chat/document-adapter.ts` only for session document, Google Drive, upload, generated-card, and download helpers currently inside ChatPanel.
-  - [ ] Create `ui/src/lib/chat/comment-adapter.ts` only for comment section labels, mention matching, thread selection, and comment list state helpers currently inside ChatPanel.
-  - [ ] Create `ui/src/lib/chat/session-adapter.ts` only for chat session REST URL construction, retry, rollback, feedback, and checkpoint helper types; actual API client remains injected from app.
-  - [ ] Update `BRANCH.md` with actual line counts and any adapter not extracted in this lot.
-  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/utils/chat-run-projection.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/utils/chat-steer.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e`.
-  - [ ] Run `wc -l ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/chat/AppChatPanel.svelte ui/src/lib/chat/context-provider.ts ui/src/lib/chat/document-adapter.ts ui/src/lib/chat/comment-adapter.ts ui/src/lib/chat/session-adapter.ts`.
-  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: split app chat panel adapters" ENV=test-feat-chat-ui-sdk-v2-lot11e`.
+- [ ] **Lot 11e - AppChatPanel public wrapper split**
+  - [x] Add RED static test `ui/tests/components/chat/AppChatPanel-boundary.test.ts` proving public `ui/src/lib/components/ChatPanel.svelte` is a wrapper around `ui/src/lib/components/chat/AppChatPanel.svelte`.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e` and confirm the boundary test fails because `AppChatPanel.svelte` does not exist.
+  - [x] Create `ui/src/lib/components/chat/AppChatPanel.svelte` by moving the remaining app-owned ChatPanel implementation.
+  - [x] Replace `ui/src/lib/components/ChatPanel.svelte` with a wrapper that forwards the existing public props, bindings, and exported methods to `AppChatPanel.svelte`.
+  - [x] Update existing wrapper tests so `ChatTimelineWrapper` and `ChatComposerWrapper` are asserted against `AppChatPanel.svelte` after the public wrapper split.
+  - [x] Update `BRANCH.md` with actual line counts and adapter deferral: `ui/src/lib/chat/context-provider.ts`, `document-adapter.ts`, `comment-adapter.ts`, and `session-adapter.ts` are not extracted in Lot 11e and move to Lot 11f.
+  - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e` — `svelte-check found 0 errors and 6 warnings in 5 files`.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e` — 22/22 passed across 5 files.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/utils/chat-run-projection.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e` — 6/6 passed.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/utils/chat-steer.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e` — 5/5 passed.
+  - [x] Run `wc -l ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/chat/AppChatPanel.svelte ui/src/lib/chat/context-provider.ts ui/src/lib/chat/document-adapter.ts ui/src/lib/chat/comment-adapter.ts ui/src/lib/chat/session-adapter.ts` — `ChatPanel.svelte` 67 lines, `AppChatPanel.svelte` 5946 lines; adapter files absent by design in this lot.
+  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: split app chat panel wrapper" ENV=test-feat-chat-ui-sdk-v2-lot11e`.
   - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11e`.
+
+- [ ] **Lot 11f - AppChatPanel adapter extraction**
+  - [ ] Add RED UI tests for route/workspace context helper extraction into `ui/src/lib/chat/context-provider.ts`.
+  - [ ] Extract route/workspace/entity context selection helpers from `ui/src/lib/components/chat/AppChatPanel.svelte` into `ui/src/lib/chat/context-provider.ts`.
+  - [ ] Add RED UI tests for document helper extraction into `ui/src/lib/chat/document-adapter.ts`.
+  - [ ] Extract session document, Google Drive, upload, generated-card, and download helpers into `ui/src/lib/chat/document-adapter.ts`.
+  - [ ] Add RED UI tests for comment helper extraction into `ui/src/lib/chat/comment-adapter.ts`.
+  - [ ] Extract comment section labels, mention matching, thread selection, and comment list state helpers into `ui/src/lib/chat/comment-adapter.ts`.
+  - [ ] Add RED UI tests for session helper extraction into `ui/src/lib/chat/session-adapter.ts`.
+  - [ ] Extract chat session REST URL construction, retry, rollback, feedback, and checkpoint helper types into `ui/src/lib/chat/session-adapter.ts`; actual API client remains app-injected.
+  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11f`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11f`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11f`.
+  - [ ] Run `wc -l ui/src/lib/components/chat/AppChatPanel.svelte ui/src/lib/chat/context-provider.ts ui/src/lib/chat/document-adapter.ts ui/src/lib/chat/comment-adapter.ts ui/src/lib/chat/session-adapter.ts`.
+  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract app chat panel adapters" ENV=test-feat-chat-ui-sdk-v2-lot11f`.
+  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11f`.
 
 - [ ] **Lot 12a - ChatWidget package layout state**
   - [ ] Add RED package tests in `packages/chat-ui/tests/chat-widget-layout.test.ts` for active tab validation, dock/floating effective mode, badge display state, mobile close policy, and panel visibility.

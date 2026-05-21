@@ -7,7 +7,10 @@ const wrapperPath = resolve(
   'src/lib/components/chat/ChatTimelineWrapper.svelte',
 );
 
-const panelPath = resolve(process.cwd(), 'src/lib/components/ChatPanel.svelte');
+const appPanelPath = resolve(
+  process.cwd(),
+  'src/lib/components/chat/AppChatPanel.svelte',
+);
 
 describe('ChatTimeline app wrapper', () => {
   it('wraps the package timeline and forwards app render snippets', () => {
@@ -21,8 +24,8 @@ describe('ChatTimeline app wrapper', () => {
     expect(source).toContain('renderRuntimeSegment');
   });
 
-  it('is used by ChatPanel instead of owning the keyed timeline loop directly', () => {
-    const source = readFileSync(panelPath, 'utf8');
+  it('is used by AppChatPanel instead of owning the keyed timeline loop directly', () => {
+    const source = readFileSync(appPanelPath, 'utf8');
     expect(source).toContain(
       "import ChatTimelineWrapper from '$lib/components/chat/ChatTimelineWrapper.svelte'",
     );
