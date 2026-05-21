@@ -138,6 +138,16 @@
     buildProjectedTimeline as buildChatProjectedTimeline,
     type ChatProjectedTimelineItem,
   } from '@sentropic/chat-ui/state/chatProjection';
+  import {
+    createComposerSteerAck,
+    createOptimisticSteerMessage,
+    resolveComposerHeightState,
+    resolveComposerPrimaryAction,
+    shouldClearComposerSteerAck,
+    shouldShowSteerAction,
+    syncDraftFromInput as syncChatDraftFromInput,
+    type ComposerPrimaryActionState,
+  } from '@sentropic/chat-ui/state/chatDraft';
 
   type ChatSession = {
     id: string;
@@ -779,6 +789,12 @@
   let composerSteerStreamId: string | null = null;
   let composerSteerReady = false;
   let composerRunInFlight = false;
+  let composerPrimaryActionState: ComposerPrimaryActionState = {
+    action: 'disabled',
+    disabled: true,
+    displayMode: 'send',
+  };
+  let composerPrimaryButtonShowsSteer = false;
   const isAssistantMessageInProgress = (message: LocalMessage): boolean => {
     if (message.role !== 'assistant') return false;
     if (message._localStatus === 'processing') return true;
@@ -801,6 +817,22 @@
     typeof composerSteerStreamId === 'string' &&
     composerSteerStreamId.trim().length > 0;
   $: composerRunInFlight = sending || composerSteerReady;
+  $: composerPrimaryActionState = resolveComposerPrimaryAction({
+    mode,
+    input,
+    commentInput,
+    commentContextType,
+    commentContextId,
+    workspaceCanComment: $workspaceCanComment,
+    commentThreadResolved,
+    sending,
+    composerRunInFlight,
+    composerSteerReady,
+    composerSteerInFlight,
+  });
+  $: composerPrimaryButtonShowsSteer = shouldShowSteerAction({
+    composerRunInFlight,
+  });
 
   const hasAssistantContent = (message: LocalMessage): boolean =>
     typeof message.content === 'string' && message.content.trim().length > 0;
@@ -1593,14 +1625,33 @@
     });
 
   let lastDraftApplied = draft;
-  $: if (draft !== lastDraftApplied && draft !== input) {
-    input = draft;
-    lastDraftApplied = draft;
+  $: {
+    const nextDraftState = syncChatDraftFromInput({
+      mode,
+      draft,
+      input,
+      lastDraftApplied,
+      direction: 'external',
+    });
+    if (nextDraftState.draft !== draft) draft = nextDraftState.draft;
+    if (nextDraftState.input !== input) input = nextDraftState.input;
+    if (nextDraftState.lastDraftApplied !== lastDraftApplied) {
+      lastDraftApplied = nextDraftState.lastDraftApplied;
+    }
   }
   const syncDraftFromInput = () => {
-    if (draft === input) return;
-    draft = input;
-    lastDraftApplied = input;
+    const nextDraftState = syncChatDraftFromInput({
+      mode,
+      draft,
+      input,
+      lastDraftApplied,
+      direction: 'input',
+    });
+    if (nextDraftState.draft !== draft) draft = nextDraftState.draft;
+    if (nextDraftState.input !== input) input = nextDraftState.input;
+    if (nextDraftState.lastDraftApplied !== lastDraftApplied) {
+      lastDraftApplied = nextDraftState.lastDraftApplied;
+    }
   };
   $: if (mode === 'ai') {
     syncDraftFromInput();
@@ -2269,16 +2320,15 @@
 
   const updateComposerHeight = () => {
     if (!composerEl) return;
-    const containerHeight = panelEl?.clientHeight ?? 0;
-    const maxHeight = Math.max(
-      COMPOSER_BASE_HEIGHT,
-      Math.floor(containerHeight * 0.3),
-    );
-    composerMaxHeight = maxHeight;
-    const contentHeight = composerEl.scrollHeight || COMPOSER_BASE_HEIGHT;
-    const wasMultiline = composerIsMultiline;
-    composerIsMultiline = contentHeight > COMPOSER_BASE_HEIGHT + 2;
-    if (composerIsMultiline !== wasMultiline) {
+    const nextHeightState = resolveComposerHeightState({
+      baseHeight: COMPOSER_BASE_HEIGHT,
+      containerHeight: panelEl?.clientHeight ?? 0,
+      contentHeight: composerEl.scrollHeight || COMPOSER_BASE_HEIGHT,
+      wasMultiline: composerIsMultiline,
+    });
+    composerMaxHeight = nextHeightState.maxHeight;
+    composerIsMultiline = nextHeightState.isMultiline;
+    if (nextHeightState.shouldRemeasure) {
       requestAnimationFrame(updateComposerHeight);
     }
   };
@@ -3216,15 +3266,17 @@
   };
 
   const handleComposerPrimaryAction = () => {
-    if (mode === 'comments') {
+    if (composerPrimaryActionState.action === 'comment_send') {
       void sendCommentMessage();
       return;
     }
-    if (composerRunInFlight) {
-      if (composerSteerReady) void sendComposerSteer();
+    if (composerPrimaryActionState.action === 'steer_send') {
+      void sendComposerSteer();
       return;
     }
-    void sendMessage();
+    if (composerPrimaryActionState.action === 'chat_send') {
+      void sendMessage();
+    }
   };
 
   const handleDeleteTodoRuntime = async () => {
@@ -3255,24 +3307,21 @@
 
     composerSteerInFlight = true;
     errorMsg = null;
-    composerSteerAck = {
+    const createdAtMs = Date.now();
+    composerSteerAck = createComposerSteerAck({
       streamId: targetStreamId,
       message: $_('chat.steer.acknowledgement'),
-      createdAtMs: Date.now(),
-    };
+      createdAtMs,
+    });
 
-    const nowIso = new Date().toISOString();
-    const localSteerMessage: LocalMessage = {
-      id: `local_steer_${Date.now()}`,
+    const localSteerMessage: LocalMessage = createOptimisticSteerMessage({
       sessionId: sessionId ?? '',
-      role: 'user',
       content: steerText,
-      createdAt: nowIso,
-      _localStatus: 'completed',
-      _optimisticSteerTargetAssistantId:
-        activeAssistantMessage?.id ?? targetStreamId,
-      _optimisticSteerSubmittedAtMs: Date.now(),
-    };
+      targetAssistantMessageId: activeAssistantMessage?.id,
+      targetStreamId,
+      nowMs: createdAtMs,
+      nowIso: new Date(createdAtMs).toISOString(),
+    });
     optimisticSteerMessages = [...optimisticSteerMessages, localSteerMessage];
     followBottom = true;
     scheduleScrollToBottom({ force: true });
@@ -3291,7 +3340,7 @@
       composerSteerInFlight = false;
       const expectedAck = composerSteerAck?.createdAtMs;
       setTimeout(() => {
-        if (composerSteerAck?.createdAtMs === expectedAck) {
+        if (shouldClearComposerSteerAck(composerSteerAck, expectedAck)) {
           composerSteerAck = null;
         }
       }, 5000);
@@ -5822,29 +5871,19 @@
         <button
           class="rounded bg-primary hover:bg-primary/90 text-white w-8 h-8 flex items-center justify-center disabled:opacity-60"
           on:click={handleComposerPrimaryAction}
-          disabled={mode === 'comments'
-            ? commentInput.trim().length === 0 ||
-              !commentContextType ||
-              !commentContextId ||
-              !$workspaceCanComment ||
-              commentThreadResolved
-            : composerRunInFlight
-              ? !composerSteerReady ||
-                composerSteerInFlight ||
-                input.trim().length === 0
-              : sending || input.trim().length === 0}
+          disabled={composerPrimaryActionState.disabled}
           type="button"
-          aria-label={composerRunInFlight
+          aria-label={composerPrimaryButtonShowsSteer
             ? $_('chat.steer.submit')
             : $_('common.send')}
-          title={composerRunInFlight
+          title={composerPrimaryButtonShowsSteer
             ? $_('chat.steer.submit')
             : $_('common.send')}
-          data-testid={composerRunInFlight
+          data-testid={composerPrimaryButtonShowsSteer
             ? 'chat-composer-steer-button'
             : 'chat-composer-send-button'}
         >
-          {#if composerRunInFlight}
+          {#if composerPrimaryButtonShowsSteer}
             <ShipWheel class="w-4 h-4" />
           {:else}
             <Send class="w-4 h-4" />
