@@ -506,7 +506,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite-preview when pro
       primaryContextType: 'folder',
       primaryContextId: folderId,
       providerId: 'gemini',
-      model: 'gemini-3.1-pro-preview-customtools'
+      model: 'gemini-3.5-flash'
     });
 
     await chatService.runAssistantGeneration({
@@ -521,7 +521,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite-preview when pro
     expect(calls[0]?.providerId).toBe('gemini');
     expect(calls[0]?.model).toBe('gemini-3.1-flash-lite-preview');
     expect(calls[1]?.providerId).toBe('gemini');
-    expect(calls[1]?.model).toBe('gemini-3.1-pro-preview-customtools');
+    expect(calls[1]?.model).toBe('gemini-3.5-flash');
 
     const events = await db
       .select()

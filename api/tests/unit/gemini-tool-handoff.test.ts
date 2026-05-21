@@ -5,7 +5,7 @@ import { buildGeminiRequestBody } from '../../src/services/llm-runtime';
 describe('buildGeminiRequestBody', () => {
   it('does not request Gemini thoughts when reasoning is not requested', () => {
     const body = buildGeminiRequestBody({
-      model: 'gemini-3.1-pro-preview-customtools',
+      model: 'gemini-3.5-flash',
       messages: [{ role: 'user', content: 'Say OK' }],
     }) as Record<string, unknown>;
 
@@ -14,7 +14,7 @@ describe('buildGeminiRequestBody', () => {
 
   it('requests Gemini thoughts when reasoning is requested', () => {
     const body = buildGeminiRequestBody({
-      model: 'gemini-3.1-pro-preview-customtools',
+      model: 'gemini-3.5-flash',
       messages: [{ role: 'user', content: 'Analyze deeply' }],
       reasoningEffort: 'high',
     }) as {
@@ -34,7 +34,7 @@ describe('buildGeminiRequestBody', () => {
 
   it('preserves assistant history content without provider-specific rewriting', () => {
     const body = buildGeminiRequestBody({
-      model: 'gemini-3.1-pro-preview-customtools',
+      model: 'gemini-3.5-flash',
       messages: [
         {
           role: 'assistant',
