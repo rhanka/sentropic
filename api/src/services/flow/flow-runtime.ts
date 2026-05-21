@@ -1,25 +1,38 @@
 import {
+  DEFAULT_USE_CASE_GENERATION_WORKFLOW,
+  buildInitialGenerationWorkflowState,
   buildGenericWorkflowRunMetadata,
   buildGenericWorkflowRunState,
   buildGenericWorkflowStartedPayload,
+  buildInitiativeGenerationRunMetadata,
+  buildInitiativeGenerationStartedPayload,
+  buildWorkflowAgentMap,
   buildWorkflowTaskAssignments,
   getFirstWorkflowAgentDefinitionId,
   getFirstWorkflowTaskKey,
+  getWorkflowSeedsForType,
+  normalizeFlowMetadata,
   type FlowRuntime,
   type FlowRuntimePorts,
+  type ResolvedWorkflowTask,
   type StartInitiativeGenerationParams,
   type StartWorkflowParams,
 } from '@sentropic/flow';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../../db/client';
 import {
+  agentDefinitions,
   executionEvents,
   executionRuns,
   workflowDefinitionTasks,
   workflowDefinitions,
   workflowRunState,
+  workspaces,
 } from '../../db/schema';
 import { createId } from '../../utils/id';
+import {
+  getAgentSeedsForType,
+} from '../../config/default-agents';
 import {
   TodoOrchestrationError,
   todoOrchestrationService,
@@ -59,9 +72,9 @@ export type AppStartWorkflowRuntime = {
 /**
  * `FlowRuntime` composition root for the app.
  *
- * Lot 3 contract: delegates every method to
- * `todoOrchestrationService`. Holds references to every port adapter
- * so consumers can drill into them after Lot 4..8 progressive moves.
+ * Lot 8 progressively moves workflow orchestration behind this
+ * composition root while legacy consumers keep their existing imports
+ * until Lot N-3.
  *
  * Per spec/SPEC_EVOL_BR26_FLOW_FACADE.md §3.
  */
@@ -199,11 +212,174 @@ export class AppFlowRuntime
       TodoActor,
       StartInitiativeGenerationWorkflowInput
     >,
-  ): Promise<InitiativeGenerationWorkflowRuntime> {
-    return todoOrchestrationService.startInitiativeGenerationWorkflow(
-      params.actor,
-      params.input,
+  ): Promise<InitiativeGenerationWorkflowRuntime & { resolvedTasks: ResolvedWorkflowTask[] }> {
+    return this.startInitiativeGenerationWorkflowDirect(params);
+  }
+
+  private async startInitiativeGenerationWorkflowDirect(
+    params: StartInitiativeGenerationParams<
+      TodoActor,
+      StartInitiativeGenerationWorkflowInput
+    >,
+  ): Promise<InitiativeGenerationWorkflowRuntime & { resolvedTasks: ResolvedWorkflowTask[] }> {
+    const { workflowDefinitionId, workflowKey, agentMap, resolvedTasks } =
+      await this.ensureInitiativeGenerationWorkflowDefinition(params.actor);
+    const firstAgent = resolvedTasks.length > 0 ? resolvedTasks[0] : null;
+    const workflowRunId = createId();
+    const now = new Date();
+
+    await db.insert(executionRuns).values({
+      id: workflowRunId,
+      workspaceId: params.actor.workspaceId,
+      planId: null,
+      todoId: null,
+      taskId: null,
+      workflowDefinitionId,
+      agentDefinitionId: firstAgent?.agentDefinitionId ?? null,
+      mode: 'full_auto',
+      status: 'in_progress',
+      startedByUserId: params.actor.userId,
+      startedAt: now,
+      completedAt: null,
+      metadata: buildInitiativeGenerationRunMetadata({
+        workflowKey,
+        input: params.input,
+      }),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(executionEvents).values({
+      id: createId(),
+      workspaceId: params.actor.workspaceId,
+      runId: workflowRunId,
+      eventType: 'workflow_generation_started',
+      actorType: 'user',
+      actorId: params.actor.userId,
+      payload: buildInitiativeGenerationStartedPayload({
+        workflowKey,
+        workflowDefinitionId,
+        input: params.input,
+      }),
+      sequence: 1,
+      createdAt: now,
+    });
+
+    await db.insert(workflowRunState).values({
+      runId: workflowRunId,
+      workspaceId: params.actor.workspaceId,
+      workflowDefinitionId,
+      status: 'in_progress',
+      state: buildInitialGenerationWorkflowState(workflowKey, params.input),
+      version: 1,
+      currentTaskKey: firstAgent?.taskKey ?? null,
+      currentTaskInstanceKey: 'main',
+      checkpointedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return {
+      workflowRunId,
+      workflowDefinitionId,
+      agentMap,
+      resolvedTasks,
+    };
+  }
+
+  private async ensureInitiativeGenerationWorkflowDefinition(
+    actor: TodoActor,
+  ): Promise<{
+    workflowDefinitionId: string;
+    workflowKey: string;
+    agentMap: Record<string, string>;
+    resolvedTasks: ResolvedWorkflowTask[];
+  }> {
+    const [workspace] = await db
+      .select({ type: workspaces.type })
+      .from(workspaces)
+      .where(eq(workspaces.id, actor.workspaceId))
+      .limit(1);
+    const workspaceType = workspace?.type ?? 'ai-ideas';
+    const typeSeed = getWorkflowSeedsForType(workspaceType);
+    const workflowSeed = typeSeed?.workflows[0] ?? DEFAULT_USE_CASE_GENERATION_WORKFLOW;
+
+    const agentSeed = getAgentSeedsForType(workspaceType);
+    if (agentSeed) {
+      await todoOrchestrationService.seedAgentsForType(actor, agentSeed.agents);
+    }
+
+    await this.ports.workflowStore.seedForWorkspaceType(
+      actor,
+      typeSeed ? workspaceType : 'ai-ideas',
     );
+
+    const [workflowDefinition] = await db
+      .select({ id: workflowDefinitions.id })
+      .from(workflowDefinitions)
+      .where(
+        and(
+          eq(workflowDefinitions.workspaceId, actor.workspaceId),
+          eq(workflowDefinitions.key, workflowSeed.key),
+        ),
+      )
+      .limit(1);
+
+    if (!workflowDefinition) {
+      throw new TodoOrchestrationError(
+        500,
+        `Missing workflow definition for key ${workflowSeed.key}`,
+      );
+    }
+
+    const resolvedTasks = await this.resolveWorkflowTasksWithAgents(
+      actor.workspaceId,
+      workflowDefinition.id,
+    );
+
+    return {
+      workflowDefinitionId: workflowDefinition.id,
+      workflowKey: workflowSeed.key,
+      agentMap: buildWorkflowAgentMap(resolvedTasks),
+      resolvedTasks,
+    };
+  }
+
+  private async resolveWorkflowTasksWithAgents(
+    workspaceId: string,
+    workflowDefinitionId: string,
+  ): Promise<ResolvedWorkflowTask[]> {
+    const rows = await db
+      .select({
+        taskKey: workflowDefinitionTasks.taskKey,
+        orderIndex: workflowDefinitionTasks.orderIndex,
+        agentDefinitionId: workflowDefinitionTasks.agentDefinitionId,
+        agentConfig: agentDefinitions.config,
+      })
+      .from(workflowDefinitionTasks)
+      .leftJoin(
+        agentDefinitions,
+        eq(workflowDefinitionTasks.agentDefinitionId, agentDefinitions.id),
+      )
+      .where(
+        and(
+          eq(workflowDefinitionTasks.workspaceId, workspaceId),
+          eq(workflowDefinitionTasks.workflowDefinitionId, workflowDefinitionId),
+        ),
+      )
+      .orderBy(asc(workflowDefinitionTasks.orderIndex), asc(workflowDefinitionTasks.createdAt));
+
+    return rows.map((row) => {
+      const config = normalizeFlowMetadata(row.agentConfig);
+      return {
+        taskKey: row.taskKey,
+        orderIndex: row.orderIndex,
+        agentDefinitionId: row.agentDefinitionId ?? null,
+        agentRole: typeof config.role === 'string' ? config.role : null,
+        agentPromptTemplate:
+          typeof config.promptTemplate === 'string' ? config.promptTemplate : null,
+      };
+    });
   }
 
   startAndDispatch(
