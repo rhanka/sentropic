@@ -162,6 +162,7 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Lot gate: typecheck-api, lint-api, full `make test-api`.
 
 - [ ] **Lot 8 — Slice 5: `todo-orchestration.ts` orchestration loop → `FlowRuntime`**
+  - [x] Slice 8.1a — Add package helpers for generic workflow start metadata, run state, and task assignments.
   - [ ] Move the workflow start + transition evaluation + agent resolution logic into `packages/flow/src/flow-runtime.ts` + Postgres adapter composition.
   - [ ] `api/src/services/todo-orchestration.ts` becomes a thin re-export of the façade only.
   - [ ] Regression: all 6 fixtures.
