@@ -138,4 +138,40 @@ describe('AppFlowRuntime', () => {
       }),
     );
   });
+
+  it('starts and dispatches initiative generation without delegating back to the legacy startAndDispatch method', async () => {
+    const legacyStartAndDispatch = vi
+      .spyOn(todoOrchestrationService, 'startAndDispatchInitiativeGenerationWorkflow')
+      .mockRejectedValue(new Error('legacy startAndDispatch delegate should not be called'));
+
+    const result = await flowRuntime.startAndDispatch({
+      actor,
+      input: {
+        folderId: 'folder-flow-runtime',
+        matrixMode: 'default',
+        input: 'Build a test opportunity list',
+        model: 'gpt-4',
+        locale: 'en',
+      },
+    });
+
+    expect(legacyStartAndDispatch).not.toHaveBeenCalled();
+    expect(result.workflowRunId).toBeTruthy();
+    expect(result.workflowDefinitionId).toBeTruthy();
+    expect(result.jobId).toBeTruthy();
+    expect(result.agentMap.generation_context_prepare).toBeTruthy();
+
+    const [job] = await db
+      .select({ id: jobQueue.id, status: jobQueue.status, type: jobQueue.type })
+      .from(jobQueue)
+      .where(and(eq(jobQueue.id, result.jobId), eq(jobQueue.workspaceId, actor.workspaceId)))
+      .limit(1);
+    expect(job).toEqual(
+      expect.objectContaining({
+        id: result.jobId,
+        status: 'pending',
+        type: 'initiative_list',
+      }),
+    );
+  });
 });
