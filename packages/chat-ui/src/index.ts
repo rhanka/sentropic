@@ -14,6 +14,8 @@ export * from './client/replay.js';
 export * from './client/streamTypes.js';
 export * from './client/streamHistory.js';
 export * from './client/streamHub.js';
+export * from './state/streamMessageProjection.js';
+export * from './state/streamMessageSmoothing.js';
 export * from './renderers/registry.js';
 export * from './hosts/types.js';
 export * from './stores/chatWidgetLayout.js';
