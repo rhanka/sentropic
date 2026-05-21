@@ -23,6 +23,27 @@ export interface WorkflowStartTaskAssignment {
   agentDefinitionId: string | null;
 }
 
+export interface ResolvedWorkflowTask {
+  taskKey: string;
+  orderIndex: number;
+  agentDefinitionId: string | null;
+  agentRole: string | null;
+  agentPromptTemplate: string | null;
+}
+
+export interface InitiativeGenerationStartInput {
+  folderId: string;
+  organizationId?: string | null;
+  matrixMode: string;
+  input: string;
+  model: string;
+  initiativeCount?: number | null;
+  locale: string;
+  autoCreateOrganizations?: boolean;
+  matrixSource?: string | null;
+  orgIds?: string[] | null;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value));
 
@@ -80,6 +101,88 @@ export function buildGenericWorkflowRunState(params: {
   return {
     workflowKey: params.workflowKey,
     inputs: normalizeFlowMetadata(params.metadata),
+  };
+}
+
+export function buildWorkflowAgentMap(
+  tasks: readonly ResolvedWorkflowTask[],
+): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const task of tasks) {
+    if (task.agentDefinitionId) {
+      map[task.taskKey] = task.agentDefinitionId;
+    }
+  }
+  return map;
+}
+
+export function buildInitiativeGenerationRunMetadata(params: {
+  workflowKey: string;
+  input: InitiativeGenerationStartInput;
+}): Record<string, unknown> {
+  const input = params.input;
+  return {
+    workflowKey: params.workflowKey,
+    folderId: input.folderId,
+    organizationId: input.organizationId ?? null,
+    matrixMode: input.matrixMode,
+    model: input.model,
+    initiativeCount: input.initiativeCount,
+    locale: input.locale,
+    input: input.input,
+    autoCreateOrganizations: input.autoCreateOrganizations ?? false,
+    matrixSource: input.matrixSource ?? null,
+    orgIds: input.orgIds ?? null,
+  };
+}
+
+export function buildInitiativeGenerationStartedPayload(params: {
+  workflowKey: string;
+  workflowDefinitionId: string;
+  input: InitiativeGenerationStartInput;
+}): Record<string, unknown> {
+  const input = params.input;
+  return {
+    workflowKey: params.workflowKey,
+    workflowDefinitionId: params.workflowDefinitionId,
+    folderId: input.folderId,
+    organizationId: input.organizationId ?? null,
+    matrixMode: input.matrixMode,
+    model: input.model,
+    initiativeCount: input.initiativeCount,
+    autoCreateOrganizations: input.autoCreateOrganizations ?? false,
+    matrixSource: input.matrixSource ?? null,
+  };
+}
+
+export function buildInitialGenerationWorkflowState(
+  workflowKey: string,
+  input: InitiativeGenerationStartInput,
+): Record<string, unknown> {
+  return {
+    workflowKey,
+    inputs: {
+      folderId: input.folderId,
+      organizationId: input.organizationId ?? null,
+      matrixMode: input.matrixMode,
+      matrixSource: input.matrixSource ?? null,
+      input: input.input,
+      model: input.model,
+      initiativeCount: input.initiativeCount ?? null,
+      locale: input.locale,
+      autoCreateOrganizations: input.autoCreateOrganizations ?? false,
+      orgIds: input.orgIds ?? [],
+    },
+    orgContext: {
+      selectedOrgIds: input.orgIds ?? [],
+      createdOrgIds: [],
+      createdOrganizations: [],
+      organizationTargets: [],
+    },
+    generation: {
+      initiativeIds: [],
+      initiatives: [],
+    },
   };
 }
 
