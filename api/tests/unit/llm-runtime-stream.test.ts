@@ -750,12 +750,12 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
-  // Gemini — Pro Preview (reasoning model)
+  // Gemini — 3.5 Flash (reasoning model)
   // -----------------------------------------------------------------------
   {
     providerId: 'gemini',
-    model: 'gemini-3.1-pro-preview-customtools',
-    label: 'Gemini Pro Preview',
+    model: 'gemini-3.5-flash',
+    label: 'Gemini 3.5 Flash',
     chatEvents: [
       { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
       { candidates: [{ content: { parts: [{ text: ' world' }] } }] },
@@ -1040,9 +1040,9 @@ describe('LLM stream event normalization', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Gemini Pro Preview: status + content (original test combined both)
+  // Gemini 3.5 Flash: status + content (original test combined both)
   // -------------------------------------------------------------------------
-  it('should emit status and content for Gemini Pro Preview', async () => {
+  it('should emit status and content for Gemini 3.5 Flash', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
     const provider = providerRegistry.requireProvider('gemini');
     vi.spyOn(provider, 'streamGenerate').mockResolvedValue(
@@ -1062,7 +1062,7 @@ describe('LLM stream event normalization', () => {
       callLLMStream({
         messages: [{ role: 'user', content: 'Think about this' }],
         providerId: 'gemini',
-        model: 'gemini-3.1-pro-preview-customtools',
+        model: 'gemini-3.5-flash',
       }),
     );
 
@@ -1102,7 +1102,7 @@ describe('LLM stream event normalization', () => {
       callLLMStream({
         messages: [{ role: 'user', content: 'Answer' }],
         providerId: 'gemini',
-        model: 'gemini-3.1-pro-preview-customtools',
+        model: 'gemini-3.5-flash',
       }),
     );
 
