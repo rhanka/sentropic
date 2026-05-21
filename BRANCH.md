@@ -477,18 +477,18 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11b`.
 
 - [ ] **Lot 11c - ChatTimeline package component**
-  - [ ] Add RED boundary tests in `packages/chat-ui/tests/chat-timeline-boundary.test.ts` proving `packages/chat-ui/src/components/ChatTimeline.svelte` exists, imports no `$lib/*`, and exposes renderer props for user message, assistant segment, runtime segment, and generated-file cards.
-  - [ ] Add RED UI wrapper tests in `ui/tests/components/chat/ChatTimeline-wrapper.test.ts` proving the app wrapper imports package `ChatTimeline.svelte` and injects app renderers/actions.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11c` and confirm the package boundary test fails because `ChatTimeline.svelte` does not exist.
-  - [ ] Create `packages/chat-ui/src/components/ChatTimeline.svelte` as a render-only timeline over `ChatProjectedTimelineItem[]` with injected snippets or typed renderer components; no API, document, comment, workspace, session, queue, or `$lib/*` imports.
-  - [ ] Add `packages/chat-ui/src/components/ChatTimeline.svelte.d.ts` and export subpath `@sentropic/chat-ui/components/ChatTimeline.svelte`.
-  - [ ] Create `ui/src/lib/components/chat/ChatTimelineWrapper.svelte` to adapt current app message actions, generated-file cards, feedback, retry, checkpoint, copy, and `StreamMessage` wiring to the package timeline.
-  - [ ] Replace only the `renderTimelineItems` snippet body in `ui/src/lib/components/ChatPanel.svelte` with the app timeline wrapper; keep surrounding history staging and empty/loading states intact.
-  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11c`.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11c`.
-  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11c`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11c`.
-  - [ ] Run `wc -l ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/chat/ChatTimelineWrapper.svelte packages/chat-ui/src/components/ChatTimeline.svelte`.
+  - [x] Add RED boundary tests in `packages/chat-ui/tests/chat-timeline-boundary.test.ts` proving `packages/chat-ui/src/components/ChatTimeline.svelte` exists, imports no `$lib/*`, and exposes renderer props for user message, assistant segment, and runtime segment.
+  - [x] Add RED UI wrapper tests in `ui/tests/components/chat/ChatTimeline-wrapper.test.ts` proving the app wrapper imports package `ChatTimeline.svelte` and forwards app render snippets.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11c` and confirm the package boundary test fails because `ChatTimeline.svelte` does not exist; other package tests passed 52/52.
+  - [x] Create `packages/chat-ui/src/components/ChatTimeline.svelte` as a render-only keyed timeline over `ChatProjectedTimelineItem[]` with injected snippets; no API, document, comment, workspace, session, queue, or `$lib/*` imports.
+  - [x] Add `packages/chat-ui/src/components/ChatTimeline.svelte.d.ts` and export subpath `@sentropic/chat-ui/components/ChatTimeline.svelte`.
+  - [x] Create `ui/src/lib/components/chat/ChatTimelineWrapper.svelte` to forward current app user-message, assistant-segment, and runtime-segment render snippets to the package timeline.
+  - [x] Replace only the `renderTimelineItems` snippet body in `ui/src/lib/components/ChatPanel.svelte` with the app timeline wrapper; keep surrounding history staging and empty/loading states intact.
+  - [x] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11c` — exited 0.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11c` — 55/55 passed across 12 files.
+  - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11c` — `svelte-check found 0 errors and 6 warnings in 5 files`.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11c` — 19/19 passed across 3 files.
+  - [x] Run `wc -l ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/chat/ChatTimelineWrapper.svelte packages/chat-ui/src/components/ChatTimeline.svelte` — `ChatPanel.svelte` 5941 lines, `ChatTimelineWrapper.svelte` 19 lines, `ChatTimeline.svelte` 21 lines.
   - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract chat timeline renderer" ENV=test-feat-chat-ui-sdk-v2-lot11c`.
   - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11c`.
 

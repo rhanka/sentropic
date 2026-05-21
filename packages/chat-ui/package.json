@@ -116,6 +116,11 @@
       "types": "./src/components/StreamMessage.svelte.d.ts",
       "svelte": "./src/components/StreamMessage.svelte",
       "import": "./src/components/StreamMessage.svelte"
+    },
+    "./components/ChatTimeline.svelte": {
+      "types": "./src/components/ChatTimeline.svelte.d.ts",
+      "svelte": "./src/components/ChatTimeline.svelte",
+      "import": "./src/components/ChatTimeline.svelte"
     }
   },
   "files": [

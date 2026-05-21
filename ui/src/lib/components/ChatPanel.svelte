@@ -26,6 +26,7 @@
     type MentionMember,
   } from '$lib/utils/comments';
   import StreamMessage from '$lib/components/StreamMessage.svelte';
+  import ChatTimelineWrapper from '$lib/components/chat/ChatTimelineWrapper.svelte';
   import { Streamdown } from 'svelte-streamdown';
   import EditableInput from '$lib/components/EditableInput.svelte';
   import DocumentSourceMenu from '$lib/components/DocumentSourceMenu.svelte';
@@ -5087,8 +5088,7 @@
           </div>
         {/if}
       {:else}
-        {#snippet renderTimelineItems(items: ProjectedTimelineItem[])}
-          {#each items as item (item.key)}
+        {#snippet renderTimelineUserMessage(item: any)}
             {#if item.kind === 'message' && item.message.role === 'user'}
               {@const m = item.message}
               <div class="flex flex-col items-end group">
@@ -5170,7 +5170,10 @@
                   </button>
                 </div>
               </div>
-            {:else if item.kind === 'assistant-segment'}
+            {/if}
+        {/snippet}
+
+        {#snippet renderTimelineAssistantSegment(item: any)}
               {@const m = item.message}
               {@const isUp = m.feedbackVote === 1}
               {@const isDown = m.feedbackVote === -1}
@@ -5275,7 +5278,9 @@
                   {/if}
                 </div>
               </div>
-            {:else if item.kind === 'runtime-segment'}
+        {/snippet}
+
+        {#snippet renderTimelineRuntimeSegment(item: any)}
               <div class="flex justify-start">
                 <div class="max-w-[85%] w-full">
                   <StreamMessage
@@ -5296,8 +5301,15 @@
                   />
                 </div>
               </div>
-            {/if}
-          {/each}
+        {/snippet}
+
+        {#snippet renderTimelineItems(items: ProjectedTimelineItem[])}
+          <ChatTimelineWrapper
+            {items}
+            renderUserMessage={renderTimelineUserMessage}
+            renderAssistantSegment={renderTimelineAssistantSegment}
+            renderRuntimeSegment={renderTimelineRuntimeSegment}
+          />
         {/snippet}
 
         {#if stagedHistoryTimelineItems.length > 0}
