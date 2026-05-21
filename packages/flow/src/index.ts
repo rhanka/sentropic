@@ -109,6 +109,17 @@ export type {
   FlowRuntimePorts,
   StartInitiativeGenerationParams,
   StartWorkflowParams,
+  WorkflowStartTaskAssignment,
+  WorkflowTaskAssignments,
+} from './flow-runtime.js';
+export {
+  buildGenericWorkflowRunMetadata,
+  buildGenericWorkflowRunState,
+  buildGenericWorkflowStartedPayload,
+  buildWorkflowTaskAssignments,
+  getFirstWorkflowAgentDefinitionId,
+  getFirstWorkflowTaskKey,
+  normalizeFlowMetadata,
 } from './flow-runtime.js';
 
 export type {
