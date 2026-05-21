@@ -445,148 +445,187 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9080 UI_PORT=5280 MAILDEV_UI_PORT=1180 ENV=test-feat-chat-ui-sdk-v2-lot10` — 17/17 passed across 2 files.
     - [x] Commit with selective `git add`, then `make commit MSG="refactor: activate package stream message" ENV=test-feat-chat-ui-sdk-v2-lot10`.
 
-- [ ] **Lot 11 - Chat timeline and composer decomposition**
-  - [ ] Create package timeline/composer modules:
-    - `packages/chat-ui/src/components/ChatTimeline.svelte` — renders projected user, runtime, and assistant segments from injected renderers.
-    - `packages/chat-ui/src/components/ChatComposer.svelte` — composer input, send/steer affordances, attachment slots, tool/context menu shell.
-    - `packages/chat-ui/src/state/chatProjection.ts` — message timeline projection that is independent from Sentropic app stores.
-    - `packages/chat-ui/src/state/chatDraft.ts` — composer draft, edit/retry/steer state helpers.
-  - [ ] Split app-specific logic out of `ui/src/lib/components/ChatPanel.svelte` into:
-    - `ui/src/lib/components/chat/AppChatPanel.svelte` — app wrapper and dependency injection boundary.
-    - `ui/src/lib/chat/context-provider.ts` — route/workspace/entity context adapter.
-    - `ui/src/lib/chat/document-adapter.ts` — session documents, Google Drive, generated file cards.
-    - `ui/src/lib/chat/comment-adapter.ts` — comment mode and mention handling.
-    - `ui/src/lib/chat/session-adapter.ts` — session loading, retry, rollback, feedback API calls.
-  - [ ] Keep the public import `ui/src/lib/components/ChatPanel.svelte` stable as a wrapper until all app imports are migrated.
-  - [ ] Update tests:
-    - `packages/chat-ui/tests/chat-projection.test.ts`
-    - `packages/chat-ui/tests/chat-draft.test.ts`
-    - `ui/tests/components/chat/AppChatPanel.test.ts`
-    - existing `ui/tests/utils/chat-run-projection.test.ts`
-    - existing `ui/tests/utils/chat-steer.test.ts`
-  - [ ] Lot gate:
-    - [ ] Run `wc -l ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/chat/AppChatPanel.svelte packages/chat-ui/src/components/ChatTimeline.svelte packages/chat-ui/src/components/ChatComposer.svelte`.
-    - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11`.
-    - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11`.
-    - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11`.
-    - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11`.
-    - [ ] Commit with selective `git add`, then `make commit MSG="refactor: split chat panel timeline and composer" ENV=test-feat-chat-ui-sdk-v2-lot11`.
+- [ ] **Lot 11a - ChatPanel projection state extraction**
+  - [ ] Record baseline line counts for `ui/src/lib/components/ChatPanel.svelte` and package state files.
+  - [ ] Add RED package tests in `packages/chat-ui/tests/chat-projection.test.ts` for fallback assistant content, processing runtime fallback, history runtime summary insertion, linked steer placement, optimistic steer placement, active runtime acknowledgement, and stable item keys.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11a` and confirm `chat-projection.test.ts` fails because `packages/chat-ui/src/state/chatProjection.ts` does not exist.
+  - [ ] Create `packages/chat-ui/src/state/chatProjection.ts` with generic `ChatProjectionMessage`, `ChatProjectionRuntimeSummary`, `ChatProjectedTimelineItem`, `ChatProjectionComputation`, `buildFallbackProjectedSegments`, and `buildProjectedTimeline`.
+  - [ ] Export `@sentropic/chat-ui/state/chatProjection` from `packages/chat-ui/package.json` and `packages/chat-ui/src/index.ts`.
+  - [ ] Replace the local `buildFallbackProjectedSegments` and `buildProjectedTimeline` bodies in `ui/src/lib/components/ChatPanel.svelte` with a thin call to the package projection helper.
+  - [ ] Keep `loadRuntimeDetailsForMessage`, generated-file scanning, API calls, comments, documents, and session orchestration app-owned in `ChatPanel.svelte`.
+  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11a`.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11a`.
+  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11a`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11a`.
+  - [ ] Run `wc -l ui/src/lib/components/ChatPanel.svelte packages/chat-ui/src/state/chatProjection.ts`.
+  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract chat timeline projection" ENV=test-feat-chat-ui-sdk-v2-lot11a`.
+  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11a`.
 
-- [ ] **Lot 12 - ChatWidget and jobs boundary isolation**
-  - [ ] Make `packages/chat-ui/src/components/ChatWidget.svelte` the reusable launcher/panel shell:
-    - no imports from `$lib/stores/queue`.
-    - no imports from `$lib/components/QueueMonitor.svelte`.
-    - no app auth/session/workspace imports.
-    - accepts `chatPanel`, `jobsPanel`, and `commentsPanel` render slots or typed component props.
-  - [ ] Keep jobs app-owned:
-    - `ui/src/lib/stores/queue.ts` remains the app queue store and API client.
-    - `ui/src/lib/components/QueueMonitor.svelte` remains the app jobs panel.
-    - `ui/src/lib/components/ChatWidget.svelte` becomes a wrapper that injects `QueueMonitor` and app queue badge state into the package widget.
-  - [ ] Add tests:
-    - `packages/chat-ui/tests/chat-widget-layout.test.ts` — active tab, badge props, dock/floating state, panel slot visibility.
-    - `ui/tests/stores/queue.test.ts` — `chat_message` jobs remain hidden from queue add path, active/failed counts remain stable.
-    - `ui/tests/components/chat/ChatWidget-wrapper.test.ts` — app wrapper injects jobs panel and preserves tabs.
-  - [ ] Lot gate:
-    - [ ] Run `rg -n "\\$lib/stores/queue|QueueMonitor|apiPost\\('/queue" packages/chat-ui/src`.
-    - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12`.
-    - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12`.
-    - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12`.
-    - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12`.
-    - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/stores/queue.test.ts API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12`.
-    - [ ] Commit with selective `git add`, then `make commit MSG="refactor: isolate chat widget jobs boundary" ENV=test-feat-chat-ui-sdk-v2-lot12`.
+- [ ] **Lot 11b - ChatPanel draft and composer action state**
+  - [ ] Add RED package tests in `packages/chat-ui/tests/chat-draft.test.ts` for draft sync, primary action selection, multiline height state, steer acknowledgement timeout state, and optimistic steer message shape.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11b` and confirm `chat-draft.test.ts` fails because `packages/chat-ui/src/state/chatDraft.ts` does not exist.
+  - [ ] Create `packages/chat-ui/src/state/chatDraft.ts` with pure helpers for `syncDraftFromInput`, `resolveComposerPrimaryAction`, `createOptimisticSteerMessage`, `shouldShowSteerAction`, and `resolveComposerHeightState`.
+  - [ ] Export `@sentropic/chat-ui/state/chatDraft` from `packages/chat-ui/package.json` and `packages/chat-ui/src/index.ts`.
+  - [ ] Replace local composer/draft helper branches in `ui/src/lib/components/ChatPanel.svelte` with calls to package helpers while leaving `sendMessage`, `sendComposerSteer`, API calls, and DOM focus app-owned.
+  - [ ] Keep comment-mode send behavior app-owned; package helpers only choose whether the primary action is `comment_send`, `chat_send`, `steer_send`, or `disabled`.
+  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11b`.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11b`.
+  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11b`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11b`.
+  - [ ] Run `wc -l ui/src/lib/components/ChatPanel.svelte packages/chat-ui/src/state/chatDraft.ts`.
+  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract chat composer draft state" ENV=test-feat-chat-ui-sdk-v2-lot11b`.
+  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11b`.
 
-- [ ] **Lot 13 - Host adapters and production package adoption**
-  - [ ] Add host adapter factories:
-    - `packages/chat-ui/src/hosts/createWebHost.ts` — host contract builder without Sentropic app imports.
-    - `ui/src/lib/chat/web-host-adapter.ts` — Sentropic web host adapter wiring API, session, context, documents, comments, jobs, local tools, and renderers.
-  - [ ] Wire production app wrappers to package components:
-    - `ui/src/lib/components/ChatPanel.svelte`
-    - `ui/src/lib/components/ChatWidget.svelte`
-    - `ui/src/lib/components/StreamMessage.svelte`
-  - [ ] Preserve Chrome and VSCode adapters:
-    - `ui/src/lib/upstream/chrome-host-adapter.ts`
-    - `ui/vscode-ext/local-tools-adapter.ts`
-    - `ui/vscode-ext/webview-entry.ts`
-  - [ ] Remove dead package component copies or convert them fully to package-owned implementations. No package component may import `$lib/*`.
-  - [ ] Update tests:
-    - `packages/chat-ui/tests/host-adapter-types.test.ts`
-    - `ui/tests/upstream/chrome-host-adapter.test.ts`
-    - `ui/tests/vscode-ext/local-tools-adapter.test.ts`
-    - `ui/tests/components/chat/AppChatPanel.test.ts`
-    - `ui/tests/components/chat/ChatWidget-wrapper.test.ts`
-  - [ ] Lot gate:
-    - [ ] Run `rg -n "\\$lib/|from 'api/|@sentropic/llm-mesh|chrome\\.runtime|__TOPAI_VSCODE_RUNTIME__" packages/chat-ui/src`.
-    - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13`.
-    - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13`.
-    - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13`.
-    - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/upstream API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13`.
-    - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/vscode-ext API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13`.
-    - [ ] Commit with selective `git add`, then `make commit MSG="refactor: adopt package chat components in app" ENV=test-feat-chat-ui-sdk-v2-lot13`.
+- [ ] **Lot 11c - ChatTimeline package component**
+  - [ ] Add RED boundary tests in `packages/chat-ui/tests/chat-timeline-boundary.test.ts` proving `packages/chat-ui/src/components/ChatTimeline.svelte` exists, imports no `$lib/*`, and exposes renderer props for user message, assistant segment, runtime segment, and generated-file cards.
+  - [ ] Add RED UI wrapper tests in `ui/tests/components/chat/ChatTimeline-wrapper.test.ts` proving the app wrapper imports package `ChatTimeline.svelte` and injects app renderers/actions.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11c` and confirm the package boundary test fails because `ChatTimeline.svelte` does not exist.
+  - [ ] Create `packages/chat-ui/src/components/ChatTimeline.svelte` as a render-only timeline over `ChatProjectedTimelineItem[]` with injected snippets or typed renderer components; no API, document, comment, workspace, session, queue, or `$lib/*` imports.
+  - [ ] Add `packages/chat-ui/src/components/ChatTimeline.svelte.d.ts` and export subpath `@sentropic/chat-ui/components/ChatTimeline.svelte`.
+  - [ ] Create `ui/src/lib/components/chat/ChatTimelineWrapper.svelte` to adapt current app message actions, generated-file cards, feedback, retry, checkpoint, copy, and `StreamMessage` wiring to the package timeline.
+  - [ ] Replace only the `renderTimelineItems` snippet body in `ui/src/lib/components/ChatPanel.svelte` with the app timeline wrapper; keep surrounding history staging and empty/loading states intact.
+  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11c`.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11c`.
+  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11c`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11c`.
+  - [ ] Run `wc -l ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/chat/ChatTimelineWrapper.svelte packages/chat-ui/src/components/ChatTimeline.svelte`.
+  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract chat timeline renderer" ENV=test-feat-chat-ui-sdk-v2-lot11c`.
+  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11c`.
+
+- [ ] **Lot 11d - ChatComposer package shell**
+  - [ ] Add RED boundary tests in `packages/chat-ui/tests/chat-composer-boundary.test.ts` proving `packages/chat-ui/src/components/ChatComposer.svelte` exists, imports no `$lib/*`, and exposes props for mode, value, disabled states, menu toggles, context/tool sections, primary action, and event callbacks.
+  - [ ] Add RED UI wrapper tests in `ui/tests/components/chat/ChatComposer-wrapper.test.ts` proving the app wrapper injects app context/tool menus and forwards send/steer/comment callbacks.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11d` and confirm the package boundary test fails because `ChatComposer.svelte` does not exist.
+  - [ ] Create `packages/chat-ui/src/components/ChatComposer.svelte` as a render-only composer shell with stable dimensions and injected context/tool menu renderers.
+  - [ ] Add `packages/chat-ui/src/components/ChatComposer.svelte.d.ts` and export subpath `@sentropic/chat-ui/components/ChatComposer.svelte`.
+  - [ ] Create `ui/src/lib/components/chat/ChatComposerWrapper.svelte` to adapt app i18n, context/tool menu state, rich markdown input, send/steer/comment callbacks, and mobile sizing to package props.
+  - [ ] Replace the composer footer block in `ui/src/lib/components/ChatPanel.svelte` with the app composer wrapper; keep `sendMessage`, `sendComposerSteer`, `sendCommentMessage`, focus, and DOM measuring app-owned.
+  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11d`.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11d`.
+  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11d`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11d`.
+  - [ ] Run `wc -l ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/chat/ChatComposerWrapper.svelte packages/chat-ui/src/components/ChatComposer.svelte`.
+  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract chat composer shell" ENV=test-feat-chat-ui-sdk-v2-lot11d`.
+  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11d`.
+
+- [ ] **Lot 11e - AppChatPanel wrapper and adapter files**
+  - [ ] Add RED static test `ui/tests/components/chat/AppChatPanel-boundary.test.ts` proving public `ui/src/lib/components/ChatPanel.svelte` is a wrapper around `ui/src/lib/components/chat/AppChatPanel.svelte`.
+  - [ ] Create `ui/src/lib/components/chat/AppChatPanel.svelte` by moving the remaining app-owned ChatPanel implementation.
+  - [ ] Replace `ui/src/lib/components/ChatPanel.svelte` with a wrapper that forwards the existing public props, bindings, and exported methods to `AppChatPanel.svelte`.
+  - [ ] Create `ui/src/lib/chat/context-provider.ts` only for route/workspace/entity context selection helpers currently inside ChatPanel.
+  - [ ] Create `ui/src/lib/chat/document-adapter.ts` only for session document, Google Drive, upload, generated-card, and download helpers currently inside ChatPanel.
+  - [ ] Create `ui/src/lib/chat/comment-adapter.ts` only for comment section labels, mention matching, thread selection, and comment list state helpers currently inside ChatPanel.
+  - [ ] Create `ui/src/lib/chat/session-adapter.ts` only for chat session REST URL construction, retry, rollback, feedback, and checkpoint helper types; actual API client remains injected from app.
+  - [ ] Update `BRANCH.md` with actual line counts and any adapter not extracted in this lot.
+  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/utils/chat-run-projection.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/utils/chat-steer.test.ts API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11e`.
+  - [ ] Run `wc -l ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/chat/AppChatPanel.svelte ui/src/lib/chat/context-provider.ts ui/src/lib/chat/document-adapter.ts ui/src/lib/chat/comment-adapter.ts ui/src/lib/chat/session-adapter.ts`.
+  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: split app chat panel adapters" ENV=test-feat-chat-ui-sdk-v2-lot11e`.
+  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11e`.
+
+- [ ] **Lot 12a - ChatWidget package layout state**
+  - [ ] Add RED package tests in `packages/chat-ui/tests/chat-widget-layout.test.ts` for active tab validation, dock/floating effective mode, badge display state, mobile close policy, and panel visibility.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12a` and confirm `chat-widget-layout.test.ts` fails because `packages/chat-ui/src/state/chatWidgetShell.ts` does not exist.
+  - [ ] Create `packages/chat-ui/src/state/chatWidgetShell.ts` with pure helpers for tab coercion, effective display mode, queue badge state, and shell visibility classes.
+  - [ ] Export `@sentropic/chat-ui/state/chatWidgetShell` from `packages/chat-ui/package.json` and `packages/chat-ui/src/index.ts`.
+  - [ ] Replace matching local pure helpers in `ui/src/lib/components/ChatWidget.svelte` with package helper calls without changing the rendered markup.
+  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12a`.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12a`.
+  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12a`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/stores/queue.test.ts API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12a`.
+  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract chat widget shell state" ENV=test-feat-chat-ui-sdk-v2-lot12a`.
+  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot12a`.
+
+- [ ] **Lot 12b - ChatWidget jobs boundary isolation**
+  - [ ] Add RED package boundary tests proving `packages/chat-ui/src/components/ChatWidget.svelte` imports no `$lib/stores/queue`, no `$lib/components/QueueMonitor.svelte`, and contains no `/queue` API calls.
+  - [ ] Add RED UI wrapper tests in `ui/tests/components/chat/ChatWidget-wrapper.test.ts` proving the app wrapper injects jobs panel, active/failed badge counts, queue purge callback, and queue tab label.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12b` and confirm the boundary test fails against the current package copy.
+  - [ ] Convert `packages/chat-ui/src/components/ChatWidget.svelte` into the reusable launcher/panel shell with injected `chatPanel`, `jobsPanel`, `commentsPanel`, badge counts, tab state, layout state, and callbacks.
+  - [ ] Add `packages/chat-ui/src/components/ChatWidget.svelte.d.ts` prop definitions for shell usage.
+  - [ ] Convert `ui/src/lib/components/ChatWidget.svelte` into an app wrapper that owns auth/session, queue store/actions, comments, extension settings, Chrome/VSCode config, and `QueueMonitor`.
+  - [ ] Keep `ui/src/lib/stores/queue.ts` and `ui/src/lib/components/QueueMonitor.svelte` app-owned and unchanged except wrapper import paths if required.
+  - [ ] Run `rg -n "\\$lib/stores/queue|QueueMonitor|apiPost\\('/queue" packages/chat-ui/src/components/ChatWidget.svelte` and confirm no hits.
+  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12b`.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12b`.
+  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12b`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12b`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/stores/queue.test.ts API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12b`.
+  - [ ] Run `wc -l ui/src/lib/components/ChatWidget.svelte packages/chat-ui/src/components/ChatWidget.svelte ui/src/lib/components/QueueMonitor.svelte ui/src/lib/stores/queue.ts`.
+  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: isolate chat widget jobs boundary" ENV=test-feat-chat-ui-sdk-v2-lot12b`.
+  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot12b`.
+
+- [ ] **Lot 13a - Web host adapter contract**
+  - [ ] Add RED package tests in `packages/chat-ui/tests/web-host.test.ts` proving `createWebHost` composes transport, stream client, labels, renderers, jobs panel, comments panel, document adapter, and local-tools adapter without importing app code.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13a` and confirm `web-host.test.ts` fails because `packages/chat-ui/src/hosts/createWebHost.ts` does not exist.
+  - [ ] Create `packages/chat-ui/src/hosts/createWebHost.ts` with typed host contract builders only; no Sentropic app imports.
+  - [ ] Export `@sentropic/chat-ui/hosts/createWebHost` from `packages/chat-ui/package.json` and `packages/chat-ui/src/index.ts`.
+  - [ ] Add `ui/src/lib/chat/web-host-adapter.ts` that wires Sentropic app API helpers, context provider, documents, comments, jobs, local tools, labels, and renderers to the package host contract.
+  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13a`.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13a`.
+  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13a`.
+  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: add chat ui web host adapter" ENV=test-feat-chat-ui-sdk-v2-lot13a`.
+  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot13a`.
+
+- [ ] **Lot 13b - Production package adoption audit**
+  - [ ] Wire production app wrappers to package `StreamMessage`, `ChatTimeline`, `ChatComposer`, `ChatPanel`, and `ChatWidget` component subpaths.
+  - [ ] Remove or fully convert dead package component copies; no package component may remain as an app-coupled mirror.
+  - [ ] Preserve `ui/src/lib/upstream/chrome-host-adapter.ts`, `ui/vscode-ext/local-tools-adapter.ts`, and `ui/vscode-ext/webview-entry.ts` behavior.
+  - [ ] Run `rg -n "\\$lib/|from 'api/|@sentropic/llm-mesh|chrome\\.runtime|__TOPAI_VSCODE_RUNTIME__" packages/chat-ui/src` and record only allowed host-type comments or no hits.
+  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13b`.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13b`.
+  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13b`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13b`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/upstream API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13b`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/vscode-ext API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13b`.
+  - [ ] Run `wc -l packages/chat-ui/src/components/*.svelte ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/ChatWidget.svelte ui/src/lib/components/StreamMessage.svelte`.
+  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: adopt package chat components in app" ENV=test-feat-chat-ui-sdk-v2-lot13b`.
+  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot13b`.
 
 - [ ] **Lot 14 - Streaming render resilience and regression guard**
-  - [ ] Add package-level stress tests for high-volume stream events:
-    - `packages/chat-ui/tests/stream-throughput.test.ts` — 2,000 `content_delta` events preserve content order and do not duplicate sequence IDs.
-    - `packages/chat-ui/tests/stream-history-bounds.test.ts` — bounded history does not grow unbounded for long GPT streams.
-  - [ ] Add UI-level regression coverage:
-    - `ui/tests/components/chat/StreamMessage-wrapper.test.ts` — large GPT-like deltas render progressively and terminal state flushes final content.
-    - `ui/tests/components/chat/ChatTimeline.test.ts` — reasoning/tool/content segments keep stable keys across late deltas.
-  - [ ] Keep UX scope constrained:
-    - no new lag/waiting UI in this lot.
-    - no timeout increases.
-    - no provider-specific special casing except explicit content smoothing configuration.
-  - [ ] Lot gate:
-    - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot14`.
-    - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot14`.
-    - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9084 UI_PORT=5284 MAILDEV_UI_PORT=1184 ENV=test-feat-chat-ui-sdk-v2-lot14`.
-    - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9084 UI_PORT=5284 MAILDEV_UI_PORT=1184 ENV=test-feat-chat-ui-sdk-v2-lot14`.
-    - [ ] Commit with selective `git add`, then `make commit MSG="test: guard chat stream rendering throughput" ENV=test-feat-chat-ui-sdk-v2-lot14`.
+  - [ ] Add package stress tests in `packages/chat-ui/tests/stream-throughput.test.ts` for 2,000 ordered `content_delta` events, sequence dedupe, terminal flush, and no duplicate merged deltas.
+  - [ ] Add package bounds tests in `packages/chat-ui/tests/stream-history-bounds.test.ts` for bounded per-stream history, bounded global history, and long GPT-like streams.
+  - [ ] Add UI regression tests in `ui/tests/components/chat/StreamMessage-wrapper.test.ts` for large GPT-like delta smoothing and terminal-state content flush.
+  - [ ] Add UI regression tests in `ui/tests/components/chat/ChatTimeline.test.ts` for stable reasoning/tool/content segment keys across late deltas and steer insertions.
+  - [ ] Keep UX scope constrained: no new lag UI, no timeout increases, no provider-specific special casing except existing smoothing configuration.
+  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot14`.
+  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot14`.
+  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9084 UI_PORT=5284 MAILDEV_UI_PORT=1184 ENV=test-feat-chat-ui-sdk-v2-lot14`.
+  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9084 UI_PORT=5284 MAILDEV_UI_PORT=1184 ENV=test-feat-chat-ui-sdk-v2-lot14`.
+  - [ ] Commit with selective `git add`, then `make commit MSG="test: guard chat stream rendering throughput" ENV=test-feat-chat-ui-sdk-v2-lot14`.
+  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot14`.
 
 - [ ] **Lot N-2 - Full UAT after modular refactor**
-  - [ ] Before UAT:
-    - [ ] Root `uat/br14a` is commit-identical to `tmp/feat-chat-ui-sdk-v2`.
-    - [ ] Run `make dev ENV=dev`.
-    - [ ] Run `make ps ENV=dev`.
-    - [ ] Run `make wait-ready ENV=dev`.
-    - [ ] Verify with Playwright that `http://localhost:5173/` renders visible content and has 0 browser console errors.
-  - [ ] Web app:
-    - [ ] Chat widget opens and closes in desktop floating mode.
-    - [ ] Chat panel docks and undocks without layout regression.
-    - [ ] Mobile chat opens as the expected full-screen or bottom-sheet surface.
-    - [ ] A new chat session can be created from initiative, organization, folder/workspace, and neutral context.
-    - [ ] Message send, reasoning stream, tool-calling, content streaming, markdown rendering, final persistence, and refresh history behave as before.
-    - [ ] Tool-call rendering, permission prompts, attachments, context/tool menu, interruption, retry, rollback, copy, and feedback controls behave as before.
-    - [ ] SSE resync/history remains stable after navigation and page refresh.
-    - [ ] Jobs tab remains app-owned but integrated: active/failed badges update, `QueueMonitor` opens, expanded job stream history renders.
-    - [ ] Known reservation: intermittent provider/network/render slowdowns may remain accepted only if content eventually arrives in order and no UI exception occurs.
-  - [ ] Chrome-facing surface:
-    - [ ] Chrome extension download endpoint and UI still expose a valid package.
-    - [ ] Side panel/floating chat behavior remains usable if extension assets are produced from the web bundle.
-    - [ ] Endpoint/settings flow remains usable.
-    - [ ] Runtime permission prompts remain scoped to origin/action.
-    - [ ] `tab_read` and `tab_action` flows still require consent and return usable results to chat.
-  - [ ] VSCode extension:
-    - [ ] VSCode chat webview loads.
-    - [ ] User can send a message and receive streamed output.
-    - [ ] Local tool permissions remain explicit.
-    - [ ] Summary/checkpoint flows remain stable.
-    - [ ] Host messaging and authentication bridge remain stable.
-  - [ ] Merge gate:
-    - [ ] UAT passed for all impacted surfaces, or explicit user waiver recorded.
-    - [ ] No merge without UAT passed or waiver.
+  - [ ] Confirm `tmp/feat-chat-ui-sdk-v2` worktree is clean and all Lot 11-14 commits are present.
+  - [ ] Prepare root UAT branch/worktree so root is commit-identical to `tmp/feat-chat-ui-sdk-v2`; this is Codex-owned, not user-owned.
+  - [ ] Run `make dev ENV=dev` from root only after root points at the UAT commit.
+  - [ ] Run `make ps ENV=dev`.
+  - [ ] Run `make wait-ready ENV=dev`.
+  - [ ] Verify with Playwright that `http://localhost:5173/` renders visible content and has 0 browser console errors.
+  - [ ] Verify desktop floating chat widget opens, closes, sends a message, streams reasoning, streams tool calls, streams content, persists final content, and survives refresh.
+  - [ ] Verify docked chat panel docks, undocks, preserves session selection, and does not regress layout.
+  - [ ] Verify mobile chat opens as expected full-screen or bottom-sheet surface and composer controls do not overlap.
+  - [ ] Verify new chat session creation from initiative, organization, folder/workspace, and neutral context.
+  - [ ] Verify tool-call rendering, local-tool permission prompts, attachments, context/tool menu, interruption, retry, rollback, copy, feedback, and generated-file download controls.
+  - [ ] Verify SSE resync/history after navigation and page refresh.
+  - [ ] Verify Jobs tab remains app-owned but integrated: active/failed badges update, `QueueMonitor` opens, expanded job stream history renders through wrapper.
+  - [ ] Verify Chrome extension download endpoint and settings UI still expose a valid package.
+  - [ ] Verify Chrome side panel/floating chat behavior, runtime permission prompts, `tab_read`, and `tab_action` flows if extension assets are available.
+  - [ ] Verify VSCode chat webview loads, can send a message, receives streamed output, preserves local-tool permissions, summary/checkpoint flows, host messaging, and auth bridge.
+  - [ ] Record known reservation only if intermittent provider/network/render slowdowns still eventually deliver ordered content without UI exceptions.
+  - [ ] Record UAT passed for all impacted surfaces, or record explicit user waiver.
+  - [ ] No merge without UAT passed or waiver.
 
 - [ ] **Lot N-1 - Docs consolidation**
-  - [ ] Update `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` with final package decisions and actual implemented component boundaries.
+  - [ ] Update `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` with actual final package decisions, component boundaries, exported subpaths, and wrapper/adapters.
   - [ ] Update `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` only if actual package dependencies differ from the study.
   - [ ] Update `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md` to replace stale `@sentropic/chat` wording with `@sentropic/chat-ui` where BR-14a is described.
-  - [ ] Update `README.md` and `TODO.md` naming only under an approved `BR14a-EXn` if the conductor wants public docs synchronized in this branch.
+  - [ ] Update `README.md` and `TODO.md` naming only under an approved `BR14a-EXn` if conductor/public docs must be synchronized in this branch.
   - [ ] Record BR-07 handoff notes for UI npm/pretest consumption.
-  - [ ] Record final module inventory:
-    - package-owned components and stores.
-    - app-owned wrappers/adapters.
-    - job tracking location and reason it remains outside package.
-  - [ ] Lot gate:
-    - [ ] Run docs-only review for stale package names using `rg -n "@sentropic/chat|@sentropic/chat-ui|BR-14a|chat-ui" README.md TODO.md PLAN.md spec plan`.
-    - [ ] Commit docs with selective `git add`, then `make commit MSG="docs: consolidate modular chat ui contract" ENV=test-feat-chat-ui-sdk-v2`.
+  - [ ] Record final module inventory for package-owned components/stores, app-owned wrappers/adapters, host-owned Chrome/VSCode code, and app-owned jobs tracking.
+  - [ ] Run docs-only review using `rg -n "@sentropic/chat|@sentropic/chat-ui|BR-14a|chat-ui" README.md TODO.md PLAN.md spec plan`.
+  - [ ] Commit docs with selective `git add`, then `make commit MSG="docs: consolidate modular chat ui contract" ENV=test-feat-chat-ui-sdk-v2`.
 
 - [ ] **Lot N - Final validation**
   - [ ] Run `make test-count ENV=test-feat-chat-ui-sdk-v2`.
