@@ -446,18 +446,18 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
     - [x] Commit with selective `git add`, then `make commit MSG="refactor: activate package stream message" ENV=test-feat-chat-ui-sdk-v2-lot10`.
 
 - [ ] **Lot 11a - ChatPanel projection state extraction**
-  - [ ] Record baseline line counts for `ui/src/lib/components/ChatPanel.svelte` and package state files.
-  - [ ] Add RED package tests in `packages/chat-ui/tests/chat-projection.test.ts` for fallback assistant content, processing runtime fallback, history runtime summary insertion, linked steer placement, optimistic steer placement, active runtime acknowledgement, and stable item keys.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11a` and confirm `chat-projection.test.ts` fails because `packages/chat-ui/src/state/chatProjection.ts` does not exist.
-  - [ ] Create `packages/chat-ui/src/state/chatProjection.ts` with generic `ChatProjectionMessage`, `ChatProjectionRuntimeSummary`, `ChatProjectedTimelineItem`, `ChatProjectionComputation`, `buildFallbackProjectedSegments`, and `buildProjectedTimeline`.
-  - [ ] Export `@sentropic/chat-ui/state/chatProjection` from `packages/chat-ui/package.json` and `packages/chat-ui/src/index.ts`.
-  - [ ] Replace the local `buildFallbackProjectedSegments` and `buildProjectedTimeline` bodies in `ui/src/lib/components/ChatPanel.svelte` with a thin call to the package projection helper.
-  - [ ] Keep `loadRuntimeDetailsForMessage`, generated-file scanning, API calls, comments, documents, and session orchestration app-owned in `ChatPanel.svelte`.
-  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11a`.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11a`.
-  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11a`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11a`.
-  - [ ] Run `wc -l ui/src/lib/components/ChatPanel.svelte packages/chat-ui/src/state/chatProjection.ts`.
+  - [x] Record baseline line counts: `ui/src/lib/components/ChatPanel.svelte` started at 6107 lines; existing package state files were `streamMessageProjection.ts` 96 lines and `streamMessageSmoothing.ts` 27 lines.
+  - [x] Add RED package tests in `packages/chat-ui/tests/chat-projection.test.ts` for fallback assistant content, processing runtime fallback, history runtime summary insertion, linked steer placement, optimistic steer placement, active runtime acknowledgement, and stable item keys.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11a` and confirm `chat-projection.test.ts` fails because `packages/chat-ui/src/state/chatProjection.ts` does not exist; other package tests passed 43/43.
+  - [x] Create `packages/chat-ui/src/state/chatProjection.ts` with generic `ChatProjectionMessage`, `ChatProjectedTimelineItem`, `ChatProjectionComputation`, `buildFallbackProjectedSegments`, and `buildProjectedTimeline`.
+  - [x] Export `@sentropic/chat-ui/state/chatProjection` from `packages/chat-ui/package.json` and `packages/chat-ui/src/index.ts`.
+  - [x] Replace the local `buildFallbackProjectedSegments` and `buildProjectedTimeline` bodies in `ui/src/lib/components/ChatPanel.svelte` with a thin call to the package projection helper.
+  - [x] Keep `loadRuntimeDetailsForMessage`, generated-file scanning, API calls, comments, documents, and session orchestration app-owned in `ChatPanel.svelte`.
+  - [x] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11a` — exited 0.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot11a` — 48/48 passed across 10 files.
+  - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11a` — `svelte-check found 0 errors and 6 warnings in 5 files`.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11a` — 17/17 passed across 2 files.
+  - [x] Run `wc -l ui/src/lib/components/ChatPanel.svelte packages/chat-ui/src/state/chatProjection.ts` — `ChatPanel.svelte` 5890 lines, `chatProjection.ts` 288 lines.
   - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract chat timeline projection" ENV=test-feat-chat-ui-sdk-v2-lot11a`.
   - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11a`.
 
