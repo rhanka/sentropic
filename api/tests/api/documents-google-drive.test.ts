@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { app as sharedApp } from '../../src/app';
 import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
 import { contextDocuments, documentConnectorAccounts, jobQueue } from '../../src/db/schema';
@@ -28,8 +29,7 @@ vi.mock('../../src/services/storage-s3', async () => {
 });
 
 async function importApp() {
-  const mod = await import('../../src/app');
-  return mod.app as any;
+  return sharedApp as any;
 }
 
 const seedConnectedGoogleDriveAccount = async (user: Awaited<ReturnType<typeof createAuthenticatedUser>>) =>

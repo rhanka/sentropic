@@ -47,6 +47,7 @@
     "@aws-sdk/client-s3": "^3.980.0",
     "@hono/node-server": "^1.19.13",
     "@hono/zod-validator": "^0.7.6",
+    "@sentropic/flow": "file:../packages/flow",
     "@sentropic/llm-mesh": "file:../packages/llm-mesh",
     "@simplewebauthn/server": "^13.2.2",
     "@xmldom/xmldom": "0.9.10",
