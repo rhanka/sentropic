@@ -107,7 +107,7 @@ persistentvolumeclaim/data-postgres-0   Bound  1Gi   scw-bssd
   - `OK: ui /`
 - `make scw-logs KUBECONFIG=$HOME/.kube/poc.yaml SCW_LOG_TAIL=120 ENV=test-feat-deploy-poc-k8s` showed startup migrations, index creation, server listen, and health checks without runtime errors.
 - `make -C ~/src/poc-k8s tenant-status TENANT=sentropic ENV=test-feat-deploy-poc-k8s` reported quota within budget after Maildev removal: pods `3/8`, requests.cpu `230m/300m`, requests.memory `448Mi/768Mi`, limits.cpu `1100m/1500m`, limits.memory `1152Mi/1500Mi`.
-- Real email smoke to `fabien.antoine@gmail.com` reached the api but did not deliver. First `make scw-email-smoke ...` returned HTTP 500 and api logs showed `ENETUNREACH` to the Scaleway TEM IPv6 endpoint. After adding `NODE_OPTIONS=--dns-result-order=ipv4first` and redeploying, `make scw-email-smoke ...` still returned HTTP 500 and logs showed SMTP `Connection timeout` to `smtp.tem.scaleway.com:465`.
+- Real email smoke to `fabien.antoine@gmail.com` reached the api but did not deliver. `make scw-email-smoke ...` returned HTTP 500 and api logs showed SMTP connectivity failures to Scaleway TEM: IPv6 `ENETUNREACH` on the live Nodemailer path, with standalone pod netchecks timing out on SMTP ports.
 - `make scw-api-netcheck KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s` returned `ETIMEDOUT` for `smtp.tem.scaleway.com:465`.
 - `make scw-api-netcheck KUBECONFIG=$HOME/.kube/poc.yaml SCW_NETCHECK_PORT=587 ENV=test-feat-deploy-poc-k8s` returned `ETIMEDOUT` for `smtp.tem.scaleway.com:587`.
 - `make scw-api-netcheck KUBECONFIG=$HOME/.kube/poc.yaml SCW_NETCHECK_HOST=51.159.84.239 SCW_NETCHECK_PORT=465 ENV=test-feat-deploy-poc-k8s` timed out against the direct Scaleway TEM IPv4 address.

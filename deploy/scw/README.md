@@ -20,8 +20,8 @@ Apply them first; the Makefile in this repo will not create them.
   `scw-bssd` + ConfigMap (`POSTGRES_DB`, `POSTGRES_USER`).
 - `30-api.yaml` — `sentropic-api` SCW Container Registry image + ClusterIP
   Service (port 8787) + non-secret ConfigMap. The ConfigMap sets
-  `NODE_OPTIONS=--dns-result-order=ipv4first` so Node prefers the Scaleway TEM
-  IPv4 endpoint before IPv6 on this IPv4-only POC egress path.
+  `NODE_OPTIONS=--dns-result-order=ipv4first` so Node prefers IPv4 where its
+  DNS path honors the option on this IPv4-only POC egress path.
 - `40-ui.yaml` — `sentropic-ui` SCW Container Registry image + ClusterIP
   Service (port 5173) + placeholder ConfigMap for future overlays.
 - `60-ingress.yaml` — optional Traefik Ingress with cert-manager TLS. Replace
