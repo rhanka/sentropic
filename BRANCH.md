@@ -540,15 +540,16 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11f`.
 
 - [ ] **Lot 12a - ChatWidget package layout state**
-  - [ ] Add RED package tests in `packages/chat-ui/tests/chat-widget-layout.test.ts` for active tab validation, dock/floating effective mode, badge display state, mobile close policy, and panel visibility.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12a` and confirm `chat-widget-layout.test.ts` fails because `packages/chat-ui/src/state/chatWidgetShell.ts` does not exist.
-  - [ ] Create `packages/chat-ui/src/state/chatWidgetShell.ts` with pure helpers for tab coercion, effective display mode, queue badge state, and shell visibility classes.
-  - [ ] Export `@sentropic/chat-ui/state/chatWidgetShell` from `packages/chat-ui/package.json` and `packages/chat-ui/src/index.ts`.
-  - [ ] Replace matching local pure helpers in `ui/src/lib/components/ChatWidget.svelte` with package helper calls without changing the rendered markup.
-  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12a`.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12a`.
-  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12a`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/stores/queue.test.ts API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12a`.
+  - [x] Add RED package tests in `packages/chat-ui/tests/chat-widget-layout.test.ts` for active tab validation, dock/floating effective mode, badge display state, mobile close policy, and panel visibility.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12a` and confirm `chat-widget-layout.test.ts` fails because `packages/chat-ui/src/state/chatWidgetShell.ts` does not exist; other package tests passed 58/58.
+  - [x] Create `packages/chat-ui/src/state/chatWidgetShell.ts` with pure helpers for tab coercion, effective display mode, queue badge state, and shell visibility classes.
+  - [x] Export `@sentropic/chat-ui/state/chatWidgetShell` from `packages/chat-ui/package.json` and `packages/chat-ui/src/index.ts`.
+  - [x] Replace matching local pure helpers in `ui/src/lib/components/ChatWidget.svelte` with package helper calls without changing the rendered markup.
+  - [x] Add `ui/tests/components/chat/ChatWidget-shell-state.test.ts` proving the app widget consumes the package shell-state helpers; `ui/tests/stores/queue.test.ts` is absent in the current worktree.
+  - [x] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12a` — exited 0.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12a` — 63/63 passed across 14 files.
+  - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12a` — `svelte-check found 0 errors and 6 warnings in 5 files`.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12a` — 23/23 passed across 6 files.
   - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract chat widget shell state" ENV=test-feat-chat-ui-sdk-v2-lot12a`.
   - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot12a`.
 
