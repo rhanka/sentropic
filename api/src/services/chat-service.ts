@@ -564,8 +564,8 @@ const MODEL_CONTEXT_BUDGETS: Record<string, number> = {
   'gpt-4.1':       1_000_000,
   'gpt-4.1-nano':  1_000_000,
   // Gemini
-  'gemini-3.1-pro-preview-customtools': 1_000_000,
-  'gemini-3.1-flash-lite-preview':      1_000_000,
+  'gemini-3.5-flash':              1_000_000,
+  'gemini-3.1-flash-lite-preview':  1_000_000,
   // Anthropic
   'claude-sonnet-4-6': 1_000_000,
   'claude-opus-4-7':   1_000_000,
