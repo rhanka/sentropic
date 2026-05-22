@@ -550,8 +550,8 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12a` — 63/63 passed across 14 files.
   - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12a` — `svelte-check found 0 errors and 6 warnings in 5 files`.
   - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12a` — 23/23 passed across 6 files.
-  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract chat widget shell state" ENV=test-feat-chat-ui-sdk-v2-lot12a`.
-  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot12a`.
+  - [x] Commit with selective `git add`, then `make commit MSG="refactor: extract chat widget shell state" ENV=test-feat-chat-ui-sdk-v2-lot12a` — `13ae3295`.
+  - [x] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot12a`.
 
 - [ ] **Lot 12b - ChatWidget jobs boundary isolation**
   - [ ] Add RED package boundary tests proving `packages/chat-ui/src/components/ChatWidget.svelte` imports no `$lib/stores/queue`, no `$lib/components/QueueMonitor.svelte`, and contains no `/queue` API calls.
