@@ -12,7 +12,6 @@ import {
   getSandboxGlobals,
   type FreeformContext,
 } from '../../src/services/docx-freeform-helpers';
-import { getDocxFreeformSkill } from '../../src/services/docx-freeform-skill';
 import { Document, Packer, Paragraph, TextRun, Table } from 'docx';
 import vm from 'node:vm';
 
@@ -204,23 +203,4 @@ describe('docx-freeform-helpers', () => {
     });
   });
 
-  describe('upskill skill content', () => {
-    it('should return a non-empty skill string', () => {
-      const skill = getDocxFreeformSkill();
-      expect(typeof skill).toBe('string');
-      expect(skill.length).toBeGreaterThan(100);
-    });
-
-    it('should contain key sections from the spec', () => {
-      const skill = getDocxFreeformSkill();
-      expect(skill).toContain('Page Size');
-      expect(skill).toContain('Tables');
-      expect(skill).toContain('Lists');
-      expect(skill).toContain('ShadingType.CLEAR');
-      expect(skill).toContain('WidthType.DXA');
-      expect(skill).toContain('9360');
-      expect(skill).toContain('doc(');
-      expect(skill).toContain('table(');
-    });
-  });
 });

@@ -13,17 +13,16 @@ tools:
     description: |
       Generate a document from the current context (initiative, folder/dashboard, etc.).
       Formats: "docx" (default) or "pptx".
-      Before generating your first document in a conversation, call this tool with `action: "upskill"` (optionally with format) to learn best practices.
-      Then call with `action: "generate"`.
       DOCX supports two sub-modes — (1) Template mode with templateId, (2) Freeform mode with code (mutually exclusive).
       PPTX supports freeform code only.
+      The sandbox helper API surface (helpers, layout rules, full examples) lives in this SKILL.md below — discoverable via `search_skills`.
     inputSchema:
       type: object
       properties:
         action:
           type: string
-          enum: [upskill, generate]
-          description: Action to perform. Call "upskill" first to learn DOCX creation best practices, then "generate" with your code.
+          enum: [generate]
+          description: Action to perform. Only "generate" is supported.
         format:
           type: string
           enum: [docx, pptx]
@@ -85,16 +84,6 @@ The adapter is injected by `chat-service` at the closing Wave D commit
 initiative, or folder records from the DB and render an in-template document.
 If `caller.templateRenderer == null`, the handler throws a clear
 `templateRenderer not bound` error.
-
-## Upskill mode (legacy — to be removed)
-
-The `action=upskill` mode is a pre-skill-loading legacy hack: the LLM
-fetches the helper API surface as a tool result, then re-invokes
-`action=generate` with `code`. The SOTA replacement is skill discovery via
-the `search_skills` meta-tool plus native loading of this SKILL.md body
-(the `## DOCX sandbox helpers` and `## PPTX sandbox helpers` sections
-below). The legacy `action=upskill` mode is scheduled for removal in BR19;
-no new code should rely on it.
 
 # DOCX sandbox helpers (API surface)
 
