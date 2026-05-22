@@ -75,6 +75,10 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in this file; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
+- Final local validation notes (2026-05-21):
+  - `make test-api API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 ENV=test-feat-flow-runtime-extract`: smoke, unit, endpoint, queue, and security suites passed; the provider-live AI suite failed with OpenAI `insufficient_quota` in `tests/ai/chat-sync.test.ts`, `tests/ai/chat-tools.test.ts`, `tests/ai/company-enrichment-sync.test.ts`, `tests/ai/executive-summary-auto.test.ts`, `tests/ai/executive-summary-sync.test.ts`, and `tests/ai/initiative-generation-async.test.ts`. This is not accepted as flaky locally because there was no same-command success on this commit; PR CI must provide the provider-live proof before merge.
+  - `make clean test-e2e API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 E2E_GROUPS="00 01 02 03 04 05 06 07" ENV=e2e-feat-flow-runtime-extract`: local run completed with failures. Provider/quota signatures were observed in group 00 AI generation and group 04 document summary. Non-provider local failures were also observed in group 00 home redirect, group 03 chat UI, group 05 i18n/chat SSE, group 06 SSE scoping, and group 07 matrix lock/presence. These are not accepted as flaky locally unless the same PR commit has a successful CI run.
+  - Proven retry successes within the same local E2E command: group 02 had 4 flaky tests with eventual pass, group 03 had 3 flaky chat tests with eventual pass, group 05 had 2 flaky tests with eventual pass, and group 07 had 1 flaky matrix lock test with eventual pass. User sign-off allows accepting this class only when CI proves at least one success on the merge candidate.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (sub-agents work in dedicated lot scopes inside this single worktree; one final test cycle).
@@ -193,11 +197,15 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Move `plan/32-BRANCH_feat-flow-runtime-extract.md` to `plan/done/32-BRANCH_feat-flow-runtime-extract.md`.
 
 - [ ] **Lot N — Final validation**
-  - [ ] `make typecheck-api`, `make typecheck`, `make lint-api`, `make lint`.
-  - [ ] `make build-api build-ui-image`.
-  - [ ] `make test-api ENV=test-feat-flow-runtime-extract`.
-  - [ ] `make test-ui ENV=test` (UI must remain untouched; regression check only).
-  - [ ] `make clean test-e2e API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 ENV=e2e-feat-flow-runtime-extract E2E_GROUP=<matrix>`.
+  - [x] `make typecheck-flow API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 ENV=test-feat-flow-runtime-extract`.
+  - [x] `make typecheck-api API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 ENV=test-feat-flow-runtime-extract`.
+  - [x] `make typecheck API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 ENV=test-feat-flow-runtime-extract`.
+  - [x] `make lint-api API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 ENV=test-feat-flow-runtime-extract` (0 errors, warnings only).
+  - [x] `make lint API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 ENV=test-feat-flow-runtime-extract` (0 errors, warnings only).
+  - [x] `make build-api build-ui-image API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 ENV=test-feat-flow-runtime-extract`.
+  - [!] `make test-api API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 ENV=test-feat-flow-runtime-extract`: local non-AI suites passed; provider-live AI suite failed on OpenAI `insufficient_quota`; PR CI proof required before merge.
+  - [x] `make test-ui API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 ENV=test-feat-flow-runtime-extract` (55 files, 370 tests passed).
+  - [!] `make clean test-e2e API_PORT=9130 UI_PORT=5330 MAILDEV_UI_PORT=1230 E2E_GROUPS="00 01 02 03 04 05 06 07" ENV=e2e-feat-flow-runtime-extract`: local run completed with failures documented under `AI Flaky tests`; PR CI proof required before merge.
   - [ ] Final gate step 1: open PR with this `BRANCH.md` as body.
   - [ ] Final gate step 2: CI green on PR.
   - [ ] Final gate step 3: commit removal of `BRANCH.md`, push, merge.
