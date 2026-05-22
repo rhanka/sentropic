@@ -15,15 +15,13 @@ Apply them first; the Makefile in this repo will not create them.
   `imagePullSecrets: [{ name: sentropic-registry }]` so every Pod can pull
   from the SCW Container Registry.
 - `15-networkpolicy.yaml` — workload-scoped ingress allowances for the
-  tenant default-deny baseline: api -> postgres, api -> maildev, ui -> api.
+  tenant default-deny baseline: api -> postgres, ui -> api.
 - `20-postgres.yaml` — Postgres 17 StatefulSet + headless Service + 1Gi PVC on
   `scw-bssd` + ConfigMap (`POSTGRES_DB`, `POSTGRES_USER`).
 - `30-api.yaml` — `sentropic-api` SCW Container Registry image + ClusterIP
   Service (port 8787) + non-secret ConfigMap.
 - `40-ui.yaml` — `sentropic-ui` SCW Container Registry image + ClusterIP
   Service (port 5173) + placeholder ConfigMap for future overlays.
-- `50-maildev.yaml` — dev SMTP capture Deployment + ClusterIP Service (1025
-  SMTP, 1080 UI).
 - `60-ingress.yaml` — optional Traefik Ingress with cert-manager TLS. Replace
   the placeholder hosts and apply with `SCW_INGRESS=1`.
 
@@ -52,8 +50,17 @@ Container Registry. Rotate the token by re-running the target.
 Two namespace-scoped Secrets must exist before applying the manifests:
 
 - `sentropic-postgres` — `POSTGRES_PASSWORD`.
-- `sentropic-api` — `DATABASE_URL`, every `*_API_KEY`, `MAIL_USERNAME`,
-  `MAIL_PASSWORD`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_PICKER_API_KEY`.
+- `sentropic-api` — `DATABASE_URL`, every `*_API_KEY`, `MAIL_HOST`,
+  `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`,
+  `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_PICKER_API_KEY`.
+
+Maildev is intentionally not deployed in Kubernetes. The POC uses the checked
+`sent-tech.ca` domain in Scaleway Transactional Email, with SMTP settings read
+from `SCW_ENV_FILE` by `make scw-bundle-secret`. If `MAIL_HOST` is absent, the
+target injects an empty `MAIL_HOST` so the API does not fall back to its local
+`maildev` default. When `MAIL_HOST` is set, `MAIL_USERNAME` and `MAIL_PASSWORD`
+must also be set in `SCW_ENV_FILE`; `MAIL_FROM` defaults to
+`no-reply@sent-tech.ca`.
 
 The api and ui manifests target the `feat-deploy-poc-k8s` alias tag on
 `rg.fr-par.scw.cloud/nc-reg/sentropic-api` and
@@ -61,10 +68,9 @@ The api and ui manifests target the `feat-deploy-poc-k8s` alias tag on
 jobs in `.github/workflows/ci.yml` push two tags per image: a
 content-hash sha1 (immutable, used by `make publish-{api,ui}-image`) and a
 floating branch alias (`feat-deploy-poc-k8s` on the BR-37 branch, `main`
-after merge). `imagePullPolicy: Always` plus the post-publish
-`deploy-k8s` CI job (`make scw-deploy`, then `kubectl -n sentropic rollout
-restart deployment/api deployment/ui`) guarantee Kubernetes picks up manifest
-changes and the latest digest without any imperative `kubectl set image`.
+after merge). `imagePullPolicy: Always` plus the `deploy-k8s` CI job running
+`make scw-deploy` guarantee Kubernetes picks up manifest changes and the latest
+digest without any imperative `kubectl set image`.
 `make scw-bundle-secret`
 reads `~/src/sentropic/.env` and creates both Secrets in-cluster,
 replacing the previous version. Re-run after rotating a key.
@@ -121,5 +127,6 @@ make scw-undeploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
 ```
 
 This removes the workload (Deployments, Services, Secrets created here,
-StatefulSet, ConfigMaps). The namespace, ResourceQuota, LimitRange and
+StatefulSet, ConfigMaps, and any legacy Maildev resources). The namespace,
+ResourceQuota, LimitRange and
 NetworkPolicy stay (owned by poc-k8s).
