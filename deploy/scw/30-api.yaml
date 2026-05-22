@@ -9,6 +9,7 @@ metadata:
 data:
   NODE_ENV: "production"
   PORT: "8787"
+  NODE_OPTIONS: "--dns-result-order=ipv4first"
   CHAT_TRACE_ENABLED: "true"
   CHAT_TRACE_RETENTION_DAYS: "7"
   DISABLE_AUTH: "0"

@@ -19,7 +19,9 @@ Apply them first; the Makefile in this repo will not create them.
 - `20-postgres.yaml` — Postgres 17 StatefulSet + headless Service + 1Gi PVC on
   `scw-bssd` + ConfigMap (`POSTGRES_DB`, `POSTGRES_USER`).
 - `30-api.yaml` — `sentropic-api` SCW Container Registry image + ClusterIP
-  Service (port 8787) + non-secret ConfigMap.
+  Service (port 8787) + non-secret ConfigMap. The ConfigMap sets
+  `NODE_OPTIONS=--dns-result-order=ipv4first` so Node prefers the Scaleway TEM
+  IPv4 endpoint before IPv6 on this IPv4-only POC egress path.
 - `40-ui.yaml` — `sentropic-ui` SCW Container Registry image + ClusterIP
   Service (port 5173) + placeholder ConfigMap for future overlays.
 - `60-ingress.yaml` — optional Traefik Ingress with cert-manager TLS. Replace
@@ -104,12 +106,23 @@ make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml SCW_INGRESS=1 ENV=test-feat-depl
 
 ```bash
 make scw-smoke KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
+make scw-api-netcheck KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
+make scw-email-smoke KUBECONFIG=$HOME/.kube/poc.yaml SCW_EMAIL_SMOKE_TO=<recipient> ENV=test-feat-deploy-poc-k8s
 
 make -C ~/src/poc-k8s tenant-port-forward TENANT=sentropic SVC=api PORT=8787 &
 curl http://localhost:8787/api/v1/health
 make -C ~/src/poc-k8s tenant-port-forward TENANT=sentropic SVC=ui PORT=5173 &
 xdg-open http://localhost:5173
 ```
+
+`scw-api-netcheck` defaults to `smtp.tem.scaleway.com:465`; override
+`SCW_NETCHECK_HOST`, `SCW_NETCHECK_PORT`, and `SCW_NETCHECK_TIMEOUT` to test
+another endpoint. Current live POC evidence: `api.scaleway.com:443` is
+reachable from `deploy/api`, while `smtp.tem.scaleway.com:465`,
+`smtp.tem.scaleway.com:587`, and direct IPv4 `51.159.84.239:465` time out.
+As a result, `scw-email-smoke` reaches the api but cannot deliver mail until
+SMTP egress is opened/routed for the cluster or the app moves to a non-SMTP
+TEM relay/API.
 
 ## Pause / resume
 
