@@ -1529,7 +1529,36 @@ scw-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s
 scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (.env)
 	@test -f $(SCW_ENV_FILE) || { echo "missing $(SCW_ENV_FILE)" >&2; exit 1; }
 	@set -eu ; \
-	get() { v=$$(grep -E "^$$1=" $(SCW_ENV_FILE) | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$$//') ; printf '%s' "$$v" ; } ; \
+	get() { awk -v key="$$1" '\
+		BEGIN { value = "" } \
+		{ \
+			line = $$0; \
+			sub(/\r$$/, "", line); \
+			if (line ~ /^[[:space:]]*#/) next; \
+			sub(/^[[:space:]]*export[[:space:]]+/, "", line); \
+			if (index(line, key "=") == 1) { \
+				value = substr(line, length(key) + 2); \
+				sub(/[[:space:]]+#.*$$/, "", value); \
+				gsub(/^"/, "", value); \
+				gsub(/"$$/, "", value); \
+			} \
+		} \
+		END { printf "%s", value }' "$(SCW_ENV_FILE)" ; } ; \
+	get_poc_export() { awk -v key="$$1" '\
+		BEGIN { value = "" } \
+		{ \
+			line = $$0; \
+			sub(/\r$$/, "", line); \
+			if (line !~ /^[[:space:]]*#[[:space:]]*export[[:space:]]+/) next; \
+			sub(/^[[:space:]]*#[[:space:]]*export[[:space:]]+/, "", line); \
+			if (index(line, key "=") == 1) { \
+				value = substr(line, length(key) + 2); \
+				sub(/[[:space:]]+#.*$$/, "", value); \
+				gsub(/^"/, "", value); \
+				gsub(/"$$/, "", value); \
+			} \
+		} \
+		END { printf "%s", value }' "$(SCW_ENV_FILE)" ; } ; \
 	POSTGRES_PASSWORD=$$(get POSTGRES_PASSWORD) ; [ -n "$$POSTGRES_PASSWORD" ] || POSTGRES_PASSWORD=app ; \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) create secret generic sentropic-postgres \
 	  --from-literal=POSTGRES_PASSWORD="$$POSTGRES_PASSWORD" \
@@ -1538,11 +1567,19 @@ scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (
 	MISTRAL=$$(get MISTRAL_API_KEY) ; COHERE=$$(get COHERE_API_KEY) ; TAVILY=$$(get TAVILY_API_KEY) ; \
 	MAIL_HOST=$$(get MAIL_HOST) ; MAIL_PORT=$$(get MAIL_PORT) ; MAIL_SECURE=$$(get MAIL_SECURE) ; \
 	MAIL_USERNAME=$$(get MAIL_USERNAME) ; MAIL_PASSWORD=$$(get MAIL_PASSWORD) ; MAIL_FROM=$$(get MAIL_FROM) ; \
+	[ -n "$$MAIL_USERNAME" ] || MAIL_USERNAME=$$(get_poc_export MAIL_USERNAME) ; \
+	[ -n "$$MAIL_PASSWORD" ] || MAIL_PASSWORD=$$(get_poc_export MAIL_PASSWORD) ; \
+	if [ -z "$$MAIL_HOST" ] && [ -n "$$MAIL_USERNAME" ] && [ -n "$$MAIL_PASSWORD" ]; then \
+	  MAIL_HOST=smtp.tem.scaleway.com ; MAIL_PORT=465 ; MAIL_SECURE=true ; \
+	fi ; \
 	[ -n "$$MAIL_HOST" ] || MAIL_HOST="" ; [ -n "$$MAIL_PORT" ] || MAIL_PORT=587 ; \
 	[ -n "$$MAIL_SECURE" ] || MAIL_SECURE=false ; [ -n "$$MAIL_FROM" ] || MAIL_FROM=no-reply@sent-tech.ca ; \
 	if [ -n "$$MAIL_HOST" ] && { [ -z "$$MAIL_USERNAME" ] || [ -z "$$MAIL_PASSWORD" ]; }; then \
 	  echo "ERROR: MAIL_USERNAME and MAIL_PASSWORD are required when MAIL_HOST is set in $(SCW_ENV_FILE)" >&2; exit 1; \
 	fi ; \
+	MAIL_AUTH_STATUS=disabled ; \
+	if [ -n "$$MAIL_USERNAME" ] && [ -n "$$MAIL_PASSWORD" ]; then MAIL_AUTH_STATUS=configured ; fi ; \
+	echo "Mail config: host=$${MAIL_HOST:-disabled} port=$$MAIL_PORT secure=$$MAIL_SECURE from=$$MAIL_FROM auth=$$MAIL_AUTH_STATUS" ; \
 	GD_CS=$$(get GOOGLE_DRIVE_CLIENT_SECRET) ; GD_PK=$$(get GOOGLE_DRIVE_PICKER_API_KEY) ; \
 	GD_CID=$$(get GOOGLE_DRIVE_CLIENT_ID) ; GD_PID=$$(get GOOGLE_DRIVE_PICKER_APP_ID) ; \
 	DATABASE_URL="postgres://app:$${POSTGRES_PASSWORD}@postgres:5432/app" ; \
