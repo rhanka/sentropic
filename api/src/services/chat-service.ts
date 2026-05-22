@@ -2756,8 +2756,7 @@ Règles :
         : 'Pass both `entityType` and `entityId` when generating a document.';
       contextBlock += `\n\n## Document generation
 You have the tool \`document_generate\`. It can generate \`format: "docx"\` (default) or \`format: "pptx"\`.
-Before generating your first document in this conversation, call it with \`action: "upskill"\` (optionally with \`format\`) to learn best practices.
-Then call with \`action: "generate"\`.
+Call it with \`action: "generate"\`. The DOCX/PPTX sandbox helper API is documented in the \`document_generate\` skill's \`SKILL.md\` (discoverable via the \`search_skills\` meta-tool).
 ${targetGuidance}
 For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw constructor calls.`;
     }
@@ -4731,34 +4730,17 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       // from `runAssistantGeneration` (document_generate, batch_create_organizations).
       // Step 3 completed by F3 commit: 30/30 server-tool branches migrated.
       case 'document_generate': {
-        const action = typeof args.action === 'string' ? args.action : 'generate';
+        const rawAction = typeof args.action === 'string' ? args.action : 'generate';
+        if (rawAction !== 'generate') {
+          throw new Error('document_generate: action must be "generate" (upskill mode removed per BR19-D6; use search_skills + SKILL.md discovery)');
+        }
         const rawFormat = typeof args.format === 'string' ? args.format : undefined;
         if (rawFormat && rawFormat !== 'docx' && rawFormat !== 'pptx') {
           throw new Error('document_generate: format must be "docx" | "pptx"');
         }
         const format = (rawFormat ?? 'docx') as 'docx' | 'pptx';
 
-        if (action === 'upskill') {
-          if (format === 'pptx') {
-            const { getPptxFreeformSkill } = await import('./pptx-freeform-skill');
-            result = {
-              status: 'completed',
-              mode: 'upskill',
-              format,
-              skill: getPptxFreeformSkill(),
-            };
-          } else {
-            // Return DOCX creation skill content for LLM learning
-            const { getDocxFreeformSkill } = await import('./docx-freeform-skill');
-            result = {
-              status: 'completed',
-              mode: 'upskill',
-              skill: getDocxFreeformSkill(),
-            };
-          }
-          await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-          streamSeq += 1;
-        } else {
+        {
           // Generate mode: DOCX template generation or DOCX/PPTX freeform sandbox generation.
           const templateId = typeof args.templateId === 'string' ? args.templateId : undefined;
           const code = typeof args.code === 'string' ? args.code : undefined;
