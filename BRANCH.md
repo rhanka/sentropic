@@ -572,14 +572,16 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot12b`.
 
 - [ ] **Lot 13a - Web host adapter contract**
-  - [ ] Add RED package tests in `packages/chat-ui/tests/web-host.test.ts` proving `createWebHost` composes transport, stream client, labels, renderers, jobs panel, comments panel, document adapter, and local-tools adapter without importing app code.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13a` and confirm `web-host.test.ts` fails because `packages/chat-ui/src/hosts/createWebHost.ts` does not exist.
-  - [ ] Create `packages/chat-ui/src/hosts/createWebHost.ts` with typed host contract builders only; no Sentropic app imports.
-  - [ ] Export `@sentropic/chat-ui/hosts/createWebHost` from `packages/chat-ui/package.json` and `packages/chat-ui/src/index.ts`.
-  - [ ] Add `ui/src/lib/chat/web-host-adapter.ts` that wires Sentropic app API helpers, context provider, documents, comments, jobs, local tools, labels, and renderers to the package host contract.
-  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13a`.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13a`.
-  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13a`.
+  - [x] Add RED package tests in `packages/chat-ui/tests/web-host.test.ts` proving `createWebHost` composes transport, stream client, labels, renderers, jobs panel, comments panel, document adapter, and local-tools adapter without importing app code.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13a` and confirm `web-host.test.ts` fails because `packages/chat-ui/src/hosts/createWebHost.ts` does not exist; other package tests passed 66/66.
+  - [x] Create `packages/chat-ui/src/hosts/createWebHost.ts` with typed host contract builders only; no Sentropic app imports.
+  - [x] Export `@sentropic/chat-ui/hosts/createWebHost` from `packages/chat-ui/package.json` and `packages/chat-ui/src/index.ts`.
+  - [x] Add `ui/src/lib/chat/web-host-adapter.ts` that wires Sentropic app API helpers, context provider, documents, comments, jobs, local tools, labels, and renderers to the package host contract.
+  - [x] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13a` — exited 0.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13a` — 70/70 passed across 16 files.
+  - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13a` — `svelte-check found 0 errors and 6 warnings in 5 files`.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/chat API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13a` — 24/24 passed across 5 files.
+  - [x] Run `wc -l packages/chat-ui/src/hosts/createWebHost.ts ui/src/lib/chat/web-host-adapter.ts packages/chat-ui/tests/web-host.test.ts` — `createWebHost.ts` 123 lines, `web-host-adapter.ts` 122 lines, `web-host.test.ts` 122 lines.
   - [ ] Commit with selective `git add`, then `make commit MSG="refactor: add chat ui web host adapter" ENV=test-feat-chat-ui-sdk-v2-lot13a`.
   - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot13a`.
 
