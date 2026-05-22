@@ -553,7 +553,7 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Commit with selective `git add`, then `make commit MSG="refactor: extract chat widget shell state" ENV=test-feat-chat-ui-sdk-v2-lot12a` — `13ae3295`.
   - [x] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot12a`.
 
-- [ ] **Lot 12b - ChatWidget jobs boundary isolation**
+- [x] **Lot 12b - ChatWidget jobs boundary isolation**
   - [x] Add RED package boundary tests proving `packages/chat-ui/src/components/ChatWidget.svelte` imports no `$lib/stores/queue`, no `$lib/components/QueueMonitor.svelte`, and contains no `/queue` API calls. Added `packages/chat-ui/tests/chat-widget-boundary.test.ts`.
   - [x] Add RED UI wrapper tests in `ui/tests/components/chat/ChatWidget-wrapper.test.ts` proving the app wrapper injects jobs panel, active/failed badge counts, queue purge callback, and queue tab label.
   - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot12b` and confirm the boundary test fails against the current package copy: 2 expected failures in `chat-widget-boundary.test.ts` while the other package tests passed.
@@ -568,8 +568,8 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12b` — 24/24 passed across 7 files.
   - [x] Run `make test-ui REGISTRY=local SCOPE=tests/stores/queue.test.ts API_PORT=9082 UI_PORT=5282 MAILDEV_UI_PORT=1182 ENV=test-feat-chat-ui-sdk-v2-lot12b` — not run because `ui/tests/stores/queue.test.ts` is absent in this worktree; queue store and `QueueMonitor` are unchanged in Lot 12b and covered indirectly by the chat wrapper boundary test.
   - [x] Run `wc -l ui/src/lib/components/ChatWidget.svelte packages/chat-ui/src/components/ChatWidget.svelte ui/src/lib/components/QueueMonitor.svelte ui/src/lib/stores/queue.ts` — `ChatWidget.svelte` 3284 lines, package `ChatWidget.svelte` 124 lines, `QueueMonitor.svelte` 271 lines, `queue.ts` 203 lines.
-  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: isolate chat widget jobs boundary" ENV=test-feat-chat-ui-sdk-v2-lot12b`.
-  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot12b`.
+  - [x] Commit with selective `git add`, then `make commit MSG="refactor: isolate chat widget jobs boundary" ENV=test-feat-chat-ui-sdk-v2-lot12b` — `34ff3bdc`.
+  - [x] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot12b`.
 
 - [ ] **Lot 13a - Web host adapter contract**
   - [ ] Add RED package tests in `packages/chat-ui/tests/web-host.test.ts` proving `createWebHost` composes transport, stream client, labels, renderers, jobs panel, comments panel, document adapter, and local-tools adapter without importing app code.
