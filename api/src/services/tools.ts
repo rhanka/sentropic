@@ -863,8 +863,7 @@ export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = 
     description:
       'Generate a document from the current context (initiative, folder/dashboard, etc.). ' +
       'Formats: "docx" (default) or "pptx". ' +
-      'Before generating your first document in a conversation, call this tool with `action: "upskill"` (optionally with format) to learn best practices. ' +
-      'Then call with `action: "generate"`. ' +
+      'The DOCX/PPTX sandbox helper API is documented in the `document_generate` skill\'s SKILL.md (discoverable via `search_skills`). ' +
       'DOCX supports two sub-modes — (1) Template mode with templateId, (2) Freeform mode with code (mutually exclusive). ' +
       'PPTX supports freeform code only.',
     parameters: {
@@ -872,9 +871,9 @@ export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = 
       properties: {
         action: {
           type: 'string',
-          enum: ['upskill', 'generate'],
+          enum: ['generate'],
           description:
-            'Action to perform. Call "upskill" first to learn DOCX creation best practices, then "generate" with your code.',
+            'Action to perform. Only "generate" is supported. The helper API surface is discoverable via search_skills + SKILL.md.',
         },
         format: {
           type: 'string',
