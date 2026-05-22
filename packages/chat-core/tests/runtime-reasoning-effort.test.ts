@@ -51,7 +51,7 @@ const buildEvaluatorCallback = (
     const shouldEvaluate = reasoningTier(input.selectedModel) !== 'none';
     const evaluatorModel =
       input.selectedProviderId === 'gemini'
-        ? 'gemini-3.1-flash-lite-preview'
+        ? 'gemini-3.5-thinking'
         : 'gpt-4.1-nano';
     if (!shouldEvaluate) {
       return {
@@ -248,11 +248,11 @@ describe('ChatRuntime.evaluateReasoningEffort (Lot 18)', () => {
     expect(result.shouldEvaluate).toBe(true);
     expect(result.effortLabel).toBe('low');
     expect(result.effortForMessage).toBe('low');
-    expect(result.evaluatedBy).toBe('gemini-3.1-flash-lite-preview');
-    expect(result.evaluatorModel).toBe('gemini-3.1-flash-lite-preview');
+    expect(result.evaluatedBy).toBe('gemini-3.5-thinking');
+    expect(result.evaluatorModel).toBe('gemini-3.5-thinking');
     expect(mesh.streamCalls).toHaveLength(1);
     expect(mesh.streamCalls[0]?.providerId).toBe('gemini');
-    expect(mesh.streamCalls[0]?.model).toBe('gemini-3.1-flash-lite-preview');
+    expect(mesh.streamCalls[0]?.model).toBe('gemini-3.5-thinking');
   });
 
   it('falls back to medium and surfaces a failure when the evaluator token is invalid', async () => {

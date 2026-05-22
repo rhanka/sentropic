@@ -83,19 +83,20 @@ Replace the remaining Gemini 3.1 Flash Lite catalog entry with Gemini 3.5 Thinki
   - [x] Add failing tests that expect Gemini catalog to expose `gemini-3.5-thinking` and no longer expose `gemini-3.1-flash-lite-preview`.
   - [x] Replace the llm-mesh Gemini Flash Lite profile with Gemini 3.5 Thinking.
   - [x] Replace Gemini provider allowlists with `gemini-3.5-thinking`.
-  - [ ] Add legacy cutovers from `gemini-3.1-flash-lite-preview` and `gemini-2.5-flash-lite` to `gemini-3.5-thinking`.
-  - [ ] Update API/UI tests for defaults, model selector payloads, and chat reasoning/tool flows.
-  - [ ] Update specs to describe Gemini 3.5 Thinking.
+  - [x] Add legacy cutovers from `gemini-3.1-flash-lite-preview` and `gemini-2.5-flash-lite` to `gemini-3.5-thinking`.
+  - [x] Update API/UI tests for defaults, model selector payloads, and chat reasoning/tool flows.
+  - [x] Update specs to describe Gemini 3.5 Thinking.
   - [ ] Lot gate:
     - [x] Red test observed before implementation: `make test-llm-mesh ENV=test-fix-gemini-35-thinking`.
     - [x] `make test-llm-mesh ENV=test-fix-gemini-35-thinking`.
-    - [ ] `make test-api-unit SCOPE="tests/unit/model-selection-legacy.test.ts tests/unit/gemini-tool-handoff.test.ts tests/unit/llm-runtime-stream.test.ts tests/unit/chat-service-tools.test.ts" API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
-    - [ ] `make test-api-endpoints SCOPE="tests/api/models.test.ts tests/api/me.test.ts tests/api/ai-settings.test.ts tests/api/chat-message-actions.test.ts" API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
-    - [ ] `make test-ui SCOPE=tests/utils/user-ai-settings-events.test.ts API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
-    - [ ] `make test-pkg-chat-core ENV=test-fix-gemini-35-thinking`.
-    - [ ] `make typecheck-llm-mesh ENV=test-fix-gemini-35-thinking`.
-    - [ ] `make typecheck-api API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
-    - [ ] `make lint-api API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
+    - [x] `make test-api-unit SCOPE="tests/unit/model-selection-legacy.test.ts tests/unit/gemini-tool-handoff.test.ts tests/unit/llm-runtime-stream.test.ts tests/unit/chat-service-tools.test.ts" API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
+    - [x] `make test-api-endpoints SCOPE="tests/api/models.test.ts tests/api/me.test.ts tests/api/ai-settings.test.ts tests/api/chat-message-actions.test.ts" API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
+    - [x] `make test-ui SCOPE=tests/utils/user-ai-settings-events.test.ts API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
+    - [x] `make test-pkg-chat-core ENV=test-fix-gemini-35-thinking`.
+    - [x] `make typecheck-llm-mesh ENV=test-fix-gemini-35-thinking`.
+    - [x] `make typecheck-api API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
+    - [x] `make lint-api API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
+    - [x] `make typecheck-ui API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
 
 - [ ] **Lot 2 — UAT handoff**
   - [ ] Push branch `fix/gemini-35-thinking`.
@@ -106,8 +107,8 @@ Replace the remaining Gemini 3.1 Flash Lite catalog entry with Gemini 3.5 Thinki
   - [ ] Legacy saved Gemini Flash Lite defaults migrate to Gemini 3.5 Thinking.
 
 - [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Confirm no `spec/BRANCH_SPEC_EVOL.md` is needed.
-  - [ ] Confirm specs touched in Lot 1 are committed.
+  - [x] Confirm no `spec/BRANCH_SPEC_EVOL.md` is needed.
+  - [x] Confirm specs touched in Lot 1 are committed.
 
 - [ ] **Lot N — Final validation**
   - [ ] Re-read this checklist and confirm all completed boxes are evidence-backed.
