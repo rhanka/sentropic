@@ -270,19 +270,6 @@
     type: 'timeline_item';
     item: ProjectedTimelineItem;
   };
-  type SessionHistorySnapshot = {
-    sessionId: string;
-    title: string | null;
-    messages: LocalMessage[];
-    timelineItems: ProjectedTimelineItem[];
-    initialEvents: Map<string, StreamEvent[]>;
-    runtimeSummaries: Map<string, RuntimeSegmentSummary>;
-    checkpoints: ChatCheckpoint[];
-    documents: ContextDocumentItem[];
-    todoRuntime: Record<string, unknown> | null;
-    lastAssistantModel: string | null;
-  };
-
   const getTimelineItemSortSequence = (item: ProjectedTimelineItem): number => {
     const messageSequence = Number(item.message.sequence ?? 0);
     return Number.isFinite(messageSequence) ? messageSequence : 0;
@@ -3276,136 +3263,6 @@
     }
   };
 
-  const fetchSessionHistorySnapshot = async (
-    id: string,
-  ): Promise<SessionHistorySnapshot> => {
-    const response = await apiFetch(
-      chatSessionHistoryUrl(id, 'summary'),
-      {
-        method: 'GET',
-        headers: {
-          Accept: 'application/x-ndjson',
-        },
-      },
-    );
-    if (!response.body) {
-      throw new Error('Session history stream returned an empty body');
-    }
-
-    const snapshot: SessionHistorySnapshot = {
-      sessionId: id,
-      title: null,
-      messages: [],
-      timelineItems: [],
-      initialEvents: new Map(),
-      runtimeSummaries: new Map(),
-      checkpoints: [],
-      documents: [],
-      todoRuntime: null,
-      lastAssistantModel: null,
-    };
-    const decoder = new TextDecoder();
-    const reader = response.body.getReader();
-    let buffer = '';
-
-    const processLine = (rawLine: string) => {
-      const line = rawLine.trim();
-      if (!line) return;
-      const payload = JSON.parse(line) as
-        | SessionHistoryMetaLine
-        | SessionHistoryTimelineLine;
-      if (payload.type === 'session_meta') {
-        snapshot.sessionId = payload.sessionId;
-        snapshot.title =
-          typeof payload.title === 'string' && payload.title.trim().length > 0
-            ? payload.title
-            : null;
-        snapshot.checkpoints = Array.isArray(payload.checkpoints)
-          ? payload.checkpoints
-          : [];
-        snapshot.documents = Array.isArray(payload.documents)
-          ? payload.documents
-          : [];
-        snapshot.todoRuntime = asRuntimeRecord(payload.todoRuntime);
-        return;
-      }
-
-      const item = payload.item;
-      const normalizedMessage: LocalMessage = {
-        ...item.message,
-        _streamId: item.message._streamId ?? item.message.id,
-        _localStatus:
-          item.message._localStatus ??
-          (item.message.content ? 'completed' : undefined),
-      };
-      const existingMessageIndex = snapshot.messages.findIndex(
-        (entry) => entry.id === normalizedMessage.id,
-      );
-      if (existingMessageIndex >= 0) {
-        snapshot.messages[existingMessageIndex] = {
-          ...snapshot.messages[existingMessageIndex],
-          ...normalizedMessage,
-        };
-      } else {
-        const sequence = Number(normalizedMessage.sequence ?? 0);
-        let insertAt = snapshot.messages.length;
-        while (
-          insertAt > 0 &&
-          Number(snapshot.messages[insertAt - 1]?.sequence ?? 0) > sequence
-        ) {
-          insertAt -= 1;
-        }
-        snapshot.messages.splice(insertAt, 0, normalizedMessage);
-      }
-      if (item.kind === 'assistant-segment' || item.kind === 'runtime-segment') {
-        snapshot.initialEvents.set(
-          item.message.id,
-          mergeProjectionHistoryEvents(
-            snapshot.initialEvents.get(item.message.id) ?? [],
-            item.segment.events,
-          ),
-        );
-      }
-      if (
-        item.kind === 'runtime-segment' &&
-        item.segment.runtimeSummary &&
-        (item.segment.runtimeSummary.hasReasoning || item.segment.runtimeSummary.hasTools)
-      ) {
-        snapshot.runtimeSummaries.set(item.message.id, item.segment.runtimeSummary);
-      }
-      const existingTimelineIndex = snapshot.timelineItems.findIndex(
-        (entry) => entry.key === item.key,
-      );
-      if (existingTimelineIndex >= 0) {
-        snapshot.timelineItems[existingTimelineIndex] = item;
-      } else {
-        snapshot.timelineItems.push(item);
-      }
-    };
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let boundary = buffer.indexOf('\n');
-      while (boundary >= 0) {
-        processLine(buffer.slice(0, boundary));
-        buffer = buffer.slice(boundary + 1);
-        boundary = buffer.indexOf('\n');
-      }
-    }
-    buffer += decoder.decode();
-    if (buffer.trim().length > 0) processLine(buffer);
-
-    snapshot.timelineItems.sort(compareTimelineItems);
-    snapshot.lastAssistantModel =
-      [...snapshot.messages]
-        .reverse()
-        .find((message) => message.role === 'assistant' && Boolean(message.model))
-        ?.model ?? null;
-    return snapshot;
-  };
-
   const yieldHistoryRenderFrame = async () => {
     await tick();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -3719,66 +3576,153 @@
   };
 
   export const selectSession = async (id: string) => {
-    const snapshot = await fetchSessionHistorySnapshot(id);
+    // Keep current session visible until the first staged batch is ready.
+    // Anti-flash (BUG-L6-44) preserved via deferred clear + revealAtBottom on first batch.
+    // Progressive lazy-load (NDJSON line-by-line, end-of-conversation first) restored.
     historyHydrationInFlight = true;
-    historyHydrationSwapPending = true;
     historyHydrationStickBottom = true;
-    optimisticSteerMessages = [];
-    projectedStreamEventsById = new Map();
-    projectedAssistantComputationByMessageId = new Map();
-    projectionEventsVersion += 1;
-    loadedRuntimeDetailsMessageIds.clear();
-    loadingRuntimeDetailsMessageIds.clear();
-    resetLocalToolInterceptionState();
-    messages = snapshot.messages;
-    historyTimelineItems = snapshot.timelineItems;
-    stagedHistoryTimelineItems = [];
-    historyTimelineSessionId = snapshot.sessionId;
-    initialEventsByMessageId = snapshot.initialEvents;
-    for (const [msgId, events] of snapshot.initialEvents) {
-      scanEventsForGeneratedFileCards(msgId, events);
-    }
-    runtimeSummaryByMessageId = snapshot.runtimeSummaries;
-    for (const [msgId, summary] of snapshot.runtimeSummaries) {
-      extractGeneratedFileCardsFromRuntimeSummary(msgId, summary);
-    }
-    applySessionCheckpoints(snapshot.checkpoints);
-    sessionDocs = snapshot.documents;
-    sessionDocsError = null;
-    if (snapshot.todoRuntime) {
-      handleTodoRuntimeToolResult({
-        toolCallId: `session-runtime:${snapshot.sessionId}`,
-        toolName: 'plan',
-        result: { todoRuntime: snapshot.todoRuntime },
-      });
-    } else {
-      resetTodoRuntimePanel();
-    }
-    if (snapshot.title) {
-      sessions = sessions.map((entry) =>
-        entry.id === snapshot.sessionId
-          ? { ...entry, title: snapshot.title }
-          : entry,
+    loadingMessages = true;
+    errorMsg = null;
+
+    const serverMessageIds = new Set<string>();
+    const serverTimelineKeys = new Set<string>();
+    const serverEventMessageIds = new Set<string>();
+    let pendingDeferredClear = true;
+
+    const performDeferredClear = () => {
+      optimisticSteerMessages = [];
+      projectedStreamEventsById = new Map();
+      projectedAssistantComputationByMessageId = new Map();
+      projectionEventsVersion += 1;
+      loadedRuntimeDetailsMessageIds.clear();
+      loadingRuntimeDetailsMessageIds.clear();
+      resetLocalToolInterceptionState();
+      messages = [];
+      historyTimelineItems = [];
+      initialEventsByMessageId = new Map();
+      runtimeSummaryByMessageId = new Map();
+      sessionDocs = [];
+      sessionDocsError = null;
+      sessionId = id;
+      historyHydrationSwapPending = true;
+    };
+
+    try {
+      const response = await apiFetch(
+        chatSessionHistoryUrl(id, 'summary'),
+        {
+          method: 'GET',
+          headers: { Accept: 'application/x-ndjson' },
+        },
       );
-    }
-    if (snapshot.lastAssistantModel) {
-      const fromCatalog = modelCatalogModels.find(
-        (entry) => entry.model_id === snapshot.lastAssistantModel,
-      );
-      if (fromCatalog) {
-        selectedProviderId = fromCatalog.provider_id;
-        selectedModelId = fromCatalog.model_id;
+      if (!response.body) {
+        throw new Error('Session history stream returned an empty body');
       }
+
+      const decoder = new TextDecoder();
+      const reader = response.body.getReader();
+      let buffer = '';
+
+      const processLine = async (rawLine: string) => {
+        const line = rawLine.trim();
+        if (!line) return;
+        const payload = JSON.parse(line) as
+          | SessionHistoryMetaLine
+          | SessionHistoryTimelineLine;
+        if (payload.type === 'session_meta') {
+          // Side-panel state (title, checkpoints, documents, todoRuntime) can update
+          // immediately — it is not gated by the timeline visibility swap.
+          ingestSessionHistoryMeta(payload);
+          return;
+        }
+        if (payload.type === 'timeline_item') {
+          serverTimelineKeys.add(payload.item.key);
+          serverMessageIds.add(String(payload.item.message.id ?? '').trim());
+          if (
+            payload.item.kind === 'assistant-segment' ||
+            payload.item.kind === 'runtime-segment'
+          ) {
+            serverEventMessageIds.add(String(payload.item.message.id ?? '').trim());
+          }
+          await stageHistoryTimelineItem(payload.item);
+          if (shouldFlushHistoryStage()) {
+            if (pendingDeferredClear) {
+              // First viewport-sized batch ready: atomically clear previous
+              // session state and reveal the new one at the bottom.
+              performDeferredClear();
+              pendingDeferredClear = false;
+              await applyHistoryTimelineBlock(stagedHistoryTimelineItems, {
+                revealAtBottom: true,
+              });
+            } else {
+              await applyHistoryTimelineBlock(stagedHistoryTimelineItems);
+            }
+          }
+        }
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary = buffer.indexOf('\n');
+        while (boundary >= 0) {
+          const line = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 1);
+          await processLine(line);
+          boundary = buffer.indexOf('\n');
+        }
+      }
+      buffer += decoder.decode();
+      if (buffer.trim().length > 0) {
+        await processLine(buffer);
+      }
+
+      // Final flush: empty session, or last partial batch under viewport size.
+      if (pendingDeferredClear) {
+        performDeferredClear();
+        pendingDeferredClear = false;
+      }
+      if (stagedHistoryTimelineItems.length > 0) {
+        await applyHistoryTimelineBlock(stagedHistoryTimelineItems, {
+          revealAtBottom: historyTimelineItems.length === 0,
+        });
+      }
+
+      messages = messages.filter((message) => serverMessageIds.has(message.id));
+      historyTimelineItems = historyTimelineItems.filter((item) =>
+        serverTimelineKeys.has(item.key),
+      );
+      initialEventsByMessageId = new Map(
+        [...initialEventsByMessageId].filter(([messageId]) =>
+          serverEventMessageIds.has(messageId),
+        ),
+      );
+
+      const lastAssistantModel = [...messages]
+        .reverse()
+        .find((m) => m.role === 'assistant' && Boolean(m.model))?.model;
+      if (lastAssistantModel) {
+        const fromCatalog = modelCatalogModels.find(
+          (entry) => entry.model_id === lastAssistantModel,
+        );
+        if (fromCatalog) {
+          selectedProviderId = fromCatalog.provider_id;
+          selectedModelId = fromCatalog.model_id;
+        }
+      }
+    } catch (e) {
+      // On failure, ensure the previous session stays visible (no half-applied swap)
+      // and surface the error to the user. If the deferred clear already happened,
+      // we leave the partial state in place — same behavior as the old code path.
+      historyHydrationSwapPending = false;
+      errorMsg = formatApiError(e, $_('chat.errors.loadMessages'));
+    } finally {
+      historyHydrationStickBottom = false;
+      historyHydrationInFlight = false;
+      historyHydrationSwapPending = false;
+      loadingMessages = false;
     }
-    sessionId = id;
-    await yieldHistoryRenderFrame();
-    if (listEl) {
-      listEl.scrollTop = listEl.scrollHeight;
-      await yieldHistoryRenderFrame();
-    }
-    historyHydrationSwapPending = false;
-    historyHydrationInFlight = false;
-    historyHydrationStickBottom = false;
   };
 
   export const refreshCommentThreads = async () => {
