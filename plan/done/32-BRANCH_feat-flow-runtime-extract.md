@@ -1,5 +1,8 @@
 # Branch Plan Stub: BR-26 Flow Runtime Extract
 
+Status: delivered by PR #165 (`feat/flow-runtime-extract`) and archived after
+UAT sign-off on 2026-05-21.
+
 Current coordination source:
 
 - `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` (§1 cartography, §11 delivery cadence, §14 agent templating invariant)
@@ -28,3 +31,16 @@ Before implementation:
 - Create a full `BRANCH.md` from `plan/BRANCH_TEMPLATE.md`.
 - Inventory `todo-orchestration.ts`, `queue-manager.ts`, `default-workflows.ts`, and all flow/agent E2E tests.
 - Confirm `@sentropic/contracts` + `@sentropic/events` are frozen on `main` before scaffolding the package.
+
+Completion notes:
+
+- `@sentropic/flow` package scaffolded and wired into the API workspace.
+- Workflow seed data, queue controls, queue processing loop, job runner,
+  dispatch helpers, run-state helpers, and start-boundary helpers moved behind
+  package/runtime contracts.
+- Golden trace fixtures and flow runtime regressions added under
+  `api/tests/services/flow/**`.
+- UAT passed on generation, approval gate, multi-org, queue/runtime, and
+  chat/todo/workflow smoke paths.
+- Remaining full consumer rebinding from legacy `todoOrchestrationService`
+  imports to `flowRuntime` is intentionally deferred.

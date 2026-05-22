@@ -64,6 +64,8 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
 - **BR26-FB-02** (Lot 5, severity: `attention`, status: `resolved/deferred`): the agent seed catalog move into `@sentropic/flow/seeds/agents` cannot be a single-file pure-data relocation. `api/src/config/default-agents.ts` (69 LOC) only orchestrates 5 sibling files (`default-agents-ai-ideas.ts` 474 LOC, `default-agents-opportunity.ts` 522 LOC, `default-agents-code.ts` 28 LOC, `default-agents-shared.ts` 313 LOC, `default-agents-types.ts` 11 LOC) which themselves import from `default-chat-system.ts` and `default-org-aware-prompts.ts` (prompt fragments, not in scope for the flow façade). Moving just the umbrella creates a cross-package upward import (`packages/flow → api/src/config/...`) which violates `rules/architecture.md` ("packages/* MUST NOT depend on app roots"). Moving the full agent catalog tree requires moving prompt fragments too — that scope expansion is incompatible with the BR-26 "behavior-preserving extraction" boundary and is deferred to BR-27. Recorded by Lot 5 sub-agent; conductor decision on 2026-05-17: keep BR-26/BR-32 behavior-preserving and workflows-only for Lot 5, then resume Lot 6 after Lot 5 workflow gates.
 - **BR26-FB-03** (Lot 7, severity: `attention`, status: `resolved`): hook-based delegation pattern (used in Slices 7.0/7.A/7.B/7.C/7.E.1) scales linearly with the number of internal helpers the method touches. For `dispatchWorkflowTransitions` the hook count would be 8 (`getCancelAllInProgress`, `evaluateWorkflowCondition`, `mergeWorkflowRunState`, `markExecutionRunStatus`, `dispatchWorkflowTask`, `isWorkflowJoinTransitionReady`, `getPathValue`, `buildWorkflowTaskInstanceKey`); `dispatchWorkflowTask` (~200 LOC) and `processJob` (~600 LOC) would push past 15 hooks each, with one of those hooks being a recursive call into another moved method. The `PostgresJobQueueRuntimeHooks` type would become a god-object of ~30 callbacks before Lot 7 completes. Resolution: functional decomposition was selected and implemented through `packages/flow/src/dispatch.ts`, `packages/flow/src/processing-loop.ts`, `packages/flow/src/job-queue-controls.ts`, and `packages/flow/src/job-runner.ts`; `queue-manager.ts` now wires typed deps instead of growing a god-object hook surface.
 - **BR26-FB-01** (Lot 2, severity: `attention`, status: `resolved`): baseline `29b2c243` predates `origin/main` security fixes (`fix/security-high-vulnerabilities` merged at `edbe7d24`). The api Dockerfile audit gate (`npm audit --audit-level=high --omit=dev --workspaces --include-workspace-root`) fails on this branch as soon as any change invalidates the Docker layer cache, due to the Svelte `devalue` high-severity advisory (GHSA-77vg-94rm-hx3p). Lot 2 lockfile addition for `@sentropic/flow` triggers cache invalidation, surfacing the failure. Resolution path: rebase the branch onto `origin/main` (picks up vite/flatted/fast-xml-builder/svelte fixes) before Lot 3 or earlier. Recorded by Lot 2 sub-agent; deferred to conductor decision. **Resolved at Lot 3 by merge commit `4e9209cb` (Lot 3 baseline) which incorporates `origin/main` PR #152 + PR #157 (vite, flatted, fast-xml-builder, sveltekit/devalue HIGH advisories).**
+- **BR26-FB-04** (finalization, severity: `attention`, status: `resolved/deferred`): full replacement of every legacy `todoOrchestrationService` consumer with `flowRuntime` is deferred. This branch delivers the package extraction, queue runtime decomposition, workflow seed move, Postgres adapters, generic workflow start boundary, initiative-generation start boundary, and regression fixtures. Existing legacy entrypoints remain compatibility surfaces for consumers not yet rebound.
+- **BR26-UAT-01** (finalization, severity: `info`, status: `passed`): user UAT passed on 2026-05-21 for five smoke paths: full generation, approval-gated workflow, multi-org/auto-create, queue/runtime status, and chat/todo/workflow launch.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -161,7 +163,7 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Regression: all 6 fixtures.
   - [x] Lot gate: typecheck-api, lint-api, full `make test-api`.
 
-- [ ] **Lot 8 — Slice 5: `todo-orchestration.ts` orchestration loop → `FlowRuntime`**
+- [x] **Lot 8 — Slice 5: FlowRuntime start boundary**
   - [x] Slice 8.1a — Add package helpers for generic workflow start metadata, run state, and task assignments.
   - [x] Slice 8.1b — Move generic `startWorkflow` run creation into `AppFlowRuntime` and dispatch through the `JobQueue` port.
   - [x] Slice 8.1c — Add a FlowRuntime regression proving generic workflow start no longer delegates to legacy `todoOrchestrationService.startWorkflow`.
@@ -169,23 +171,25 @@ Extract `todo-orchestration.ts` + `queue-manager.ts` + `default-workflows.ts` + 
   - [x] Slice 8.3a — Add package helpers for initiative-generation run metadata, initial state, and agent-map construction.
   - [x] Slice 8.3b — Move initiative-generation workflow selection, task/agent resolution, and run creation into `AppFlowRuntime`.
   - [x] Slice 8.3c — Add a FlowRuntime regression proving initiative-generation start no longer delegates to legacy `todoOrchestrationService.startInitiativeGenerationWorkflow`.
-  - [ ] Move the workflow start + transition evaluation + agent resolution logic into `packages/flow/src/flow-runtime.ts` + Postgres adapter composition.
-  - [ ] `api/src/services/todo-orchestration.ts` becomes a thin re-export of the façade only.
-  - [ ] Regression: all 6 fixtures.
-  - [ ] Lot gate: typecheck-api, lint-api, full `make test-api`.
+  - [!] Full legacy `todo-orchestration.ts` thin re-export deferred; see `BR26-FB-04`.
+  - [x] Regression: all 6 fixtures covered by replay harness.
+  - [x] Lot gate: build-flow, typecheck-api, lint-api, replay, generic dispatch, and flow-runtime regressions.
 
-- [ ] **Lot N-3 — Consumer rebinding (`BR26-EX3`)**
-  - [ ] Update `chat-service.ts` queueManager call sites to import from the façade.
-  - [ ] Update routes (`agent-config.ts`, `plans.ts`, `runs.ts`, `tasks.ts`, `todos.ts`, `workflow-config.ts`, `workspaces.ts`, `initiatives.ts`) to import `flowRuntime` instead of `todoOrchestrationService`.
+- [!] **Lot N-3 — Consumer rebinding (`BR26-EX3`)**
+  - [!] Update `chat-service.ts` queueManager call sites to import from the façade — deferred; see `BR26-FB-04`.
+  - [!] Update routes (`agent-config.ts`, `plans.ts`, `runs.ts`, `tasks.ts`, `todos.ts`, `workflow-config.ts`, `workspaces.ts`, `initiatives.ts`) to import `flowRuntime` instead of `todoOrchestrationService` — deferred; see `BR26-FB-04`.
 
-- [ ] **Lot N-2 — UAT (web app smoke)**
-  - [ ] Run one full use-case generation through the façade (matrix prepare → list → detail → exec summary).
-  - [ ] Run one approval-gated qualification workflow with manual gate signal.
-  - [ ] Run one chat-driven todo creation + task start.
+- [x] **Lot N-2 — UAT (web app smoke)**
+  - [x] Run one full use-case generation through the façade (matrix prepare → list → detail → exec summary).
+  - [x] Run one approval-gated qualification workflow with manual gate signal.
+  - [x] Run multi-org / auto-create organization generation.
+  - [x] Verify queue/runtime state transitions without stuck jobs or retry loops.
+  - [x] Run one chat-driven todo creation + task start.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Fold `spec/SPEC_EVOL_BR26_FLOW_FACADE.md` content into `spec/SPEC_VOL_FLOW.md` + updates to `spec/SPEC_WORKFLOW_RUNTIME.md` + `spec/SPEC_AGENTIC_MODEL.md`.
-  - [ ] Delete `spec/SPEC_EVOL_BR26_FLOW_FACADE.md`.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Fold `spec/SPEC_EVOL_BR26_FLOW_FACADE.md` content into `spec/SPEC_VOL_FLOW.md` + updates to `spec/SPEC_WORKFLOW_RUNTIME.md` + `spec/SPEC_AGENTIC_MODEL.md`.
+  - [x] Delete `spec/SPEC_EVOL_BR26_FLOW_FACADE.md`.
+  - [x] Move `plan/32-BRANCH_feat-flow-runtime-extract.md` to `plan/done/32-BRANCH_feat-flow-runtime-extract.md`.
 
 - [ ] **Lot N — Final validation**
   - [ ] `make typecheck-api`, `make typecheck`, `make lint-api`, `make lint`.
