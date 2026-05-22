@@ -158,6 +158,10 @@ describe('Use Cases Generate - Workflow runtime end-to-end', () => {
       buildDetailPayload(String(initiativeName)),
     );
 
+    vi.spyOn(contextMatrix, 'generateOrganizationMatrixTemplate').mockResolvedValue(
+      buildMatrixTemplate(),
+    );
+
     vi.spyOn(executiveSummaryService, 'generateExecutiveSummary').mockImplementation(async ({ folderId }) => {
       await db
         .update(folders)
