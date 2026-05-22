@@ -524,18 +524,18 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11e`.
 
 - [ ] **Lot 11f - AppChatPanel adapter extraction**
-  - [ ] Add RED UI tests for route/workspace context helper extraction into `ui/src/lib/chat/context-provider.ts`.
-  - [ ] Extract route/workspace/entity context selection helpers from `ui/src/lib/components/chat/AppChatPanel.svelte` into `ui/src/lib/chat/context-provider.ts`.
-  - [ ] Add RED UI tests for document helper extraction into `ui/src/lib/chat/document-adapter.ts`.
-  - [ ] Extract session document, Google Drive, upload, generated-card, and download helpers into `ui/src/lib/chat/document-adapter.ts`.
-  - [ ] Add RED UI tests for comment helper extraction into `ui/src/lib/chat/comment-adapter.ts`.
-  - [ ] Extract comment section labels, mention matching, thread selection, and comment list state helpers into `ui/src/lib/chat/comment-adapter.ts`.
-  - [ ] Add RED UI tests for session helper extraction into `ui/src/lib/chat/session-adapter.ts`.
-  - [ ] Extract chat session REST URL construction, retry, rollback, feedback, and checkpoint helper types into `ui/src/lib/chat/session-adapter.ts`; actual API client remains app-injected.
-  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11f`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11f`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11f`.
-  - [ ] Run `wc -l ui/src/lib/components/chat/AppChatPanel.svelte ui/src/lib/chat/context-provider.ts ui/src/lib/chat/document-adapter.ts ui/src/lib/chat/comment-adapter.ts ui/src/lib/chat/session-adapter.ts`.
+  - [x] Add RED UI tests for route/workspace context helper extraction into `ui/src/lib/chat/context-provider.ts` (`tests/chat/context-provider.test.ts` failed on missing module in RED run).
+  - [x] Extract route/workspace/entity context selection helpers from `ui/src/lib/components/chat/AppChatPanel.svelte` into `ui/src/lib/chat/context-provider.ts`.
+  - [x] Add RED UI tests for document helper extraction into `ui/src/lib/chat/document-adapter.ts` (`tests/chat/document-adapter.test.ts` failed on missing module in RED run).
+  - [x] Extract session document, Google Drive, upload, generated-card, and download helpers into `ui/src/lib/chat/document-adapter.ts`.
+  - [x] Add RED UI tests for comment helper extraction into `ui/src/lib/chat/comment-adapter.ts` (`tests/chat/comment-adapter.test.ts` failed on missing module in RED run).
+  - [x] Extract comment section labels, mention matching, thread selection, and comment list state helpers into `ui/src/lib/chat/comment-adapter.ts`.
+  - [x] Add RED UI tests for session helper extraction into `ui/src/lib/chat/session-adapter.ts` (`tests/chat/session-adapter.test.ts` failed on missing module in RED run).
+  - [x] Extract chat session REST URL construction, retry, rollback, feedback, and checkpoint helper types into `ui/src/lib/chat/session-adapter.ts`; actual API client remains app-injected.
+  - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11f` — `svelte-check found 0 errors and 6 warnings in 5 files`.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11f` — 22/22 passed across 5 files.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11f` — 24/24 passed across 5 files.
+  - [x] Run `wc -l ui/src/lib/components/chat/AppChatPanel.svelte ui/src/lib/chat/context-provider.ts ui/src/lib/chat/document-adapter.ts ui/src/lib/chat/comment-adapter.ts ui/src/lib/chat/session-adapter.ts` — `AppChatPanel.svelte` 5641 lines, `context-provider.ts` 147 lines, `document-adapter.ts` 139 lines, `comment-adapter.ts` 235 lines, `session-adapter.ts` 63 lines.
   - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract app chat panel adapters" ENV=test-feat-chat-ui-sdk-v2-lot11f`.
   - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11f`.
 
