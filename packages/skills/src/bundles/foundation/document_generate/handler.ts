@@ -115,11 +115,11 @@ export function createDocumentGenerateHandler(skill: Skill): SkillToolHandler {
 
     // ------------------------------------------------------------------
     // Sub-path routing (freeform DOCX bound in step 1.A; freeform PPTX
-    // bound in step 1.B; upskill + template DOCX deferred to step 1.C).
+    // bound in step 1.B; template DOCX deferred to BR19-D3 closing rebind).
+    // The legacy `action=upskill` mode was removed in BR19-D6: the LLM now
+    // discovers the helper API via `search_skills` + SKILL.md instead of a
+    // tool-call indirection.
     // ------------------------------------------------------------------
-    if (action === 'upskill') {
-      throwDeferred(`action=upskill&format=${format}`);
-    }
     if (action !== 'generate') {
       throwDeferred(`action=${action || '<missing>'}`);
     }
