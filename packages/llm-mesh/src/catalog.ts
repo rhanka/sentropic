@@ -268,7 +268,7 @@ export const modelProfiles = [
   {
     providerId: 'anthropic',
     modelId: 'claude-opus-4-7',
-    label: 'Opus 4.6',
+    label: 'Opus 4.7',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('anthropic', 'advanced'),

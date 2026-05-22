@@ -1,10 +1,11 @@
 # Feature: Gemini 3.5 Thinking catalog replacement
 
 ## Objective
-Replace the remaining Gemini 3.1 Flash Lite catalog entry with Gemini 3.5 Thinking without adding a global roadmap branch number.
+Replace the remaining Gemini 3.1 Flash Lite catalog entry with Gemini 3.5 Thinking and correct the Opus 4.7 display label without adding a global roadmap branch number.
 
 ## Scope / Guardrails
 - Scope limited to model catalog metadata, provider allowlists, legacy model cutover rules, focused tests, and specs that mention the Gemini catalog.
+- The same model-catalog scope also covers display-label corrections for active catalog entries.
 - No database migration.
 - Make-only workflow, no direct Docker/npm commands.
 - Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
@@ -84,10 +85,12 @@ Replace the remaining Gemini 3.1 Flash Lite catalog entry with Gemini 3.5 Thinki
   - [x] Replace the llm-mesh Gemini Flash Lite profile with Gemini 3.5 Thinking.
   - [x] Replace Gemini provider allowlists with `gemini-3.5-thinking`.
   - [x] Add legacy cutovers from `gemini-3.1-flash-lite-preview` and `gemini-2.5-flash-lite` to `gemini-3.5-thinking`.
+  - [x] Correct `claude-opus-4-7` display label from `Opus 4.6` to `Opus 4.7`.
   - [x] Update API/UI tests for defaults, model selector payloads, and chat reasoning/tool flows.
   - [x] Update specs to describe Gemini 3.5 Thinking.
   - [ ] Lot gate:
     - [x] Red test observed before implementation: `make test-llm-mesh ENV=test-fix-gemini-35-thinking`.
+    - [x] Red test observed for Opus label correction: `make test-llm-mesh ENV=test-fix-gemini-35-thinking` failed on `Opus 4.6` vs `Opus 4.7`.
     - [x] `make test-llm-mesh ENV=test-fix-gemini-35-thinking`.
     - [x] `make test-api-unit SCOPE="tests/unit/model-selection-legacy.test.ts tests/unit/gemini-tool-handoff.test.ts tests/unit/llm-runtime-stream.test.ts tests/unit/chat-service-tools.test.ts" API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
     - [x] `make test-api-endpoints SCOPE="tests/api/models.test.ts tests/api/me.test.ts tests/api/ai-settings.test.ts tests/api/chat-message-actions.test.ts" API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
