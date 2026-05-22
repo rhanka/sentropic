@@ -601,7 +601,7 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Commit with selective `git add`, then `make commit MSG="refactor: adopt package chat components in app" ENV=test-feat-chat-ui-sdk-v2-lot13b` — `56475e2d`.
   - [x] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot13b`.
 
-- [ ] **Lot 14 - Streaming render resilience and regression guard**
+- [x] **Lot 14 - Streaming render resilience and regression guard**
   - [x] Add package stress tests in `packages/chat-ui/tests/stream-throughput.test.ts` for 2,000 ordered `content_delta` events, sequence dedupe, terminal flush, and no duplicate merged deltas. RED run failed on duplicate reconnect sequences (`abbac` instead of `abc`), then `StreamHistory` was fixed to ignore replayed same-type stream events at or below the last retained sequence.
   - [x] Add package bounds tests in `packages/chat-ui/tests/stream-history-bounds.test.ts` for bounded per-stream history, bounded global history, and long GPT-like streams.
   - [x] Add UI regression tests in `ui/tests/components/chat/StreamMessage-wrapper.test.ts` for large GPT-like delta smoothing and terminal-state content flush.
@@ -611,8 +611,8 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot14` — 79/79 passed across 19 files.
   - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9084 UI_PORT=5284 MAILDEV_UI_PORT=1184 ENV=test-feat-chat-ui-sdk-v2-lot14` — `svelte-check found 0 errors and 6 warnings in 5 files`.
   - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9084 UI_PORT=5284 MAILDEV_UI_PORT=1184 ENV=test-feat-chat-ui-sdk-v2-lot14` — 26/26 passed across 8 files.
-  - [ ] Commit with selective `git add`, then `make commit MSG="test: guard chat stream rendering throughput" ENV=test-feat-chat-ui-sdk-v2-lot14`.
-  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot14`.
+  - [x] Commit with selective `git add`, then `make commit MSG="test: guard chat stream rendering throughput" ENV=test-feat-chat-ui-sdk-v2-lot14` — `81a7a981`.
+  - [x] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot14`.
 
 - [ ] **Lot N-2 - Full UAT after modular refactor**
   - [ ] Confirm `tmp/feat-chat-ui-sdk-v2` worktree is clean and all Lot 11-14 commits are present.
