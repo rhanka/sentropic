@@ -4,7 +4,7 @@ State of this branch (`feat/deploy-poc-k8s`) :
 
 - New `deploy/scw/` tenant manifests (RBAC + Postgres StatefulSet + api/ui Deployments + optional Ingress).
 - Updated `.github/workflows/ci.yml` publishing `sentropic-api` and `sentropic-ui` to the SCW Container Registry, then running the neutral `deploy-k8s` job on branch/main pushes.
-- New Makefile targets `scw-deploy`, `scw-undeploy`, `scw-bundle-secret`, `scw-registry-secret`, `scw-status`, `scw-debug`, `scw-logs`, `scw-smoke`.
+- New Makefile targets `scw-deploy`, `scw-undeploy`, `scw-bundle-secret`, `scw-registry-secret`, `scw-status`, `scw-debug`, `scw-logs`, `scw-smoke`, `scw-api-netcheck`, `scw-email-smoke`.
 - This UAT note.
 
 ## Prerequisites
@@ -67,6 +67,10 @@ curl -sIo /dev/null -w "%{http_code}\n" http://localhost:5173/
 # expected: 200
 # (open http://localhost:5173 in a browser if you want the full UI UAT)
 
+# 6) smoke-test outbound email path from the k8s api
+make scw-api-netcheck KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
+make scw-email-smoke KUBECONFIG=$HOME/.kube/poc.yaml SCW_EMAIL_SMOKE_TO=<recipient> ENV=test-feat-deploy-poc-k8s
+
 ```
 
 ## Expected resources after deploy
@@ -103,6 +107,11 @@ persistentvolumeclaim/data-postgres-0   Bound  1Gi   scw-bssd
   - `OK: ui /`
 - `make scw-logs KUBECONFIG=$HOME/.kube/poc.yaml SCW_LOG_TAIL=120 ENV=test-feat-deploy-poc-k8s` showed startup migrations, index creation, server listen, and health checks without runtime errors.
 - `make -C ~/src/poc-k8s tenant-status TENANT=sentropic ENV=test-feat-deploy-poc-k8s` reported quota within budget after Maildev removal: pods `3/8`, requests.cpu `230m/300m`, requests.memory `448Mi/768Mi`, limits.cpu `1100m/1500m`, limits.memory `1152Mi/1500Mi`.
+- Real email smoke to `fabien.antoine@gmail.com` reached the api but did not deliver. First `make scw-email-smoke ...` returned HTTP 500 and api logs showed `ENETUNREACH` to the Scaleway TEM IPv6 endpoint. After adding `NODE_OPTIONS=--dns-result-order=ipv4first` and redeploying, `make scw-email-smoke ...` still returned HTTP 500 and logs showed SMTP `Connection timeout` to `smtp.tem.scaleway.com:465`.
+- `make scw-api-netcheck KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s` returned `ETIMEDOUT` for `smtp.tem.scaleway.com:465`.
+- `make scw-api-netcheck KUBECONFIG=$HOME/.kube/poc.yaml SCW_NETCHECK_PORT=587 ENV=test-feat-deploy-poc-k8s` returned `ETIMEDOUT` for `smtp.tem.scaleway.com:587`.
+- `make scw-api-netcheck KUBECONFIG=$HOME/.kube/poc.yaml SCW_NETCHECK_HOST=51.159.84.239 SCW_NETCHECK_PORT=465 ENV=test-feat-deploy-poc-k8s` timed out against the direct Scaleway TEM IPv4 address.
+- `make scw-api-netcheck KUBECONFIG=$HOME/.kube/poc.yaml SCW_NETCHECK_HOST=api.scaleway.com SCW_NETCHECK_PORT=443 ENV=test-feat-deploy-poc-k8s` returned `OK`, proving external HTTPS egress works from the pod while SMTP egress is blocked.
 
 Quota usage (`kubectl -n sentropic describe resourcequota tenant-quota`) should show ~230m / 448Mi requests used out of 300m / 768Mi authorised.
 
@@ -111,6 +120,7 @@ Quota usage (`kubectl -n sentropic describe resourcequota tenant-quota`) should 
 - **No Ingress applied by default.** Use port-forward via `poc-k8s` `tenant-port-forward` for the UAT. To expose publicly, set up cert-manager + a `letsencrypt` ClusterIssuer, edit the placeholder hosts in `deploy/scw/60-ingress.yaml`, and apply with `SCW_INGRESS=1`.
 - **Postgres has no backup automation.** A 1Gi PVC is enough for POC traffic but data is not snapshotted yet.
 - **No Maildev in Kubernetes.** Outbound email uses the POC SMTP configuration stored in `SCW_ENV_FILE` and injected into the `sentropic-api` Secret. If `MAIL_HOST` is absent and POC TEM credentials cannot be recovered, the API starts with outbound email disabled rather than falling back to Maildev.
+- **Outbound SMTP is blocked from the POC pod.** Real delivery through Scaleway TEM SMTP cannot pass until cluster egress to SMTP ports is opened/routed, or the email path is moved to a non-SMTP TEM relay/API.
 - **Secrets bundling is operator-side** : every developer who wants to redeploy has to have a viable `~/src/sentropic/.env`. No Sealed Secrets / Vault yet.
 
 ## Cleanup
