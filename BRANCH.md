@@ -68,6 +68,7 @@ Lift the Sentropic api + ui + postgres stack onto the shared `poc-k8s` Scaleway 
 - **BR37-FL12** (severity: `fixed`, status: `closed`): Branch push CI run 26201388648 published the api/ui images successfully, then `deploy-k8s` initially failed because GitHub Actions secret `KUBECONFIG_B64` was missing or empty. Fixed on 2026-05-20 via `make gh-k8s-secret KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s` and `make gh-k8s-secret-check ENV=test-feat-deploy-poc-k8s`; rerun reached Kubernetes rollout. No secret value was printed.
 - **BR37-FL13** (severity: `fixed`, status: `closed`): Live k8s rollout debugging on 2026-05-20 found three POC-only deployment blockers after `KUBECONFIG_B64` was fixed: missing `sentropic-registry` pull secret, wrong registry namespace literal (`sentropic` instead of `nc-reg`), and tenant `default-deny-ingress` blocking api -> postgres. Fixed by adding `scw-registry-secret`, `scw-debug`, `scw-logs`, `scw-smoke`, `deploy/scw/15-networkpolicy.yaml`, `strategy: Recreate` for api/ui under tight quota, and an api `startupProbe` for startup migrations. Historical evidence before BR37-FL14: `make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s` rolled out api/ui; `make scw-status ...` showed api/ui/maildev/postgres all `1/1`; `make scw-smoke ...` returned OK for api `/api/v1/health`, ui `/`, and maildev `/`.
 - **BR37-FL14** (severity: `fixed`, status: `closed`): Maildev does not belong in the shared Kubernetes POC tenant. Fixed on 2026-05-22 by deleting `deploy/scw/50-maildev.yaml`, removing the Maildev ingress NetworkPolicy and smoke check, making `scw-deploy` delete legacy Maildev resources, and moving outbound mail settings into the `sentropic-api` Secret via `make scw-bundle-secret`. POC SMTP settings are read from `SCW_ENV_FILE`; if `MAIL_HOST` is absent, the target injects an empty `MAIL_HOST` so the API does not fall back to its local `maildev` default. The checked Scaleway TEM domain for the POC is `sent-tech.ca`; `MAIL_FROM` defaults to `no-reply@sent-tech.ca`. Evidence: `make scw-status ...` now shows only api, ui, postgres; `make scw-smoke ...` returns OK for api and ui; tenant quota dropped to pods `3/8`, requests.cpu `230m/300m`, requests.memory `448Mi/768Mi`.
+- **BR37-FL15** (severity: `fixed`, status: `closed`): The POC `.env` stores Scaleway TEM credentials as historical commented `#export MAIL_USERNAME=...` and `#export MAIL_PASSWORD=...` entries, not active `MAIL_*` variables. Fixed on 2026-05-22 by making `scw-bundle-secret` prefer active `MAIL_*` values, then recover those POC `#export` credentials as fallback and derive `MAIL_HOST=smtp.tem.scaleway.com`, `MAIL_PORT=465`, `MAIL_SECURE=true`. The target now prints only a redacted operational summary (`host`, `port`, `secure`, `from`, `auth=configured|disabled`). Evidence: `make scw-bundle-secret ... SCW_ENV_FILE=$HOME/src/sentropic/.env ...` reconfigured `sentropic-api` with `host=smtp.tem.scaleway.com port=465 secure=true from=no-reply@sent-tech.ca auth=configured`.
 
 ## AI Flaky tests
 - This branch does not change AI runtime behavior.
@@ -131,6 +132,7 @@ Lift the Sentropic api + ui + postgres stack onto the shared `poc-k8s` Scaleway 
   - [x] Patch `deploy/scw/10-rbac.yaml` to add `imagePullSecrets: [{ name: sentropic-registry }]` on ServiceAccount `sentropic-app`.
   - [x] Update `deploy/scw/README.md` to replace GHCR references by SCW Registry and document `make scw-registry-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s`.
   - [x] Remove Maildev from the k8s tenant and make `scw-bundle-secret` inject `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, and `MAIL_FROM` from `SCW_ENV_FILE`.
+  - [x] Recover legacy POC TEM credentials from commented `#export MAIL_USERNAME` / `#export MAIL_PASSWORD` entries in `SCW_ENV_FILE` and derive Scaleway TEM SMTP on `smtp.tem.scaleway.com:465`.
   - [x] Create/update SCW Registry pull secret with `make scw-registry-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s`.
   - [x] Run `make gh-k8s-secret KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s`, then `make gh-k8s-secret-check ENV=test-feat-deploy-poc-k8s`, to create GitHub Actions secret `KUBECONFIG_B64`.
   - [x] Rerun deploy with `make gh-k8s-rerun-deploy GH_DEPLOY_RUN_ID=26201388648 ENV=test-feat-deploy-poc-k8s`; GitHub watch hit API rate limit, local k8s UAT completed after follow-up fixes in this commit.
@@ -141,6 +143,7 @@ Lift the Sentropic api + ui + postgres stack onto the shared `poc-k8s` Scaleway 
   - [x] Verify obsolete session `session-sess-apr95chl` is already absent: pod, PVC, and auth Secret all return `NotFound`.
   - [x] Confirm `poc-k8s` operator side is applied: namespace `sentropic`, ResourceQuota, LimitRange, NetworkPolicy baseline.
   - [x] Bundle secrets from root `.env`: `sentropic-postgres` and `sentropic-api`.
+  - [x] Re-bundle `sentropic-api` with recovered POC TEM SMTP config: `smtp.tem.scaleway.com:465`, `MAIL_SECURE=true`, `auth=configured`.
   - [x] Verify Kubernetes pull-secret `sentropic-registry` exists by creating it via `make scw-registry-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s`.
   - [x] Deploy workload: `make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s`.
   - [x] Snapshot workload: `make scw-status KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s`.
@@ -160,7 +163,7 @@ Lift the Sentropic api + ui + postgres stack onto the shared `poc-k8s` Scaleway 
 ## Deferred to BR-14d / BR-37 follow-ups
 - [ ] Sealed Secrets / Vault.
 - [ ] Postgres backup automation.
-- [ ] Real outbound SMTP.
+- [ ] Outbound email delivery smoke against a disposable recipient.
 - [ ] Public DNS.
 - [ ] Cert-manager ClusterIssuer and final Ingress hosts.
 - [ ] Full dev/CI migration to Kubernetes or k3d.
