@@ -9,13 +9,9 @@ import {
   workflowTaskResults,
   workflowTaskTransitions,
 } from '../../src/db/schema';
+import { queueManager as sharedQueueManager } from '../../src/services/queue-manager';
 import { createId } from '../../src/utils/id';
 import { cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
-
-async function importQueueManager() {
-  const mod = await import('../../src/services/queue-manager');
-  return mod.queueManager as any;
-}
 
 type TestTaskSeed = {
   taskKey: string;
@@ -36,15 +32,17 @@ describe('Queue - generic workflow transition runtime', () => {
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
 
   beforeEach(async () => {
-    queueManager = await importQueueManager();
+    queueManager = sharedQueueManager as any;
     user = await createAuthenticatedUser('editor');
   });
 
   afterEach(async () => {
-    await db.delete(workflowTaskResults).where(eq(workflowTaskResults.workspaceId, user.workspaceId));
-    await db.delete(workflowRunState).where(eq(workflowRunState.workspaceId, user.workspaceId));
-    await db.delete(executionRuns).where(eq(executionRuns.workspaceId, user.workspaceId));
-    await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, user.workspaceId));
+    if (user?.workspaceId) {
+      await db.delete(workflowTaskResults).where(eq(workflowTaskResults.workspaceId, user.workspaceId));
+      await db.delete(workflowRunState).where(eq(workflowRunState.workspaceId, user.workspaceId));
+      await db.delete(executionRuns).where(eq(executionRuns.workspaceId, user.workspaceId));
+      await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, user.workspaceId));
+    }
     await cleanupAuthData();
     vi.restoreAllMocks();
   });

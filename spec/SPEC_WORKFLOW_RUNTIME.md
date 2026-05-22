@@ -2,7 +2,10 @@
 
 ## 1. Workflow Definition Structure
 
-A workflow is defined by `DefaultWorkflowDefinition` in `api/src/config/default-workflows.ts`:
+A workflow is defined by `DefaultWorkflowDefinition` from the workflow seed
+catalog in `@sentropic/flow` (`packages/flow/src/seeds/workflows.ts`). The API
+module `api/src/config/default-workflows.ts` remains a compatibility re-export
+for existing app consumers:
 
 ```ts
 {
@@ -291,3 +294,46 @@ On workspace creation, `seedWorkflowsForType` inserts workflow definitions, task
 
 - **opportunity_qualification** — Linear workflow: context_prepare -> demand_analysis -> solution_draft -> bid_preparation -> gate_review. All tasks use `noop` executor (placeholder for future implementation).
 - **code_analysis** — Linear workflow: context_prepare -> codebase_scan -> issue_triage -> implementation_plan. All tasks use `noop` executor.
+
+## 9. Flow Package Boundary
+
+The workflow runtime is split between package-owned pure/runtime modules and
+API-owned adapters:
+
+- Package modules in `packages/flow/src/**` own condition evaluation, binding
+  resolution, task instance key generation, workflow dispatch helpers, queue
+  control helpers, the outer processing loop, job-runner retry/abort behavior,
+  and workflow seed data.
+- API adapters in `api/src/services/flow/**` own Postgres access, app service
+  calls, queue row persistence, `execution_runs`, `workflow_run_state`,
+  `workflow_task_results`, notifications, and Sentropic-specific side effects.
+- `api/src/services/flow/flow-runtime.ts` is the app composition root. It wires
+  `FlowRuntime`, `WorkflowStore`, `RunStore`, `JobQueue`, `ApprovalGate`,
+  `AgentTemplate`, and `Transitions` together for production use.
+
+This boundary keeps the package reusable while preserving existing database
+contracts and queue behavior. Legacy imports may still point at
+`todo-orchestration.ts` or `queue-manager.ts`; those files remain compatibility
+entrypoints for app surfaces that have not yet been rebound to `flowRuntime`.
+
+### Start Boundary
+
+Generic workflow start and initiative-generation start now build their run
+metadata, initial state, task assignments, and agent maps through flow runtime
+helpers. Dispatch of entry tasks goes through the `JobQueue` port instead of
+calling the legacy orchestration path directly.
+
+### Queue Boundary
+
+`QueueManager.processJobs()` delegates its outer processing loop and per-job
+execution shell to `@sentropic/flow` helpers. Concrete executors remain app
+callbacks because they call domain services such as organization enrichment,
+generation, chat processing, document summary, and DOCX generation.
+
+### Approval-Gate Boundary
+
+Gate config resolution and gate evaluation are available through
+`ApprovalGate`. Approval signaling keeps current resume semantics: the decision
+argument is accepted at the boundary but does not yet change branching behavior.
+Gate-aware approval/rejection branching is a follow-up behavior change, not part
+of the behavior-preserving extraction.

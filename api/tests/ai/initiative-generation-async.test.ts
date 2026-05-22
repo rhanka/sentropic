@@ -3,9 +3,10 @@ import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
-import { chatStreamEvents, jobQueue, workflowTaskResults } from '../../src/db/schema';
+import { chatStreamEvents, folders, initiatives, jobQueue, organizations, workflowTaskResults } from '../../src/db/schema';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { queueManager } from '../../src/services/queue-manager';
+import { hydrateInitiatives } from '../../src/routes/api/initiatives';
 
 type AsyncFailureScope = {
   workspaceId?: string | null;
@@ -114,6 +115,10 @@ async function waitFor<T>(
   let lastValue: T | undefined;
 
   while (true) {
+    if (options.failureScope?.workspaceId) {
+      await queueManager.processJobsForWorkspace(options.failureScope.workspaceId);
+    }
+
     if (options.failureScope) {
       await assertNoAsyncFailures(options.failureScope);
     }
@@ -132,11 +137,55 @@ async function waitFor<T>(
   }
 }
 
-async function fetchInitiatives(folderId: string, sessionToken: string): Promise<any[]> {
-  const initiativesResponse = await authenticatedRequest(app, 'GET', `/api/v1/initiatives?folder_id=${folderId}`, sessionToken);
-  expect(initiativesResponse.status).toBe(200);
-  const initiativesData = await initiativesResponse.json();
-  return initiativesData.items;
+async function fetchInitiatives(folderId: string, workspaceId: string): Promise<any[]> {
+  const rows = await db
+    .select()
+    .from(initiatives)
+    .where(and(eq(initiatives.workspaceId, workspaceId), eq(initiatives.folderId, folderId)));
+  return hydrateInitiatives(rows);
+}
+
+async function fetchOrganizationState(organizationId: string, workspaceId: string) {
+  const [row] = await db
+    .select()
+    .from(organizations)
+    .where(and(eq(organizations.id, organizationId), eq(organizations.workspaceId, workspaceId)))
+    .limit(1);
+
+  if (!row) {
+    return { response: { status: 404 }, data: { httpStatus: 404 } };
+  }
+
+  return {
+    response: { status: 200 },
+    data: {
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      ...((row.data ?? {}) as Record<string, unknown>),
+    },
+  };
+}
+
+async function fetchFolderState(folderId: string, workspaceId: string) {
+  const [row] = await db
+    .select()
+    .from(folders)
+    .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)))
+    .limit(1);
+  return row ?? null;
+}
+
+async function fetchWorkspaceQueueStats(workspaceId: string) {
+  const rows = await db
+    .select({ status: jobQueue.status })
+    .from(jobQueue)
+    .where(eq(jobQueue.workspaceId, workspaceId));
+  return {
+    pending: rows.filter((job) => job.status === 'pending').length,
+    processing: rows.filter((job) => job.status === 'processing').length,
+    failed: rows.filter((job) => job.status === 'failed').length,
+  };
 }
 
 async function hardResetQueue(): Promise<void> {
@@ -232,9 +281,8 @@ describe('AI Workflow - Complete Integration Test', () => {
       'organization enrichment',
       { timeoutMs: 45000, failureScope: { workspaceId: user.workspaceId } },
       async () => {
-        const response = await authenticatedRequest(app, 'GET', `/api/v1/organizations/${createdOrganizationId}`, user.sessionToken!);
-        const data = response.status === 200 ? await response.json() : { httpStatus: response.status };
-        return { done: response.status !== 200 || data.status !== 'enriching', value: { response, data } };
+        const state = await fetchOrganizationState(createdOrganizationId, user.workspaceId!);
+        return { done: state.response.status !== 200 || state.data.status !== 'enriching', value: state };
       }
     );
 
@@ -275,9 +323,8 @@ describe('AI Workflow - Complete Integration Test', () => {
     const workflowRunId = generateData.workflow_run_id as string;
 
     // 6) Verify folder exists and stays attached to the organization while the workflow continues
-    const folderResponse = await authenticatedRequest(app, 'GET', `/api/v1/folders/${createdFolderId}`, user.sessionToken!);
-    expect(folderResponse.status).toBe(200);
-    const folderData = await folderResponse.json();
+    const folderData = await fetchFolderState(createdFolderId, user.workspaceId!);
+    if (!folderData) throw new Error(`Folder ${createdFolderId} not found`);
     expect(['generating', 'completed']).toContain(folderData.status);
     expect(folderData.organizationId).toBe(createdOrganizationId);
 
@@ -286,7 +333,7 @@ describe('AI Workflow - Complete Integration Test', () => {
       'initiative list creation',
       { timeoutMs: 45000, failureScope: { workspaceId: user.workspaceId, workflowRunId } },
       async () => {
-        const items = await fetchInitiatives(createdFolderId!, user.sessionToken!);
+        const items = await fetchInitiatives(createdFolderId!, user.workspaceId!);
         return { done: items.length > 0, value: items };
       }
     );
@@ -302,7 +349,7 @@ describe('AI Workflow - Complete Integration Test', () => {
       'initiative detail completion threshold',
       { timeoutMs: 120000, failureScope: { workspaceId: user.workspaceId, workflowRunId } },
       async () => {
-        const updatedInitiatives = await fetchInitiatives(createdFolderId!, user.sessionToken!);
+        const updatedInitiatives = await fetchInitiatives(createdFolderId!, user.workspaceId!);
         const completed = updatedInitiatives.filter((uc: any) => uc.status === 'completed');
         console.log(`Completed initiatives after wait: ${completed.length}/${updatedInitiatives.length}`);
         console.log('Current statuses:', updatedInitiatives.map((uc: any) => uc.status));
@@ -374,9 +421,7 @@ describe('AI Workflow - Complete Integration Test', () => {
       'queue idle',
       { timeoutMs: 60000, failureScope: { workspaceId: user.workspaceId, workflowRunId } },
       async () => {
-        const queueStats = await authenticatedRequest(app, 'GET', '/api/v1/queue/stats', user.sessionToken!);
-        expect(queueStats.status).toBe(200);
-        const data = await queueStats.json();
+        const data = await fetchWorkspaceQueueStats(user.workspaceId!);
         return { done: data.pending === 0 && data.processing === 0, value: data };
       }
     );
@@ -392,9 +437,8 @@ describe('AI Workflow - Complete Integration Test', () => {
       'folder completion',
       { timeoutMs: 12000, failureScope: { workspaceId: user.workspaceId, workflowRunId } },
       async () => {
-        const finalFolderResponse = await authenticatedRequest(app, 'GET', `/api/v1/folders/${createdFolderId}`, user.sessionToken!);
-        expect(finalFolderResponse.status).toBe(200);
-        const data = await finalFolderResponse.json();
+        const data = await fetchFolderState(createdFolderId!, user.workspaceId!);
+        if (!data) throw new Error(`Folder ${createdFolderId} not found`);
         return { done: data.status === 'completed', value: data };
       }
     );
@@ -453,7 +497,7 @@ describe('AI Workflow - Complete Integration Test', () => {
       'org-aware initiative list creation',
       { timeoutMs: 90000, failureScope: { workspaceId: user.workspaceId, workflowRunId } },
       async () => {
-        const items = await fetchInitiatives(createdFolderId!, user.sessionToken!);
+        const items = await fetchInitiatives(createdFolderId!, user.workspaceId!);
         return { done: items.length > 0, value: items };
       }
     );

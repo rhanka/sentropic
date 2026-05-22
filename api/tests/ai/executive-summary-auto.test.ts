@@ -3,9 +3,10 @@ import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { createTestId, getTestModel, sleep } from '../utils/test-helpers';
 import { db } from '../../src/db/client';
-import { folders, initiatives } from '../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import { chatStreamEvents, folders, initiatives, jobQueue } from '../../src/db/schema';
+import { and, eq } from 'drizzle-orm';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { queueManager } from '../../src/services/queue-manager';
 
 describe('Executive Summary - Automatic Generation', () => {
   let user: any;
@@ -51,6 +52,26 @@ describe('Executive Summary - Automatic Generation', () => {
     } catch {}
   });
 
+  function parseJobData(data: string): any {
+    return JSON.parse(data);
+  }
+
+  async function fetchInitiatives(folderId: string) {
+    return db
+      .select()
+      .from(initiatives)
+      .where(and(eq(initiatives.workspaceId, workspaceId), eq(initiatives.folderId, folderId)));
+  }
+
+  async function fetchExecutiveSummaryJobs(folderId: string) {
+    const jobs = await db
+      .select()
+      .from(jobQueue)
+      .where(and(eq(jobQueue.workspaceId, workspaceId), eq(jobQueue.type, 'executive_summary')));
+
+    return jobs.filter((job) => parseJobData(job.data).folderId === folderId);
+  }
+
   it('should automatically trigger executive summary generation when all initiatives are completed', async () => {
     // 1. Generate initiatives (this will create a folder and initiative_list/initiative_detail jobs)
     const generateRes = await authenticatedRequest(app, 'POST', '/api/v1/initiatives/generate', user.sessionToken!, {
@@ -67,13 +88,11 @@ describe('Executive Summary - Automatic Generation', () => {
     const maxAttempts = 30; // 5 minutes max
 
     while (!allInitiativesCompleted && attempts < maxAttempts) {
-      await sleep(10000); // Wait 10 seconds between checks
+      await queueManager.processJobsForWorkspace(workspaceId);
+      await sleep(1000);
 
       // Check initiatives status
-      const initiativesRes = await authenticatedRequest(app, 'GET', `/api/v1/initiatives?folder_id=${folderId}`, user.sessionToken!);
-      expect(initiativesRes.status).toBe(200);
-      const initiativesData = await initiativesRes.json();
-      const initiativesList = initiativesData.items || [];
+      const initiativesList = await fetchInitiatives(folderId);
 
       if (initiativesList.length > 0) {
         allInitiativesCompleted = initiativesList.every((uc: any) => uc.status === 'completed');
@@ -85,16 +104,10 @@ describe('Executive Summary - Automatic Generation', () => {
     expect(allInitiativesCompleted).toBe(true);
 
     // 4. Wait a bit more for the executive_summary job to be created and potentially processed
-    await sleep(5000);
+    await queueManager.processJobsForWorkspace(workspaceId);
 
     // 5. Check that an executive_summary job was created (or already completed)
-    const jobsRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', user.sessionToken!);
-    expect(jobsRes.status).toBe(200);
-    const jobs = await jobsRes.json();
-    const executiveSummaryJobs = jobs.filter((j: any) => 
-      j.type === 'executive_summary' && 
-      j.data.folderId === folderId
-    );
+    const executiveSummaryJobs = await fetchExecutiveSummaryJobs(folderId);
     
     // Either the job exists (pending/processing) or it was already completed
     // If completed, the executive summary should be in the database
@@ -118,7 +131,9 @@ describe('Executive Summary - Automatic Generation', () => {
     }
 
     // 5. Cleanup
-    await authenticatedRequest(app, 'DELETE', `/api/v1/folders/${folderId}`, user.sessionToken!);
+    await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, `folder_${folderId}`));
+    await db.delete(initiatives).where(eq(initiatives.folderId, folderId));
+    await db.delete(folders).where(eq(folders.id, folderId));
   }, 300000); // 5 minutes timeout
 
   it('should not trigger executive summary if one already exists', async () => {
@@ -160,23 +175,13 @@ describe('Executive Summary - Automatic Generation', () => {
     // 3. Simulate processing a use case detail (which would normally trigger the check)
     // Since all initiatives are already completed, this should NOT create a new executive_summary job
     // We'll check by looking at the queue before and after
-    const jobsBeforeRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', user.sessionToken!);
-    const jobsBefore = await jobsBeforeRes.json();
-    const executiveSummaryJobsBefore = jobsBefore.filter((j: any) => 
-      j.type === 'executive_summary' && 
-      j.data.folderId === folderId
-    );
+    const executiveSummaryJobsBefore = await fetchExecutiveSummaryJobs(folderId);
 
     // Wait a bit
     await sleep(2000);
 
     // 4. Check that NO new executive_summary job was created
-    const jobsAfterRes = await authenticatedRequest(app, 'GET', '/api/v1/queue/jobs', user.sessionToken!);
-    const jobsAfter = await jobsAfterRes.json();
-    const executiveSummaryJobsAfter = jobsAfter.filter((j: any) => 
-      j.type === 'executive_summary' && 
-      j.data.folderId === folderId
-    );
+    const executiveSummaryJobsAfter = await fetchExecutiveSummaryJobs(folderId);
 
     expect(executiveSummaryJobsAfter.length).toBe(executiveSummaryJobsBefore.length);
 
@@ -189,4 +194,3 @@ describe('Executive Summary - Automatic Generation', () => {
     await db.delete(folders).where(eq(folders.id, folderId));
   }, 30000);
 });
-

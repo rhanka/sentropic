@@ -32,6 +32,7 @@ import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 import { callLLMStream } from '../../src/services/llm-runtime';
 import { generateCommentResolutionProposal } from '../../src/services/context-comments';
+import { queueManager } from '../../src/services/queue-manager';
 
 const llmStreamMock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
 const proposalMock = generateCommentResolutionProposal as unknown as ReturnType<typeof vi.fn>;
@@ -141,6 +142,11 @@ describe('Chat tools API - comment_assistant', () => {
     workspaceId?: string,
     maxAttempts: number = 15
   ): Promise<void> {
+    const targetWorkspaceId = workspaceId ?? user.workspaceId;
+    if (targetWorkspaceId) {
+      await queueManager.processJobsForWorkspace(targetWorkspaceId);
+    }
+
     let attempts = 0;
     while (attempts < maxAttempts) {
       await sleep(500);
