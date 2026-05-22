@@ -56,6 +56,50 @@
   import { openGoogleDrivePicker as openGoogleDrivePickerDialog } from '$lib/utils/google-drive-picker';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
   import {
+    detectChatRouteContext,
+    selectActiveChatContexts,
+    upsertRouteContextEntry,
+    type ChatContextEntry,
+  } from '$lib/chat/context-provider';
+  import {
+    buildCommentThreads as buildChatCommentThreads,
+    findAssignedMentionFromText,
+    formatCommentTimestamp as formatChatCommentTimestamp,
+    getCommentAuthorLabel,
+    getCommentSectionLabel as getChatCommentSectionLabel,
+    getInitials,
+    getMentionCandidate,
+    getMentionLabel,
+    getMentionMatches as getChatMentionMatches,
+    isAiComment,
+    isCommentByUser,
+  } from '$lib/chat/comment-adapter';
+  import {
+    createChatSessionCreatePayload,
+    createChatSessionDocumentContext,
+    createGoogleDriveChatAttachInput,
+    extractGeneratedFileCardsFromEvents,
+    extractGeneratedFileCardsFromRuntimeSummary as collectGeneratedFileCardsFromRuntimeSummary,
+    getGeneratedFileFormatLabel,
+    getSessionDocumentStatusLabelKey,
+    normalizeGeneratedFileCard,
+  } from '$lib/chat/document-adapter';
+  import {
+    chatMessageFeedbackUrl,
+    chatMessageRetryUrl,
+    chatMessageStopUrl,
+    chatMessageToolResultsUrl,
+    chatMessageUrl,
+    chatMessagesUrl,
+    chatSessionCheckpointCreateUrl,
+    chatSessionCheckpointRestoreUrl,
+    chatSessionCheckpointsUrl,
+    chatSessionHistoryUrl,
+    chatSessionUrl,
+    chatSessionsUrl,
+    formatChatApiError,
+  } from '$lib/chat/session-adapter';
+  import {
     decideLocalToolPermission,
     executeLocalTool,
     getLocalToolDefinitions,
@@ -308,14 +352,6 @@
     createdAt: number;
   };
   type IconComponent = typeof FileText;
-  type ChatContextEntry = {
-    contextType: 'organization' | 'folder' | 'initiative' | 'executive_summary';
-    contextId?: string;
-    label: string;
-    active: boolean;
-    used: boolean;
-    lastUsedAt: number;
-  };
 
   type ToolToggle = {
     id: string;
@@ -470,115 +506,19 @@
     createdBy: string;
   }> = [];
 
-  const SECTION_LABEL_KEYS: Record<string, Record<string, string>> = {
-    usecase: {
-      name: 'common.name',
-      description: 'chat.sections.usecase.description',
-      problem: 'chat.sections.usecase.problem',
-      solution: 'chat.sections.usecase.solution',
-      benefits: 'chat.sections.usecase.benefits',
-      constraints: 'chat.sections.usecase.constraints',
-      risks: 'chat.sections.usecase.risks',
-      metrics: 'chat.sections.usecase.metrics',
-      nextSteps: 'chat.sections.usecase.nextSteps',
-      technologies: 'chat.sections.usecase.technologies',
-      dataSources: 'chat.sections.usecase.dataSources',
-      dataObjects: 'chat.sections.usecase.dataObjects',
-      valueScores: 'chat.sections.usecase.valueScores',
-      complexityScores: 'chat.sections.usecase.complexityScores',
-      references: 'chat.sections.usecase.references',
-      contact: 'chat.sections.usecase.contact',
-      domain: 'chat.sections.usecase.domain',
-      deadline: 'chat.sections.usecase.deadline',
-    },
-    organization: {
-      name: 'common.name',
-      industry: 'organization.fields.industry',
-      size: 'chat.sections.organization.size',
-      technologies: 'chat.sections.organization.technologies',
-      products: 'chat.sections.organization.products',
-      processes: 'chat.sections.organization.processes',
-      kpis: 'chat.sections.organization.kpis',
-      challenges: 'chat.sections.organization.challenges',
-      objectives: 'chat.sections.organization.objectives',
-      references: 'chat.sections.organization.references',
-    },
-    folder: {
-      description: 'chat.sections.folder.description',
-      name: 'chat.sections.folder.name',
-    },
-    executive_summary: {
-      name: 'chat.sections.folder.name',
-      introduction: 'chat.sections.executiveSummary.introduction',
-      analyse: 'chat.sections.executiveSummary.analysis',
-      analysis: 'chat.sections.executiveSummary.analysis',
-      recommandation: 'chat.sections.executiveSummary.recommendations',
-      recommendations: 'chat.sections.executiveSummary.recommendations',
-      synthese_executive: 'chat.sections.executiveSummary.summary',
-      synthese: 'chat.sections.executiveSummary.summary',
-      summary: 'chat.sections.executiveSummary.summary',
-      references: 'chat.sections.executiveSummary.references',
-    },
-  };
-
-  const getCommentSectionLabel = (type: string | null, key: string | null) => {
-    if (!type) return null;
-    if (!key) return $_('common.general');
-    const i18nKey = SECTION_LABEL_KEYS[type]?.[key];
-    return i18nKey ? $_(i18nKey) : key;
-  };
-
-  const getInitials = (label: string) => {
-    const parts = label.trim().split(/\s+/);
-    const initials = parts
-      .slice(0, 2)
-      .map((p) => p[0]?.toUpperCase() ?? '')
-      .join('');
-    return initials || '?';
-  };
+  const getCommentSectionLabel = (type: string | null, key: string | null) =>
+    getChatCommentSectionLabel(type, key, $_);
 
   const commentAuthorLabel = (comment: CommentItem) =>
-    comment.created_by_user?.displayName ||
-    comment.created_by_user?.email ||
-    comment.created_by;
+    getCommentAuthorLabel(comment);
 
-  const mentionLabelFor = (member: MentionMember) =>
-    member.displayName || member.email || member.userId;
+  const mentionLabelFor = (member: MentionMember) => getMentionLabel(member);
 
-  const isCommentByCurrentUser = (comment: CommentItem) => {
-    const user = $session.user;
-    if (!user) return false;
-    if (comment.created_by === user.id) return true;
-    if (comment.created_by === user.email) return true;
-    if (comment.created_by_user?.id === user.id) return true;
-    if (user.email && comment.created_by_user?.email === user.email)
-      return true;
-    return false;
-  };
+  const isCommentByCurrentUser = (comment: CommentItem) =>
+    isCommentByUser(comment, $session.user);
 
-  const isAiComment = (comment: CommentItem) => Boolean(comment.tool_call_id);
-
-  const getMentionCandidate = (text: string) => {
-    if (!text) return null;
-    if (/\s$/.test(text)) return null;
-    const match = /(^|[\s([{])@([^\s@]{0,32})$/.exec(text);
-    if (!match) return null;
-    const start = (match.index ?? 0) + match[1].length;
-    return { start, end: text.length, query: match[2] ?? '' };
-  };
-
-  const getMentionMatches = (query: string) => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return mentionMembers.slice(0, 6);
-    return mentionMembers
-      .filter((m) => mentionLabelFor(m).toLowerCase().includes(needle))
-      .slice(0, 6);
-  };
-
-  const isSameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
+  const getMentionMatches = (query: string) =>
+    getChatMentionMatches(mentionMembers, query);
 
   let timeFormatter = new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
@@ -602,32 +542,17 @@
     });
   }
 
-  const formatCommentTimestamp = (value: string | null | undefined) => {
-    if (!value) return '';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '';
-    const now = new Date();
-    if (isSameDay(date, now)) return timeFormatter.format(date);
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    if (isSameDay(date, yesterday))
-      return `${$_('common.yesterday')} ${timeFormatter.format(date)}`;
-    return `${dateFormatter.format(date)} ${timeFormatter.format(date)}`;
-  };
+  const formatCommentTimestamp = (value: string | null | undefined) =>
+    formatChatCommentTimestamp({
+      value,
+      now: new Date(),
+      yesterdayLabel: $_('common.yesterday'),
+      timeFormatter,
+      dateFormatter,
+    });
 
-  const findAssignedUserFromText = (text: string) => {
-    if (!text || mentionMembers.length === 0) return null;
-    const haystack = text.toLowerCase();
-    let best: { member: MentionMember; index: number } | null = null;
-    for (const member of mentionMembers) {
-      const label = mentionLabelFor(member).toLowerCase();
-      const idx = haystack.lastIndexOf(`@${label}`);
-      if (idx >= 0 && (!best || idx > best.index)) {
-        best = { member, index: idx };
-      }
-    }
-    return best?.member ?? null;
-  };
+  const findAssignedUserFromText = (text: string) =>
+    findAssignedMentionFromText(text, mentionMembers);
 
   const loadMentionMembers = async () => {
     const workspaceId = getScopedWorkspaceIdForUser();
@@ -669,43 +594,8 @@
     void focusComposerEnd();
   };
 
-  const buildCommentThreads = (items: CommentItem[]) => {
-    const threads = new Map<string, CommentItem[]>();
-    for (const item of items) {
-      const threadId = item.thread_id;
-      if (!threadId) continue;
-      const current = threads.get(threadId) ?? [];
-      current.push(item);
-      threads.set(threadId, current);
-    }
-    for (const [threadId, threadItems] of threads.entries()) {
-      threads.set(
-        threadId,
-        threadItems.sort((a, b) => (a.created_at < b.created_at ? -1 : 1)),
-      );
-    }
-    const nextThreads = Array.from(threads.entries()).map(
-      ([threadId, threadItems]) => {
-        const last = threadItems[threadItems.length - 1];
-        const root = threadItems[0] ?? null;
-        const lastAt = last?.created_at ?? '';
-        return {
-          id: threadId,
-          sectionKey: last?.section_key || null,
-          count: threadItems.length,
-          lastAt,
-          preview: last?.content ?? '',
-          authorLabel: last ? commentAuthorLabel(last) : '',
-          status: (root?.status ?? 'open') as 'open' | 'closed',
-          assignedTo: root?.assigned_to ?? null,
-          rootId: root?.id ?? threadId,
-          createdBy: root?.created_by ?? '',
-        };
-      },
-    );
-    nextThreads.sort((a, b) => (a.lastAt < b.lastAt ? 1 : -1));
-    return { threads: nextThreads, map: threads };
-  };
+  const buildCommentThreads = (items: CommentItem[]) =>
+    buildChatCommentThreads(items);
 
   let messages: LocalMessage[] = [];
   let loadingMessages = false;
@@ -912,10 +802,10 @@
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        await apiPost(
-          `/chat/messages/${encodeURIComponent(streamId)}/tool-results`,
-          { toolCallId, result },
-        );
+        await apiPost(chatMessageToolResultsUrl(streamId), {
+          toolCallId,
+          result,
+        });
         return;
       } catch (error) {
         lastError = error;
@@ -1548,7 +1438,7 @@
     loadingRuntimeDetailsMessageIds.add(messageId);
     try {
       const response = await apiFetch(
-        `/chat/sessions/${targetSessionId}/history?runtimeDetails=full`,
+        chatSessionHistoryUrl(targetSessionId, 'full'),
         {
           method: 'GET',
           headers: { Accept: 'application/x-ndjson' },
@@ -1659,72 +1549,12 @@
     syncDraftFromInput();
   }
 
-  /**
-   * Détecte le contexte depuis la route actuelle
-   * Retourne { primaryContextType, primaryContextId? } ou null si pas de contexte
-   */
-  const detectContextFromRoute = (): {
-    primaryContextType: string;
-    primaryContextId?: string;
-  } | null => {
-    const routeId = $contextStore.route.id;
-    const params = $contextStore.params;
-
-    // /initiative/[id] → initiative
-    if (routeId === '/initiative/[id]' && params.id) {
-      return { primaryContextType: 'initiative', primaryContextId: params.id };
-    }
-
-    // /initiative → initiative list; when a folder is selected, treat chat context as folder
-    if (routeId === '/initiative' && $currentFolderId) {
-      return {
-        primaryContextType: 'folder',
-        primaryContextId: $currentFolderId,
-      };
-    }
-
-    // /dashboard → dashboard is folder-scoped when a folder is selected
-    if (routeId === '/dashboard' && $currentFolderId) {
-      return {
-        primaryContextType: 'folder',
-        primaryContextId: $currentFolderId,
-      };
-    }
-
-    // /matrix → matrix view is folder-scoped when a folder is selected
-    if (routeId === '/matrix' && $currentFolderId) {
-      return {
-        primaryContextType: 'folder',
-        primaryContextId: $currentFolderId,
-      };
-    }
-
-    // /folders/[id] → folder
-    if (routeId === '/folders/[id]' && params.id) {
-      return { primaryContextType: 'folder', primaryContextId: params.id };
-    }
-
-    // /organizations/[id] → organization
-    if (routeId === '/organizations/[id]' && params.id) {
-      return {
-        primaryContextType: 'organization',
-        primaryContextId: params.id,
-      };
-    }
-
-    // /organizations → organizations list (organization scope without a specific id)
-    if (routeId === '/organizations') {
-      return { primaryContextType: 'organization' };
-    }
-
-    // /folders → folders list (folder scope without a specific id)
-    if (routeId === '/folders') {
-      return { primaryContextType: 'folder' };
-    }
-
-    // Pas de contexte détecté
-    return null;
-  };
+  const detectContextFromRoute = () =>
+    detectChatRouteContext({
+      routeId: $contextStore.route.id,
+      params: $contextStore.params,
+      currentFolderId: $currentFolderId,
+    });
 
   const TOOL_TOGGLES: ToolToggle[] = [
     {
@@ -2133,50 +1963,25 @@
 
   const updateContextFromRoute = () => {
     const context = detectContextFromRoute();
-    const contextId = context?.primaryContextId || '';
-    const contextType = (context?.primaryContextType || null) as
-      | ChatContextEntry['contextType']
-      | null;
-    const routeKey =
-      contextType && contextId ? `${contextType}:${contextId}` : null;
-    if (lastRouteContextKey && lastRouteContextKey !== routeKey) {
-      contextEntries = contextEntries.filter(
-        (c) =>
-          !(
-            c.contextType + ':' + c.contextId === lastRouteContextKey && !c.used
-          ),
-      );
-      savePrefs();
-    }
-    lastRouteContextKey = routeKey;
-    if (!contextType || !contextId) return;
+    const contextType = context?.primaryContextType ?? null;
+    const contextId = context?.primaryContextId ?? '';
     const label =
-      getContextLabelFromStores(contextType, contextId) ||
-      contextNameByKey.get(`${contextType}:${contextId}`) ||
-      contextId;
-    const now = Date.now();
-    const idx = contextEntries.findIndex(
-      (c) => c.contextType === contextType && c.contextId === contextId,
-    );
-    if (idx === -1) {
-      contextEntries = [
-        {
-          contextType,
-          contextId,
-          label,
-          active: true,
-          used: false,
-          lastUsedAt: now,
-        },
-        ...contextEntries,
-      ];
-    } else {
-      const next = [...contextEntries];
-      const current = next[idx];
-      next[idx] = { ...current, label, active: true };
-      contextEntries = next;
-    }
-    if (label === contextId) {
+      contextType && contextId
+        ? getContextLabelFromStores(contextType, contextId) ||
+          contextNameByKey.get(`${contextType}:${contextId}`) ||
+          contextId
+        : '';
+    const result = upsertRouteContextEntry({
+      entries: contextEntries,
+      context,
+      label,
+      previousRouteKey: lastRouteContextKey,
+      now: Date.now(),
+      used: false,
+    });
+    contextEntries = result.entries;
+    lastRouteContextKey = result.nextRouteKey;
+    if (result.shouldLoadName && contextType && contextId) {
       void loadContextName(contextType, contextId);
     }
     savePrefs();
@@ -2185,42 +1990,23 @@
   const markCurrentContextUsed = () => {
     const context = detectContextFromRoute();
     if (!context?.primaryContextType || !context.primaryContextId) return;
-    const contextType =
-      context.primaryContextType as ChatContextEntry['contextType'];
+    const contextType = context.primaryContextType;
     const contextId = context.primaryContextId;
     const label =
       getContextLabelFromStores(contextType, contextId) ||
       contextNameByKey.get(`${contextType}:${contextId}`) ||
       contextId;
-    const now = Date.now();
-    const idx = contextEntries.findIndex(
-      (c) => c.contextType === contextType && c.contextId === contextId,
-    );
-    if (idx === -1) {
-      contextEntries = [
-        {
-          contextType,
-          contextId,
-          label,
-          active: true,
-          used: true,
-          lastUsedAt: now,
-        },
-        ...contextEntries,
-      ];
-    } else {
-      const next = [...contextEntries];
-      const current = next[idx];
-      next[idx] = {
-        ...current,
-        label,
-        active: true,
-        used: true,
-        lastUsedAt: now,
-      };
-      contextEntries = next;
-    }
-    if (label === contextId) {
+    const result = upsertRouteContextEntry({
+      entries: contextEntries,
+      context,
+      label,
+      previousRouteKey: lastRouteContextKey,
+      now: Date.now(),
+      used: true,
+    });
+    contextEntries = result.entries;
+    lastRouteContextKey = result.nextRouteKey;
+    if (result.shouldLoadName) {
       void loadContextName(contextType, contextId);
     }
     savePrefs();
@@ -2228,10 +2014,7 @@
 
   $: sortedContexts = [...contextEntries];
 
-  const getActiveContexts = () =>
-    contextEntries
-      .filter((c) => c.active && c.used)
-      .sort((a, b) => b.lastUsedAt - a.lastUsedAt);
+  const getActiveContexts = () => selectActiveChatContexts(contextEntries);
 
   const getEnabledToolIds = () => {
     return computeEnabledToolIds({
@@ -2751,11 +2534,7 @@
   }
 
   const sessionDocStatusLabel = (s: string) => {
-    if (s === 'uploaded') return $_('chat.documents.status.uploaded');
-    if (s === 'processing') return $_('chat.documents.status.processing');
-    if (s === 'ready') return $_('chat.documents.status.ready');
-    if (s === 'failed') return $_('chat.documents.status.failed');
-    return $_('chat.documents.status.unknown');
+    return $_(getSessionDocumentStatusLabelKey(s));
   };
 
   const loadSessionDocs = async () => {
@@ -2763,11 +2542,9 @@
     sessionDocsError = null;
     try {
       const scopedWs = getScopedWorkspaceIdForUser();
-      const res = await listDocuments({
-        contextType: 'chat_session',
-        contextId: sessionId,
-        workspaceId: scopedWs,
-      });
+      const res = await listDocuments(
+        createChatSessionDocumentContext(sessionId, scopedWs),
+      );
       sessionDocs = res.items ?? [];
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -2806,10 +2583,10 @@
     if (sessionId) return sessionId;
 
     const context = detectContextFromRoute();
-    const res = await apiPost<{ sessionId: string }>('/chat/sessions', {
-      primaryContextType: context?.primaryContextType,
-      primaryContextId: context?.primaryContextId,
-    });
+    const res = await apiPost<{ sessionId: string }>(
+      chatSessionsUrl(),
+      createChatSessionCreatePayload(context),
+    );
     sessionId = res.sessionId;
     await loadSessions();
     await loadMessages(res.sessionId, { scrollToBottom: true });
@@ -2832,11 +2609,9 @@
       if (fileIds.length === 0) return;
 
       await resolveGoogleDrivePickerSelection({ fileIds });
-      await attachGoogleDriveDocuments({
-        contextType: 'chat_session',
-        contextId: targetSessionId,
-        fileIds,
-      });
+      await attachGoogleDriveDocuments(
+        createGoogleDriveChatAttachInput(targetSessionId, fileIds),
+      );
       await loadSessionDocs();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -2856,10 +2631,8 @@
       const targetSessionId = await ensureSessionDocumentTarget();
       const scopedWs = getScopedWorkspaceIdForUser();
       await uploadDocument({
-        contextType: 'chat_session',
-        contextId: targetSessionId,
+        ...createChatSessionDocumentContext(targetSessionId, scopedWs),
         file,
-        workspaceId: scopedWs,
       });
       await loadSessionDocs();
     } catch (err) {
@@ -2901,7 +2674,7 @@
     if (!next) return;
     errorMsg = null;
     try {
-      await apiPatch(`/chat/messages/${encodeURIComponent(messageId)}`, {
+      await apiPatch(chatMessageUrl(messageId), {
         content: next,
       });
       messages = messages.map((m) =>
@@ -2986,7 +2759,7 @@
         assistantMessageId: string;
         streamId: string;
         jobId: string;
-      }>(`/chat/messages/${encodeURIComponent(messageId)}/retry`, {
+      }>(chatMessageRetryUrl(messageId), {
         providerId: selectedProviderId,
         model: selectedModelId,
       });
@@ -3041,10 +2814,7 @@
     checkpointActionInFlight = true;
     errorMsg = null;
     try {
-      await apiPost(
-        `/chat/sessions/${sessionId}/checkpoints/${checkpoint.id}/restore`,
-        {},
-      );
+      await apiPost(chatSessionCheckpointRestoreUrl(sessionId, checkpoint.id), {});
       await loadMessages(sessionId, { scrollToBottom: true, silent: true });
       return true;
     } catch (e) {
@@ -3192,15 +2962,8 @@
     }
   };
 
-  const formatApiError = (e: unknown, fallback: string) => {
-    if (e instanceof ApiError) {
-      const base =
-        typeof e.message === 'string' ? e.message : String(e.message);
-      if (e.status) return `HTTP ${e.status}: ${base}`;
-      return base;
-    }
-    return fallback;
-  };
+  const formatApiError = (e: unknown, fallback: string) =>
+    formatChatApiError(e, fallback);
 
   const asRuntimeRecord = (value: unknown): Record<string, unknown> | null => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -3349,25 +3112,6 @@
     }
   };
 
-  const normalizeGeneratedFileCard = (
-    card: Partial<GeneratedFileCard> & Pick<GeneratedFileCard, 'jobId' | 'fileName'>
-  ): GeneratedFileCard => ({
-    jobId: card.jobId,
-    fileName: card.fileName,
-    format:
-      typeof card.format === 'string' && card.format.trim().length > 0
-        ? card.format.trim().toLowerCase()
-        : 'docx',
-    mimeType:
-      typeof card.mimeType === 'string' && card.mimeType.trim().length > 0
-        ? card.mimeType.trim()
-        : undefined,
-    downloadUrl:
-      typeof card.downloadUrl === 'string' && card.downloadUrl.trim().length > 0
-        ? card.downloadUrl.trim()
-        : undefined,
-  });
-
   const handleGeneratedFileCard = (messageId: string, card: GeneratedFileCard) => {
     const existing = generatedFileCardsByMessageId.get(messageId) ?? [];
     if (existing.some(c => c.jobId === card.jobId)) return;
@@ -3379,59 +3123,15 @@
     messageId: string,
     summary: RuntimeSegmentSummary | undefined,
   ) => {
-    if (summary?.generatedFileCards && summary.generatedFileCards.length > 0) {
-      for (const card of summary.generatedFileCards) {
-        handleGeneratedFileCard(messageId, card);
-      }
-      return;
-    }
-    if (!summary?.docxCards || summary.docxCards.length === 0) return;
-    for (const card of summary.docxCards) {
-      handleGeneratedFileCard(messageId, { ...card, format: 'docx' });
+    for (const card of collectGeneratedFileCardsFromRuntimeSummary(summary)) {
+      handleGeneratedFileCard(messageId, card);
     }
   };
 
   const scanEventsForGeneratedFileCards = (messageId: string, events: readonly { eventType: string; data: any }[]) => {
-    const toolNames: Record<string, string> = {};
-    for (const ev of events) {
-      if (ev.eventType === 'tool_call_start' && ev.data?.tool_call_id && ev.data?.name) {
-        toolNames[ev.data.tool_call_id] = ev.data.name;
-      }
-      if (ev.eventType === 'tool_call_result') {
-        const toolId = String(ev.data?.tool_call_id ?? '');
-        const toolName = toolNames[toolId];
-        if (
-          toolName === 'document_generate' &&
-          ev.data?.result?.status === 'completed' &&
-          typeof ev.data?.result?.jobId === 'string' &&
-          typeof ev.data?.result?.fileName === 'string'
-        ) {
-          handleGeneratedFileCard(messageId, {
-            jobId: ev.data.result.jobId,
-            fileName: ev.data.result.fileName,
-            format:
-              typeof ev.data?.result?.format === 'string'
-                ? ev.data.result.format
-                : 'docx',
-            mimeType:
-              typeof ev.data?.result?.mimeType === 'string'
-                ? ev.data.result.mimeType
-                : undefined,
-            downloadUrl:
-              typeof ev.data?.result?.downloadUrl === 'string'
-                ? ev.data.result.downloadUrl
-                : undefined,
-          });
-        }
-      }
+    for (const card of extractGeneratedFileCardsFromEvents(events)) {
+      handleGeneratedFileCard(messageId, card);
     }
-  };
-
-  const getGeneratedFileFormatLabel = (format: GeneratedFileCard['format']): string => {
-    if (typeof format === 'string' && format.trim().length > 0) {
-      return format.trim().toUpperCase();
-    }
-    return 'FILE';
   };
 
   const handleTodoRuntimeToolResult = (update: TodoRuntimeToolResultEvent) => {
@@ -3580,7 +3280,7 @@
     id: string,
   ): Promise<SessionHistorySnapshot> => {
     const response = await apiFetch(
-      `/chat/sessions/${id}/history?runtimeDetails=summary`,
+      chatSessionHistoryUrl(id, 'summary'),
       {
         method: 'GET',
         headers: {
@@ -3837,7 +3537,7 @@
     }
     try {
       const res = await apiGet<{ checkpoints?: ChatCheckpoint[] }>(
-        `/chat/sessions/${id}/checkpoints?limit=20`,
+        chatSessionCheckpointsUrl(id, 20),
       );
       applySessionCheckpoints(
         Array.isArray(res.checkpoints) ? res.checkpoints : [],
@@ -3853,7 +3553,7 @@
   ) => {
     if (!targetSessionId || !anchorMessageId) return;
     try {
-      await apiPost(`/chat/sessions/${targetSessionId}/checkpoints`, {
+      await apiPost(chatSessionCheckpointCreateUrl(targetSessionId), {
         anchorMessageId,
       });
       await loadCheckpoints(targetSessionId);
@@ -3866,7 +3566,7 @@
     loadingSessions = true;
     errorMsg = null;
     try {
-      const res = await apiGet<{ sessions: ChatSession[] }>('/chat/sessions');
+      const res = await apiGet<{ sessions: ChatSession[] }>(chatSessionsUrl());
       sessions = res.sessions ?? [];
       // If the current sessionId is stale (e.g. from a different workspace), clear it
       if (sessionId && !sessions.some((s) => s.id === sessionId) && messages.length === 0) {
@@ -3916,7 +3616,7 @@
         resetTodoRuntimePanel();
       }
       const response = await apiFetch(
-        `/chat/sessions/${id}/history?runtimeDetails=summary`,
+        chatSessionHistoryUrl(id, 'summary'),
         {
           method: 'GET',
           headers: {
@@ -4127,7 +3827,7 @@
     if (!sessionId) return;
     errorMsg = null;
     try {
-      await apiDelete(`/chat/sessions/${sessionId}`);
+      await apiDelete(chatSessionUrl(sessionId));
       sessionId = null;
       messages = [];
       historyTimelineItems = [];
@@ -4437,7 +4137,7 @@
         assistantMessageId: string;
         streamId: string;
         jobId: string;
-      }>('/chat/messages', payload);
+      }>(chatMessagesUrl(), payload);
 
       input = '';
       composerIsMultiline = false;
@@ -4480,9 +4180,7 @@
     stoppingMessageId = activeAssistantMessage.id;
     errorMsg = null;
     try {
-      await apiPost(
-        `/chat/messages/${encodeURIComponent(activeAssistantMessage.id)}/stop`,
-      );
+      await apiPost(chatMessageStopUrl(activeAssistantMessage.id));
     } catch (e) {
       errorMsg = formatApiError(e, $_('chat.errors.stop'));
     } finally {
@@ -4496,10 +4194,7 @@
   ) => {
     errorMsg = null;
     try {
-      await apiPost(
-        `/chat/messages/${encodeURIComponent(messageId)}/feedback`,
-        { vote: next },
-      );
+      await apiPost(chatMessageFeedbackUrl(messageId), { vote: next });
       const voteValue = next === 'clear' ? null : next === 'up' ? 1 : -1;
       messages = messages.map((m) =>
         m.id === messageId ? { ...m, feedbackVote: voteValue } : m,
