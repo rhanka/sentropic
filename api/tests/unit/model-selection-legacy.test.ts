@@ -24,11 +24,11 @@ describe('model selection legacy cutovers', () => {
     });
   });
 
-  it('maps gemini-2.5-flash-lite to gemini-3.1-flash-lite-preview', () => {
+  it('maps gemini-2.5-flash-lite to gemini-3.5-thinking', () => {
     expect(findLegacyModelCutoverRule('gemini-2.5-flash-lite')).toEqual({
       providerId: 'gemini',
       fromModelId: 'gemini-2.5-flash-lite',
-      toModelId: 'gemini-3.1-flash-lite-preview',
+      toModelId: 'gemini-3.5-thinking',
     });
 
     expect(
@@ -38,7 +38,26 @@ describe('model selection legacy cutovers', () => {
       })
     ).toEqual({
       providerId: 'gemini',
-      modelId: 'gemini-3.1-flash-lite-preview',
+      modelId: 'gemini-3.5-thinking',
+      migrated: true,
+    });
+  });
+
+  it('maps gemini-3.1-flash-lite-preview to gemini-3.5-thinking', () => {
+    expect(findLegacyModelCutoverRule('gemini-3.1-flash-lite-preview')).toEqual({
+      providerId: 'gemini',
+      fromModelId: 'gemini-3.1-flash-lite-preview',
+      toModelId: 'gemini-3.5-thinking',
+    });
+
+    expect(
+      normalizeLegacyModelSelection({
+        providerId: 'gemini',
+        modelId: 'gemini-3.1-flash-lite-preview',
+      })
+    ).toEqual({
+      providerId: 'gemini',
+      modelId: 'gemini-3.5-thinking',
       migrated: true,
     });
   });
