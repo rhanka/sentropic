@@ -2,6 +2,7 @@
   import type { Readable } from 'svelte/store';
   import type { AppContext } from '$lib/core/context-provider';
   import type { CommentContextType } from '$lib/utils/comments';
+  import PackageChatPanel from '@sentropic/chat-ui/components/ChatPanel.svelte';
   import AppChatPanel from '$lib/components/chat/AppChatPanel.svelte';
 
   type ChatSession = {
@@ -49,6 +50,7 @@
     appPanel?.deleteCurrentSession?.();
 </script>
 
+{#snippet renderAppChatPanelShell()}
 <AppChatPanel
   bind:this={appPanel}
   bind:sessions
@@ -65,3 +67,6 @@
   bind:commentThreads
   bind:commentLoading
 />
+{/snippet}
+
+<PackageChatPanel renderShell={renderAppChatPanelShell} />

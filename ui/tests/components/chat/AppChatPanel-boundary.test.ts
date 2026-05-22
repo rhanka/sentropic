@@ -13,8 +13,13 @@ describe('AppChatPanel boundary', () => {
     expect(existsSync(appPanelPath)).toBe(true);
     const source = readFileSync(panelPath, 'utf8');
     expect(source).toContain(
+      "import PackageChatPanel from '@sentropic/chat-ui/components/ChatPanel.svelte'",
+    );
+    expect(source).toContain(
       "import AppChatPanel from '$lib/components/chat/AppChatPanel.svelte'",
     );
+    expect(source).toContain('<PackageChatPanel');
+    expect(source).toContain('renderShell={renderAppChatPanelShell}');
     expect(source).toContain('<AppChatPanel');
     expect(source).toContain('export const focusComposer');
     expect(source).not.toContain("import { apiFetch");

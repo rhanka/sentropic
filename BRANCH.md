@@ -586,17 +586,18 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot13a`.
 
 - [ ] **Lot 13b - Production package adoption audit**
-  - [ ] Wire production app wrappers to package `StreamMessage`, `ChatTimeline`, `ChatComposer`, `ChatPanel`, and `ChatWidget` component subpaths.
-  - [ ] Remove or fully convert dead package component copies; no package component may remain as an app-coupled mirror.
-  - [ ] Preserve `ui/src/lib/upstream/chrome-host-adapter.ts`, `ui/vscode-ext/local-tools-adapter.ts`, and `ui/vscode-ext/webview-entry.ts` behavior.
-  - [ ] Run `rg -n "\\$lib/|from 'api/|@sentropic/llm-mesh|chrome\\.runtime|__TOPAI_VSCODE_RUNTIME__" packages/chat-ui/src` and record only allowed host-type comments or no hits.
-  - [ ] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13b`.
-  - [ ] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13b`.
-  - [ ] Run `make typecheck-ui REGISTRY=local API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13b`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13b`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/upstream API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13b`.
-  - [ ] Run `make test-ui REGISTRY=local SCOPE=tests/vscode-ext API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13b`.
-  - [ ] Run `wc -l packages/chat-ui/src/components/*.svelte ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/ChatWidget.svelte ui/src/lib/components/StreamMessage.svelte`.
+  - [x] Add RED package/UI boundary tests for package `ChatPanel.svelte` isolation and public app wrapper adoption. Initial `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13b` failed in `chat-panel-boundary.test.ts` because package `ChatPanel.svelte` still imported `$lib/*`, `svelte-i18n`, app API helpers, and app components.
+  - [x] Wire production app wrappers to package `StreamMessage`, `ChatTimeline`, `ChatComposer`, `ChatPanel`, and `ChatWidget` component subpaths. `ChatPanel.svelte` now wraps `AppChatPanel.svelte` through `PackageChatPanel` with `renderShell={renderAppChatPanelShell}`.
+  - [x] Remove or fully convert dead package component copies; no package component may remain as an app-coupled mirror. Package `ChatPanel.svelte` converted from the 6107-line app-coupled copy to a 77-line injected shell.
+  - [x] Preserve `ui/src/lib/upstream/chrome-host-adapter.ts`, `ui/vscode-ext/local-tools-adapter.ts`, and `ui/vscode-ext/webview-entry.ts` behavior; no edits made to those files and their scoped tests pass.
+  - [x] Run `rg -n "\\$lib/|from 'api/|@sentropic/llm-mesh|chrome\\.runtime|__TOPAI_VSCODE_RUNTIME__" packages/chat-ui/src` and record only allowed host-type comments or no hits. Output is limited to allowed `chrome.runtime` comments in `packages/chat-ui/src/stores/localTools.ts` and `packages/chat-ui/src/hosts/types.ts`; no `$lib`, API, mesh, or VSCode-runtime imports remain.
+  - [x] Run `make typecheck-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13b` — exited 0.
+  - [x] Run `make test-chat-ui ENV=test-feat-chat-ui-sdk-v2-lot13b` — 73/73 passed across 17 files.
+  - [x] Run `make typecheck-ui REGISTRY=local API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13b` — `svelte-check found 0 errors and 6 warnings in 5 files`.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13b` — 24/24 passed across 7 files.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/upstream API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13b` — 31/31 passed across 3 files.
+  - [x] Run `make test-ui REGISTRY=local SCOPE=tests/vscode-ext API_PORT=9083 UI_PORT=5283 MAILDEV_UI_PORT=1183 ENV=test-feat-chat-ui-sdk-v2-lot13b` — 49/49 passed across 14 files.
+  - [x] Run `wc -l packages/chat-ui/src/components/*.svelte ui/src/lib/components/ChatPanel.svelte ui/src/lib/components/ChatWidget.svelte ui/src/lib/components/StreamMessage.svelte` — package `ChatPanel` 77, `ChatWidget` 124, `StreamMessage` 1141, `ChatTimeline` 21, `ChatComposer` 76; app `ChatPanel` 72, `ChatWidget` 3284, `StreamMessage` 87.
   - [ ] Commit with selective `git add`, then `make commit MSG="refactor: adopt package chat components in app" ENV=test-feat-chat-ui-sdk-v2-lot13b`.
   - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot13b`.
 
