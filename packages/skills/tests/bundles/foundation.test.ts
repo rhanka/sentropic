@@ -737,7 +737,7 @@ describe('foundation bundle — Wave C step 3 content/action skills', () => {
       expect(tool?.inputSchema?.required).toEqual(['action']);
       const props = (tool?.inputSchema as { properties?: Record<string, { enum?: string[] }> })
         ?.properties;
-      expect(props?.action?.enum).toEqual(['upskill', 'generate']);
+      expect(props?.action?.enum).toEqual(['generate']);
       expect(props?.format?.enum).toEqual(['docx', 'pptx']);
       expect(props?.entityType?.enum).toEqual(['initiative', 'folder']);
       expect(tool?.sideEffect).toBe(true);
