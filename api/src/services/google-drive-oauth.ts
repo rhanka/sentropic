@@ -157,10 +157,14 @@ const deriveAppReturnBaseUrlFromApiBaseUrl = (value: string | null | undefined):
 export const resolveGoogleDriveAppReturnBaseUrl = (
   options: { requestApiBaseUrl?: string | null } = {},
 ): string | null => {
+  const derived = deriveAppReturnBaseUrlFromApiBaseUrl(options.requestApiBaseUrl);
   const raw =
     normalizeOptionalText(process.env.AUTH_CALLBACK_BASE_URL) ||
     normalizeOptionalText(env.AUTH_CALLBACK_BASE_URL);
-  return raw ? trimTrailingSlash(raw) : deriveAppReturnBaseUrlFromApiBaseUrl(options.requestApiBaseUrl);
+  if (!raw) return derived;
+
+  const normalized = trimTrailingSlash(raw);
+  return derived && isLoopbackCallbackBaseUrl(normalized) ? derived : normalized;
 };
 
 const resolveClientSecret = async (): Promise<string | null> => {

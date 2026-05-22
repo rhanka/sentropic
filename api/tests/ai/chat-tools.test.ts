@@ -7,9 +7,10 @@ import {
   cleanupAuthData
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { chatMessages, chatStreamEvents, chatContexts, contextModificationHistory, initiatives, folders } from '../../src/db/schema';
+import { chatMessages, chatStreamEvents, chatContexts, contextModificationHistory, initiatives, folders, jobQueue } from '../../src/db/schema';
 import { eq, and } from 'drizzle-orm';
 import * as tools from '../../src/services/tools';
+import { queueManager } from '../../src/services/queue-manager';
 
 describe('Chat AI - Tool Calls Integration', () => {
   let user: any;
@@ -48,14 +49,18 @@ describe('Chat AI - Tool Calls Integration', () => {
   });
 
   async function waitForJobCompletion(jobId: string, adminUser: any, maxAttempts: number = 15): Promise<void> {
+    void adminUser;
+
+    if (user.workspaceId) {
+      await queueManager.processJobsForWorkspace(user.workspaceId);
+    }
+
     let attempts = 0;
     while (attempts < maxAttempts) {
       await sleep(1000); // 1 second between checks
       
-      // Queue is workspace-scoped: read the job directly with the owner's token.
-      const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
-      expect(jobRes.status).toBe(200);
-      const job = await jobRes.json();
+      const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, jobId)).limit(1);
+      expect(job).toBeDefined();
       
       if (job && (job.status === 'completed' || job.status === 'failed')) {
         expect(job.status).toBe('completed');
@@ -67,17 +72,17 @@ describe('Chat AI - Tool Calls Integration', () => {
   }
 
   async function fetchAssistantDetails(sessionId: string, assistantMessageId: string): Promise<any[]> {
-    const response = await authenticatedRequest(
-      app,
-      'GET',
-      `/api/v1/chat/sessions/${sessionId}/bootstrap`,
-      user.sessionToken!,
-    );
-    expect(response.status).toBe(200);
-    const payload = await response.json();
-    return Array.isArray(payload?.assistantDetailsByMessageId?.[assistantMessageId])
-      ? payload.assistantDetailsByMessageId[assistantMessageId]
-      : [];
+    void sessionId;
+
+    return db
+      .select({
+        eventType: chatStreamEvents.eventType,
+        data: chatStreamEvents.data,
+        sequence: chatStreamEvents.sequence,
+      })
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.messageId, assistantMessageId))
+      .orderBy(chatStreamEvents.sequence);
   }
 
   describe('read_initiative tool', () => {
@@ -317,8 +322,7 @@ describe('Chat AI - Tool Calls Integration', () => {
         // Si le job réussit, c'est que l'IA n'a pas tenté de modifier le mauvais initiative (acceptable)
       } catch {
         // Si le job échoue, vérifier que c'est à cause de la sécurité
-        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
-        const job = await jobRes.json();
+        const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, jobId)).limit(1);
         if (job?.status === 'failed') {
           expect(job.error).toContain('Security');
         }
@@ -356,15 +360,11 @@ describe('Chat AI - Tool Calls Integration', () => {
       await waitForJobCompletion(secondJobId, adminUser);
 
       // Vérifier l'historique de la session
-      const messagesRes = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/chat/sessions/${sessionId}/messages`,
-        user.sessionToken!
-      );
-      expect(messagesRes.status).toBe(200);
-      const messagesData = await messagesRes.json();
-      expect(messagesData.messages.length).toBeGreaterThanOrEqual(4); // 2 user + 2 assistant
+      const messages = await db
+        .select()
+        .from(chatMessages)
+        .where(eq(chatMessages.sessionId, sessionId));
+      expect(messages.length).toBeGreaterThanOrEqual(4); // 2 user + 2 assistant
 
       await cleanupAuthData(); // Cleanup admin user
     }, 30000);

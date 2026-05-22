@@ -350,7 +350,10 @@ describe('Chat API Endpoints', () => {
       );
       const created = await create.json();
 
-      const before = await db.select({ id: jobQueue.id }).from(jobQueue);
+      const before = await db
+        .select({ id: jobQueue.id })
+        .from(jobQueue)
+        .where(eq(jobQueue.workspaceId, user.workspaceId));
 
       const acceptSpy = vi
         .spyOn(chatService, 'acceptLocalToolResult')
@@ -375,7 +378,10 @@ describe('Chat API Endpoints', () => {
         expect(body.resumed).toBe(false);
         expect(body.waitingForToolCallIds).toEqual(['call_local_2']);
 
-        const after = await db.select({ id: jobQueue.id }).from(jobQueue);
+        const after = await db
+          .select({ id: jobQueue.id })
+          .from(jobQueue)
+          .where(eq(jobQueue.workspaceId, user.workspaceId));
         expect(after.length).toBe(before.length);
       } finally {
         acceptSpy.mockRestore();

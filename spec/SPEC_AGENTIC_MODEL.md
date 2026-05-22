@@ -112,6 +112,23 @@ Resolution in `resolveWorkflowTaskAgentDefinitionId()`:
 
 The resolved agent definition ID determines which prompt configuration (`promptId`, `promptTemplate`, `outputSchema`) is used for the LLM call, via `resolveGenerationPromptOverride`.
 
+### Flow Runtime Boundary
+
+Workflow dispatch resolves `agentSelection` through `@sentropic/flow`
+dispatch helpers. The package owns the condition evaluation and task-routing
+decision, while API adapters continue to load concrete `agent_definitions`
+rows and prompt configuration from Postgres.
+
+The invariant is that the same workflow state and task definition must resolve
+to the same agent definition before and after package extraction. This protects
+org-aware list agents, matrix agents, detail agents, executive synthesis
+agents, and opportunity-specific variants from routing drift.
+
+The full agent seed catalog remains API-owned for now because it imports prompt
+fragments and shared prompt factories from API config modules. Moving that
+catalog into a package data boundary is a dedicated follow-up, not part of the
+behavior-preserving flow runtime extraction.
+
 ## 4. Prompt System
 
 ### Prompt Override Resolution
