@@ -692,12 +692,12 @@ const STREAM_TEST_MATRIX: StreamTestConfig[] = [
   },
 
   // -----------------------------------------------------------------------
-  // Gemini — Flash Lite (standard)
+  // Gemini — 3.5 Thinking
   // -----------------------------------------------------------------------
   {
     providerId: 'gemini',
-    model: 'gemini-3.1-flash-lite-preview',
-    label: 'Gemini Flash Lite',
+    model: 'gemini-3.5-thinking',
+    label: 'Gemini 3.5 Thinking',
     chatEvents: [
       { candidates: [{ content: { parts: [{ text: 'Hello' }] } }] },
       { candidates: [{ content: { parts: [{ text: ' world' }] } }] },

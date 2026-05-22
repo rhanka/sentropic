@@ -251,11 +251,11 @@ export const modelProfiles = [
   },
   {
     providerId: 'gemini',
-    modelId: 'gemini-3.1-flash-lite-preview',
-    label: 'Gemini 3.1 Flash Lite',
-    reasoningTier: 'standard',
-    defaultTaskHints: ['chat'],
-    capabilities: modelCapabilities('gemini', 'standard'),
+    modelId: 'gemini-3.5-thinking',
+    label: 'Gemini 3.5 Thinking',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['chat', 'structured', 'summary'],
+    capabilities: modelCapabilities('gemini', 'advanced'),
   },
   {
     providerId: 'anthropic',
@@ -268,7 +268,7 @@ export const modelProfiles = [
   {
     providerId: 'anthropic',
     modelId: 'claude-opus-4-7',
-    label: 'Opus 4.6',
+    label: 'Opus 4.7',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
     capabilities: modelCapabilities('anthropic', 'advanced'),
