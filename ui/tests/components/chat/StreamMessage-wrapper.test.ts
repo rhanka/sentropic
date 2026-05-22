@@ -19,5 +19,9 @@ describe('StreamMessage app wrapper', () => {
     expect(source).toContain("import { _ } from 'svelte-i18n'");
     expect(source).toContain('streamClient={streamHub}');
     expect(source).toContain('labels={labelResolver}');
+    expect(source).toContain('{smoothContentStreaming}');
+    expect(source).toContain('{smoothChunkThreshold}');
+    expect(source).toContain('{subscriptionMode}');
+    expect(source).toContain('{finalContent}');
   });
 });
