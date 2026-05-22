@@ -47,28 +47,3 @@ spec:
       ports:
         - protocol: TCP
           port: 8787
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-api-to-maildev
-  namespace: sentropic
-  labels:
-    app.kubernetes.io/name: sentropic
-    app.kubernetes.io/component: maildev
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: sentropic
-      app.kubernetes.io/component: maildev
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: sentropic
-              app.kubernetes.io/component: api
-      ports:
-        - protocol: TCP
-          port: 1025
