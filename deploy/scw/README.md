@@ -56,11 +56,14 @@ Two namespace-scoped Secrets must exist before applying the manifests:
 
 Maildev is intentionally not deployed in Kubernetes. The POC uses the checked
 `sent-tech.ca` domain in Scaleway Transactional Email, with SMTP settings read
-from `SCW_ENV_FILE` by `make scw-bundle-secret`. If `MAIL_HOST` is absent, the
-target injects an empty `MAIL_HOST` so the API does not fall back to its local
-`maildev` default. When `MAIL_HOST` is set, `MAIL_USERNAME` and `MAIL_PASSWORD`
-must also be set in `SCW_ENV_FILE`; `MAIL_FROM` defaults to
-`no-reply@sent-tech.ca`.
+from `SCW_ENV_FILE` by `make scw-bundle-secret`. Active `MAIL_*` entries win.
+For the historical POC `.env` format, the target can also recover commented
+`#export MAIL_USERNAME=...` and `#export MAIL_PASSWORD=...` entries and derive
+`MAIL_HOST=smtp.tem.scaleway.com`, `MAIL_PORT=465`, and `MAIL_SECURE=true`. If
+no host or POC credentials are present, the target injects an empty `MAIL_HOST`
+so the API does not fall back to its local `maildev` default. When `MAIL_HOST`
+is set, `MAIL_USERNAME` and `MAIL_PASSWORD` must also be set or recoverable;
+`MAIL_FROM` defaults to `no-reply@sent-tech.ca`.
 
 The api and ui manifests target the `feat-deploy-poc-k8s` alias tag on
 `rg.fr-par.scw.cloud/nc-reg/sentropic-api` and
