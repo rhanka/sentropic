@@ -18,6 +18,25 @@ Negation rules (must hold by construction):
 - Plugin ≠ Agent (extension mechanism vs autonomous orchestrator).
 - Marketplace ≠ Registry (curated/billed/ranked vs flat inventory).
 
+### 1.1 Banned synonyms
+
+The canonical vocabulary above is closed. Synonyms that overlap with `Tool` / `Skill` / `Agent` / `Plugin` / `Flow` MUST NOT be introduced into the codebase (source code, tests, specs, BRANCH.md, commit messages). Common drift terms — and what they map to:
+
+| Banned term | Canonical replacement | Rationale |
+|---|---|---|
+| `curriculum` | `skill` (or section of a `SKILL.md`) | A skill IS the instruction text in `SKILL.md` body; "curriculum" is just another name for it and breaks the table above. |
+| `upskill` (as an action mode) | `skill` discovery via `search_skills` + native `SKILL.md` loading | `action=upskill` was a pre-skill-loading legacy hack that returned a text payload via a tool call; SOTA = the LLM finds the skill by description-match and loads `SKILL.md` natively. Use the existing `skill` term; do not invent a verb. |
+| `guide` / `handbook` / `reference` / `manual` | `skill` | Same logical artefact as a skill body. |
+| `recipe` / `playbook` | `skill` | Same. |
+| `workflow` (as a synonym for orchestration) | `flow` (canonical) or `agent` (when it has a reasoning loop) | "Workflow" is acceptable as plain English in prose but never as a typed concept name. |
+| `bot` / `assistant` (as a typed concept) | `agent` | Bot/assistant are product-marketing words; the typed concept is `agent`. |
+
+Drift incidents that motivated the table:
+- BR19 (2026-05-19 → 2026-05-22): `curriculum` was introduced in `b8fc1c1d` (Wave D Step 1.A) to label the LLM-facing skill-instructions text. User rejected it; the rename was lost when the session limit interrupted the conversation, and `c4dea8ed` + `7cc55ff2` propagated it further before BR19-N4 caught and reverted the drift.
+- BR19 also propagated `upskill` (legacy from `40f553ba`, 2026-04-05) without questioning it; removed per BR19-D6.
+
+Enforcement is by review and convention; new code introducing a banned term should be challenged in code review with a pointer to this section.
+
 ## 2. Inventory per product
 
 | Product | Tools | Skills | Plugin/extension | Agent | Marketplace |
