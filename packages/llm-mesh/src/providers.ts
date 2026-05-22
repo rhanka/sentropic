@@ -15,7 +15,7 @@ export const knownModelIds = [
   'gpt-5.4-nano',
   'gpt-4.1-nano',
   'gemini-3.5-flash',
-  'gemini-3.1-flash-lite-preview',
+  'gemini-3.5-thinking',
   'claude-sonnet-4-6',
   'claude-opus-4-7',
   'mistral-small-2603',
@@ -32,7 +32,7 @@ export type QualifiedModelId = `${ProviderId}:${string}`;
 
 export const knownModelIdsByProvider = {
   openai: ['gpt-5.5', 'gpt-5.4-nano', 'gpt-4.1-nano'],
-  gemini: ['gemini-3.5-flash', 'gemini-3.1-flash-lite-preview'],
+  gemini: ['gemini-3.5-flash', 'gemini-3.5-thinking'],
   anthropic: ['claude-sonnet-4-6', 'claude-opus-4-7'],
   mistral: ['mistral-small-2603', 'magistral-medium-2509'],
   cohere: ['command-a-03-2025', 'command-a-reasoning-08-2025'],
