@@ -1496,11 +1496,16 @@ SCW_LOG_TAIL ?= 200
 SCW_LOG_PREVIOUS ?= 0
 SCW_API_SMOKE_PORT ?= 18787
 SCW_UI_SMOKE_PORT ?= 15173
+SCW_EMAIL_SMOKE_TO ?=
+SCW_EMAIL_SMOKE_TIMEOUT ?= 160
+SCW_NETCHECK_HOST ?= smtp.tem.scaleway.com
+SCW_NETCHECK_PORT ?= 465
+SCW_NETCHECK_TIMEOUT ?= 8000
 GH_REPO ?= rhanka/sentropic
 GH_K8S_SECRET_NAME ?= KUBECONFIG_B64
 GH_DEPLOY_RUN_ID ?=
 
-.PHONY: scw-deploy scw-undeploy scw-bundle-secret scw-registry-secret scw-status scw-debug scw-logs scw-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
+.PHONY: scw-deploy scw-undeploy scw-bundle-secret scw-registry-secret scw-status scw-debug scw-logs scw-smoke scw-api-netcheck scw-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
 
 scw-deploy: ## Apply tenant manifests on the poc cluster (SCW_INGRESS=1 includes 60-ingress.yaml)
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/10-rbac.yaml
@@ -1662,6 +1667,38 @@ scw-smoke: ## Smoke-test api and ui through temporary port-forwards
 	}; \
 	smoke api "$(SCW_API_SMOKE_PORT)" 8787 /api/v1/health; \
 	smoke ui "$(SCW_UI_SMOKE_PORT)" 5173 /
+
+scw-api-netcheck: ## Check TCP connectivity from the k8s api pod (SCW_NETCHECK_HOST=..., SCW_NETCHECK_PORT=...)
+	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) exec deploy/api -- env \
+	  SCW_NETCHECK_HOST="$(SCW_NETCHECK_HOST)" \
+	  SCW_NETCHECK_PORT="$(SCW_NETCHECK_PORT)" \
+	  SCW_NETCHECK_TIMEOUT="$(SCW_NETCHECK_TIMEOUT)" \
+	  node -e 'const net = require("node:net"); const host = process.env.SCW_NETCHECK_HOST; const port = Number(process.env.SCW_NETCHECK_PORT); const timeout = Number(process.env.SCW_NETCHECK_TIMEOUT); const started = Date.now(); const socket = net.createConnection({ host, port }); let finished = false; function finish(code, msg) { if (finished) return; finished = true; console.log(msg + " elapsed_ms=" + (Date.now() - started)); socket.destroy(); process.exit(code); } socket.setTimeout(timeout); socket.once("connect", () => finish(0, "OK: " + host + ":" + port + " reachable")); socket.once("timeout", () => finish(2, "ERROR: " + host + ":" + port + " timed out after " + timeout + "ms")); socket.once("error", (err) => finish(1, "ERROR: " + host + ":" + port + " " + (err.code || err.message)));'
+
+scw-email-smoke: ## Send a live email verification smoke via the k8s api (SCW_EMAIL_SMOKE_TO=...)
+	@test -n "$(SCW_EMAIL_SMOKE_TO)" || { echo "ERROR: set SCW_EMAIL_SMOKE_TO=<recipient email>" >&2; exit 1; }
+	@set -eu ; \
+	log="$$(mktemp)" ; body="$$(mktemp)" ; pid="" ; \
+	cleanup() { \
+	  if [ -n "$$pid" ]; then kill "$$pid" >/dev/null 2>&1 || true; wait "$$pid" >/dev/null 2>&1 || true; fi; \
+	  rm -f "$$log" "$$body"; \
+	} ; \
+	trap cleanup EXIT ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) port-forward svc/api "$(SCW_API_SMOKE_PORT):8787" >"$$log" 2>&1 & pid="$$!" ; \
+	ok=0 ; \
+	for _ in $$(seq 1 30); do \
+	  if curl -fsS "http://127.0.0.1:$(SCW_API_SMOKE_PORT)/api/v1/health" >/dev/null 2>&1; then ok=1; break; fi; \
+	  sleep 1; \
+	done ; \
+	if [ "$$ok" != "1" ]; then echo "ERROR: api port-forward failed"; cat "$$log"; exit 1; fi ; \
+	status="$$(curl -sS -o "$$body" -w "%{http_code}" \
+	  --max-time "$(SCW_EMAIL_SMOKE_TIMEOUT)" \
+	  -H "Content-Type: application/json" \
+	  --data '{"email":"$(SCW_EMAIL_SMOKE_TO)"}' \
+	  "http://127.0.0.1:$(SCW_API_SMOKE_PORT)/api/v1/auth/email/verify-request")" ; \
+	if [ "$$status" != "200" ]; then echo "ERROR: email smoke returned HTTP $$status"; cat "$$body"; exit 1; fi ; \
+	if ! grep -q '"success"[[:space:]]*:[[:space:]]*true' "$$body"; then echo "ERROR: email smoke response did not confirm success"; cat "$$body"; exit 1; fi ; \
+	echo "OK: verification email request accepted for $(SCW_EMAIL_SMOKE_TO)"
 
 gh-k8s-secret: ## Create/update GH Actions secret KUBECONFIG_B64 from $(KUBECONFIG)
 	@test -s "$(KUBECONFIG)" || (echo "ERROR: missing or empty KUBECONFIG=$(KUBECONFIG)" >&2; exit 1)
