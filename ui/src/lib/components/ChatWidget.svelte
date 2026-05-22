@@ -57,6 +57,7 @@
     type ChatWidgetPanelVisibility,
     type ChatWidgetTab,
   } from '@sentropic/chat-ui/state/chatWidgetShell';
+  import PackageChatWidget from '@sentropic/chat-ui/components/ChatWidget.svelte';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
@@ -2114,6 +2115,7 @@
   });
 </script>
 
+{#snippet renderAppChatWidgetShell()}
 <div
   class={isSidePanelHost
     ? 'queue-monitor h-full min-h-0 flex flex-col'
@@ -3270,3 +3272,13 @@
     </div>
   {/if}
 </div>
+{/snippet}
+
+<PackageChatWidget
+  activeTab={activeTab}
+  activeJobsCount={activeJobsCount}
+  failedJobsCount={failedJobsCount}
+  queueTabLabel={$_('chat.tabs.jobs')}
+  onPurgeJobs={handlePurgeMyJobs}
+  renderShell={renderAppChatWidgetShell}
+/>
