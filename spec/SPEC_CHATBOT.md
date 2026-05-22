@@ -165,7 +165,7 @@ BR-14c adds the permanent runtime boundary for model access:
 - **5 active providers** with centralized model catalog (labels served from backend):
   - **OpenAI**: GPT-5.4, GPT-4.1, GPT-4.1 Nano.
   - **Gemini**: Gemini 3.5 Flash, Gemini 3.5 Thinking.
-  - **Anthropic Claude**: Sonnet 4.6, Opus 4.6 — extended thinking (thinking budget_tokens), 1M token context.
+  - **Anthropic Claude**: Sonnet 4.6, Opus 4.7 — extended thinking (thinking budget_tokens), 1M token context.
   - **Mistral**: Devstral 2, Magistral Medium — Magistral supports reasoning via thinking chunks.
   - **Cohere**: Command A, Command A Reasoning — thinking blocks in `content-delta` stream (field `thinking` vs `text`), `tool-plan-delta` for reasoning with tools.
 - Streaming SSE normalization:
