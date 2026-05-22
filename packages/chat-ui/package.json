@@ -77,6 +77,11 @@
       "svelte": "./src/hosts/types.ts",
       "import": "./src/hosts/types.ts"
     },
+    "./hosts/createWebHost": {
+      "types": "./src/hosts/createWebHost.ts",
+      "svelte": "./src/hosts/createWebHost.ts",
+      "import": "./src/hosts/createWebHost.ts"
+    },
     "./stores/chatWidgetLayout": {
       "types": "./src/stores/chatWidgetLayout.ts",
       "svelte": "./src/stores/chatWidgetLayout.ts",

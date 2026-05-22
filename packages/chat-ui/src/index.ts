@@ -21,6 +21,7 @@ export * from './state/streamMessageProjection.js';
 export * from './state/streamMessageSmoothing.js';
 export * from './renderers/registry.js';
 export * from './hosts/types.js';
+export * from './hosts/createWebHost.js';
 export * from './stores/chatWidgetLayout.js';
 export * from './stores/localTools.js';
 export * from './utils/chat-run-projection.js';
