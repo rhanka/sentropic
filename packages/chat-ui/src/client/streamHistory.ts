@@ -96,6 +96,8 @@ export class StreamHistory {
     const streamId = event.streamId;
     const previous = this.streamHistoryById.get(streamId) ?? [];
     const last = previous[previous.length - 1];
+    if (shouldIgnoreReplayedStreamEvent(last, event)) return;
+
     const sameTextDeltaKind =
       (event.type === 'reasoning_delta' || event.type === 'content_delta') &&
       last &&
@@ -153,3 +155,27 @@ const getDelta = (event: StreamHubEvent): string =>
 
 const getToolCallId = (event: StreamHubEvent): string =>
   String(asRecord(event.data).tool_call_id ?? '');
+
+const getSequence = (event: StreamHubEvent): number =>
+  'sequence' in event ? Number(event.sequence) : Number.NaN;
+
+const shouldIgnoreReplayedStreamEvent = (
+  last: StreamHubEvent | undefined,
+  event: StreamHubEvent & { streamId: string },
+): boolean => {
+  if (!last || !('streamId' in last)) return false;
+  if (last.streamId !== event.streamId || last.type !== event.type) return false;
+
+  const lastSequence = getSequence(last);
+  const eventSequence = getSequence(event);
+  if (!Number.isFinite(lastSequence) || !Number.isFinite(eventSequence)) {
+    return false;
+  }
+  if (eventSequence > lastSequence) return false;
+
+  if (event.type === 'tool_call_delta') {
+    const lastToolCallId = getToolCallId(last);
+    return Boolean(lastToolCallId && lastToolCallId === getToolCallId(event));
+  }
+  return true;
+};
