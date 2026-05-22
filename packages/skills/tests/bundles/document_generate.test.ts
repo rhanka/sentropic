@@ -461,16 +461,16 @@ const MIN_FIXTURE_SCRIPT = `return doc([h(1, 'Title'), p('Body paragraph.')]);`;
 describe('document_generate handler — deferred sub-paths', () => {
   const handler = createDocumentGenerateHandler(documentGenerateSkill);
 
-  it('throws deferred-error for action=upskill (any format)', async () => {
+  it('rejects action=upskill as removed (any format) per BR19-D6', async () => {
     await expect(
       handler(makeInvocation({ action: 'upskill', format: 'docx' })),
     ).rejects.toThrow(
-      /document_generate sub-path 'action=upskill&format=docx' is deferred to Wave D step 1.C/,
+      /document_generate sub-path 'action=upskill' is deferred/,
     );
     await expect(
       handler(makeInvocation({ action: 'upskill', format: 'pptx' })),
     ).rejects.toThrow(
-      /document_generate sub-path 'action=upskill&format=pptx' is deferred/,
+      /document_generate sub-path 'action=upskill' is deferred/,
     );
   });
 
