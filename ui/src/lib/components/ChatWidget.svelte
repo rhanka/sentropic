@@ -27,7 +27,10 @@
     List,
     Settings,
   } from '@lucide/svelte';
-  import { chatWidgetLayout } from '@sentropic/chat-ui/stores/chatWidgetLayout';
+  import {
+    chatWidgetLayout,
+    type ChatWidgetDisplayMode,
+  } from '@sentropic/chat-ui/stores/chatWidgetLayout';
   import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
   import {
     deleteLocalToolPermissionPolicy,
@@ -43,12 +46,23 @@
     resolveExtensionAuthUiState,
     resolveExtensionChatGateState,
   } from '$lib/utils/extension-auth-ui';
+  import {
+    coerceChatWidgetTab,
+    computeChatWidgetDockWidthCss,
+    resolveChatWidgetJobBadge,
+    resolveChatWidgetPanelVisibility,
+    resolveEffectiveChatWidgetMode,
+    shouldAutoCloseChatWidget,
+    type ChatWidgetJobBadge,
+    type ChatWidgetPanelVisibility,
+    type ChatWidgetTab,
+  } from '@sentropic/chat-ui/state/chatWidgetShell';
 
   import QueueMonitor from '$lib/components/QueueMonitor.svelte';
   import ChatPanel from '$lib/components/ChatPanel.svelte';
   import MenuPopover from '$lib/components/MenuPopover.svelte';
 
-  type Tab = 'chat' | 'queue' | 'comments';
+  type Tab = ChatWidgetTab;
   let activeTab: Tab = 'chat';
   let isVisible = false;
   let hasOpenedOnce = false;
@@ -111,7 +125,7 @@
   // eslint-disable-next-line no-unused-vars
   let handleOpenComments: ((_: CustomEvent) => void) | null = null;
 
-  type DisplayMode = 'floating' | 'docked';
+  type DisplayMode = ChatWidgetDisplayMode;
   type ExtensionProfile = 'uat' | 'prod';
   type ExtensionCodeWorkspaceSummary = {
     id: string;
@@ -362,7 +376,12 @@
       extensionPermissionDraftOrigin = 'vscode://workspace';
     }
   }
-  $: if (isPluginMode && activeTab === 'comments') activeTab = 'chat';
+  $: {
+    const coercedTab = coerceChatWidgetTab(activeTab, {
+      canUseComments: !isPluginMode,
+    });
+    if (coercedTab !== activeTab) activeTab = coercedTab;
+  }
   $: if (isBrowser) {
     const saved = localStorage.getItem(DISPLAY_MODE_STORAGE_KEY);
     if (saved === 'docked' && !isExtensionOverlayHost) displayMode = 'docked';
@@ -400,13 +419,12 @@
     setBodyScrollLocked(Boolean(isVisible && isMobile));
   };
 
-  $: effectiveMode = isSidePanelHost
-    ? 'docked'
-    : isExtensionOverlayHost
-      ? 'floating'
-      : isMobileViewport
-        ? 'docked'
-        : displayMode;
+  $: effectiveMode = resolveEffectiveChatWidgetMode({
+    hostMode,
+    isExtensionOverlayHost,
+    isMobileViewport,
+    displayMode,
+  });
   $: isDocked = effectiveMode === 'docked';
 
   const updateExtensionConfigMenuMaxHeight = () => {
@@ -451,29 +469,21 @@
   }
 
   const computeDockWidthCss = (): string => {
-    if (!isBrowser) return '0px';
-    const w = window.innerWidth;
-    const minWidgetPx = 28 * 16; // 28rem ~= widget width (matches floating width)
-    if (w < 640) return '100vw'; // mobile: full screen dock
-    if (w < 1024) {
-      // Tablet/intermediate: 50%, but if that would be smaller than the widget width, go full screen.
-      return w * 0.5 < minWidgetPx ? '100vw' : '50vw';
-    }
-    // Desktop: prefer ~33%, but if that would be smaller than the widget width, fallback to 50%.
-    if (w * 0.33 >= minWidgetPx) return '33vw';
-    return w * 0.5 < minWidgetPx ? '100vw' : '50vw';
+    return computeChatWidgetDockWidthCss({
+      isBrowser,
+      viewportWidth: typeof window === 'undefined' ? 0 : window.innerWidth,
+    });
   };
 
   const publishLayout = () => {
     // Important: compute from current state, do not rely on reactive $: order.
     // Otherwise switching modes can publish the previous value and invert the padding logic.
-    const modeNow: DisplayMode = isSidePanelHost
-      ? 'docked'
-      : isExtensionOverlayHost
-        ? 'floating'
-        : isMobileViewport
-          ? 'docked'
-          : displayMode;
+    const modeNow = resolveEffectiveChatWidgetMode({
+      hostMode,
+      isExtensionOverlayHost,
+      isMobileViewport,
+      displayMode,
+    });
     chatWidgetLayout.set({
       mode: modeNow,
       isOpen: isVisible,
@@ -503,12 +513,9 @@
 
   const applyInitialState = (state: ChatWidgetHandoffState | null) => {
     if (!state) return;
-    const canUseComments = !isPluginMode;
-    if (state.activeTab === 'chat' || state.activeTab === 'queue') {
-      activeTab = state.activeTab;
-    } else if (state.activeTab === 'comments' && canUseComments) {
-      activeTab = state.activeTab;
-    }
+    activeTab = coerceChatWidgetTab(state.activeTab, {
+      canUseComments: !isPluginMode,
+    });
     chatSessionId = state.chatSessionId ?? null;
     commentThreadId = state.commentThreadId ?? null;
     commentSectionKey = state.commentSectionKey ?? null;
@@ -523,10 +530,9 @@
       const parsed = JSON.parse(raw) as Partial<ChatWidgetHandoffState> | null;
       if (!parsed || typeof parsed !== 'object') return null;
       return {
-        activeTab:
-          parsed.activeTab === 'queue' || parsed.activeTab === 'comments'
-            ? parsed.activeTab
-            : 'chat',
+        activeTab: coerceChatWidgetTab(parsed.activeTab, {
+          canUseComments: !isPluginMode,
+        }),
         chatSessionId:
           typeof parsed.chatSessionId === 'string' ? parsed.chatSessionId : null,
         draft: typeof parsed.draft === 'string' ? parsed.draft : '',
@@ -1673,11 +1679,15 @@
   $: activeJobsCount = $queueStore.jobs.filter(
     (job) => job.status === 'pending' || job.status === 'processing',
   ).length;
-  $: hasActiveJobs = activeJobsCount > 0;
   $: failedJobsCount = $queueStore.jobs.filter(
     (job) => job.status === 'failed',
   ).length;
-  $: hasFailedJobs = failedJobsCount > 0;
+  let jobBadgeState: ChatWidgetJobBadge = { kind: 'none', count: 0 };
+  $: jobBadgeState = resolveChatWidgetJobBadge({
+    isLoading: $queueStore.isLoading,
+    activeJobsCount,
+    failedJobsCount,
+  });
 
   const detectCommentContextFromRoute = (
     routeId: string | null,
@@ -1801,6 +1811,17 @@
     commentContext?.type ?? null,
     commentSectionKey,
   );
+  let panelVisibility: ChatWidgetPanelVisibility =
+    resolveChatWidgetPanelVisibility({
+      activeTab,
+      isPluginMode,
+      hasCommentContext: false,
+    });
+  $: panelVisibility = resolveChatWidgetPanelVisibility({
+    activeTab,
+    isPluginMode,
+    hasCommentContext: Boolean(commentContext?.id && commentContext?.type),
+  });
 
   $: if (commentContext?.id && commentContext?.type) {
     const nextKey = `${commentContext.type}:${commentContext.id}`;
@@ -1985,14 +2006,14 @@
   };
 
   const onExternalCloseChat = () => {
-    if (isExtensionOverlayHost) {
-      if (!isVisible) return;
-      close();
-      return;
-    }
-    // Only close automatically when the chat is docked full screen on mobile.
-    if (!isDocked || !isMobileViewport) return;
-    if (!isVisible) return;
+    if (
+      !shouldAutoCloseChatWidget({
+        isExtensionOverlayHost,
+        isDocked,
+        isMobileViewport,
+        isVisible,
+      })
+    ) return;
     close();
   };
 
@@ -2003,7 +2024,9 @@
       detail?.activeTab === 'queue' ||
       (detail?.activeTab === 'comments' && !isPluginMode)
     ) {
-      activeTab = detail.activeTab;
+      activeTab = coerceChatWidgetTab(detail.activeTab, {
+        canUseComments: !isPluginMode,
+      });
     }
     void openWidget();
   };
@@ -2117,26 +2140,26 @@
       <MessageCircle class="w-6 h-6" aria-hidden="true" />
 
       <!-- Badge: loading (petit spinner) -->
-      {#if $queueStore.isLoading}
+      {#if jobBadgeState.kind === 'loading'}
         <span class="absolute top-1 right-1 text-white rounded-full p-1 shadow">
           <Loader2 class="w-3 h-3 animate-spin" />
         </span>
-      {:else if hasActiveJobs}
+      {:else if jobBadgeState.kind === 'active'}
         <!-- Badge: jobs en cours => montre -->
         <span
           class="absolute top-1 right-1 text-white rounded-full p-1 shadow"
           title={$_('chat.queue.badge.active', {
-            values: { count: activeJobsCount },
+            values: { count: jobBadgeState.count },
           })}
         >
           <Clock class="w-3 h-3" aria-hidden="true" />
         </span>
-      {:else if hasFailedJobs}
+      {:else if jobBadgeState.kind === 'failed'}
         <!-- Badge: au moins un job en échec -->
         <span
           class="absolute -top-1 -right-1 bg-white text-red-600 rounded-full p-1 shadow"
           title={$_('chat.queue.badge.failed', {
-            values: { count: failedJobsCount },
+            values: { count: jobBadgeState.count },
           })}
         >
           <X class="w-3 h-3" aria-hidden="true" />
@@ -3079,7 +3102,7 @@
             </div>
           </div>
         {:else}
-          {#if activeTab === 'queue'}
+          {#if panelVisibility.showQueuePanel}
             <div class="h-full min-h-0 flex flex-col">
               <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
                 <div class="min-w-0 text-xs text-slate-500 truncate">{$_('chat.tabs.jobs')}</div>
@@ -3098,9 +3121,9 @@
               </div>
             </div>
           {/if}
-          {#if !isPluginMode && activeTab === 'comments'}
+          {#if panelVisibility.showCommentsPanel}
             <div class="h-full min-h-0 overflow-hidden">
-              {#if commentContext?.id}
+              {#if panelVisibility.showCommentsContext && commentContext?.id}
                 <ChatPanel
                   mode="comments"
                   bind:commentThreads
@@ -3121,7 +3144,7 @@
               {/if}
             </div>
           {/if}
-          <div class="h-full min-h-0 flex flex-col" class:hidden={activeTab !== 'chat'}>
+          <div class="h-full min-h-0 flex flex-col" class:hidden={!panelVisibility.showChatPanel}>
             <div class="border-b border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
               <div class="min-w-0 text-xs text-slate-500 truncate" title={activeChatSession ? formatSessionLabel(activeChatSession) : $_('chat.sessions.none')}>
                 {#if chatLoadingSessions}
