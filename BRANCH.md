@@ -99,7 +99,7 @@ Replace the remaining Gemini 3.1 Flash Lite catalog entry with Gemini 3.5 Thinki
     - [x] `make typecheck-ui API_PORT=8796 UI_PORT=5186 MAILDEV_UI_PORT=1086 ENV=test-fix-gemini-35-thinking`.
 
 - [ ] **Lot 2 — UAT handoff**
-  - [ ] Push branch `fix/gemini-35-thinking`.
+  - [x] Push branch `fix/gemini-35-thinking`.
   - [ ] Web app settings: model selector shows `Gemini 3.5 Thinking` under Gemini.
   - [ ] Web app settings: `Gemini 3.1 Flash Lite` is absent.
   - [ ] Chat model picker shows `Gemini 3.5 Thinking` and can save it as the user default.
@@ -111,8 +111,8 @@ Replace the remaining Gemini 3.1 Flash Lite catalog entry with Gemini 3.5 Thinki
   - [x] Confirm specs touched in Lot 1 are committed.
 
 - [ ] **Lot N — Final validation**
-  - [ ] Re-read this checklist and confirm all completed boxes are evidence-backed.
-  - [ ] Push final branch state for UAT.
+  - [x] Re-read this checklist and confirm all completed boxes are evidence-backed.
+  - [x] Push final branch state for UAT.
   - [ ] Record UAT status after user sign-off.
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
