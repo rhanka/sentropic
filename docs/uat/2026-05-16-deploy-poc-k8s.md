@@ -2,7 +2,7 @@
 
 State of this branch (`feat/deploy-poc-k8s`) :
 
-- New `deploy/scw/` tenant manifests (RBAC + Postgres StatefulSet + api/ui Deployments + maildev + optional Ingress).
+- New `deploy/scw/` tenant manifests (RBAC + Postgres StatefulSet + api/ui Deployments + optional Ingress).
 - Updated `.github/workflows/ci.yml` publishing `sentropic-api` and `sentropic-ui` to the SCW Container Registry, then running the neutral `deploy-k8s` job on branch/main pushes.
 - New Makefile targets `scw-deploy`, `scw-undeploy`, `scw-bundle-secret`, `scw-registry-secret`, `scw-status`, `scw-debug`, `scw-logs`, `scw-smoke`.
 - This UAT note.
@@ -13,7 +13,7 @@ State of this branch (`feat/deploy-poc-k8s`) :
    `make -C ~/src/poc-k8s apply-platform apply-sentropic` already done.
 2. **Registry pull secret ready** : create an SCW IAM API key with read-only access to the SCW Container Registry, then run `make scw-registry-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/sentropic/.env ENV=test-feat-deploy-poc-k8s`.
 3. **GitHub kubeconfig secret ready** : create repository secret `KUBECONFIG_B64` with the base64 content of `~/.kube/poc.yaml`.
-4. **`.env` populated** with at minimum: `POSTGRES_PASSWORD` (otherwise defaults to `app`), `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `MAIL_USERNAME`, `MAIL_PASSWORD`. Other keys are optional and only needed for the features that depend on them.
+4. **`.env` populated** with at minimum: `POSTGRES_PASSWORD` (otherwise defaults to `app`), `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`. For outbound email in the POC, add `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, and `MAIL_FROM`; `MAIL_FROM` defaults to `no-reply@sent-tech.ca`.
 
 ## Step-by-step UAT
 
@@ -48,7 +48,7 @@ make scw-registry-secret KUBECONFIG=$HOME/.kube/poc.yaml SCW_ENV_FILE=$HOME/src/
 # 3) deploy
 make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
 # expected: "deployment.apps/api successfully rolled out", same for ui
-# expected: kubectl get pods shows api, ui, maildev (1/1 each) + postgres-0 (1/1)
+# expected: kubectl get pods shows api, ui, and postgres-0 (1/1 each)
 
 # 4) smoke-test the API
 make scw-smoke KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s
@@ -67,11 +67,6 @@ curl -sIo /dev/null -w "%{http_code}\n" http://localhost:5173/
 # expected: 200
 # (open http://localhost:5173 in a browser if you want the full UI UAT)
 
-# 6) smoke-test maildev (optional)
-make -C ~/src/poc-k8s tenant-port-forward TENANT=sentropic SVC=maildev PORT=1080 &
-sleep 3
-curl -sIo /dev/null -w "%{http_code}\n" http://localhost:1080/
-# expected: 200 (the maildev UI)
 ```
 
 ## Expected resources after deploy
@@ -79,13 +74,11 @@ curl -sIo /dev/null -w "%{http_code}\n" http://localhost:1080/
 ```
 NAME                          READY  STATUS   RESTARTS  AGE
 pod/api-...                   1/1    Running  0         ~30s
-pod/maildev-...               1/1    Running  0         ~30s
 pod/postgres-0                1/1    Running  0         ~60s
 pod/ui-...                    1/1    Running  0         ~30s
 
 NAME                          READY  AGE
 deployment.apps/api           1/1    ~30s
-deployment.apps/maildev       1/1    ~30s
 deployment.apps/ui            1/1    ~30s
 
 NAME                          READY  AGE
@@ -100,22 +93,21 @@ persistentvolumeclaim/data-postgres-0   Bound  1Gi   scw-bssd
 - `make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s` rolled out api and ui successfully after:
   - aligning manifests to `rg.fr-par.scw.cloud/nc-reg/sentropic-{api,ui}:feat-deploy-poc-k8s`;
   - using `strategy: Recreate` for api/ui under the tight tenant quota;
-  - adding workload NetworkPolicies for api -> postgres, api -> maildev, ui -> api;
+  - adding workload NetworkPolicies for api -> postgres and ui -> api;
   - adding an api `startupProbe` so startup migrations are not killed by liveness.
-- `make scw-status KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s` showed api, ui, maildev, and postgres all `1/1`.
+- `make scw-status KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s` showed api, ui, and postgres all `1/1` after the Maildev removal.
 - `make scw-smoke KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s` returned:
   - `OK: api /api/v1/health`
   - `OK: ui /`
-  - `OK: maildev /`
-- `make -C ~/src/poc-k8s tenant-status TENANT=sentropic ENV=test-feat-deploy-poc-k8s` reported quota within budget: pods `4/8`, requests.cpu `260m/300m`, requests.memory `512Mi/768Mi`, limits.cpu `1200m/1500m`, limits.memory `1280Mi/1500Mi`.
+- `make -C ~/src/poc-k8s tenant-status TENANT=sentropic ENV=test-feat-deploy-poc-k8s` reported quota within budget after Maildev removal: pods `3/8`, requests.cpu `230m/300m`, requests.memory `448Mi/768Mi`, limits.cpu `1100m/1500m`, limits.memory `1152Mi/1500Mi`.
 
-Quota usage (`kubectl -n sentropic describe resourcequota tenant-quota`) should show ~260m / 512Mi requests used out of 300m / 768Mi authorised.
+Quota usage (`kubectl -n sentropic describe resourcequota tenant-quota`) should show ~230m / 448Mi requests used out of 300m / 768Mi authorised.
 
 ## Known limitations
 
 - **No Ingress applied by default.** Use port-forward via `poc-k8s` `tenant-port-forward` for the UAT. To expose publicly, set up cert-manager + a `letsencrypt` ClusterIssuer, edit the placeholder hosts in `deploy/scw/60-ingress.yaml`, and apply with `SCW_INGRESS=1`.
 - **Postgres has no backup automation.** A 1Gi PVC is enough for POC traffic but data is not snapshotted yet.
-- **`maildev` is dev-only** : real outbound SMTP is not configured. Tests that rely on outgoing email work only against the maildev UI capture.
+- **No Maildev in Kubernetes.** Outbound email uses the POC SMTP configuration stored in `SCW_ENV_FILE` and injected into the `sentropic-api` Secret. If `MAIL_HOST` is absent, the API starts with outbound email disabled rather than falling back to Maildev.
 - **Secrets bundling is operator-side** : every developer who wants to redeploy has to have a viable `~/src/sentropic/.env`. No Sealed Secrets / Vault yet.
 
 ## Cleanup
