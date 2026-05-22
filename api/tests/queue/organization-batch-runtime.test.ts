@@ -12,10 +12,11 @@ import {
   workflowTaskTransitions,
   workflowTaskResults,
 } from '../../src/db/schema';
+import { queueManager as sharedQueueManager } from '../../src/services/queue-manager';
 import { createId } from '../../src/utils/id';
 import { createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 
-const mockExecuteWithToolsStream = vi.fn();
+const mockExecuteWithToolsStream = vi.hoisted(() => vi.fn());
 vi.mock('../../src/services/tools', async () => {
   return {
     executeWithToolsStream: (prompt: string, options: Record<string, unknown>) =>
@@ -23,29 +24,26 @@ vi.mock('../../src/services/tools', async () => {
   };
 });
 
-async function importQueueManager() {
-  const mod = await import('../../src/services/queue-manager');
-  return mod.queueManager as any;
-}
-
 describe('Queue - organization_batch_create runtime', () => {
   let queueManager: any;
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
 
   beforeEach(async () => {
-    queueManager = await importQueueManager();
+    queueManager = sharedQueueManager as any;
     user = await createAuthenticatedUser('editor');
     mockExecuteWithToolsStream.mockReset();
   });
 
   afterEach(async () => {
-    await db.delete(workflowTaskResults).where(eq(workflowTaskResults.workspaceId, user.workspaceId));
-    await db.delete(workflowRunState).where(eq(workflowRunState.workspaceId, user.workspaceId));
-    await db.delete(executionRuns).where(eq(executionRuns.workspaceId, user.workspaceId));
-    await db.delete(jobQueue).where(eq(jobQueue.workspaceId, user.workspaceId));
-    await db.delete(folders).where(eq(folders.workspaceId, user.workspaceId));
-    await db.delete(organizations).where(eq(organizations.workspaceId, user.workspaceId));
-    await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, user.workspaceId));
+    if (user?.workspaceId) {
+      await db.delete(workflowTaskResults).where(eq(workflowTaskResults.workspaceId, user.workspaceId));
+      await db.delete(workflowRunState).where(eq(workflowRunState.workspaceId, user.workspaceId));
+      await db.delete(executionRuns).where(eq(executionRuns.workspaceId, user.workspaceId));
+      await db.delete(jobQueue).where(eq(jobQueue.workspaceId, user.workspaceId));
+      await db.delete(folders).where(eq(folders.workspaceId, user.workspaceId));
+      await db.delete(organizations).where(eq(organizations.workspaceId, user.workspaceId));
+      await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, user.workspaceId));
+    }
     await cleanupAuthData();
     vi.restoreAllMocks();
   });

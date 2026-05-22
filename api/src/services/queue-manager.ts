@@ -1,5 +1,35 @@
 import { db, pool } from '../db/client';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import {
+  buildWorkflowTaskInstanceKey,
+  completeWorkflowTask as flowCompleteWorkflowTask,
+  dispatchReadyWorkflowJoins as flowDispatchReadyWorkflowJoins,
+  dispatchWorkflowTask as flowDispatchWorkflowTask,
+  dispatchWorkflowTransitions as flowDispatchWorkflowTransitions,
+  failWorkflowTask as flowFailWorkflowTask,
+  getPathValue,
+  isRecord,
+  loadQueueSettings,
+  markWorkflowTaskStarted as flowMarkWorkflowTaskStarted,
+  parseJsonField,
+  pauseQueue,
+  reloadQueueSettings,
+  resolveGenerationPromptOverrideFromConfig,
+  resumeQueue,
+  runJob as flowRunJob,
+  runProcessingLoop as flowRunProcessingLoop,
+  type GenerationPromptOverride,
+  type JobRunnerDeps,
+  type ProcessingLoopDeps,
+  type QueueClass,
+  type WorkflowDispatchDeps,
+  type WorkflowDispatchDescriptor as FlowWorkflowDispatchDescriptor,
+  type WorkflowRuntimeContext,
+  type WorkflowRuntimeDefinition,
+  type WorkflowTaskCompletion,
+  type WorkflowTaskExecutionDefinition,
+  type WorkflowTransitionDefinition,
+} from '@sentropic/flow';
 import { createId } from '../utils/id';
 import { enrichOrganization, type OrganizationData } from './context-organization';
 import {
@@ -29,7 +59,6 @@ import {
   executionRuns,
   users,
   workflowDefinitionTasks,
-  workflowRunState,
   workflowTaskTransitions,
   workflowTaskResults,
   workspaceMemberships,
@@ -59,6 +88,7 @@ import { generateFreeformDocx } from './docx-generation';
 import type { CommentContextType } from './context-comments';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
 import type { ProviderId } from './provider-runtime';
+import { postgresRunStore } from './flow/postgres-run-store';
 
 function parseOrgData(value: unknown): Record<string, unknown> {
   if (!value) return {};
@@ -74,26 +104,15 @@ function parseOrgData(value: unknown): Record<string, unknown> {
   return {};
 }
 
-function parseJsonField<T = unknown>(value: unknown): T | null {
-  if (value == null) return null;
-  if (typeof value === 'object') return value as T;
-  if (typeof value !== 'string' || !value.trim()) return null;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return null;
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
 function readStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
     .map((item) => (typeof item === 'string' ? item.trim() : ''))
     .filter(Boolean);
+}
+
+function isVitestRuntime(): boolean {
+  return process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST || process.env.VITEST_WORKER_ID);
 }
 
 type WorkflowOrganizationTarget = {
@@ -167,28 +186,7 @@ function jobDataToRecord(jobData: JobData): Record<string, unknown> {
   return isRecord(jobData) ? jobData : {};
 }
 
-function deepMergeState(base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
-  const next: Record<string, unknown> = { ...base };
-  for (const [key, patchValue] of Object.entries(patch)) {
-    const currentValue = next[key];
-    if (isRecord(currentValue) && isRecord(patchValue)) {
-      next[key] = deepMergeState(currentValue, patchValue);
-      continue;
-    }
-    next[key] = patchValue;
-  }
-  return next;
-}
-
 type WorkflowTaskRuntimeStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
-
-type WorkflowTaskCompletion = {
-  output?: Record<string, unknown>;
-  statePatch?: Record<string, unknown>;
-  currentTaskKey?: string | null;
-  currentTaskInstanceKey?: string | null;
-  runStatus?: WorkflowTaskRuntimeStatus;
-};
 
 function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkflowRuntimeContext | null {
   if (!value || typeof value !== 'object') return null;
@@ -220,45 +218,6 @@ function parseGenerationWorkflowRuntimeContext(value: unknown): GenerationWorkfl
     agentDefinitionId: toNullableString(record.agentDefinitionId),
     agentMap,
   };
-}
-
-type GenerationPromptOverride = {
-  promptId: string;
-  promptTemplate?: string;
-  outputSchema?: Record<string, unknown>;
-};
-
-export const resolveGenerationPromptOverrideFromConfig = (
-  rawConfig: unknown,
-  fallbackPromptId: string,
-): GenerationPromptOverride => {
-  const config =
-    rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
-      ? (rawConfig as Record<string, unknown>)
-      : {};
-  const promptId =
-    typeof config.promptId === 'string' && config.promptId.trim().length > 0
-      ? config.promptId.trim()
-      : fallbackPromptId;
-  const promptTemplate =
-    typeof config.promptTemplate === 'string' && config.promptTemplate.trim().length > 0
-      ? config.promptTemplate
-      : undefined;
-  const outputSchema =
-    config.outputSchema && typeof config.outputSchema === 'object' && !Array.isArray(config.outputSchema)
-      ? (config.outputSchema as Record<string, unknown>)
-      : undefined;
-  return { promptId, promptTemplate, outputSchema };
-};
-
-function sanitizeJobResultForPublic(result: unknown): unknown {
-  if (!result || typeof result !== 'object') return result;
-  const copy = { ...(result as Record<string, unknown>) };
-  if (typeof copy.contentBase64 === 'string') {
-    delete copy.contentBase64;
-    copy.hasContent = true;
-  }
-  return copy;
 }
 
 function isSameValue(left: unknown, right: unknown): boolean {
@@ -335,43 +294,9 @@ export type MatrixMode = 'organization' | 'generate' | 'default';
 
 export type GenerationWorkflowTaskKey = string;
 
-export interface GenerationWorkflowRuntimeContext {
-  workflowRunId: string;
-  workflowDefinitionId: string;
-  taskKey: string;
-  agentDefinitionId: string | null;
-  agentMap: Record<string, string>; // task key → agent definition ID
-}
+export type GenerationWorkflowRuntimeContext = WorkflowRuntimeContext;
 
-type WorkflowTaskExecutionDefinition = {
-  taskKey: string;
-  orderIndex: number;
-  agentDefinitionId: string | null;
-  metadata: Record<string, unknown>;
-};
-
-type WorkflowTransitionDefinition = {
-  fromTaskKey: string | null;
-  toTaskKey: string | null;
-  transitionType: string;
-  condition: Record<string, unknown>;
-  metadata: Record<string, unknown>;
-};
-
-type WorkflowRuntimeDefinition = {
-  tasks: Map<string, WorkflowTaskExecutionDefinition>;
-  transitions: WorkflowTransitionDefinition[];
-  agentMap: Record<string, string>;
-  agentIdsByKey: Record<string, string>;
-};
-
-type WorkflowDispatchDescriptor = {
-  taskKey: string;
-  taskInstanceKey: string;
-  executor: string;
-  jobType?: JobType;
-  jobId?: string;
-};
+type WorkflowDispatchDescriptor = FlowWorkflowDispatchDescriptor<JobType>;
 
 export interface OrganizationEnrichJobData {
   organizationId: string;
@@ -564,6 +489,7 @@ export class QueueManager {
   private paused = false;
   private cancelAllInProgress = false;
   private jobControllers: Map<string, AbortController> = new Map();
+  private cachedJobRunnerDeps: JobRunnerDeps<JobQueueRow, JobType, JobData> | null = null;
 
   constructor() {
     this.loadSettings();
@@ -661,18 +587,7 @@ export class QueueManager {
     currentTaskKey: string | null;
     currentTaskInstanceKey: string | null;
   } | null> {
-    const [row] = await db
-      .select({
-        status: workflowRunState.status,
-        state: workflowRunState.state,
-        version: workflowRunState.version,
-        currentTaskKey: workflowRunState.currentTaskKey,
-        currentTaskInstanceKey: workflowRunState.currentTaskInstanceKey,
-      })
-      .from(workflowRunState)
-      .where(eq(workflowRunState.runId, runId))
-      .limit(1);
-
+    const row = await postgresRunStore.getSnapshot(runId);
     if (!row) return null;
     return {
       status: row.status,
@@ -687,15 +602,7 @@ export class QueueManager {
     runId: string,
     status: 'in_progress' | 'completed' | 'failed',
   ): Promise<void> {
-    const now = new Date();
-    await db
-      .update(executionRuns)
-      .set({
-        status,
-        completedAt: status === 'completed' || status === 'failed' ? now : null,
-        updatedAt: now,
-      })
-      .where(eq(executionRuns.id, runId));
+    await postgresRunStore.markRunStatus(runId, status);
   }
 
   private async mergeWorkflowRunState(params: {
@@ -709,37 +616,20 @@ export class QueueManager {
       const current = await this.getWorkflowRunStateSnapshot(params.runId);
       if (!current) return;
 
-      const nextState = params.statePatch ? deepMergeState(current.state, params.statePatch) : current.state;
-      const now = new Date();
-      const nextVersion = current.version + (params.statePatch ? 1 : 0);
-
-      const updatedRows = await db
-        .update(workflowRunState)
-        .set({
-          status: params.status ?? current.status,
-          state: nextState,
-          version: nextVersion,
-          currentTaskKey:
-            Object.prototype.hasOwnProperty.call(params, 'currentTaskKey')
-              ? (params.currentTaskKey ?? null)
-              : current.currentTaskKey,
-          currentTaskInstanceKey:
-            Object.prototype.hasOwnProperty.call(params, 'currentTaskInstanceKey')
-              ? (params.currentTaskInstanceKey ?? null)
-              : current.currentTaskInstanceKey,
-          checkpointedAt: now,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(workflowRunState.runId, params.runId),
-            eq(workflowRunState.version, current.version),
-          ),
-        )
-        .returning({ runId: workflowRunState.runId });
-
-      if (updatedRows.length > 0) {
+      try {
+        await postgresRunStore.mergeState({
+          runId: params.runId,
+          expectedVersion: current.version,
+          patch: params.statePatch,
+          status: params.status,
+          currentTaskKey: params.currentTaskKey,
+          currentTaskInstanceKey: params.currentTaskInstanceKey,
+        });
         return;
+      } catch (error) {
+        if (!(error instanceof Error) || !/version conflict/i.test(error.message)) {
+          throw error;
+        }
       }
     }
 
@@ -759,46 +649,19 @@ export class QueueManager {
     startedAt?: Date | null;
     completedAt?: Date | null;
   }): Promise<void> {
-    const now = new Date();
-    const insertValues = {
+    await postgresRunStore.upsertTaskResult({
       runId: params.workflow.workflowRunId,
-      workspaceId: params.workspaceId,
-      workflowDefinitionId: params.workflow.workflowDefinitionId,
       taskKey: params.workflow.taskKey,
       taskInstanceKey: params.taskInstanceKey,
       status: params.status,
-      inputPayload: params.inputPayload ?? {},
+      input: params.inputPayload ?? {},
       output: params.output ?? {},
       statePatch: params.statePatch ?? {},
       attempts: params.attempts ?? 1,
       lastError: params.lastError ?? null,
-      startedAt: params.startedAt ?? now,
-      completedAt: params.completedAt ?? null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    const updateSet = {
-      status: params.status,
-      inputPayload: params.inputPayload ?? {},
-      output: params.output ?? {},
-      statePatch: params.statePatch ?? {},
-      attempts: params.attempts ?? 1,
-      lastError: params.lastError ?? null,
-      ...(params.startedAt !== undefined ? { startedAt: params.startedAt } : {}),
-      ...(params.completedAt !== undefined ? { completedAt: params.completedAt } : {}),
-      updatedAt: now,
-    };
-    await db
-      .insert(workflowTaskResults)
-      .values(insertValues)
-      .onConflictDoUpdate({
-        target: [
-          workflowTaskResults.runId,
-          workflowTaskResults.taskKey,
-          workflowTaskResults.taskInstanceKey,
-        ],
-        set: updateSet,
-      });
+      startedAt: params.startedAt,
+      completedAt: params.completedAt,
+    });
   }
 
   private async markWorkflowTaskStarted(params: {
@@ -807,27 +670,16 @@ export class QueueManager {
     taskInstanceKey: string;
     jobData: JobData;
   }): Promise<void> {
-    const startedAt = new Date();
-    await this.upsertWorkflowTaskResult({
-      workflow: params.workflow,
-      workspaceId: params.workspaceId,
-      taskInstanceKey: params.taskInstanceKey,
-      status: 'in_progress',
-      inputPayload: jobDataToRecord(params.jobData),
-      output: {},
-      statePatch: {},
-      attempts: this.getJobAttempt(params.jobData),
-      lastError: null,
-      startedAt,
-      completedAt: null,
-    });
-    await this.mergeWorkflowRunState({
-      runId: params.workflow.workflowRunId,
-      status: 'in_progress',
-      currentTaskKey: params.workflow.taskKey,
-      currentTaskInstanceKey: params.taskInstanceKey,
-    });
-    await this.markExecutionRunStatus(params.workflow.workflowRunId, 'in_progress');
+    return flowMarkWorkflowTaskStarted<JobType>(
+      {
+        workflow: params.workflow,
+        workspaceId: params.workspaceId,
+        taskInstanceKey: params.taskInstanceKey,
+        inputPayload: jobDataToRecord(params.jobData),
+        attempts: this.getJobAttempt(params.jobData),
+      },
+      this.buildFlowDispatchDeps(),
+    );
   }
 
   private async completeWorkflowTask(params: {
@@ -837,60 +689,17 @@ export class QueueManager {
     jobData: JobData;
     completion?: WorkflowTaskCompletion;
   }): Promise<void> {
-    const completedAt = new Date();
-    const output = params.completion?.output ?? {};
-    const statePatch = params.completion?.statePatch ?? {};
-    await this.upsertWorkflowTaskResult({
-      workflow: params.workflow,
-      workspaceId: params.workspaceId,
-      taskInstanceKey: params.taskInstanceKey,
-      status: 'completed',
-      inputPayload: jobDataToRecord(params.jobData),
-      output,
-      statePatch,
-      attempts: this.getJobAttempt(params.jobData),
-      lastError: null,
-      startedAt: undefined,
-      completedAt,
-    });
-    await this.mergeWorkflowRunState({
-      runId: params.workflow.workflowRunId,
-      status: params.completion?.runStatus ?? 'in_progress',
-      statePatch,
-      currentTaskKey: params.completion?.currentTaskKey,
-      currentTaskInstanceKey: params.completion?.currentTaskInstanceKey,
-    });
-    const nextRunStatus = params.completion?.runStatus ?? 'in_progress';
-    if (nextRunStatus === 'completed') {
-      await this.markExecutionRunStatus(params.workflow.workflowRunId, 'completed');
-      return;
-    }
-
-    const runtimeState = await this.getWorkflowRunStateSnapshot(params.workflow.workflowRunId);
-    if (!runtimeState) return;
-
-    const runtimeDefinition = await this.loadWorkflowRuntimeDefinition(
-      params.workspaceId,
-      params.workflow.workflowDefinitionId,
+    return flowCompleteWorkflowTask<JobType>(
+      {
+        workflow: params.workflow,
+        workspaceId: params.workspaceId,
+        taskInstanceKey: params.taskInstanceKey,
+        inputPayload: jobDataToRecord(params.jobData),
+        attempts: this.getJobAttempt(params.jobData),
+        completion: params.completion,
+      },
+      this.buildFlowDispatchDeps(),
     );
-    const runContext = await this.getWorkflowRunContext(params.workflow.workflowRunId);
-    await this.dispatchWorkflowTransitions({
-      workspaceId: params.workspaceId,
-      workflowRunId: params.workflow.workflowRunId,
-      workflowDefinitionId: params.workflow.workflowDefinitionId,
-      runtimeDefinition,
-      runContext,
-      state: runtimeState.state,
-      fromTaskKey: params.workflow.taskKey,
-    });
-    await this.dispatchReadyWorkflowJoins({
-      workspaceId: params.workspaceId,
-      workflowRunId: params.workflow.workflowRunId,
-      workflowDefinitionId: params.workflow.workflowDefinitionId,
-      runtimeDefinition,
-      runContext,
-      state: runtimeState.state,
-    });
   }
 
   private async failWorkflowTask(params: {
@@ -900,100 +709,17 @@ export class QueueManager {
     jobData: JobData;
     error: unknown;
   }): Promise<void> {
-    const completedAt = new Date();
-    const errorPayload = {
-      name: params.error instanceof Error ? params.error.name : 'Error',
-      message: params.error instanceof Error ? params.error.message : String(params.error),
-    };
-    await this.upsertWorkflowTaskResult({
-      workflow: params.workflow,
-      workspaceId: params.workspaceId,
-      taskInstanceKey: params.taskInstanceKey,
-      status: 'failed',
-      inputPayload: jobDataToRecord(params.jobData),
-      output: {},
-      statePatch: {},
-      attempts: this.getJobAttempt(params.jobData),
-      lastError: errorPayload,
-      startedAt: undefined,
-      completedAt,
-    });
-    await this.mergeWorkflowRunState({
-      runId: params.workflow.workflowRunId,
-      status: 'failed',
-      currentTaskKey: params.workflow.taskKey,
-      currentTaskInstanceKey: params.taskInstanceKey,
-    });
-    await this.markExecutionRunStatus(params.workflow.workflowRunId, 'failed');
-  }
-
-  private getPathValue(source: unknown, path: string): unknown {
-    if (!path) return source;
-    const segments = path.split('.').filter(Boolean);
-    let current: unknown = source;
-    for (const segment of segments) {
-      if (!isRecord(current)) return undefined;
-      current = current[segment];
-    }
-    return current;
-  }
-
-  private evaluateWorkflowCondition(condition: unknown, state: Record<string, unknown>): boolean {
-    if (!isRecord(condition) || Object.keys(condition).length === 0) {
-      return true;
-    }
-    if (Array.isArray(condition.all)) {
-      return condition.all.every((entry) => this.evaluateWorkflowCondition(entry, state));
-    }
-    if (Array.isArray(condition.any)) {
-      return condition.any.some((entry) => this.evaluateWorkflowCondition(entry, state));
-    }
-    if (condition.not !== undefined) {
-      return !this.evaluateWorkflowCondition(condition.not, state);
-    }
-    const path = typeof condition.path === 'string' ? condition.path : '';
-    const operator = typeof condition.operator === 'string' ? condition.operator : 'eq';
-    const currentValue = path ? this.getPathValue(state, path) : undefined;
-    switch (operator) {
-      case 'eq':
-        return currentValue === condition.value;
-      case 'truthy':
-        return Boolean(currentValue);
-      case 'not_empty':
-        if (Array.isArray(currentValue)) return currentValue.length > 0;
-        if (typeof currentValue === 'string') return currentValue.trim().length > 0;
-        return Boolean(currentValue);
-      default:
-        return false;
-    }
-  }
-
-  private resolveWorkflowBindingValue(
-    binding: unknown,
-    context: {
-      state: Record<string, unknown>;
-      run: Record<string, unknown>;
-      item?: unknown;
-    },
-  ): unknown {
-    if (typeof binding === 'string') {
-      if (binding === '$state') return context.state;
-      if (binding.startsWith('$state.')) return this.getPathValue(context.state, binding.slice('$state.'.length));
-      if (binding === '$run') return context.run;
-      if (binding.startsWith('$run.')) return this.getPathValue(context.run, binding.slice('$run.'.length));
-      if (binding === '$item') return context.item;
-      if (binding.startsWith('$item.')) return this.getPathValue(context.item, binding.slice('$item.'.length));
-      return binding;
-    }
-    if (Array.isArray(binding)) {
-      return binding.map((entry) => this.resolveWorkflowBindingValue(entry, context));
-    }
-    if (isRecord(binding)) {
-      return Object.fromEntries(
-        Object.entries(binding).map(([key, value]) => [key, this.resolveWorkflowBindingValue(value, context)]),
-      );
-    }
-    return binding;
+    return flowFailWorkflowTask<JobType>(
+      {
+        workflow: params.workflow,
+        workspaceId: params.workspaceId,
+        taskInstanceKey: params.taskInstanceKey,
+        inputPayload: jobDataToRecord(params.jobData),
+        attempts: this.getJobAttempt(params.jobData),
+        error: params.error,
+      },
+      this.buildFlowDispatchDeps(),
+    );
   }
 
   private async loadWorkflowRuntimeDefinition(
@@ -1144,29 +870,6 @@ export class QueueManager {
     return inserted.length > 0;
   }
 
-  private buildWorkflowTaskInstanceKey(
-    item: unknown,
-    index: number,
-    metadata: Record<string, unknown>,
-    fallbackTaskKey: string,
-  ): string {
-    const fanout = isRecord(metadata.fanout) ? metadata.fanout : {};
-    const configuredPath = typeof fanout.instanceKeyPath === 'string' ? fanout.instanceKeyPath : null;
-    if (configuredPath) {
-      const configuredValue = this.getPathValue(item, configuredPath);
-      if (typeof configuredValue === 'string' && configuredValue.trim()) {
-        return configuredValue.trim();
-      }
-    }
-    if (isRecord(item)) {
-      const candidateId = typeof item.id === 'string' ? item.id.trim() : '';
-      if (candidateId) return candidateId;
-      const candidateKey = typeof item.key === 'string' ? item.key.trim() : '';
-      if (candidateKey) return candidateKey;
-    }
-    return `${fallbackTaskKey}:${index}`;
-  }
-
   private async isWorkflowJoinTransitionReady(params: {
     workflowRunId: string;
     runtimeDefinition: WorkflowRuntimeDefinition;
@@ -1218,7 +921,7 @@ export class QueueManager {
 
     const expectedSourcePath = typeof join.expectedSourcePath === 'string' ? join.expectedSourcePath : null;
     if (expectedSourcePath) {
-      const expectedItems = this.getPathValue(params.state, expectedSourcePath);
+      const expectedItems = getPathValue(params.state, expectedSourcePath);
       const allowEmpty = join.allowEmpty === true;
       if (!Array.isArray(expectedItems)) {
         return false;
@@ -1230,43 +933,17 @@ export class QueueManager {
         (transition) =>
           transition.transitionType === 'fanout' &&
           transition.toTaskKey === joinedTaskKey &&
-          this.getPathValue(transition.metadata, 'fanout.sourcePath') === expectedSourcePath,
+          getPathValue(transition.metadata, 'fanout.sourcePath') === expectedSourcePath,
       );
       const instanceKeyMetadata = upstreamFanoutTransition?.metadata ?? params.transition.metadata;
       return expectedItems.every((item, index) =>
         completedInstanceKeys.has(
-          this.buildWorkflowTaskInstanceKey(item, index, instanceKeyMetadata, joinedTaskKey),
+          buildWorkflowTaskInstanceKey(item, index, instanceKeyMetadata, joinedTaskKey),
         ),
       );
     }
 
     return completedInstanceKeys.has('main');
-  }
-
-  private resolveWorkflowTaskAgentDefinitionId(
-    task: WorkflowTaskExecutionDefinition,
-    state: Record<string, unknown>,
-    agentIdsByKey: Record<string, string>,
-  ): string | null {
-    const metadata = isRecord(task.metadata) ? task.metadata : {};
-    const selection = isRecord(metadata.agentSelection) ? metadata.agentSelection : null;
-    if (!selection) {
-      return task.agentDefinitionId;
-    }
-    const rules = Array.isArray(selection.rules) ? selection.rules : [];
-    for (const rule of rules) {
-      if (!isRecord(rule)) continue;
-      if (!this.evaluateWorkflowCondition(rule.condition, state)) continue;
-      const agentKey = typeof rule.agentKey === 'string' ? rule.agentKey : null;
-      if (agentKey && agentIdsByKey[agentKey]) {
-        return agentIdsByKey[agentKey];
-      }
-    }
-    const defaultAgentKey = typeof selection.defaultAgentKey === 'string' ? selection.defaultAgentKey : null;
-    if (defaultAgentKey && agentIdsByKey[defaultAgentKey]) {
-      return agentIdsByKey[defaultAgentKey];
-    }
-    return task.agentDefinitionId;
   }
 
   private async dispatchWorkflowTask(params: {
@@ -1280,151 +957,221 @@ export class QueueManager {
     taskInstanceKey: string;
     item?: unknown;
   }): Promise<WorkflowDispatchDescriptor[]> {
-    const task = params.runtimeDefinition.tasks.get(params.taskKey);
-    if (!task) return [];
+    return flowDispatchWorkflowTask<JobType>(params, this.buildFlowDispatchDeps());
+  }
 
-    const metadata = isRecord(task.metadata) ? task.metadata : {};
-    const executor = typeof metadata.executor === 'string' ? metadata.executor : 'noop';
-    const inputBindings = isRecord(metadata.inputBindings) ? metadata.inputBindings : {};
-    const resolvedPayload = this.resolveWorkflowBindingValue(inputBindings, {
-      state: params.state,
-      run: params.runContext,
-      item: params.item,
-    });
-    const inputPayload = isRecord(resolvedPayload) ? resolvedPayload : {};
-    const agentDefinitionId = this.resolveWorkflowTaskAgentDefinitionId(
-      task,
-      params.state,
-      params.runtimeDefinition.agentIdsByKey,
-    );
-    const workflowContext: GenerationWorkflowRuntimeContext = {
-      workflowRunId: params.workflowRunId,
-      workflowDefinitionId: params.workflowDefinitionId,
-      taskKey: params.taskKey,
-      agentDefinitionId,
-      agentMap: {
-        ...params.runtimeDefinition.agentMap,
-        ...(agentDefinitionId ? { [params.taskKey]: agentDefinitionId } : {}),
-      },
+  private buildFlowDispatchDeps(): WorkflowDispatchDeps<JobType> {
+    return {
+      canSkipDispatch: (scope, workflowRunId) =>
+        this.shouldSkipWorkflowDispatch(scope, workflowRunId),
+      mergeRunState: (p) => this.mergeWorkflowRunState(p),
+      markExecutionStatus: (runId, status) =>
+        this.markExecutionRunStatus(runId, status),
+      dispatchTask: (p) => this.dispatchWorkflowTask(p),
+      isJoinReady: (p) => this.isWorkflowJoinTransitionReady(p),
+      getTaskResultStatus: (runId, taskKey, instanceKey) =>
+        this.getWorkflowTaskResultStatus(runId, taskKey, instanceKey),
+      reserveTaskDispatch: (p) => this.reserveWorkflowTaskDispatch(p),
+      upsertTaskResult: (p) => this.upsertWorkflowTaskResult(p),
+      enqueueJob: (type, data, opts) => this.addJob(type, data as unknown as JobData, opts),
+      loadRuntimeDefinition: (ws, id) => this.loadWorkflowRuntimeDefinition(ws, id),
+      getRunStateSnapshot: (id) => this.getWorkflowRunStateSnapshot(id),
+      getRunContext: (id) => this.getWorkflowRunContext(id),
     };
+  }
 
-    const existingStatus = await this.getWorkflowTaskResultStatus(
-      params.workflowRunId,
-      params.taskKey,
-      params.taskInstanceKey,
-    );
-    if (existingStatus && existingStatus !== 'failed') {
-      return [];
+  /**
+   * Lazily build the `JobRunnerDeps` adapter for `@sentropic/flow/runJob`.
+   * Cached on the instance so we don't reallocate per job. Bound to
+   * private QueueManager methods + db helpers.
+   *
+   * Slice 7.F.4a — only `executive_summary` is registered in
+   * `executors`; other job types fall through to the legacy in-place
+   * `switch` in `processJob`. Slices 7.F.4b..j register the remaining
+   * 9 bindings.
+   */
+  private getJobRunnerDeps(): JobRunnerDeps<JobQueueRow, JobType, JobData> {
+    if (this.cachedJobRunnerDeps) {
+      return this.cachedJobRunnerDeps;
     }
-    if (!existingStatus) {
-      const reserved = await this.reserveWorkflowTaskDispatch({
-        workflowRunId: params.workflowRunId,
-        workflowDefinitionId: params.workflowDefinitionId,
-        workspaceId: params.workspaceId,
-        taskKey: params.taskKey,
-        taskInstanceKey: params.taskInstanceKey,
-        inputPayload,
-      });
-      if (!reserved) {
-        return [];
-      }
-    }
-
-    if (executor === 'noop') {
-      const now = new Date();
-      await this.upsertWorkflowTaskResult({
-        workflow: workflowContext,
-        workspaceId: params.workspaceId,
-        taskInstanceKey: params.taskInstanceKey,
-        status: 'completed',
-        inputPayload,
-        output: {},
-        statePatch: {},
-        attempts: 1,
-        lastError: null,
-        startedAt: now,
-        completedAt: now,
-      });
-      await this.mergeWorkflowRunState({
-        runId: params.workflowRunId,
-        status: 'in_progress',
-        currentTaskKey: params.taskKey,
-        currentTaskInstanceKey: params.taskInstanceKey,
-      });
-      return this.dispatchWorkflowTransitions({
-        workspaceId: params.workspaceId,
-        workflowRunId: params.workflowRunId,
-        workflowDefinitionId: params.workflowDefinitionId,
-        runtimeDefinition: params.runtimeDefinition,
-        runContext: params.runContext,
-        state: params.state,
-        fromTaskKey: params.taskKey,
-      });
-    }
-
-    if (executor === 'job') {
-      const jobType = typeof metadata.jobType === 'string' ? (metadata.jobType as JobType) : null;
-      if (!jobType) {
-        throw new Error(`Workflow task ${params.taskKey} is missing metadata.jobType`);
-      }
-      await this.upsertWorkflowTaskResult({
-        workflow: workflowContext,
-        workspaceId: params.workspaceId,
-        taskInstanceKey: params.taskInstanceKey,
-        status: 'pending',
-        inputPayload,
-        output: {},
-        statePatch: {},
-        attempts: 0,
-        lastError: null,
-        startedAt: null,
-        completedAt: null,
-      });
-      let jobId: string;
-      try {
-        jobId = await this.addJob(
-          jobType,
-          {
-            ...inputPayload,
-            workflow: workflowContext,
-          } as JobData,
-          { workspaceId: params.workspaceId, maxRetries: 1 },
-        );
-      } catch (error) {
-        await this.upsertWorkflowTaskResult({
-          workflow: workflowContext,
+    this.cachedJobRunnerDeps = {
+      parseJobData: (row) => JSON.parse(row.data) as JobData,
+      getJobId: (row) => row.id,
+      getJobType: (row) => row.type as JobType,
+      getWorkspaceId: (row) => row.workspaceId ?? ADMIN_WORKSPACE_ID,
+      getWorkflowContext: (data) => this.getGenerationWorkflowContextForJobData(data),
+      getWorkflowTaskInstanceKey: (type, data) =>
+        this.getWorkflowTaskInstanceKey(type, data),
+      buildRetryJobData: (data, nextAttempt, retryMax) => {
+        const dataRecord = jobDataToRecord(data);
+        const next =
+          data && typeof data === 'object'
+            ? { ...dataRecord, _retry: { attempt: nextAttempt, maxRetries: retryMax } }
+            : { _retry: { attempt: nextAttempt, maxRetries: retryMax } };
+        return next as unknown as JobData;
+      },
+      claimReadStatus: async (jobId) => {
+        const [current] = await db
+          .select({ status: jobQueue.status })
+          .from(jobQueue)
+          .where(eq(jobQueue.id, jobId))
+          .limit(1);
+        return current?.status ?? null;
+      },
+      registerController: (jobId, controller) => {
+        this.jobControllers.set(jobId, controller);
+      },
+      unregisterController: (jobId) => {
+        this.jobControllers.delete(jobId);
+      },
+      markWorkflowTaskStarted: (params) =>
+        this.markWorkflowTaskStarted({
+          workflow: params.workflow,
           workspaceId: params.workspaceId,
           taskInstanceKey: params.taskInstanceKey,
-          status: 'failed',
-          inputPayload,
+          jobData: params.jobData,
+        }),
+      completeWorkflowTask: (params) =>
+        this.completeWorkflowTask({
+          workflow: params.workflow,
+          workspaceId: params.workspaceId,
+          taskInstanceKey: params.taskInstanceKey,
+          jobData: params.jobData,
+          completion: params.completion,
+        }),
+      failWorkflowTask: (params) =>
+        this.failWorkflowTask({
+          workflow: params.workflow,
+          workspaceId: params.workspaceId,
+          taskInstanceKey: params.taskInstanceKey,
+          jobData: params.jobData,
+          error: params.error,
+        }),
+      upsertWorkflowTaskResultForRetry: (params) =>
+        this.upsertWorkflowTaskResult({
+          workflow: params.workflow,
+          workspaceId: params.workspaceId,
+          taskInstanceKey: params.taskInstanceKey,
+          status: 'pending',
+          inputPayload: jobDataToRecord(params.nextJobData),
           output: {},
           statePatch: {},
-          attempts: 0,
+          attempts: params.retryAttempt + 1,
           lastError: {
-            name: error instanceof Error ? error.name : 'Error',
-            message: error instanceof Error ? error.message : String(error),
+            name: 'Error',
+            message: params.errorMessage,
           },
           startedAt: null,
-          completedAt: new Date(),
-        });
-        throw error;
-      }
-      await this.mergeWorkflowRunState({
-        runId: params.workflowRunId,
-        status: 'in_progress',
-        currentTaskKey: params.taskKey,
-        currentTaskInstanceKey: params.taskInstanceKey,
-      });
-      return [{
-        taskKey: params.taskKey,
-        taskInstanceKey: params.taskInstanceKey,
-        executor,
-        jobType,
-        jobId,
-      }];
-    }
+          completedAt: null,
+        }),
+      markJobCompleted: async (jobId) => {
+        await db.run(sql`
+          UPDATE job_queue
+          SET status = 'completed', completed_at = ${new Date()}
+          WHERE id = ${jobId}
+        `);
+      },
+      markJobFailed: async (jobId, errorMessage) => {
+        await db.run(sql`
+          UPDATE job_queue
+          SET status = 'failed', error = ${errorMessage}
+          WHERE id = ${jobId}
+        `);
+      },
+      requeueJobForRetry: async ({ jobId, nextJobData, retryAttempt, retryMax, errorMessage }) => {
+        await db.run(sql`
+          UPDATE job_queue
+          SET status = 'pending',
+              data = ${JSON.stringify(nextJobData)},
+              error = ${`retry ${retryAttempt}/${retryMax}: ${errorMessage}`},
+              started_at = NULL,
+              completed_at = NULL
+          WHERE id = ${jobId}
+        `);
+      },
+      notifyJobEvent: (jobId) => this.notifyJobEvent(jobId),
+      executors: {
+        chat_message: (data, signal) =>
+          this.processChatMessage(data as ChatMessageJobData, signal),
+        document_summary: (data, signal, context) =>
+          this.processDocumentSummary(data as DocumentSummaryJobData, context.jobId, signal),
+        docx_generate: (data, signal, context) =>
+          this.processDocxGenerate(data as DocxGenerateJobData, context.jobId, signal),
+        executive_summary: (data, signal) =>
+          this.processExecutiveSummary(data as ExecutiveSummaryJobData, signal),
+        initiative_detail: (data, signal) =>
+          this.processInitiativeDetail(data as InitiativeDetailJobData, signal),
+        initiative_list: (data, signal) =>
+          this.processInitiativeList(data as InitiativeListJobData, signal),
+        matrix_generate: (data, signal) =>
+          this.processMatrixGenerate(data as MatrixGenerateJobData, signal),
+        organization_enrich: (data, signal, context) =>
+          this.processOrganizationEnrich(data as OrganizationEnrichJobData, context.jobId, signal),
+        organization_batch_create: (data, signal) =>
+          this.processOrganizationBatchCreate(data as OrganizationBatchCreateJobData, signal),
+        organization_targets_join: (data, signal) =>
+          this.processOrganizationTargetsJoin(data as OrganizationTargetsJoinJobData, signal),
+      },
+      onAbortedCancellation: async (row, error, jobData) => {
+        if (row.type !== 'chat_message') {
+          return false;
+        }
+        const assistantMessageId =
+          typeof (jobData as { assistantMessageId?: unknown })?.assistantMessageId === 'string'
+            ? ((jobData as { assistantMessageId: string }).assistantMessageId as string)
+            : null;
+        const reason = error instanceof Error ? error.message : 'cancelled';
+        if (assistantMessageId) {
+          try {
+            await chatService.finalizeAssistantMessageFromStream({
+              assistantMessageId,
+              reason,
+              fallbackContent: 'Réponse interrompue.',
+            });
+          } catch {
+            // ignore
+          }
+        }
 
-    throw new Error(`Unsupported workflow executor "${executor}" for task ${params.taskKey}`);
+        await db.run(sql`
+          UPDATE job_queue
+          SET status = 'completed', completed_at = ${new Date()}, error = ${reason}
+          WHERE id = ${row.id}
+        `);
+        await this.notifyJobEvent(row.id);
+        return true;
+      },
+      onTerminalFailure: async (row, error, jobData) => {
+        if (row.type !== 'document_summary') {
+          return;
+        }
+        try {
+          const documentId =
+            typeof (jobData as { documentId?: unknown })?.documentId === 'string'
+              ? (jobData as { documentId: string }).documentId
+              : null;
+          if (!documentId) {
+            return;
+          }
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          const safe = this.sanitizePgText(`Échec: ${message}`).slice(0, 5000);
+          await db.run(sql`
+            UPDATE context_documents
+            SET status = 'failed',
+                data = jsonb_set(coalesce(data, '{}'::jsonb), '{summary}', to_jsonb(${safe}::text), true),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ${documentId}
+          `);
+
+          const streamId = `document_${documentId}`;
+          const sequence = await getNextSequence(streamId);
+          await writeStreamEvent(streamId, 'error', { message }, sequence);
+        } catch {
+          // ignore
+        }
+      },
+    };
+    return this.cachedJobRunnerDeps;
   }
 
   private async dispatchWorkflowTransitions(params: {
@@ -1436,95 +1183,7 @@ export class QueueManager {
     state: Record<string, unknown>;
     fromTaskKey: string | null;
   }): Promise<WorkflowDispatchDescriptor[]> {
-    const matchingTransitions = params.runtimeDefinition.transitions.filter(
-      (transition) => transition.fromTaskKey === params.fromTaskKey,
-    );
-    const dispatched: WorkflowDispatchDescriptor[] = [];
-    for (const transition of matchingTransitions) {
-      const conditionMatches = this.evaluateWorkflowCondition(transition.condition, params.state);
-      if (!conditionMatches) {
-        continue;
-      }
-      if (transition.transitionType === 'end' || !transition.toTaskKey) {
-        await this.mergeWorkflowRunState({
-          runId: params.workflowRunId,
-          status: 'completed',
-          currentTaskKey: params.fromTaskKey,
-          currentTaskInstanceKey: 'main',
-        });
-        await this.markExecutionRunStatus(params.workflowRunId, 'completed');
-        continue;
-      }
-      if (transition.transitionType === 'fanout') {
-        const fanout = isRecord(transition.metadata.fanout) ? transition.metadata.fanout : {};
-        const sourcePath = typeof fanout.sourcePath === 'string' ? fanout.sourcePath : null;
-        if (!sourcePath) {
-          continue;
-        }
-        const sourceItems = this.getPathValue(params.state, sourcePath);
-        if (!Array.isArray(sourceItems)) {
-          continue;
-        }
-        for (const [index, item] of sourceItems.entries()) {
-          dispatched.push(
-            ...(await this.dispatchWorkflowTask({
-              workspaceId: params.workspaceId,
-              workflowRunId: params.workflowRunId,
-              workflowDefinitionId: params.workflowDefinitionId,
-              runtimeDefinition: params.runtimeDefinition,
-              runContext: params.runContext,
-              state: params.state,
-              taskKey: transition.toTaskKey,
-              taskInstanceKey: this.buildWorkflowTaskInstanceKey(
-                item,
-                index,
-                transition.metadata,
-                transition.toTaskKey,
-              ),
-              item,
-            })),
-          );
-        }
-        continue;
-      }
-      if (transition.transitionType === 'join') {
-        const isReady = await this.isWorkflowJoinTransitionReady({
-          workflowRunId: params.workflowRunId,
-          runtimeDefinition: params.runtimeDefinition,
-          transition,
-          state: params.state,
-        });
-        if (!isReady) {
-          continue;
-        }
-        dispatched.push(
-          ...(await this.dispatchWorkflowTask({
-            workspaceId: params.workspaceId,
-            workflowRunId: params.workflowRunId,
-            workflowDefinitionId: params.workflowDefinitionId,
-            runtimeDefinition: params.runtimeDefinition,
-            runContext: params.runContext,
-            state: params.state,
-            taskKey: transition.toTaskKey,
-            taskInstanceKey: 'main',
-          })),
-        );
-        continue;
-      }
-      dispatched.push(
-        ...(await this.dispatchWorkflowTask({
-          workspaceId: params.workspaceId,
-          workflowRunId: params.workflowRunId,
-          workflowDefinitionId: params.workflowDefinitionId,
-          runtimeDefinition: params.runtimeDefinition,
-          runContext: params.runContext,
-          state: params.state,
-          taskKey: transition.toTaskKey,
-          taskInstanceKey: 'main',
-        })),
-      );
-    }
-    return dispatched;
+    return flowDispatchWorkflowTransitions<JobType>(params, this.buildFlowDispatchDeps());
   }
 
   private async dispatchReadyWorkflowJoins(params: {
@@ -1535,37 +1194,18 @@ export class QueueManager {
     runContext: Record<string, unknown>;
     state: Record<string, unknown>;
   }): Promise<WorkflowDispatchDescriptor[]> {
-    const dispatched: WorkflowDispatchDescriptor[] = [];
-    for (const transition of params.runtimeDefinition.transitions) {
-      if (transition.transitionType !== 'join' || !transition.toTaskKey) {
-        continue;
-      }
-      if (!this.evaluateWorkflowCondition(transition.condition, params.state)) {
-        continue;
-      }
-      const isReady = await this.isWorkflowJoinTransitionReady({
-        workflowRunId: params.workflowRunId,
-        runtimeDefinition: params.runtimeDefinition,
-        transition,
-        state: params.state,
-      });
-      if (!isReady) {
-        continue;
-      }
-      dispatched.push(
-        ...(await this.dispatchWorkflowTask({
-          workspaceId: params.workspaceId,
-          workflowRunId: params.workflowRunId,
-          workflowDefinitionId: params.workflowDefinitionId,
-          runtimeDefinition: params.runtimeDefinition,
-          runContext: params.runContext,
-          state: params.state,
-          taskKey: transition.toTaskKey,
-          taskInstanceKey: 'main',
-        })),
-      );
+    return flowDispatchReadyWorkflowJoins<JobType>(params, this.buildFlowDispatchDeps());
+  }
+
+  private shouldSkipWorkflowDispatch(scope: string, workflowRunId: string): boolean {
+    if (!this.cancelAllInProgress) {
+      return false;
     }
-    return dispatched;
+
+    console.log(
+      `⏹️ Queue cancellation in progress; skipping workflow dispatch (${scope}) for run ${workflowRunId}`,
+    );
+    return true;
   }
 
   async dispatchWorkflowEntryTasks(params: {
@@ -1573,24 +1213,20 @@ export class QueueManager {
     workflowRunId: string;
     workflowDefinitionId: string;
   }): Promise<WorkflowDispatchDescriptor[]> {
-    const runtimeDefinition = await this.loadWorkflowRuntimeDefinition(
-      params.workspaceId,
-      params.workflowDefinitionId,
-    );
-    const runtimeState = await this.getWorkflowRunStateSnapshot(params.workflowRunId);
-    if (!runtimeState) {
-      throw new Error(`Workflow run state not found for ${params.workflowRunId}`);
-    }
-    const runContext = await this.getWorkflowRunContext(params.workflowRunId);
-    return this.dispatchWorkflowTransitions({
-      workspaceId: params.workspaceId,
-      workflowRunId: params.workflowRunId,
-      workflowDefinitionId: params.workflowDefinitionId,
-      runtimeDefinition,
-      runContext,
-      state: runtimeState.state,
-      fromTaskKey: null,
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    postgresJobQueue.setRuntimeHooks({
+      loadWorkflowRuntimeDefinition: (ws, id) =>
+        this.loadWorkflowRuntimeDefinition(ws, id),
+      getWorkflowRunStateSnapshot: (id) => this.getWorkflowRunStateSnapshot(id),
+      getWorkflowRunContext: (id) => this.getWorkflowRunContext(id),
+      dispatchWorkflowTransitions: (p) =>
+        this.dispatchWorkflowTransitions(
+          p as Parameters<QueueManager['dispatchWorkflowTransitions']>[0],
+        ),
     });
+    return postgresJobQueue.dispatchWorkflowEntryTasks(params) as Promise<
+      WorkflowDispatchDescriptor[]
+    >;
   }
 
   private async resolveGenerationPromptOverride(
@@ -1893,48 +1529,63 @@ export class QueueManager {
    * Charger les paramètres de configuration
    */
   private async loadSettings(): Promise<void> {
-    try {
-      const settings = await settingsService.getAISettings();
-      this.maxConcurrentJobs = settings.concurrency;
-      this.maxPublishingJobs = settings.publishingConcurrency;
-      this.processingInterval = settings.processingInterval;
-      console.log(
-        `🔧 Queue settings loaded: aiConcurrency=${this.maxConcurrentJobs}, publishingConcurrency=${this.maxPublishingJobs}, interval=${this.processingInterval}ms`
-      );
-    } catch (error) {
-      console.warn('⚠️ Failed to load queue settings, using defaults:', error);
-    }
+    await loadQueueSettings({
+      readSettings: () => settingsService.getAISettings(),
+      applySettings: (settings) => {
+        this.maxConcurrentJobs = settings.maxAi;
+        this.maxPublishingJobs = settings.maxPublishing;
+        this.processingInterval = settings.intervalMs;
+      },
+      logSettings: (settings) => {
+        console.log(
+          `🔧 Queue settings loaded: aiConcurrency=${settings.maxAi}, publishingConcurrency=${settings.maxPublishing}, interval=${settings.intervalMs}ms`
+        );
+      },
+      warnLoadFailure: (error) => {
+        console.warn('⚠️ Failed to load queue settings, using defaults:', error);
+      },
+    });
   }
 
   /**
    * Recharger les paramètres de configuration
    */
   async reloadSettings(): Promise<void> {
-    await this.loadSettings();
+    await reloadQueueSettings({
+      loadSettings: () => this.loadSettings(),
+    });
   }
 
   pause(): void {
-    this.paused = true;
+    pauseQueue({
+      setPaused: (value) => {
+        this.paused = value;
+      },
+    });
   }
 
   resume(): void {
-    this.paused = false;
-    if (!this.isProcessing) {
-      this.processJobs().catch(console.error);
-    }
+    resumeQueue({
+      setPaused: (value) => {
+        this.paused = value;
+      },
+      isProcessing: () => this.isProcessing,
+      startProcessing: () => {
+        this.processJobs().catch(console.error);
+      },
+    });
   }
 
   async cancelAllProcessing(reason: string = 'cancel-all'): Promise<void> {
-    this.cancelAllInProgress = true;
-    for (const [, controller] of this.jobControllers.entries()) {
-      try {
-        controller.abort(new DOMException(reason, 'AbortError'));
-      } catch {
-        // Ignore abort errors if controller is already aborted
-      }
-    }
-    await this.drain();
-    this.cancelAllInProgress = false;
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    postgresJobQueue.setRuntimeHooks({
+      iterateJobControllers: () => this.jobControllers.entries(),
+      setCancelAllInProgress: (v) => {
+        this.cancelAllInProgress = v;
+      },
+      getActiveJobCount: () => this.jobControllers.size,
+    });
+    return postgresJobQueue.cancelAll(reason);
   }
 
   /**
@@ -1942,44 +1593,12 @@ export class QueueManager {
    * This prevents leakage/cost when a user purges their own job history.
    */
   async cancelProcessingForWorkspace(workspaceId: string, reason: string = 'purge-mine'): Promise<void> {
-    // Mark DB rows as failed first (best-effort) so other readers see them as cancelled.
-    let processingIds: string[] = [];
-    try {
-      const rows = (await db.all(sql`
-        SELECT id FROM job_queue
-        WHERE status = 'processing' AND workspace_id = ${workspaceId}
-      `)) as Array<{ id: string }>;
-      processingIds = rows.map((r) => r.id);
-    } catch (e) {
-      console.warn('⚠️ Failed to load processing jobs for workspace cancellation:', e);
-    }
-
-    if (processingIds.length === 0) return;
-
-    try {
-      await db.run(sql`
-        UPDATE job_queue
-        SET status = 'failed', completed_at = CURRENT_TIMESTAMP, error = ${`Job cancelled by ${reason}`}
-        WHERE status = 'processing' AND workspace_id = ${workspaceId}
-      `);
-    } catch (e) {
-      // ignore
-    }
-
-    for (const jobId of processingIds) {
-      const controller = this.jobControllers.get(jobId);
-      if (!controller) continue;
-      try {
-        controller.abort(new DOMException(reason, 'AbortError'));
-      } catch {
-        // ignore
-      }
-      try {
-        await this.notifyJobEvent(jobId);
-      } catch {
-        // ignore
-      }
-    }
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    postgresJobQueue.setRuntimeHooks({
+      notifyJobEvent: (id) => this.notifyJobEvent(id),
+      getJobController: (id) => this.jobControllers.get(id),
+    });
+    return postgresJobQueue.cancelByWorkspace(workspaceId, reason);
   }
 
   /**
@@ -1988,51 +1607,20 @@ export class QueueManager {
    * - autres => status "failed".
    */
   async cancelJob(jobId: string, reason: string = 'cancelled'): Promise<{ status: string } | null> {
-    const [row] = await db
-      .select({ id: jobQueue.id, type: jobQueue.type, status: jobQueue.status })
-      .from(jobQueue)
-      .where(eq(jobQueue.id, jobId))
-      .limit(1);
-    if (!row) return null;
-
-    const isChat = row.type === 'chat_message';
-    const nextStatus = isChat ? 'completed' : 'failed';
-    await db.run(sql`
-      UPDATE job_queue
-      SET status = ${nextStatus},
-          completed_at = ${new Date()},
-          error = ${`Job cancelled: ${reason}`}
-      WHERE id = ${jobId}
-    `);
-    await this.notifyJobEvent(jobId);
-
-    const controller = this.jobControllers.get(jobId);
-    if (controller) {
-      try {
-        controller.abort(new DOMException(reason, 'AbortError'));
-      } catch {
-        // ignore
-      }
-    }
-
-    return { status: nextStatus };
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    postgresJobQueue.setRuntimeHooks({
+      notifyJobEvent: (id) => this.notifyJobEvent(id),
+      getJobController: (id) => this.jobControllers.get(id),
+    });
+    return postgresJobQueue.cancelJob(jobId, reason);
   }
 
   async drain(timeoutMs: number = 10000): Promise<void> {
-    const start = Date.now();
-    while (this.jobControllers.size > 0 && Date.now() - start < timeoutMs) {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-  }
-
-  private queueClassSqlExpr(): string {
-    return `
-      CASE type
-        WHEN 'docx_generate' THEN 'publishing'
-        WHEN 'chat_message' THEN 'chat'
-        ELSE 'ai'
-      END
-    `;
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    postgresJobQueue.setRuntimeHooks({
+      getActiveJobCount: () => this.jobControllers.size,
+    });
+    return postgresJobQueue.drain(timeoutMs);
   }
 
   /**
@@ -2051,39 +1639,38 @@ export class QueueManager {
       maxRetries?: number;
     }
   ): Promise<string> {
-    if (this.cancelAllInProgress || this.paused) {
-      console.warn(`⏸️ Queue paused/cancelling, refusing to enqueue job ${type}`);
-      throw new Error('Queue is paused or cancelling; job not accepted');
-    }
-    const jobId = createId();
-    const workspaceId = opts?.workspaceId ?? ADMIN_WORKSPACE_ID;
-    const maxRetries = Number.isFinite(opts?.maxRetries as number) ? Number(opts?.maxRetries) : 0;
-    const payload = {
-      ...(data as unknown as Record<string, unknown>),
-      _retry: {
-        attempt: 0,
-        maxRetries: Math.max(0, Math.floor(maxRetries)),
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    postgresJobQueue.setRuntimeHooks({
+      canAcceptJob: (jobType) => {
+        if (this.cancelAllInProgress || this.paused) {
+          console.warn(`⏸️ Queue paused/cancelling, refusing to enqueue job ${jobType}`);
+          return false;
+        }
+        return true;
       },
-    };
-    
-    await db.run(sql`
-      INSERT INTO job_queue (id, type, data, status, created_at, workspace_id)
-      VALUES (${jobId}, ${type}, ${JSON.stringify(payload)}, 'pending', ${new Date()}, ${workspaceId})
-    `);
-    await this.notifyJobEvent(jobId);
-    
-    console.log(`📝 Job ${jobId} (${type}) added to queue`);
-    
-    // Démarrer le traitement si pas déjà en cours
-    if (!this.isProcessing) {
-      this.processJobs().catch(console.error);
-    }
-    
-    return jobId;
+      notifyJobEvent: (id) => this.notifyJobEvent(id),
+      startProcessing: () => {
+        if (isVitestRuntime()) {
+          return;
+        }
+        if (!this.isProcessing) {
+          this.processJobs().catch(console.error);
+        }
+      },
+    });
+    return postgresJobQueue.enqueue(type, data, opts);
   }
 
   /**
-   * Traiter les jobs en attente
+   * Traiter les jobs en attente.
+   *
+   * Real reorganization (BR-26 Lot 7 slice F.1): the outer loop body
+   * lives in `@sentropic/flow/processing-loop` as `runProcessingLoop`
+   * (pure function). Per-job logic (`processJob`) and SQL helpers
+   * (`getProcessingCountByClass`, `claimPendingJobsByClass`,
+   * `hasAnyPending`) live behind the JobQueue adapter and are wired
+   * as deps callbacks.
+   * Behavior-preserving — replay byte-identical.
    */
   async processJobs(): Promise<void> {
     if (this.isProcessing) {
@@ -2095,426 +1682,63 @@ export class QueueManager {
       return;
     }
 
-    this.isProcessing = true;
-    console.log('🚀 Starting job processing...');
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    await flowRunProcessingLoop<JobQueueRow>(this.buildProcessingLoopDeps(postgresJobQueue));
+  }
 
-    try {
-      const inFlight = new Set<Promise<void>>();
-      const queueClassExpr = sql.raw(this.queueClassSqlExpr());
-      const queueClasses: Array<'ai' | 'chat' | 'publishing'> = ['chat', 'publishing', 'ai'];
-
-      const sleep = async (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-      const getProcessingCountByClass = async (
-        queueClass: 'ai' | 'chat' | 'publishing'
-      ): Promise<number> => {
-        try {
-          const rows = (await db.all(sql`
-            SELECT COUNT(*)::int AS count
-            FROM job_queue
-            WHERE status = 'processing'
-              AND ${queueClassExpr} = ${queueClass}
-          `)) as Array<{ count: number }>;
-          return rows?.[0]?.count ?? 0;
-        } catch {
-          return 0;
-        }
-      };
-
-      const hasAnyPending = async (): Promise<boolean> => {
-        const rows = await db
-          .select({ id: sql<string>`id` })
-          .from(jobQueue)
-          .where(eq(jobQueue.status, 'pending'))
-          .limit(1);
-        return rows.length > 0;
-      };
-
-      const claimPendingJobsByClass = async (
-        queueClass: 'ai' | 'chat' | 'publishing',
-        limit: number
-      ): Promise<JobQueueRow[]> => {
-        if (limit <= 0) return [];
-        const orderByExpr =
-          queueClass === 'ai'
-            ? sql.raw(
-                "CASE type WHEN 'chat_message' THEN 0 WHEN 'matrix_generate' THEN 1 WHEN 'initiative_list' THEN 1 ELSE 2 END, created_at ASC"
-              )
-            : sql.raw('created_at ASC');
-        const now = new Date();
-        const rows = (await db.all(sql`
-          WITH picked AS (
-            SELECT id
-            FROM job_queue
-            WHERE status = 'pending'
-              AND ${queueClassExpr} = ${queueClass}
-            ORDER BY ${orderByExpr}
-            LIMIT ${limit}
-            FOR UPDATE SKIP LOCKED
-          )
-          UPDATE job_queue q
-          SET status = 'processing', started_at = ${now}
-          FROM picked
-          WHERE q.id = picked.id
-          RETURNING
-            q.id AS "id",
-            q.type AS "type",
-            q.status AS "status",
-            q.workspace_id AS "workspaceId",
-            q.data AS "data",
-            q.result AS "result",
-            q.error AS "error",
-            q.created_at AS "createdAt",
-            q.started_at AS "startedAt",
-            q.completed_at AS "completedAt"
-        `)) as JobQueueRow[];
-        return rows ?? [];
-      };
-
-      while (!this.paused) {
-        if (this.cancelAllInProgress) break;
-
-        for (const queueClass of queueClasses) {
-          const classLimit = queueClass === 'publishing' ? this.maxPublishingJobs : this.maxConcurrentJobs;
-          const classProcessing = await getProcessingCountByClass(queueClass);
-          const slots = Math.max(0, classLimit - classProcessing);
-          if (slots <= 0) continue;
-
-          const claimedJobs = await claimPendingJobsByClass(queueClass, slots);
-          for (const job of claimedJobs) {
-            await this.notifyJobEvent(job.id);
-            const p = this.processJob(job).finally(() => {
-              inFlight.delete(p);
-            });
-            inFlight.add(p);
-          }
-        }
-
-        // If nothing is running and nothing is pending, we're done.
-        if (inFlight.size === 0) {
-          const more = await hasAnyPending();
-          if (!more) break;
-          // No local work but pending exists: either slots=0 (global limit reached) or a race. Wait briefly.
-          await sleep(200);
-          continue;
-        }
-
-        // Wait for at least one job to finish, then continue filling.
-        // IMPORTANT: do not block indefinitely on long-running jobs.
-        // New jobs can be enqueued while we are waiting; we must periodically wake up to claim
-        // additional pending jobs (up to the configured global concurrency).
-        await Promise.race([Promise.race(inFlight), sleep(this.processingInterval)]);
-      }
-    } finally {
-      this.isProcessing = false;
-      console.log('✅ Job processing completed');
+  async processJobsForWorkspace(workspaceId: string): Promise<void> {
+    if (this.isProcessing) {
+      return;
     }
+
+    if (this.paused) {
+      return;
+    }
+
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    const scopedJobQueueAdapter = {
+      getProcessingCountByClass: (queueClass: QueueClass) =>
+        postgresJobQueue.getProcessingCountByClass(queueClass, { workspaceId }),
+      claimPendingJobsByClass: (queueClass: QueueClass, limit: number) =>
+        postgresJobQueue.claimPendingJobsByClass(queueClass, limit, { workspaceId }),
+      hasAnyPending: () => postgresJobQueue.hasAnyPending({ workspaceId }),
+    };
+    await flowRunProcessingLoop<JobQueueRow>(this.buildProcessingLoopDeps(scopedJobQueueAdapter));
+  }
+
+  private buildProcessingLoopDeps(jobQueueAdapter: {
+    getProcessingCountByClass(queueClass: QueueClass): Promise<number>;
+    claimPendingJobsByClass(queueClass: QueueClass, limit: number): Promise<JobQueueRow[]>;
+    hasAnyPending(): Promise<boolean>;
+  }): ProcessingLoopDeps<JobQueueRow> {
+    return {
+      getSettings: () => ({
+        maxAi: this.maxConcurrentJobs,
+        maxPublishing: this.maxPublishingJobs,
+        intervalMs: this.processingInterval,
+      }),
+      isPaused: () => this.paused,
+      isCancelAllInProgress: () => this.cancelAllInProgress,
+      setProcessing: (value) => {
+        this.isProcessing = value;
+      },
+      getProcessingCountByClass: (queueClass) =>
+        jobQueueAdapter.getProcessingCountByClass(queueClass),
+      claimPendingJobsByClass: (queueClass, limit) =>
+        jobQueueAdapter.claimPendingJobsByClass(queueClass, limit),
+      hasAnyPending: () => jobQueueAdapter.hasAnyPending(),
+      notifyJobEvent: (id) => this.notifyJobEvent(id),
+      getJobId: (row) => row.id,
+      processJob: (row) => this.processJob(row),
+    };
   }
 
   /**
    * Traiter un job individuel
    */
   private async processJob(job: JobQueueRow): Promise<void> {
-    const jobId = job.id;
-    const jobType = job.type as JobType;
-    const jobData = JSON.parse(job.data) as JobData;
-    const workflow = this.getGenerationWorkflowContextForJobData(jobData);
-    const workflowTaskInstanceKey = this.getWorkflowTaskInstanceKey(jobType, jobData);
-    const workspaceId = job.workspaceId ?? ADMIN_WORKSPACE_ID;
-
-    const getRetryMeta = (value: unknown): { attempt: number; maxRetries: number } => {
-      if (!value || typeof value !== 'object') return { attempt: 0, maxRetries: 0 };
-      const retry = (value as { _retry?: unknown })._retry;
-      if (!retry || typeof retry !== 'object') return { attempt: 0, maxRetries: 0 };
-      const attemptRaw = (retry as { attempt?: unknown }).attempt;
-      const maxRaw = (retry as { maxRetries?: unknown }).maxRetries;
-      const attempt = typeof attemptRaw === 'number' && Number.isFinite(attemptRaw) ? attemptRaw : Number(attemptRaw);
-      const maxRetries = typeof maxRaw === 'number' && Number.isFinite(maxRaw) ? maxRaw : Number(maxRaw);
-      return {
-        attempt: Number.isFinite(attempt) ? Math.max(0, Math.floor(attempt)) : 0,
-        maxRetries: Number.isFinite(maxRetries) ? Math.max(0, Math.floor(maxRetries)) : 0,
-      };
-    };
-
-    const { attempt: retryAttempt, maxRetries: retryMax } = getRetryMeta(jobData);
-
-    const isAbort = (err: unknown): boolean => {
-      if (!err) return false;
-      if (err instanceof DOMException && err.name === 'AbortError') return true;
-      if (err instanceof Error && err.name === 'AbortError') return true;
-      const msg = err instanceof Error ? err.message : String(err);
-      return msg.includes('AbortError') || msg.includes('aborted') || msg.includes('Request was aborted');
-    };
-
-    const isRetryableInitiativeError = (err: unknown): boolean => {
-      const msg = err instanceof Error ? err.message : String(err);
-      const lowerMsg = msg.toLowerCase();
-      // JSON/format issues (LLM returned non-JSON or concatenated junk)
-      if (msg.includes('Erreur lors du parsing') || msg.includes('Invalid JSON') || msg.includes('Unexpected non-whitespace character') || msg.includes('No JSON object boundaries')) {
-        return true;
-      }
-      // Missing scores arrays leading to validateScores crash
-      if (msg.includes("Cannot read properties of undefined (reading 'map')")) {
-        return true;
-      }
-      // Transient network/OpenAI-ish issues (best-effort)
-      if (
-        msg.includes('429') ||
-        lowerMsg.includes('rate limit') ||
-        msg.includes('ECONNRESET') ||
-        msg.includes('ETIMEDOUT') ||
-        msg.includes('ENOTFOUND')
-      ) {
-        return true;
-      }
-      return false;
-    };
-
-    const isRetryableWorkflowError = (err: unknown): boolean => {
-      if (isRetryableInitiativeError(err)) {
-        return true;
-      }
-      const msg = err instanceof Error ? err.message : String(err);
-      const lowerMsg = msg.toLowerCase();
-      return (
-        lowerMsg.includes('aborterror') ||
-        lowerMsg.includes('terminated') ||
-        lowerMsg.includes('stream aborted') ||
-        lowerMsg.includes('aborted') ||
-        lowerMsg.includes('timed out') ||
-        lowerMsg.includes('timeout') ||
-        lowerMsg.includes('temporarily unavailable') ||
-        lowerMsg.includes('upstream') ||
-        lowerMsg.includes('overloaded') ||
-        lowerMsg.includes('econnreset') ||
-        lowerMsg.includes('etimedout') ||
-        lowerMsg.includes('enotfound')
-      );
-    };
-
-    let controller: AbortController | null = null;
-
-    try {
-      console.log(`🔄 Processing job ${jobId} (${jobType})`);
-
-      // Safety: the job may have been purged between claim and processing start.
-      // Also protects against any unexpected double-processing: only proceed if job is still processing.
-      const [current] = await db
-        .select({ status: jobQueue.status })
-        .from(jobQueue)
-        .where(eq(jobQueue.id, jobId))
-        .limit(1);
-      if (!current || current.status !== 'processing') {
-        console.log(`⏭️ Skipping job ${jobId}: missing or not processing (likely purged/claimed elsewhere)`);
-        return;
-      }
-
-      controller = new AbortController();
-      this.jobControllers.set(jobId, controller);
-
-      if (workflow) {
-        await this.markWorkflowTaskStarted({
-          workflow,
-          workspaceId,
-          taskInstanceKey: workflowTaskInstanceKey,
-          jobData,
-        });
-      }
-
-      // Traiter selon le type
-      let workflowCompletion: WorkflowTaskCompletion | undefined;
-      switch (jobType) {
-        case 'organization_enrich':
-          workflowCompletion = (await this.processOrganizationEnrich(
-            jobData as OrganizationEnrichJobData,
-            jobId,
-            controller.signal,
-          )) ?? undefined;
-          break;
-        case 'organization_batch_create':
-          workflowCompletion = (await this.processOrganizationBatchCreate(
-            jobData as OrganizationBatchCreateJobData,
-            controller.signal,
-          )) ?? undefined;
-          break;
-        case 'organization_targets_join':
-          workflowCompletion = (await this.processOrganizationTargetsJoin(
-            jobData as OrganizationTargetsJoinJobData,
-            controller.signal,
-          )) ?? undefined;
-          break;
-        case 'matrix_generate':
-          workflowCompletion = (await this.processMatrixGenerate(jobData as MatrixGenerateJobData, controller.signal)) ?? undefined;
-          break;
-        case 'initiative_list':
-          workflowCompletion = (await this.processInitiativeList(jobData as InitiativeListJobData, controller.signal)) ?? undefined;
-          break;
-        case 'initiative_detail':
-          workflowCompletion = (await this.processInitiativeDetail(jobData as InitiativeDetailJobData, controller.signal)) ?? undefined;
-          break;
-        case 'executive_summary':
-          workflowCompletion = (await this.processExecutiveSummary(jobData as ExecutiveSummaryJobData, controller.signal)) ?? undefined;
-          break;
-        case 'chat_message':
-          await this.processChatMessage(jobData as ChatMessageJobData, controller.signal);
-          break;
-        case 'document_summary':
-          await this.processDocumentSummary(
-            jobData as DocumentSummaryJobData,
-            jobId,
-            controller.signal
-          );
-          break;
-        case 'docx_generate':
-          await this.processDocxGenerate(
-            jobData as DocxGenerateJobData,
-            jobId,
-            controller.signal
-          );
-          break;
-        default:
-          throw new Error(`Unknown job type: ${jobType}`);
-      }
-
-      if (workflow) {
-        await this.completeWorkflowTask({
-          workflow,
-          workspaceId,
-          taskInstanceKey: workflowTaskInstanceKey,
-          jobData,
-          completion: workflowCompletion,
-        });
-      }
-
-      // Marquer comme terminé
-      await db.run(sql`
-        UPDATE job_queue 
-        SET status = 'completed', completed_at = ${new Date()}
-        WHERE id = ${jobId}
-      `);
-      await this.notifyJobEvent(jobId);
-
-      console.log(`✅ Job ${jobId} completed successfully`);
-    } catch (error) {
-      console.error(`❌ Job ${jobId} failed:`, error);
-
-      // Retry logic (bounded) for workflow jobs on transient/provider failures.
-      // IMPORTANT: only suppress retries for explicit local cancellations.
-      const wasCancelledLocally = controller?.signal.aborted === true;
-      if (workflow && retryMax > 0 && retryAttempt < retryMax && !wasCancelledLocally && isRetryableWorkflowError(error)) {
-        const nextAttempt = retryAttempt + 1;
-        const jobDataRecord = jobDataToRecord(jobData);
-        const nextData =
-          jobData && typeof jobData === 'object'
-            ? { ...jobDataRecord, _retry: { attempt: nextAttempt, maxRetries: retryMax } }
-            : { _retry: { attempt: nextAttempt, maxRetries: retryMax } };
-        const msg = error instanceof Error ? error.message : 'Unknown error';
-        await this.upsertWorkflowTaskResult({
-          workflow,
-          workspaceId,
-          taskInstanceKey: workflowTaskInstanceKey,
-          status: 'pending',
-          inputPayload: nextData,
-          output: {},
-          statePatch: {},
-          attempts: retryAttempt + 1,
-          lastError: {
-            name: error instanceof Error ? error.name : 'Error',
-            message: msg,
-          },
-          startedAt: null,
-          completedAt: null,
-        });
-        await db.run(sql`
-          UPDATE job_queue
-          SET status = 'pending',
-              data = ${JSON.stringify(nextData)},
-              error = ${`retry ${nextAttempt}/${retryMax}: ${msg}`},
-              started_at = NULL,
-              completed_at = NULL
-          WHERE id = ${jobId}
-        `);
-        await this.notifyJobEvent(jobId);
-        console.warn(`🔁 Retrying job ${jobId} (${jobType}) attempt ${nextAttempt}/${retryMax}`);
-        return;
-      }
-
-      if (workflow) {
-        await this.failWorkflowTask({
-          workflow,
-          workspaceId,
-          taskInstanceKey: workflowTaskInstanceKey,
-          jobData,
-          error,
-        });
-      }
-
-      // Annulation utilisateur: pour le chat, on finalise avec le contenu partiel.
-      if (jobType === 'chat_message' && isAbort(error)) {
-        const assistantMessageId =
-          typeof (jobData as { assistantMessageId?: unknown })?.assistantMessageId === 'string'
-            ? ((jobData as { assistantMessageId: string }).assistantMessageId as string)
-            : null;
-        if (assistantMessageId) {
-          try {
-            await chatService.finalizeAssistantMessageFromStream({
-              assistantMessageId,
-              reason: error instanceof Error ? error.message : 'cancelled',
-              fallbackContent: 'Réponse interrompue.'
-            });
-          } catch {
-            // ignore
-          }
-        }
-
-        await db.run(sql`
-          UPDATE job_queue 
-          SET status = 'completed', completed_at = ${new Date()}, error = ${error instanceof Error ? error.message : 'cancelled'}
-          WHERE id = ${jobId}
-        `);
-        await this.notifyJobEvent(jobId);
-        return;
-      }
-      
-      // Marquer comme échoué
-      await db.run(sql`
-        UPDATE job_queue 
-        SET status = 'failed', error = ${error instanceof Error ? error.message : 'Unknown error'}
-        WHERE id = ${jobId}
-      `);
-      await this.notifyJobEvent(jobId);
-
-      // Best-effort: also propagate failure to context_documents for document_summary jobs,
-      // so the UI can show `failed` without having to inspect job_queue.
-      if (jobType === 'document_summary') {
-        try {
-          const docId =
-            typeof (jobData as { documentId?: unknown })?.documentId === 'string'
-              ? (jobData as { documentId: string }).documentId
-              : null;
-          if (docId) {
-            const msg = error instanceof Error ? error.message : 'Unknown error';
-            const safe = this.sanitizePgText(`Échec: ${msg}`).slice(0, 5000);
-            await db.run(sql`
-              UPDATE context_documents
-              SET status = 'failed',
-                  data = jsonb_set(coalesce(data, '{}'::jsonb), '{summary}', to_jsonb(${safe}), true),
-                  updated_at = CURRENT_TIMESTAMP
-              WHERE id = ${docId}
-            `);
-
-            // Best-effort: also stream an error for observers (streamId derived from documentId).
-            const streamId = `document_${docId}`;
-            const seq = await getNextSequence(streamId);
-            await writeStreamEvent(streamId, 'error', { message: msg }, seq);
-          }
-        } catch {
-          // ignore
-        }
-      }
-    } finally {
-      this.jobControllers.delete(jobId);
-    }
+    const runnerDeps = this.getJobRunnerDeps();
+    return flowRunJob<JobQueueRow, JobType, JobData>(job, runnerDeps);
   }
 
   /**
@@ -4318,68 +3542,16 @@ export class QueueManager {
    * Obtenir le statut d'un job
    */
   async getJobStatus(jobId: string, opts?: { includeBinaryResult?: boolean }): Promise<Job | null> {
-    const result = await db
-      .select()
-      .from(jobQueue)
-      .where(eq(jobQueue.id, jobId))
-      .limit(1);
-    
-    if (!result || result.length === 0) return null;
-    
-    const row = result[0];
-    const job = {
-      id: row.id,
-      type: row.type as JobType,
-      data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
-      result:
-        opts?.includeBinaryResult === true
-          ? parseJsonField(row.result)
-          : sanitizeJobResultForPublic(parseJsonField(row.result)),
-      status: row.status as Job['status'],
-      workspaceId: row.workspaceId,
-      // Drizzle retourne createdAt, startedAt, completedAt en camelCase
-      createdAt: row.createdAt.toISOString(),
-      startedAt: row.startedAt || undefined,
-      completedAt: row.completedAt || undefined,
-      error: row.error || undefined
-    } satisfies Omit<Job, 'streamId'>;
-
-    return {
-      ...job,
-      streamId: getPublicJobStreamId(job),
-    };
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    return postgresJobQueue.getJobStatus(jobId, opts) as Promise<Job | null>;
   }
 
   /**
    * Obtenir tous les jobs
    */
   async getAllJobs(opts?: { workspaceId?: string }): Promise<Job[]> {
-    const results = await db
-      .select()
-      .from(jobQueue)
-      .where(opts?.workspaceId ? eq(jobQueue.workspaceId, opts.workspaceId) : undefined)
-      .orderBy(desc(jobQueue.createdAt));
-    
-    return results.map((row) => {
-      const job = {
-      id: row.id,
-      type: row.type as JobType,
-      data: (parseJsonField<JobData>(row.data) ?? {}) as JobData,
-      result: sanitizeJobResultForPublic(parseJsonField(row.result)),
-      status: row.status as Job['status'],
-      workspaceId: row.workspaceId,
-      // Drizzle retourne createdAt, startedAt, completedAt en camelCase
-      createdAt: row.createdAt.toISOString(),
-      startedAt: row.startedAt || undefined,
-      completedAt: row.completedAt || undefined,
-      error: row.error || undefined
-      } satisfies Omit<Job, 'streamId'>;
-
-      return {
-        ...job,
-        streamId: getPublicJobStreamId(job),
-      };
-    });
+    const { postgresJobQueue } = await import('./flow/postgres-job-queue');
+    return postgresJobQueue.listJobs(opts) as Promise<Job[]>;
   }
 
   async findLatestDocxJobBySource(params: {

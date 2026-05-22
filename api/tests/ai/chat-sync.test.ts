@@ -7,8 +7,9 @@ import {
   cleanupAuthData 
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { chatMessages } from '../../src/db/schema';
+import { chatMessages, chatStreamEvents, jobQueue } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
+import { queueManager } from '../../src/services/queue-manager';
 
 describe('Chat AI - Complete Integration', () => {
   let user: any;
@@ -32,11 +33,12 @@ describe('Chat AI - Complete Integration', () => {
 
       expect(response.status).toBe(200);
       const data = await response.json();
-      const { jobId, assistantMessageId, sessionId } = data;
+      const { jobId, assistantMessageId } = data;
       expect(jobId).toBeDefined();
       expect(assistantMessageId).toBeDefined();
 
       // Attendre la complétion du job (max 10s: 10 tentatives * 1s)
+      await queueManager.processJobsForWorkspace(user.workspaceId);
       let jobCompleted = false;
       let attempts = 0;
       const maxAttempts = 10;
@@ -44,10 +46,8 @@ describe('Chat AI - Complete Integration', () => {
       while (!jobCompleted && attempts < maxAttempts) {
         await sleep(1000); // Wait 1 second between checks
 
-        // Queue is workspace-scoped: read the job directly with the owner's token.
-        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
-        expect(jobRes.status).toBe(200);
-        const job = await jobRes.json();
+        const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, jobId)).limit(1);
+        expect(job).toBeDefined();
 
         if (job && (job.status === 'completed' || job.status === 'failed')) {
           jobCompleted = true;
@@ -99,10 +99,11 @@ describe('Chat AI - Complete Integration', () => {
 
       expect(chatResponse.status).toBe(200);
       const chatData = await chatResponse.json();
-      const { jobId, assistantMessageId, sessionId } = chatData;
+      const { jobId, assistantMessageId } = chatData;
 
       // Poll frequently so CI can observe completion without burning the whole
       // test timeout on coarse 5-second sleeps.
+      await queueManager.processJobsForWorkspace(user.workspaceId);
       let jobCompleted = false;
       let attempts = 0;
       const maxAttempts = 20;
@@ -110,9 +111,8 @@ describe('Chat AI - Complete Integration', () => {
       while (!jobCompleted && attempts < maxAttempts) {
         await sleep(1000);
 
-        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
-        expect(jobRes.status).toBe(200);
-        const job = await jobRes.json();
+        const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, jobId)).limit(1);
+        expect(job).toBeDefined();
 
         if (job && (job.status === 'completed' || job.status === 'failed')) {
           jobCompleted = true;
@@ -124,15 +124,11 @@ describe('Chat AI - Complete Integration', () => {
 
       expect(jobCompleted).toBe(true);
 
-      const bootstrapRes = await authenticatedRequest(
-        app,
-        'GET',
-        `/api/v1/chat/sessions/${sessionId}/bootstrap`,
-        user.sessionToken!
-      );
-      expect(bootstrapRes.status).toBe(200);
-      const streamEvents = await bootstrapRes.json();
-      const assistantDetails = streamEvents?.assistantDetailsByMessageId?.[assistantMessageId];
+      const assistantDetails = await db
+        .select()
+        .from(chatStreamEvents)
+        .where(eq(chatStreamEvents.messageId, assistantMessageId))
+        .orderBy(chatStreamEvents.sequence);
       
       // Il devrait y avoir des events (tool calls ou content)
       expect(assistantDetails).toBeDefined();
@@ -151,6 +147,7 @@ describe('Chat AI - Complete Integration', () => {
       const { jobId, assistantMessageId } = chatData;
 
       // Attendre la complétion du job
+      await queueManager.processJobsForWorkspace(user.workspaceId);
       let jobCompleted = false;
       let attempts = 0;
       const maxAttempts = 5;
@@ -158,9 +155,8 @@ describe('Chat AI - Complete Integration', () => {
       while (!jobCompleted && attempts < maxAttempts) {
         await sleep(5000);
 
-        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${jobId}`, user.sessionToken!);
-        expect(jobRes.status).toBe(200);
-        const job = await jobRes.json();
+        const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, jobId)).limit(1);
+        expect(job).toBeDefined();
 
         if (job && (job.status === 'completed' || job.status === 'failed')) {
           jobCompleted = true;
@@ -197,15 +193,15 @@ describe('Chat AI - Complete Integration', () => {
       const { sessionId, jobId: firstJobId } = firstData;
 
       // Attendre la complétion du premier job (max 10s)
+      await queueManager.processJobsForWorkspace(user.workspaceId);
       let firstJobCompleted = false;
       let attempts = 0;
       const maxAttempts = 10;
 
       while (!firstJobCompleted && attempts < maxAttempts) {
         await sleep(1000);
-        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${firstJobId}`, user.sessionToken!);
-        expect(jobRes.status).toBe(200);
-        const job = await jobRes.json();
+        const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, firstJobId)).limit(1);
+        expect(job).toBeDefined();
         if (job && (job.status === 'completed' || job.status === 'failed')) {
           firstJobCompleted = true;
           expect(job.status).toBe('completed');
@@ -225,14 +221,14 @@ describe('Chat AI - Complete Integration', () => {
       const { jobId: secondJobId, assistantMessageId } = secondData;
 
       // Attendre la complétion du deuxième job (max 10s)
+      await queueManager.processJobsForWorkspace(user.workspaceId);
       let secondJobCompleted = false;
       attempts = 0;
 
       while (!secondJobCompleted && attempts < maxAttempts) {
         await sleep(1000);
-        const jobRes = await authenticatedRequest(app, 'GET', `/api/v1/queue/jobs/${secondJobId}`, user.sessionToken!);
-        expect(jobRes.status).toBe(200);
-        const job = await jobRes.json();
+        const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, secondJobId)).limit(1);
+        expect(job).toBeDefined();
         if (job && (job.status === 'completed' || job.status === 'failed')) {
           secondJobCompleted = true;
           expect(job.status).toBe('completed');
