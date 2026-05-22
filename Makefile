@@ -1496,7 +1496,6 @@ SCW_LOG_TAIL ?= 200
 SCW_LOG_PREVIOUS ?= 0
 SCW_API_SMOKE_PORT ?= 18787
 SCW_UI_SMOKE_PORT ?= 15173
-SCW_MAILDEV_SMOKE_PORT ?= 11080
 GH_REPO ?= rhanka/sentropic
 GH_K8S_SECRET_NAME ?= KUBECONFIG_B64
 GH_DEPLOY_RUN_ID ?=
@@ -1509,16 +1508,17 @@ scw-deploy: ## Apply tenant manifests on the poc cluster (SCW_INGRESS=1 includes
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/20-postgres.yaml
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/30-api.yaml
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/40-ui.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/50-maildev.yaml
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
 	@if [ "$(SCW_INGRESS)" = "1" ]; then \
 	  KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/60-ingress.yaml; \
 	fi
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) rollout restart deployment/api deployment/ui
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) rollout status deploy/api --timeout=300s
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) rollout status deploy/ui  --timeout=300s
 
 scw-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s stay)
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/60-ingress.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/50-maildev.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/40-ui.yaml --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/30-api.yaml --ignore-not-found
 	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/20-postgres.yaml --ignore-not-found
@@ -1536,7 +1536,13 @@ scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
 	OPENAI=$$(get OPENAI_API_KEY) ; ANTHROPIC=$$(get ANTHROPIC_API_KEY) ; GEMINI=$$(get GEMINI_API_KEY) ; \
 	MISTRAL=$$(get MISTRAL_API_KEY) ; COHERE=$$(get COHERE_API_KEY) ; TAVILY=$$(get TAVILY_API_KEY) ; \
-	MAIL_USERNAME=$$(get MAIL_USERNAME) ; MAIL_PASSWORD=$$(get MAIL_PASSWORD) ; \
+	MAIL_HOST=$$(get MAIL_HOST) ; MAIL_PORT=$$(get MAIL_PORT) ; MAIL_SECURE=$$(get MAIL_SECURE) ; \
+	MAIL_USERNAME=$$(get MAIL_USERNAME) ; MAIL_PASSWORD=$$(get MAIL_PASSWORD) ; MAIL_FROM=$$(get MAIL_FROM) ; \
+	[ -n "$$MAIL_HOST" ] || MAIL_HOST="" ; [ -n "$$MAIL_PORT" ] || MAIL_PORT=587 ; \
+	[ -n "$$MAIL_SECURE" ] || MAIL_SECURE=false ; [ -n "$$MAIL_FROM" ] || MAIL_FROM=no-reply@sent-tech.ca ; \
+	if [ -n "$$MAIL_HOST" ] && { [ -z "$$MAIL_USERNAME" ] || [ -z "$$MAIL_PASSWORD" ]; }; then \
+	  echo "ERROR: MAIL_USERNAME and MAIL_PASSWORD are required when MAIL_HOST is set in $(SCW_ENV_FILE)" >&2; exit 1; \
+	fi ; \
 	GD_CS=$$(get GOOGLE_DRIVE_CLIENT_SECRET) ; GD_PK=$$(get GOOGLE_DRIVE_PICKER_API_KEY) ; \
 	GD_CID=$$(get GOOGLE_DRIVE_CLIENT_ID) ; GD_PID=$$(get GOOGLE_DRIVE_PICKER_APP_ID) ; \
 	DATABASE_URL="postgres://app:$${POSTGRES_PASSWORD}@postgres:5432/app" ; \
@@ -1548,8 +1554,12 @@ scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (
 	  --from-literal=MISTRAL_API_KEY="$$MISTRAL" \
 	  --from-literal=COHERE_API_KEY="$$COHERE" \
 	  --from-literal=TAVILY_API_KEY="$$TAVILY" \
+	  --from-literal=MAIL_HOST="$$MAIL_HOST" \
+	  --from-literal=MAIL_PORT="$$MAIL_PORT" \
+	  --from-literal=MAIL_SECURE="$$MAIL_SECURE" \
 	  --from-literal=MAIL_USERNAME="$$MAIL_USERNAME" \
 	  --from-literal=MAIL_PASSWORD="$$MAIL_PASSWORD" \
+	  --from-literal=MAIL_FROM="$$MAIL_FROM" \
 	  --from-literal=GOOGLE_DRIVE_CLIENT_ID="$$GD_CID" \
 	  --from-literal=GOOGLE_DRIVE_CLIENT_SECRET="$$GD_CS" \
 	  --from-literal=GOOGLE_DRIVE_PICKER_API_KEY="$$GD_PK" \
@@ -1598,7 +1608,7 @@ scw-logs: ## Show recent logs for a tenant pod selector (SCW_LOG_SELECTOR=..., S
 	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) logs -l "$(SCW_LOG_SELECTOR)" --tail="$(SCW_LOG_TAIL)" --all-containers=true --prefix=true; \
 	fi
 
-scw-smoke: ## Smoke-test api, ui, and maildev through temporary port-forwards
+scw-smoke: ## Smoke-test api and ui through temporary port-forwards
 	@set -eu ; \
 	smoke() { \
 	  name="$$1"; local_port="$$2"; remote_port="$$3"; path="$$4"; log="$$(mktemp)"; \
@@ -1614,8 +1624,7 @@ scw-smoke: ## Smoke-test api, ui, and maildev through temporary port-forwards
 	  rm -f "$$log"; echo "OK: $$name $$path"; \
 	}; \
 	smoke api "$(SCW_API_SMOKE_PORT)" 8787 /api/v1/health; \
-	smoke ui "$(SCW_UI_SMOKE_PORT)" 5173 /; \
-	smoke maildev "$(SCW_MAILDEV_SMOKE_PORT)" 1080 /
+	smoke ui "$(SCW_UI_SMOKE_PORT)" 5173 /
 
 gh-k8s-secret: ## Create/update GH Actions secret KUBECONFIG_B64 from $(KUBECONFIG)
 	@test -s "$(KUBECONFIG)" || (echo "ERROR: missing or empty KUBECONFIG=$(KUBECONFIG)" >&2; exit 1)

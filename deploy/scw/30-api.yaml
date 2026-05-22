@@ -9,10 +9,6 @@ metadata:
 data:
   NODE_ENV: "production"
   PORT: "8787"
-  MAIL_HOST: "maildev"
-  MAIL_PORT: "1025"
-  MAIL_SECURE: "false"
-  MAIL_FROM: "no-reply@sentropic.local"
   CHAT_TRACE_ENABLED: "true"
   CHAT_TRACE_RETENTION_DAYS: "7"
   DISABLE_AUTH: "0"
