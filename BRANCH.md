@@ -536,8 +536,8 @@ Relaunch BR-14a from current `origin/main` and extract the reusable chat UI surf
   - [x] Run `make test-ui REGISTRY=local SCOPE=tests/components/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11f` — 22/22 passed across 5 files.
   - [x] Run `make test-ui REGISTRY=local SCOPE=tests/chat API_PORT=9081 UI_PORT=5281 MAILDEV_UI_PORT=1181 ENV=test-feat-chat-ui-sdk-v2-lot11f` — 24/24 passed across 5 files.
   - [x] Run `wc -l ui/src/lib/components/chat/AppChatPanel.svelte ui/src/lib/chat/context-provider.ts ui/src/lib/chat/document-adapter.ts ui/src/lib/chat/comment-adapter.ts ui/src/lib/chat/session-adapter.ts` — `AppChatPanel.svelte` 5641 lines, `context-provider.ts` 147 lines, `document-adapter.ts` 139 lines, `comment-adapter.ts` 235 lines, `session-adapter.ts` 63 lines.
-  - [ ] Commit with selective `git add`, then `make commit MSG="refactor: extract app chat panel adapters" ENV=test-feat-chat-ui-sdk-v2-lot11f`.
-  - [ ] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11f`.
+  - [x] Commit with selective `git add`, then `make commit MSG="refactor: extract app chat panel adapters" ENV=test-feat-chat-ui-sdk-v2-lot11f` — `f445ae48`.
+  - [x] Run `make down ENV=test-feat-chat-ui-sdk-v2-lot11f`.
 
 - [ ] **Lot 12a - ChatWidget package layout state**
   - [ ] Add RED package tests in `packages/chat-ui/tests/chat-widget-layout.test.ts` for active tab validation, dock/floating effective mode, badge display state, mobile close policy, and panel visibility.
