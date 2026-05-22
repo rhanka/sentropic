@@ -52,6 +52,11 @@
       "svelte": "./src/state/chatProjection.ts",
       "import": "./src/state/chatProjection.ts"
     },
+    "./state/chatWidgetShell": {
+      "types": "./src/state/chatWidgetShell.ts",
+      "svelte": "./src/state/chatWidgetShell.ts",
+      "import": "./src/state/chatWidgetShell.ts"
+    },
     "./state/streamMessageProjection": {
       "types": "./src/state/streamMessageProjection.ts",
       "svelte": "./src/state/streamMessageProjection.ts",

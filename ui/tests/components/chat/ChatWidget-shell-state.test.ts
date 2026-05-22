@@ -1,0 +1,19 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const widgetPath = resolve(process.cwd(), 'src/lib/components/ChatWidget.svelte');
+
+describe('ChatWidget shell state extraction', () => {
+  it('uses the package shell-state helpers for tabs, layout, badges, and panel visibility', () => {
+    expect(existsSync(widgetPath)).toBe(true);
+    const source = readFileSync(widgetPath, 'utf8');
+    expect(source).toContain("from '@sentropic/chat-ui/state/chatWidgetShell'");
+    expect(source).toContain('coerceChatWidgetTab');
+    expect(source).toContain('resolveEffectiveChatWidgetMode');
+    expect(source).toContain('resolveChatWidgetJobBadge');
+    expect(source).toContain('shouldAutoCloseChatWidget');
+    expect(source).toContain('panelVisibility.showQueuePanel');
+    expect(source).toContain('jobBadgeState.kind');
+  });
+});
