@@ -178,7 +178,7 @@ cloc-test: ## (deprecated) Alias for test-cloc
 	@$(MAKE) --no-print-directory test-cloc
 
 .PHONY: test-count
-test-count: ## Count tests (files + test cases): UI unit, API unit (excluding ai), API integration (ai), E2E
+test-count: ## Count tests (files + test cases): UI, API, E2E, and package modules
 	@TEST_REGEX='(^|[^[:alnum:]_])(test|it)(\.(skip|only|each|concurrent|fails|todo|fixme))*[[:space:]]*[(]'; \
 	ui_files=$$(find ui/tests -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print | wc -l | tr -d ' '); \
 	ui_tests=$$(find ui/tests -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print0 | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
@@ -186,10 +186,12 @@ test-count: ## Count tests (files + test cases): UI unit, API unit (excluding ai
 	api_unit_tests=$$(find api/tests -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) ! -path "api/tests/ai/*" -print0 | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
 	api_ai_files=$$(find api/tests/ai -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print 2>/dev/null | wc -l | tr -d ' '); \
 	api_ai_tests=$$(find api/tests/ai -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print0 2>/dev/null | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
-	e2e_files=$$(find e2e/tests -type f -name "*.spec.ts" ! -path "e2e/tests/fixtures/*" ! -path "e2e/tests/helpers/*" -print | wc -l | tr -d ' '); \
-	e2e_tests=$$(find e2e/tests -type f -name "*.spec.ts" ! -path "e2e/tests/fixtures/*" ! -path "e2e/tests/helpers/*" -print0 | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
-	total_files=$$((ui_files + api_unit_files + api_ai_files + e2e_files)); \
-	total_tests=$$((ui_tests + api_unit_tests + api_ai_tests + e2e_tests)); \
+	e2e_files=$$(find e2e/tests -type f -name "*.spec.ts" ! -path "e2e/tests/fixtures/*" ! -path "e2e/tests/helpers/*" ! -path "e2e/tests/dev/_scratch*" -print | wc -l | tr -d ' '); \
+	e2e_tests=$$(find e2e/tests -type f -name "*.spec.ts" ! -path "e2e/tests/fixtures/*" ! -path "e2e/tests/helpers/*" ! -path "e2e/tests/dev/_scratch*" -print0 | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
+	package_files=$$(find packages -path "*/tests/*" -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print 2>/dev/null | wc -l | tr -d ' '); \
+	package_tests=$$(find packages -path "*/tests/*" -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print0 2>/dev/null | xargs -0r grep -REho "$$TEST_REGEX" | wc -l | tr -d ' '); \
+	total_files=$$((ui_files + api_unit_files + api_ai_files + e2e_files + package_files)); \
+	total_tests=$$((ui_tests + api_unit_tests + api_ai_tests + e2e_tests + package_tests)); \
 	echo "📊 Comptage des tests (approx.)"; \
 	echo ""; \
 	printf "%-28s %10s %10s\n" "Scope" "Fichiers" "Tests"; \
@@ -198,6 +200,7 @@ test-count: ## Count tests (files + test cases): UI unit, API unit (excluding ai
 	printf "%-28s %10s %10s\n" "API (unitaires, sans ai)" "$$api_unit_files" "$$api_unit_tests"; \
 	printf "%-28s %10s %10s\n" "API (integration = ai)" "$$api_ai_files" "$$api_ai_tests"; \
 	printf "%-28s %10s %10s\n" "E2E (Playwright)" "$$e2e_files" "$$e2e_tests"; \
+	printf "%-28s %10s %10s\n" "Packages (modules)" "$$package_files" "$$package_tests"; \
 	printf "%-28s %10s %10s\n" "TOTAL" "$$total_files" "$$total_tests"; \
 	echo ""; \
 	echo "Note: comptage basé sur occurrences de test()/it() (+ .only/.skip/.each/.concurrent/.fails/.todo/.fixme)."
@@ -610,6 +613,47 @@ publish-llm-mesh-token: build-llm-mesh ## Publish @sentropic/llm-mesh using a to
 		-w /workspace/packages/llm-mesh \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/llm-mesh@"$$version" version >/dev/null 2>&1; then echo "@sentropic/llm-mesh@$$version already exists; skipping publish"; else npm publish --access public; fi'
 
+.PHONY: typecheck-chat-ui
+typecheck-chat-ui: ## Run @sentropic/chat-ui type checks
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+
+.PHONY: build-chat-ui
+build-chat-ui: ## Build @sentropic/chat-ui dist package
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+
+.PHONY: pack-chat-ui
+pack-chat-ui: build-chat-ui ## Validate @sentropic/chat-ui npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+.PHONY: publish-chat-ui
+publish-chat-ui: build-chat-ui ## Publish @sentropic/chat-ui from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/chat-ui \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/chat-ui@"$$version" version >/dev/null 2>&1; then echo "@sentropic/chat-ui@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
+.PHONY: publish-chat-ui-token
+publish-chat-ui-token: build-chat-ui ## Publish @sentropic/chat-ui using a token read from NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-chat-ui in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/chat-ui \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/chat-ui@"$$version" version >/dev/null 2>&1; then echo "@sentropic/chat-ui@$$version already exists; skipping publish"; else npm publish --access public; fi'
+
 .PHONY: lint
 lint: lint-ui lint-api ## Run all linters
 
@@ -644,6 +688,11 @@ test: test-api test-ui test-e2e ## Run all tests
 .PHONY: test-llm-mesh
 test-llm-mesh: ## Run @sentropic/llm-mesh tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+
+.PHONY: test-chat-ui
+test-chat-ui: ## Run @sentropic/chat-ui tests
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
 .PHONY: test-pkg-chat-core
 test-pkg-chat-core: ## Run @sentropic/chat-core unit tests with coverage

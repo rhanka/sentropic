@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   insertSteerMessageInTimeline,
   postChatSteer,
-} from '../../src/lib/utils/chat-steer';
+} from '@sentropic/chat-ui/utils/chat-steer';
 
 describe('chat steer utils', () => {
   it('posts steer payload to chat message endpoint and normalizes feedback', async () => {
