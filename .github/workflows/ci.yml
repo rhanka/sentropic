@@ -22,8 +22,16 @@ jobs:
       ai: ${{ steps.filter.outputs.ai }}
       llm_mesh: ${{ steps.filter.outputs.llm_mesh }}
       chat_ui: ${{ steps.filter.outputs.chat_ui }}
+      chat_core: ${{ steps.filter.outputs.chat_core }}
+      events: ${{ steps.filter.outputs.events }}
+      contracts: ${{ steps.filter.outputs.contracts }}
+      flow: ${{ steps.filter.outputs.flow }}
       llm_mesh_publish: ${{ steps.filter.outputs.llm_mesh_publish }}
       chat_ui_publish: ${{ steps.filter.outputs.chat_ui_publish }}
+      chat_core_publish: ${{ steps.filter.outputs.chat_core_publish }}
+      events_publish: ${{ steps.filter.outputs.events_publish }}
+      contracts_publish: ${{ steps.filter.outputs.contracts_publish }}
+      flow_publish: ${{ steps.filter.outputs.flow_publish }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -64,6 +72,49 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/chat-ui/**'
+            chat_core:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/chat-core/**'
+              - 'packages/events/**'
+              - 'packages/contracts/**'
+              - '.github/workflows/ci.yml'
+            chat_core_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/chat-core/**'
+            events:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/events/**'
+              - 'packages/contracts/**'
+              - '.github/workflows/ci.yml'
+            events_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/events/**'
+            contracts:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/contracts/**'
+              - '.github/workflows/ci.yml'
+            contracts_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/contracts/**'
+            flow:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/flow/**'
+              - '.github/workflows/ci.yml'
+            flow_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/flow/**'
 
   # Build E2E Docker image
   build-e2e:
