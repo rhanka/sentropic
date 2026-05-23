@@ -6,7 +6,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rhanka/entropic.git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
     "directory": "packages/chat-core"
   },
   "main": "./dist/index.js",
@@ -33,10 +33,11 @@
     "test:coverage": "vitest run tests --coverage"
   },
   "dependencies": {
-    "@sentropic/contracts": "*",
-    "@sentropic/events": "*"
+    "@sentropic/contracts": "^0.1.0",
+    "@sentropic/events": "^0.1.0"
   },
   "devDependencies": {
+    "@types/node": "^22.10.10",
     "typescript": "5.4.5"
   }
 }

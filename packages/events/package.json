@@ -6,7 +6,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rhanka/entropic.git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
     "directory": "packages/events"
   },
   "main": "./dist/index.js",
@@ -31,7 +31,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@sentropic/contracts": "*"
+    "@sentropic/contracts": "^0.1.0"
   },
   "devDependencies": {
     "typescript": "5.4.5"
