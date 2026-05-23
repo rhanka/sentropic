@@ -26,6 +26,54 @@ env:
   ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
 
 jobs:
+  enforce-package-bump:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check version bump for packages with src changes
+        run: |
+          set -eu
+          BASE="${{ github.base_ref }}"
+          git fetch origin "$BASE" --depth=200 >/dev/null 2>&1
+          MERGE_BASE="$(git merge-base "origin/$BASE" HEAD)"
+          CHANGED="$(git diff --name-only "$MERGE_BASE" HEAD)"
+          FAIL=""
+          for pkg_dir in packages/*/; do
+            [ -d "$pkg_dir" ] || continue
+            pkg="$(basename "$pkg_dir")"
+            # Skip if no src/ changes for this package in the PR diff
+            if ! printf '%s\n' "$CHANGED" | grep -qE "^packages/${pkg}/src/"; then
+              continue
+            fi
+            # Skip private packages (not published)
+            is_private="$(node -p "JSON.parse(require('fs').readFileSync('packages/${pkg}/package.json','utf8')).private===true" 2>/dev/null || echo false)"
+            if [ "$is_private" = "true" ]; then
+              echo "::notice::packages/${pkg} is private — skipping bump check"
+              continue
+            fi
+            OLD="$(git show "$MERGE_BASE:packages/${pkg}/package.json" 2>/dev/null | grep -m1 '"version"' | sed -E 's/.*"version"\s*:\s*"([^"]+)".*/\1/' || true)"
+            NEW="$(grep -m1 '"version"' "packages/${pkg}/package.json" | sed -E 's/.*"version"\s*:\s*"([^"]+)".*/\1/')"
+            # If OLD missing, package is new — bootstrap path covers it; skip
+            if [ -z "$OLD" ]; then
+              echo "::notice::packages/${pkg} appears new (no base version) — skipping bump check"
+              continue
+            fi
+            if [ "$OLD" = "$NEW" ]; then
+              echo "::error::packages/${pkg} has changes under src/ but version is unchanged ($OLD). Bump packages/${pkg}/package.json version (semver) before merging. See rules/workflow.md → Package publication."
+              FAIL="$FAIL ${pkg}($OLD)"
+            else
+              echo "::notice::packages/${pkg}: $OLD -> $NEW ✓"
+            fi
+          done
+          if [ -n "$FAIL" ]; then
+            echo "::error::Missing version bumps:$FAIL"
+            exit 1
+          fi
+          echo "All touched packages have bumped versions."
+
   changes:
     runs-on: ubuntu-latest
     outputs:
