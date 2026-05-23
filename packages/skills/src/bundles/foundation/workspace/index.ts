@@ -1,9 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { parseSkillSource } from '../../../format/parser.js';
 import type { Skill } from '../../../types/skill.js';
+import { readFoundationSkillSource } from '../load-skill.js';
 import { workspaceHandlers } from './handler.js';
 
 /**
@@ -19,8 +16,7 @@ import { workspaceHandlers } from './handler.js';
  * rebind step of BR-19 Lot 5 (see `./handler.ts` for context).
  */
 function loadWorkspaceSkill(): Skill {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const source = readFileSync(join(here, 'SKILL.md'), 'utf8');
+  const source = readFoundationSkillSource(import.meta.url, 'workspace');
   const parsed = parseSkillSource(source);
   return Object.freeze({
     metadata: parsed.metadata,

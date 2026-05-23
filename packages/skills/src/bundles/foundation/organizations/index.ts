@@ -4,5 +4,6 @@ import { organizationsHandlers } from './handler.js';
 
 export const organizationsSkill: Skill = loadFoundationSkill(
   import.meta.url,
+  'organizations',
   organizationsHandlers,
 );
