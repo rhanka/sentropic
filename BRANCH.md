@@ -102,11 +102,11 @@ Align every `@sentropic/*` package with the npm registry: bootstrap-publish `cha
     - [x] `git diff .github/workflows/ci.yml` shows only additive output/filter entries.
     - [x] `make commit MSG="ci: add changes filters for chat-core/events/contracts/flow"`.
 
-- [ ] **Lot 3b — CI validate jobs**
-  - [ ] Add `validate-chat-core`, `validate-events`, `validate-contracts`, `validate-flow` (mirror `validate-chat-ui`).
-  - [ ] Lot gate:
-    - [ ] Each validate job runs `make typecheck-<pkg>` + `make build-<pkg>` + `make pack-<pkg>`.
-    - [ ] `make commit MSG="ci: add validate jobs for chat-core/events/contracts/flow"`.
+- [x] **Lot 3b — CI validate jobs**
+  - [x] Add `validate-chat-core`, `validate-events`, `validate-contracts`, `validate-flow` (mirror `validate-chat-ui`).
+  - [x] Lot gate:
+    - [x] Each validate job runs `make typecheck-<pkg>` + `make build-<pkg>` + `make pack-<pkg>`.
+    - [x] `make commit MSG="ci: add validate jobs for chat-core/events/contracts/flow"`.
 
 - [ ] **Lot 3c — CI publish jobs + bootstrap dispatch**
   - [ ] Add `publish-chat-core`, `publish-events`, `publish-contracts`, `publish-flow` (mirror `publish-chat-ui`).
