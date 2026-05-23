@@ -76,13 +76,23 @@ Align every `@sentropic/*` package with the npm registry: bootstrap-publish `cha
     - [x] `git diff packages/` shows version bumps + private flip + repo URL corrections, no spurious change.
     - [x] `make commit MSG="chore(packages): bump llm-mesh 0.1.1, unprivate flow, fix entropic→sentropic repo URLs"`.
 
-- [ ] **Lot 2 — Makefile bootstrap + OIDC targets**
-  - [ ] Mirror `publish-chat-ui` block from existing Makefile to add `publish-chat-core` (OIDC), `publish-events` (OIDC), `publish-contracts` (OIDC), `publish-flow` (OIDC).
-  - [ ] Mirror `publish-chat-ui-token` block to add `publish-chat-core-token`, `publish-events-token`, `publish-contracts-token`, `publish-flow-token`.
+- [ ] **Lot 2a — Makefile foundation (install/build/typecheck/pack)**
+  - [x] Add `install-internal-packages` (npm ci scoped to contracts/events/chat-core/flow + root).
+  - [x] Add `build-internal-packages` meta-target + aliases `build-contracts`, `build-events`, `build-chat-core` (dep order: contracts → events → chat-core; flow already standalone).
+  - [x] Add `typecheck-contracts`, `typecheck-events`, `typecheck-chat-core` (each depends on its build deps).
+  - [x] Add `pack-contracts`, `pack-events`, `pack-chat-core`, `pack-flow` (dry-run validation).
   - [ ] Lot gate:
-    - [ ] `make publish-chat-core --dry-run` (or `make -n publish-chat-core`) prints expected recipe without executing.
-    - [ ] `git diff Makefile` shows only additive `.PHONY` blocks for new targets.
-    - [ ] `make commit MSG="feat(make): add publish lanes for chat-core/events/contracts/flow"`.
+    - [ ] `git diff Makefile` shows only additive `.PHONY` blocks for new foundation targets.
+    - [ ] `make commit MSG="feat(make): add internal-packages install/build/typecheck/pack targets"`.
+
+- [ ] **Lot 2b — Makefile publish lanes (OIDC + token)**
+  - [ ] Add `publish-contracts` (OIDC) + `publish-contracts-token` (bootstrap NPM_TOKEN).
+  - [ ] Add `publish-events` (OIDC) + `publish-events-token`.
+  - [ ] Add `publish-chat-core` (OIDC) + `publish-chat-core-token`.
+  - [ ] Add `publish-flow` (OIDC) + `publish-flow-token`.
+  - [ ] Lot gate:
+    - [ ] `git diff Makefile` shows only additive `.PHONY publish-*` blocks.
+    - [ ] `make commit MSG="feat(make): add publish (OIDC + token) lanes for contracts/events/chat-core/flow"`.
 
 - [ ] **Lot 3 — CI publish lanes**
   - [ ] In `.github/workflows/ci.yml`, extend `changes.outputs` to include `chat_core`, `events`, `contracts`, `flow` and add their `paths` filters (mirror `chat_ui` block).
