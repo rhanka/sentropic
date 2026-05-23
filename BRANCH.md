@@ -70,15 +70,14 @@ Prevent the silent-skip bug where a commit that modifies `packages/<pkg>/src/**`
     - [x] `git diff Makefile` shows only additive `-e GITHUB_*` per OIDC recipe (54 lines added, 9 per recipe × 6).
     - [x] `make commit MSG="fix(make): propagate full GITHUB_* env to npm publish for sigstore provenance"`.
 
-- [ ] **Lot 4 — Strict MIT license**
-  - [ ] Replace root `LICENSE` with OSI-standard MIT text (Copyright 2025 Fabien Antoine).
-  - [ ] Replace `packages/llm-mesh/LICENSE` and `packages/flow/LICENSE` with the same strict MIT text.
-  - [ ] Create `packages/{chat-core,chat-ui,contracts,events}/LICENSE` with the same strict MIT text.
-  - [ ] In each `packages/<pkg>/package.json`, change `"license": "SEE LICENSE IN LICENSE"` → `"license": "MIT"` (SPDX identifier).
-  - [ ] Bump `packages/{chat-core,chat-ui,contracts,events,flow}/package.json` version `0.1.0 → 0.1.1` to force npm republish with the new LICENSE in tarball. llm-mesh stays at 0.1.1 (already targeted, will republish via the lane).
-  - [ ] Lot gate:
-    - [ ] `git diff` shows: 1 root LICENSE rewritten + 6 per-pkg LICENSE created/rewritten + 6 license fields + 5 version bumps.
-    - [ ] `make commit MSG="chore(license): switch to strict MIT, bump packages 0.1.0 -> 0.1.1"`.
+- [x] **Lot 4 — Strict MIT license**
+  - [x] Replaced root `LICENSE` with OSI-standard MIT text (Copyright 2025 Fabien Antoine).
+  - [x] Replaced `packages/llm-mesh/LICENSE` and `packages/flow/LICENSE` with the same strict MIT text.
+  - [x] Created `packages/{chat-core,chat-ui,contracts,events}/LICENSE` with the same strict MIT text.
+  - [x] Set `"license": "MIT"` (SPDX) in each `packages/<pkg>/package.json`.
+  - [x] Bumped `packages/{chat-core,chat-ui,contracts,events,flow}/package.json` `0.1.0 → 0.1.1` to force npm republish with new LICENSE in tarball. llm-mesh stays at 0.1.1 (target unchanged; will republish via the lane).
+  - [x] Lot gate:
+    - [x] Two commits: `chore(license): switch root + 6 packages to strict MIT` and `chore(packages): bump 5 packages 0.1.0 -> 0.1.1 + license:MIT + lockfile`.
 
 - [ ] **Lot 5 — PR + CI green + merge**
   - [ ] `git push origin fix/npm-publish-bump-gate`.
