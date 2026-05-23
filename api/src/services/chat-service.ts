@@ -40,40 +40,13 @@ import type OpenAI from 'openai';
 import { getOpenAITransportMode } from './provider-connections';
 import { CHAT_SYSTEM_PROMPTS, CHAT_COMMON_PROMPTS } from '../config/default-chat-system';
 import {
-  readInitiativeTool,
-  updateInitiativeTool,
-  webSearchTool,
-  webExtractTool,
   searchWeb,
   extractUrlContent,
-  organizationsListTool,
-  organizationGetTool,
-  organizationUpdateTool,
-  foldersListTool,
-  folderGetTool,
-  folderUpdateTool,
-  initiativesListTool,
-  executiveSummaryGetTool,
-  executiveSummaryUpdateTool,
-  matrixGetTool,
-  matrixUpdateTool,
-  documentsTool,
-  historyAnalyzeTool,
-  commentAssistantTool,
-  planTool,
-  solutionsListTool,
-  solutionGetTool,
-  proposalsListTool,
-  proposalGetTool,
-  productsListTool,
-  productGetTool,
-  gateReviewTool,
-  workspaceListTool,
-  initiativeSearchTool,
-  taskDispatchTool,
-  documentGenerateTool,
-  batchCreateOrganizationsTool
 } from './tools';
+import {
+  resolveFoundationChatTools,
+} from './skills/catalog';
+import { executeFoundationSkillTool } from './skills/foundation-executor';
 import { toolService } from './tool-service';
 import { listTabs as listRegisteredTabs } from './tab-registry';
 import type { TabEntry } from './tab-registry';
@@ -2325,13 +2298,10 @@ export class ChatService {
     // Prepare tools based on the active contexts (view-scoped behavior).
     // Note: destructive/batch tools are gated elsewhere; here we only enable what can be called.
     let tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined;
-    const toolSet = new Map<string, OpenAI.Chat.Completions.ChatCompletionTool>();
-    const addTools = (items: OpenAI.Chat.Completions.ChatCompletionTool[]) => {
-      for (const t of items) {
-        if (t.type !== 'function') continue;
-        const name = t.function?.name;
-        if (!name) continue;
-        toolSet.set(name, t);
+    const allowedSkillToolNames = new Set<string>();
+    const addToolNames = (names: ReadonlyArray<string>) => {
+      for (const name of names) {
+        if (name) allowedSkillToolNames.add(name);
       }
     };
     const contextTypes = new Set<ChatContextType>();
@@ -2339,90 +2309,82 @@ export class ChatService {
     contextsOverride.forEach((c) => contextTypes.add(c.contextType));
 
     if (contextTypes.has('initiative') || contextTypes.has('usecase')) { // TODO Lot 9.5: remove 'usecase' after data migration
-      addTools([
-        readInitiativeTool,
-        ...(readOnly ? [] : [updateInitiativeTool]),
-        webSearchTool,
-        webExtractTool
+      addToolNames([
+        'read_initiative',
+        ...(readOnly ? [] : ['update_initiative']),
+        'web_search',
+        'web_extract'
       ]);
     }
     if (contextTypes.has('organization')) {
-      addTools([
-        organizationsListTool,
-        organizationGetTool,
-        ...(readOnly ? [] : [organizationUpdateTool]),
-        foldersListTool,
-        webSearchTool,
-        webExtractTool
+      addToolNames([
+        'organizations_list',
+        'organization_get',
+        ...(readOnly ? [] : ['organization_update']),
+        'folders_list',
+        'web_search',
+        'web_extract'
       ]);
     }
     if (contextTypes.has('folder')) {
-      addTools([
-        foldersListTool,
-        folderGetTool,
-        ...(readOnly ? [] : [folderUpdateTool]),
-        matrixGetTool,
-        ...(readOnly ? [] : [matrixUpdateTool]),
-        initiativesListTool,
-        executiveSummaryGetTool,
-        ...(readOnly ? [] : [executiveSummaryUpdateTool]),
-        organizationGetTool,
-        webSearchTool,
-        webExtractTool
+      addToolNames([
+        'folders_list',
+        'folder_get',
+        ...(readOnly ? [] : ['folder_update']),
+        'matrix_get',
+        ...(readOnly ? [] : ['matrix_update']),
+        'initiatives_list',
+        'executive_summary_get',
+        ...(readOnly ? [] : ['executive_summary_update']),
+        'organization_get',
+        'web_search',
+        'web_extract'
       ]);
     }
     if (contextTypes.has('executive_summary')) {
-      addTools([
-        executiveSummaryGetTool,
-        ...(readOnly ? [] : [executiveSummaryUpdateTool]),
-        initiativesListTool,
-        folderGetTool,
-        matrixGetTool,
-        organizationGetTool,
-        webSearchTool,
-        webExtractTool
+      addToolNames([
+        'executive_summary_get',
+        ...(readOnly ? [] : ['executive_summary_update']),
+        'initiatives_list',
+        'folder_get',
+        'matrix_get',
+        'organization_get',
+        'web_search',
+        'web_extract'
       ]);
     }
 
     // Workspace-type-aware tool layer (§14.2)
     const wsType = await getWorkspaceType(sessionWorkspaceId);
-    const wsTypeToolNames = new Set<string>();
-    const addWsTools = (defs: Parameters<typeof addTools>[0]) => {
-      addTools(defs);
-      for (const t of defs) {
-        const name = t.type === 'function' ? t.function?.name : undefined;
-        if (name) wsTypeToolNames.add(name);
-      }
-    };
     if (wsType === 'opportunity') {
-      addWsTools([
-        solutionsListTool,
-        solutionGetTool,
-        proposalsListTool,
-        proposalGetTool,
-        productsListTool,
-        productGetTool,
-        gateReviewTool,
-        documentGenerateTool,
-        batchCreateOrganizationsTool
+      addToolNames([
+        'solutions_list',
+        'solution_get',
+        'proposals_list',
+        'proposal_get',
+        'products_list',
+        'product_get',
+        'gate_review',
+        'document_generate',
+        'batch_create_organizations'
       ]);
     } else if (wsType === 'ai-ideas') {
-      addWsTools([
-        solutionsListTool,
-        solutionGetTool,
-        proposalsListTool,
-        proposalGetTool,
-        productsListTool,
-        productGetTool,
-        gateReviewTool,
-        documentGenerateTool,
-        batchCreateOrganizationsTool
+      addToolNames([
+        'solutions_list',
+        'solution_get',
+        'proposals_list',
+        'proposal_get',
+        'products_list',
+        'product_get',
+        'gate_review',
+        'document_generate',
+        'batch_create_organizations'
       ]);
     } else if (wsType === 'neutral') {
-      addWsTools([
-        workspaceListTool,
-        initiativeSearchTool,
-        taskDispatchTool
+      addToolNames([
+        'workspace_list',
+        'initiative_search',
+        'task_dispatch'
       ]);
     }
 
@@ -2438,21 +2400,21 @@ export class ChatService {
       effectiveRequestedTools.delete('web_extract');
     }
     if (effectiveRequestedTools.has('web_search')) {
-      addTools([webSearchTool]);
+      addToolNames(['web_search']);
     }
     if (effectiveRequestedTools.has('web_extract')) {
-      addTools([webExtractTool]);
+      addToolNames(['web_extract']);
     }
     if (effectiveRequestedTools.has('plan') || enforceTodoUpdateMode) {
-      addTools([planTool]);
+      addToolNames(['plan']);
     }
     if (hasDocuments) {
-      addTools([documentsTool]);
+      addToolNames(['documents']);
     }
     if (hasCommentContexts) {
-      addTools([commentAssistantTool]);
+      addToolNames(['comment_assistant']);
     }
-    addTools([historyAnalyzeTool]);
+    addToolNames(['history_analyze']);
     let localTools = this.normalizeLocalToolDefinitions(
       options.localToolDefinitions
     );
@@ -2473,8 +2435,26 @@ export class ChatService {
       }
     }
 
-    addTools(localTools);
-    tools = toolSet.size > 0 ? Array.from(toolSet.values()) : hasDocuments ? [documentsTool] : undefined;
+    const toolSet = new Map<string, OpenAI.Chat.Completions.ChatCompletionTool>();
+    const addResolvedTools = (items: OpenAI.Chat.Completions.ChatCompletionTool[]) => {
+      for (const t of items) {
+        if (t.type !== 'function') continue;
+        const name = t.function?.name;
+        if (!name) continue;
+        toolSet.set(name, t);
+      }
+    };
+    addResolvedTools(
+      resolveFoundationChatTools({
+        userId: options.userId,
+        workspaceId: sessionWorkspaceId,
+        workspaceType: wsType,
+        currentUserRole,
+        allowedTools: allowedSkillToolNames,
+      }),
+    );
+    addResolvedTools(localTools);
+    tools = toolSet.size > 0 ? Array.from(toolSet.values()) : undefined;
 
     const localToolNames = new Set(
       localTools
@@ -2489,8 +2469,7 @@ export class ChatService {
     // UI toggle (options.tools) adds optional tools (web_search, plan) via
     // effectiveRequestedTools above; it does not restrict programmatic tools.
 
-    const documentsToolName =
-      documentsTool.type === 'function' ? documentsTool.function.name : 'documents';
+    const documentsToolName = 'documents';
     const hasDocumentsToolAvailable = Boolean(
       tools?.some(
         (t) => t.type === 'function' && t.function?.name === documentsToolName
@@ -3800,6 +3779,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       primaryContextId,
       selectedModel,
       sessionWorkspaceId,
+      tools,
       readOnly,
       currentUserRole,
       enforceTodoUpdateMode,
@@ -3816,336 +3796,32 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     const args = input.args as any;
     let streamSeq = input.streamSeq;
     let result: unknown;
+    const foundationResult = await executeFoundationSkillTool({
+      toolCall,
+      args: args as Record<string, unknown>,
+      options,
+      streamSeq,
+      sessionWorkspaceId,
+      workspaceType: await getWorkspaceType(sessionWorkspaceId),
+      currentUserRole,
+      readOnly,
+      allowedFolderIds,
+      allowedByType,
+      hasContextType,
+      isAllowedOrganizationId,
+      tools,
+    });
+    if (foundationResult.handled) {
+      return {
+        result: foundationResult.result,
+        streamSeq: foundationResult.streamSeq,
+      };
+    }
     switch (toolCall.name) {
-      // BR14b Lot 21d-2 Step 3 Group A — verbatim move of inline tool branches
-      // from `runAssistantGeneration` (read_initiative, update_initiative,
-      // organizations_list, organization_get, organization_update).
-      case 'read_initiative': {
-        if (!allowedByType.usecase.has(args.initiativeId)) {
-          throw new Error('Security: initiativeId does not match allowed contexts');
-        }
-        const readResult = await toolService.readInitiative(args.initiativeId, {
-          workspaceId: sessionWorkspaceId,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = readResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          // Normaliser pour l'UI: toujours fournir result.status
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(readResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'update_initiative': {
-        if (readOnly) {
-          throw new Error('Read-only workspace: initiative update is disabled');
-        }
-        if (!allowedByType.usecase.has(args.initiativeId)) {
-          throw new Error('Security: initiativeId does not match allowed contexts');
-        }
-        const updateResult = await toolService.updateInitiativeFields({
-          initiativeId: args.initiativeId,
-          updates: args.updates || [],
-          userId: options.userId,
-          sessionId: options.sessionId,
-          messageId: options.assistantMessageId,
-          toolCallId: toolCall.id,
-          locale: options.locale,
-          workspaceId: sessionWorkspaceId
-        });
-        result = updateResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          // Normaliser pour l'UI: toujours fournir result.status
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'organizations_list': {
-        if (!hasContextType('organization')) {
-          throw new Error('Security: organizations_list is only available in organization context');
-        }
-        const listResult = await toolService.listOrganizations({
-          workspaceId: sessionWorkspaceId,
-          idsOnly: !!args.idsOnly,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = listResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'organization_get': {
-        if (!args.organizationId || typeof args.organizationId !== 'string') {
-          throw new Error('Security: organizationId is required');
-        }
-        const allowed = await isAllowedOrganizationId(args.organizationId);
-        if (!allowed) {
-          throw new Error('Security: organizationId does not match allowed contexts');
-        }
-
-        const getResult = await toolService.getOrganization(args.organizationId, {
-          workspaceId: sessionWorkspaceId,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = getResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'organization_update': {
-        if (readOnly) throw new Error('Read-only workspace: organization_update is disabled');
-        if (!args.organizationId || typeof args.organizationId !== 'string') {
-          throw new Error('Security: organizationId is required');
-        }
-        const allowed = await isAllowedOrganizationId(args.organizationId);
-        if (!allowed) {
-          throw new Error('Security: organizationId does not match allowed contexts');
-        }
-        const updateResult = await toolService.updateOrganizationFields({
-          organizationId: args.organizationId,
-          updates: Array.isArray(args.updates) ? args.updates : [],
-          userId: options.userId,
-          sessionId: options.sessionId,
-          messageId: options.assistantMessageId,
-          toolCallId: toolCall.id,
-          locale: options.locale,
-          workspaceId: sessionWorkspaceId
-        });
-        result = updateResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      // BR14b Lot 21d-2 Step 3 Group B — verbatim move of inline tool branches
-      // from `runAssistantGeneration` (folders_list, folder_get, folder_update,
-      // initiatives_list, executive_summary_get, executive_summary_update).
-      case 'folders_list': {
-        if (!hasContextType('organization') && !hasContextType('folder')) {
-          throw new Error('Security: folders_list is only available in organization/folder context');
-        }
-        const organizationId = typeof args.organizationId === 'string'
-          ? args.organizationId
-          : (allowedByType.organization.values().next().value ?? null);
-        const listResult = await toolService.listFolders({
-          workspaceId: sessionWorkspaceId,
-          organizationId,
-          idsOnly: !!args.idsOnly,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = listResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'folder_get': {
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const getResult = await toolService.getFolder(args.folderId, {
-          workspaceId: sessionWorkspaceId,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = getResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'folder_update': {
-        if (readOnly) throw new Error('Read-only workspace: folder_update is disabled');
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const updateResult = await toolService.updateFolderFields({
-          folderId: args.folderId,
-          updates: Array.isArray(args.updates) ? args.updates : [],
-          userId: options.userId,
-          sessionId: options.sessionId,
-          messageId: options.assistantMessageId,
-          toolCallId: toolCall.id,
-          locale: options.locale,
-          workspaceId: sessionWorkspaceId
-        });
-        result = updateResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'initiatives_list': {
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const listResult = await toolService.listInitiativesForFolder(args.folderId, {
-          workspaceId: sessionWorkspaceId,
-          idsOnly: !!args.idsOnly,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = listResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'executive_summary_get': {
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const getResult = await toolService.getExecutiveSummary(args.folderId, {
-          workspaceId: sessionWorkspaceId,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = getResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'executive_summary_update': {
-        if (readOnly) throw new Error('Read-only workspace: executive_summary_update is disabled');
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const updateResult = await toolService.updateExecutiveSummaryFields({
-          folderId: args.folderId,
-          updates: Array.isArray(args.updates) ? args.updates : [],
-          userId: options.userId,
-          sessionId: options.sessionId,
-          messageId: options.assistantMessageId,
-          toolCallId: toolCall.id,
-          locale: options.locale,
-          workspaceId: sessionWorkspaceId
-        });
-        result = updateResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
       // BR14b Lot 21d-2 Step 3 Group C — verbatim move of inline tool branches
-      // from `runAssistantGeneration` (matrix_get, matrix_update, plan(create),
-      // plan(update_plan), plan(update_task)).
-      case 'matrix_get': {
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const getResult = await toolService.getMatrix(args.folderId, { workspaceId: sessionWorkspaceId });
-        result = getResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'matrix_update': {
-        if (readOnly) throw new Error('Read-only workspace: matrix_update is disabled');
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const updateResult = await toolService.updateMatrix({
-          folderId: args.folderId,
-          matrixConfig: args.matrixConfig,
-          userId: options.userId,
-          sessionId: options.sessionId,
-          messageId: options.assistantMessageId,
-          toolCallId: toolCall.id,
-          locale: options.locale,
-          workspaceId: sessionWorkspaceId
-        });
-        result = updateResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
+      // from `runAssistantGeneration` (plan(create), plan(update_plan),
+      // plan(update_task)). `matrix_get` / `matrix_update` moved to
+      // `api/src/services/skills/foundation-executor.ts` in BR19 Lot 5.
       case 'plan': {
         if (todoOperation === 'create') {
           const createToolLabel = 'plan(action=create)';
@@ -4632,89 +4308,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         streamSeq += 1;
         break;
       }
-      // BR14b Lot 21d-2 Step 3 Group E — verbatim move of inline tool branches
-      // from `runAssistantGeneration` (solutions_list, solution_get, proposals_list,
-      // proposal_get, products_list, product_get, gate_review, workspace_list,
-      // initiative_search, task_dispatch).
-      case 'solutions_list': {
-        const listResult = await toolService.listSolutions({
-          initiativeId: args.initiativeId,
-          workspaceId: sessionWorkspaceId,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = { status: 'completed', ...listResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'solution_get': {
-        const getResult = await toolService.getSolution(args.solutionId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
-        result = { status: 'completed', ...getResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'proposals_list': {
-        const listResult = await toolService.listProposals({
-          initiativeId: args.initiativeId,
-          workspaceId: sessionWorkspaceId,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = { status: 'completed', ...listResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'proposal_get': {
-        const getResult = await toolService.getProposal(args.proposalId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
-        result = { status: 'completed', ...getResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'products_list': {
-        const listResult = await toolService.listProducts({
-          workspaceId: sessionWorkspaceId,
-          initiativeId: typeof args.initiativeId === 'string' ? args.initiativeId : undefined,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = { status: 'completed', ...listResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'product_get': {
-        const getResult = await toolService.getProduct(args.productId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
-        result = { status: 'completed', ...getResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'gate_review': {
-        const gateResult = await toolService.reviewGate(sessionWorkspaceId, args.initiativeId, args.targetStage);
-        result = { status: 'completed', ...gateResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'workspace_list': {
-        const listResult = await toolService.listWorkspacesForUser(options.userId);
-        result = { status: 'completed', ...listResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'initiative_search': {
-        const searchResult = await toolService.searchInitiativesCrossWorkspace(options.userId, {
-          query: typeof args.query === 'string' ? args.query : undefined,
-          status: typeof args.status === 'string' ? args.status : undefined,
-          maturityStage: typeof args.maturityStage === 'string' ? args.maturityStage : undefined
-        });
-        result = { status: 'completed', ...searchResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
+      // Non-foundation orchestration tools still handled caller-side.
       case 'task_dispatch': {
         // task_dispatch delegates to the plan tool's create action
         const taskResult = await todoOrchestrationService.createTodoFromChat(
