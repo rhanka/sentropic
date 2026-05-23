@@ -1,6 +1,6 @@
 # SPEC_STUDY - BR14a Chat UI SDK Scope
 
-Status: Lot 10 StreamMessage package activation.
+Status: Lot N-1 final consolidation after modular refactor and root UAT.
 
 ## Goal
 
@@ -94,35 +94,87 @@ Activation order:
 
 Graphify note: the manual import and responsibility map is sufficiently concrete for Lot 8. Graphify is reserved for a later audit only if the app/package dependency graph becomes ambiguous during code movement.
 
+## Final Implementation Snapshot
+
+BR-14a now ships `@sentropic/chat-ui` as a package consumed by the web app through app-owned wrappers and host adapters.
+
+Package-owned:
+
+- `StreamMessage.svelte`: active stream renderer with injected `streamClient` and label resolver.
+- `ChatTimeline.svelte`: render-only keyed timeline over projected timeline items.
+- `ChatComposer.svelte`: render-only composer shell with injected control snippets.
+- `ChatWidget.svelte`: active widget shell that can render the app-owned shell/panels through snippets.
+- `ChatPanel.svelte`: package shell boundary that accepts host, transport, stream, context, renderer, and snippet inputs; the full Sentropic session orchestration remains app-owned.
+- `createStreamHub(options)`, `StreamHubHistory`, stream event contracts, chat projection helpers, draft state, widget shell state, local-tools state, renderer registry, and web-host factory.
+
+App-owned:
+
+- `ui/src/lib/components/ChatPanel.svelte`, `ChatWidget.svelte`, and `StreamMessage.svelte` remain compatibility wrappers that inject Sentropic app services into the package.
+- `ui/src/lib/components/chat/AppChatPanel.svelte` owns session orchestration, REST calls, comments, documents, generated files, local tool continuation, runtime details, and history hydration.
+- `ui/src/lib/chat/{context-provider,document-adapter,comment-adapter,session-adapter,web-host-adapter}.ts` own Sentropic-specific adapter wiring.
+- `ui/src/lib/components/QueueMonitor.svelte` and `ui/src/lib/stores/queue.ts` remain app-owned; jobs are integrated through widget badges and the app queue panel.
+- Chrome and VSCode runtime bridges remain host-owned and inject package local-tool adapters where needed.
+
+Root UAT note: the final StreamMessage overflow regression was fixed by including `../packages/chat-ui/src/**/*.{html,js,svelte,ts}` in the UI Tailwind content scan so package-owned `max-h-16` and `max-h-24` utilities are generated again.
+
+BR-07 handoff notes:
+
+- UI package consumers must resolve the raw Svelte/TypeScript source subpaths declared in `packages/chat-ui/package.json`; BR-14a intentionally keeps exports on `src/` for Vite/SvelteKit consumption.
+- Package pretest/build steps must keep Svelte peer dependencies (`svelte`, `@lucide/svelte`, `svelte-streamdown`) available to `@sentropic/chat-ui`.
+- Any BR-07 packaging or npm-pretest flow that builds the app UI must include `packages/chat-ui/src/**/*.{html,js,svelte,ts}` in the Tailwind scan, either through this branch's UI config or an equivalent package-aware content glob.
+- The app still owns Sentropic-specific queue/jobs, comments, documents, Google Drive, Chrome runtime, and VSCode runtime adapters; npm packaging must not infer those as package-owned runtime responsibilities.
+
 ## Final Package Shape
 
 Target package: `packages/chat-ui`, package name `@sentropic/chat-ui`.
 
-Public entrypoints:
+Public entrypoints currently exported by `packages/chat-ui/package.json`:
 
 ```ts
 @sentropic/chat-ui
-@sentropic/chat-ui/svelte
-@sentropic/chat-ui/client
-@sentropic/chat-ui/renderers
-@sentropic/chat-ui/hosts
+@sentropic/chat-ui/client/transport
+@sentropic/chat-ui/client/replay
+@sentropic/chat-ui/client/streamTypes
+@sentropic/chat-ui/client/streamHistory
+@sentropic/chat-ui/client/streamHub
+@sentropic/chat-ui/state/chatDraft
+@sentropic/chat-ui/state/chatProjection
+@sentropic/chat-ui/state/chatWidgetShell
+@sentropic/chat-ui/state/streamMessageProjection
+@sentropic/chat-ui/state/streamMessageSmoothing
+@sentropic/chat-ui/renderers/registry
+@sentropic/chat-ui/hosts/types
+@sentropic/chat-ui/hosts/createWebHost
+@sentropic/chat-ui/stores/chatWidgetLayout
+@sentropic/chat-ui/stores/localTools
+@sentropic/chat-ui/utils/chat-run-projection
+@sentropic/chat-ui/utils/chat-steer
+@sentropic/chat-ui/utils/chat-tool-scope
+@sentropic/chat-ui/utils/localToolStreamSync
+@sentropic/chat-ui/components/ChatPanel.svelte
+@sentropic/chat-ui/components/ChatWidget.svelte
+@sentropic/chat-ui/components/StreamMessage.svelte
+@sentropic/chat-ui/components/ChatTimeline.svelte
+@sentropic/chat-ui/components/ChatComposer.svelte
 ```
 
-`@sentropic/chat-ui` re-exports the stable public surface. Sub-entrypoints keep consumers from importing private paths and let non-Svelte consumers use client contracts without component code.
+`@sentropic/chat-ui` re-exports the stable TypeScript surface. Svelte components are imported through explicit `./components/*` subpaths so bundlers keep `.svelte` handling intact.
 
 ## Svelte Exports
 
-`@sentropic/chat-ui/svelte` exports:
+Component subpaths export:
 
-- `ChatWidget.svelte`: full chat launcher/panel shell. Props must accept a host adapter, context provider, initial state, display mode, and optional feature flags. It must not import app route stores directly.
-- `ChatPanel.svelte`: session/message composer and timeline UI. Props must accept sessions, active session id, context provider, transport, tool definitions, renderer registry, and callbacks for session/title/document/comment integration.
-- `StreamMessage.svelte`: stream replay/render component. Props keep the current stream-focused shape: injected `streamClient`, injected `labels`, `streamId`, `status`, `initialEvents`, `subscriptionMode`, `runtimeSummary`, `onTerminal`, `onStreamEvent`, `onGeneratedFile`, and `onTodoRuntime`.
+- `ChatWidget.svelte`: package widget shell with active tab, job badge counts, labels, purge callback, and snippet-based shell/panel injection.
+- `ChatPanel.svelte`: package shell boundary accepting host/transport/stream/context/renderer inputs and header/timeline/composer snippets.
+- `StreamMessage.svelte`: active stream replay/render component with injected `streamClient`, injected `labels`, `streamId`, `status`, `initialEvents`, `subscriptionMode`, `runtimeSummary`, `onTerminal`, `onStreamEvent`, `onGeneratedFile`, and `onTodoRuntime`.
+- `ChatTimeline.svelte`: keyed render-only timeline over `ChatProjectedTimelineItem[]`.
+- `ChatComposer.svelte`: render-only composer surface with injected controls and floating layers.
 
 Package components may depend on Svelte, `svelte/store`, `svelte-i18n` only through injected dictionaries/labels, `svelte-streamdown`, and UI/icon dependencies already required by the extracted components. App-owned components such as document pickers, comments, workspace menus, and entity-specific cards must be passed as renderers or slots instead of imported directly.
 
 ## Stores And Client Exports
 
-`@sentropic/chat-ui/client` exports:
+Client/state/store subpaths export:
 
 - `createStreamHub(options)`: instance-based replacement for the singleton `streamHub`. Options include `baseUrl`, `getAuthState`, `getWorkspaceId`, `eventSourceFactory`, `extensionPortFactory`, `windowTarget`, replay limits, and optional logger.
 - `createChatWidgetLayoutStore(initial?)`: package-owned layout store for `floating` / `docked` state.
