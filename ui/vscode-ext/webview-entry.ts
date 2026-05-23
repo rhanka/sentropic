@@ -8,11 +8,13 @@ import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
 import { initializeSession } from '$lib/stores/session';
 import { init as initI18n, register } from 'svelte-i18n';
 import { mount as mountSvelte } from 'svelte';
+import { setLocalToolsAdapter } from '@sentropic/chat-ui/stores/localTools';
 import {
   createVsCodeBridge,
   createWindowVsCodeBridgeTransport,
   type VsCodeBridge,
 } from './vscode-bridge';
+import { createVsCodeLocalToolsAdapter } from './local-tools-adapter';
 import {
   resolveCodeAgentPromptProfile,
   type CodeAgentPromptSource,
@@ -1239,6 +1241,9 @@ const initialState: ChatWidgetHandoffState = {
 const boot = async (): Promise<void> => {
   const runtimeState = await bootstrapRuntimeState();
   installExtensionRuntimeShim(runtimeState);
+  setLocalToolsAdapter(
+    createVsCodeLocalToolsAdapter({ bridge: runtimeState.bridge }),
+  );
   installBridgeApiFetchProxy(runtimeState);
   await initializeSession();
 
