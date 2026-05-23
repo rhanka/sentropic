@@ -58,6 +58,13 @@ Align every `@sentropic/*` package with the npm registry: bootstrap-publish `cha
   - [x] Confirm `@sentropic/llm-mesh` trusted publisher already migrated to `rhanka/sentropic / ci.yml` (done 2026-05-23 via npmjs UI).
 
 - [x] **Lot 1 — Package manifest changes**
+
+- [x] **Lot 1b — Cross-package deps version pinning**
+  - [x] `packages/events/package.json`: `@sentropic/contracts: "*" → "^0.1.0"`.
+  - [x] `packages/chat-core/package.json`: `@sentropic/{contracts,events}: "*" → "^0.1.0"` each.
+  - [x] Lot gate:
+    - [x] `git diff` shows only deps version pinning.
+    - [x] `make commit MSG="fix(packages): pin @sentropic deps to ^0.1.0 (was *) for events/chat-core"`.
   - [x] `packages/llm-mesh/package.json`: bump `0.1.0 → 0.1.1`.
   - [x] `packages/flow/package.json`: flip `"private": true → false`, bump `0.0.0 → 0.1.0`, fields already aligned with `llm-mesh` reference.
   - [x] `packages/chat-ui/package.json`: kept `0.1.0`, `publishConfig.access=public` confirmed, repo URL already `sentropic.git`.
