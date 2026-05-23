@@ -658,18 +658,17 @@ publish-chat-ui-token: build-chat-ui ## Publish @sentropic/chat-ui using a token
 install-internal-packages: ## Install workspace deps and link @sentropic/{contracts,events,chat-core,flow} into node_modules (no api/ui)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/flow --include-workspace-root --ignore-scripts --no-audit --no-fund'
 
-.PHONY: build-internal-packages
-build-internal-packages: install-internal-packages ## Build dist/ for contracts/events/chat-core in dep order (flow builds separately via build-flow)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf packages/contracts/dist packages/events/dist packages/chat-core/dist; (cd packages/contracts && npx --offline tsc -p tsconfig.json); (cd packages/events && npx --offline tsc -p tsconfig.json); (cd packages/chat-core && npx --offline tsc -p tsconfig.json)'
-
 .PHONY: build-contracts
-build-contracts: build-internal-packages ## Build @sentropic/contracts dist package
+build-contracts: install-internal-packages ## Build @sentropic/contracts dist package (standalone, no @sentropic deps)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
 
 .PHONY: build-events
-build-events: build-internal-packages ## Build @sentropic/events dist package (depends on contracts)
+build-events: build-contracts ## Build @sentropic/events dist package (depends on contracts dist)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/events $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
 
 .PHONY: build-chat-core
-build-chat-core: build-internal-packages ## Build @sentropic/chat-core dist package (depends on contracts+events)
+build-chat-core: build-events ## Build @sentropic/chat-core dist package (depends on contracts + events dist)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/chat-core $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
 
 .PHONY: typecheck-contracts
 typecheck-contracts: install-internal-packages ## Run @sentropic/contracts type checks
