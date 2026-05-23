@@ -51,7 +51,7 @@ Two extensions extend that surface:
 - a Chrome extension that exposes the chat in a side panel and allows controlled actions on the current tab;
 - a VSCode extension that embeds the same assistance logic in the development environment, with local tools and a permission layer.
 
-BR-14a extracts this surface into a publishable library, `@sentropic/chat`, so the chat is no longer only a Top AI Ideas component but a reusable building block.
+BR-14a extracts this surface into a publishable library, `@sentropic/chat-ui`, so the chat is no longer only a Top AI Ideas component but a reusable building block.
 
 ### Agentic Workflow
 
@@ -134,7 +134,7 @@ flowchart TB
 
     subgraph Packages["Sentropic packages"]
         SentropicMesh["@sentropic/llm-mesh<br/>providers · account/token auth · streaming"]
-        SentropicChat["@sentropic/chat<br/>chat UI · transport · auth bridge · tools"]
+        SentropicChat["@sentropic/chat-ui<br/>chat UI · transport · auth bridge · tools"]
         SentropicFlow["@sentropic/flow<br/>agentic workflows · graphs · checkpoints"]
         SentropicUI["@sentropic/ui<br/>templates · artifacts · collaboration"]
     end
@@ -162,7 +162,7 @@ flowchart TB
 
 - **BR-14c**: extract the LLM mesh first as `@sentropic/llm-mesh`, published as an npm library, with OpenAI, Claude, Gemini, Mistral, Cohere, token or Codex-account usage, and preparation for Gemini Code Assist / Claude Code accounts.
 - **BR-14b**: refactor the application LLM runtime so it consumes this provider-agnostic abstraction instead of remaining a monolithic internal runtime.
-- **BR-14a**: extract the chat surface into `@sentropic/chat`, publishable and reusable outside Top AI Ideas, built on the LLM mesh contract rather than the details of the application runtime.
+- **BR-14a**: extract the chat surface into `@sentropic/chat-ui`, publishable and reusable outside Top AI Ideas, built on the LLM mesh contract rather than the details of the application runtime.
 - **BR-16a**: connect Google Drive while keeping documents in situ, with chunk indexing and embeddings stored by Sentropic.
 - **BR-07 / BR-07b**: prepare npm publication and move the workflow runtime toward a standalone building block comparable in spirit to LangGraph or Temporal, but adapted to this project.
 
