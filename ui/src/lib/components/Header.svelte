@@ -9,7 +9,7 @@
   import { hiddenWorkspaceLock, selectedWorkspace, selectedWorkspaceType } from '$lib/stores/workspaceScope';
   import type { WorkspaceType } from '$lib/stores/workspaceScope';
   import { ChevronDown, Menu, X, Lightbulb, Target, Code2, Home } from '@lucide/svelte';
-  import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
+  import { chatWidgetLayout } from '@sentropic/chat-ui/stores/chatWidgetLayout';
   import { fly, fade } from 'svelte/transition';
 
   let showUserMenu = false;

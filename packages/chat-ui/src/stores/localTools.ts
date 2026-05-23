@@ -1,4 +1,35 @@
+/**
+ * BR14a Lot 5 — @sentropic/chat-ui local tools store.
+ *
+ * UI-generic core for local-tool availability, definitions, executions,
+ * permission prompts, and policy operations. Host-specific transport is
+ * supplied through a `LocalToolsAdapter` (see `../hosts/types.ts`).
+ *
+ * Default adapter reads `globalThis.chrome.runtime`, which is satisfied
+ * by:
+ * - Chrome extension content/side-panel context (native).
+ * - VSCode webview context (`installExtensionRuntimeShim` in
+ *   `ui/vscode-ext/webview-entry.ts` installs a `chrome.runtime` shim
+ *   bridging messages through the host).
+ *
+ * Hosts that cannot rely on `globalThis.chrome` (tests, future embedded
+ * hosts) may inject their own adapter via `setLocalToolsAdapter`.
+ *
+ * Public re-exports (BR14a Lot 5):
+ * - `LocalToolName`, `LocalToolDefinition`, `LocalToolExecution`,
+ *   `LocalToolExecutionStatus`, `LocalToolPermissionPolicy`,
+ *   `LocalToolPermissionDecision`, `LocalToolPermissionRequest`,
+ *   `LocalToolPermissionPolicyEntry`.
+ * - `localToolsStore`, `getLocalToolDefinitions`,
+ *   `isLocalToolName`, `isLocalToolRuntimeAvailable`.
+ * - `executeLocalTool`, `decideLocalToolPermission`,
+ *   `listLocalToolPermissionPolicies`, `upsertLocalToolPermissionPolicy`,
+ *   `deleteLocalToolPermissionPolicy`.
+ * - `LocalToolPermissionRequiredError`, `setLocalToolsAdapter`.
+ */
 import { writable } from 'svelte/store';
+
+import type { LocalToolsAdapter } from '../hosts/types.js';
 
 export type LocalToolName =
   | 'tab_read'
@@ -278,7 +309,7 @@ const VSCODE_LOCAL_TOOL_DEFINITIONS: ReadonlyArray<LocalToolDefinition> = [
   },
 ];
 
-const LOCAL_TOOL_NAMES: ReadonlySet<LocalToolName> = new Set([
+const LOCAL_TOOL_NAMES: ReadonlySet<LocalToolName> = new Set<LocalToolName>([
   'tab_read',
   'tab_action',
   'tab_read_dom',
@@ -297,28 +328,28 @@ const LOCAL_TOOL_NAMES: ReadonlySet<LocalToolName> = new Set([
   'git_diff',
 ]);
 
-type RuntimeLike = {
-  id?: string;
-  sendMessage?: (
-    message: unknown,
-  ) => Promise<{
-    ok?: boolean;
-    result?: unknown;
-    error?: string;
-    permissionRequest?: LocalToolPermissionRequest;
-    items?: LocalToolPermissionPolicyEntry[];
-    item?: LocalToolPermissionPolicyEntry;
-  }>;
+let injectedAdapter: LocalToolsAdapter | null = null;
+
+/**
+ * Inject a custom local-tools host adapter. Pass `null` to clear the
+ * injected adapter and fall back to the default `globalThis.chrome.runtime`
+ * lookup. Used by tests and embedded hosts.
+ */
+export const setLocalToolsAdapter = (
+  adapter: LocalToolsAdapter | null,
+): void => {
+  injectedAdapter = adapter;
 };
 
-const getRuntime = (): RuntimeLike | null => {
+const getRuntime = (): LocalToolsAdapter | null => {
+  if (injectedAdapter) return injectedAdapter;
   const ext = globalThis as typeof globalThis & {
-    chrome?: { runtime?: RuntimeLike };
+    chrome?: { runtime?: LocalToolsAdapter };
   };
   return ext.chrome?.runtime ?? null;
 };
 
-const isVsCodeRuntime = (runtime: RuntimeLike | null): boolean => {
+const isVsCodeRuntime = (runtime: LocalToolsAdapter | null): boolean => {
   const runtimeId = String(runtime?.id ?? '').trim().toLowerCase();
   return runtimeId === 'topai.vscode.runtime';
 };
@@ -334,7 +365,7 @@ export const isLocalToolRuntimeAvailable = (): boolean =>
   hasExtensionRuntimeMessaging();
 
 const getRuntimeToolDefinitions = (
-  runtime: RuntimeLike | null,
+  runtime: LocalToolsAdapter | null,
 ): ReadonlyArray<LocalToolDefinition> =>
   isVsCodeRuntime(runtime)
     ? VSCODE_LOCAL_TOOL_DEFINITIONS
@@ -385,14 +416,13 @@ type ExecuteLocalToolOptions = {
   streamId?: string;
 };
 
-const getRuntimeWithMessaging = (): RuntimeLike => {
-  const ext = globalThis as typeof globalThis & {
-    chrome?: { runtime?: RuntimeLike };
-  };
-  const runtime = ext.chrome?.runtime ?? null;
+const getRuntimeWithMessaging = (): LocalToolsAdapter => {
+  const runtime = getRuntime();
   const sendMessage = runtime?.sendMessage;
   if (!runtime?.id || !sendMessage) {
-    throw new Error('Local tool runtime is unavailable outside extension context.');
+    throw new Error(
+      'Local tool runtime is unavailable outside extension context.',
+    );
   }
   return runtime;
 };
@@ -404,7 +434,9 @@ export async function executeLocalTool(
   options?: ExecuteLocalToolOptions,
 ): Promise<unknown> {
   const runtime = getRuntimeWithMessaging();
-  const sendMessage = runtime.sendMessage as NonNullable<RuntimeLike['sendMessage']>;
+  const sendMessage = runtime.sendMessage as NonNullable<
+    LocalToolsAdapter['sendMessage']
+  >;
 
   upsertExecution(toolCallId, {
     name,
@@ -423,7 +455,7 @@ export async function executeLocalTool(
     });
 
     if (response?.permissionRequest) {
-      const request = response.permissionRequest;
+      const request = response.permissionRequest as LocalToolPermissionRequest;
       upsertExecution(toolCallId, {
         name,
         args,
@@ -479,7 +511,9 @@ export async function decideLocalToolPermission(
   decision: LocalToolPermissionDecision,
 ): Promise<void> {
   const runtime = getRuntimeWithMessaging();
-  const sendMessage = runtime.sendMessage as NonNullable<RuntimeLike['sendMessage']>;
+  const sendMessage = runtime.sendMessage as NonNullable<
+    LocalToolsAdapter['sendMessage']
+  >;
   const response = await sendMessage({
     type: 'tool_permission_decide',
     payload: {
@@ -488,7 +522,9 @@ export async function decideLocalToolPermission(
     },
   });
   if (!response?.ok) {
-    throw new Error(response?.error ?? 'Unable to save local tool permission decision.');
+    throw new Error(
+      response?.error ?? 'Unable to save local tool permission decision.',
+    );
   }
 }
 
@@ -496,14 +532,20 @@ export async function listLocalToolPermissionPolicies(): Promise<
   LocalToolPermissionPolicyEntry[]
 > {
   const runtime = getRuntimeWithMessaging();
-  const sendMessage = runtime.sendMessage as NonNullable<RuntimeLike['sendMessage']>;
+  const sendMessage = runtime.sendMessage as NonNullable<
+    LocalToolsAdapter['sendMessage']
+  >;
   const response = await sendMessage({
     type: 'extension_tool_permissions_list',
   });
   if (!response?.ok) {
-    throw new Error(response?.error ?? 'Unable to load extension tool permissions.');
+    throw new Error(
+      response?.error ?? 'Unable to load extension tool permissions.',
+    );
   }
-  return Array.isArray(response.items) ? response.items : [];
+  return Array.isArray(response.items)
+    ? (response.items as LocalToolPermissionPolicyEntry[])
+    : [];
 }
 
 export async function upsertLocalToolPermissionPolicy(input: {
@@ -513,15 +555,19 @@ export async function upsertLocalToolPermissionPolicy(input: {
   pathPattern?: string;
 }): Promise<LocalToolPermissionPolicyEntry> {
   const runtime = getRuntimeWithMessaging();
-  const sendMessage = runtime.sendMessage as NonNullable<RuntimeLike['sendMessage']>;
+  const sendMessage = runtime.sendMessage as NonNullable<
+    LocalToolsAdapter['sendMessage']
+  >;
   const response = await sendMessage({
     type: 'extension_tool_permissions_upsert',
     payload: input,
   });
   if (!response?.ok || !response.item) {
-    throw new Error(response?.error ?? 'Unable to update extension tool permission.');
+    throw new Error(
+      response?.error ?? 'Unable to update extension tool permission.',
+    );
   }
-  return response.item;
+  return response.item as LocalToolPermissionPolicyEntry;
 }
 
 export async function deleteLocalToolPermissionPolicy(input: {
@@ -530,12 +576,16 @@ export async function deleteLocalToolPermissionPolicy(input: {
   pathPattern?: string;
 }): Promise<void> {
   const runtime = getRuntimeWithMessaging();
-  const sendMessage = runtime.sendMessage as NonNullable<RuntimeLike['sendMessage']>;
+  const sendMessage = runtime.sendMessage as NonNullable<
+    LocalToolsAdapter['sendMessage']
+  >;
   const response = await sendMessage({
     type: 'extension_tool_permissions_delete',
     payload: input,
   });
   if (!response?.ok) {
-    throw new Error(response?.error ?? 'Unable to delete extension tool permission.');
+    throw new Error(
+      response?.error ?? 'Unable to delete extension tool permission.',
+    );
   }
 }

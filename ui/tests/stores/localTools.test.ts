@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import {
   LocalToolPermissionRequiredError,
@@ -8,7 +8,8 @@ import {
   isLocalToolRuntimeAvailable,
   isLocalToolName,
   localToolsStore,
-} from '../../src/lib/stores/localTools';
+  setLocalToolsAdapter,
+} from '@sentropic/chat-ui/stores/localTools';
 
 const resetLocalToolsState = () => {
   localToolsStore.set({
@@ -20,8 +21,13 @@ const resetLocalToolsState = () => {
 
 describe('localTools store', () => {
   beforeEach(() => {
+    setLocalToolsAdapter(null);
     resetLocalToolsState();
     delete (globalThis as any).chrome;
+  });
+
+  afterEach(() => {
+    setLocalToolsAdapter(null);
   });
 
   it('registers the expected built-in local tool definitions', () => {

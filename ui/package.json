@@ -62,6 +62,7 @@
   },
   "dependencies": {
     "@lucide/svelte": "^0.562.0",
+    "@sentropic/chat-ui": "file:../packages/chat-ui",
     "@simplewebauthn/browser": "^13.2.2",
     "@tiptap/core": "^3.6.5",
     "@tiptap/extension-placeholder": "^3.14.0",

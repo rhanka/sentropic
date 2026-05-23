@@ -239,7 +239,7 @@ Roadmap specifications:
   - [ ] Migrate the application LLM runtime onto `@sentropic/llm-mesh`.
   - [ ] Preserve quotas, retries, streaming, audit, and provider capability behavior.
 - [ ] **BR-14a** `feat/chat-ui-sdk`
-  - [ ] Extract `@sentropic/chat` from web, Chrome, and VSCode surfaces.
+  - [ ] Extract `@sentropic/chat-ui` from web, Chrome, and VSCode surfaces.
   - [ ] Reuse the LLM mesh contract; do not define a separate provider abstraction.
 - [ ] **BR-14e** `chore/sentropic-codebase-finalization`
   - [ ] Finalize non-chat/non-LLM codebase naming across API, UI, tests, fixtures, reports, exports, and package metadata.

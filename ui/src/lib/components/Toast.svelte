@@ -1,6 +1,6 @@
 <script lang="ts">
   import { toasts, removeToast } from '$lib/stores/toast';
-  import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
+  import { chatWidgetLayout } from '@sentropic/chat-ui/stores/chatWidgetLayout';
   import { fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { CheckCircle2, XCircle, AlertTriangle, Info, Download, X } from '@lucide/svelte';
