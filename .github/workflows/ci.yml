@@ -5,6 +5,21 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      bootstrap_publish_target:
+        description: 'Bootstrap-publish target (uses NPM_TOKEN; first publish only before OIDC trusted publishers are attached)'
+        required: true
+        default: 'none'
+        type: choice
+        options:
+          - none
+          - contracts
+          - events
+          - chat-core
+          - chat-ui
+          - flow
+          - all
 
 env:
   REGISTRY: ${{ secrets.REGISTRY }}
@@ -22,8 +37,16 @@ jobs:
       ai: ${{ steps.filter.outputs.ai }}
       llm_mesh: ${{ steps.filter.outputs.llm_mesh }}
       chat_ui: ${{ steps.filter.outputs.chat_ui }}
+      chat_core: ${{ steps.filter.outputs.chat_core }}
+      events: ${{ steps.filter.outputs.events }}
+      contracts: ${{ steps.filter.outputs.contracts }}
+      flow: ${{ steps.filter.outputs.flow }}
       llm_mesh_publish: ${{ steps.filter.outputs.llm_mesh_publish }}
       chat_ui_publish: ${{ steps.filter.outputs.chat_ui_publish }}
+      chat_core_publish: ${{ steps.filter.outputs.chat_core_publish }}
+      events_publish: ${{ steps.filter.outputs.events_publish }}
+      contracts_publish: ${{ steps.filter.outputs.contracts_publish }}
+      flow_publish: ${{ steps.filter.outputs.flow_publish }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -64,6 +87,49 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/chat-ui/**'
+            chat_core:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/chat-core/**'
+              - 'packages/events/**'
+              - 'packages/contracts/**'
+              - '.github/workflows/ci.yml'
+            chat_core_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/chat-core/**'
+            events:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/events/**'
+              - 'packages/contracts/**'
+              - '.github/workflows/ci.yml'
+            events_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/events/**'
+            contracts:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/contracts/**'
+              - '.github/workflows/ci.yml'
+            contracts_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/contracts/**'
+            flow:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/flow/**'
+              - '.github/workflows/ci.yml'
+            flow_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/flow/**'
 
   # Build E2E Docker image
   build-e2e:
@@ -155,6 +221,66 @@ jobs:
         run: make build-chat-ui
       - name: Pack Chat UI
         run: make pack-chat-ui
+
+  validate-contracts:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.contracts == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Contracts
+        run: make typecheck-contracts
+      - name: Build Contracts
+        run: make build-contracts
+      - name: Pack Contracts
+        run: make pack-contracts
+
+  validate-events:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.events == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Events
+        run: make typecheck-events
+      - name: Build Events
+        run: make build-events
+      - name: Pack Events
+        run: make pack-events
+
+  validate-chat-core:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.chat_core == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Chat Core
+        run: make typecheck-chat-core
+      - name: Build Chat Core
+        run: make build-chat-core
+      - name: Pack Chat Core
+        run: make pack-chat-core
+
+  validate-flow:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.flow == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Flow
+        run: make typecheck-flow
+      - name: Build Flow
+        run: make build-flow
+      - name: Pack Flow
+        run: make pack-flow
 
   # Build API Docker image (independent from API tests)
   build-api-image:
@@ -656,6 +782,92 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Publish Chat UI
         run: make publish-chat-ui
+
+  publish-contracts:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-contracts, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    if: needs.changes.outputs.contracts_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish Contracts
+        run: make publish-contracts
+
+  publish-events:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-events, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    if: needs.changes.outputs.events_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish Events
+        run: make publish-events
+
+  publish-chat-core:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-chat-core, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    if: needs.changes.outputs.chat_core_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish Chat Core
+        run: make publish-chat-core
+
+  publish-flow:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-flow, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    if: needs.changes.outputs.flow_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish Flow
+        run: make publish-flow
+
+  bootstrap-publish:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_publish_target != 'none' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Write NPM_TOKEN to file
+        run: |
+          mkdir -p /tmp/sentropic-secrets
+          printf '%s' "$NPM_TOKEN" > /tmp/sentropic-secrets/npm-token
+          chmod 600 /tmp/sentropic-secrets/npm-token
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Bootstrap publish contracts
+        if: inputs.bootstrap_publish_target == 'contracts' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-contracts-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish events
+        if: inputs.bootstrap_publish_target == 'events' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-events-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish chat-core
+        if: inputs.bootstrap_publish_target == 'chat-core' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-chat-core-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish chat-ui
+        if: inputs.bootstrap_publish_target == 'chat-ui' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-chat-ui-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish flow
+        if: inputs.bootstrap_publish_target == 'flow' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-flow-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
 
   # Deploy API
   deploy-api:
