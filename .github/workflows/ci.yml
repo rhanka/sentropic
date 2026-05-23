@@ -207,6 +207,66 @@ jobs:
       - name: Pack Chat UI
         run: make pack-chat-ui
 
+  validate-contracts:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.contracts == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Contracts
+        run: make typecheck-contracts
+      - name: Build Contracts
+        run: make build-contracts
+      - name: Pack Contracts
+        run: make pack-contracts
+
+  validate-events:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.events == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Events
+        run: make typecheck-events
+      - name: Build Events
+        run: make build-events
+      - name: Pack Events
+        run: make pack-events
+
+  validate-chat-core:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.chat_core == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Chat Core
+        run: make typecheck-chat-core
+      - name: Build Chat Core
+        run: make build-chat-core
+      - name: Pack Chat Core
+        run: make pack-chat-core
+
+  validate-flow:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.flow == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Flow
+        run: make typecheck-flow
+      - name: Build Flow
+        run: make build-flow
+      - name: Pack Flow
+        run: make pack-flow
+
   # Build API Docker image (independent from API tests)
   build-api-image:
     runs-on: ubuntu-latest
