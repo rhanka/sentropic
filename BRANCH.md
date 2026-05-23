@@ -108,13 +108,13 @@ Align every `@sentropic/*` package with the npm registry: bootstrap-publish `cha
     - [x] Each validate job runs `make typecheck-<pkg>` + `make build-<pkg>` + `make pack-<pkg>`.
     - [x] `make commit MSG="ci: add validate jobs for chat-core/events/contracts/flow"`.
 
-- [ ] **Lot 3c — CI publish jobs + bootstrap dispatch**
-  - [ ] Add `publish-chat-core`, `publish-events`, `publish-contracts`, `publish-flow` (mirror `publish-chat-ui`).
-  - [ ] Add `workflow_dispatch` event with `bootstrap_publish_target` choice input (contracts/events/chat-core/chat-ui/flow/all).
-  - [ ] Add `bootstrap-publish` job that writes `secrets.NPM_TOKEN` to a file then runs `make publish-<pkg>-token` for each selected target in dep order.
-  - [ ] Lot gate:
-    - [ ] `git diff` shows only additive publish jobs + workflow_dispatch + bootstrap-publish.
-    - [ ] `make commit MSG="ci: add publish lanes for chat-core/events/contracts/flow + bootstrap dispatch"`.
+- [x] **Lot 3c — CI publish jobs + bootstrap dispatch**
+  - [x] Add `publish-chat-core`, `publish-events`, `publish-contracts`, `publish-flow` (mirror `publish-chat-ui`).
+  - [x] Add `workflow_dispatch` event with `bootstrap_publish_target` choice input (none/contracts/events/chat-core/chat-ui/flow/all).
+  - [x] Add `bootstrap-publish` job that writes `secrets.NPM_TOKEN` to `/tmp/sentropic-secrets/npm-token` then runs `make publish-<pkg>-token NPM_TOKEN_FILE=...` for each selected target in dep order.
+  - [x] Lot gate:
+    - [x] `git diff` shows only additive publish jobs + workflow_dispatch + bootstrap-publish.
+    - [x] `make commit MSG="ci: add publish lanes for chat-core/events/contracts/flow + bootstrap dispatch"`.
 
 - [ ] **Lot 4 — PR + CI green**
   - [ ] `git push origin fix/npm-publish` (no `--set-upstream`).
