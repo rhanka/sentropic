@@ -20,6 +20,7 @@ Align every `@sentropic/*` package with the npm registry: bootstrap-publish `cha
   - `packages/events/package.json`
   - `packages/contracts/package.json`
   - `packages/flow/package.json`
+  - `package-lock.json` (regenerated from packages/* deps changes — root workspace lockfile)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
