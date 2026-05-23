@@ -55,7 +55,7 @@ Prevent package publish jobs from running on main when only CI workflow files ch
     - [x] Static workflow inspection confirms `.github/workflows/ci.yml` does not trigger package publish outputs.
 
 - [ ] **Lot N — Final validation**
-  - [ ] Commit fix with `make commit`.
-  - [ ] Push branch and open PR with this `BRANCH.md` as body.
+  - [x] Commit implementation fix with `make commit`.
+  - [ ] Push latest branch and open PR with this `BRANCH.md` as body.
   - [ ] Verify PR CI or enough workflow checks to prove package publish jobs are no longer triggered by workflow-only changes.
   - [ ] Delete `BRANCH.md`, push, merge.
