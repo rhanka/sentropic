@@ -57,7 +57,7 @@ spec:
       serviceAccountName: sentropic-app
       containers:
         - name: api
-          image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:feat-deploy-poc-k8s
+          image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
           imagePullPolicy: Always
           envFrom:
             - configMapRef:

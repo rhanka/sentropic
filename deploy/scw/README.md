@@ -67,13 +67,12 @@ so the API does not fall back to its local `maildev` default. When `MAIL_HOST`
 is set, `MAIL_USERNAME` and `MAIL_PASSWORD` must also be set or recoverable;
 `MAIL_FROM` defaults to `no-reply@sent-tech.ca`.
 
-The api and ui manifests target the `feat-deploy-poc-k8s` alias tag on
+The api and ui manifests target the `main` alias tag on
 `rg.fr-par.scw.cloud/nc-reg/sentropic-api` and
 `rg.fr-par.scw.cloud/nc-reg/sentropic-ui`. The `publish-{api,ui}-image`
 jobs in `.github/workflows/ci.yml` push two tags per image: a
-content-hash sha1 (immutable, used by `make publish-{api,ui}-image`) and a
-floating branch alias (`feat-deploy-poc-k8s` on the BR-37 branch, `main`
-after merge). `imagePullPolicy: Always` plus the `deploy-k8s` CI job running
+content-hash sha1 (immutable, used by `make publish-{api,ui}-image`) and the
+floating `main` alias. `imagePullPolicy: Always` plus the `deploy-k8s` CI job running
 `make scw-deploy` guarantee Kubernetes picks up manifest changes and the latest
 digest without any imperative `kubectl set image`.
 `make scw-bundle-secret`
