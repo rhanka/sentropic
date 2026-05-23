@@ -4,7 +4,7 @@ description: Read proposal and bid records in opportunity workspaces.
 version: 0.1.0
 category: object
 contextFilter:
-  workspaceTypes: [ai-ideas, opportunity]
+  workspaceTypes: [neutral, ai-ideas, opportunity]
 tools:
   - name: proposals_list
     description: List proposals or bids in the current workspace.

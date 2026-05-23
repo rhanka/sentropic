@@ -130,6 +130,23 @@ describe('executeSearchSkills — filter', () => {
     const names = hits.map((h) => h.metadata.name).sort();
     expect(names).toEqual(['editor-search', 'public-search']);
   });
+
+  it('drops allowlisted-out skills even when metadata is otherwise visible', () => {
+    const reg = new InMemorySkillRegistry();
+    reg.register(buildSkill('web', 'shared search capability'));
+    reg.register(buildSkill('documents', 'shared document generation capability'));
+
+    const hits = executeSearchSkills(
+      reg,
+      buildAuthz({
+        permissionMode: 'allowlist',
+        allowedTools: ['web_run'],
+      }),
+      { query: 'shared' },
+    );
+
+    expect(hits.map((h) => h.metadata.name)).toEqual(['web']);
+  });
 });
 
 describe('executeSearchSkills — empty catalog & invariants', () => {
