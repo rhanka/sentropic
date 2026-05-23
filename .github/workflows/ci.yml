@@ -538,6 +538,7 @@ jobs:
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+      UI_IMAGE_NAME: sentropic-ui
     steps:
       - uses: actions/checkout@v6
       - name: Check if UI image is up to date
@@ -553,9 +554,26 @@ jobs:
       - name: Load UI image from artifact
         if: steps.image-check.outcome == 'failure'
         run: make load-ui
+      - name: Retag UI image for Sentropic publish
+        if: steps.image-check.outcome == 'failure'
+        env:
+          SOURCE_UI_IMAGE_NAME: top-ai-ideas-ui
+        run: |
+          set -eu
+          UI_VERSION="$(make -s version | awk '/^UI_VERSION:/ {print $2}')"
+          docker tag "${REGISTRY}/${SOURCE_UI_IMAGE_NAME}:${UI_VERSION}" "${REGISTRY}/${UI_IMAGE_NAME}:${UI_VERSION}"
       - name: Publish UI image
         if: steps.image-check.outcome == 'failure'
         run: make publish-ui-image
+      - name: Push main alias tag (UI)
+        run: |
+          set -eu
+          ALIAS="main"
+          UI_VERSION="$(make -s version | awk '/^UI_VERSION:/ {print $2}')"
+          # Ensure canonical tag is present locally (it may not be if image-check passed)
+          docker pull "${REGISTRY}/${UI_IMAGE_NAME}:${UI_VERSION}"
+          docker tag  "${REGISTRY}/${UI_IMAGE_NAME}:${UI_VERSION}" "${REGISTRY}/${UI_IMAGE_NAME}:${ALIAS}"
+          docker push "${REGISTRY}/${UI_IMAGE_NAME}:${ALIAS}"
 
   publish-api-image:
     runs-on: ubuntu-latest
@@ -564,6 +582,7 @@ jobs:
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
+      API_IMAGE_NAME: sentropic-api
     steps:
       - uses: actions/checkout@v6
       - name: Check if API image is up to date
@@ -579,9 +598,26 @@ jobs:
       - name: Load API image from artifact
         if: steps.image-check.outcome == 'failure'
         run: make load-api
+      - name: Retag API image for Sentropic publish
+        if: steps.image-check.outcome == 'failure'
+        env:
+          SOURCE_API_IMAGE_NAME: top-ai-ideas-api
+        run: |
+          set -eu
+          API_VERSION="$(make -s version | awk '/^API_VERSION:/ {print $2}')"
+          docker tag "${REGISTRY}/${SOURCE_API_IMAGE_NAME}:${API_VERSION}" "${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}"
       - name: Publish API image
         if: steps.image-check.outcome == 'failure'
         run: make publish-api-image
+      - name: Push main alias tag (API)
+        run: |
+          set -eu
+          ALIAS="main"
+          API_VERSION="$(make -s version | awk '/^API_VERSION:/ {print $2}')"
+          # Ensure canonical tag is present locally (it may not be if image-check passed)
+          docker pull "${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}"
+          docker tag  "${REGISTRY}/${API_IMAGE_NAME}:${API_VERSION}" "${REGISTRY}/${API_IMAGE_NAME}:${ALIAS}"
+          docker push "${REGISTRY}/${API_IMAGE_NAME}:${ALIAS}"
 
   publish-llm-mesh:
     runs-on: ubuntu-latest
@@ -664,3 +700,32 @@ jobs:
     - name: Deploy to GitHub Pages
       id: deployment
       uses: actions/deploy-pages@v5
+
+  # Deploy Kubernetes tenant after api+ui images are published with the main alias.
+  # Triggered on main. Requires GH secret KUBECONFIG_B64
+  # (base64 of ~/.kube/poc.yaml). See deploy/scw/README.md and BRANCH.md Lot 2.5.
+  deploy-k8s:
+    runs-on: ubuntu-latest
+    needs: [publish-api-image, publish-ui-image]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Decode kubeconfig from secret
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          set -eu
+          if [ -z "${KUBECONFIG_B64:-}" ]; then
+            echo "::error::GH secret KUBECONFIG_B64 is missing or empty. See BRANCH.md Lot 2.5 user action item."
+            exit 1
+          fi
+          printf '%s' "${KUBECONFIG_B64}" | base64 -d > kubeconfig.yaml
+          chmod 600 kubeconfig.yaml
+      - name: Apply manifests and verify api + ui on Kubernetes
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig.yaml
+        run: |
+          set -eu
+          make scw-deploy KUBECONFIG="${KUBECONFIG}" ENV=ci-k8s
+          kubectl -n sentropic rollout status  deployment/api --timeout=300s
+          kubectl -n sentropic rollout status  deployment/ui  --timeout=300s
