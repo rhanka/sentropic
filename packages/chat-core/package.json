@@ -37,6 +37,7 @@
     "@sentropic/events": "^0.1.0"
   },
   "devDependencies": {
+    "@types/node": "^22.10.10",
     "typescript": "5.4.5"
   }
 }
