@@ -42,6 +42,7 @@ import { CHAT_SYSTEM_PROMPTS, CHAT_COMMON_PROMPTS } from '../config/default-chat
 import {
   searchWeb,
   extractUrlContent,
+  batchCreateOrganizationsTool,
 } from './tools';
 import {
   resolveFoundationChatTools,
@@ -2453,6 +2454,9 @@ export class ChatService {
         allowedTools: allowedSkillToolNames,
       }),
     );
+    if (allowedSkillToolNames.has('batch_create_organizations')) {
+      addResolvedTools([batchCreateOrganizationsTool]);
+    }
     addResolvedTools(localTools);
     tools = toolSet.size > 0 ? Array.from(toolSet.values()) : undefined;
 
