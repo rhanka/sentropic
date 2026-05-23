@@ -1,9 +1,9 @@
 {
   "name": "@sentropic/flow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Façade-first flow runtime extraction package for the Sentropic workspace (workflow orchestration, job queue, gate evaluation, agent templating ports).",
   "type": "module",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhanka/sentropic.git",
