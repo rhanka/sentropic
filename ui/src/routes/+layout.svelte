@@ -20,7 +20,7 @@
   import '$lib/i18n';
   import { _ } from 'svelte-i18n';
   import { initializeSession, session } from '$lib/stores/session';
-  import { chatWidgetLayout } from '$lib/stores/chatWidgetLayout';
+  import { chatWidgetLayout } from '@sentropic/chat-ui/stores/chatWidgetLayout';
   import {
     organizationsStore,
     currentOrganizationId,

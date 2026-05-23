@@ -48,7 +48,7 @@ Minimum contract:
 - Add a private root `package.json` with Node workspace metadata.
 - Move container mounts from per-app subdirectories to the repo root with explicit working directories for `api` and `ui`.
 - Keep `make` as the entrypoint; do not introduce Nx as a required orchestrator.
-- Prepare clean consumption of future internal packages such as `@sentropic/llm-mesh` and `@sentropic/chat`.
+- Prepare clean consumption of future internal packages such as `@sentropic/llm-mesh` and `@sentropic/chat-ui`.
 - Do not move `api/` and `ui/` into `packages/`; the target layout remains app roots plus reusable packages.
 
 Impact notes:
@@ -64,7 +64,7 @@ Activation plan:
 - BR-14c is the first mandatory activation branch: create `packages/llm-mesh`, expose the `@sentropic/llm-mesh` package, publish it to npm through CI/CD, migrate the application LLM runtime to that package, and delete the app-local runtime code it replaces. No double runtime path, feature flag, compatibility bridge, fallback alias, copy step, path hack, or direct app-root package coupling is allowed.
 - BR-14g is the model catalog activation branch: move the OpenAI default from GPT-5.4 to GPT-5.5, keep GPT-5.4 Nano available, move Claude Opus 4.6 to Opus 4.7, and update compatibility/default rules against the mesh model-profile contract.
 - BR-14b is the chat-service modularization branch above the model runtime: extract and stabilize reasoning-loop, tool-loop, continuation, and orchestration boundaries after BR-14c has already moved model access to the mesh.
-- BR-14a is the UI/package activation branch: extract `@sentropic/chat` while consuming provider/model behavior through the mesh contract or a narrow mesh-compatible interface.
+- BR-14a is the UI/package activation branch: extract `@sentropic/chat-ui` while consuming provider/model behavior through the mesh contract or a narrow mesh-compatible interface.
 - BR-14e and BR-14d are not activation substitutes. They close codebase naming and operational transition after the package/runtime/chat boundaries have been exercised.
 - If BR-14c cannot consume `@sentropic/llm-mesh` directly from `api/` under the BR-14f workspace wiring, the branch is incomplete. A relative source import such as `../../packages/...` is not a valid exit criterion.
 
@@ -155,7 +155,7 @@ Exit criteria:
 
 Branch: `feat/chat-ui-sdk`
 
-Goal: extract `@sentropic/chat` from web, Chrome, and VSCode surfaces.
+Goal: extract `@sentropic/chat-ui` from web, Chrome, and VSCode surfaces.
 
 Minimum contract:
 

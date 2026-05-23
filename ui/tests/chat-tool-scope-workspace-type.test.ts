@@ -4,7 +4,7 @@ import {
   type WorkspaceType,
   getWorkspaceTypeToolIds,
   filterToolTogglesByWorkspaceType,
-} from '../src/lib/utils/chat-tool-scope';
+} from '@sentropic/chat-ui/utils/chat-tool-scope';
 
 const TOGGLES: ChatToolScopeToggle[] = [
   { id: 'web', toolIds: ['web_search', 'web_extract'] },
