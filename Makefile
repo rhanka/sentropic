@@ -654,6 +654,51 @@ publish-chat-ui-token: build-chat-ui ## Publish @sentropic/chat-ui using a token
 		-w /workspace/packages/chat-ui \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; version="$$(node -p "require(\"./package.json\").version")"; if npm view @sentropic/chat-ui@"$$version" version >/dev/null 2>&1; then echo "@sentropic/chat-ui@$$version already exists; skipping publish"; else npm publish --access public; fi'
 
+.PHONY: install-internal-packages
+install-internal-packages: ## Install workspace deps and link @sentropic/{contracts,events,chat-core,flow} into node_modules (no api/ui)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/flow --include-workspace-root --ignore-scripts --no-audit --no-fund'
+
+.PHONY: build-internal-packages
+build-internal-packages: install-internal-packages ## Build dist/ for contracts/events/chat-core in dep order (flow builds separately via build-flow)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf packages/contracts/dist packages/events/dist packages/chat-core/dist; (cd packages/contracts && npx --offline tsc -p tsconfig.json); (cd packages/events && npx --offline tsc -p tsconfig.json); (cd packages/chat-core && npx --offline tsc -p tsconfig.json)'
+
+.PHONY: build-contracts
+build-contracts: build-internal-packages ## Build @sentropic/contracts dist package
+
+.PHONY: build-events
+build-events: build-internal-packages ## Build @sentropic/events dist package (depends on contracts)
+
+.PHONY: build-chat-core
+build-chat-core: build-internal-packages ## Build @sentropic/chat-core dist package (depends on contracts+events)
+
+.PHONY: typecheck-contracts
+typecheck-contracts: install-internal-packages ## Run @sentropic/contracts type checks
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline tsc --noEmit -p tsconfig.json'
+
+.PHONY: typecheck-events
+typecheck-events: build-contracts ## Run @sentropic/events type checks (requires contracts dist)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/events $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline tsc --noEmit -p tsconfig.json'
+
+.PHONY: typecheck-chat-core
+typecheck-chat-core: build-events ## Run @sentropic/chat-core type checks (requires contracts+events dist)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/chat-core $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline tsc --noEmit -p tsconfig.json'
+
+.PHONY: pack-contracts
+pack-contracts: build-contracts ## Validate @sentropic/contracts npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+.PHONY: pack-events
+pack-events: build-events ## Validate @sentropic/events npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/events $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+.PHONY: pack-chat-core
+pack-chat-core: build-chat-core ## Validate @sentropic/chat-core npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/chat-core $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
+.PHONY: pack-flow
+pack-flow: build-flow ## Validate @sentropic/flow npm package contents without publishing
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/flow $(FLOW_NODE_IMAGE) sh -lc 'npm pack --dry-run'
+
 .PHONY: lint
 lint: lint-ui lint-api ## Run all linters
 
