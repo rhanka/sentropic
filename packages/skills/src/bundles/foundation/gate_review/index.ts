@@ -4,5 +4,6 @@ import { gateReviewHandlers } from './handler.js';
 
 export const gateReviewSkill: Skill = loadFoundationSkill(
   import.meta.url,
+  'gate_review',
   gateReviewHandlers,
 );

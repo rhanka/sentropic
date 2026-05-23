@@ -4,5 +4,6 @@ import { foldersHandlers } from './handler.js';
 
 export const foldersSkill: Skill = loadFoundationSkill(
   import.meta.url,
+  'folders',
   foldersHandlers,
 );

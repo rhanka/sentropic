@@ -4,5 +4,6 @@ import { historyAnalyzeHandlers } from './handler.js';
 
 export const historyAnalyzeSkill: Skill = loadFoundationSkill(
   import.meta.url,
+  'history_analyze',
   historyAnalyzeHandlers,
 );
