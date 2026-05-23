@@ -57,16 +57,16 @@ Align every `@sentropic/*` package with the npm registry: bootstrap-publish `cha
   - [x] Confirm `NPM_TOKEN` GitHub secret already set on `rhanka/sentropic` (created 2026-05-23, GAT `sentropic-bootstrap-publish`, `@sentropic` scope R/W, bypass 2FA, expires 2026-08-21).
   - [x] Confirm `@sentropic/llm-mesh` trusted publisher already migrated to `rhanka/sentropic / ci.yml` (done 2026-05-23 via npmjs UI).
 
-- [ ] **Lot 1 — Package manifest changes**
-  - [ ] `packages/llm-mesh/package.json`: bump `0.1.0 → 0.1.1`.
-  - [ ] `packages/flow/package.json`: flip `"private": true → false`, bump `0.0.0 → 0.1.0`, confirm `publishConfig`/`files`/`exports` fields align with `llm-mesh` reference.
-  - [ ] `packages/chat-ui/package.json`: keep `0.1.0`, verify `publishConfig.access=public`, no other change.
-  - [ ] `packages/chat-core/package.json`: keep `0.1.0`, verify `publishConfig.access=public`, no other change.
-  - [ ] `packages/events/package.json`: keep `0.1.0`, verify `publishConfig.access=public`, no other change.
-  - [ ] `packages/contracts/package.json`: keep `0.1.0`, verify `publishConfig.access=public`, no other change.
-  - [ ] Lot gate:
-    - [ ] `git diff packages/` shows version bumps + private flip + no spurious change.
-    - [ ] `make commit MSG="chore(packages): bump llm-mesh 0.1.1, unprivate flow, prepare first publish"`.
+- [x] **Lot 1 — Package manifest changes**
+  - [x] `packages/llm-mesh/package.json`: bump `0.1.0 → 0.1.1`.
+  - [x] `packages/flow/package.json`: flip `"private": true → false`, bump `0.0.0 → 0.1.0`, fields already aligned with `llm-mesh` reference.
+  - [x] `packages/chat-ui/package.json`: kept `0.1.0`, `publishConfig.access=public` confirmed, repo URL already `sentropic.git`.
+  - [x] `packages/chat-core/package.json`: kept `0.1.0`, `publishConfig.access=public` confirmed, fixed repo URL `entropic.git → sentropic.git`.
+  - [x] `packages/events/package.json`: kept `0.1.0`, `publishConfig.access=public` confirmed, fixed repo URL `entropic.git → sentropic.git`.
+  - [x] `packages/contracts/package.json`: kept `0.1.0`, `publishConfig.access=public` confirmed, fixed repo URL `entropic.git → sentropic.git`.
+  - [x] Lot gate:
+    - [x] `git diff packages/` shows version bumps + private flip + repo URL corrections, no spurious change.
+    - [x] `make commit MSG="chore(packages): bump llm-mesh 0.1.1, unprivate flow, fix entropic→sentropic repo URLs"`.
 
 - [ ] **Lot 2 — Makefile bootstrap + OIDC targets**
   - [ ] Mirror `publish-chat-ui` block from existing Makefile to add `publish-chat-core` (OIDC), `publish-events` (OIDC), `publish-contracts` (OIDC), `publish-flow` (OIDC).
