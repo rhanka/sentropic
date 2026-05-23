@@ -1,9 +1,9 @@
 {
   "name": "@sentropic/contracts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Transverse contracts shared across @sentropic/* packages (tenant, authz, cost, idempotency, checkpoint version, event envelope).",
   "type": "module",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhanka/sentropic.git",

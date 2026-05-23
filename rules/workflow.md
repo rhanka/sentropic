@@ -108,6 +108,14 @@ Include in every implementation sub-agent prompt:
 - Final tests: `make test-api`, `make test-ui`, `make clean test-e2e`
 - AI flaky allowlist (non-blocking, must document failure signature + user sign-off)
 
+## Package Publication (MANDATORY)
+- Each `packages/<pkg>/` is published to the npm registry as `@sentropic/<pkg>` (unless marked `"private": true`).
+- Publishing is fully automated via OIDC trusted publishers — no token in CI for steady-state publishes. Configured per-package on `npmjs.com → package → Settings → Trusted Publisher` pointing to `rhanka/sentropic` workflow `ci.yml`.
+- **MANDATORY**: every PR that modifies files under `packages/<pkg>/src/**` MUST bump `packages/<pkg>/package.json` `version` (semver: patch for bugfix, minor for feature, major for breaking).
+- The `enforce-package-bump` CI job blocks merge if a touched non-private package has no version bump. It runs on `pull_request` only, computes merge-base with the PR base ref, and emits `::error::` per offending package.
+- Skipping the gate is forbidden — if the rule does not apply (e.g. src-only refactor that genuinely keeps the public surface), bump patch anyway. Silent skip on npm (`already exists`) means the new code never reaches consumers.
+- First publish of a brand-new `packages/<pkg>/` requires a one-shot bootstrap: trigger `workflow_dispatch` on `ci.yml` with `bootstrap_publish_target=<pkg>` (uses `NPM_TOKEN` secret), then attach the OIDC trusted publisher on npmjs.com. Document this in the new package's branch.
+
 ## Feature Completion
 - Follow final lots in `BRANCH.md`
 - Close/defer all `Feedback Loop` items with owner/date
