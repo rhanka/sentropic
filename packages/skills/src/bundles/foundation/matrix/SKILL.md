@@ -4,7 +4,7 @@ description: Read and update folder matrix configurations in AI-ideas and opport
 version: 0.1.0
 category: analysis
 contextFilter:
-  workspaceTypes: [ai-ideas, opportunity]
+  workspaceTypes: [neutral, ai-ideas, opportunity]
 tools:
   - name: matrix_get
     description: Read the matrix configuration (folders.matrixConfig) for a folder.

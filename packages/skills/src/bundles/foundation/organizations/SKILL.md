@@ -4,7 +4,7 @@ description: Read and update organization records in AI-ideas and opportunity wo
 version: 0.1.0
 category: object
 contextFilter:
-  workspaceTypes: [ai-ideas, opportunity]
+  workspaceTypes: [neutral, ai-ideas, opportunity]
 tools:
   - name: organizations_list
     description: List organizations visible in the current workspace with summary metadata.

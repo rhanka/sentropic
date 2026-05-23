@@ -4,7 +4,7 @@ description: Review initiative gate criteria for a maturity-stage transition in 
 version: 0.1.0
 category: analysis
 contextFilter:
-  workspaceTypes: [ai-ideas, opportunity]
+  workspaceTypes: [neutral, ai-ideas, opportunity]
 tools:
   - name: gate_review
     description: Review gate criteria for an initiative maturity-stage transition.

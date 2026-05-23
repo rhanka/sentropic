@@ -86,7 +86,7 @@ const WAVE_C_SKILLS = [
     name: 'executive_summary',
     tools: ['executive_summary_get', 'executive_summary_update'],
     bodyTitle: 'Executive summary skill',
-    workspaceTypes: ['ai-ideas', 'opportunity'],
+    workspaceTypes: ['neutral', 'ai-ideas', 'opportunity'],
     updateTool: 'executive_summary_update',
   },
   {
@@ -94,7 +94,7 @@ const WAVE_C_SKILLS = [
     name: 'matrix',
     tools: ['matrix_get', 'matrix_update'],
     bodyTitle: 'Matrix skill',
-    workspaceTypes: ['ai-ideas', 'opportunity'],
+    workspaceTypes: ['neutral', 'ai-ideas', 'opportunity'],
     updateTool: 'matrix_update',
   },
   {
@@ -108,7 +108,7 @@ const WAVE_C_SKILLS = [
     name: 'gate_review',
     tools: ['gate_review'],
     bodyTitle: 'Gate review skill',
-    workspaceTypes: ['ai-ideas', 'opportunity'],
+    workspaceTypes: ['neutral', 'ai-ideas', 'opportunity'],
   },
 ] as const;
 
@@ -313,6 +313,7 @@ describe('foundation bundle — Wave B object skills', () => {
       expect(skill.metadata.version).toBe('0.1.0');
       expect(skill.metadata.category).toBe('object');
       expect(skill.metadata.contextFilter?.workspaceTypes).toEqual([
+        'neutral',
         'ai-ideas',
         'opportunity',
       ]);
