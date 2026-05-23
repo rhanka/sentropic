@@ -593,6 +593,15 @@ publish-llm-mesh: build-llm-mesh ## Publish @sentropic/llm-mesh from CI OIDC tru
 		-e GITHUB_REPOSITORY \
 		-e GITHUB_REF \
 		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
 		-e ACTIONS_ID_TOKEN_REQUEST_URL \
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
@@ -636,6 +645,15 @@ publish-chat-ui: build-chat-ui ## Publish @sentropic/chat-ui from CI OIDC truste
 		-e GITHUB_REPOSITORY \
 		-e GITHUB_REF \
 		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
 		-e ACTIONS_ID_TOKEN_REQUEST_URL \
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
@@ -708,6 +726,15 @@ publish-contracts: build-contracts ## Publish @sentropic/contracts from CI OIDC 
 		-e GITHUB_REPOSITORY \
 		-e GITHUB_REF \
 		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
 		-e ACTIONS_ID_TOKEN_REQUEST_URL \
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
@@ -736,6 +763,15 @@ publish-events: build-events ## Publish @sentropic/events from CI OIDC trusted p
 		-e GITHUB_REPOSITORY \
 		-e GITHUB_REF \
 		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
 		-e ACTIONS_ID_TOKEN_REQUEST_URL \
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
@@ -764,6 +800,15 @@ publish-chat-core: build-chat-core ## Publish @sentropic/chat-core from CI OIDC 
 		-e GITHUB_REPOSITORY \
 		-e GITHUB_REF \
 		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
 		-e ACTIONS_ID_TOKEN_REQUEST_URL \
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
@@ -792,6 +837,15 @@ publish-flow: build-flow ## Publish @sentropic/flow from CI OIDC trusted publish
 		-e GITHUB_REPOSITORY \
 		-e GITHUB_REF \
 		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
 		-e ACTIONS_ID_TOKEN_REQUEST_URL \
 		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
 		-v "$(CURDIR):/workspace" \
