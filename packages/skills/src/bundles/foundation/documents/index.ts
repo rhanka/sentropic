@@ -4,5 +4,6 @@ import { documentsHandlers } from './handler.js';
 
 export const documentsSkill: Skill = loadFoundationSkill(
   import.meta.url,
+  'documents',
   documentsHandlers,
 );

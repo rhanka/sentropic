@@ -4,5 +4,6 @@ import { executiveSummaryHandlers } from './handler.js';
 
 export const executiveSummarySkill: Skill = loadFoundationSkill(
   import.meta.url,
+  'executive_summary',
   executiveSummaryHandlers,
 );

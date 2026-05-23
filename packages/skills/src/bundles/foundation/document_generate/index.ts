@@ -1,9 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { parseSkillSource } from '../../../format/parser.js';
 import type { Skill } from '../../../types/skill.js';
+import { readFoundationSkillSource } from '../load-skill.js';
 import { createDocumentGenerateHandlers } from './handler.js';
 
 /**
@@ -16,8 +13,10 @@ import { createDocumentGenerateHandlers } from './handler.js';
  * a reference to the parsed Skill to forward to `SandboxRuntime.execute`.
  */
 function loadDocumentGenerateSkill(): Skill {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const source = readFileSync(join(here, 'SKILL.md'), 'utf8');
+  const source = readFoundationSkillSource(
+    import.meta.url,
+    'document_generate',
+  );
   const parsed = parseSkillSource(source);
   const skill: Skill = {
     metadata: parsed.metadata,
