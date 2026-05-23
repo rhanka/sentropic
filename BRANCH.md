@@ -56,6 +56,6 @@ Prevent package publish jobs from running on main when only CI workflow files ch
 
 - [ ] **Lot N — Final validation**
   - [x] Commit implementation fix with `make commit`.
-  - [ ] Push latest branch and open PR with this `BRANCH.md` as body.
-  - [ ] Verify PR CI or enough workflow checks to prove package publish jobs are no longer triggered by workflow-only changes.
+  - [x] Push latest branch and open PR with this `BRANCH.md` as body.
+  - [x] Verify PR CI or enough workflow checks to prove package publish jobs are no longer triggered by workflow-only changes.
   - [ ] Delete `BRANCH.md`, push, merge.
