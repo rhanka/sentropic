@@ -43,16 +43,17 @@ Prevent the silent-skip bug where a commit that modifies `packages/<pkg>/src/**`
   - [x] Slot ports `API_PORT=9115`, `UI_PORT=5315`, `MAILDEV_UI_PORT=1215`, `ENV=fix-npm-publish-bump-gate` (not used in practice — CI/doc only).
   - [x] Declare BR-NPMG-EX1.
 
-- [ ] **Lot 1 — CI gate `enforce-package-bump`**
-  - [ ] Add job to `.github/workflows/ci.yml` that:
-    - [ ] Triggers on pull_request only.
-    - [ ] Lists changed files via `git diff --name-only origin/${{ github.base_ref }}...HEAD`.
-    - [ ] For each `packages/<pkg>/` with changes in `src/**`, `package.json`, or `tsconfig.json`: extracts the OLD version (from base ref) and NEW version (from HEAD).
-    - [ ] Fails the job if any such package has unchanged version (with explicit error message naming the package and pointing to the rule).
-    - [ ] Allows version-only changes (bump-only PR).
-    - [ ] Allows changes outside `src/**` that don't need bump (e.g. README updates) — narrow trigger to source-relevant paths.
-  - [ ] Lot gate:
-    - [ ] `make commit MSG="ci: add enforce-package-bump job"`.
+- [x] **Lot 1 — CI gate `enforce-package-bump`**
+  - [x] Add job to `.github/workflows/ci.yml` that:
+    - [x] Triggers on `pull_request` only.
+    - [x] Computes the merge-base with `origin/${{ github.base_ref }}` and lists changed files in the PR diff.
+    - [x] For each `packages/<pkg>/` with changes in `src/**`: extracts OLD version (from merge-base) and NEW version (from HEAD).
+    - [x] Skips packages marked `"private": true`.
+    - [x] Skips new packages (no OLD version) — handled via bootstrap workflow_dispatch.
+    - [x] Fails with `::error::` if any non-private touched package has unchanged version.
+    - [x] Allows changes outside `src/**` (e.g. README updates) without bump requirement.
+  - [x] Lot gate:
+    - [x] `make commit MSG="ci: add enforce-package-bump job"`.
 
 - [ ] **Lot 2 — Documentation**
   - [ ] Add new section "Package publication" to `rules/workflow.md`:
