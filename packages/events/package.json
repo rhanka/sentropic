@@ -1,9 +1,9 @@
 {
   "name": "@sentropic/events",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Wire-protocol StreamEvent taxonomy (v1) for @sentropic/* packages; re-exports transverse contracts from @sentropic/contracts.",
   "type": "module",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhanka/sentropic.git",
