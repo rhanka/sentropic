@@ -4,7 +4,7 @@ description: Read and update initiatives, including the legacy read/update initi
 version: 0.1.0
 category: object
 contextFilter:
-  workspaceTypes: [ai-ideas, opportunity]
+  workspaceTypes: [neutral, ai-ideas, opportunity]
 tools:
   - name: initiatives_list
     description: List initiatives in the current workspace with status and maturity metadata.

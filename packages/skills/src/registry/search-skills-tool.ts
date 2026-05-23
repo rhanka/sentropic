@@ -2,7 +2,7 @@ import type { SkillRegistry, SkillSearchOptions } from './registry.js';
 import type { SkillSearchHit } from '../types/skill-search-hit.js';
 import type { SkillTool } from '../types/skill-tool.js';
 import type { AuthzContext, ResolvedTool } from './authz.js';
-import { isSkillVisibleTo } from './resolve.js';
+import { isSkillVisibleTo, isToolCallableUnder } from './resolve.js';
 
 /**
  * Canonical name of the meta-tool. Stable contract: agents and the chat-core
@@ -193,6 +193,9 @@ export function executeSearchSkills(
   const out: SkillSearchHit[] = [];
   for (const hit of ranked) {
     if (!isSkillVisibleTo(hit.metadata, authz)) continue;
+    if (!hit.metadata.toolNames.some((name) => isToolCallableUnder(name, authz))) {
+      continue;
+    }
     if (rolesFilter && rolesFilter.length > 0) {
       const declared = hit.metadata.contextFilter?.roles;
       // Wildcard skill (no declared roles) always passes the user filter;
