@@ -94,14 +94,26 @@ Align every `@sentropic/*` package with the npm registry: bootstrap-publish `cha
     - [x] `git diff Makefile` shows only additive `.PHONY publish-*` blocks.
     - [x] `make commit MSG="feat(make): add publish (OIDC + token) lanes for contracts/events/chat-core/flow"`.
 
-- [ ] **Lot 3 — CI publish lanes**
-  - [ ] In `.github/workflows/ci.yml`, extend `changes.outputs` to include `chat_core`, `events`, `contracts`, `flow` and add their `paths` filters (mirror `chat_ui` block).
-  - [ ] Add `validate-chat-core`, `validate-events`, `validate-contracts`, `validate-flow` jobs (mirror `validate-chat-ui`).
-  - [ ] Add `publish-chat-core`, `publish-events`, `publish-contracts`, `publish-flow` jobs (mirror `publish-chat-ui`, OIDC mode).
-  - [ ] Add `workflow_dispatch` input `bootstrap_publish` (boolean) on the workflow; when true, run `make publish-<pkg>-token` instead of `make publish-<pkg>`, with `NPM_TOKEN_FILE` populated from `secrets.NPM_TOKEN`.
+- [x] **Lot 3a — CI changes filter additions**
+  - [x] Extend `changes.outputs` for `chat_core`, `events`, `contracts`, `flow` + `*_publish` variants.
+  - [x] Add `paths-filter` entries for each new package mirroring `chat_ui`/`chat_ui_publish` patterns.
+  - [x] Note: `chat_core` filter includes `events` + `contracts` paths (build-deps); same chain for `events` (includes `contracts`).
+  - [x] Lot gate:
+    - [x] `git diff .github/workflows/ci.yml` shows only additive output/filter entries.
+    - [x] `make commit MSG="ci: add changes filters for chat-core/events/contracts/flow"`.
+
+- [ ] **Lot 3b — CI validate jobs**
+  - [ ] Add `validate-chat-core`, `validate-events`, `validate-contracts`, `validate-flow` (mirror `validate-chat-ui`).
   - [ ] Lot gate:
-    - [ ] `git diff .github/workflows/ci.yml` shows only additive filters + jobs + dispatch input.
-    - [ ] yaml-lint via `make lint` if available, or visual review.
+    - [ ] Each validate job runs `make typecheck-<pkg>` + `make build-<pkg>` + `make pack-<pkg>`.
+    - [ ] `make commit MSG="ci: add validate jobs for chat-core/events/contracts/flow"`.
+
+- [ ] **Lot 3c — CI publish jobs + bootstrap dispatch**
+  - [ ] Add `publish-chat-core`, `publish-events`, `publish-contracts`, `publish-flow` (mirror `publish-chat-ui`).
+  - [ ] Add `workflow_dispatch` event with `bootstrap_publish_target` choice input (contracts/events/chat-core/chat-ui/flow/all).
+  - [ ] Add `bootstrap-publish` job that writes `secrets.NPM_TOKEN` to a file then runs `make publish-<pkg>-token` for each selected target in dep order.
+  - [ ] Lot gate:
+    - [ ] `git diff` shows only additive publish jobs + workflow_dispatch + bootstrap-publish.
     - [ ] `make commit MSG="ci: add publish lanes for chat-core/events/contracts/flow + bootstrap dispatch"`.
 
 - [ ] **Lot 4 — PR + CI green**
