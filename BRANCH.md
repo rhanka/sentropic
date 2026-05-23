@@ -55,16 +55,11 @@ Prevent the silent-skip bug where a commit that modifies `packages/<pkg>/src/**`
   - [x] Lot gate:
     - [x] `make commit MSG="ci: add enforce-package-bump job"`.
 
-- [ ] **Lot 2 — Documentation**
-  - [ ] Add new section "Package publication" to `rules/workflow.md`:
-    - [ ] Each `packages/<pkg>/` is published to npm under `@sentropic/<pkg>`.
-    - [ ] Publishing happens automatically on merge to main via OIDC trusted publishers (no token needed).
-    - [ ] **MANDATORY**: bump `packages/<pkg>/package.json` `version` semver-style on every PR that touches `packages/<pkg>/src/**`.
-    - [ ] CI gate `enforce-package-bump` blocks merge if not respected.
-    - [ ] First publish of a new package requires manual `workflow_dispatch bootstrap_publish_target=<pkg>` with `NPM_TOKEN` secret, followed by attaching trusted publisher OIDC on npmjs.com.
-  - [ ] Add checkbox to `plan/BRANCH_TEMPLATE.md` Lot N "Final validation": `[ ] Bumped affected packages/<pkg>/package.json version (semver) if src changed`.
-  - [ ] Lot gate:
-    - [ ] `make commit MSG="docs: add package publication policy to rules/workflow.md and BRANCH template"`.
+- [x] **Lot 2 — Documentation**
+  - [x] Added new section "Package Publication (MANDATORY)" to `rules/workflow.md`.
+  - [x] Added "Bumped affected packages/<pkg>/package.json version" checkbox to `plan/BRANCH_TEMPLATE.md` Lot N.
+  - [x] Lot gate:
+    - [x] `make commit MSG="docs: add package publication policy to rules/workflow.md and BRANCH template"`.
 
 - [ ] **Lot 3 — PR + CI green + merge**
   - [ ] `git push origin fix/npm-publish-bump-gate`.
