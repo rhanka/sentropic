@@ -167,6 +167,16 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - Actual: target names are `@sentropic/auth-ui` for BR-39a and `@sentropic/auth-hono` for BR-39b; BR-39b Make targets use the `auth-hono` suffix.
   - Evidence: `typecheck-auth-hono`, `test-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, and `publish-auth-hono-token` are recorded as required BR-39b targets. BR-39a must mirror the same lifecycle for `auth-ui`.
   - Recommendation: keep package names as `auth-ui` and `auth-hono`; do not rename or introduce broader auth package names during extraction.
+- `BR39b-Q5`
+  - Branch: BR-39b `feat/auth-hono-kit`
+  - Owner: Conductor / BR-39a implementer
+  - Severity: attention
+  - Status: open
+  - Repro steps: compare current backend route inventory with inspected BR-39a `AuthUiTransport`.
+  - Expected: every backend auth route that the UI needs during replacement has a matching transport method, or the branch plan explicitly marks it app-owned/internal.
+  - Actual: current backend exposes `POST /api/v1/auth/magic-link/request` and `POST /api/v1/auth/magic-link/verify`; inspected BR-39a transport exposes `verifyMagicLink` but not a request/send method.
+  - Evidence: `api/src/routes/auth/magic-link.ts` owns magic-link request and verify flows; read-only BR-39a inspection found `AuthUiTransport.verifyMagicLink` only.
+  - Recommendation: before BR-39b replaces Sentropic API magic-link routes, confirm whether magic-link request is intentionally app-owned/outside `@sentropic/auth-ui`, or add the missing `requestMagicLink` transport method in BR-39a and align `AUTH_HONO_ROUTE_MAP`.
 - `BR39b-EX1`
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: implementation worker
