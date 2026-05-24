@@ -201,6 +201,45 @@ Extract the reusable Hono-side authentication routes and server contracts into a
 - Test envs: `ENV=test-feat-auth-hono-kit`, `ENV=e2e-feat-auth-hono-kit`.
 - Root UAT env: `ENV=dev` on `/home/antoinefa/src/sentropic`, same HEAD as the branch under qualification.
 
+## Two-Track Status
+- **Track A - BR-39a `@sentropic/auth-ui`**
+  - Done:
+    - BR-39a worktree exists at `/home/antoinefa/src/sentropic/tmp/feat-auth-ui-sdk` on `feat/auth-ui-sdk`.
+    - Current inspected SHA: `0944c6daf241`.
+    - `packages/auth-ui` exists with package metadata, TypeScript source, tests, README, LICENSE, and built `dist/**` artifacts.
+    - Lot 1 is checked complete in BR-39a `BRANCH.md`.
+    - Exported transport contract exists in `packages/auth-ui/src/transport-types.ts` as `AuthUiTransport`.
+    - Contract methods available for BR-39b alignment: `requestEmailCode`, `verifyEmailCode`, `verifyMagicLink`, `createPasskeyRegistrationOptions`, `verifyPasskeyRegistration`, `createPasskeyAuthenticationOptions`, `verifyPasskeyAuthentication`, `refreshSession`, `logout`, `listCredentials`, `renameCredential`, `revokeCredential`.
+    - `BR39a-EX1` approved and applied in BR-39a for package Make targets.
+    - Existing BR-39a package gates recorded as passed: `make typecheck-auth-ui ENV=test-feat-auth-ui-sdk`, `make test-packages SCOPE=packages/auth-ui/tests ENV=test-feat-auth-ui-sdk`, `make build-auth-ui ENV=test-feat-auth-ui-sdk`, `make pack-auth-ui ENV=test-feat-auth-ui-sdk`.
+  - To do:
+    - BR-39a Lot 2 reusable screens.
+    - BR-39a Lot 3 Sentropic app rewiring to consume `@sentropic/auth-ui`.
+    - BR-39a CI/CD publish wiring parity appears incomplete from read-only inspection: `publish-auth-ui`, CI `auth_ui` filters/jobs, and `bootstrap_publish_target=auth-ui` are not visible in `.github/workflows/ci.yml` at inspected SHA.
+    - BR-39a first-publish bootstrap and npm trusted publisher setup still need final documentation/execution.
+  - Action:
+    - Codex next action: BR-39a worker should add package publish automation parity for `auth-ui`, complete screens, rewire Sentropic UI routes to consume the package, and remove duplicated app-local UI logic in the same branch.
+    - User action: none unless npm first-publish/2FA is requested during BR-39a bootstrap publish.
+- **Track B - BR-39b `@sentropic/auth-hono`**
+  - Done:
+    - BR-39b worktree exists at `/home/antoinefa/src/sentropic/tmp/feat-auth-hono-kit` on `feat/auth-hono-kit`.
+    - Current inspected SHA at status update: `c5ee130f437f6b4b25f5f32c5bfe94482059bcd2`.
+    - Lot 0 branch plan, backend inventory, scope decisions, npm/bootstrap anticipation, and `BR39b-EX1` are recorded.
+    - Backend extraction inventory maps current Sentropic routes/services to package ports in `BR39b-INV1`.
+    - `BR39b-EX1` is approved for narrow `Makefile` and `.github/workflows/ci.yml` edits required by package lifecycle automation.
+    - BR-39a transport contract now exists in the sibling worktree and can be used as the backend shape reference once conductor confirms the inspected SHA or BR-39a merge point.
+  - To do:
+    - Create `packages/auth-hono` with package metadata, TypeScript source, tests, README, LICENSE, and package exports.
+    - Add Make targets: `typecheck-auth-hono`, `test-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`.
+    - Add CI filters/jobs: `auth_hono`, `auth_hono_publish`, `validate-auth-hono`, `publish-auth-hono`, and bootstrap input `bootstrap_publish_target=auth-hono`.
+    - Extract reusable Hono route factories and auth services from existing Sentropic backend routes/services.
+    - Rewire Sentropic API routes and middleware to consume `@sentropic/auth-hono` from the workspace package in the same branch.
+    - Remove duplicated app-local auth route/service logic after package/API tests pass; no dual auth paths.
+    - Complete npm first-publish runbook and trusted publisher setup.
+  - Action:
+    - Codex next action: start BR-39b Lot 1 by creating the package shell, tests, contracts, and Make/CI automation under approved `BR39b-EX1`, using BR-39a `AuthUiTransport` request/result shapes as the alignment target.
+    - User action: confirm whether BR-39b should align to BR-39a current SHA `0944c6daf241` immediately, or wait for BR-39a merge if its Lot 2/3 screens may still change transport requirements.
+
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 - Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `README.md`, `TODO.md`, `PLAN.md`, `plan/39b-BRANCH_feat-auth-hono-kit.md`, `plan/39a-BRANCH_feat-auth-ui-sdk.md`, `plan/BRANCH_TEMPLATE.md`, and `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md`.
