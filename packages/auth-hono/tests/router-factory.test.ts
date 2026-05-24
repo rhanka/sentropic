@@ -45,4 +45,18 @@ describe('createAuthRouter', () => {
     const credentialResponse = await router.request('/api/v1/auth/credentials/credential-1', { method: 'DELETE' });
     expect(credentialResponse.status).toBe(501);
   });
+
+  it('uses injected route handlers when provided', async () => {
+    const router = createAuthRouter({
+      handlers: {
+        requestMagicLink: (c) => c.json({ ok: true }),
+      },
+      routePrefix: '/api/v1/auth',
+    });
+
+    const response = await router.request('/api/v1/auth/magic-link/request', { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
+  });
 });
