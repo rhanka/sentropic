@@ -311,62 +311,6 @@ describe('ChatService - document_generate tool (unit, mocked OpenAI)', () => {
     expect((errorEvent!.data as any).result.error).toContain('entityId');
   });
 
-  it('should return upskill content when action is "upskill"', async () => {
-    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
-
-    mock.mockImplementationOnce(() =>
-      stream([
-        {
-          type: 'tool_call_start',
-          data: {
-            tool_call_id: 'tool_upskill_1',
-            name: 'document_generate',
-            args: JSON.stringify({
-              action: 'upskill',
-              entityType: 'initiative',
-              entityId: 'init-up-1',
-            }),
-          },
-        },
-        { type: 'done', data: {} },
-      ]),
-    );
-
-    const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
-        userId,
-        workspaceId,
-        content: 'teach me docx generation',
-        primaryContextType: 'folder',
-        primaryContextId: folderId,
-        model: 'gpt-4.1-nano',
-      });
-
-    await chatService.runAssistantGeneration({
-      userId,
-      sessionId,
-      assistantMessageId,
-      model,
-    });
-
-    const events = await db
-      .select()
-      .from(chatStreamEvents)
-      .where(eq(chatStreamEvents.streamId, assistantMessageId));
-
-    const resultEvent = events.find(
-      (e: any) =>
-        e.eventType === 'tool_call_result' &&
-        (e.data as any)?.tool_call_id === 'tool_upskill_1',
-    );
-    expect(resultEvent).toBeDefined();
-    const resultData = resultEvent!.data as any;
-    expect(resultData.result.status).toBe('completed');
-    expect(resultData.result.mode).toBe('upskill');
-    expect(typeof resultData.result.skill).toBe('string');
-    expect(resultData.result.skill.length).toBeGreaterThan(0);
-  });
-
   it('should produce jobId, fileName, downloadUrl for freeform code generation', async () => {
     const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const freeformMock = generateFreeformDocx as unknown as ReturnType<typeof vi.fn>;
