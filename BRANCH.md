@@ -1,0 +1,232 @@
+# Feature: BR-38b Image Generation Tool
+
+## Objective
+Add image generation as a first-class chat/tool capability after BR-38a lands: users can ask for generated images, see generated images inline, download them, and keep generated media attached to the relevant chat/document context.
+
+## Scope / Guardrails
+- Scope limited to image generation, generated image storage, generated image rendering, and generated-media document links.
+- Depends on BR-38a for image media references, chat attachment rendering primitives, provider modality capability wiring, and storage conventions.
+- Multimodal image input is out of scope except for reusing BR-38a contracts.
+- Google Drive export/sync of generated images is deferred unless BR-38a already delivered the required Drive write contract and this branch declares an explicit exception.
+- One migration max in `api/drizzle/*.sql` if generated media needs persisted metadata beyond BR-38a storage references.
+- Make-only workflow, no direct Docker commands.
+- Root workspace `/home/antoinefa/src/sentropic` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/feat-image-generation-tool`.
+- Automated test campaigns must run on dedicated environments, never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification.
+- In every `make` command, the concrete branch environment value must be passed as the last argument.
+- All new text in English.
+- Package version bumps are mandatory for every non-private package whose `src/**` changes: `packages/llm-mesh`, `packages/chat-core`, `packages/chat-ui`, and `packages/events` if touched.
+- Generated image bytes must be stored through reviewed storage/document media paths and must not be embedded directly in chat message text.
+- The tool contract must expose deterministic errors for unsupported providers, missing credentials, quota failures, and unsafe prompt refusals.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `PLAN.md`
+  - `plan/38b-BRANCH_feat-image-generation-tool.md`
+  - `packages/llm-mesh/package.json`
+  - `packages/llm-mesh/src/**`
+  - `packages/llm-mesh/tests/**`
+  - `packages/chat-core/package.json`
+  - `packages/chat-core/src/**`
+  - `packages/chat-core/tests/**`
+  - `packages/chat-ui/package.json`
+  - `packages/chat-ui/src/**`
+  - `packages/chat-ui/tests/**`
+  - `packages/events/package.json`
+  - `packages/events/src/**`
+  - `packages/events/tests/**`
+  - `package-lock.json`
+  - `api/src/db/schema.ts`
+  - `api/src/routes/api/chat.ts`
+  - `api/src/routes/api/documents.ts`
+  - `api/src/routes/api/pptx.ts`
+  - `api/src/services/chat-service.ts`
+  - `api/src/services/llm-runtime/**`
+  - `api/src/services/tool-service.ts`
+  - `api/src/services/document*.ts`
+  - `api/src/services/context-document*.ts`
+  - `api/tests/api/chat.test.ts`
+  - `api/tests/api/chat-tools.test.ts`
+  - `api/tests/api/documents.test.ts`
+  - `api/tests/unit/chat-service-tools.test.ts`
+  - `api/tests/unit/documents-tool-service.test.ts`
+  - `api/tests/unit/provider-mesh-contract-proof.test.ts`
+  - `api/tests/unit/tool-service.test.ts`
+  - `api/tests/ai/chat-tools.test.ts`
+  - `ui/src/lib/components/chat/AppChatPanel.svelte`
+  - `ui/src/lib/components/chat/ChatTimelineWrapper.svelte`
+  - `ui/src/lib/components/DocumentSourceMenu.svelte`
+  - `ui/src/lib/components/DocumentsBlock.svelte`
+  - `ui/src/lib/chat/document-adapter.ts`
+  - `ui/src/lib/chat/web-host-adapter.ts`
+  - `ui/src/lib/utils/documents.ts`
+  - `ui/src/locales/en.json`
+  - `ui/src/locales/fr.json`
+  - `ui/tests/components/chat/AppChatPanel-boundary.test.ts`
+  - `ui/tests/components/chat/ChatTimeline-wrapper.test.ts`
+  - `ui/tests/components/ChatPanel-docx-cards.test.ts`
+  - `ui/tests/chat/document-adapter.test.ts`
+  - `ui/tests/utils/documents.test.ts`
+  - `e2e/tests/00-ai-generation.spec.ts`
+  - `e2e/tests/03-chat.spec.ts`
+  - `e2e/tests/04-documents-ui-actions.spec.ts`
+  - `spec/SPEC_CHATBOT.md`
+  - `spec/SPEC_EVOL_LLM_MESH.md`
+  - `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`
+  - `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` except this branch file
+  - `plan/38a-BRANCH_feat-multimodal-image-input.md`
+  - Image input/upload behavior except bug fixes needed to keep BR-38a contracts working.
+  - Google Drive write/export flow unless explicitly declared through `BR38b-EXn`.
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file, only for generated-media metadata)
+  - `.github/workflows/**`
+  - `api/src/services/google-drive-client.ts` and `ui/src/lib/utils/google-drive*.ts` if generated-image Drive export is explicitly pulled into scope
+  - New `api/src/services/image-generation/**` or `ui/src/lib/media/**` modules if existing service boundaries cannot hold the feature cleanly
+- **Exception process**:
+  - Declare exception ID `BR38b-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop`.
+
+## Feedback Loop
+- No open blockers at registration time.
+- Dependency note: launch only after BR-38a has merged and `main` contains stable media/document/chat rendering contracts.
+- `attention`: user approved a parallel BR-38b contract spike on 2026-05-24. Lot 0 read/scoping work may proceed now; implementation Lots 1-4 remain blocked until BR-38a stabilizes the media/document/chat rendering contract.
+- Architecture notes already verified on main:
+  - `packages/llm-mesh/src/capabilities.ts` output modalities currently include `text`, `json`, and `tool-call`, not `image`.
+  - `packages/chat-ui/src/renderers/registry.ts` provides a renderer registry suitable for generated image cards.
+  - Existing document generation tools store downloadable artifacts; generated image storage should reuse that pattern where practical.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: image generation is one end-to-end capability whose provider contract, tool execution, storage, and renderer must land together to be testable.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only after API, UI, provider, and storage gates pass.
+- Development worktree: `tmp/feat-image-generation-tool`.
+- Branch ports: `API_PORT=9191`, `UI_PORT=5391`, `MAILDEV_UI_PORT=1291`.
+- Test envs: `ENV=test-feat-image-generation-tool`, `ENV=e2e-feat-image-generation-tool`.
+- Root UAT env: `ENV=dev` on `/home/antoinefa/src/sentropic`, same HEAD as the branch under qualification.
+
+## Plan / Todo (lot-based)
+- [ ] **Lot 0 - Baseline & constraints**
+  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `TODO.md`, `PLAN.md`, this branch file, BR-38a final PR, and the four source specs listed in Allowed Paths.
+  - [ ] Confirm BR-38a is merged into `main`.
+  - [x] Create isolated worktree `tmp/feat-image-generation-tool` from `main`.
+  - [x] Copy `.env` into the worktree only if local service execution is needed; override branch ports and never use root `ENV=dev` for tests.
+  - [x] Capture Makefile targets needed for API, UI, package, AI, and E2E gates.
+  - [x] Confirm command style with `API_PORT=9191`, `UI_PORT=5391`, `MAILDEV_UI_PORT=1291`, and the concrete `ENV=...` value last.
+  - [x] Confirm scope boundaries and declare `BR38b-EXn` before touching conditional paths.
+  - [ ] Add `spec/BRANCH_SPEC_EVOL_IMAGE_GENERATION.md` only if the design cannot be integrated cleanly into existing specs in the same branch.
+
+- [ ] **Lot 1 - Mesh image generation contract**
+  - [ ] Extend `@sentropic/llm-mesh` capabilities with generated image output modality.
+  - [ ] Add a typed image generation request/response contract that carries prompt, size/aspect ratio, count, quality/style when supported, provider options, and binary/url result references.
+  - [ ] Implement provider adapter support for the selected first provider path and explicit unsupported-provider errors for the rest.
+  - [ ] Ensure provider auth resolution uses existing mesh auth material and does not create a new credential path.
+  - [ ] Preserve text chat generate/stream APIs without dual paths.
+  - [ ] Lot gate:
+    - [ ] `make test-packages SCOPE=packages/llm-mesh/tests/facade.test.ts ENV=test-feat-image-generation-tool`
+    - [ ] `make test-api SCOPE=tests/unit/provider-mesh-contract-proof.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+
+- [ ] **Lot 2 - API image generation tool and storage**
+  - [ ] Add a server-side chat tool contract, named `image_generate`, with JSON schema for prompt and generation controls.
+  - [ ] Route `image_generate` through the mesh image generation contract.
+  - [ ] Store generated image artifacts through the existing document/storage pattern and create generated-media context references.
+  - [ ] Return tool results with stable media IDs, MIME type, filename, dimensions when available, and download URLs.
+  - [ ] Add audit/runtime details for prompt, provider, model, status, and generated media references without logging raw credentials.
+  - [ ] Preserve existing `document_generate`, DOCX, PPTX, and chat tool behavior.
+  - [ ] Lot gate:
+    - [ ] `make test-api SCOPE=tests/api/chat-tools.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [ ] `make test-api SCOPE=tests/api/documents.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [ ] `make test-api SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [ ] `make test-api SCOPE=tests/unit/tool-service.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [ ] `make test-api SCOPE=tests/unit/documents-tool-service.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+
+- [ ] **Lot 3 - Chat UI generated image rendering**
+  - [ ] Register a generated image renderer through the existing chat-ui renderer registry/host adapter boundary.
+  - [ ] Render generated image cards inline with preview, prompt/title, status, provider/model metadata, download, and attach-to-documents actions.
+  - [ ] Keep generated image cards responsive with stable dimensions and no text overlap on mobile or desktop.
+  - [ ] Surface generation errors and refusals as recoverable chat tool results.
+  - [ ] Keep `@sentropic/chat-ui` generic and app-specific document/download URLs in the host adapter.
+  - [ ] Lot gate:
+    - [ ] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-image-generation-tool`
+    - [ ] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-image-generation-tool`
+    - [ ] `make test-ui SCOPE=tests/components/ChatPanel-docx-cards.test.ts ENV=test-feat-image-generation-tool`
+    - [ ] `make test-ui SCOPE=tests/chat/document-adapter.test.ts ENV=test-feat-image-generation-tool`
+    - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-image-generation-tool`
+
+- [ ] **Lot 4 - Generated media document integration**
+  - [ ] Attach generated image records to the current chat session document context.
+  - [ ] Add download behavior using the same document access controls as uploaded documents.
+  - [ ] Allow generated image reuse as a BR-38a image attachment in later turns.
+  - [ ] Keep Drive export out of scope unless `BR38b-EXn` is declared.
+  - [ ] Lot gate:
+    - [ ] `make test-api SCOPE=tests/api/chat.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [ ] `make test-api SCOPE=tests/api/documents.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-image-generation-tool`
+
+- [ ] **Lot N-2 - UAT**
+  - [ ] Web app setup:
+    - [ ] Push branch before UAT.
+    - [ ] Confirm root workspace is commit-identical to branch HEAD.
+    - [ ] Run user UAT from root with `API_PORT=8787`, `UI_PORT=5173`, `MAILDEV_UI_PORT=1080`, `ENV=dev`.
+  - [ ] Web app evolution tests:
+    - [ ] Ask chat to generate one product mockup image and verify the inline image card renders.
+    - [ ] Download the generated image and verify the file opens locally.
+    - [ ] Attach the generated image to the current document context and verify it appears in Documents.
+    - [ ] Reuse the generated image as an image attachment in a follow-up vision prompt.
+    - [ ] Trigger an unsupported-model path and verify the error is clear before provider dispatch.
+    - [ ] Trigger a provider refusal/quota-style error with a test double and verify the UI remains usable.
+  - [ ] Web app non-regression tests:
+    - [ ] Existing text-only chat send/retry/edit/stop flows still work.
+    - [ ] Existing document generation tools still produce downloadable artifacts.
+    - [ ] Existing uploaded/Drive document context flows still work.
+    - [ ] Existing chat tool cards do not regress visually.
+
+- [ ] **Lot N-1 - Docs consolidation**
+  - [ ] Update `SPEC_EVOL_LLM_MESH.md` with the image generation mesh contract.
+  - [ ] Update `SPEC_CHATBOT.md` with the `image_generate` tool contract and generated media lifecycle.
+  - [ ] Update `SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` with generated-image renderer boundaries.
+  - [ ] Update `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` only if the package boundaries changed.
+  - [ ] Delete `spec/BRANCH_SPEC_EVOL_IMAGE_GENERATION.md` after integration if it was created.
+
+- [ ] **Lot N - Final validation**
+  - [ ] Typecheck and lint:
+    - [ ] `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [ ] `make lint-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [ ] `make typecheck-ui ENV=test-feat-image-generation-tool`
+    - [ ] `make lint-ui ENV=test-feat-image-generation-tool`
+  - [ ] Retest packages:
+    - [ ] `make test-packages ENV=test-feat-image-generation-tool`
+  - [ ] Retest API:
+    - [ ] `make test-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+  - [ ] Retest UI:
+    - [ ] `make test-ui ENV=test-feat-image-generation-tool`
+  - [ ] Retest E2E:
+    - [ ] `make build-api build-ui-image API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool`
+    - [ ] `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool`
+    - [ ] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool`
+    - [ ] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool`
+  - [ ] Retest AI flaky tests under acceptance rule:
+    - [ ] `make test-api-ai SCOPE=tests/ai/chat-tools.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+  - [ ] Record explicit user sign-off if any AI flaky test is accepted.
+  - [ ] Bump affected package versions for every touched package `src/**`.
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
