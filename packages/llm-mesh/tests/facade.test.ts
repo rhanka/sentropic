@@ -115,6 +115,73 @@ describe('createLlmMesh', () => {
     expect(adapter.generate).not.toHaveBeenCalled();
   });
 
+  it('fails early when the selected model does not support image input', async () => {
+    const model = {
+      providerId: 'cohere' as const,
+      modelId: 'command-a-03-2025',
+      label: 'Command A',
+      reasoningTier: 'standard' as const,
+      defaultTaskHints: ['chat'] as const,
+      capabilities: {
+        ...getProviderProfile('cohere').capabilities,
+        modalities: { input: ['text'] as const, output: ['text'] as const },
+      },
+    };
+    const adapter = buildAdapter(model);
+    const mesh = createLlmMesh({ registry: createProviderRegistry([adapter]) });
+
+    await expect(
+      mesh.generate({
+        providerId: 'cohere',
+        modelId: 'command-a-03-2025',
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Describe this image' },
+            { type: 'image', mediaType: 'image/png', data: 'iVBORw0KGgo=' },
+          ],
+        }],
+        auth: { type: 'environment-token', envVar: 'COHERE_API_KEY' },
+      }),
+    ).rejects.toThrow('Image input is unsupported for cohere:command-a-03-2025');
+    expect(adapter.generate).not.toHaveBeenCalled();
+  });
+
+  it('passes image and file content parts through unchanged for models that support them', async () => {
+    const model = {
+      providerId: 'openai' as const,
+      modelId: 'gpt-5.5',
+      label: 'GPT-5.5',
+      reasoningTier: 'advanced' as const,
+      defaultTaskHints: ['chat'] as const,
+      capabilities: {
+        ...getProviderProfile('openai').capabilities,
+        modalities: { input: ['text', 'image', 'file'] as const, output: ['text'] as const },
+      },
+    };
+    const adapter = buildAdapter(model);
+    const mesh = createLlmMesh({ registry: createProviderRegistry([adapter]) });
+    const content = [
+      { type: 'text' as const, text: 'Summarize these inputs' },
+      { type: 'image' as const, mediaType: 'image/png', data: 'iVBORw0KGgo=' },
+      { type: 'file' as const, mediaType: 'application/pdf', url: 'https://example.test/file.pdf', filename: 'file.pdf' },
+    ];
+
+    await mesh.generate({
+      providerId: 'openai',
+      modelId: 'gpt-5.5',
+      messages: [{ role: 'user', content }],
+      auth: { type: 'environment-token', envVar: 'OPENAI_API_KEY' },
+    });
+
+    expect(adapter.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [expect.objectContaining({ role: 'user', content })],
+      }),
+      expect.anything(),
+    );
+  });
+
   it('does not mark reasoning catalog models as unsupported', () => {
     const cohereReasoning = getModelProfile('cohere', 'command-a-reasoning-08-2025');
     const geminiFlash = getModelProfile('gemini', 'gemini-3.5-flash');
@@ -132,5 +199,13 @@ describe('createLlmMesh', () => {
     expect(legacyGeminiFlashLite).toBeNull();
     expect(claudeOpus?.label).toBe('Opus 4.7');
     expect(claudeOpus?.reasoningTier).toBe('advanced');
+  });
+
+  it('advertises image input only for verified vision-capable provider families', () => {
+    expect(getModelProfile('openai', 'gpt-5.5')?.capabilities.modalities.input).toContain('image');
+    expect(getModelProfile('gemini', 'gemini-3.5-flash')?.capabilities.modalities.input).toContain('image');
+    expect(getModelProfile('anthropic', 'claude-opus-4-7')?.capabilities.modalities.input).toContain('image');
+    expect(getModelProfile('mistral', 'mistral-small-2603')?.capabilities.modalities.input).not.toContain('image');
+    expect(getModelProfile('cohere', 'command-a-03-2025')?.capabilities.modalities.input).not.toContain('image');
   });
 });
