@@ -108,6 +108,8 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - Store generated media through existing document/storage references, not inline chat text.
   - Render generated images through a generic media/tool-result registry so BR-38a attachment primitives can be reused.
   - Keep implementation Lots 1-4 blocked until BR-38a is merged into `main`.
+- Main sync 2026-05-24: merged `origin/main` after root fast-forward from `85c679d7` to `146364eb`; no merge conflicts. Branch remains docs-only and implementation is still blocked by BR-38a plus the pending image-model design decision.
+- OpenAI docs refresh 2026-05-24: official GPT Image docs now list `gpt-image-2` as the current GPT Image model, with `gpt-image-1` still available. Pending brainstorm decision: default to `gpt-image-2` with `gpt-image-1` as explicit fallback, or keep the branch locked to `gpt-image-1`.
 
 ## AI Flaky tests
 - Acceptance rule:
