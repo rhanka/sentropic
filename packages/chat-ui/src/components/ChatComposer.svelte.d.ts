@@ -12,6 +12,7 @@ export type ChatComposerProps = {
   tabIndex?: number;
   composerElement?: HTMLDivElement | null;
   onKeyDown?: (event: KeyboardEvent) => void;
+  onPaste?: (event: ClipboardEvent) => void;
   renderComposerSurface: Snippet<[]>;
   renderFloatingLayer: Snippet<[]>;
   renderAttachmentTray?: Snippet<[]>;
