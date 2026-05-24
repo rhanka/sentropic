@@ -1,0 +1,49 @@
+{
+  "name": "@sentropic/skills",
+  "version": "0.1.1",
+  "description": "Skill catalog, SKILL.md parser, sandbox runtime, and description-based discovery for Sentropic agents.",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/skills"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/bundles/**/*.md",
+    "src/bundles/**/*.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests --environment node"
+  },
+  "dependencies": {
+    "docx": "^9.5.1",
+    "gray-matter": "4.0.3",
+    "isolated-vm": "6.1.2",
+    "pptxgenjs": "^4.0.1",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "20.11.30",
+    "typescript": "5.4.5",
+    "vitest": "4.0.18"
+  }
+}
