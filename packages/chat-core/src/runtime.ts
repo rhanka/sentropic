@@ -1093,7 +1093,12 @@ export type AcceptLocalToolResultResponse = {
  * (OpenAI Responses API) at the call boundary.
  */
 export type AssistantRunLoopMessage =
-  | { role: 'system' | 'user' | 'assistant'; content: string }
+  | {
+      role: 'system' | 'user' | 'assistant';
+      content:
+        | string
+        | ReadonlyArray<{ readonly type: string; readonly [key: string]: unknown }>;
+    }
   | { role: 'tool'; content: string; tool_call_id: string };
 
 /**
