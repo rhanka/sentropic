@@ -10,6 +10,7 @@ import type { AuthHonoPorts } from './ports.js';
 export interface CreateAuthRouterOptions {
   cookieNames?: AuthHonoCookieNames;
   emailCode?: AuthHonoEmailCodePolicy;
+  handlers?: AuthHonoRouteHandlers;
   magicLink?: AuthHonoMagicLinkPolicy;
   ports?: AuthHonoPorts;
   responsePolicy?: AuthHonoResponsePolicy;
@@ -112,9 +113,14 @@ export const createAuthRouter = (options: CreateAuthRouterOptions = {}): Hono =>
 
   for (const routeName of Object.keys(config.routes) as AuthHonoAuthUiMethod[]) {
     const contract = config.routes[routeName];
+    const handler = options.handlers?.[routeName];
 
-    router.on(contract.method, joinRoutePath(config.routePrefix, contract.path), (c) =>
-      c.json(
+    router.on(contract.method, joinRoutePath(config.routePrefix, contract.path), (c) => {
+      if (handler) {
+        return handler(c);
+      }
+
+      return c.json(
         {
           error: {
             code: config.responsePolicy.notImplementedCode,
@@ -122,8 +128,8 @@ export const createAuthRouter = (options: CreateAuthRouterOptions = {}): Hono =>
           },
         },
         501
-      )
-    );
+      );
+    });
   }
 
   return router;
