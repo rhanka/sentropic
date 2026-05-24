@@ -15,6 +15,7 @@ import {
   type StreamResult,
   type ToolChoice,
   type ToolDefinition,
+  type MessageContent,
 } from '@sentropic/llm-mesh';
 import type OpenAI from 'openai';
 
@@ -65,13 +66,63 @@ const stringifyContent = (value: unknown): string => {
   }
 };
 
+const toMeshContent = (value: unknown): MessageContent => {
+  if (typeof value === 'string') return value;
+  if (!Array.isArray(value)) return stringifyContent(value);
+
+  const parts = value
+    .map((item) => {
+      if (!isRecord(item)) return null;
+      const type = typeof item.type === 'string' ? item.type : '';
+      if (type === 'text' || type === 'input_text') {
+        const text = typeof item.text === 'string' ? item.text : '';
+        return text ? { type: 'text' as const, text } : null;
+      }
+      if (type === 'image_url') {
+        const imageUrl = item.image_url;
+        const url =
+          typeof imageUrl === 'string'
+            ? imageUrl
+            : isRecord(imageUrl) && typeof imageUrl.url === 'string'
+              ? imageUrl.url
+              : '';
+        return url ? { type: 'image' as const, url } : null;
+      }
+      if (type === 'input_image') {
+        const url = typeof item.image_url === 'string' ? item.image_url : '';
+        return url ? { type: 'image' as const, url } : null;
+      }
+      if (type === 'image') {
+        const mediaType = typeof item.mediaType === 'string' ? item.mediaType : undefined;
+        const data = typeof item.data === 'string' ? item.data : undefined;
+        const url = typeof item.url === 'string' ? item.url : undefined;
+        return data || url
+          ? { type: 'image' as const, ...(mediaType ? { mediaType } : {}), ...(data ? { data } : {}), ...(url ? { url } : {}) }
+          : null;
+      }
+      if (type === 'file') {
+        const mediaType = typeof item.mediaType === 'string' ? item.mediaType : undefined;
+        const data = typeof item.data === 'string' ? item.data : undefined;
+        const url = typeof item.url === 'string' ? item.url : undefined;
+        const filename = typeof item.filename === 'string' ? item.filename : undefined;
+        return data || url
+          ? { type: 'file' as const, ...(mediaType ? { mediaType } : {}), ...(data ? { data } : {}), ...(url ? { url } : {}), ...(filename ? { filename } : {}) }
+          : null;
+      }
+      return null;
+    })
+    .filter((part): part is Exclude<MessageContent, string>[number] => part !== null);
+
+  return parts.length > 0 ? parts : stringifyContent(value);
+};
+
 const toMeshMessages = (
   messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
 ): LlmMeshMessage[] => {
   return messages.map((message) => {
     const record = message as unknown as Record<string, unknown>;
     const rawRole = typeof record.role === 'string' ? record.role : 'user';
-    const content = stringifyContent(record.content);
+    const content = rawRole === 'tool' ? stringifyContent(record.content) : toMeshContent(record.content);
 
     if (rawRole === 'tool') {
       const toolCallId =
@@ -83,7 +134,7 @@ const toMeshMessages = (
         content,
         toolResult: {
           toolCallId,
-          output: content,
+          output: stringifyContent(record.content),
         },
       };
     }
