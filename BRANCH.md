@@ -223,12 +223,12 @@ Extract the reusable Hono-side authentication routes and server contracts into a
 - **Track B - BR-39b `@sentropic/auth-hono`**
   - Done:
     - BR-39b worktree exists at `/home/antoinefa/src/sentropic/tmp/feat-auth-hono-kit` on `feat/auth-hono-kit`.
-    - Current inspected SHA at status update: pending port-contract commit on top of `6b3604cc9708`.
+    - Current inspected SHA at status update: `7cc1a6be545b`.
     - Lot 0 branch plan, backend inventory, scope decisions, npm/bootstrap anticipation, and `BR39b-EX1` are recorded.
     - Backend extraction inventory maps current Sentropic routes/services to package ports in `BR39b-INV1`.
     - `BR39b-EX1` is approved for narrow `Makefile` and `.github/workflows/ci.yml` edits required by package lifecycle automation.
     - BR-39a transport contract now exists in the sibling worktree and can be used as the backend shape reference once conductor confirms the inspected SHA or BR-39a merge point.
-    - `packages/auth-hono` package shell exists with package metadata, TypeScript source, tests, README, LICENSE, and built `dist/**` artifacts.
+    - `packages/auth-hono` package shell exists with package metadata, TypeScript source, tests, README, and LICENSE; `dist/**` is generated during build/pack and not tracked.
     - Initial route contract map is aligned with BR-39a `AuthUiTransport` method names.
     - Package lifecycle Make targets exist: `typecheck-auth-hono`, `test-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`.
     - CI/CD package wiring exists for `auth_hono`, `auth_hono_publish`, `validate-auth-hono`, `publish-auth-hono`, and `bootstrap_publish_target=auth-hono`.
@@ -264,7 +264,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [x] Record read-only backend extraction inventory in `BR39b-INV1`.
   - [x] Validate Lot 0 as documentation-only with `git diff --check`.
 
-- [ ] **Lot 1 - Package contracts and route factory**
+- [x] **Lot 1 - Package contracts and route factory**
   - [x] Wait for BR-39a exported auth transport contract before freezing route schemas; once visible, proceed quickly by extracting and replacing existing Sentropic auth behavior instead of redesigning it.
   - [x] Apply approved `BR39b-EX1` for scoped `Makefile` and `.github/workflows/ci.yml` edits needed by `auth-hono` package lifecycle wiring.
   - [x] Create `packages/auth-hono` with `package.json`, `tsconfig.json`, `README.md`, `LICENSE`, and `src/index.ts`.
@@ -281,7 +281,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [x] Add CI publish job `publish-auth-hono` with OIDC trusted publishing, gated on `main` and package publish path changes.
   - [x] Add `auth-hono` to `workflow_dispatch.bootstrap_publish_target` choices and bootstrap publish steps.
   - [x] Confirm `enforce-package-bump` behavior for the new package: new package skips old-version comparison, later `src/**` changes require semver bumps.
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make typecheck-auth-hono ENV=test-feat-auth-hono-kit`
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/contracts.test.ts ENV=test-feat-auth-hono-kit`
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/router-factory.test.ts ENV=test-feat-auth-hono-kit`
