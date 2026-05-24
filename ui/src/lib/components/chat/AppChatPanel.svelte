@@ -42,6 +42,7 @@
   import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import {
     deleteDocument,
+    getDownloadUrl,
     listDocuments,
     uploadDocument,
     type ContextDocumentItem,
@@ -140,6 +141,7 @@
     Eye,
     EyeOff,
     FolderOpen,
+    Image as ImageIcon,
     Trash2,
     ChevronLeft,
     ChevronRight,
@@ -182,8 +184,15 @@
   } from '@sentropic/chat-ui/utils/chat-run-projection';
   import {
     buildProjectedTimeline as buildChatProjectedTimeline,
+    type ChatMessageAttachment,
     type ChatProjectedTimelineItem,
   } from '@sentropic/chat-ui/state/chatProjection';
+  import {
+    createImageAttachmentDraft,
+    isSupportedImageAttachmentMimeType,
+    summarizeComposerAttachments,
+    type ChatComposerAttachmentDraft,
+  } from '@sentropic/chat-ui/state/chatAttachments';
   import {
     createComposerSteerAck,
     createOptimisticSteerMessage,
@@ -229,6 +238,7 @@
     sequence?: number;
     createdAt?: string;
     feedbackVote?: number | null;
+    attachments?: readonly ChatMessageAttachment[];
   };
 
   type LocalMessage = ChatMessage & {
@@ -600,6 +610,8 @@
   let selectedModelSelectionKey = 'openai::gpt-4.1-nano';
   let pendingTodoRuntimeDeleteConfirm = false;
   let input = draft;
+  let composerAttachments: ChatComposerAttachmentDraft[] = [];
+  let composerAttachmentSummary = summarizeComposerAttachments(composerAttachments);
   let commentInput = '';
   let commentMessages: CommentItem[] = [];
   export let commentLoading = false;
@@ -696,6 +708,7 @@
     typeof composerSteerStreamId === 'string' &&
     composerSteerStreamId.trim().length > 0;
   $: composerRunInFlight = sending || composerSteerReady;
+  $: composerAttachmentSummary = summarizeComposerAttachments(composerAttachments);
   $: composerPrimaryActionState = resolveComposerPrimaryAction({
     mode,
     input,
@@ -708,6 +721,7 @@
     composerRunInFlight,
     composerSteerReady,
     composerSteerInFlight,
+    attachments: mode === 'ai' ? composerAttachmentSummary : undefined,
   });
   $: composerPrimaryButtonShowsSteer = shouldShowSteerAction({
     composerRunInFlight,
@@ -2580,6 +2594,159 @@
     return res.sessionId;
   };
 
+  const createComposerAttachmentId = () =>
+    `att_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  const createComposerAttachmentPreviewUrl = (file: File): string | undefined => {
+    try {
+      return URL.createObjectURL(file);
+    } catch {
+      return undefined;
+    }
+  };
+
+  const revokeComposerAttachmentPreview = (
+    attachment: Pick<ChatComposerAttachmentDraft, 'previewUrl'>,
+  ) => {
+    if (!attachment.previewUrl?.startsWith('blob:')) return;
+    try {
+      URL.revokeObjectURL(attachment.previewUrl);
+    } catch {
+      // ignore browser cleanup failures
+    }
+  };
+
+  const clearComposerAttachments = () => {
+    for (const attachment of composerAttachments) {
+      revokeComposerAttachmentPreview(attachment);
+    }
+    composerAttachments = [];
+  };
+
+  const removeComposerAttachment = (attachmentId: string) => {
+    const attachment = composerAttachments.find((item) => item.id === attachmentId);
+    if (attachment) revokeComposerAttachmentPreview(attachment);
+    composerAttachments = composerAttachments.filter((item) => item.id !== attachmentId);
+  };
+
+  const updateComposerAttachment = (
+    attachmentId: string,
+    patch: Partial<ChatComposerAttachmentDraft>,
+  ) => {
+    composerAttachments = composerAttachments.map((attachment) =>
+      attachment.id === attachmentId ? { ...attachment, ...patch } : attachment,
+    );
+  };
+
+  const getComposerAttachmentStatusLabel = (
+    attachment: ChatComposerAttachmentDraft,
+  ): string => {
+    if (attachment.state === 'ready') return attachment.mimeType;
+    if (attachment.state === 'failed') return attachment.error || $_('common.error');
+    return $_('common.loading');
+  };
+
+  const getAttachmentImageSrc = (attachment: ChatMessageAttachment): string => {
+    if (attachment.previewUrl) return attachment.previewUrl;
+    if (attachment.url) return attachment.url;
+    if (attachment.documentId) {
+      return getDownloadUrl({
+        documentId: attachment.documentId,
+        workspaceId: getScopedWorkspaceIdForUser(),
+      });
+    }
+    return '';
+  };
+
+  const attachImageFileToComposer = async (
+    file: File,
+    source: 'paste' | 'upload',
+  ) => {
+    if (!isSupportedImageAttachmentMimeType(file.type)) return false;
+    showComposerMenu = false;
+    const attachmentId = createComposerAttachmentId();
+    const previewUrl = createComposerAttachmentPreviewUrl(file);
+    composerAttachments = [
+      ...composerAttachments,
+      createImageAttachmentDraft({
+        id: attachmentId,
+        source,
+        fileName: file.name || 'image',
+        mimeType: file.type,
+        sizeBytes: file.size,
+        state: 'uploading',
+        previewUrl,
+      }),
+    ];
+
+    sessionDocsUploading = true;
+    sessionDocsError = null;
+    try {
+      const targetSessionId = await ensureSessionDocumentTarget();
+      const scopedWs = getScopedWorkspaceIdForUser();
+      const uploaded = await uploadDocument({
+        ...createChatSessionDocumentContext(targetSessionId, scopedWs),
+        file,
+      });
+      updateComposerAttachment(attachmentId, {
+        state: 'ready',
+        documentId: uploaded.id,
+      });
+      await loadSessionDocs();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      sessionDocsError = msg;
+      updateComposerAttachment(attachmentId, {
+        state: 'failed',
+        error: msg,
+      });
+    } finally {
+      sessionDocsUploading = false;
+    }
+    return true;
+  };
+
+  const addGoogleDriveImageAttachments = (items: Array<Record<string, unknown>>) => {
+    const imageAttachments = items
+      .filter((item) => {
+        const mimeType = typeof item.mime_type === 'string' ? item.mime_type : '';
+        const documentId = typeof item.id === 'string' ? item.id.trim() : '';
+        return documentId.length > 0 && isSupportedImageAttachmentMimeType(mimeType);
+      })
+      .map((item) =>
+        createImageAttachmentDraft({
+          id: createComposerAttachmentId(),
+          source: 'drive',
+          fileName:
+            typeof item.filename === 'string' && item.filename.trim().length > 0
+              ? item.filename
+              : 'image',
+          mimeType: typeof item.mime_type === 'string' ? item.mime_type : 'image/png',
+          sizeBytes:
+            typeof item.size_bytes === 'number' && Number.isFinite(item.size_bytes)
+              ? item.size_bytes
+              : 0,
+          state: 'ready',
+          documentId: String(item.id),
+        }),
+      );
+    if (imageAttachments.length > 0) {
+      composerAttachments = [...composerAttachments, ...imageAttachments];
+    }
+  };
+
+  const handleComposerPaste = (event: ClipboardEvent) => {
+    if (mode !== 'ai') return;
+    const files = Array.from(event.clipboardData?.files ?? []).filter((file) =>
+      isSupportedImageAttachmentMimeType(file.type),
+    );
+    if (files.length === 0) return;
+    event.preventDefault();
+    for (const file of files) {
+      void attachImageFileToComposer(file, 'paste');
+    }
+  };
+
   const importSessionDocsFromGoogleDrive = async () => {
     if (googleDriveActionInFlight) return;
     googleDriveActionInFlight = true;
@@ -2596,9 +2763,10 @@
       if (fileIds.length === 0) return;
 
       await resolveGoogleDrivePickerSelection({ fileIds });
-      await attachGoogleDriveDocuments(
+      const attachedItems = await attachGoogleDriveDocuments(
         createGoogleDriveChatAttachInput(targetSessionId, fileIds),
       );
+      addGoogleDriveImageAttachments(attachedItems);
       await loadSessionDocs();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -2631,7 +2799,12 @@
   };
 
   const onPickSessionDoc = async (event: CustomEvent<{ file: File }>) => {
-    await uploadSessionDoc(event.detail.file);
+    const file = event.detail.file;
+    if (isSupportedImageAttachmentMimeType(file.type)) {
+      await attachImageFileToComposer(file, 'upload');
+      return;
+    }
+    await uploadSessionDoc(file);
   };
 
   const removeSessionDoc = async (doc: ContextDocumentItem) => {
@@ -3603,6 +3776,7 @@
       runtimeSummaryByMessageId = new Map();
       sessionDocs = [];
       sessionDocsError = null;
+      clearComposerAttachments();
       sessionId = id;
       historyHydrationSwapPending = true;
     };
@@ -4008,7 +4182,24 @@
 
   const sendMessage = async () => {
     const text = input.trim();
-    if (!text || (sending && !composerSteerReady)) return;
+    const sentAttachments: ChatMessageAttachment[] = composerAttachments
+      .filter(
+        (attachment) =>
+          attachment.state === 'ready' &&
+          attachment.kind === 'image' &&
+          typeof attachment.documentId === 'string' &&
+          attachment.documentId.trim().length > 0,
+      )
+      .map((attachment) => ({
+        kind: 'image' as const,
+        source: 'context_document',
+        documentId: attachment.documentId,
+        fileName: attachment.fileName,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        state: 'ready' as const,
+      }));
+    if ((!text && sentAttachments.length === 0) || (sending && !composerSteerReady)) return;
 
     sending = true;
     errorMsg = null;
@@ -4035,6 +4226,14 @@
           parameters: Record<string, unknown>;
         }>;
         workspace_id?: string;
+        attachments?: Array<{
+          kind: 'image';
+          source: 'context_document';
+          documentId: string;
+          fileName?: string;
+          mimeType?: string;
+          sizeBytes?: number;
+        }>;
       } = {
         content: text,
       };
@@ -4062,6 +4261,16 @@
 
       const enabledTools = getEnabledToolIds();
       if (enabledTools.length > 0) payload.tools = enabledTools;
+      if (sentAttachments.length > 0) {
+        payload.attachments = sentAttachments.map((attachment) => ({
+          kind: 'image',
+          source: 'context_document',
+          documentId: attachment.documentId ?? '',
+          fileName: attachment.fileName,
+          mimeType: attachment.mimeType,
+          sizeBytes: attachment.sizeBytes,
+        }));
+      }
 
       if (isLocalToolRuntimeAvailable()) {
         const enabledLocalToolIds = new Set(
@@ -4084,6 +4293,7 @@
       }>(chatMessagesUrl(), payload);
 
       input = '';
+      clearComposerAttachments();
       composerIsMultiline = false;
       updateComposerHeight();
       if (res.sessionId && res.sessionId !== sessionId) {
@@ -4099,6 +4309,7 @@
         sessionId: res.sessionId,
         role: 'user',
         content: text,
+        attachments: sentAttachments,
         createdAt: nowIso,
         _localStatus: 'completed',
       };
@@ -4370,6 +4581,7 @@
         handleGoogleDriveConnectionUpdated,
       );
     }
+    clearComposerAttachments();
   });
 </script>
 
@@ -4728,6 +4940,34 @@
           </div>
         {/if}
       {:else}
+        {#snippet renderTimelineMessageAttachments(item: any)}
+          {#if item.kind === 'message' && item.message.role === 'user' && (item.message.attachments?.length ?? 0) > 0}
+            <div class="mt-1 flex justify-end">
+              <div class="grid max-w-[85%] grid-cols-2 gap-1">
+                {#each item.message.attachments as attachment (attachment.id ?? attachment.documentId ?? attachment.url ?? attachment.fileName)}
+                  {#if attachment.kind === 'image'}
+                    {@const imageSrc = getAttachmentImageSrc(attachment)}
+                    <div class="overflow-hidden rounded border border-primary/20 bg-white/10">
+                      {#if imageSrc}
+                        <img
+                          src={imageSrc}
+                          alt={attachment.fileName ?? 'image'}
+                          class="block h-24 w-24 object-cover"
+                          loading="lazy"
+                        />
+                      {:else}
+                        <div class="flex h-24 w-24 items-center justify-center bg-slate-100 text-slate-500">
+                          <ImageIcon class="h-5 w-5" />
+                        </div>
+                      {/if}
+                    </div>
+                  {/if}
+                {/each}
+              </div>
+            </div>
+          {/if}
+        {/snippet}
+
         {#snippet renderTimelineUserMessage(item: any)}
             {#if item.kind === 'message' && item.message.role === 'user'}
               {@const m = item.message}
@@ -4762,7 +5002,9 @@
                       </div>
                     </div>
                   {:else}
-                    <Streamdown content={m.content ?? ''} />
+                    {#if (m.content ?? '').trim().length > 0}
+                      <Streamdown content={m.content ?? ''} />
+                    {/if}
                   {/if}
                 </div>
                 <div
@@ -4947,6 +5189,7 @@
           <ChatTimelineWrapper
             {items}
             renderUserMessage={renderTimelineUserMessage}
+            renderMessageAttachments={renderTimelineMessageAttachments}
             renderAssistantSegment={renderTimelineAssistantSegment}
             renderRuntimeSegment={renderTimelineRuntimeSegment}
           />
@@ -5341,6 +5584,48 @@
         {/if}
   {/snippet}
 
+  {#snippet renderAttachmentTray()}
+        {#if mode === 'ai' && composerAttachments.length > 0}
+          <div
+            class="mt-2 flex gap-2 overflow-x-auto slim-scroll"
+            data-testid="chat-composer-attachment-tray"
+          >
+            {#each composerAttachments as attachment (attachment.id)}
+              <div
+                class="flex h-14 min-w-0 max-w-[12rem] items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700"
+              >
+                {#if attachment.previewUrl}
+                  <img
+                    src={attachment.previewUrl}
+                    alt={attachment.fileName}
+                    class="h-10 w-10 rounded object-cover"
+                  />
+                {:else}
+                  <div class="flex h-10 w-10 items-center justify-center rounded bg-slate-100 text-slate-500">
+                    <ImageIcon class="h-4 w-4" />
+                  </div>
+                {/if}
+                <div class="min-w-0 flex-1">
+                  <div class="truncate font-medium">{attachment.fileName}</div>
+                  <div class="truncate text-slate-400">
+                    {getComposerAttachmentStatusLabel(attachment)}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  aria-label={$_('common.delete')}
+                  title={$_('common.delete')}
+                  on:click={() => removeComposerAttachment(attachment.id)}
+                >
+                  <X class="h-3.5 w-3.5" />
+                </button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+  {/snippet}
+
   {#snippet renderLeftControls()}
         {#if mode === 'ai'}
           <MenuPopover
@@ -5544,8 +5829,10 @@
       : 0}
     bind:composerElement={composerEl}
     onKeyDown={handleKeyDown}
+    onPaste={handleComposerPaste}
     {renderComposerSurface}
     {renderFloatingLayer}
+    {renderAttachmentTray}
     {renderLeftControls}
     {renderRightActions}
   />

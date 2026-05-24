@@ -25,4 +25,14 @@ describe('AppChatPanel boundary', () => {
     expect(source).not.toContain("import { apiFetch");
     expect(source).not.toContain('const sendMessage = async');
   });
+
+  it('wires host-managed image attachments from composer to chat message payloads', () => {
+    const source = readFileSync(appPanelPath, 'utf8');
+    expect(source).toContain("@sentropic/chat-ui/state/chatAttachments");
+    expect(source).toContain('let composerAttachments');
+    expect(source).toContain('handleComposerPaste');
+    expect(source).toContain('renderAttachmentTray');
+    expect(source).toContain('payload.attachments');
+    expect(source).toContain('attachments: sentAttachments');
+  });
 });
