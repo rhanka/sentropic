@@ -20,7 +20,7 @@ import {
   type ReasoningEffortEvaluation,
   type ReasoningEffortLabel,
 } from '../../../packages/chat-core/src/runtime';
-import type { ChatMessageWithFeedback } from '../../../packages/chat-core/src/message-port';
+import type { ChatMessageAttachment, ChatMessageWithFeedback } from '../../../packages/chat-core/src/message-port';
 import {
   writeContextBudgetStatus as writeContextBudgetStatusPure,
   type ContextBudgetSnapshot as ChatCoreContextBudgetSnapshot,
@@ -182,6 +182,7 @@ export type CreateChatMessageInput = {
   primaryContextType?: ChatContextType | null;
   primaryContextId?: string | null;
   contexts?: Array<{ contextType: ChatContextType; contextId: string }>;
+  attachments?: ChatMessageAttachment[] | null;
   sessionTitle?: string | null;
 };
 
