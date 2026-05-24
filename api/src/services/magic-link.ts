@@ -3,8 +3,8 @@ import { magicLinks, users } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { randomBytes, createHash } from 'crypto';
 import { logger } from '../logger';
-import nodemailer from 'nodemailer';
 import { env } from '../config/env';
+import { sendTransactionalEmail } from './scw-tem-client';
 import { deriveDisplayNameFromEmail } from '../utils/display-name';
 
 /**
@@ -34,39 +34,6 @@ interface VerifyMagicLinkResult {
 }
 
 const MAGIC_LINK_TTL = 10 * 60; // 10 minutes in seconds
-
-let mailTransporter: nodemailer.Transporter | null = null;
-
-function getMailTransporter(): nodemailer.Transporter | null {
-  if (mailTransporter) {
-    return mailTransporter;
-  }
-
-  if (!env.MAIL_HOST) {
-    logger.warn('MAIL_HOST not configured. Emails will not be sent.');
-    return null;
-  }
-
-  try {
-    mailTransporter = nodemailer.createTransport({
-      host: env.MAIL_HOST,
-      port: env.MAIL_PORT,
-      secure: env.MAIL_SECURE,
-      auth:
-        env.MAIL_USERNAME && env.MAIL_PASSWORD
-          ? {
-              user: env.MAIL_USERNAME,
-              pass: env.MAIL_PASSWORD,
-            }
-          : undefined,
-    });
-
-    return mailTransporter;
-  } catch (error) {
-    logger.error({ err: error }, 'Failed to initialize mail transporter.');
-    return null;
-  }
-}
 
 /**
  * Hash a token for storage (SHA-256)
@@ -275,19 +242,8 @@ export async function sendMagicLinkEmail(
   email: string,
   magicLink: string
 ): Promise<void> {
-  const transporter = getMailTransporter();
-
-  if (!transporter) {
-    logger.info({
-      email,
-      magicLink,
-    }, '[FALLBACK] Magic link email logged (no transporter available)');
-    return;
-  }
-
   try {
-    await transporter.sendMail({
-      from: env.MAIL_FROM,
+    await sendTransactionalEmail({
       to: email,
       subject: 'Votre lien de connexion Top AI Ideas',
       text: `Bonjour,\n\nVoici votre lien de connexion sécurisé. Il expirera dans 10 minutes et ne peut être utilisé qu'une seule fois.\n\n${magicLink}\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.\n\nL’équipe Top AI Ideas`,
