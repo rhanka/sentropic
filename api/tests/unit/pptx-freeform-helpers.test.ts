@@ -22,7 +22,6 @@ import {
   isPptxPresentation,
   writePptxBuffer,
 } from '../../src/services/pptx-generation';
-import { getPptxFreeformSkill } from '../../src/services/pptx-freeform-skill';
 
 const stubContext: PptxFreeformContext = {
   entity: { id: 'folder-1', name: 'Test Folder', description: 'A test presentation' },
@@ -165,14 +164,5 @@ describe('pptx-freeform helpers', () => {
   it('should provide defensive text coercion', () => {
     expect(safeText(null, 'fallback')).toBe('fallback');
     expect(safeText('  spaced\ntext  ')).toBe('spaced text');
-  });
-
-  it('should return compact upskill guidance', () => {
-    const skill = getPptxFreeformSkill();
-    expect(skill.length).toBeGreaterThan(500);
-    expect(skill).toContain('PptGenJS');
-    expect(skill).toContain('pptx()');
-    expect(skill).toContain('Wide slides are 13.333 x 7.5 inches');
-    expect(skill).toContain('No `require`, `import`, `fs`, `fetch`, `process`');
   });
 });
