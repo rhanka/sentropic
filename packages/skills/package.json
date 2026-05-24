@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/skills",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Skill catalog, SKILL.md parser, sandbox runtime, and description-based discovery for Sentropic agents.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
