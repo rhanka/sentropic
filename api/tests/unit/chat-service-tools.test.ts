@@ -844,6 +844,58 @@ it('should evaluate reasoning effort with gemini-3.5-thinking when provider is g
     expect(calls.length).toBeGreaterThan(10);
   });
 
+  it('should stop repeated identical tool validation errors before the max-iteration fallback', async () => {
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+    const calls: any[] = [];
+
+    mock.mockImplementation((opts: any) => {
+      calls.push(opts);
+      const toolsEnabled = Array.isArray(opts?.tools) && opts.tools.length > 0;
+      if (toolsEnabled) {
+        return stream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: `call_plan_bad_${calls.length}`,
+              name: 'plan',
+              args: JSON.stringify({ action: 'unknown' }),
+            },
+          },
+          { type: 'done', data: {} },
+        ]);
+      }
+      return stream([
+        {
+          type: 'content_delta',
+          data: { delta: 'Je ne peux pas continuer avec cet appel outil.' },
+        },
+        { type: 'done', data: {} },
+      ]);
+    });
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'Run the plan tool with invalid args repeatedly',
+      model: 'gpt-4.1-nano',
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+      tools: ['plan'],
+    });
+
+    expect(calls).toHaveLength(4);
+    expect(calls[0]?.tools?.length).toBeGreaterThan(0);
+    expect(calls[1]?.tools?.length).toBeGreaterThan(0);
+    expect(calls[2]?.tools?.length).toBeGreaterThan(0);
+    expect(calls[3]?.tools).toBeUndefined();
+    expect(calls[3]?.toolChoice).toBe('none');
+  });
+
   it('should inject strict TODO orchestration rules in system prompt when an active session TODO exists', async () => {
     const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     let systemPrompt = '';
