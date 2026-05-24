@@ -102,6 +102,12 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - `packages/llm-mesh/src/capabilities.ts` output modalities currently include `text`, `json`, and `tool-call`, not `image`.
   - `packages/chat-ui/src/renderers/registry.ts` provides a renderer registry suitable for generated image cards.
   - Existing document generation tools store downloadable artifacts; generated image storage should reuse that pattern where practical.
+- Lot 0 decision brief from the parallel contract spike:
+  - Use a separate mesh `generateImage()` contract instead of overloading text chat streaming.
+  - Start with OpenAI image generation (`openai:gpt-image-1`) and return deterministic unsupported-provider errors elsewhere.
+  - Store generated media through existing document/storage references, not inline chat text.
+  - Render generated images through a generic media/tool-result registry so BR-38a attachment primitives can be reused.
+  - Keep implementation Lots 1-4 blocked until BR-38a is merged into `main`.
 
 ## AI Flaky tests
 - Acceptance rule:
