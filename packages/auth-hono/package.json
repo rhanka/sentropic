@@ -24,6 +24,10 @@
       "types": "./dist/email-verification.d.ts",
       "import": "./dist/email-verification.js"
     },
+    "./magic-link": {
+      "types": "./dist/magic-link.d.ts",
+      "import": "./dist/magic-link.js"
+    },
     "./middleware": {
       "types": "./dist/middleware.d.ts",
       "import": "./dist/middleware.js"
