@@ -145,6 +145,12 @@ export interface AuthHonoSessionPort {
   findByTokenHash(sessionTokenHash: string): Promise<AuthHonoSessionRecord | null>;
   findByRefreshTokenHash(refreshTokenHash: string): Promise<AuthHonoSessionRecord | null>;
   touch(sessionId: string, now: Date): Promise<void>;
+  updateTokens(input: {
+    expiresAt: Date;
+    refreshTokenHash: string;
+    sessionId: string;
+    sessionTokenHash: string;
+  }): Promise<AuthHonoSessionRecord | null>;
   revoke(sessionId: string): Promise<boolean>;
   revokeAllForUser(userId: string): Promise<number>;
   listForUser(userId: string): Promise<AuthHonoSessionRecord[]>;

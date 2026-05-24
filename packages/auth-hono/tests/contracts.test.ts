@@ -12,6 +12,7 @@ describe('@sentropic/auth-hono contracts', () => {
     expect(AUTH_HONO_AUTH_UI_METHODS).toEqual([
       'requestEmailCode',
       'verifyEmailCode',
+      'requestMagicLink',
       'verifyMagicLink',
       'createPasskeyRegistrationOptions',
       'verifyPasskeyRegistration',
@@ -29,6 +30,10 @@ describe('@sentropic/auth-hono contracts', () => {
     expect(AUTH_HONO_ROUTE_MAP.requestEmailCode).toEqual({
       method: 'POST',
       path: '/email/verify-request',
+    });
+    expect(AUTH_HONO_ROUTE_MAP.requestMagicLink).toEqual({
+      method: 'POST',
+      path: '/magic-link/request',
     });
     expect(AUTH_HONO_ROUTE_MAP.verifyPasskeyRegistration).toEqual({
       method: 'POST',
@@ -136,6 +141,7 @@ describe('@sentropic/auth-hono contracts', () => {
         findByTokenHash: async () => session,
         findByRefreshTokenHash: async () => session,
         touch: async () => undefined,
+        updateTokens: async () => session,
         revoke: async () => true,
         revokeAllForUser: async () => 1,
         listForUser: async () => [session],
