@@ -105,8 +105,8 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
     - [x] Conclusion: **no new IAM Application or secret key created**. The HTTP API client must reuse the existing secret value currently stored in root `.env` as `MAIL_PASSWORD` (will be remapped to `SCW_TEM_SECRET_KEY` in Lot 1.2; same value).
     - [x] Recorded full IAM trail in `docs/uat/2026-05-24-deploy-poc-k8s-37b.md` (without leaking the secret): Application id, Policy id, both permission sets, project id, region (`fr-par`), validated sender domain (`sent-tech.ca`), `message_id` of the live smoke send.
 
-  - [ ] **Lot 1.2 — Add `SCW_TEM_*` env vars + Zod schema (BR37b-EX4)**
-    - [ ] Edit `api/src/config/env.ts`:
+  - [x] **Lot 1.2 — Add `SCW_TEM_*` env vars + Zod schema (BR37b-EX4)**
+    - [x] Edit `api/src/config/env.ts`:
       - Add `SCW_TEM_API_BASE_URL` (default `https://api.scaleway.com`, dev override `http://scw-tem-mock:7700`).
       - Add `SCW_TEM_REGION` (default `fr-par`).
       - Add `SCW_TEM_PROJECT_ID` (required, falls back to `SCW_DEFAULT_PROJECT_ID` if absent).
@@ -116,16 +116,16 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
     - [ ] Edit root `.env` accordingly:
       - Replace the legacy `MAIL_*` block (lines 64-67 area) with `export SCW_TEM_SECRET_KEY=<same value as the old MAIL_PASSWORD>`, `export SCW_TEM_PROJECT_ID="${SCW_DEFAULT_PROJECT_ID}"`, `export SCW_TEM_REGION=fr-par`, `export SCW_TEM_FROM_EMAIL=no-reply@sent-tech.ca`. No new secret to procure; same IAM secret key, scope now covers API send via the `BR37b-IAM1` policy extension.
 
-  - [ ] **Lot 1.3 — New `api/src/services/scw-tem-client.ts` (BR37b-EX4)**
-    - [ ] Single function `sendEmail({ to, subject, html, text, fromEmail?, fromName? }): Promise<{ messageId: string }>`.
-    - [ ] Implementation: `fetch(${env.SCW_TEM_API_BASE_URL}/transactional-email/v1alpha1/regions/${env.SCW_TEM_REGION}/emails, { method: 'POST', headers: { 'X-Auth-Token': env.SCW_TEM_SECRET_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id, from: { email, name }, to: [{ email }], subject, html, text }) })`.
-    - [ ] On non-2xx: throw with structured error (status, response body excerpt).
+  - [x] **Lot 1.3 — New `api/src/services/scw-tem-client.ts` (BR37b-EX4)**
+    - [x] Single function `sendTransactionalEmail({ to, subject, html, text, fromEmail?, fromName? }): Promise<{ messageId: string }>`.
+    - [x] Implementation: `fetch(${env.SCW_TEM_API_BASE_URL}/transactional-email/v1alpha1/regions/${env.SCW_TEM_REGION}/emails, { method: 'POST', headers: { 'X-Auth-Token': env.SCW_TEM_SECRET_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id, from: { email, name }, to: [{ email }], subject, html, text }) })`.
+    - [x] On non-2xx: throw with structured error (status, response body excerpt).
     - [ ] Add a unit test stub that mocks `fetch` and asserts payload shape.
 
-  - [ ] **Lot 1.4 — Migrate call sites (BR37b-EX4)**
-    - [ ] `api/src/services/magic-link.ts`: replace `nodemailer.createTransport` + `transporter.sendMail` with `scwTemSendEmail({...})`. Delete the `mailTransporter` singleton, `getMailTransporter` helper, and the nodemailer import.
-    - [ ] `api/src/services/email-verification.ts`: same migration. Delete the `mailTransporter` singleton, `getMailTransporter` helper, and the nodemailer import.
-    - [ ] Confirm no other `nodemailer` import remains in `api/**`.
+  - [x] **Lot 1.4 — Migrate call sites (BR37b-EX4)**
+    - [x] `api/src/services/magic-link.ts`: replace `nodemailer.createTransport` + `transporter.sendMail` with `sendTransactionalEmail({...})`. Delete the `mailTransporter` singleton, `getMailTransporter` helper, and the nodemailer import.
+    - [x] `api/src/services/email-verification.ts`: same migration. Delete the `mailTransporter` singleton, `getMailTransporter` helper, and the nodemailer import.
+    - [x] Confirm no other `nodemailer` import remains in `api/**` (grep `api/src` → zero).
 
   - [ ] **Lot 1.5 — Remove nodemailer dependency (BR37b-EX4)**
     - [ ] `make install-api nodemailer` reverse: remove `nodemailer` from `api/package.json` `dependencies` and from `package-lock.json`. (Use `make install-api`/`make uninstall-api` flow if available; otherwise edit + regenerate lock via dockerized npm.)
