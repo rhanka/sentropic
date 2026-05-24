@@ -150,6 +150,45 @@ describe('Google Drive file selection API', () => {
     );
   });
 
+  it('resolves selected Google Drive image metadata as supported without export format', async () => {
+    await seedConnectedGoogleDriveAccount(user);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            id: 'image_1',
+            name: 'diagram.png',
+            mimeType: 'image/png',
+            webViewLink: 'https://drive.google.com/file/d/image_1/view',
+            size: '2048',
+            trashed: false,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    );
+
+    const res = await app.request('/api/v1/google-drive/files/resolve-picker-selection', {
+      method: 'POST',
+      headers: {
+        Cookie: `session=${user.sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ file_ids: ['image_1'] }),
+    });
+
+    expect(res.status).toBe(200);
+    const payload = await res.json();
+    expect(payload.files[0]).toMatchObject({
+      id: 'image_1',
+      name: 'diagram.png',
+      mime_type: 'image/png',
+      supported: true,
+      export_mime_type: null,
+    });
+  });
+
   it('returns unsupported files without attaching them', async () => {
     await seedConnectedGoogleDriveAccount(user);
     vi.stubGlobal(
