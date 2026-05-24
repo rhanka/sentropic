@@ -1,0 +1,14 @@
+{
+  "name": "scw-tem-mock",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Dev-only mock of the Scaleway TEM HTTP API that forwards to maildev over SMTP.",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "nodemailer": "^8.0.4"
+  }
+}
