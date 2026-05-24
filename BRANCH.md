@@ -228,16 +228,21 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Backend extraction inventory maps current Sentropic routes/services to package ports in `BR39b-INV1`.
     - `BR39b-EX1` is approved for narrow `Makefile` and `.github/workflows/ci.yml` edits required by package lifecycle automation.
     - BR-39a transport contract now exists in the sibling worktree and can be used as the backend shape reference once conductor confirms the inspected SHA or BR-39a merge point.
+    - `packages/auth-hono` package shell exists with package metadata, TypeScript source, tests, README, LICENSE, and built `dist/**` artifacts.
+    - Initial route contract map is aligned with BR-39a `AuthUiTransport` method names.
+    - Package lifecycle Make targets exist: `typecheck-auth-hono`, `test-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`.
+    - CI/CD package wiring exists for `auth_hono`, `auth_hono_publish`, `validate-auth-hono`, `publish-auth-hono`, and `bootstrap_publish_target=auth-hono`.
+    - Root workspace lockfile was synced through `make lock-root ENV=test-feat-auth-hono-kit`.
   - To do:
-    - Create `packages/auth-hono` with package metadata, TypeScript source, tests, README, LICENSE, and package exports.
-    - Add Make targets: `typecheck-auth-hono`, `test-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`.
-    - Add CI filters/jobs: `auth_hono`, `auth_hono_publish`, `validate-auth-hono`, `publish-auth-hono`, and bootstrap input `bootstrap_publish_target=auth-hono`.
+    - Define full typed port interfaces for users, credentials, challenges, sessions, email verification, magic links, email delivery, cookies, tokens, audit logging, clock, random IDs, and account policy.
+    - Expand `createAuthRouter` beyond health to mount registration, login, session, credentials, magic-link, and email route factories.
+    - Export `createRequireAuth` and `createOptionalAuth` middleware factories without Sentropic workspace coupling.
     - Extract reusable Hono route factories and auth services from existing Sentropic backend routes/services.
     - Rewire Sentropic API routes and middleware to consume `@sentropic/auth-hono` from the workspace package in the same branch.
     - Remove duplicated app-local auth route/service logic after package/API tests pass; no dual auth paths.
     - Complete npm first-publish runbook and trusted publisher setup.
   - Action:
-    - Codex next action: start BR-39b Lot 1 by creating the package shell, tests, contracts, and Make/CI automation under approved `BR39b-EX1`, using BR-39a `AuthUiTransport` request/result shapes as the alignment target.
+    - Codex next action: continue BR-39b Lot 1 with typed ports, full route-factory shape, middleware factories, and package tests before extracting service logic.
     - User action: confirm whether BR-39b should align to BR-39a current SHA `0944c6daf241` immediately, or wait for BR-39a merge if its Lot 2/3 screens may still change transport requirements.
 
 ## Plan / Todo (lot-based)
@@ -257,26 +262,27 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [x] Validate Lot 0 as documentation-only with `git diff --check`.
 
 - [ ] **Lot 1 - Package contracts and route factory**
-  - [ ] Wait for BR-39a exported auth transport contract before freezing route schemas; once visible, proceed quickly by extracting and replacing existing Sentropic auth behavior instead of redesigning it.
-  - [ ] Apply approved `BR39b-EX1` for scoped `Makefile` and `.github/workflows/ci.yml` edits needed by `auth-hono` package lifecycle wiring.
-  - [ ] Create `packages/auth-hono` with `package.json`, `tsconfig.json`, `README.md`, `LICENSE`, and `src/index.ts`.
-  - [ ] Add `packages/auth-hono/package.json` with publishable package metadata, `"name": "@sentropic/auth-hono"`, initial semver version, ESM exports, `files`, license, repository metadata, and dependency/peer dependency policy aligned with existing packages.
-  - [ ] Update root workspace lockfile for the new package using make-only install/update flow.
+  - [x] Wait for BR-39a exported auth transport contract before freezing route schemas; once visible, proceed quickly by extracting and replacing existing Sentropic auth behavior instead of redesigning it.
+  - [x] Apply approved `BR39b-EX1` for scoped `Makefile` and `.github/workflows/ci.yml` edits needed by `auth-hono` package lifecycle wiring.
+  - [x] Create `packages/auth-hono` with `package.json`, `tsconfig.json`, `README.md`, `LICENSE`, and `src/index.ts`.
+  - [x] Add `packages/auth-hono/package.json` with publishable package metadata, `"name": "@sentropic/auth-hono"`, initial semver version, ESM exports, `files`, license, repository metadata, and dependency/peer dependency policy aligned with existing packages.
+  - [x] Update root workspace lockfile for the new package using make-only install/update flow.
+  - [x] Add initial route contract map aligned with BR-39a `AuthUiTransport` method names.
   - [ ] Define pure port interfaces for users, credentials, challenges, sessions, email verification, magic links, cookies, logger, clock, random IDs, token signing, and token hashing.
   - [ ] Define route-factory options for route prefix, cookie names, RP ID/origins, session duration, email-code policy, account-status mapping, route-path overrides, and response/error shape policy aligned with BR-39a.
   - [ ] Export a `createAuthRouter(options)` Hono factory that mounts registration, login, session, credentials, magic-link, email, and health routes.
   - [ ] Export `createRequireAuth(options)` and `createOptionalAuth(options)` middleware factories that do not assume Sentropic workspaces.
-  - [ ] Add package lifecycle Make targets mirroring existing package patterns: `typecheck-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`, and `test-auth-hono`.
-  - [ ] Add CI change filters and outputs for `auth_hono` and `auth_hono_publish`.
-  - [ ] Add CI validation job `validate-auth-hono` that runs `make typecheck-auth-hono`, `make test-auth-hono`, `make build-auth-hono`, and `make pack-auth-hono`.
-  - [ ] Add CI publish job `publish-auth-hono` with OIDC trusted publishing, gated on `main` and package publish path changes.
-  - [ ] Add `auth-hono` to `workflow_dispatch.bootstrap_publish_target` choices and bootstrap publish steps.
-  - [ ] Confirm `enforce-package-bump` behavior for the new package: new package skips old-version comparison, later `src/**` changes require semver bumps.
+  - [x] Add package lifecycle Make targets mirroring existing package patterns: `typecheck-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`, and `test-auth-hono`.
+  - [x] Add CI change filters and outputs for `auth_hono` and `auth_hono_publish`.
+  - [x] Add CI validation job `validate-auth-hono` that runs `make typecheck-auth-hono`, `make test-auth-hono`, `make build-auth-hono`, and `make pack-auth-hono`.
+  - [x] Add CI publish job `publish-auth-hono` with OIDC trusted publishing, gated on `main` and package publish path changes.
+  - [x] Add `auth-hono` to `workflow_dispatch.bootstrap_publish_target` choices and bootstrap publish steps.
+  - [x] Confirm `enforce-package-bump` behavior for the new package: new package skips old-version comparison, later `src/**` changes require semver bumps.
   - [ ] Lot gate:
-    - [ ] `make typecheck-auth-hono ENV=test-feat-auth-hono-kit`
-    - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/contracts.test.ts ENV=test-feat-auth-hono-kit`
-    - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/router-factory.test.ts ENV=test-feat-auth-hono-kit`
-    - [ ] `make pack-auth-hono ENV=test-feat-auth-hono-kit`
+    - [x] `make typecheck-auth-hono ENV=test-feat-auth-hono-kit`
+    - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/contracts.test.ts ENV=test-feat-auth-hono-kit`
+    - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/router-factory.test.ts ENV=test-feat-auth-hono-kit`
+    - [x] `make pack-auth-hono ENV=test-feat-auth-hono-kit`
 
 - [ ] **Lot 2 - WebAuthn, email, and session services**
   - [ ] Move reusable WebAuthn registration option generation and verification logic into package services with injected credential and challenge ports.
