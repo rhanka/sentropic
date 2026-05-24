@@ -35,6 +35,7 @@ export interface CreateAuthSessionInput {
 export interface AuthHonoSessionService {
   createSession(input: CreateAuthSessionInput): Promise<AuthHonoSessionTokens>;
   listUserSessions(userId: string): Promise<AuthHonoSessionRecord[]>;
+  refreshSession(refreshToken: string): Promise<AuthHonoSessionTokens | null>;
   revokeAllSessions(userId: string): Promise<number>;
   revokeSession(sessionId: string): Promise<boolean>;
   validateSessionToken(sessionToken: string): Promise<AuthHonoValidatedSession | null>;
@@ -86,6 +87,61 @@ export const createAuthSessionService = (
 
     listUserSessions(userId) {
       return options.ports.sessions.listForUser(userId);
+    },
+
+    async refreshSession(refreshToken) {
+      const now = options.ports.clock.now();
+      const refreshTokenHash = await options.ports.tokens.hashSecret(refreshToken);
+      const sessionRecord = await options.ports.sessions.findByRefreshTokenHash(refreshTokenHash);
+
+      if (!sessionRecord || sessionRecord.revokedAt || sessionRecord.expiresAt <= now) {
+        return null;
+      }
+
+      const user = await options.ports.users.findById(sessionRecord.userId);
+
+      if (!user) {
+        return null;
+      }
+
+      const decision = await options.ports.accountPolicy.canAuthenticate(user, now);
+
+      if (!decision.allowed) {
+        return null;
+      }
+
+      const role = await options.ports.accountPolicy.resolveSessionRole(user, now);
+      const expiresAt = options.ports.clock.addSeconds(now, sessionTtlSeconds);
+      const nextRefreshToken = options.ports.random.token(refreshTokenBytes);
+      const nextSessionToken = await options.ports.tokens.signSessionToken(
+        {
+          userId: user.id,
+          sessionId: sessionRecord.id,
+          role,
+          email: user.email,
+          displayName: user.displayName,
+        },
+        expiresAt
+      );
+      const nextSessionTokenHash = await options.ports.tokens.hashSecret(nextSessionToken);
+      const nextRefreshTokenHash = await options.ports.tokens.hashSecret(nextRefreshToken);
+      const updatedSession = await options.ports.sessions.updateTokens({
+        expiresAt,
+        refreshTokenHash: nextRefreshTokenHash,
+        sessionId: sessionRecord.id,
+        sessionTokenHash: nextSessionTokenHash,
+      });
+
+      if (!updatedSession) {
+        return null;
+      }
+
+      return {
+        expiresAt: updatedSession.expiresAt,
+        refreshToken: nextRefreshToken,
+        sessionId: updatedSession.id,
+        sessionToken: nextSessionToken,
+      };
     },
 
     revokeAllSessions(userId) {

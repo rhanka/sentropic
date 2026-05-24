@@ -3,6 +3,7 @@ import type { AuthHonoPorts } from './ports.js';
 export const AUTH_HONO_AUTH_UI_METHODS = [
   'requestEmailCode',
   'verifyEmailCode',
+  'requestMagicLink',
   'verifyMagicLink',
   'createPasskeyRegistrationOptions',
   'verifyPasskeyRegistration',
@@ -32,6 +33,10 @@ export const AUTH_HONO_ROUTE_MAP = {
   verifyEmailCode: {
     method: 'POST',
     path: '/email/verify-code',
+  },
+  requestMagicLink: {
+    method: 'POST',
+    path: '/magic-link/request',
   },
   verifyMagicLink: {
     method: 'POST',
