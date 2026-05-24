@@ -124,6 +124,7 @@ Add first-class image input to Sentropic chat and document context flows: users 
   - `BR38a-EX3`: `spec/DATA_MODEL.md` is allowed for schema documentation. Reason: the ERD/data model must reflect the new chat message attachment field. Impact: documentation only. Rollback: remove the attachment row/notes.
   - `BR38a-EX4`: `api/tests/unit/chat-service-tools.test.ts` is allowed for the regression proving persisted image attachments are hydrated into structured vision parts before LLM streaming. Reason: this is the nearest existing mocked `ChatService.runAssistantGeneration` harness. Impact: unit coverage only. Rollback: remove the test with the hydration code.
   - Follow-up gap closed: previous 38a commits persisted `chat_messages.attachments` and taught the provider runtime to accept image parts, but did not yet bridge persisted attachments into `currentMessages`. The current fix loads authorized image context documents, converts them to `{ type: 'image', mediaType, data }` parts, and keeps text-only flows unchanged.
+  - Main sync 2026-05-24: merged `origin/main` after root fast-forward from `85c679d7` to `146364eb`; no merge conflicts. Verification below was rerun on the merged head.
   - UAT remains pending. This branch must not be undrafted/merged until root UAT runs from a commit-identical root workspace and CI is green on the final pushed head.
 
 ## Verification Ledger
@@ -139,6 +140,21 @@ Add first-class image input to Sentropic chat and document context flows: users 
   - `make test-pkg-chat-core ENV=test-feat-multimodal-image-input`
 - 2026-05-24 blocked verification:
   - `make typecheck-chat-core ENV=test-feat-multimodal-image-input` is blocked by pre-existing root-owned `api/node_modules/.vite` permissions (`EACCES: permission denied, rmdir '/workspace/api/node_modules/.vite'`). `make test-pkg-chat-core ENV=test-feat-multimodal-image-input` passed on the same head.
+- 2026-05-24 post-main-merge GREEN:
+  - `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input`
+  - `make typecheck-ui API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input` (0 errors, 6 pre-existing warnings)
+  - `make prepare-node-workspace API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input` refreshed the mounted `workspace_node_modules` volume after `@sentropic/skills` landed on main.
+  - `make test-api-unit SCOPE="tests/unit/chat-service-tools.test.ts" API_TEST_WORKERS=1 API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input`
+  - `make test-ui SCOPE="tests/components/chat/AppChatPanel-boundary.test.ts" API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input`
+  - `make typecheck-llm-mesh ENV=test-feat-multimodal-image-input`
+  - `make typecheck-chat-ui ENV=test-feat-multimodal-image-input`
+  - `make test-llm-mesh ENV=test-feat-multimodal-image-input`
+  - `make test-chat-ui ENV=test-feat-multimodal-image-input`
+  - `make test-pkg-chat-core ENV=test-feat-multimodal-image-input`
+  - `make typecheck-chat-core ENV=test-feat-multimodal-image-input`
+- 2026-05-24 local cleanup note:
+  - Initial post-main `test-api-unit` run failed before test collection because the mounted `workspace_node_modules` volume did not yet contain `gray-matter` for the new `@sentropic/skills` workspace; `prepare-node-workspace` fixed it and the same test then passed.
+  - Initial post-main `typecheck-chat-core` reruns hit local generated `node_modules` ownership issues (`api/node_modules/.vite`, `ui/node_modules/.bin`, and root `node_modules`). Generated artifacts were cleaned or ownership-corrected only after the package tests had finished; the same command then passed.
 
 ## AI Flaky tests
 - Acceptance rule:
