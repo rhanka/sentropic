@@ -92,16 +92,26 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- `BR39b-DEC1`
+  - Branch: BR-39b `feat/auth-hono-kit`
+  - Owner: Conductor / implementation workers
+  - Severity: clarification
+  - Status: acknowledged
+  - Repro steps: conductor clarified the auth extraction orchestration after Lot 0 questions.
+  - Expected: branch plans must make clear that `@sentropic/auth-ui` and `@sentropic/auth-hono` are the final package names, and that each branch both publishes its package and replaces the current app implementation with that package in the same branch.
+  - Actual: branch plan now records the orchestration rule explicitly.
+  - Evidence: BR-39a owns `@sentropic/auth-ui` package publication plus Sentropic UI route rewiring; BR-39b owns `@sentropic/auth-hono` package publication plus Sentropic API route/middleware rewiring.
+  - Recommendation: do not split "publish package" and "replace in app" into separate branches unless implementation size forces a conductor-approved branch split. The extraction is only complete when the app consumes the new package and the replaced local implementation has been removed.
 - `BR39b-Q1`
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: Conductor / BR-39a implementer
   - Severity: blocking for Lot 1+
-  - Status: blocked
+  - Status: clarification
   - Repro steps: in `tmp/feat-auth-hono-kit`, `packages/auth-ui` is absent and no exported auth transport contract is visible in `packages/**` or `ui/src/routes/auth/**`; `PLAN.md` and `plan/39b-BRANCH_feat-auth-hono-kit.md` state BR-39b depends on BR-39a.
   - Expected: BR-39a exports stable auth transport request/result/error types for email OTP/code, magic-link verify, passkey registration, passkey login, session issue/refresh/logout, and credential list/rename/revoke.
   - Actual: backend route factories would have to freeze response and error shapes without the UI package contract.
-  - Evidence: read-only inspection found `packages/auth-ui` missing; existing backend endpoints are app-local under `api/src/routes/auth/**`.
-  - Recommendation: do not start BR-39b route-factory implementation until BR-39a lands or publishes a frozen contract. After BR-39a lands, align `@sentropic/auth-hono` route schemas and tests to that transport contract before moving reusable service logic.
+  - Evidence: read-only inspection found `packages/auth-ui` missing; existing backend endpoints are app-local under `api/src/routes/auth/**`; conductor clarified that existing contracts already cover much of the shape and BR-39b should move quickly once the exported BR-39a contract is visible.
+  - Recommendation: do not invent a second backend contract. As soon as BR-39a exposes the stable auth transport contract, proceed with fast extraction/replacement from the existing Sentropic auth routes and services into `@sentropic/auth-hono`, preserving existing route behavior while replacing app-local implementation in the same branch.
 - `BR39b-INV1`
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: Worker B
@@ -125,7 +135,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: Conductor / implementation worker
   - Severity: blocking for package publication automation
-  - Status: attention
+  - Status: clarification
   - Repro steps: inspect `Makefile` and `.github/workflows/ci.yml` package patterns for `@sentropic/llm-mesh`, `@sentropic/chat-ui`, `@sentropic/contracts`, `@sentropic/events`, `@sentropic/chat-core`, and `@sentropic/flow`.
   - Expected: `@sentropic/auth-hono` ships with the same package lifecycle as existing publishable packages: Make targets, CI validation, OIDC publish, token bootstrap publish, and workflow-dispatch bootstrap selection.
   - Actual: current branch boundaries list `Makefile` as forbidden and `.github/workflows/**` as conditional, but package publication parity requires editing both unless a separate infra branch absorbs that work.
@@ -134,20 +144,41 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Existing CI change filters expose one validation output and one publish output per package.
     - Existing CI publish jobs use OIDC trusted publishing on `main` after validation gates.
     - Existing `bootstrap-publish` job supports `contracts`, `events`, `chat-core`, `chat-ui`, `flow`, and `all`; it does not yet support `auth-hono`.
-  - Recommendation: before Lot 1 implementation, either approve `BR39b-EX1` for `Makefile` and `.github/workflows/ci.yml`, or create a small follow-up infra branch that adds `auth-hono` package lifecycle wiring. Preferred path is `BR39b-EX1` in this branch because package extraction is incomplete without local/CI package gates.
+  - Recommendation: approved as `BR39b-EX1`; BR-39b should modify `Makefile` and `.github/workflows/ci.yml` in this same branch to keep package publication and app replacement orchestrated together.
 - `BR39b-Q3`
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: Human npm owner / Conductor
   - Severity: attention
-  - Status: attention
+  - Status: clarification
   - Repro steps: apply the existing first-publish lifecycle in `rules/workflow.md` to a new package name, `@sentropic/auth-hono`.
   - Expected: first publish is planned before merge so CI/CD does not fail after the package lands on `main`.
   - Actual: the package does not exist yet, so npm trusted publisher cannot be fully attached until package creation/bootstrap publish exists.
   - Evidence:
     - Existing Make targets use token bootstrap publishes (`publish-<pkg>-token`) only for first publish.
     - Existing steady-state publishes use GitHub OIDC trusted publishing through `ci.yml`.
-  - Recommendation: when `packages/auth-hono/package.json` exists and package metadata is final, add `auth-hono` to the CI bootstrap input and run `workflow_dispatch` on `main` with `bootstrap_publish_target=auth-hono` using `NPM_TOKEN` only for first publish. If npm requires human 2FA to create or authorize the token/package, schedule that before merge. After first publish, attach npm trusted publisher for package `@sentropic/auth-hono` to repository `rhanka/sentropic`, workflow `ci.yml`, then rely on OIDC `publish-auth-hono` for future versions.
-- No `BR39b-EXn` scope exceptions declared in Lot 0.
+  - Recommendation: approved. When `packages/auth-hono/package.json` exists and package metadata is final, add `auth-hono` to the CI bootstrap input and run `workflow_dispatch` on `main` with `bootstrap_publish_target=auth-hono` using `NPM_TOKEN` only for first publish. If npm requires human 2FA to create or authorize the token/package, schedule that before merge. After first publish, attach npm trusted publisher for package `@sentropic/auth-hono` to repository `rhanka/sentropic`, workflow `ci.yml`, then rely on OIDC `publish-auth-hono` for future versions.
+- `BR39b-Q4`
+  - Branch: BR-39b `feat/auth-hono-kit`
+  - Owner: Conductor / implementation worker
+  - Severity: clarification
+  - Status: acknowledged
+  - Repro steps: conductor confirmed target package and Make target naming.
+  - Expected: package names and Make targets are consistent across both auth extraction branches.
+  - Actual: target names are `@sentropic/auth-ui` for BR-39a and `@sentropic/auth-hono` for BR-39b; BR-39b Make targets use the `auth-hono` suffix.
+  - Evidence: `typecheck-auth-hono`, `test-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, and `publish-auth-hono-token` are recorded as required BR-39b targets. BR-39a must mirror the same lifecycle for `auth-ui`.
+  - Recommendation: keep package names as `auth-ui` and `auth-hono`; do not rename or introduce broader auth package names during extraction.
+- `BR39b-EX1`
+  - Branch: BR-39b `feat/auth-hono-kit`
+  - Owner: implementation worker
+  - Severity: attention
+  - Status: approved by conductor
+  - Repro steps: BR-39b package publication parity requires Make and CI/CD changes, but `Makefile` is forbidden and `.github/workflows/**` is conditional in the initial branch boundaries.
+  - Expected: `@sentropic/auth-hono` has local Make gates and CI/CD publication gates before implementation is considered complete.
+  - Actual: existing branch boundaries would otherwise block those edits.
+  - Reason: package extraction includes publication automation; without these edits, the package can be created but not validated or published like existing `@sentropic/*` packages.
+  - Impact: permits scoped edits to `Makefile` and `.github/workflows/ci.yml` for `auth-hono` targets, filters, validation, publish, and bootstrap-publish only.
+  - Rollback: revert the `auth-hono` Make targets and CI workflow entries; package source and API adapter changes remain separable.
+  - Recommendation: keep the exception narrow. Do not use it for unrelated Make/CI cleanup.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -174,6 +205,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
 - [x] **Lot 0 - Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `README.md`, `TODO.md`, `PLAN.md`, `plan/39b-BRANCH_feat-auth-hono-kit.md`, `plan/39a-BRANCH_feat-auth-ui-sdk.md`, `plan/BRANCH_TEMPLATE.md`, and `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md`.
   - [x] Confirm BR-39a status and record `BR39b-Q1`: BR-39a is not merged/stable in this worktree because `packages/auth-ui` and exported auth transport contracts are absent.
+  - [x] Record conductor decisions: `BR39b-DEC1`, `BR39b-Q1`, `BR39b-Q2`, `BR39b-Q3`, `BR39b-Q4`, and approved `BR39b-EX1`.
   - [x] Confirm isolated worktree `tmp/feat-auth-hono-kit` on branch `feat/auth-hono-kit`.
   - [x] Confirm `.env` copy is not needed for this documentation-only Lot 0; no services were started.
   - [x] Capture Makefile targets needed for later gates: existing `typecheck-api`, `lint-api`, `test-api`, `build-api`, `build-ui-image`, `test-e2e`, `commit`; new `typecheck-auth-hono`, `build-auth-hono`, `test-auth-hono` or equivalent package targets are not present yet and belong to Lot 1 implementation.
@@ -186,8 +218,8 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [x] Validate Lot 0 as documentation-only with `git diff --check`.
 
 - [ ] **Lot 1 - Package contracts and route factory**
-  - [ ] Wait for `BR39b-Q1` resolution before freezing route schemas.
-  - [ ] Resolve `BR39b-Q2` by approving `BR39b-EX1` for `Makefile` and `.github/workflows/ci.yml`, or by assigning equivalent package lifecycle wiring to a separate infra branch.
+  - [ ] Wait for BR-39a exported auth transport contract before freezing route schemas; once visible, proceed quickly by extracting and replacing existing Sentropic auth behavior instead of redesigning it.
+  - [ ] Apply approved `BR39b-EX1` for scoped `Makefile` and `.github/workflows/ci.yml` edits needed by `auth-hono` package lifecycle wiring.
   - [ ] Create `packages/auth-hono` with `package.json`, `tsconfig.json`, `README.md`, `LICENSE`, and `src/index.ts`.
   - [ ] Add `packages/auth-hono/package.json` with publishable package metadata, `"name": "@sentropic/auth-hono"`, initial semver version, ESM exports, `files`, license, repository metadata, and dependency/peer dependency policy aligned with existing packages.
   - [ ] Update root workspace lockfile for the new package using make-only install/update flow.
@@ -226,6 +258,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [ ] Rewire `api/src/middleware/auth.ts` to use package session validation while keeping Sentropic workspace selection and hidden-workspace rules app-owned.
   - [ ] Keep rate limiting in `api/src/app.ts` app-owned unless a later approved exception says otherwise.
   - [ ] Remove duplicated app-local route/service logic only after equivalent package tests and API tests pass; no dual auth paths.
+  - [ ] Confirm the Sentropic API consumes `@sentropic/auth-hono` from the workspace package in this same branch before handoff.
   - [ ] Lot gate:
     - [ ] `make typecheck-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
     - [ ] `make lint-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
