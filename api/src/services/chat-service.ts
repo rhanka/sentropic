@@ -40,40 +40,14 @@ import type OpenAI from 'openai';
 import { getOpenAITransportMode } from './provider-connections';
 import { CHAT_SYSTEM_PROMPTS, CHAT_COMMON_PROMPTS } from '../config/default-chat-system';
 import {
-  readInitiativeTool,
-  updateInitiativeTool,
-  webSearchTool,
-  webExtractTool,
   searchWeb,
   extractUrlContent,
-  organizationsListTool,
-  organizationGetTool,
-  organizationUpdateTool,
-  foldersListTool,
-  folderGetTool,
-  folderUpdateTool,
-  initiativesListTool,
-  executiveSummaryGetTool,
-  executiveSummaryUpdateTool,
-  matrixGetTool,
-  matrixUpdateTool,
-  documentsTool,
-  historyAnalyzeTool,
-  commentAssistantTool,
-  planTool,
-  solutionsListTool,
-  solutionGetTool,
-  proposalsListTool,
-  proposalGetTool,
-  productsListTool,
-  productGetTool,
-  gateReviewTool,
-  workspaceListTool,
-  initiativeSearchTool,
-  taskDispatchTool,
-  documentGenerateTool,
-  batchCreateOrganizationsTool
+  batchCreateOrganizationsTool,
 } from './tools';
+import {
+  resolveFoundationChatTools,
+} from './skills/catalog';
+import { executeFoundationSkillTool } from './skills/foundation-executor';
 import { toolService } from './tool-service';
 import { listTabs as listRegisteredTabs } from './tab-registry';
 import type { TabEntry } from './tab-registry';
@@ -98,16 +72,21 @@ function isChatContextType(value: unknown): value is ChatContextType {
   return typeof value === 'string' && (CHAT_CONTEXT_TYPES as readonly string[]).includes(value);
 }
 
-type DocumentGenerateEntityType = 'initiative' | 'folder';
+type TemplateDocumentGenerateEntityType = 'initiative' | 'folder';
+type FreeformDocumentGenerateEntityType = TemplateDocumentGenerateEntityType | 'organization';
 
-function isDocumentGenerateEntityType(value: unknown): value is DocumentGenerateEntityType {
+function isTemplateDocumentGenerateEntityType(value: unknown): value is TemplateDocumentGenerateEntityType {
   return value === 'initiative' || value === 'folder';
 }
 
-function getDocumentGenerateFallbackTarget(
+function isFreeformDocumentGenerateEntityType(value: unknown): value is FreeformDocumentGenerateEntityType {
+  return value === 'organization' || isTemplateDocumentGenerateEntityType(value);
+}
+
+function getTemplateDocumentGenerateFallbackTarget(
   contextType: ChatContextType | null | undefined,
   contextId: string | null | undefined,
-): { entityType: DocumentGenerateEntityType; entityId: string } | null {
+): { entityType: TemplateDocumentGenerateEntityType; entityId: string } | null {
   const entityId = typeof contextId === 'string' ? contextId.trim() : '';
   if (!entityId) return null;
   if (contextType === 'initiative' || contextType === 'usecase') {
@@ -119,20 +98,38 @@ function getDocumentGenerateFallbackTarget(
   return null;
 }
 
-function resolveDocumentGenerateTarget(input: {
+function getFreeformDocumentGenerateFallbackTarget(
+  contextType: ChatContextType | null | undefined,
+  contextId: string | null | undefined,
+): { entityType: FreeformDocumentGenerateEntityType; entityId: string } | null {
+  const entityId = typeof contextId === 'string' ? contextId.trim() : '';
+  if (!entityId) return null;
+  if (contextType === 'organization' || contextType === 'folder' || contextType === 'initiative') {
+    return { entityType: contextType, entityId };
+  }
+  if (contextType === 'usecase') {
+    return { entityType: 'initiative', entityId };
+  }
+  if (contextType === 'executive_summary') {
+    return { entityType: 'folder', entityId };
+  }
+  return null;
+}
+
+function resolveTemplateDocumentGenerateTarget(input: {
   entityType?: unknown;
   entityId?: unknown;
   primaryContextType: ChatContextType | null | undefined;
   primaryContextId: string | null | undefined;
-}): { entityType: DocumentGenerateEntityType; entityId: string; usedFallback: boolean } {
+}): { entityType: TemplateDocumentGenerateEntityType; entityId: string; usedFallback: boolean } {
   const rawEntityType = typeof input.entityType === 'string' ? input.entityType.trim() : '';
-  if (rawEntityType && !isDocumentGenerateEntityType(rawEntityType)) {
-    throw new Error('document_generate: entityType must be "initiative" | "folder"');
+  if (rawEntityType && !isTemplateDocumentGenerateEntityType(rawEntityType)) {
+    throw new Error('document_generate: template mode entityType must be "initiative" | "folder"');
   }
 
-  const explicitEntityType = isDocumentGenerateEntityType(rawEntityType) ? rawEntityType : null;
+  const explicitEntityType = isTemplateDocumentGenerateEntityType(rawEntityType) ? rawEntityType : null;
   const explicitEntityId = typeof input.entityId === 'string' ? input.entityId.trim() : '';
-  const fallback = getDocumentGenerateFallbackTarget(
+  const fallback = getTemplateDocumentGenerateFallbackTarget(
     input.primaryContextType,
     input.primaryContextId,
   );
@@ -146,6 +143,49 @@ function resolveDocumentGenerateTarget(input: {
     (fallback && (!explicitEntityType || fallback.entityType === explicitEntityType)
       ? fallback.entityId
       : '');
+
+  return {
+    entityType: resolvedEntityType,
+    entityId: resolvedEntityId,
+    usedFallback:
+      (!explicitEntityType && !!fallback) ||
+      (!explicitEntityId && !!fallback && (!explicitEntityType || fallback.entityType === explicitEntityType)),
+  };
+}
+
+function resolveFreeformDocumentGenerateTarget(input: {
+  entityType?: unknown;
+  entityId?: unknown;
+  primaryContextType: ChatContextType | null | undefined;
+  primaryContextId: string | null | undefined;
+  organizationContextIds?: readonly string[];
+}): { entityType: FreeformDocumentGenerateEntityType; entityId: string; usedFallback: boolean } {
+  const rawEntityType = typeof input.entityType === 'string' ? input.entityType.trim() : '';
+  if (rawEntityType && !isFreeformDocumentGenerateEntityType(rawEntityType)) {
+    throw new Error('document_generate: freeform entityType must be "organization" | "folder" | "initiative"');
+  }
+
+  const explicitEntityType = isFreeformDocumentGenerateEntityType(rawEntityType) ? rawEntityType : null;
+  const explicitEntityId = typeof input.entityId === 'string' ? input.entityId.trim() : '';
+  const primaryFallback = getFreeformDocumentGenerateFallbackTarget(
+    input.primaryContextType,
+    input.primaryContextId,
+  );
+  const organizationFallback =
+    !primaryFallback && input.organizationContextIds?.length === 1
+      ? { entityType: 'organization' as const, entityId: input.organizationContextIds[0] }
+      : null;
+  const fallback = primaryFallback ?? organizationFallback;
+  const resolvedEntityType = explicitEntityType ?? fallback?.entityType;
+  const resolvedEntityId =
+    explicitEntityId ||
+    (fallback && (!explicitEntityType || fallback.entityType === explicitEntityType)
+      ? fallback.entityId
+      : '');
+
+  if (!resolvedEntityType || !resolvedEntityId) {
+    throw new Error('document_generate: entityId is required when no current freeform context is available');
+  }
 
   return {
     entityType: resolvedEntityType,
@@ -2530,13 +2570,10 @@ export class ChatService {
     // Prepare tools based on the active contexts (view-scoped behavior).
     // Note: destructive/batch tools are gated elsewhere; here we only enable what can be called.
     let tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined;
-    const toolSet = new Map<string, OpenAI.Chat.Completions.ChatCompletionTool>();
-    const addTools = (items: OpenAI.Chat.Completions.ChatCompletionTool[]) => {
-      for (const t of items) {
-        if (t.type !== 'function') continue;
-        const name = t.function?.name;
-        if (!name) continue;
-        toolSet.set(name, t);
+    const allowedSkillToolNames = new Set<string>();
+    const addToolNames = (names: ReadonlyArray<string>) => {
+      for (const name of names) {
+        if (name) allowedSkillToolNames.add(name);
       }
     };
     const contextTypes = new Set<ChatContextType>();
@@ -2544,90 +2581,82 @@ export class ChatService {
     contextsOverride.forEach((c) => contextTypes.add(c.contextType));
 
     if (contextTypes.has('initiative') || contextTypes.has('usecase')) { // TODO Lot 9.5: remove 'usecase' after data migration
-      addTools([
-        readInitiativeTool,
-        ...(readOnly ? [] : [updateInitiativeTool]),
-        webSearchTool,
-        webExtractTool
+      addToolNames([
+        'read_initiative',
+        ...(readOnly ? [] : ['update_initiative']),
+        'web_search',
+        'web_extract'
       ]);
     }
     if (contextTypes.has('organization')) {
-      addTools([
-        organizationsListTool,
-        organizationGetTool,
-        ...(readOnly ? [] : [organizationUpdateTool]),
-        foldersListTool,
-        webSearchTool,
-        webExtractTool
+      addToolNames([
+        'organizations_list',
+        'organization_get',
+        ...(readOnly ? [] : ['organization_update']),
+        'folders_list',
+        'web_search',
+        'web_extract'
       ]);
     }
     if (contextTypes.has('folder')) {
-      addTools([
-        foldersListTool,
-        folderGetTool,
-        ...(readOnly ? [] : [folderUpdateTool]),
-        matrixGetTool,
-        ...(readOnly ? [] : [matrixUpdateTool]),
-        initiativesListTool,
-        executiveSummaryGetTool,
-        ...(readOnly ? [] : [executiveSummaryUpdateTool]),
-        organizationGetTool,
-        webSearchTool,
-        webExtractTool
+      addToolNames([
+        'folders_list',
+        'folder_get',
+        ...(readOnly ? [] : ['folder_update']),
+        'matrix_get',
+        ...(readOnly ? [] : ['matrix_update']),
+        'initiatives_list',
+        'executive_summary_get',
+        ...(readOnly ? [] : ['executive_summary_update']),
+        'organization_get',
+        'web_search',
+        'web_extract'
       ]);
     }
     if (contextTypes.has('executive_summary')) {
-      addTools([
-        executiveSummaryGetTool,
-        ...(readOnly ? [] : [executiveSummaryUpdateTool]),
-        initiativesListTool,
-        folderGetTool,
-        matrixGetTool,
-        organizationGetTool,
-        webSearchTool,
-        webExtractTool
+      addToolNames([
+        'executive_summary_get',
+        ...(readOnly ? [] : ['executive_summary_update']),
+        'initiatives_list',
+        'folder_get',
+        'matrix_get',
+        'organization_get',
+        'web_search',
+        'web_extract'
       ]);
     }
 
     // Workspace-type-aware tool layer (§14.2)
     const wsType = await getWorkspaceType(sessionWorkspaceId);
-    const wsTypeToolNames = new Set<string>();
-    const addWsTools = (defs: Parameters<typeof addTools>[0]) => {
-      addTools(defs);
-      for (const t of defs) {
-        const name = t.type === 'function' ? t.function?.name : undefined;
-        if (name) wsTypeToolNames.add(name);
-      }
-    };
     if (wsType === 'opportunity') {
-      addWsTools([
-        solutionsListTool,
-        solutionGetTool,
-        proposalsListTool,
-        proposalGetTool,
-        productsListTool,
-        productGetTool,
-        gateReviewTool,
-        documentGenerateTool,
-        batchCreateOrganizationsTool
+      addToolNames([
+        'solutions_list',
+        'solution_get',
+        'proposals_list',
+        'proposal_get',
+        'products_list',
+        'product_get',
+        'gate_review',
+        'document_generate',
+        'batch_create_organizations'
       ]);
     } else if (wsType === 'ai-ideas') {
-      addWsTools([
-        solutionsListTool,
-        solutionGetTool,
-        proposalsListTool,
-        proposalGetTool,
-        productsListTool,
-        productGetTool,
-        gateReviewTool,
-        documentGenerateTool,
-        batchCreateOrganizationsTool
+      addToolNames([
+        'solutions_list',
+        'solution_get',
+        'proposals_list',
+        'proposal_get',
+        'products_list',
+        'product_get',
+        'gate_review',
+        'document_generate',
+        'batch_create_organizations'
       ]);
     } else if (wsType === 'neutral') {
-      addWsTools([
-        workspaceListTool,
-        initiativeSearchTool,
-        taskDispatchTool
+      addToolNames([
+        'workspace_list',
+        'initiative_search',
+        'task_dispatch'
       ]);
     }
 
@@ -2643,21 +2672,21 @@ export class ChatService {
       effectiveRequestedTools.delete('web_extract');
     }
     if (effectiveRequestedTools.has('web_search')) {
-      addTools([webSearchTool]);
+      addToolNames(['web_search']);
     }
     if (effectiveRequestedTools.has('web_extract')) {
-      addTools([webExtractTool]);
+      addToolNames(['web_extract']);
     }
     if (effectiveRequestedTools.has('plan') || enforceTodoUpdateMode) {
-      addTools([planTool]);
+      addToolNames(['plan']);
     }
     if (hasDocuments) {
-      addTools([documentsTool]);
+      addToolNames(['documents']);
     }
     if (hasCommentContexts) {
-      addTools([commentAssistantTool]);
+      addToolNames(['comment_assistant']);
     }
-    addTools([historyAnalyzeTool]);
+    addToolNames(['history_analyze']);
     let localTools = this.normalizeLocalToolDefinitions(
       options.localToolDefinitions
     );
@@ -2678,8 +2707,29 @@ export class ChatService {
       }
     }
 
-    addTools(localTools);
-    tools = toolSet.size > 0 ? Array.from(toolSet.values()) : hasDocuments ? [documentsTool] : undefined;
+    const toolSet = new Map<string, OpenAI.Chat.Completions.ChatCompletionTool>();
+    const addResolvedTools = (items: OpenAI.Chat.Completions.ChatCompletionTool[]) => {
+      for (const t of items) {
+        if (t.type !== 'function') continue;
+        const name = t.function?.name;
+        if (!name) continue;
+        toolSet.set(name, t);
+      }
+    };
+    addResolvedTools(
+      resolveFoundationChatTools({
+        userId: options.userId,
+        workspaceId: sessionWorkspaceId,
+        workspaceType: wsType,
+        currentUserRole,
+        allowedTools: allowedSkillToolNames,
+      }),
+    );
+    if (allowedSkillToolNames.has('batch_create_organizations')) {
+      addResolvedTools([batchCreateOrganizationsTool]);
+    }
+    addResolvedTools(localTools);
+    tools = toolSet.size > 0 ? Array.from(toolSet.values()) : undefined;
 
     const localToolNames = new Set(
       localTools
@@ -2694,8 +2744,7 @@ export class ChatService {
     // UI toggle (options.tools) adds optional tools (web_search, plan) via
     // effectiveRequestedTools above; it does not restrict programmatic tools.
 
-    const documentsToolName =
-      documentsTool.type === 'function' ? documentsTool.function.name : 'documents';
+    const documentsToolName = 'documents';
     const hasDocumentsToolAvailable = Boolean(
       tools?.some(
         (t) => t.type === 'function' && t.function?.name === documentsToolName
@@ -2952,19 +3001,30 @@ Règles :
     contextBlock += `\n\n${activeToolsBlock}`;
 
     if (activeToolNames.includes('document_generate')) {
-      const defaultDocumentTarget = getDocumentGenerateFallbackTarget(
+      const defaultTemplateTarget = getTemplateDocumentGenerateFallbackTarget(
         primaryContextType,
         primaryContextId,
       );
-      const targetGuidance = defaultDocumentTarget
-        ? `Current chat context default target: \`${defaultDocumentTarget.entityType}:${defaultDocumentTarget.entityId}\`. You may omit \`entityType\` / \`entityId\` only when generating for this current target; specify both when targeting another entity.`
-        : 'Pass both `entityType` and `entityId` when generating a document.';
+      const defaultFreeformTarget = getFreeformDocumentGenerateFallbackTarget(
+        primaryContextType,
+        primaryContextId,
+      );
+      const targetGuidance = defaultTemplateTarget
+        ? `Current template-compatible default target: \`${defaultTemplateTarget.entityType}:${defaultTemplateTarget.entityId}\`. Template mode requires a template-compatible target (\`initiative\` or \`folder\`).`
+        : 'No template-compatible default target is available from the current chat context.';
+      const freeformGuidance = defaultFreeformTarget
+        ? `Current freeform default target: \`${defaultFreeformTarget.entityType}:${defaultFreeformTarget.entityId}\`. In freeform mode, omit \`entityType\` / \`entityId\` to use this current context.`
+        : 'In freeform mode, pass `entityType` and `entityId` only when no current organization, folder, or initiative context is available.';
       contextBlock += `\n\n## Document generation
 You have the tool \`document_generate\`. It can generate \`format: "docx"\` (default) or \`format: "pptx"\`.
-Before generating your first document in this conversation, call it with \`action: "upskill"\` (optionally with \`format\`) to learn best practices.
-Then call with \`action: "generate"\`.
+Call it with \`action: "generate"\`. The DOCX/PPTX sandbox helper API is documented in the \`document_generate\` skill's \`SKILL.md\` (discoverable via the \`search_skills\` meta-tool).
 ${targetGuidance}
-For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw constructor calls.`;
+${freeformGuidance}
+For template mode (\`templateId\`), \`entityType\` must be \`initiative\` or \`folder\`; organization templates are not supported.
+For DOCX freeform \`code\`, do not use \`require\`, \`import\`, \`await\`, \`docx()\`, chain APIs, or \`new Document().addParagraph(...)\`. The sandbox already injects helpers; return a document synchronously, for example: \`return doc([h(1, 'Title'), p('Summary'), table(['Field', 'Value'], [['Name', 'Ellio']])]);\`.
+If you need data from another tool, call that tool before \`document_generate\` and embed the returned values as literals in the generated \`code\`; sandbox code cannot call chat tools.
+For PPTX freeform \`code\`, use only the injected PPTX helpers: \`pptx\`, \`titleSlide\`, \`sectionSlide\`, \`textBox\`, \`bullets\`, \`table\`, \`statCallout\`, \`footer\`, and \`visualPlaceholder\`. Do not use DOCX helpers such as \`h\`, \`p\`, \`hr\`, or \`list\`; do not use a \`slide(...)\` helper; do not use raw constructors. Return the presentation handle synchronously, for example: \`const deck = pptx({ title: "Ellio" }); const slide = titleSlide(deck, "Ellio", "Monopage"); textBox(slide, "Summary", { x: 0.8, y: 4.2, w: 11.5, h: 0.5 }); return deck;\`.
+When generating JavaScript \`code\` for DOCX or PPTX, use double-quoted string literals for all human text and escape any embedded double quotes. This avoids syntax errors with apostrophes in French text such as \`l'innovation\`.`;
     }
 
     const vscodeCodeAgentPayload = this.normalizeVsCodeCodeAgentPayload(
@@ -4009,6 +4069,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       primaryContextId,
       selectedModel,
       sessionWorkspaceId,
+      tools,
       readOnly,
       currentUserRole,
       enforceTodoUpdateMode,
@@ -4025,336 +4086,32 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
     const args = input.args as any;
     let streamSeq = input.streamSeq;
     let result: unknown;
+    const foundationResult = await executeFoundationSkillTool({
+      toolCall,
+      args: args as Record<string, unknown>,
+      options,
+      streamSeq,
+      sessionWorkspaceId,
+      workspaceType: await getWorkspaceType(sessionWorkspaceId),
+      currentUserRole,
+      readOnly,
+      allowedFolderIds,
+      allowedByType,
+      hasContextType,
+      isAllowedOrganizationId,
+      tools,
+    });
+    if (foundationResult.handled) {
+      return {
+        result: foundationResult.result,
+        streamSeq: foundationResult.streamSeq,
+      };
+    }
     switch (toolCall.name) {
-      // BR14b Lot 21d-2 Step 3 Group A — verbatim move of inline tool branches
-      // from `runAssistantGeneration` (read_initiative, update_initiative,
-      // organizations_list, organization_get, organization_update).
-      case 'read_initiative': {
-        if (!allowedByType.usecase.has(args.initiativeId)) {
-          throw new Error('Security: initiativeId does not match allowed contexts');
-        }
-        const readResult = await toolService.readInitiative(args.initiativeId, {
-          workspaceId: sessionWorkspaceId,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = readResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          // Normaliser pour l'UI: toujours fournir result.status
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(readResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'update_initiative': {
-        if (readOnly) {
-          throw new Error('Read-only workspace: initiative update is disabled');
-        }
-        if (!allowedByType.usecase.has(args.initiativeId)) {
-          throw new Error('Security: initiativeId does not match allowed contexts');
-        }
-        const updateResult = await toolService.updateInitiativeFields({
-          initiativeId: args.initiativeId,
-          updates: args.updates || [],
-          userId: options.userId,
-          sessionId: options.sessionId,
-          messageId: options.assistantMessageId,
-          toolCallId: toolCall.id,
-          locale: options.locale,
-          workspaceId: sessionWorkspaceId
-        });
-        result = updateResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          // Normaliser pour l'UI: toujours fournir result.status
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'organizations_list': {
-        if (!hasContextType('organization')) {
-          throw new Error('Security: organizations_list is only available in organization context');
-        }
-        const listResult = await toolService.listOrganizations({
-          workspaceId: sessionWorkspaceId,
-          idsOnly: !!args.idsOnly,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = listResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'organization_get': {
-        if (!args.organizationId || typeof args.organizationId !== 'string') {
-          throw new Error('Security: organizationId is required');
-        }
-        const allowed = await isAllowedOrganizationId(args.organizationId);
-        if (!allowed) {
-          throw new Error('Security: organizationId does not match allowed contexts');
-        }
-
-        const getResult = await toolService.getOrganization(args.organizationId, {
-          workspaceId: sessionWorkspaceId,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = getResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'organization_update': {
-        if (readOnly) throw new Error('Read-only workspace: organization_update is disabled');
-        if (!args.organizationId || typeof args.organizationId !== 'string') {
-          throw new Error('Security: organizationId is required');
-        }
-        const allowed = await isAllowedOrganizationId(args.organizationId);
-        if (!allowed) {
-          throw new Error('Security: organizationId does not match allowed contexts');
-        }
-        const updateResult = await toolService.updateOrganizationFields({
-          organizationId: args.organizationId,
-          updates: Array.isArray(args.updates) ? args.updates : [],
-          userId: options.userId,
-          sessionId: options.sessionId,
-          messageId: options.assistantMessageId,
-          toolCallId: toolCall.id,
-          locale: options.locale,
-          workspaceId: sessionWorkspaceId
-        });
-        result = updateResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      // BR14b Lot 21d-2 Step 3 Group B — verbatim move of inline tool branches
-      // from `runAssistantGeneration` (folders_list, folder_get, folder_update,
-      // initiatives_list, executive_summary_get, executive_summary_update).
-      case 'folders_list': {
-        if (!hasContextType('organization') && !hasContextType('folder')) {
-          throw new Error('Security: folders_list is only available in organization/folder context');
-        }
-        const organizationId = typeof args.organizationId === 'string'
-          ? args.organizationId
-          : (allowedByType.organization.values().next().value ?? null);
-        const listResult = await toolService.listFolders({
-          workspaceId: sessionWorkspaceId,
-          organizationId,
-          idsOnly: !!args.idsOnly,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = listResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'folder_get': {
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const getResult = await toolService.getFolder(args.folderId, {
-          workspaceId: sessionWorkspaceId,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = getResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'folder_update': {
-        if (readOnly) throw new Error('Read-only workspace: folder_update is disabled');
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const updateResult = await toolService.updateFolderFields({
-          folderId: args.folderId,
-          updates: Array.isArray(args.updates) ? args.updates : [],
-          userId: options.userId,
-          sessionId: options.sessionId,
-          messageId: options.assistantMessageId,
-          toolCallId: toolCall.id,
-          locale: options.locale,
-          workspaceId: sessionWorkspaceId
-        });
-        result = updateResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'initiatives_list': {
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const listResult = await toolService.listInitiativesForFolder(args.folderId, {
-          workspaceId: sessionWorkspaceId,
-          idsOnly: !!args.idsOnly,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = listResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(listResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'executive_summary_get': {
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const getResult = await toolService.getExecutiveSummary(args.folderId, {
-          workspaceId: sessionWorkspaceId,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = getResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'executive_summary_update': {
-        if (readOnly) throw new Error('Read-only workspace: executive_summary_update is disabled');
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const updateResult = await toolService.updateExecutiveSummaryFields({
-          folderId: args.folderId,
-          updates: Array.isArray(args.updates) ? args.updates : [],
-          userId: options.userId,
-          sessionId: options.sessionId,
-          messageId: options.assistantMessageId,
-          toolCallId: toolCall.id,
-          locale: options.locale,
-          workspaceId: sessionWorkspaceId
-        });
-        result = updateResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
       // BR14b Lot 21d-2 Step 3 Group C — verbatim move of inline tool branches
-      // from `runAssistantGeneration` (matrix_get, matrix_update, plan(create),
-      // plan(update_plan), plan(update_task)).
-      case 'matrix_get': {
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const getResult = await toolService.getMatrix(args.folderId, { workspaceId: sessionWorkspaceId });
-        result = getResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(getResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
-      case 'matrix_update': {
-        if (readOnly) throw new Error('Read-only workspace: matrix_update is disabled');
-        if (!args.folderId || typeof args.folderId !== 'string') {
-          throw new Error('Security: folderId is required');
-        }
-        if (!allowedFolderIds.has(args.folderId)) {
-          throw new Error('Security: folderId does not match allowed contexts');
-        }
-        const updateResult = await toolService.updateMatrix({
-          folderId: args.folderId,
-          matrixConfig: args.matrixConfig,
-          userId: options.userId,
-          sessionId: options.sessionId,
-          messageId: options.assistantMessageId,
-          toolCallId: toolCall.id,
-          locale: options.locale,
-          workspaceId: sessionWorkspaceId
-        });
-        result = updateResult;
-        await writeStreamEvent(
-          options.assistantMessageId,
-          'tool_call_result',
-          { tool_call_id: toolCall.id, result: { status: 'completed', ...(updateResult as Record<string, unknown>) } },
-          streamSeq,
-          options.assistantMessageId
-        );
-        streamSeq += 1;
-        break;
-      }
+      // from `runAssistantGeneration` (plan(create), plan(update_plan),
+      // plan(update_task)). `matrix_get` / `matrix_update` moved to
+      // `api/src/services/skills/foundation-executor.ts` in BR19 Lot 5.
       case 'plan': {
         if (todoOperation === 'create') {
           const createToolLabel = 'plan(action=create)';
@@ -4841,89 +4598,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
         streamSeq += 1;
         break;
       }
-      // BR14b Lot 21d-2 Step 3 Group E — verbatim move of inline tool branches
-      // from `runAssistantGeneration` (solutions_list, solution_get, proposals_list,
-      // proposal_get, products_list, product_get, gate_review, workspace_list,
-      // initiative_search, task_dispatch).
-      case 'solutions_list': {
-        const listResult = await toolService.listSolutions({
-          initiativeId: args.initiativeId,
-          workspaceId: sessionWorkspaceId,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = { status: 'completed', ...listResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'solution_get': {
-        const getResult = await toolService.getSolution(args.solutionId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
-        result = { status: 'completed', ...getResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'proposals_list': {
-        const listResult = await toolService.listProposals({
-          initiativeId: args.initiativeId,
-          workspaceId: sessionWorkspaceId,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = { status: 'completed', ...listResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'proposal_get': {
-        const getResult = await toolService.getProposal(args.proposalId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
-        result = { status: 'completed', ...getResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'products_list': {
-        const listResult = await toolService.listProducts({
-          workspaceId: sessionWorkspaceId,
-          initiativeId: typeof args.initiativeId === 'string' ? args.initiativeId : undefined,
-          select: Array.isArray(args.select) ? args.select : null
-        });
-        result = { status: 'completed', ...listResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'product_get': {
-        const getResult = await toolService.getProduct(args.productId, { workspaceId: sessionWorkspaceId, select: Array.isArray(args.select) ? args.select : null });
-        result = { status: 'completed', ...getResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'gate_review': {
-        const gateResult = await toolService.reviewGate(sessionWorkspaceId, args.initiativeId, args.targetStage);
-        result = { status: 'completed', ...gateResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'workspace_list': {
-        const listResult = await toolService.listWorkspacesForUser(options.userId);
-        result = { status: 'completed', ...listResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
-      case 'initiative_search': {
-        const searchResult = await toolService.searchInitiativesCrossWorkspace(options.userId, {
-          query: typeof args.query === 'string' ? args.query : undefined,
-          status: typeof args.status === 'string' ? args.status : undefined,
-          maturityStage: typeof args.maturityStage === 'string' ? args.maturityStage : undefined
-        });
-        result = { status: 'completed', ...searchResult };
-        await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-        streamSeq += 1;
-        break;
-      }
+      // Non-foundation orchestration tools still handled caller-side.
       case 'task_dispatch': {
         // task_dispatch delegates to the plan tool's create action
         const taskResult = await todoOrchestrationService.createTodoFromChat(
@@ -4939,45 +4614,21 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
       // from `runAssistantGeneration` (document_generate, batch_create_organizations).
       // Step 3 completed by F3 commit: 30/30 server-tool branches migrated.
       case 'document_generate': {
-        const action = typeof args.action === 'string' ? args.action : 'generate';
+        const rawAction = typeof args.action === 'string' ? args.action : 'generate';
+        if (rawAction !== 'generate') {
+          throw new Error('document_generate: action must be "generate" (upskill mode removed per BR19-D6; use search_skills + SKILL.md discovery)');
+        }
         const rawFormat = typeof args.format === 'string' ? args.format : undefined;
         if (rawFormat && rawFormat !== 'docx' && rawFormat !== 'pptx') {
           throw new Error('document_generate: format must be "docx" | "pptx"');
         }
         const format = (rawFormat ?? 'docx') as 'docx' | 'pptx';
 
-        if (action === 'upskill') {
-          if (format === 'pptx') {
-            const { getPptxFreeformSkill } = await import('./pptx-freeform-skill');
-            result = {
-              status: 'completed',
-              mode: 'upskill',
-              format,
-              skill: getPptxFreeformSkill(),
-            };
-          } else {
-            // Return DOCX creation skill content for LLM learning
-            const { getDocxFreeformSkill } = await import('./docx-freeform-skill');
-            result = {
-              status: 'completed',
-              mode: 'upskill',
-              skill: getDocxFreeformSkill(),
-            };
-          }
-          await writeStreamEvent(options.assistantMessageId, 'tool_call_result', { tool_call_id: toolCall.id, result }, streamSeq, options.assistantMessageId);
-          streamSeq += 1;
-        } else {
+        {
           // Generate mode: DOCX template generation or DOCX/PPTX freeform sandbox generation.
           const templateId = typeof args.templateId === 'string' ? args.templateId : undefined;
           const code = typeof args.code === 'string' ? args.code : undefined;
           const title = typeof args.title === 'string' ? args.title : undefined;
-          const { entityType, entityId } = resolveDocumentGenerateTarget({
-            entityType: args.entityType,
-            entityId: args.entityId,
-            primaryContextType,
-            primaryContextId,
-          });
-          if (!entityId) throw new Error('document_generate: entityId is required');
           if (templateId && code) throw new Error('document_generate: templateId and code are mutually exclusive');
           if (!templateId && !code) throw new Error('document_generate: either templateId or code is required');
           if (format === 'pptx' && templateId) {
@@ -4985,12 +4636,19 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           }
 
           if (code) {
+            const { entityType, entityId } = resolveFreeformDocumentGenerateTarget({
+              entityType: args.entityType,
+              entityId: args.entityId,
+              primaryContextType,
+              primaryContextId,
+              organizationContextIds: [...allowedByType.organization],
+            });
             if (format === 'pptx') {
               // Freeform PPTX: synchronous sandbox generation (BR-21a).
               try {
                 const freeformResult = await generateFreeformPptx({
                   code,
-                  entityType: entityType as 'initiative' | 'folder',
+                  entityType,
                   entityId,
                   workspaceId: sessionWorkspaceId,
                   title,
@@ -5088,7 +4746,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
               try {
                 const freeformResult = await generateFreeformDocx({
                   code,
-                  entityType: entityType as 'initiative' | 'folder',
+                  entityType,
                   entityId,
                   workspaceId: sessionWorkspaceId,
                 });
@@ -5162,6 +4820,15 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             }
           } else {
             // Template mode (unchanged, DOCX only)
+            const { entityType, entityId } = resolveTemplateDocumentGenerateTarget({
+              entityType: args.entityType,
+              entityId: args.entityId,
+              primaryContextType,
+              primaryContextId,
+            });
+            if (!entityId) {
+              throw new Error('document_generate: entityId is required for template mode');
+            }
             result = {
               status: 'completed',
               message: `Document generation queued for ${entityType} ${entityId} with template ${templateId}. The document will be available for download once processing completes.`,
