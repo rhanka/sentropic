@@ -237,15 +237,15 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - `AUTH_HONO_REQUIRED_PORTS` is type-checked against `keyof AuthHonoPorts` to keep runtime inventory and adapter surface aligned.
     - `createAuthRouter` now accepts router options for route prefix, route overrides, cookie names, RP metadata, session policy, email-code policy, magic-link policy, and response policy.
     - `createAuthRouter` mounts health plus all BR-39a-aligned auth route contracts under the configured prefix; auth routes intentionally return `501 not_implemented` until Lot 2 service handlers are extracted.
+    - `createRequireAuth` and `createOptionalAuth` middleware factories are exported without Sentropic workspace coupling; they validate bearer/cookie sessions through package ports and set Hono auth context variables.
   - To do:
     - Replace `createAuthRouter` route stubs with extracted registration, login, session, credentials, magic-link, and email handlers.
-    - Export `createRequireAuth` and `createOptionalAuth` middleware factories without Sentropic workspace coupling.
     - Extract reusable Hono route factories and auth services from existing Sentropic backend routes/services.
     - Rewire Sentropic API routes and middleware to consume `@sentropic/auth-hono` from the workspace package in the same branch.
     - Remove duplicated app-local auth route/service logic after package/API tests pass; no dual auth paths.
     - Complete npm first-publish runbook and trusted publisher setup.
   - Action:
-    - Codex next action: continue BR-39b Lot 1 with middleware factories and package tests, then move into Lot 2 service handler extraction.
+    - Codex next action: move into Lot 2 service handler extraction, starting with session manager behavior because middleware now depends on that port contract.
     - User action: confirm whether BR-39b should align to BR-39a current SHA `0944c6daf241` immediately, or wait for BR-39a merge if its Lot 2/3 screens may still change transport requirements.
 
 ## Plan / Todo (lot-based)
@@ -274,7 +274,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [x] Define pure port interfaces for users, credentials, challenges, sessions, email verification, magic links, cookies, logger, clock, random IDs, token signing, and token hashing.
   - [x] Define route-factory options for route prefix, cookie names, RP ID/origins, session duration, email-code policy, account-status mapping, route-path overrides, and response/error shape policy aligned with BR-39a.
   - [x] Export a `createAuthRouter(options)` Hono factory that mounts registration, login, session, credentials, magic-link, email, and health routes.
-  - [ ] Export `createRequireAuth(options)` and `createOptionalAuth(options)` middleware factories that do not assume Sentropic workspaces.
+  - [x] Export `createRequireAuth(options)` and `createOptionalAuth(options)` middleware factories that do not assume Sentropic workspaces.
   - [x] Add package lifecycle Make targets mirroring existing package patterns: `typecheck-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`, and `test-auth-hono`.
   - [x] Add CI change filters and outputs for `auth_hono` and `auth_hono_publish`.
   - [x] Add CI validation job `validate-auth-hono` that runs `make typecheck-auth-hono`, `make test-auth-hono`, `make build-auth-hono`, and `make pack-auth-hono`.
@@ -285,6 +285,8 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [x] `make typecheck-auth-hono ENV=test-feat-auth-hono-kit`
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/contracts.test.ts ENV=test-feat-auth-hono-kit`
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/router-factory.test.ts ENV=test-feat-auth-hono-kit`
+    - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/middleware.test.ts ENV=test-feat-auth-hono-kit`
+    - [x] `make test-auth-hono ENV=test-feat-auth-hono-kit`
     - [x] `make pack-auth-hono ENV=test-feat-auth-hono-kit`
 
 - [ ] **Lot 2 - WebAuthn, email, and session services**
