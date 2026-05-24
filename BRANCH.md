@@ -118,6 +118,27 @@ Add first-class image input to Sentropic chat and document context flows: users 
   - `api/src/services/llm-runtime/mesh-dispatch.ts` flattens message content through `stringifyContent`.
   - `api/src/routes/api/chat.ts` accepts string-only message content.
   - `ui/src/lib/utils/documents.ts` and `ui/src/lib/utils/google-drive-picker.ts` exclude image MIME types today.
+- Audit update 2026-05-24:
+  - `BR38a-EX1`: `api/drizzle/0027_chat_message_attachments.sql` and `api/drizzle/meta/_journal.json` are allowed as the single media-reference migration. Reason: persist nullable `chat_messages.attachments` instead of embedding bytes in message text. Impact: schema adds one JSONB column. Rollback: drop the column and remove the journal entry with the feature commits reverted.
+  - `BR38a-EX2`: `api/src/services/chat/postgres-chat-message-store.ts` is allowed to map the new attachments column through the message-store port. Reason: the runtime cannot hydrate or replay attachments unless persistence reads/writes them. Impact: scoped CRUD mapping only. Rollback: remove the field mapping with the migration revert.
+  - `BR38a-EX3`: `spec/DATA_MODEL.md` is allowed for schema documentation. Reason: the ERD/data model must reflect the new chat message attachment field. Impact: documentation only. Rollback: remove the attachment row/notes.
+  - `BR38a-EX4`: `api/tests/unit/chat-service-tools.test.ts` is allowed for the regression proving persisted image attachments are hydrated into structured vision parts before LLM streaming. Reason: this is the nearest existing mocked `ChatService.runAssistantGeneration` harness. Impact: unit coverage only. Rollback: remove the test with the hydration code.
+  - Follow-up gap closed: previous 38a commits persisted `chat_messages.attachments` and taught the provider runtime to accept image parts, but did not yet bridge persisted attachments into `currentMessages`. The current fix loads authorized image context documents, converts them to `{ type: 'image', mediaType, data }` parts, and keeps text-only flows unchanged.
+  - UAT remains pending. This branch must not be undrafted/merged until root UAT runs from a commit-identical root workspace and CI is green on the final pushed head.
+
+## Verification Ledger
+- 2026-05-24 RED: `make test-api-unit SCOPE="tests/unit/chat-service-tools.test.ts" API_TEST_WORKERS=1 API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input` failed as expected before the fix because `loadContextDocumentContent` was called 0 times.
+- 2026-05-24 RED: `make test-ui SCOPE="tests/components/chat/AppChatPanel-boundary.test.ts" API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input` failed as expected before the fix because `AppChatPanel` did not import/wire `chatAttachments`.
+- 2026-05-24 GREEN:
+  - `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input`
+  - `make typecheck-ui API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input` (0 errors, 6 pre-existing warnings)
+  - `make typecheck-chat-ui ENV=test-feat-multimodal-image-input`
+  - `make test-api-unit SCOPE="tests/unit/chat-service-tools.test.ts" API_TEST_WORKERS=1 API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input`
+  - `make test-ui SCOPE="tests/components/chat/AppChatPanel-boundary.test.ts" API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input`
+  - `make test-chat-ui ENV=test-feat-multimodal-image-input`
+  - `make test-pkg-chat-core ENV=test-feat-multimodal-image-input`
+- 2026-05-24 blocked verification:
+  - `make typecheck-chat-core ENV=test-feat-multimodal-image-input` is blocked by pre-existing root-owned `api/node_modules/.vite` permissions (`EACCES: permission denied, rmdir '/workspace/api/node_modules/.vite'`). `make test-pkg-chat-core ENV=test-feat-multimodal-image-input` passed on the same head.
 
 ## AI Flaky tests
 - Acceptance rule:
