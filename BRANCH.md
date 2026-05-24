@@ -84,6 +84,6 @@ Register the BR-39 auth-module extraction pair in the Sentropic roadmap: BR-39a 
 - [ ] **Lot N - Final validation**
   - [x] Verify only `BRANCH.md`, `PLAN.md`, `plan/39a-BRANCH_feat-auth-ui-sdk.md`, and `plan/39b-BRANCH_feat-auth-hono-kit.md` changed.
   - [x] Commit roadmap registration with `make commit MSG="docs: register auth module extraction branches"`.
-  - [ ] Create/update PR using this `BRANCH.md` text as PR body.
+  - [x] Create/update PR using this `BRANCH.md` text as PR body.
   - [ ] Verify branch CI or document that no CI was triggered for docs-only changes.
   - [ ] Once gates are OK, commit removal of `BRANCH.md`, push, and merge with merge commit only.
