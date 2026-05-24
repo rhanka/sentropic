@@ -28,9 +28,8 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
   - `plan/37b-BRANCH_feat-deploy-poc-k8s-37b.md`
   - `deploy/scw/**` (tenant manifests, including new files for sealed-secrets resources, postgres-backup CronJob, ingress, cert-manager ClusterIssuer)
   - `docs/uat/2026-05-24-deploy-poc-k8s-37b.md`
+  - `tools/scw-tem-mock/**` (new, BR37b-EX6: minimal local HTTP→SMTP proxy compatible with the SCW TEM API surface, dev-only)
 - **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose*.yml`
-  - `api/**`
   - `ui/**`
   - `packages/**`
   - `e2e/**`
@@ -40,10 +39,13 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
   - `TRANSITION.md`
   - `api/drizzle/*.sql`
   - `plan/NN-BRANCH_*.md` except `plan/37b-BRANCH_feat-deploy-poc-k8s-37b.md`
+  - any `api/**` outside the exceptional email-migration set listed under `BR37b-EX4`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile` (`BR37b-EX1`, append-only targets for sealed-secrets, postgres backup, smtp diagnostics, dns/ingress smoke; never modify existing BR-37 `scw-*` block behavior)
   - `.github/workflows/ci.yml` (`BR37b-EX2`, if a deploy-k8s trigger touch is needed to validate the end-to-end chain on a non-deploy-touching merge — strict scope: trigger conditions only, no logic change)
   - `PLAN.md` (`BR37b-EX3`, roadmap registration of BR-37b only)
+  - `api/src/services/magic-link.ts`, `api/src/services/email-verification.ts`, `api/src/config/env.ts`, related unit tests (`BR37b-EX4`, migrate from Nodemailer SMTP to Scaleway TEM HTTP API; zero dual paths; drop nodemailer dependency)
+  - `docker-compose*.yml` (`BR37b-EX5`, add `scw-tem-mock` service for dev local; keep maildev for SMTP UI; wire api → scw-tem-mock by environment override)
 - **Exception process**:
   - Declare exception ID `BR37b-EXn` in `## Feedback Loop` before touching any conditional path.
   - Include reason, impact, and rollback strategy.
@@ -53,6 +55,9 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
 - **BR37b-EX1** (status: `pending`): Conditional `Makefile` change for append-only operator targets: `scw-sealed-secrets-install`, `scw-seal-secret`, `scw-pgbackup-now`, `scw-pgbackup-restore`, `scw-smtp-diag`, `scw-dns-smoke`. Reason: encode new operator paths as Make-only entrypoints consistent with BR-37 `scw-*` block. Impact: append-only targets; no existing target behavior changed. Rollback: remove appended targets.
 - **BR37b-EX2** (status: `pending`): Conditional `.github/workflows/ci.yml` change, scope strictly limited to extending the `deploy-k8s` job trigger filter so that ingress/sealed-secret/backup manifest changes do trigger a fresh apply on merge, plus optional ingress/cert smoke step. No change to publish or build jobs. Rollback: revert ci.yml diff.
 - **BR37b-EX3** (status: `pending`): Add BR-37b row in `PLAN.md` branch catalog (`§3`) and dependency graph (`§4`). Reason: roadmap hygiene. Impact: docs-only. Rollback: revert PLAN.md hunks.
+- **BR37b-EX4** (status: `pending`): Conditional change in `api/src/services/magic-link.ts`, `api/src/services/email-verification.ts`, `api/src/config/env.ts`, and their unit tests. Reason: Lot 0 diagnostic confirmed SMTP egress is blocked at the Kapsule platform level (TEM, Gmail, IPv4 direct all time out; HTTPS to `api.scaleway.com` succeeds), and no NetworkPolicy egress in our namespace can change that — the platform drops the SYN. The only technically clean fix is to migrate outbound mail from Nodemailer SMTP to Scaleway TEM HTTP API (POST `https://api.scaleway.com/transactional-email/v1alpha1/regions/{region}/emails`, header `X-Auth-Token: <SCW_TEM_SECRET_KEY>`). Impact: introduce `api/src/services/scw-tem-client.ts`, swap the two existing nodemailer call sites, drop the nodemailer dependency from `api/package.json`, replace `MAIL_*` env vars with `SCW_TEM_*` in `env.ts`. Zero dual paths: nodemailer code and dep removed. Rollback: revert the four files + restore the nodemailer dep.
+- **BR37b-EX5** (status: `pending`): Conditional change in `docker-compose*.yml` to add a new dev-only service `scw-tem-mock` that exposes the TEM API surface on `http://scw-tem-mock:7700` and forwards each accepted payload to maildev SMTP. Wires the api service env var `SCW_TEM_API_BASE_URL=http://scw-tem-mock:7700` in dev (production sets it to `https://api.scaleway.com` via the SealedSecret). Reason: dev local must keep visibility into outgoing emails via the existing maildev UI without dual code paths inside the api. Impact: one new container in docker-compose + an env override on the api service block; no change to existing compose services. Rollback: revert the docker-compose hunks.
+- **BR37b-EX6** (status: `pending`): New `tools/scw-tem-mock/` directory containing `Dockerfile`, `index.js` (~50 lines: Express + nodemailer-to-maildev), and `package.json` (only `express` + `nodemailer`). Reason: implement the dev-only TEM API mock declared by `BR37b-EX5`. Impact: new self-contained tooling directory under `tools/`, never imported by api/ui code. Rollback: delete the directory + revert the docker-compose hunk.
 - **BR37b-FL1** (severity: `attention`, status: `open`): Carries forward BR37-FL16. Live outbound email from the k8s POC pod is blocked at SMTP egress. As of 2026-05-22, `scw-email-smoke` returned HTTP 500; pod-side netcheck showed `smtp.tem.scaleway.com:465` and `:587` time out, IPv4 `51.159.84.239:465` times out, while `api.scaleway.com:443` reachable. Working hypothesis: Scaleway Kapsule egress posture blocks outbound SMTP, or Scaleway TEM IP ranges are unreachable from the POC node pool subnet. Investigate before fixing.
 - **BR37b-FL2** (severity: `attention`, status: `open`): Sealed Secrets is the standard k8s pattern selected by user (no Vault, no External Secrets Operator with remote backend). Controller deployed as a Helm release or raw manifests in a dedicated namespace; sealing key sealed-into the cluster. Disaster recovery: backup the controller's sealing key (master) out-of-band; document procedure.
 - **BR37b-FL3** (severity: `attention`, status: `open`): Postgres backup uses a k8s native `CronJob` with `pg_dump | aws s3 cp` to SCW Object Storage (S3-compatible). No CNPG operator. Bucket name `sentropic-pgbackup` is **not hardcoded** — manifests reference env var `PG_BACKUP_BUCKET`. Bucket is operator-provisioned in the same SCW project as the existing app object storage, via SCW CLI: `scw object bucket create name=sentropic-pgbackup region=$DOC_STORAGE_REGION_PROD project-id=$SCW_DEFAULT_PROJECT_ID`. IAM credentials are **mutualised** with `DOC_STORAGE_ACCESS_KEY_PROD` / `DOC_STORAGE_SECRET_KEY_PROD` already present in root `.env`: segmentation enforced at the bucket boundary, not at the credential boundary (per user direction "pas à l'excès"). New root `.env` entries: `PG_BACKUP_BUCKET=sentropic-pgbackup`, optional `PG_BACKUP_REGION` / `PG_BACKUP_ENDPOINT` (default to the `DOC_STORAGE_*_PROD` siblings if unset). No new secret value is committed; the SealedSecret references the same credentials as the app.
@@ -86,19 +91,74 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
   - [ ] Capture current SMTP egress signature: `make scw-api-netcheck SCW_NETCHECK_HOST=smtp.tem.scaleway.com SCW_NETCHECK_PORT=465 KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37b`. Repeat with port 587 and with `api.scaleway.com:443` as control.
   - [ ] Confirm scope and guardrails. Declare `BR37b-EX1`, `BR37b-EX2`, `BR37b-EX3` only when first impacted file is touched.
 
-- [ ] **Lot 1 — SMTP egress unblocking (BR37b-FL1)**
-  - [ ] Investigate cluster egress posture: list active `NetworkPolicy` egress rules in `sentropic` namespace and any platform-level egress firewall on the Kapsule node pool subnet.
-  - [ ] Test direct IPv4 endpoints for Scaleway TEM: `51.159.84.239:465`, `51.159.84.239:587` (control: `api.scaleway.com:443`).
-  - [ ] Decide between the following remediation paths based on investigation evidence:
-    - Path A (NetworkPolicy egress allow): add `deploy/scw/16-egress-netpol.yaml` with egress rules from `app=api` to TEM SMTP IP CIDRs and DNS, then re-test.
-    - Path B (alternative outbound relay): switch the api Secret `MAIL_*` to a Scaleway TEM HTTP API path or a non-SMTP relay if SMTP egress remains blocked at the platform level. No app code change; configure via Secret only.
-  - [ ] Add `make scw-smtp-diag` target (append-only) that runs the pod-side netcheck matrix and prints a verdict line. (BR37b-EX1)
-  - [ ] Apply the chosen path manifest changes; run `make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37b` after the change.
-  - [ ] Re-run `make scw-email-smoke SCW_EMAIL_SMOKE_TO=fabien.antoine@gmail.com KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37b` and verify HTTP 200 + email delivery confirmation (inbox screenshot in UAT doc).
-  - [ ] Mark BR37b-FL1 as `fixed` with evidence (netcheck transcript, smoke return code, mail receipt), or convert to `deferred` with explicit user waiver if path B is rejected.
-  - [ ] Lot gate:
-    - [ ] No typecheck/lint/unit/E2E test impacted (manifest + Make only).
-    - [ ] UAT k8s: `make scw-smoke ENV=test-feat-deploy-poc-k8s-37b`, `make scw-email-smoke ENV=test-feat-deploy-poc-k8s-37b`.
+- [ ] **Lot 1 — Email migration from SMTP to Scaleway TEM HTTP API (BR37b-FL1, BR37b-EX4/EX5/EX6)**
+
+  - [ ] **Lot 1.0 — Confirm Lot 0 diagnostic is recorded**
+    - [ ] Append the Lot 0 netcheck matrix (TEM 465/587 ETIMEDOUT, IPv4 direct 8000ms timeout, Gmail 465 ETIMEDOUT, control `api.scaleway.com:443` OK 32ms, namespace NetworkPolicies all `ingress` only) into `docs/uat/2026-05-24-deploy-poc-k8s-37b.md`. Conclusion line: "Platform-level SMTP egress block; only HTTPS to `api.scaleway.com` reachable; mandatory migration to TEM HTTP API."
+    - [ ] Add `make scw-smtp-diag` target (append-only Makefile) that runs the same three netchecks in one shot and prints a verdict line. (BR37b-EX1)
+
+  - [ ] **Lot 1.1 — Operator-side SCW IAM provisioning (manual, not in repo)**
+    - [ ] Create SCW IAM Application `sentropic-tem-sender` in the same project as the existing DOC_STORAGE credentials (project `$SCW_DEFAULT_PROJECT_ID`).
+    - [ ] Attach an IAM Policy `sentropic-tem-sender-policy` with only `TransactionalEmailEmailFullAccess` scoped to that project. No DOC_STORAGE, no ContainerRegistry, no admin.
+    - [ ] Generate a Secret Key for that Application; store it in root `.env` as `export SCW_TEM_SECRET_KEY=<...>`.
+    - [ ] Confirm the sender domain `sent-tech.ca` is in `validated` state on the project's TEM dashboard (was already validated by BR-37 SMTP setup; verify the same domain works for the API path).
+    - [ ] Record in `docs/uat/2026-05-24-deploy-poc-k8s-37b.md` (without leaking the secret): IAM Application id, Policy id, validated sender domain, region (`fr-par`).
+
+  - [ ] **Lot 1.2 — Add `SCW_TEM_*` env vars + Zod schema (BR37b-EX4)**
+    - [ ] Edit `api/src/config/env.ts`:
+      - Add `SCW_TEM_API_BASE_URL` (default `https://api.scaleway.com`, dev override `http://scw-tem-mock:7700`).
+      - Add `SCW_TEM_REGION` (default `fr-par`).
+      - Add `SCW_TEM_PROJECT_ID` (required when not in dry-run, falls back to `SCW_DEFAULT_PROJECT_ID`).
+      - Add `SCW_TEM_SECRET_KEY` (optional in dev mock mode; required in prod).
+      - Add `SCW_TEM_FROM_EMAIL` (default `no-reply@sent-tech.ca`) and `SCW_TEM_FROM_NAME` (default `Sentropic`).
+      - **Remove** `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` (zero dual paths).
+
+  - [ ] **Lot 1.3 — New `api/src/services/scw-tem-client.ts` (BR37b-EX4)**
+    - [ ] Single function `sendEmail({ to, subject, html, text, fromEmail?, fromName? }): Promise<{ messageId: string }>`.
+    - [ ] Implementation: `fetch(${env.SCW_TEM_API_BASE_URL}/transactional-email/v1alpha1/regions/${env.SCW_TEM_REGION}/emails, { method: 'POST', headers: { 'X-Auth-Token': env.SCW_TEM_SECRET_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id, from: { email, name }, to: [{ email }], subject, html, text }) })`.
+    - [ ] On non-2xx: throw with structured error (status, response body excerpt).
+    - [ ] Add a unit test stub that mocks `fetch` and asserts payload shape.
+
+  - [ ] **Lot 1.4 — Migrate call sites (BR37b-EX4)**
+    - [ ] `api/src/services/magic-link.ts`: replace `nodemailer.createTransport` + `transporter.sendMail` with `scwTemSendEmail({...})`. Delete the `mailTransporter` singleton, `getMailTransporter` helper, and the nodemailer import.
+    - [ ] `api/src/services/email-verification.ts`: same migration. Delete the `mailTransporter` singleton, `getMailTransporter` helper, and the nodemailer import.
+    - [ ] Confirm no other `nodemailer` import remains in `api/**`.
+
+  - [ ] **Lot 1.5 — Remove nodemailer dependency (BR37b-EX4)**
+    - [ ] `make install-api nodemailer` reverse: remove `nodemailer` from `api/package.json` `dependencies` and from `package-lock.json`. (Use `make install-api`/`make uninstall-api` flow if available; otherwise edit + regenerate lock via dockerized npm.)
+    - [ ] Confirm `make typecheck-api` + `make lint-api` pass with the dep removed.
+
+  - [ ] **Lot 1.6 — Update api tests (BR37b-EX4)**
+    - [ ] Identify and update tests that import or mock nodemailer / `MAIL_*` env vars under `api/tests/**`. Targeted scope: `api/tests/api/auth/*.ts`, `api/tests/services/email-verification.test.ts` (if present), `api/tests/services/magic-link.test.ts` (if present).
+    - [ ] Replace nodemailer mocks with `fetch` mocks asserting the TEM payload shape.
+    - [ ] Run scoped: `make test-api SCOPE=tests/services/email-verification.test.ts ENV=test-feat-deploy-poc-k8s-37b` and `make test-api SCOPE=tests/services/magic-link.test.ts ENV=test-feat-deploy-poc-k8s-37b`.
+
+  - [ ] **Lot 1.7 — Implement dev mock `tools/scw-tem-mock/` (BR37b-EX6)**
+    - [ ] Create `tools/scw-tem-mock/index.js`: Express server on port 7700 with route `POST /transactional-email/v1alpha1/regions/:region/emails`, parses body, uses `nodemailer.createTransport({ host: 'maildev', port: 1025 })` to send to maildev, returns `{ message_id }`.
+    - [ ] Create `tools/scw-tem-mock/package.json`: deps `express`, `nodemailer`; start script `node index.js`.
+    - [ ] Create `tools/scw-tem-mock/Dockerfile`: `FROM node:24-alpine; WORKDIR /app; COPY package.json index.js ./; RUN npm install; CMD ["node","index.js"]`.
+
+  - [ ] **Lot 1.8 — Wire docker-compose (BR37b-EX5)**
+    - [ ] Edit `docker-compose.yml` (or whichever compose file the api/maildev stack lives in): add service `scw-tem-mock` with `build: ./tools/scw-tem-mock`, depends_on: maildev, ports: `7700:7700` (optional for debug), network shared with api/maildev.
+    - [ ] Edit api service env block: add `SCW_TEM_API_BASE_URL=http://scw-tem-mock:7700`, `SCW_TEM_SECRET_KEY=dev-mock-token`, `SCW_TEM_PROJECT_ID=dev-mock-project`, `SCW_TEM_REGION=fr-par`, `SCW_TEM_FROM_EMAIL=no-reply@sent-tech.ca`.
+    - [ ] Keep maildev service unchanged.
+
+  - [ ] **Lot 1.9 — Sealed Secret for prod `SCW_TEM_SECRET_KEY`**
+    - [ ] Depends on Lot 2 sealed-secrets controller bootstrap. Track as cross-lot dependency: Lot 2 must reach controller-installed state before Lot 1.9.
+    - [ ] Add `SCW_TEM_SECRET_KEY`, `SCW_TEM_PROJECT_ID`, `SCW_TEM_REGION`, `SCW_TEM_FROM_EMAIL` keys into the existing `sentropic-api` SealedSecret (`deploy/scw/05-sealed-sentropic-api.yaml`).
+    - [ ] Update `deploy/scw/30-api.yaml` env block to load these from the Secret; remove the old `MAIL_*` env keys.
+
+  - [ ] **Lot 1.10 — Deploy + live UAT**
+    - [ ] `make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37b`. Confirm api pod restarts and reads new env.
+    - [ ] `make scw-email-smoke SCW_EMAIL_SMOKE_TO=fabien.antoine@gmail.com KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37b`. Verify HTTP 200 from api + email arrives in inbox (screenshot in UAT doc).
+    - [ ] Dev local: `make dev API_PORT=9186 UI_PORT=5386 MAILDEV_UI_PORT=1286 ENV=test-feat-deploy-poc-k8s-37b`, trigger magic-link from UI, confirm email lands in Maildev UI via the mock.
+
+  - [ ] **Lot 1 gate**:
+    - [ ] `make typecheck-api` + `make lint-api` green with nodemailer dep removed.
+    - [ ] `make test-api ENV=test-feat-deploy-poc-k8s-37b` green (no nodemailer-mocking tests remain).
+    - [ ] `make scw-email-smoke ENV=test-feat-deploy-poc-k8s-37b` returns 200 + delivery confirmed.
+    - [ ] Maildev UI dev local shows the magic-link email via scw-tem-mock proxy.
+    - [ ] Mark `BR37b-FL1` as `fixed` with evidence.
 
 - [ ] **Lot 2 — Sealed Secrets controller + sealing (BR37b-FL2)**
   - [ ] Decide controller install method (manifest-only vs Helm). Preferred: official manifest install from `bitnami-labs/sealed-secrets` release pinned to a specific version, deployed into namespace `sealed-secrets` (or `kube-system` per project convention) without Helm dependency.
