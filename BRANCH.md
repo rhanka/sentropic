@@ -125,6 +125,7 @@ Add first-class image input to Sentropic chat and document context flows: users 
   - `BR38a-EX4`: `api/tests/unit/chat-service-tools.test.ts` is allowed for the regression proving persisted image attachments are hydrated into structured vision parts before LLM streaming. Reason: this is the nearest existing mocked `ChatService.runAssistantGeneration` harness. Impact: unit coverage only. Rollback: remove the test with the hydration code.
   - Follow-up gap closed: previous 38a commits persisted `chat_messages.attachments` and taught the provider runtime to accept image parts, but did not yet bridge persisted attachments into `currentMessages`. The current fix loads authorized image context documents, converts them to `{ type: 'image', mediaType, data }` parts, and keeps text-only flows unchanged.
   - Main sync 2026-05-24: merged `origin/main` after root fast-forward from `85c679d7` to `146364eb`; no merge conflicts. Verification below was rerun on the merged head.
+  - Latest main sync 2026-05-24: merged `origin/main` again after `main` advanced from `146364eb` to `d5e3cddc`; no merge conflicts.
   - UAT remains pending. This branch must not be undrafted/merged until root UAT runs from a commit-identical root workspace and CI is green on the final pushed head.
 
 ## Verification Ledger
@@ -155,6 +156,8 @@ Add first-class image input to Sentropic chat and document context flows: users 
 - 2026-05-24 local cleanup note:
   - Initial post-main `test-api-unit` run failed before test collection because the mounted `workspace_node_modules` volume did not yet contain `gray-matter` for the new `@sentropic/skills` workspace; `prepare-node-workspace` fixed it and the same test then passed.
   - Initial post-main `typecheck-chat-core` reruns hit local generated `node_modules` ownership issues (`api/node_modules/.vite`, `ui/node_modules/.bin`, and root `node_modules`). Generated artifacts were cleaned or ownership-corrected only after the package tests had finished; the same command then passed.
+- 2026-05-24 CI note:
+  - GitHub run `26373930960` on superseded head `8b5005d3` failed only `test-e2e (group-c, 03)`: `tests/03-chat.spec.ts` could not find the `Reasoning/Raisonnement` runtime header after reload, while all compile/package/API/build/security jobs passed. The branch was then merged with the latest `origin/main` head `d5e3cddc` and needs a fresh CI run before UAT/merge.
 
 ## AI Flaky tests
 - Acceptance rule:
