@@ -120,4 +120,52 @@ describe('createAuthSessionService', () => {
 
     await expect(service.validateSessionToken('session-token')).resolves.toBeNull();
   });
+
+  it('rotates session and refresh tokens from a valid refresh token', async () => {
+    let rotated:
+      | {
+          expiresAt: Date;
+          refreshTokenHash: string;
+          sessionId: string;
+          sessionTokenHash: string;
+        }
+      | null = null;
+    const service = createAuthSessionService({
+      ports: createPorts({
+        random: {
+          token: () => 'new-refresh-token',
+        },
+        sessions: {
+          findByRefreshTokenHash: async () => createSessionRecord(),
+          updateTokens: async (input) => {
+            rotated = input;
+            return createSessionRecord({
+              expiresAt: input.expiresAt,
+              refreshTokenHash: input.refreshTokenHash,
+              sessionTokenHash: input.sessionTokenHash,
+            });
+          },
+        },
+        tokens: {
+          hashSecret: (secret: string) => `hash:${secret}`,
+          signSessionToken: async () => 'new-session-token',
+        },
+      } as Partial<AuthHonoPorts>),
+    });
+
+    const tokens = await service.refreshSession('refresh-token');
+
+    expect(tokens).toEqual({
+      expiresAt,
+      refreshToken: 'new-refresh-token',
+      sessionId: 'session-1',
+      sessionToken: 'new-session-token',
+    });
+    expect(rotated).toEqual({
+      expiresAt,
+      refreshTokenHash: 'hash:new-refresh-token',
+      sessionId: 'session-1',
+      sessionTokenHash: 'hash:new-session-token',
+    });
+  });
 });

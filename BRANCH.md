@@ -237,7 +237,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
 - **Track B - BR-39b `@sentropic/auth-hono`**
   - Done:
     - BR-39b worktree exists at `/home/antoinefa/src/sentropic/tmp/feat-auth-hono-kit` on `feat/auth-hono-kit`.
-    - Current inspected SHA at status update: `7cc1a6be545b`.
+    - Current inspected SHA at status update: pending request-magic-link and refresh-session commit on top of `e2530497aec8`.
     - Lot 0 branch plan, backend inventory, scope decisions, npm/bootstrap anticipation, and `BR39b-EX1` are recorded.
     - Backend extraction inventory maps current Sentropic routes/services to package ports in `BR39b-INV1`.
     - `BR39b-EX1` is approved for narrow `Makefile` and `.github/workflows/ci.yml` edits required by package lifecycle automation.
@@ -245,6 +245,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Conductor approved aligning BR-39b immediately to inspected BR-39a SHA `0944c6daf241`, with explicit follow-up adjustments if BR-39a transport changes.
     - `packages/auth-hono` package shell exists with package metadata, TypeScript source, tests, README, and LICENSE; `dist/**` is generated during build/pack and not tracked.
     - Initial route contract map is aligned with BR-39a `AuthUiTransport` method names.
+    - `requestMagicLink` is pre-aligned in `AUTH_HONO_AUTH_UI_METHODS` and `AUTH_HONO_ROUTE_MAP` for `POST /magic-link/request` per `BR39b-Q5`; BR-39a must still add the matching transport method.
     - Package lifecycle Make targets exist: `typecheck-auth-hono`, `test-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`.
     - CI/CD package wiring exists for `auth_hono`, `auth_hono_publish`, `validate-auth-hono`, `publish-auth-hono`, and `bootstrap_publish_target=auth-hono`.
     - Root workspace lockfile was synced through `make lock-root ENV=test-feat-auth-hono-kit`.
@@ -253,17 +254,15 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - `createAuthRouter` now accepts router options for route prefix, route overrides, cookie names, RP metadata, session policy, email-code policy, magic-link policy, and response policy.
     - `createAuthRouter` mounts health plus all BR-39a-aligned auth route contracts under the configured prefix; auth routes intentionally return `501 not_implemented` until Lot 2 service handlers are extracted.
     - `createRequireAuth` and `createOptionalAuth` middleware factories are exported without Sentropic workspace coupling; they validate bearer/cookie sessions through package ports and set Hono auth context variables.
-    - Initial `createAuthSessionService` is exported with session issue, validate, list, revoke, and revoke-all primitives backed only by package ports.
+    - `createAuthSessionService` is exported with session issue, validate, refresh-token rotation, list, revoke, and revoke-all primitives backed only by package ports.
   - To do:
     - Replace `createAuthRouter` route stubs with extracted registration, login, session, credentials, magic-link, and email handlers.
-    - Add `requestMagicLink` to `AUTH_HONO_AUTH_UI_METHODS` and `AUTH_HONO_ROUTE_MAP` once BR-39a adds the transport method.
-    - Complete session refresh-token rotation in the package service before replacing Sentropic session routes.
     - Extract reusable Hono route factories and auth services from existing Sentropic backend routes/services.
     - Rewire Sentropic API routes and middleware to consume `@sentropic/auth-hono` from the workspace package in the same branch.
     - Remove duplicated app-local auth route/service logic after package/API tests pass; no dual auth paths.
     - Complete npm first-publish runbook and trusted publisher setup.
   - Action:
-    - Codex next action: continue Lot 2 with refresh-token rotation, then email-code and magic-link service extraction.
+    - Codex next action: continue Lot 2 with email-code and magic-link service extraction.
     - User action: none until npm first-publish/2FA is requested during bootstrap publish readiness.
 
 ## Plan / Todo (lot-based)
@@ -312,7 +311,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [ ] Move reusable WebAuthn authentication option generation and verification logic into package services with discoverable-credential support.
   - [ ] Move reusable email-code and magic-link validation flows into package services with injected delivery and token-storage ports.
   - [x] Add initial reusable JWT/session issue, validate, list, revoke, and revoke-all primitives with injected session storage, token, random, clock, and account-policy ports.
-  - [ ] Move reusable JWT/session issue, validate, refresh, revoke, and revoke-all logic into package services with injected session storage and secret providers.
+  - [x] Move reusable JWT/session issue, validate, refresh, revoke, and revoke-all logic into package services with injected session storage and secret providers.
   - [ ] Preserve deterministic error codes and HTTP status mapping for invalid request, expired challenge, duplicate credential, unverified email, disabled account, and invalid session paths.
   - [ ] Lot gate:
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/session-service.test.ts ENV=test-feat-auth-hono-kit`
