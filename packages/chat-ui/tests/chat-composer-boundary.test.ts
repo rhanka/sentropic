@@ -26,6 +26,7 @@ describe('ChatComposer package boundary', () => {
     expect(source).toContain('export let disabled');
     expect(source).toContain('renderComposerSurface');
     expect(source).toContain('renderFloatingLayer');
+    expect(source).toContain('renderAttachmentTray');
     expect(source).toContain('renderLeftControls');
     expect(source).toContain('renderRightActions');
   });

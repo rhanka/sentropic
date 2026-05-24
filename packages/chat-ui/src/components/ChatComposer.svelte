@@ -14,6 +14,7 @@
   export let onKeyDown: ((event: KeyboardEvent) => void) | undefined = undefined;
   export let renderComposerSurface: Snippet<[]>;
   export let renderFloatingLayer: Snippet<[]>;
+  export let renderAttachmentTray: Snippet<[]> | undefined = undefined;
   export let renderLeftControls: Snippet<[]>;
   export let renderRightActions: Snippet<[]>;
 </script>
@@ -39,6 +40,10 @@
       </div>
       {@render renderFloatingLayer()}
     </div>
+
+    {#if renderAttachmentTray}
+      {@render renderAttachmentTray()}
+    {/if}
 
     <div class="flex items-center gap-1.5">
       {@render renderLeftControls()}

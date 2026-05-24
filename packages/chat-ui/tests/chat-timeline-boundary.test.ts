@@ -23,6 +23,7 @@ describe('ChatTimeline package boundary', () => {
     const source = readTimeline();
     expect(source).toContain('export let items');
     expect(source).toContain('renderUserMessage');
+    expect(source).toContain('renderMessageAttachments');
     expect(source).toContain('renderAssistantSegment');
     expect(source).toContain('renderRuntimeSegment');
     expect(source).toContain('{#each items as item (item.key)}');

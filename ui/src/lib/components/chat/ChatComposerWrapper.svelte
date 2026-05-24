@@ -15,6 +15,7 @@
   export let onKeyDown: ((event: KeyboardEvent) => void) | undefined = undefined;
   export let renderComposerSurface: Snippet<[]>;
   export let renderFloatingLayer: Snippet<[]>;
+  export let renderAttachmentTray: Snippet<[]> | undefined = undefined;
   export let renderLeftControls: Snippet<[]>;
   export let renderRightActions: Snippet<[]>;
 </script>
@@ -33,6 +34,7 @@
   {onKeyDown}
   {renderComposerSurface}
   {renderFloatingLayer}
+  {renderAttachmentTray}
   {renderLeftControls}
   {renderRightActions}
 />

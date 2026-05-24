@@ -20,6 +20,7 @@ describe('ChatComposer app wrapper', () => {
     );
     expect(source).toContain('renderComposerSurface');
     expect(source).toContain('renderFloatingLayer');
+    expect(source).toContain('renderAttachmentTray');
     expect(source).toContain('renderLeftControls');
     expect(source).toContain('renderRightActions');
   });
