@@ -11,7 +11,7 @@ sandbox:
 tools:
   - name: document_generate
     description: |
-      Generate a document from the current context (initiative, folder/dashboard, etc.).
+      Generate a document from the current context (organization, initiative, folder/dashboard, etc.).
       Formats: "docx" (default) or "pptx".
       DOCX supports two sub-modes — (1) Template mode with templateId, (2) Freeform mode with code (mutually exclusive).
       PPTX supports freeform code only.
@@ -29,17 +29,17 @@ tools:
           description: Output format. Defaults to "docx". Use "pptx" for freeform presentation generation (PptGenJS code).
         templateId:
           type: string
-          description: Document template identifier. Examples; "usecase-onepage" for initiative one-pager, "executive-synthesis-multipage" for folder executive summary report. Mutually exclusive with code. Only for action "generate" and format "docx".
+          description: Document template identifier. Examples; "usecase-onepage" for initiative one-pager, "executive-synthesis-multipage" for folder executive summary report. Mutually exclusive with code. Only for action "generate" and format "docx". Template mode requires an initiative or folder target.
         entityType:
           type: string
-          enum: [initiative, folder]
-          description: Type of entity to generate the document for. Only for action "generate". Optional when the current chat context already focuses an initiative or folder.
+          enum: [organization, initiative, folder]
+          description: Optional freeform target type. Omit in freeform mode when the current chat context already focuses an organization, initiative, or folder. Template mode only supports "initiative" or "folder".
         entityId:
           type: string
-          description: ID of the entity (initiative ID or folder ID). Only for action "generate". Optional when the current chat context already focuses the target initiative/folder.
+          description: Optional freeform target ID. Omit in freeform mode when the current chat context already focuses the target. Template mode requires the ID of a template-compatible initiative or folder unless the current context already provides it.
         code:
           type: string
-          description: Freeform JavaScript code. For format "docx", use docx helpers (doc, h, p, bold, italic, list, table, pageBreak, hr) and return a Document object. For format "pptx", prefer pptx() plus the provided PptGenJS helpers and return a presentation object. Available data; context.entity, context.initiatives, context.matrix, context.workspace. Mutually exclusive with templateId. Only for action "generate".
+          description: Freeform JavaScript code. For format "docx", use docx helpers (doc, h, p, bold, italic, list, table, pageBreak, hr) and return a Document object. For format "pptx", prefer pptx() plus the provided PptGenJS helpers and return a presentation object. Available data; context.entity, context.folders, context.initiatives, context.matrix, context.workspace. Mutually exclusive with templateId. Only for action "generate".
         title:
           type: string
           description: Document title used as the file name. Example; "Rapport initiatives dossier X". Only for action "generate".
@@ -91,7 +91,7 @@ If `caller.templateRenderer == null`, the handler throws a clear
 
 Your code runs inside a sandboxed `vm.createContext` with docx.js globals and helper functions.
 - The code must `return` a `Document` object (via `doc()` helper or `new Document({...})`).
-- Available data: `context.entity`, `context.initiatives`, `context.matrix`, `context.workspace`.
+- Available data: `context.entity`, `context.folders`, `context.initiatives`, `context.matrix`, `context.workspace`.
 - Timeout: 30 seconds.
 - No `require`, `import`, `fs`, `fetch`, `process` — only the injected globals.
 - Code is wrapped as `(function() { ...your code... })()` and executed synchronously.
@@ -233,7 +233,7 @@ Your code runs inside a sandboxed Node VM with PptGenJS helpers.
 - Return a PptGenJS presentation object from `pptx()`.
 - Prefer `pptx()` over raw constructor calls; use `PptxGenJS` / `pptxgenjs` only for advanced APIs not covered by the helpers.
 - You may also return `{ presentation, fileName }`.
-- Available data: `context.entity`, `context.initiatives`, `context.matrix`, `context.workspace`.
+- Available data: `context.entity`, `context.folders`, `context.initiatives`, `context.matrix`, `context.workspace`.
 - Timeout: 30 seconds for code execution.
 - No `require`, `import`, `fs`, `fetch`, `process`, network, or template import/editing.
 - Use inches for coordinates. Wide slides are 13.333 x 7.5 inches.

@@ -54,6 +54,7 @@ type TableOpts = {
 
 export type FreeformContext = {
   entity: Record<string, unknown>;
+  folders?: Record<string, unknown>[];
   initiatives: Record<string, unknown>[];
   matrix: Record<string, unknown> | null;
   workspace: Record<string, unknown>;

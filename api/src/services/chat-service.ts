@@ -71,16 +71,21 @@ function isChatContextType(value: unknown): value is ChatContextType {
   return typeof value === 'string' && (CHAT_CONTEXT_TYPES as readonly string[]).includes(value);
 }
 
-type DocumentGenerateEntityType = 'initiative' | 'folder';
+type TemplateDocumentGenerateEntityType = 'initiative' | 'folder';
+type FreeformDocumentGenerateEntityType = TemplateDocumentGenerateEntityType | 'organization';
 
-function isDocumentGenerateEntityType(value: unknown): value is DocumentGenerateEntityType {
+function isTemplateDocumentGenerateEntityType(value: unknown): value is TemplateDocumentGenerateEntityType {
   return value === 'initiative' || value === 'folder';
 }
 
-function getDocumentGenerateFallbackTarget(
+function isFreeformDocumentGenerateEntityType(value: unknown): value is FreeformDocumentGenerateEntityType {
+  return value === 'organization' || isTemplateDocumentGenerateEntityType(value);
+}
+
+function getTemplateDocumentGenerateFallbackTarget(
   contextType: ChatContextType | null | undefined,
   contextId: string | null | undefined,
-): { entityType: DocumentGenerateEntityType; entityId: string } | null {
+): { entityType: TemplateDocumentGenerateEntityType; entityId: string } | null {
   const entityId = typeof contextId === 'string' ? contextId.trim() : '';
   if (!entityId) return null;
   if (contextType === 'initiative' || contextType === 'usecase') {
@@ -92,20 +97,38 @@ function getDocumentGenerateFallbackTarget(
   return null;
 }
 
-function resolveDocumentGenerateTarget(input: {
+function getFreeformDocumentGenerateFallbackTarget(
+  contextType: ChatContextType | null | undefined,
+  contextId: string | null | undefined,
+): { entityType: FreeformDocumentGenerateEntityType; entityId: string } | null {
+  const entityId = typeof contextId === 'string' ? contextId.trim() : '';
+  if (!entityId) return null;
+  if (contextType === 'organization' || contextType === 'folder' || contextType === 'initiative') {
+    return { entityType: contextType, entityId };
+  }
+  if (contextType === 'usecase') {
+    return { entityType: 'initiative', entityId };
+  }
+  if (contextType === 'executive_summary') {
+    return { entityType: 'folder', entityId };
+  }
+  return null;
+}
+
+function resolveTemplateDocumentGenerateTarget(input: {
   entityType?: unknown;
   entityId?: unknown;
   primaryContextType: ChatContextType | null | undefined;
   primaryContextId: string | null | undefined;
-}): { entityType: DocumentGenerateEntityType; entityId: string; usedFallback: boolean } {
+}): { entityType: TemplateDocumentGenerateEntityType; entityId: string; usedFallback: boolean } {
   const rawEntityType = typeof input.entityType === 'string' ? input.entityType.trim() : '';
-  if (rawEntityType && !isDocumentGenerateEntityType(rawEntityType)) {
-    throw new Error('document_generate: entityType must be "initiative" | "folder"');
+  if (rawEntityType && !isTemplateDocumentGenerateEntityType(rawEntityType)) {
+    throw new Error('document_generate: template mode entityType must be "initiative" | "folder"');
   }
 
-  const explicitEntityType = isDocumentGenerateEntityType(rawEntityType) ? rawEntityType : null;
+  const explicitEntityType = isTemplateDocumentGenerateEntityType(rawEntityType) ? rawEntityType : null;
   const explicitEntityId = typeof input.entityId === 'string' ? input.entityId.trim() : '';
-  const fallback = getDocumentGenerateFallbackTarget(
+  const fallback = getTemplateDocumentGenerateFallbackTarget(
     input.primaryContextType,
     input.primaryContextId,
   );
@@ -129,48 +152,47 @@ function resolveDocumentGenerateTarget(input: {
   };
 }
 
-async function resolveDocumentGenerateTargetForChat(input: {
+function resolveFreeformDocumentGenerateTarget(input: {
   entityType?: unknown;
   entityId?: unknown;
   primaryContextType: ChatContextType | null | undefined;
   primaryContextId: string | null | undefined;
   organizationContextIds?: readonly string[];
-  workspaceId: string;
-}): Promise<{ entityType: DocumentGenerateEntityType; entityId: string; usedFallback: boolean }> {
+}): { entityType: FreeformDocumentGenerateEntityType; entityId: string; usedFallback: boolean } {
   const rawEntityType = typeof input.entityType === 'string' ? input.entityType.trim() : '';
-  const explicitEntityType = isDocumentGenerateEntityType(rawEntityType) ? rawEntityType : null;
-  const explicitEntityId = typeof input.entityId === 'string' ? input.entityId.trim() : '';
-  const organizationContextId =
-    input.primaryContextType === 'organization' && input.primaryContextId
-      ? input.primaryContextId
-      : input.organizationContextIds && input.organizationContextIds.length === 1
-        ? input.organizationContextIds[0]
-        : null;
-
-  if (organizationContextId) {
-    const shouldUseOrganizationFolder =
-      rawEntityType === 'organization' ||
-      (!rawEntityType && !explicitEntityId) ||
-      (explicitEntityType === 'folder' && !explicitEntityId);
-
-    if (shouldUseOrganizationFolder) {
-      const rows = await db
-        .select({ id: folders.id })
-        .from(folders)
-        .where(and(eq(folders.workspaceId, input.workspaceId), eq(folders.organizationId, organizationContextId)))
-        .orderBy(desc(folders.createdAt));
-
-      if (rows.length === 1) {
-        return { entityType: 'folder', entityId: rows[0].id, usedFallback: true };
-      }
-      if (rows.length === 0) {
-        throw new Error('document_generate: organization context has no folder target; create or select a folder first');
-      }
-      throw new Error('document_generate: organization context has multiple folder targets; pass entityType "folder" and entityId explicitly');
-    }
+  if (rawEntityType && !isFreeformDocumentGenerateEntityType(rawEntityType)) {
+    throw new Error('document_generate: freeform entityType must be "organization" | "folder" | "initiative"');
   }
 
-  return resolveDocumentGenerateTarget(input);
+  const explicitEntityType = isFreeformDocumentGenerateEntityType(rawEntityType) ? rawEntityType : null;
+  const explicitEntityId = typeof input.entityId === 'string' ? input.entityId.trim() : '';
+  const primaryFallback = getFreeformDocumentGenerateFallbackTarget(
+    input.primaryContextType,
+    input.primaryContextId,
+  );
+  const organizationFallback =
+    !primaryFallback && input.organizationContextIds?.length === 1
+      ? { entityType: 'organization' as const, entityId: input.organizationContextIds[0] }
+      : null;
+  const fallback = primaryFallback ?? organizationFallback;
+  const resolvedEntityType = explicitEntityType ?? fallback?.entityType;
+  const resolvedEntityId =
+    explicitEntityId ||
+    (fallback && (!explicitEntityType || fallback.entityType === explicitEntityType)
+      ? fallback.entityId
+      : '');
+
+  if (!resolvedEntityType || !resolvedEntityId) {
+    throw new Error('document_generate: entityId is required when no current freeform context is available');
+  }
+
+  return {
+    entityType: resolvedEntityType,
+    entityId: resolvedEntityId,
+    usedFallback:
+      (!explicitEntityType && !!fallback) ||
+      (!explicitEntityId && !!fallback && (!explicitEntityType || fallback.entityType === explicitEntityType)),
+  };
 }
 
 export type CommentContextType = 'organization' | 'folder' | 'initiative' | 'matrix' | 'executive_summary';
@@ -2774,22 +2796,30 @@ Règles :
     contextBlock += `\n\n${activeToolsBlock}`;
 
     if (activeToolNames.includes('document_generate')) {
-      const defaultDocumentTarget = getDocumentGenerateFallbackTarget(
+      const defaultTemplateTarget = getTemplateDocumentGenerateFallbackTarget(
         primaryContextType,
         primaryContextId,
       );
-      const targetGuidance = defaultDocumentTarget
-        ? `Current chat context default target: \`${defaultDocumentTarget.entityType}:${defaultDocumentTarget.entityId}\`. You may omit \`entityType\` / \`entityId\` only when generating for this current target; specify both when targeting another entity.`
-        : primaryContextType === 'organization'
-          ? 'The current chat context is an organization. `document_generate` cannot target `organization` directly; target a linked `folder` instead. If the organization has exactly one linked folder, you may omit `entityType` / `entityId` and the server will use that folder. If there are multiple folders, call `folders_list` and pass `entityType: "folder"` plus the folder `entityId`.'
-          : 'Pass both `entityType` and `entityId` when generating a document.';
+      const defaultFreeformTarget = getFreeformDocumentGenerateFallbackTarget(
+        primaryContextType,
+        primaryContextId,
+      );
+      const targetGuidance = defaultTemplateTarget
+        ? `Current template-compatible default target: \`${defaultTemplateTarget.entityType}:${defaultTemplateTarget.entityId}\`. Template mode requires a template-compatible target (\`initiative\` or \`folder\`).`
+        : 'No template-compatible default target is available from the current chat context.';
+      const freeformGuidance = defaultFreeformTarget
+        ? `Current freeform default target: \`${defaultFreeformTarget.entityType}:${defaultFreeformTarget.entityId}\`. In freeform mode, omit \`entityType\` / \`entityId\` to use this current context.`
+        : 'In freeform mode, pass `entityType` and `entityId` only when no current organization, folder, or initiative context is available.';
       contextBlock += `\n\n## Document generation
 You have the tool \`document_generate\`. It can generate \`format: "docx"\` (default) or \`format: "pptx"\`.
 Call it with \`action: "generate"\`. The DOCX/PPTX sandbox helper API is documented in the \`document_generate\` skill's \`SKILL.md\` (discoverable via the \`search_skills\` meta-tool).
 ${targetGuidance}
+${freeformGuidance}
+For template mode (\`templateId\`), \`entityType\` must be \`initiative\` or \`folder\`; organization templates are not supported.
 For DOCX freeform \`code\`, do not use \`require\`, \`import\`, \`await\`, \`docx()\`, chain APIs, or \`new Document().addParagraph(...)\`. The sandbox already injects helpers; return a document synchronously, for example: \`return doc([h(1, 'Title'), p('Summary'), table(['Field', 'Value'], [['Name', 'Ellio']])]);\`.
 If you need data from another tool, call that tool before \`document_generate\` and embed the returned values as literals in the generated \`code\`; sandbox code cannot call chat tools.
-For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw constructor calls.`;
+For PPTX freeform \`code\`, use only the injected PPTX helpers: \`pptx\`, \`titleSlide\`, \`sectionSlide\`, \`textBox\`, \`bullets\`, \`table\`, \`statCallout\`, \`footer\`, and \`visualPlaceholder\`. Do not use DOCX helpers such as \`h\`, \`p\`, \`hr\`, or \`list\`; do not use a \`slide(...)\` helper; do not use raw constructors. Return the presentation handle synchronously, for example: \`const deck = pptx({ title: "Ellio" }); const slide = titleSlide(deck, "Ellio", "Monopage"); textBox(slide, "Summary", { x: 0.8, y: 4.2, w: 11.5, h: 0.5 }); return deck;\`.
+When generating JavaScript \`code\` for DOCX or PPTX, use double-quoted string literals for all human text and escape any embedded double quotes. This avoids syntax errors with apostrophes in French text such as \`l'innovation\`.`;
     }
 
     const vscodeCodeAgentPayload = this.normalizeVsCodeCodeAgentPayload(
@@ -4391,15 +4421,6 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           const templateId = typeof args.templateId === 'string' ? args.templateId : undefined;
           const code = typeof args.code === 'string' ? args.code : undefined;
           const title = typeof args.title === 'string' ? args.title : undefined;
-          const { entityType, entityId } = await resolveDocumentGenerateTargetForChat({
-            entityType: args.entityType,
-            entityId: args.entityId,
-            primaryContextType,
-            primaryContextId,
-            organizationContextIds: [...allowedByType.organization],
-            workspaceId: sessionWorkspaceId,
-          });
-          if (!entityId) throw new Error('document_generate: entityId is required');
           if (templateId && code) throw new Error('document_generate: templateId and code are mutually exclusive');
           if (!templateId && !code) throw new Error('document_generate: either templateId or code is required');
           if (format === 'pptx' && templateId) {
@@ -4407,12 +4428,19 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           }
 
           if (code) {
+            const { entityType, entityId } = resolveFreeformDocumentGenerateTarget({
+              entityType: args.entityType,
+              entityId: args.entityId,
+              primaryContextType,
+              primaryContextId,
+              organizationContextIds: [...allowedByType.organization],
+            });
             if (format === 'pptx') {
               // Freeform PPTX: synchronous sandbox generation (BR-21a).
               try {
                 const freeformResult = await generateFreeformPptx({
                   code,
-                  entityType: entityType as 'initiative' | 'folder',
+                  entityType,
                   entityId,
                   workspaceId: sessionWorkspaceId,
                   title,
@@ -4510,7 +4538,7 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
               try {
                 const freeformResult = await generateFreeformDocx({
                   code,
-                  entityType: entityType as 'initiative' | 'folder',
+                  entityType,
                   entityId,
                   workspaceId: sessionWorkspaceId,
                 });
@@ -4584,6 +4612,15 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
             }
           } else {
             // Template mode (unchanged, DOCX only)
+            const { entityType, entityId } = resolveTemplateDocumentGenerateTarget({
+              entityType: args.entityType,
+              entityId: args.entityId,
+              primaryContextType,
+              primaryContextId,
+            });
+            if (!entityId) {
+              throw new Error('document_generate: entityId is required for template mode');
+            }
             result = {
               status: 'completed',
               message: `Document generation queued for ${entityType} ${entityId} with template ${templateId}. The document will be available for download once processing completes.`,
