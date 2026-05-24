@@ -1,6 +1,7 @@
 # PLAN - Orchestrated Roadmap
 
 Status: Updated 2026-05-14 — BR-14c (`feat/llm-mesh-sdk`) MERGED (PR #141, 2026-05-11), BR-14g (model catalog GPT-5.5 + Opus 4.7) MERGED (PR #146), BR-24 (`chore/node24-actions-upgrade`) MERGED (PR #147), `fix-mistral` MERGED (PR #145). BR-23 (`feat/multi-agent-framework-comparison`) scoping COMPLETED 2026-05-13 — PR #148 open, awaiting `SPEC_VOL` validation; architecture decisions closed in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` (single generic `CheckpointStore<T>`, single composable federated `ToolRegistry`, separate `@sentropic/marketplace`, façade-first `@sentropic/flow` extraction preserving agent templating invariant). BR-14b IN PROGRESS — Lot 1 contracts shipped (`16163ffc` = `@sentropic/contracts` skeleton), Lot 2 events shipped (`9cc76b61` = `@sentropic/events` skeleton); Lot 3 `@sentropic/chat-core` shell pending. BR-14a Lot 0 scoping complete (`c5cc6da1`); implementation blocked on BR-14b merge; target renamed `@sentropic/chat` → `@sentropic/chat-ui`. BR-25 (`chore/rules-skills-audit`) in study mode (17/46 checkboxes). BR-31 (`chore/make-to-nx-study`) STUDY CLOSED 2026-05-13 — recommendation REJECT (commits `681790fa` + `38d8f1d3`); no code change. BR-26 (`feat/openerp-runtime-requirements`) SCAFFOLDED 2026-05-14 (PR #151) — OpenERP project runtime requirements (MCP, OTel hooks, policy hooks, identity, marketplace primitives, sandbox); reserves slots BR-27..30 for OpenERP implementation follow-ups. Original BR-26..30 slots remapped to BR-32..36 to avoid collision. Forthcoming sentropic branches: BR-32 (flow-runtime-extract), BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers). Selected next execution order: BR-14b → BR-14a → BR-32 → BR-19 → BR-33 → BR-35 → BR-36 → BR-14e → BR-14d. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`.
+Status addendum 2026-05-24: BR-38a (`feat/multimodal-image-input`) and BR-38b (`feat/image-generation-tool`) are registered as the vision/image branch pair. BR-38a owns image upload/paste/attach from chat, documents, and Google Drive plus llm-mesh vision routing. BR-38b depends on BR-38a and owns image generation contract, storage, and chat rendering.
 
 ## 0) Repo merge policy (effective 2026-05-13)
 
@@ -42,7 +43,7 @@ Every PR going forward must be merged via a merge commit and the source branch l
 - BR-14a `feat/chat-ui-sdk` — **Lot 0 scoping complete** (`c5cc6da1`). Implementation blocked on BR-14b merge. Target package renamed `@sentropic/chat` → `@sentropic/chat-ui` per `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` §1.
 
 **Pending branches (unblocked or near-unblocked):**
-- BR-07, BR-10, BR-11, BR-12, BR-14e, BR-14d, BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22, BR-32 (flow-runtime-extract), BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers) — see §3 catalog for descriptions, dependencies, and priorities.
+- BR-07, BR-10, BR-11, BR-12, BR-14e, BR-14d, BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22, BR-32 (flow-runtime-extract), BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers), BR-38a (multimodal-image-input), BR-38b (image-generation-tool) — see §3 catalog for descriptions, dependencies, and priorities.
 
 **Study closed (no code):**
 - BR-31 `chore/make-to-nx-study` — **study closed 2026-05-13**. Recommendation **REJECT** with sub-option (optional power-developer adapt). Deliverable: `spec/SPEC_STUDY_MAKE_TO_NX_MIGRATION.md`. Commits `681790fa` (BRANCH.md) + `38d8f1d3` (spec). No further lots; PR open for record.
@@ -255,6 +256,13 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 |        |                                                  | flows: webhook, schedule, email-in, file-watch. Either     |                      |                                |
 |        |                                                  | folded into BR-32 or standalone post-BR-32.                |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-38a | feat/multimodal-image-input                      | Image upload/paste/attach from chat, documents, and        | plan                 | BR-14a, BR-14b, BR-14c,        |
+|        |                                                  | Google Drive; llm-mesh modality routing to vision-capable  |                      | BR-14g, BR-16a                 |
+|        |                                                  | providers; unsupported-model fallback and UI chips.        |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-38b | feat/image-generation-tool                       | Image generation contract/tool/runtime storage with chat   | plan                 | BR-38a                         |
+|        |                                                  | rendering, download, and generated-media document links.   |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-31  | chore/make-to-nx-study                           | One-branch study assessing nx as a Make replacement.       | study closed         | none (doc-only)                |
 |        |                                                  | Deliverable: spec/SPEC_STUDY_MAKE_TO_NX_MIGRATION.md       | (recommend REJECT)   |                                |
 |        |                                                  | (status quo + nx simulation + CI before/after + transition |                      |                                |
@@ -305,6 +313,8 @@ graph TD
   BR34[BR-34 graphify fusion]
   BR35[BR-35 persistence git adapter]
   BR36[BR-36 external triggers]
+  BR38a[BR-38a multimodal image input]
+  BR38b[BR-38b image generation]
   BR31[BR-31 make to nx study ✗ REJECT]
 
   BR00 --> BR01
@@ -365,6 +375,12 @@ graph TD
   BR19 --> BR33
   BR14b --> BR35
   BR32 --> BR36
+  BR14a --> BR38a
+  BR14b --> BR38a
+  BR14c --> BR38a
+  BR14g --> BR38a
+  BR16a --> BR38a
+  BR38a --> BR38b
 ```
 
 ## 5) Scheduling post-BR-04
@@ -376,6 +392,7 @@ graph TD
 - **W4 (after BR-19 merge)**: BR-33 (`feat/managed-marketplace`) ∥ BR-35 (`feat/persistence-git-adapter`).
 - **W5 (after BR-32+BR-33 settle)**: BR-36 (`feat/external-triggers`).
 - **Out of waves — backlog**: BR-34 (`feat/graphify-fusion`) standalone, scheduled on capacity.
+- **Out of waves — vision/image pair (registered 2026-05-24)**: BR-38a (`feat/multimodal-image-input`) then BR-38b (`feat/image-generation-tool`). BR-38a can be pulled forward after BR-14a/BR-14b/BR-14c/BR-14g and BR-16a contracts are stable enough to avoid duplicate chat/document wire changes. BR-38b waits for BR-38a because generated images reuse the media/storage/rendering contracts introduced for image input.
 - **Out of waves — closed**: BR-31 (`chore/make-to-nx-study`) study closed, recommendation REJECT.
 
 **Wave in progress (2026-04-21)**: this transition branch (README pair, Sentropic URL, repo/DNS/SCW plan, BR-14 split, PR-117 transition TODO) ∥ BR-16a Lot 0 (gdrive SSO + document_summary indexing scoping). Planning-only.
@@ -406,6 +423,10 @@ Branch/sub-agent port convention per branch index (`nn`) and slot `0..4`:
 
 Example: BR-16 slot `0..4` uses API `9080..9084`, UI `5280..5284`, Maildev UI `1180..1184`.
 
+Registered BR-38 slots:
+- BR-38a slot 0 uses `API_PORT=9190`, `UI_PORT=5390`, `MAILDEV_UI_PORT=1290`, `ENV=test-feat-multimodal-image-input` or `ENV=e2e-feat-multimodal-image-input`.
+- BR-38b slot 1 uses `API_PORT=9191`, `UI_PORT=5391`, `MAILDEV_UI_PORT=1291`, `ENV=test-feat-image-generation-tool` or `ENV=e2e-feat-image-generation-tool`.
+
 All active branch plans and new sub-agent launch packets must use this slot convention when multiple agents or OAuth callback registration are involved.
 User UAT on root workspace (`ENV=dev`). Branch development and automated tests run in isolated worktrees only.
 
@@ -425,6 +446,8 @@ User UAT on root workspace (`ENV=dev`). Branch development and automated tests r
 - `plan/34-BRANCH_feat-graphify-fusion.md` (BR-34 branch pointer)
 - `plan/35-BRANCH_feat-persistence-git-adapter.md` (BR-35 branch pointer)
 - `plan/36-BRANCH_feat-external-triggers.md` (BR-36 branch pointer)
+- `plan/38a-BRANCH_feat-multimodal-image-input.md` (BR-38a branch pointer)
+- `plan/38b-BRANCH_feat-image-generation-tool.md` (BR-38b branch pointer)
 - `plan/31-BRANCH_chore-make-to-nx-study.md` (BR-31 branch pointer — study closed)
 - `spec/SPEC_EVOL_WORKSPACE_TYPES.md` (BR-04)
 - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (residual)
