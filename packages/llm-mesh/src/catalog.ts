@@ -47,6 +47,11 @@ const textModalities = {
   output: ['text', 'json', 'tool-call'] as const,
 };
 
+const visionModalities = {
+  input: ['text', 'image', 'file'] as const,
+  output: ['text', 'json', 'tool-call'] as const,
+};
+
 const auth = (
   accountTransports: readonly AccountTransportProviderId[] = [],
 ) => ({
@@ -183,8 +188,10 @@ export const providerProfiles = {
 const modelCapabilities = (
   providerId: ProviderId,
   reasoningTier: ReasoningTier,
+  options: { vision?: boolean } = {},
 ): ModelCapabilities => ({
   ...providerProfiles[providerId].capabilities,
+  modalities: options.vision ? visionModalities : providerProfiles[providerId].capabilities.modalities,
   reasoning: {
     ...providerProfiles[providerId].capabilities.reasoning,
     support:
@@ -223,7 +230,7 @@ export const modelProfiles = [
     label: 'GPT-5.5',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('openai', 'advanced'),
+    capabilities: modelCapabilities('openai', 'advanced', { vision: true }),
   },
   {
     providerId: 'openai',
@@ -231,7 +238,7 @@ export const modelProfiles = [
     label: 'GPT-5.4 Nano',
     reasoningTier: 'standard',
     defaultTaskHints: ['chat'],
-    capabilities: modelCapabilities('openai', 'standard'),
+    capabilities: modelCapabilities('openai', 'standard', { vision: true }),
   },
   {
     providerId: 'openai',
@@ -247,7 +254,7 @@ export const modelProfiles = [
     label: 'Gemini 3.5 Flash',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('gemini', 'advanced'),
+    capabilities: modelCapabilities('gemini', 'advanced', { vision: true }),
   },
   {
     providerId: 'gemini',
@@ -255,7 +262,7 @@ export const modelProfiles = [
     label: 'Gemini 3.5 Thinking',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('gemini', 'advanced'),
+    capabilities: modelCapabilities('gemini', 'advanced', { vision: true }),
   },
   {
     providerId: 'anthropic',
@@ -263,7 +270,7 @@ export const modelProfiles = [
     label: 'Sonnet 4.6',
     reasoningTier: 'standard',
     defaultTaskHints: ['chat', 'structured'],
-    capabilities: modelCapabilities('anthropic', 'standard'),
+    capabilities: modelCapabilities('anthropic', 'standard', { vision: true }),
   },
   {
     providerId: 'anthropic',
@@ -271,7 +278,7 @@ export const modelProfiles = [
     label: 'Opus 4.7',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('anthropic', 'advanced'),
+    capabilities: modelCapabilities('anthropic', 'advanced', { vision: true }),
   },
   {
     providerId: 'mistral',
