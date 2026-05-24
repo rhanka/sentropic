@@ -22,6 +22,13 @@ describe('documents utils', () => {
     expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.tgz');
   });
 
+  it('includes supported image formats in upload accept list', () => {
+    expect(DOCUMENT_UPLOAD_ACCEPT).toContain('image/png');
+    expect(DOCUMENT_UPLOAD_ACCEPT).toContain('image/jpeg');
+    expect(DOCUMENT_UPLOAD_ACCEPT).toContain('image/webp');
+    expect(DOCUMENT_UPLOAD_ACCEPT).toContain('image/gif');
+  });
+
   it('maps Google Workspace MIME types to user-facing labels', () => {
     expect(getDocumentMimeLabel('application/vnd.google-apps.document')).toBe('Google Docs');
     expect(getDocumentMimeLabel('application/vnd.google-apps.spreadsheet')).toBe('Google Sheets');

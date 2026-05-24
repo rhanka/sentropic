@@ -196,6 +196,41 @@ describe('Documents API', () => {
     expect(bytes.length).toBeGreaterThan(0);
   });
 
+  it('POST /documents stores image uploads as ready indexing-skipped docs without enqueueing summary jobs', async () => {
+    const form = new FormData();
+    form.set('context_type', 'folder');
+    form.set('context_id', 'f_1');
+    form.set(
+      'file',
+      new File([new Uint8Array([137, 80, 78, 71])], 'diagram.png', {
+        type: 'image/png',
+      }),
+    );
+
+    const res = await authenticatedMultipartRequest(app, '/api/v1/documents', user.sessionToken!, form);
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data).toHaveProperty('id');
+    expect(data.status).toBe('ready');
+    expect(data.indexing_skipped).toBe(true);
+    expect(data.mime_type).toBe('image/png');
+    expect(data.job_id).toBeUndefined();
+
+    createdDocId = data.id;
+
+    expect(mockPutObject).toHaveBeenCalledTimes(1);
+    expect(mockPutObject.mock.calls[0]?.[0]?.contentType).toBe('image/png');
+    expect(addJobSpy).not.toHaveBeenCalled();
+
+    const [row] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, createdDocId!)).limit(1);
+    expect(row.status).toBe('ready');
+    expect(row.data).toMatchObject({
+      summaryLang: 'fr',
+      indexingSkipped: true,
+      indexingSkipReason: 'image_metadata_only',
+    });
+  });
+
   it('heals legacy download-only archive rows to ready when listed or fetched', async () => {
     const legacyDocId = crypto.randomUUID();
     createdDocId = legacyDocId;
