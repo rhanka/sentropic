@@ -59,8 +59,9 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
   - Repro steps: inspect `Makefile` for `typecheck-auth-ui`, `build-auth-ui`, and generic `test-packages` targets.
   - Expected: Lot 1 gates from `plan/39a-BRANCH_feat-auth-ui-sdk.md` exist as make targets.
   - Actual: only existing analogous package targets are `typecheck-chat-ui`, `build-chat-ui`, and `test-chat-ui`; no auth-ui-specific or generic package test target exists before Lot 1.
-  - Evidence: `rg -n "typecheck-auth-ui|build-auth-ui|test-packages|test-chat-ui|typecheck-chat-ui" Makefile`.
-  - Recommendation: keep `Makefile` untouched in this worker slice; run the nearest existing safe package/UI make target after implementation and leave target creation to a follow-up or conductor-approved Makefile exception.
+  - Evidence: `rg -n "typecheck-auth-ui|build-auth-ui|test-packages|test-chat-ui|typecheck-chat-ui" Makefile`; `make test-packages SCOPE=packages/auth-ui/tests/auth-contracts.test.ts ENV=test-feat-auth-ui-sdk` failed with `No rule to make target 'test-packages'`; `make typecheck-auth-ui ENV=test-feat-auth-ui-sdk` failed with `No rule to make target 'typecheck-auth-ui'`.
+  - Nearest checks: `make typecheck-chat-ui ENV=test-feat-auth-ui-sdk` passed; `make test-chat-ui ENV=test-feat-auth-ui-sdk` passed with 19 files / 79 tests; `make lock-root ENV=test-feat-auth-ui-sdk` updated `package-lock.json` for the new workspace package; `make install-internal-packages ENV=test-feat-auth-ui-sdk` passed as a workspace lock sanity check.
+  - Recommendation: keep `Makefile` untouched in this worker slice; add auth-ui-specific make targets in a conductor-approved follow-up or exception, then rerun `packages/auth-ui/tests/**`.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -97,21 +98,22 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
   - [x] Confirm command style with `API_PORT=9195`, `UI_PORT=5395`, `MAILDEV_UI_PORT=1295`, and concrete `ENV=...` value last.
   - [x] Confirm package publication requirements for a new `packages/auth-ui` package, including bootstrap publish and trusted publisher setup.
   - [x] Confirm scope boundaries and declare `BR39a-EXn` before touching conditional paths.
-  - [ ] Lot 0 commit: `make commit MSG="docs: create auth ui branch plan"`.
+  - [x] Lot 0 commit: `make commit MSG="docs: create auth ui branch plan"`.
 
-- [ ] **Lot 1 - Package shell and contracts**
-  - [ ] Write focused package tests for transport contracts, label/branding defaults, and browser WebAuthn helper behavior before implementation.
-  - [ ] Create `packages/auth-ui` with `package.json`, `tsconfig.json`, `README.md`, `LICENSE`, and `src/index.ts`.
-  - [ ] Export transport contracts for email OTP/code, magic-link verify, passkey registration, passkey login, session issue/refresh/logout, and credential list/rename/revoke.
-  - [ ] Export `AuthUiLabels`, `AuthUiBranding`, `AuthUiNavigation`, `AuthUiSessionCallbacks`, and typed result/error shapes.
-  - [ ] Move browser-only WebAuthn support checks and start registration/authentication helpers behind package exports.
-  - [ ] Keep package code free of SvelteKit `$app/*`, Sentropic `$lib/*`, global session stores, and hardcoded API paths.
-  - [ ] Package README documents Lot 1 contract boundary, downstream path-configurable transport usage, and first-publish bootstrap note.
+- [x] **Lot 1 - Package shell and contracts**
+  - [x] Write focused package tests for transport contracts, label/branding defaults, and browser WebAuthn helper behavior before implementation.
+  - [x] Create `packages/auth-ui` with `package.json`, `tsconfig.json`, `README.md`, `LICENSE`, and `src/index.ts`.
+  - [x] Export transport contracts for email OTP/code, magic-link verify, passkey registration, passkey login, session issue/refresh/logout, and credential list/rename/revoke.
+  - [x] Export `AuthUiLabels`, `AuthUiBranding`, `AuthUiNavigation`, `AuthUiSessionCallbacks`, and typed result/error shapes.
+  - [x] Move browser-only WebAuthn support checks and start registration/authentication helpers behind package exports.
+  - [x] Keep package code free of SvelteKit `$app/*`, Sentropic `$lib/*`, global session stores, and hardcoded API paths.
+  - [x] Package README documents Lot 1 contract boundary, downstream path-configurable transport usage, and first-publish bootstrap note.
+  - [x] Root workspace lockfile synced through `make lock-root ENV=test-feat-auth-ui-sdk`.
   - [ ] Lot gate:
-    - [ ] `make typecheck-auth-ui ENV=test-feat-auth-ui-sdk` or record missing target under `BR39a-Q1`.
-    - [ ] `make test-packages SCOPE=packages/auth-ui/tests/auth-contracts.test.ts ENV=test-feat-auth-ui-sdk` or record missing target under `BR39a-Q1`.
-    - [ ] Nearest safe existing package/UI make target when auth-ui package targets are missing.
-  - [ ] Lot 1 commit: `make commit MSG="feat: add auth ui package contracts"`.
+    - [x] `make typecheck-auth-ui ENV=test-feat-auth-ui-sdk` or record missing target under `BR39a-Q1`.
+    - [x] `make test-packages SCOPE=packages/auth-ui/tests/auth-contracts.test.ts ENV=test-feat-auth-ui-sdk` or record missing target under `BR39a-Q1`.
+    - [x] Nearest safe existing package/UI make target when auth-ui package targets are missing.
+  - [x] Lot 1 commit: `make commit MSG="feat: add auth ui package contracts"`.
 
 - [ ] **Lot 2 - Reusable auth screens**
   - [ ] Add package components for `AuthLogin.svelte`, `AuthRegister.svelte`, `AuthMagicLinkVerify.svelte`, and `AuthDevices.svelte`.
