@@ -121,7 +121,7 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
     - [x] Single function `sendTransactionalEmail({ to, subject, html, text, fromEmail?, fromName? }): Promise<{ messageId: string }>`.
     - [x] Implementation: `fetch(${env.SCW_TEM_API_BASE_URL}/transactional-email/v1alpha1/regions/${env.SCW_TEM_REGION}/emails, { method: 'POST', headers: { 'X-Auth-Token': env.SCW_TEM_SECRET_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ project_id, from: { email, name }, to: [{ email }], subject, html, text }) })`.
     - [x] On non-2xx: throw with structured error (status, response body excerpt).
-    - [ ] Add a unit test stub that mocks `fetch` and asserts payload shape.
+    - [x] Add a unit test stub that mocks `fetch` and asserts payload shape (`api/tests/unit/services/scw-tem-client.test.ts`, 3 tests passing).
 
   - [x] **Lot 1.4 — Migrate call sites (BR37b-EX4)**
     - [x] `api/src/services/magic-link.ts`: replace `nodemailer.createTransport` + `transporter.sendMail` with `sendTransactionalEmail({...})`. Delete the `mailTransporter` singleton, `getMailTransporter` helper, and the nodemailer import.
@@ -132,20 +132,20 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
     - [x] Removed `nodemailer` + `@types/nodemailer` from `api/package.json` (deps + the two `--external:nodemailer` esbuild flags in the build script); regenerated root `package-lock.json` via `make lock-root` (zero nodemailer refs). `api/package-lock.json` left untouched (out of allowed scope) — see BR37b-Q1; root lockfile is the one the API Dockerfile consumes via `npm ci --workspaces`.
     - [x] Confirmed `make typecheck-api` + `make lint-api` pass with the dep removed.
 
-  - [ ] **Lot 1.6 — Update api tests (BR37b-EX4)**
-    - [ ] Identify and update tests that import or mock nodemailer / `MAIL_*` env vars under `api/tests/**`. Targeted scope: `api/tests/api/auth/*.ts`, `api/tests/services/email-verification.test.ts` (if present), `api/tests/services/magic-link.test.ts` (if present).
-    - [ ] Replace nodemailer mocks with `fetch` mocks asserting the TEM payload shape.
-    - [ ] Run scoped: `make test-api SCOPE=tests/services/email-verification.test.ts ENV=test-feat-deploy-poc-k8s-37b` and `make test-api SCOPE=tests/services/magic-link.test.ts ENV=test-feat-deploy-poc-k8s-37b`.
+  - [x] **Lot 1.6 — Update api tests (BR37b-EX4)**
+    - [x] Identified tests under `api/tests/**`: grep for `nodemailer` and `MAIL_` returns ZERO test files. No test mocks the mail transport or `MAIL_*` env vars (auth tests exercise DB-level token generation + HTTP endpoints, never the email transport). So no nodemailer/MAIL_ mock to migrate.
+    - [x] Replaced (n/a — no existing mocks); added a new `fetch`-mock unit test asserting the TEM payload shape (covered under Lot 1.3).
+    - [x] Run scoped: `make test-api-unit SCOPE=tests/unit/services/scw-tem-client.test.ts ENV=test-feat-deploy-poc-k8s-37b` (3 pass) and `make test-api-unit SCOPE=tests/unit/auth/magic-link.test.ts ENV=...` (7 pass).
 
-  - [ ] **Lot 1.7 — Implement dev mock `tools/scw-tem-mock/` (BR37b-EX6)**
-    - [ ] Create `tools/scw-tem-mock/index.js`: Express server on port 7700 with route `POST /transactional-email/v1alpha1/regions/:region/emails`, parses body, uses `nodemailer.createTransport({ host: 'maildev', port: 1025 })` to send to maildev, returns `{ message_id }`.
-    - [ ] Create `tools/scw-tem-mock/package.json`: deps `express`, `nodemailer`; start script `node index.js`.
-    - [ ] Create `tools/scw-tem-mock/Dockerfile`: `FROM node:24-alpine; WORKDIR /app; COPY package.json index.js ./; RUN npm install; CMD ["node","index.js"]`.
+  - [x] **Lot 1.7 — Implement dev mock `tools/scw-tem-mock/` (BR37b-EX6)**
+    - [x] Created `tools/scw-tem-mock/index.js`: Express server on port 7700, route `POST /transactional-email/v1alpha1/regions/:region/emails`, forwards to maildev via `nodemailer.createTransport({ host: 'maildev', port: 1025 })`, returns `{ emails: [{ id, message_id, status: 'sending' }] }`; accepts any X-Auth-Token; `/health` route added.
+    - [x] Created `tools/scw-tem-mock/package.json`: deps `express`, `nodemailer`; start script `node index.js`.
+    - [x] Created `tools/scw-tem-mock/Dockerfile`: `FROM node:24-alpine`, `npm install --omit=dev`, `CMD ["node","index.js"]`.
 
-  - [ ] **Lot 1.8 — Wire docker-compose (BR37b-EX5)**
-    - [ ] Edit `docker-compose.yml` (or whichever compose file the api/maildev stack lives in): add service `scw-tem-mock` with `build: ./tools/scw-tem-mock`, depends_on: maildev, ports: `7700:7700` (optional for debug), network shared with api/maildev.
-    - [ ] Edit api service env block: add `SCW_TEM_API_BASE_URL=http://scw-tem-mock:7700`, `SCW_TEM_SECRET_KEY=dev-mock-token`, `SCW_TEM_PROJECT_ID=dev-mock-project`, `SCW_TEM_REGION=fr-par`, `SCW_TEM_FROM_EMAIL=no-reply@sent-tech.ca`.
-    - [ ] Keep maildev service unchanged.
+  - [x] **Lot 1.8 — Wire docker-compose (BR37b-EX5)**
+    - [x] Edited `docker-compose.yml`: added service `scw-tem-mock` (`build: ./tools/scw-tem-mock`, env `MAILDEV_HOST/MAILDEV_SMTP_PORT`, depends_on maildev, same default network as api+maildev); added `scw-tem-mock` to the api `depends_on`.
+    - [x] Edited api service env block: replaced the dead `MAIL_*` block with `SCW_TEM_API_BASE_URL` (default `http://scw-tem-mock:7700`), `SCW_TEM_SECRET_KEY` (default `dev-mock-token`), `SCW_TEM_PROJECT_ID` (default `dev-mock-project`), `SCW_TEM_REGION` (`fr-par`), `SCW_TEM_FROM_EMAIL`, `SCW_TEM_FROM_NAME`.
+    - [x] Maildev service unchanged. Live dev smoke: magic-link request → scw-tem-mock → maildev delivered the email (verified via maildev REST API).
 
   - [ ] **Lot 1.9 — Sealed Secret for prod `SCW_TEM_SECRET_KEY`**
     - [ ] Depends on Lot 2 sealed-secrets controller bootstrap. Track as cross-lot dependency: Lot 2 must reach controller-installed state before Lot 1.9.
