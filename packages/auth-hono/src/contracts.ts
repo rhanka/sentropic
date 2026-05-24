@@ -1,3 +1,5 @@
+import type { AuthHonoPorts } from './ports.js';
+
 export const AUTH_HONO_AUTH_UI_METHODS = [
   'requestEmailCode',
   'verifyEmailCode',
@@ -87,6 +89,6 @@ export const AUTH_HONO_REQUIRED_PORTS = [
   'clock',
   'random',
   'accountPolicy',
-] as const;
+] as const satisfies readonly (keyof AuthHonoPorts)[];
 
 export type AuthHonoRequiredPort = (typeof AUTH_HONO_REQUIRED_PORTS)[number];
