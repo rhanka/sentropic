@@ -4,9 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/client';
-import { folders, initiatives } from '../db/schema';
+import { folders, initiatives, organizations } from '../db/schema';
 import type { MatrixConfig } from '../types/matrix';
 import type { ScoreEntry, Initiative, InitiativeData } from '../types/initiative';
 import {
@@ -43,6 +43,8 @@ export type DocxGenerateResult = {
   buffer: Buffer;
   mimeType: string;
 };
+
+export type FreeformDocxEntityType = DocxEntityType | 'organization';
 
 type InitiativeOnePageSource = {
   initiative: Initiative;
@@ -514,13 +516,13 @@ export async function computeDocxSourceHash(
 
 export type FreeformDocxRequest = {
   code: string;
-  entityType: DocxEntityType;
+  entityType: FreeformDocxEntityType;
   entityId: string;
   workspaceId: string;
 };
 
 async function loadFreeformContext(
-  entityType: DocxEntityType,
+  entityType: FreeformDocxEntityType,
   entityId: string,
   workspaceId: string,
 ): Promise<FreeformContext> {
@@ -539,6 +541,48 @@ async function loadFreeformContext(
       entity: hydrated as unknown as Record<string, unknown>,
       initiatives: [],
       matrix: parseMatrixConfig(folder?.matrixConfig ?? null) as unknown as Record<string, unknown> | null,
+      workspace: { id: workspaceId },
+    };
+  }
+
+  if (entityType === 'organization') {
+    const [organization] = await db
+      .select()
+      .from(organizations)
+      .where(and(eq(organizations.id, entityId), eq(organizations.workspaceId, workspaceId)));
+    if (!organization) throw new Error('not_found');
+
+    const folderRows = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.organizationId, entityId), eq(folders.workspaceId, workspaceId)))
+      .orderBy(asc(folders.createdAt));
+    const folderIds = folderRows.map((folder) => folder.id);
+    const initiativeRows = folderIds.length > 0
+      ? await db
+          .select()
+          .from(initiatives)
+          .where(and(eq(initiatives.workspaceId, workspaceId), inArray(initiatives.folderId, folderIds)))
+          .orderBy(asc(initiatives.createdAt))
+      : [];
+    const hydratedInitiatives = await hydrateInitiatives(initiativeRows);
+
+    return {
+      entity: {
+        id: organization.id,
+        name: organization.name,
+        status: organization.status,
+        references: [],
+      },
+      folders: folderRows.map((folder) => ({
+        id: folder.id,
+        name: folder.name,
+        description: folder.description,
+        status: folder.status,
+        executiveSummary: parseExecutiveSummary(folder.executiveSummary ?? null),
+      })),
+      initiatives: hydratedInitiatives as unknown as Record<string, unknown>[],
+      matrix: null,
       workspace: { id: workspaceId },
     };
   }
@@ -615,7 +659,7 @@ export async function generateFreeformDocx(
 
   // Pack to buffer
   const buffer = Buffer.from(await Packer.toBuffer(result));
-  const entitySlug = entityType === 'folder' ? 'folder' : 'initiative';
+  const entitySlug = entityType;
 
   return {
     buffer,
