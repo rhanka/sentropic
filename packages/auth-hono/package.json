@@ -1,0 +1,50 @@
+{
+  "name": "@sentropic/auth-hono",
+  "version": "0.1.0",
+  "description": "Reusable Hono authentication route factories, contracts, and server-side auth helpers for Sentropic-compatible apps.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/auth-hono"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts.d.ts",
+      "import": "./dist/contracts.js"
+    },
+    "./router": {
+      "types": "./dist/router.d.ts",
+      "import": "./dist/router.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "peerDependencies": {
+    "@hono/zod-validator": "^0.7.5",
+    "@simplewebauthn/server": "^13.2.2",
+    "hono": "^4.10.7",
+    "jose": "^5.10.0",
+    "zod": "^3.25.76"
+  }
+}
