@@ -20,6 +20,10 @@
       "types": "./dist/contracts.d.ts",
       "import": "./dist/contracts.js"
     },
+    "./email-verification": {
+      "types": "./dist/email-verification.d.ts",
+      "import": "./dist/email-verification.js"
+    },
     "./middleware": {
       "types": "./dist/middleware.d.ts",
       "import": "./dist/middleware.js"
