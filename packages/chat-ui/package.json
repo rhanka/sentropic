@@ -47,6 +47,11 @@
       "svelte": "./src/state/chatDraft.ts",
       "import": "./src/state/chatDraft.ts"
     },
+    "./state/chatAttachments": {
+      "types": "./src/state/chatAttachments.ts",
+      "svelte": "./src/state/chatAttachments.ts",
+      "import": "./src/state/chatAttachments.ts"
+    },
     "./state/chatProjection": {
       "types": "./src/state/chatProjection.ts",
       "svelte": "./src/state/chatProjection.ts",

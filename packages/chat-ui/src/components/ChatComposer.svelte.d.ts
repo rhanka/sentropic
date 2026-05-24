@@ -14,6 +14,7 @@ export type ChatComposerProps = {
   onKeyDown?: (event: KeyboardEvent) => void;
   renderComposerSurface: Snippet<[]>;
   renderFloatingLayer: Snippet<[]>;
+  renderAttachmentTray?: Snippet<[]>;
   renderLeftControls: Snippet<[]>;
   renderRightActions: Snippet<[]>;
 };
