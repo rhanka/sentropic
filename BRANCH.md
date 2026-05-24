@@ -51,17 +51,27 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
   - Mirror the same exception in `plan/39a-BRANCH_feat-auth-ui-sdk.md` if this branch plan is later updated by the conductor.
 
 ## Feedback Loop
+- `BR39a-EX1`
+  - Branch: `feat/auth-ui-sdk`
+  - Owner: Conductor
+  - Severity: medium
+  - Status: resolved
+  - Rationale: `@sentropic/auth-ui` cannot be validated through the mandatory make-only workflow without package-specific Makefile targets.
+  - Impact: add `typecheck-auth-ui`, `build-auth-ui`, `pack-auth-ui`, `test-auth-ui`, and `test-packages` dispatch for `packages/auth-ui/**`.
+  - Rollback: revert the Makefile target block and return `BR39a-Q1` to `attention`.
+  - Evidence: `BR39a-Q1` captured the missing targets before the exception; new targets passed on `ENV=test-feat-auth-ui-sdk`.
+
 - `BR39a-Q1`
   - Branch: `feat/auth-ui-sdk`
-  - Owner: Worker A
+  - Owner: Conductor
   - Severity: medium
-  - Status: attention
+  - Status: resolved
   - Repro steps: inspect `Makefile` for `typecheck-auth-ui`, `build-auth-ui`, and generic `test-packages` targets.
   - Expected: Lot 1 gates from `plan/39a-BRANCH_feat-auth-ui-sdk.md` exist as make targets.
-  - Actual: only existing analogous package targets are `typecheck-chat-ui`, `build-chat-ui`, and `test-chat-ui`; no auth-ui-specific or generic package test target exists before Lot 1.
+  - Actual: only existing analogous package targets were `typecheck-chat-ui`, `build-chat-ui`, and `test-chat-ui`; no auth-ui-specific or generic package test target existed before `BR39a-EX1`.
   - Evidence: `rg -n "typecheck-auth-ui|build-auth-ui|test-packages|test-chat-ui|typecheck-chat-ui" Makefile`; `make test-packages SCOPE=packages/auth-ui/tests/auth-contracts.test.ts ENV=test-feat-auth-ui-sdk` failed with `No rule to make target 'test-packages'`; `make typecheck-auth-ui ENV=test-feat-auth-ui-sdk` failed with `No rule to make target 'typecheck-auth-ui'`.
   - Nearest checks: `make typecheck-chat-ui ENV=test-feat-auth-ui-sdk` passed; `make test-chat-ui ENV=test-feat-auth-ui-sdk` passed with 19 files / 79 tests; `make lock-root ENV=test-feat-auth-ui-sdk` updated `package-lock.json` for the new workspace package; `make install-internal-packages ENV=test-feat-auth-ui-sdk` passed as a workspace lock sanity check.
-  - Recommendation: keep `Makefile` untouched in this worker slice; add auth-ui-specific make targets in a conductor-approved follow-up or exception, then rerun `packages/auth-ui/tests/**`.
+  - Resolution: `BR39a-EX1` added the missing make targets; `make typecheck-auth-ui ENV=test-feat-auth-ui-sdk`, `make test-packages SCOPE=packages/auth-ui/tests ENV=test-feat-auth-ui-sdk`, `make build-auth-ui ENV=test-feat-auth-ui-sdk`, and `make pack-auth-ui ENV=test-feat-auth-ui-sdk` passed.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -109,11 +119,13 @@ Extract reusable Sentropic authentication screens and browser-side passkey helpe
   - [x] Keep package code free of SvelteKit `$app/*`, Sentropic `$lib/*`, global session stores, and hardcoded API paths.
   - [x] Package README documents Lot 1 contract boundary, downstream path-configurable transport usage, and first-publish bootstrap note.
   - [x] Root workspace lockfile synced through `make lock-root ENV=test-feat-auth-ui-sdk`.
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make typecheck-auth-ui ENV=test-feat-auth-ui-sdk` or record missing target under `BR39a-Q1`.
     - [x] `make test-packages SCOPE=packages/auth-ui/tests/auth-contracts.test.ts ENV=test-feat-auth-ui-sdk` or record missing target under `BR39a-Q1`.
     - [x] Nearest safe existing package/UI make target when auth-ui package targets are missing.
   - [x] Lot 1 commit: `make commit MSG="feat: add auth ui package contracts"`.
+  - [x] Lot 1 recovery commit: `make commit MSG="feat: add auth ui webauthn helpers"`.
+  - [x] Lot 1 make-target commit: `make commit MSG="chore: add auth ui package make targets"`.
 
 - [ ] **Lot 2 - Reusable auth screens**
   - [ ] Add package components for `AuthLogin.svelte`, `AuthRegister.svelte`, `AuthMagicLinkVerify.svelte`, and `AuthDevices.svelte`.
