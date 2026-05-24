@@ -43,6 +43,14 @@
     "./session": {
       "types": "./dist/session.d.ts",
       "import": "./dist/session.js"
+    },
+    "./webauthn-authentication": {
+      "types": "./dist/webauthn-authentication.d.ts",
+      "import": "./dist/webauthn-authentication.js"
+    },
+    "./webauthn-registration": {
+      "types": "./dist/webauthn-registration.d.ts",
+      "import": "./dist/webauthn-registration.js"
     }
   },
   "files": [

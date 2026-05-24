@@ -5,3 +5,5 @@ export * from './middleware.js';
 export * from './ports.js';
 export * from './router.js';
 export * from './session.js';
+export * from './webauthn-authentication.js';
+export * from './webauthn-registration.js';

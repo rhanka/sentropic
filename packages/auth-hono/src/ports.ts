@@ -84,7 +84,7 @@ export interface AuthHonoCredentialPort {
   findByCredentialId(credentialId: string): Promise<AuthHonoCredentialRecord | null>;
   listForUser(userId: string): Promise<AuthHonoCredentialRecord[]>;
   create(input: AuthHonoCreateCredentialInput): Promise<AuthHonoCredentialRecord>;
-  updateCounter(credentialId: string, counter: number): Promise<void>;
+  updateCounter(credentialId: string, counter: number, lastUsedAt?: Date): Promise<void>;
   rename(credentialRecordId: string, userId: string, name: string): Promise<AuthHonoCredentialRecord | null>;
   revoke(credentialRecordId: string, userId: string): Promise<boolean>;
 }
@@ -258,6 +258,7 @@ export interface AuthHonoAccountPolicyDecision {
 export interface AuthHonoAccountPolicyPort {
   normalizeEmail(email: string): string;
   deriveDisplayName(email: string): string;
+  resolveUserVerification?(user: AuthHonoUserRecord): 'discouraged' | 'preferred' | 'required';
   roleForNewUser(input: { email: string; isFirstUser: boolean }): Promise<string> | string;
   statusForNewUser(input: { email: string; isFirstUser: boolean; now: Date }): Promise<{
     accountStatus: AuthHonoAccountStatus;
