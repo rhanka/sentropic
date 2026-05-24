@@ -131,6 +131,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
 
     // web tools must be available everywhere
     for (const s of seen) {
+      expect(s.names).toContain('search_skills');
       expect(s.names).toContain('web_search');
       expect(s.names).toContain('web_extract');
     }
@@ -263,6 +264,61 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
 
     // Cleanup extra folder (avoid leaking across tests)
     await db.delete(folders).where(and(eq(folders.id, otherFolderId), eq(folders.workspaceId, workspaceId)));
+  });
+
+  it('should execute search_skills against the active skill allowlist', async () => {
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+
+    mock
+      .mockImplementationOnce(() =>
+        stream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: 'call_search_skills_1',
+              name: 'search_skills',
+              args: JSON.stringify({ query: 'matrix', limit: 5 }),
+            },
+          },
+          { type: 'done', data: {} },
+        ]),
+      )
+      .mockImplementationOnce(() =>
+        stream([
+          { type: 'content_delta', data: { delta: 'OK' } },
+          { type: 'done', data: {} },
+        ]),
+      );
+
+    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+      userId,
+      workspaceId,
+      content: 'find a relevant skill',
+      primaryContextType: 'folder',
+      primaryContextId: folderId,
+      model: 'gpt-4.1-nano',
+    });
+
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId: msg.sessionId,
+      assistantMessageId: msg.assistantMessageId,
+      model: msg.model,
+    });
+
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, msg.assistantMessageId));
+    const resultEvent = events.find(
+      (e) =>
+        e.eventType === 'tool_call_result' &&
+        (e.data as any)?.tool_call_id === 'call_search_skills_1',
+    );
+    expect(resultEvent).toBeDefined();
+    const result = (resultEvent!.data as any).result;
+    expect(result.status).toBe('completed');
+    expect(result.hits.map((h: any) => h.metadata.name)).toContain('matrix');
   });
 
   it('should merge local tool definitions, pause on local tool call, and prepare resume payload', async () => {
