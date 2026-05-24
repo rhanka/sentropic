@@ -252,7 +252,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Pure package port contracts are exported from `packages/auth-hono/src/ports.ts` and re-exported from the package root and `./ports` subpath.
     - `AUTH_HONO_REQUIRED_PORTS` is type-checked against `keyof AuthHonoPorts` to keep runtime inventory and adapter surface aligned.
     - `createAuthRouter` now accepts router options for route prefix, route overrides, cookie names, RP metadata, session policy, email-code policy, magic-link policy, and response policy.
-    - `createAuthRouter` mounts health plus all BR-39a-aligned auth route contracts under the configured prefix; auth routes intentionally return `501 not_implemented` until Lot 2 service handlers are extracted.
+    - `createAuthRouter` mounts health plus all BR-39a-aligned auth route contracts under the configured prefix; routes call injected handlers when provided and otherwise return `501 not_implemented`.
     - `createRequireAuth` and `createOptionalAuth` middleware factories are exported without Sentropic workspace coupling; they validate bearer/cookie sessions through package ports and set Hono auth context variables.
     - `createAuthSessionService` is exported with session issue, validate, refresh-token rotation, list, revoke, and revoke-all primitives backed only by package ports.
     - `createAuthEmailVerificationService` is exported with email normalization, request rate limiting, code generation, hashed storage, email delivery, code verification, and validation-token issue primitives backed only by package ports.
@@ -264,7 +264,8 @@ Extract the reusable Hono-side authentication routes and server contracts into a
       - `make typecheck-auth-hono ENV=test-feat-auth-hono-kit`
       - `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-registration-service.test.ts ENV=test-feat-auth-hono-kit`
       - `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-authentication-service.test.ts ENV=test-feat-auth-hono-kit`
-      - `make test-auth-hono ENV=test-feat-auth-hono-kit`
+      - `make test-auth-hono SCOPE=packages/auth-hono/tests/router-factory.test.ts ENV=test-feat-auth-hono-kit`
+      - `make test-auth-hono ENV=test-feat-auth-hono-kit` (8 files, 24 tests)
       - `make pack-auth-hono ENV=test-feat-auth-hono-kit`
   - To do:
     - Replace `createAuthRouter` route stubs with extracted registration, login, session, credentials, magic-link, and email handlers.
@@ -302,6 +303,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [x] Define pure port interfaces for users, credentials, challenges, sessions, email verification, magic links, cookies, logger, clock, random IDs, token signing, and token hashing.
   - [x] Define route-factory options for route prefix, cookie names, RP ID/origins, session duration, email-code policy, account-status mapping, route-path overrides, and response/error shape policy aligned with BR-39a.
   - [x] Export a `createAuthRouter(options)` Hono factory that mounts registration, login, session, credentials, magic-link, email, and health routes.
+  - [x] Allow `createAuthRouter(options)` to use injected route handlers per route contract, while preserving the explicit `501 not_implemented` fallback for unimplemented routes.
   - [x] Export `createRequireAuth(options)` and `createOptionalAuth(options)` middleware factories that do not assume Sentropic workspaces.
   - [x] Add package lifecycle Make targets mirroring existing package patterns: `typecheck-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`, and `test-auth-hono`.
   - [x] Add CI change filters and outputs for `auth_hono` and `auth_hono_publish`.
