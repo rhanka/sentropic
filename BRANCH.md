@@ -106,12 +106,13 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: Conductor / BR-39a implementer
   - Severity: blocking for Lot 1+
-  - Status: clarification
+  - Status: resolved for current implementation
   - Repro steps: in `tmp/feat-auth-hono-kit`, `packages/auth-ui` is absent and no exported auth transport contract is visible in `packages/**` or `ui/src/routes/auth/**`; `PLAN.md` and `plan/39b-BRANCH_feat-auth-hono-kit.md` state BR-39b depends on BR-39a.
   - Expected: BR-39a exports stable auth transport request/result/error types for email OTP/code, magic-link verify, passkey registration, passkey login, session issue/refresh/logout, and credential list/rename/revoke.
   - Actual: backend route factories would have to freeze response and error shapes without the UI package contract.
-  - Evidence: read-only inspection found `packages/auth-ui` missing; existing backend endpoints are app-local under `api/src/routes/auth/**`; conductor clarified that existing contracts already cover much of the shape and BR-39b should move quickly once the exported BR-39a contract is visible.
-  - Recommendation: do not invent a second backend contract. As soon as BR-39a exposes the stable auth transport contract, proceed with fast extraction/replacement from the existing Sentropic auth routes and services into `@sentropic/auth-hono`, preserving existing route behavior while replacing app-local implementation in the same branch.
+  - Evidence: read-only inspection found `packages/auth-ui` missing in this worktree; existing backend endpoints are app-local under `api/src/routes/auth/**`; sibling BR-39a worktree later exposed `packages/auth-ui/src/transport-types.ts` at SHA `0944c6daf241`.
+  - Decision: conductor approved aligning BR-39b immediately to inspected BR-39a SHA `0944c6daf241` instead of waiting for BR-39a merge.
+  - Recommendation: do not invent a second backend contract. Continue fast extraction/replacement from the existing Sentropic auth routes and services into `@sentropic/auth-hono`, preserving existing route behavior while replacing app-local implementation in the same branch. If BR-39a changes transport requirements later, update BR-39b explicitly against the new exported contract.
 - `BR39b-INV1`
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: Worker B
@@ -149,14 +150,15 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: Human npm owner / Conductor
   - Severity: attention
-  - Status: clarification
+  - Status: approved
   - Repro steps: apply the existing first-publish lifecycle in `rules/workflow.md` to a new package name, `@sentropic/auth-hono`.
   - Expected: first publish is planned before merge so CI/CD does not fail after the package lands on `main`.
   - Actual: the package does not exist yet, so npm trusted publisher cannot be fully attached until package creation/bootstrap publish exists.
   - Evidence:
     - Existing Make targets use token bootstrap publishes (`publish-<pkg>-token`) only for first publish.
     - Existing steady-state publishes use GitHub OIDC trusted publishing through `ci.yml`.
-  - Recommendation: approved. When `packages/auth-hono/package.json` exists and package metadata is final, add `auth-hono` to the CI bootstrap input and run `workflow_dispatch` on `main` with `bootstrap_publish_target=auth-hono` using `NPM_TOKEN` only for first publish. If npm requires human 2FA to create or authorize the token/package, schedule that before merge. After first publish, attach npm trusted publisher for package `@sentropic/auth-hono` to repository `rhanka/sentropic`, workflow `ci.yml`, then rely on OIDC `publish-auth-hono` for future versions.
+  - Decision: conductor approved preparing first publish now, but executing bootstrap publish at merge/main readiness rather than manually publishing before package/API replacement is complete.
+  - Recommendation: when package metadata is final and the branch is ready for merge, run `workflow_dispatch` on `main` with `bootstrap_publish_target=auth-hono` using `NPM_TOKEN` only for first publish. If npm requires human 2FA to create or authorize the token/package, schedule that before merge. After first publish, attach npm trusted publisher for package `@sentropic/auth-hono` to repository `rhanka/sentropic`, workflow `ci.yml`, then rely on OIDC `publish-auth-hono` for future versions.
 - `BR39b-Q4`
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: Conductor / implementation worker
@@ -171,12 +173,13 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: Conductor / BR-39a implementer
   - Severity: attention
-  - Status: open
+  - Status: approved
   - Repro steps: compare current backend route inventory with inspected BR-39a `AuthUiTransport`.
   - Expected: every backend auth route that the UI needs during replacement has a matching transport method, or the branch plan explicitly marks it app-owned/internal.
   - Actual: current backend exposes `POST /api/v1/auth/magic-link/request` and `POST /api/v1/auth/magic-link/verify`; inspected BR-39a transport exposes `verifyMagicLink` but not a request/send method.
-  - Evidence: `api/src/routes/auth/magic-link.ts` owns magic-link request and verify flows; read-only BR-39a inspection found `AuthUiTransport.verifyMagicLink` only.
-  - Recommendation: before BR-39b replaces Sentropic API magic-link routes, confirm whether magic-link request is intentionally app-owned/outside `@sentropic/auth-ui`, or add the missing `requestMagicLink` transport method in BR-39a and align `AUTH_HONO_ROUTE_MAP`.
+  - Evidence: `api/src/routes/auth/magic-link.ts` owns magic-link request and verify flows; read-only BR-39a inspection found `AuthUiTransport.verifyMagicLink` only. The difference is that `requestMagicLink` creates/sends the email link, while `verifyMagicLink` consumes the token from that link.
+  - Decision: conductor approved adding `requestMagicLink` to `@sentropic/auth-ui` and aligning `@sentropic/auth-hono` to that complete transport surface.
+  - Recommendation: BR-39a should add the missing `requestMagicLink` transport method, and BR-39b should add the corresponding route contract for `POST /magic-link/request` before replacing Sentropic magic-link routes.
 - `BR39b-EX1`
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: implementation worker
@@ -226,9 +229,10 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - BR-39a Lot 2 reusable screens.
     - BR-39a Lot 3 Sentropic app rewiring to consume `@sentropic/auth-ui`.
     - BR-39a CI/CD publish wiring parity appears incomplete from read-only inspection: `publish-auth-ui`, CI `auth_ui` filters/jobs, and `bootstrap_publish_target=auth-ui` are not visible in `.github/workflows/ci.yml` at inspected SHA.
+    - BR-39a must add `requestMagicLink` to `AuthUiTransport` so the UI package covers both magic-link request/send and token verification.
     - BR-39a first-publish bootstrap and npm trusted publisher setup still need final documentation/execution.
   - Action:
-    - Codex next action: BR-39a worker should add package publish automation parity for `auth-ui`, complete screens, rewire Sentropic UI routes to consume the package, and remove duplicated app-local UI logic in the same branch.
+    - Codex next action: BR-39a worker should add `requestMagicLink`, add package publish automation parity for `auth-ui`, complete screens, rewire Sentropic UI routes to consume the package, and remove duplicated app-local UI logic in the same branch.
     - User action: none unless npm first-publish/2FA is requested during BR-39a bootstrap publish.
 - **Track B - BR-39b `@sentropic/auth-hono`**
   - Done:
@@ -238,6 +242,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Backend extraction inventory maps current Sentropic routes/services to package ports in `BR39b-INV1`.
     - `BR39b-EX1` is approved for narrow `Makefile` and `.github/workflows/ci.yml` edits required by package lifecycle automation.
     - BR-39a transport contract now exists in the sibling worktree and can be used as the backend shape reference once conductor confirms the inspected SHA or BR-39a merge point.
+    - Conductor approved aligning BR-39b immediately to inspected BR-39a SHA `0944c6daf241`, with explicit follow-up adjustments if BR-39a transport changes.
     - `packages/auth-hono` package shell exists with package metadata, TypeScript source, tests, README, and LICENSE; `dist/**` is generated during build/pack and not tracked.
     - Initial route contract map is aligned with BR-39a `AuthUiTransport` method names.
     - Package lifecycle Make targets exist: `typecheck-auth-hono`, `test-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`.
@@ -251,6 +256,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Initial `createAuthSessionService` is exported with session issue, validate, list, revoke, and revoke-all primitives backed only by package ports.
   - To do:
     - Replace `createAuthRouter` route stubs with extracted registration, login, session, credentials, magic-link, and email handlers.
+    - Add `requestMagicLink` to `AUTH_HONO_AUTH_UI_METHODS` and `AUTH_HONO_ROUTE_MAP` once BR-39a adds the transport method.
     - Complete session refresh-token rotation in the package service before replacing Sentropic session routes.
     - Extract reusable Hono route factories and auth services from existing Sentropic backend routes/services.
     - Rewire Sentropic API routes and middleware to consume `@sentropic/auth-hono` from the workspace package in the same branch.
@@ -258,7 +264,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Complete npm first-publish runbook and trusted publisher setup.
   - Action:
     - Codex next action: continue Lot 2 with refresh-token rotation, then email-code and magic-link service extraction.
-    - User action: confirm whether BR-39b should align to BR-39a current SHA `0944c6daf241` immediately, or wait for BR-39a merge if its Lot 2/3 screens may still change transport requirements.
+    - User action: none until npm first-publish/2FA is requested during bootstrap publish readiness.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 - Baseline & constraints**
