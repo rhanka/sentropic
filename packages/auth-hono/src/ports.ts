@@ -129,6 +129,7 @@ export interface AuthHonoSessionRecord {
 }
 
 export interface AuthHonoCreateSessionInput {
+  id: string;
   userId: string;
   sessionTokenHash: string;
   refreshTokenHash?: string | null;

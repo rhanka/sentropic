@@ -238,14 +238,16 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - `createAuthRouter` now accepts router options for route prefix, route overrides, cookie names, RP metadata, session policy, email-code policy, magic-link policy, and response policy.
     - `createAuthRouter` mounts health plus all BR-39a-aligned auth route contracts under the configured prefix; auth routes intentionally return `501 not_implemented` until Lot 2 service handlers are extracted.
     - `createRequireAuth` and `createOptionalAuth` middleware factories are exported without Sentropic workspace coupling; they validate bearer/cookie sessions through package ports and set Hono auth context variables.
+    - Initial `createAuthSessionService` is exported with session issue, validate, list, revoke, and revoke-all primitives backed only by package ports.
   - To do:
     - Replace `createAuthRouter` route stubs with extracted registration, login, session, credentials, magic-link, and email handlers.
+    - Complete session refresh-token rotation in the package service before replacing Sentropic session routes.
     - Extract reusable Hono route factories and auth services from existing Sentropic backend routes/services.
     - Rewire Sentropic API routes and middleware to consume `@sentropic/auth-hono` from the workspace package in the same branch.
     - Remove duplicated app-local auth route/service logic after package/API tests pass; no dual auth paths.
     - Complete npm first-publish runbook and trusted publisher setup.
   - Action:
-    - Codex next action: move into Lot 2 service handler extraction, starting with session manager behavior because middleware now depends on that port contract.
+    - Codex next action: continue Lot 2 with refresh-token rotation, then email-code and magic-link service extraction.
     - User action: confirm whether BR-39b should align to BR-39a current SHA `0944c6daf241` immediately, or wait for BR-39a merge if its Lot 2/3 screens may still change transport requirements.
 
 ## Plan / Todo (lot-based)
@@ -293,9 +295,11 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [ ] Move reusable WebAuthn registration option generation and verification logic into package services with injected credential and challenge ports.
   - [ ] Move reusable WebAuthn authentication option generation and verification logic into package services with discoverable-credential support.
   - [ ] Move reusable email-code and magic-link validation flows into package services with injected delivery and token-storage ports.
+  - [x] Add initial reusable JWT/session issue, validate, list, revoke, and revoke-all primitives with injected session storage, token, random, clock, and account-policy ports.
   - [ ] Move reusable JWT/session issue, validate, refresh, revoke, and revoke-all logic into package services with injected session storage and secret providers.
   - [ ] Preserve deterministic error codes and HTTP status mapping for invalid request, expired challenge, duplicate credential, unverified email, disabled account, and invalid session paths.
   - [ ] Lot gate:
+    - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/session-service.test.ts ENV=test-feat-auth-hono-kit`
     - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-registration.test.ts ENV=test-feat-auth-hono-kit`
     - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-authentication.test.ts ENV=test-feat-auth-hono-kit`
     - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/email-verification.test.ts ENV=test-feat-auth-hono-kit`
