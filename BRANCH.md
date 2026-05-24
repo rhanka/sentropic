@@ -237,7 +237,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
 - **Track B - BR-39b `@sentropic/auth-hono`**
   - Done:
     - BR-39b worktree exists at `/home/antoinefa/src/sentropic/tmp/feat-auth-hono-kit` on `feat/auth-hono-kit`.
-    - Current inspected SHA at status update: `343a6bd2`.
+    - Current inspected SHA at status update: `aea05a99`.
     - Lot 0 branch plan, backend inventory, scope decisions, npm/bootstrap anticipation, and `BR39b-EX1` are recorded.
     - Backend extraction inventory maps current Sentropic routes/services to package ports in `BR39b-INV1`.
     - `BR39b-EX1` is approved for narrow `Makefile` and `.github/workflows/ci.yml` edits required by package lifecycle automation.
@@ -257,6 +257,15 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - `createAuthSessionService` is exported with session issue, validate, refresh-token rotation, list, revoke, and revoke-all primitives backed only by package ports.
     - `createAuthEmailVerificationService` is exported with email normalization, request rate limiting, code generation, hashed storage, email delivery, code verification, and validation-token issue primitives backed only by package ports.
     - `createAuthMagicLinkService` is exported with magic-link generation, hashed token storage, email delivery, token verification, user lookup/update/create, and mark-used primitives backed only by package ports.
+    - `createAuthWebAuthnRegistrationService` is exported with challenge creation, excluded credential mapping, user-verification policy delegation, SimpleWebAuthn registration verification, duplicate credential detection, credential creation, and challenge mark-used primitives backed only by package ports.
+    - `createAuthWebAuthnAuthenticationService` is exported with discoverable and user-scoped option generation, allowed credential mapping, challenge validation, SimpleWebAuthn authentication verification, user-verification policy delegation, counter/last-used update, and challenge mark-used primitives backed only by package ports.
+    - Spark 5.3 xhigh subagents were launched in isolated worktrees for registration, authentication, and route-adapter inventory. They produced useful read context, but no implementation diff was integrated because Agents A/B exited without usable patches and Agent C produced only inline inventory notes.
+    - Latest package gates passed:
+      - `make typecheck-auth-hono ENV=test-feat-auth-hono-kit`
+      - `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-registration-service.test.ts ENV=test-feat-auth-hono-kit`
+      - `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-authentication-service.test.ts ENV=test-feat-auth-hono-kit`
+      - `make test-auth-hono ENV=test-feat-auth-hono-kit`
+      - `make pack-auth-hono ENV=test-feat-auth-hono-kit`
   - To do:
     - Replace `createAuthRouter` route stubs with extracted registration, login, session, credentials, magic-link, and email handlers.
     - Extract reusable Hono route factories and auth services from existing Sentropic backend routes/services.
@@ -264,7 +273,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Remove duplicated app-local auth route/service logic after package/API tests pass; no dual auth paths.
     - Complete npm first-publish runbook and trusted publisher setup.
   - Action:
-    - Codex next action: continue Lot 2 with WebAuthn registration/authentication services, then route handlers that compose the extracted services.
+    - Codex next action: continue Lot 2 by extracting route handler composition and deterministic HTTP/error mapping around the package services, then begin Lot 3 Sentropic adapters.
     - User action: none until npm first-publish/2FA is requested during bootstrap publish readiness.
 
 ## Plan / Todo (lot-based)
@@ -309,8 +318,8 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [x] `make pack-auth-hono ENV=test-feat-auth-hono-kit`
 
 - [ ] **Lot 2 - WebAuthn, email, and session services**
-  - [ ] Move reusable WebAuthn registration option generation and verification logic into package services with injected credential and challenge ports.
-  - [ ] Move reusable WebAuthn authentication option generation and verification logic into package services with discoverable-credential support.
+  - [x] Move reusable WebAuthn registration option generation and verification logic into package services with injected credential and challenge ports.
+  - [x] Move reusable WebAuthn authentication option generation and verification logic into package services with discoverable-credential support.
   - [x] Add reusable email-code request and verification primitives with injected email verification, delivery, token, random, clock, and account-policy ports.
   - [x] Add reusable magic-link request and verification primitives with injected magic-link, user, delivery, token, random, clock, and account-policy ports.
   - [x] Move reusable email-code and magic-link validation flows into package services with injected delivery and token-storage ports.
@@ -321,10 +330,11 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/session-service.test.ts ENV=test-feat-auth-hono-kit`
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/email-verification-service.test.ts ENV=test-feat-auth-hono-kit`
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/magic-link-service.test.ts ENV=test-feat-auth-hono-kit`
-    - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-registration.test.ts ENV=test-feat-auth-hono-kit`
-    - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-authentication.test.ts ENV=test-feat-auth-hono-kit`
-    - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/email-verification.test.ts ENV=test-feat-auth-hono-kit`
-    - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/session-manager.test.ts ENV=test-feat-auth-hono-kit`
+    - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-registration-service.test.ts ENV=test-feat-auth-hono-kit`
+    - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-authentication-service.test.ts ENV=test-feat-auth-hono-kit`
+    - [x] `make typecheck-auth-hono ENV=test-feat-auth-hono-kit`
+    - [x] `make test-auth-hono ENV=test-feat-auth-hono-kit`
+    - [x] `make pack-auth-hono ENV=test-feat-auth-hono-kit`
 
 - [ ] **Lot 3 - Sentropic API adapters**
   - [ ] Implement Sentropic adapters for users, credentials, challenges, sessions, email verification, magic links, cookies, logger, clock, random IDs, token signing, and token hashing using the existing Drizzle schema and services.
