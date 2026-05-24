@@ -237,7 +237,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
 - **Track B - BR-39b `@sentropic/auth-hono`**
   - Done:
     - BR-39b worktree exists at `/home/antoinefa/src/sentropic/tmp/feat-auth-hono-kit` on `feat/auth-hono-kit`.
-    - Current inspected SHA at status update: `96b36905`.
+    - Current inspected SHA at status update: pending magic-link service commit on top of `96b36905`.
     - Lot 0 branch plan, backend inventory, scope decisions, npm/bootstrap anticipation, and `BR39b-EX1` are recorded.
     - Backend extraction inventory maps current Sentropic routes/services to package ports in `BR39b-INV1`.
     - `BR39b-EX1` is approved for narrow `Makefile` and `.github/workflows/ci.yml` edits required by package lifecycle automation.
@@ -256,6 +256,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - `createRequireAuth` and `createOptionalAuth` middleware factories are exported without Sentropic workspace coupling; they validate bearer/cookie sessions through package ports and set Hono auth context variables.
     - `createAuthSessionService` is exported with session issue, validate, refresh-token rotation, list, revoke, and revoke-all primitives backed only by package ports.
     - `createAuthEmailVerificationService` is exported with email normalization, request rate limiting, code generation, hashed storage, email delivery, code verification, and validation-token issue primitives backed only by package ports.
+    - `createAuthMagicLinkService` is exported with magic-link generation, hashed token storage, email delivery, token verification, user lookup/update/create, and mark-used primitives backed only by package ports.
   - To do:
     - Replace `createAuthRouter` route stubs with extracted registration, login, session, credentials, magic-link, and email handlers.
     - Extract reusable Hono route factories and auth services from existing Sentropic backend routes/services.
@@ -263,7 +264,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Remove duplicated app-local auth route/service logic after package/API tests pass; no dual auth paths.
     - Complete npm first-publish runbook and trusted publisher setup.
   - Action:
-    - Codex next action: continue Lot 2 with magic-link service extraction, then WebAuthn registration/authentication services.
+    - Codex next action: continue Lot 2 with WebAuthn registration/authentication services, then route handlers that compose the extracted services.
     - User action: none until npm first-publish/2FA is requested during bootstrap publish readiness.
 
 ## Plan / Todo (lot-based)
@@ -311,13 +312,15 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [ ] Move reusable WebAuthn registration option generation and verification logic into package services with injected credential and challenge ports.
   - [ ] Move reusable WebAuthn authentication option generation and verification logic into package services with discoverable-credential support.
   - [x] Add reusable email-code request and verification primitives with injected email verification, delivery, token, random, clock, and account-policy ports.
-  - [ ] Move reusable email-code and magic-link validation flows into package services with injected delivery and token-storage ports.
+  - [x] Add reusable magic-link request and verification primitives with injected magic-link, user, delivery, token, random, clock, and account-policy ports.
+  - [x] Move reusable email-code and magic-link validation flows into package services with injected delivery and token-storage ports.
   - [x] Add initial reusable JWT/session issue, validate, list, revoke, and revoke-all primitives with injected session storage, token, random, clock, and account-policy ports.
   - [x] Move reusable JWT/session issue, validate, refresh, revoke, and revoke-all logic into package services with injected session storage and secret providers.
   - [ ] Preserve deterministic error codes and HTTP status mapping for invalid request, expired challenge, duplicate credential, unverified email, disabled account, and invalid session paths.
   - [ ] Lot gate:
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/session-service.test.ts ENV=test-feat-auth-hono-kit`
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/email-verification-service.test.ts ENV=test-feat-auth-hono-kit`
+    - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/magic-link-service.test.ts ENV=test-feat-auth-hono-kit`
     - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-registration.test.ts ENV=test-feat-auth-hono-kit`
     - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-authentication.test.ts ENV=test-feat-auth-hono-kit`
     - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/email-verification.test.ts ENV=test-feat-auth-hono-kit`
