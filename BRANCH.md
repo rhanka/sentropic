@@ -27,6 +27,16 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
   - `api/tests/ai/chat-tools.test.ts`
   - `api/tests/api/chat-tools.test.ts`
   - `api/tests/api/chat.test.ts`
+  - `packages/chat-core/src/runtime-tool-dispatch.ts`
+  - `packages/chat-core/src/runtime.ts`
+  - `packages/chat-core/tests/runtime-tool-dispatch.test.ts`
+  - `packages/chat-core/tests/integration/full-flow.test.ts`
+  - `packages/chat-core/package.json`
+  - `packages/chat-ui/src/utils/chat-run-projection.ts`
+  - `packages/chat-ui/src/client/streamHistory.ts`
+  - `packages/chat-ui/tests/stream-throughput.test.ts`
+  - `packages/chat-ui/tests/chat-run-projection.test.ts`
+  - `packages/chat-ui/package.json`
   - `ui/src/lib/stores/streamHub.ts`
   - `ui/src/lib/components/ChatPanel.svelte`
   - `ui/src/lib/components/StreamMessage.svelte`
@@ -73,7 +83,7 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
 - Branch diagnostics and automated tests run from `tmp/fix-chat-loop-guard-analysis`.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`.
   - [x] Read `rules/workflow.md`.
   - [x] Read `README.md`, `TODO.md`, and `PLAN.md`.
@@ -87,10 +97,10 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
   - [x] Confirm scope and guardrails.
 
 - [ ] **Lot 1 — Root cause investigation**
-  - [ ] Inspect backend assistant turn flow in `api/src/services/chat-service.ts` around tool-call iteration, tool result injection, and terminal assistant messages.
-  - [ ] Inspect tool execution/error normalization in `api/src/services/tools.ts` and `api/src/services/skills/foundation-executor.ts`.
-  - [ ] Inspect frontend stream projection in `ui/src/lib/stores/streamHub.ts`.
-  - [ ] Inspect chat rendering/projection in `ChatPanel.svelte`, `StreamMessage.svelte`, and chat wrapper components.
+  - [x] Inspect backend assistant turn flow in `api/src/services/chat-service.ts` around tool-call iteration, tool result injection, and terminal assistant messages.
+  - [x] Inspect tool execution/error normalization in `api/src/services/tools.ts`, `api/src/services/skills/foundation-executor.ts`, and `packages/chat-core/src/runtime-tool-dispatch.ts`.
+  - [x] Inspect frontend stream projection in `ui/src/lib/stores/streamHub.ts`, `packages/chat-ui/src/client/streamHistory.ts`, and `packages/chat-ui/src/utils/chat-run-projection.ts`.
+  - [x] Inspect chat rendering/projection in `ChatPanel.svelte`, `StreamMessage.svelte`, and chat wrapper components.
   - [ ] Reproduce a minimal repeated identical tool-error loop with a focused API/unit test or diagnostic fixture before implementing.
   - [ ] Record the failure signature in `## Feedback Loop`.
   - [ ] Lot gate:
@@ -99,7 +109,7 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
 - [ ] **Lot 2 — Backend repeated tool-error breaker**
   - [ ] Add a failing backend test for repeated same tool name plus same normalized error signature within one assistant turn.
   - [ ] Add a failing backend test proving changed arguments or changed error signature can still proceed.
-  - [ ] Implement minimal breaker semantics in the assistant/tool loop.
+  - [ ] Implement minimal breaker semantics in `packages/chat-core/src/runtime-tool-dispatch.ts`.
   - [ ] Ensure the terminal assistant-facing error is actionable and tells the model to stop retrying and ask the user or choose a different approach.
   - [ ] Preserve final transcript accuracy and visible tool error details.
   - [ ] Lot gate:
@@ -109,7 +119,7 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
 
 - [ ] **Lot 3 — Frontend stream projection bound**
   - [ ] Add a failing UI/store test if diagnostics confirm unbounded duplicate tool-call deltas or projection churn.
-  - [ ] Bound or compact long-running assistant-turn projection data without changing final transcript accuracy.
+  - [ ] Bound or compact long-running assistant-turn projection data in `packages/chat-ui` without changing final transcript accuracy.
   - [ ] Preserve reasoning/tool visibility while deduplicating or compacting repeated transient deltas.
   - [ ] Lot gate:
     - [ ] `make test-ui SCOPE=tests/stores/streamHub.test.ts API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
@@ -131,6 +141,8 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
   - [ ] `make lint-ui API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
   - [ ] `make test-api API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
   - [ ] `make test-ui API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
+  - [ ] Bump `packages/chat-core/package.json` if `packages/chat-core/src/**` changes.
+  - [ ] Bump `packages/chat-ui/package.json` if `packages/chat-ui/src/**` changes.
   - [ ] Build before e2e: `make build-api build-ui-image API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=e2e-fix-chat-loop-guard-analysis`
   - [ ] E2E chat smoke: `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=e2e-fix-chat-loop-guard-analysis`
   - [ ] Record PR body failure signature and chosen guard semantics.
