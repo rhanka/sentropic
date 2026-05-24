@@ -1145,4 +1145,127 @@ describe('LLM stream event normalization', () => {
     expect(events.some((event) => event.type === 'content_delta')).toBe(true);
     expect(events.some((event) => event.type === 'done')).toBe(true);
   });
+
+  it('should convert image content parts for OpenAI Responses input without stringifying them', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('openai');
+    let capturedRequest: unknown;
+    vi.spyOn(provider, 'streamGenerate').mockImplementation(async (request) => {
+      capturedRequest = request;
+      return (async function* () {
+        yield { type: 'response.created', response: { id: 'resp_image' } };
+        yield { type: 'response.output_text.delta', delta: 'Image received' };
+        yield { type: 'response.completed' };
+      })();
+    });
+
+    const { callLLMStream } = await import('../../src/services/llm-runtime');
+
+    await collectStreamEvents(
+      callLLMStream({
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Describe this' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+          ],
+        }] as never,
+        providerId: 'openai',
+        model: 'gpt-5.5',
+      }),
+    );
+
+    const requestOptions = (capturedRequest as { requestOptions?: { input?: Array<{ content?: unknown }> } }).requestOptions;
+    expect(requestOptions?.input?.[0]?.content).toEqual([
+      { type: 'input_text', text: 'Describe this' },
+      { type: 'input_image', image_url: 'data:image/png;base64,iVBORw0KGgo=', detail: 'auto' },
+    ]);
+  });
+
+  it('should convert image content parts for Gemini request input', async () => {
+    const { buildGeminiRequestBody } = await import('../../src/services/llm-runtime');
+
+    const body = buildGeminiRequestBody({
+      model: 'gemini-3.5-flash',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Describe this' },
+          { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==' } },
+        ],
+      }] as never,
+    });
+
+    expect(body.contents).toEqual([
+      {
+        role: 'user',
+        parts: [
+          { text: 'Describe this' },
+          { inlineData: { mimeType: 'image/jpeg', data: '/9j/4AAQSkZJRgABAQ==' } },
+        ],
+      },
+    ]);
+  });
+
+  it('should convert image content parts for Anthropic message input', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('anthropic');
+    let capturedRequest: unknown;
+    vi.spyOn(provider, 'streamGenerate').mockImplementation(async (request) => {
+      capturedRequest = request;
+      return (async function* () {
+        yield { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Image received' }, index: 0 };
+        yield { type: 'message_stop' };
+      })();
+    });
+
+    const { callLLMStream } = await import('../../src/services/llm-runtime');
+
+    await collectStreamEvents(
+      callLLMStream({
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Describe this' },
+            { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+          ],
+        }] as never,
+        providerId: 'anthropic',
+        model: 'claude-opus-4-7',
+      }),
+    );
+
+    const requestOptions = (capturedRequest as { requestOptions?: { messages?: Array<{ content?: unknown }> } }).requestOptions;
+    expect(requestOptions?.messages?.[0]?.content).toEqual([
+      { type: 'text', text: 'Describe this' },
+      {
+        type: 'image',
+        source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' },
+      },
+    ]);
+  });
+
+  it('should reject image input before provider dispatch when the selected model is text-only', async () => {
+    const { providerRegistry } = await import('../../src/services/provider-registry');
+    const provider = providerRegistry.requireProvider('cohere');
+    const streamGenerate = vi.spyOn(provider, 'streamGenerate');
+    const { callLLMStream } = await import('../../src/services/llm-runtime');
+
+    await expect(
+      collectStreamEvents(
+        callLLMStream({
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Describe this' },
+              { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+            ],
+          }] as never,
+          providerId: 'cohere',
+          model: 'command-a-03-2025',
+        }),
+      ),
+    ).rejects.toThrow('Image input is unsupported for cohere:command-a-03-2025');
+    expect(streamGenerate).not.toHaveBeenCalled();
+  });
 });
