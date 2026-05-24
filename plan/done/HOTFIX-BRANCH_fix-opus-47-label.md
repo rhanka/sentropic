@@ -266,8 +266,8 @@ Ship `@sentropic/skills` package — skill catalog, sandbox runtime, description
       - [ ] Sub-lot gate: `make clean test-e2e API_PORT=9095 UI_PORT=5295 MAILDEV_UI_PORT=1195 ENV=e2e-feat-agent-sandbox-skills E2E_GROUP=<matrix.e2e_group>`
 
 - [ ] **Lot 8 — Docs consolidation**
-  - [ ] Integrate `spec/SPEC_EVOL_BR19_SKILLS.md` into `spec/SPEC_VOL_AGENT_SANDBOX_SKILLS.md` (final form) + cross-link from `spec/SPEC_VOL_LLM_MESH.md` adjacent specs.
-  - [ ] Delete `spec/SPEC_EVOL_BR19_SKILLS.md` after integration.
+  - [x] Integrate `spec/SPEC_EVOL_BR19_SKILLS.md` into `spec/SPEC_VOL_AGENT_SANDBOX_SKILLS.md` (final form). Closed by BR19 documentation finalization.
+  - [x] Delete `spec/SPEC_EVOL_BR19_SKILLS.md` after integration. Closed by BR19 documentation finalization.
 
 - [ ] **Lot 9 — Final validation**
   - [ ] Typecheck & Lint (`make typecheck-api lint-api`)
