@@ -20,6 +20,10 @@
       "types": "./dist/contracts.d.ts",
       "import": "./dist/contracts.js"
     },
+    "./middleware": {
+      "types": "./dist/middleware.d.ts",
+      "import": "./dist/middleware.js"
+    },
     "./ports": {
       "types": "./dist/ports.d.ts",
       "import": "./dist/ports.js"
