@@ -13,6 +13,13 @@ const SUPPORTED_BINARY_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
 
+const SUPPORTED_IMAGE_MIME_TYPES = new Set([
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
 const SUPPORTED_TEXT_MIME_TYPES = new Set([
   'application/json',
   'application/xml',
@@ -178,6 +185,7 @@ export const isGoogleWorkspaceMimeType = (mimeType: string): mimeType is GoogleW
 
 export const isSupportedGoogleDriveMimeType = (mimeType: string): boolean =>
   isGoogleWorkspaceMimeType(mimeType) ||
+  SUPPORTED_IMAGE_MIME_TYPES.has(mimeType) ||
   SUPPORTED_BINARY_MIME_TYPES.has(mimeType) ||
   SUPPORTED_TEXT_MIME_TYPES.has(mimeType);
 

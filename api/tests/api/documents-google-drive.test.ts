@@ -190,6 +190,78 @@ describe('Documents API (Google Drive attach)', () => {
     });
   });
 
+  it('attaches Google Drive image refs as ready metadata-only documents without enqueueing summaries', async () => {
+    await seedConnectedGoogleDriveAccount(user);
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          id: 'image_1',
+          name: 'diagram.webp',
+          mimeType: 'image/webp',
+          webViewLink: 'https://drive.google.com/file/d/image_1/view',
+          webContentLink: null,
+          iconLink: null,
+          modifiedTime: '2026-05-24T12:00:00.000Z',
+          version: '7',
+          size: '4096',
+          md5Checksum: 'checksum_1',
+          trashed: false,
+          driveId: null,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await app.request('/api/v1/documents/google-drive', {
+      method: 'POST',
+      headers: {
+        Cookie: `session=${user.sessionToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        context_type: 'folder',
+        context_id: 'f_1',
+        file_ids: ['image_1'],
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const payload = await res.json();
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items[0]).toMatchObject({
+      filename: 'diagram.webp',
+      mime_type: 'image/webp',
+      size_bytes: 4096,
+      status: 'ready',
+      indexing_skipped: true,
+    });
+    expect(payload.items[0].job_id).toBeUndefined();
+    const docId = payload.items[0].id as string;
+    createdDocIds.push(docId);
+
+    expect(mockPutObject).toHaveBeenCalledTimes(0);
+    expect(addJobSpy).not.toHaveBeenCalled();
+
+    const [row] = await db.select().from(contextDocuments).where(eq(contextDocuments.id, docId)).limit(1);
+    expect(row.sourceType).toBe('google_drive');
+    expect(row.storageKey).toBeNull();
+    expect(row.status).toBe('ready');
+    expect(row.jobId).toBeNull();
+    expect(row.data).toMatchObject({
+      summaryLang: 'fr',
+      syncStatus: 'indexed',
+      indexingSkipped: true,
+      indexingSkipReason: 'image_metadata_only',
+      source: {
+        kind: 'google_drive',
+        fileId: 'image_1',
+        mimeType: 'image/webp',
+        exportMimeType: null,
+      },
+    });
+  });
+
   it('forbids viewers from attaching documents for non-chat contexts', async () => {
     const res = await app.request('/api/v1/documents/google-drive', {
       method: 'POST',
