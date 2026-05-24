@@ -3653,6 +3653,7 @@ When generating JavaScript \`code\` for DOCX or PPTX, use double-quoted string l
       executedTools.push(...consumed.executedTools);
       streamSeq = consumed.streamSeq;
       contextBudgetReplanAttempts = consumed.contextBudgetReplanAttempts;
+      continueGenerationLoop = loopState.continueGenerationLoop;
 
       // BR14b Lot 21e-3 — post-`consumeToolCalls` per-iteration finalization
       // (Block A trace + todo refresh, Block B `pendingLocalToolCalls`
