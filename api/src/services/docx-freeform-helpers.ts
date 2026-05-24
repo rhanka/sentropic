@@ -372,6 +372,7 @@ export function getSandboxGlobals(context: FreeformContext): Record<string, unkn
   return {
     // Helper functions (recommended API)
     doc,
+    document: doc,
     h,
     p,
     bold,

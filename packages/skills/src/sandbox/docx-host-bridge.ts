@@ -503,6 +503,7 @@ export const DOCX_BRIDGE_BOOTSTRAP = `
 const __callDocxSync = (ref) => (...args) =>
   ref.applySync(undefined, args, { arguments: { copy: true }, result: { copy: true } });
 const doc = __callDocxSync(__hostDocxDoc);
+const document = doc;
 const h = __callDocxSync(__hostDocxHeading);
 const p = __callDocxSync(__hostDocxParagraph);
 const bold = __callDocxSync(__hostDocxBold);

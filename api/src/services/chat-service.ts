@@ -129,6 +129,50 @@ function resolveDocumentGenerateTarget(input: {
   };
 }
 
+async function resolveDocumentGenerateTargetForChat(input: {
+  entityType?: unknown;
+  entityId?: unknown;
+  primaryContextType: ChatContextType | null | undefined;
+  primaryContextId: string | null | undefined;
+  organizationContextIds?: readonly string[];
+  workspaceId: string;
+}): Promise<{ entityType: DocumentGenerateEntityType; entityId: string; usedFallback: boolean }> {
+  const rawEntityType = typeof input.entityType === 'string' ? input.entityType.trim() : '';
+  const explicitEntityType = isDocumentGenerateEntityType(rawEntityType) ? rawEntityType : null;
+  const explicitEntityId = typeof input.entityId === 'string' ? input.entityId.trim() : '';
+  const organizationContextId =
+    input.primaryContextType === 'organization' && input.primaryContextId
+      ? input.primaryContextId
+      : input.organizationContextIds && input.organizationContextIds.length === 1
+        ? input.organizationContextIds[0]
+        : null;
+
+  if (organizationContextId) {
+    const shouldUseOrganizationFolder =
+      rawEntityType === 'organization' ||
+      (!rawEntityType && !explicitEntityId) ||
+      (explicitEntityType === 'folder' && !explicitEntityId);
+
+    if (shouldUseOrganizationFolder) {
+      const rows = await db
+        .select({ id: folders.id })
+        .from(folders)
+        .where(and(eq(folders.workspaceId, input.workspaceId), eq(folders.organizationId, organizationContextId)))
+        .orderBy(desc(folders.createdAt));
+
+      if (rows.length === 1) {
+        return { entityType: 'folder', entityId: rows[0].id, usedFallback: true };
+      }
+      if (rows.length === 0) {
+        throw new Error('document_generate: organization context has no folder target; create or select a folder first');
+      }
+      throw new Error('document_generate: organization context has multiple folder targets; pass entityType "folder" and entityId explicitly');
+    }
+  }
+
+  return resolveDocumentGenerateTarget(input);
+}
+
 export type CommentContextType = 'organization' | 'folder' | 'initiative' | 'matrix' | 'executive_summary';
 const COMMENT_CONTEXT_TYPES = ['organization', 'folder', 'initiative', 'matrix', 'executive_summary'] as const;
 function isCommentContextType(value: unknown): value is CommentContextType {
@@ -2736,11 +2780,15 @@ Règles :
       );
       const targetGuidance = defaultDocumentTarget
         ? `Current chat context default target: \`${defaultDocumentTarget.entityType}:${defaultDocumentTarget.entityId}\`. You may omit \`entityType\` / \`entityId\` only when generating for this current target; specify both when targeting another entity.`
-        : 'Pass both `entityType` and `entityId` when generating a document.';
+        : primaryContextType === 'organization'
+          ? 'The current chat context is an organization. `document_generate` cannot target `organization` directly; target a linked `folder` instead. If the organization has exactly one linked folder, you may omit `entityType` / `entityId` and the server will use that folder. If there are multiple folders, call `folders_list` and pass `entityType: "folder"` plus the folder `entityId`.'
+          : 'Pass both `entityType` and `entityId` when generating a document.';
       contextBlock += `\n\n## Document generation
 You have the tool \`document_generate\`. It can generate \`format: "docx"\` (default) or \`format: "pptx"\`.
 Call it with \`action: "generate"\`. The DOCX/PPTX sandbox helper API is documented in the \`document_generate\` skill's \`SKILL.md\` (discoverable via the \`search_skills\` meta-tool).
 ${targetGuidance}
+For DOCX freeform \`code\`, do not use \`require\`, \`import\`, \`await\`, \`docx()\`, chain APIs, or \`new Document().addParagraph(...)\`. The sandbox already injects helpers; return a document synchronously, for example: \`return doc([h(1, 'Title'), p('Summary'), table(['Field', 'Value'], [['Name', 'Ellio']])]);\`.
+If you need data from another tool, call that tool before \`document_generate\` and embed the returned values as literals in the generated \`code\`; sandbox code cannot call chat tools.
 For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw constructor calls.`;
     }
 
@@ -4343,11 +4391,13 @@ For PPTX, prefer the \`pptx()\` helper and the provided slide helpers over raw c
           const templateId = typeof args.templateId === 'string' ? args.templateId : undefined;
           const code = typeof args.code === 'string' ? args.code : undefined;
           const title = typeof args.title === 'string' ? args.title : undefined;
-          const { entityType, entityId } = resolveDocumentGenerateTarget({
+          const { entityType, entityId } = await resolveDocumentGenerateTargetForChat({
             entityType: args.entityType,
             entityId: args.entityId,
             primaryContextType,
             primaryContextId,
+            organizationContextIds: [...allowedByType.organization],
+            workspaceId: sessionWorkspaceId,
           });
           if (!entityId) throw new Error('document_generate: entityId is required');
           if (templateId && code) throw new Error('document_generate: templateId and code are mutually exclusive');
