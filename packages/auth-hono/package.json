@@ -20,6 +20,10 @@
       "types": "./dist/contracts.d.ts",
       "import": "./dist/contracts.js"
     },
+    "./ports": {
+      "types": "./dist/ports.d.ts",
+      "import": "./dist/ports.js"
+    },
     "./router": {
       "types": "./dist/router.d.ts",
       "import": "./dist/router.js"

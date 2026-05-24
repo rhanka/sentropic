@@ -223,7 +223,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
 - **Track B - BR-39b `@sentropic/auth-hono`**
   - Done:
     - BR-39b worktree exists at `/home/antoinefa/src/sentropic/tmp/feat-auth-hono-kit` on `feat/auth-hono-kit`.
-    - Current inspected SHA at status update: `c5ee130f437f6b4b25f5f32c5bfe94482059bcd2`.
+    - Current inspected SHA at status update: pending port-contract commit on top of `6b3604cc9708`.
     - Lot 0 branch plan, backend inventory, scope decisions, npm/bootstrap anticipation, and `BR39b-EX1` are recorded.
     - Backend extraction inventory maps current Sentropic routes/services to package ports in `BR39b-INV1`.
     - `BR39b-EX1` is approved for narrow `Makefile` and `.github/workflows/ci.yml` edits required by package lifecycle automation.
@@ -233,8 +233,9 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Package lifecycle Make targets exist: `typecheck-auth-hono`, `test-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`.
     - CI/CD package wiring exists for `auth_hono`, `auth_hono_publish`, `validate-auth-hono`, `publish-auth-hono`, and `bootstrap_publish_target=auth-hono`.
     - Root workspace lockfile was synced through `make lock-root ENV=test-feat-auth-hono-kit`.
+    - Pure package port contracts are exported from `packages/auth-hono/src/ports.ts` and re-exported from the package root and `./ports` subpath.
+    - `AUTH_HONO_REQUIRED_PORTS` is type-checked against `keyof AuthHonoPorts` to keep runtime inventory and adapter surface aligned.
   - To do:
-    - Define full typed port interfaces for users, credentials, challenges, sessions, email verification, magic links, email delivery, cookies, tokens, audit logging, clock, random IDs, and account policy.
     - Expand `createAuthRouter` beyond health to mount registration, login, session, credentials, magic-link, and email route factories.
     - Export `createRequireAuth` and `createOptionalAuth` middleware factories without Sentropic workspace coupling.
     - Extract reusable Hono route factories and auth services from existing Sentropic backend routes/services.
@@ -242,7 +243,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Remove duplicated app-local auth route/service logic after package/API tests pass; no dual auth paths.
     - Complete npm first-publish runbook and trusted publisher setup.
   - Action:
-    - Codex next action: continue BR-39b Lot 1 with typed ports, full route-factory shape, middleware factories, and package tests before extracting service logic.
+    - Codex next action: continue BR-39b Lot 1 with route-factory options, middleware factories, and package tests before extracting service logic.
     - User action: confirm whether BR-39b should align to BR-39a current SHA `0944c6daf241` immediately, or wait for BR-39a merge if its Lot 2/3 screens may still change transport requirements.
 
 ## Plan / Todo (lot-based)
@@ -268,7 +269,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [x] Add `packages/auth-hono/package.json` with publishable package metadata, `"name": "@sentropic/auth-hono"`, initial semver version, ESM exports, `files`, license, repository metadata, and dependency/peer dependency policy aligned with existing packages.
   - [x] Update root workspace lockfile for the new package using make-only install/update flow.
   - [x] Add initial route contract map aligned with BR-39a `AuthUiTransport` method names.
-  - [ ] Define pure port interfaces for users, credentials, challenges, sessions, email verification, magic links, cookies, logger, clock, random IDs, token signing, and token hashing.
+  - [x] Define pure port interfaces for users, credentials, challenges, sessions, email verification, magic links, cookies, logger, clock, random IDs, token signing, and token hashing.
   - [ ] Define route-factory options for route prefix, cookie names, RP ID/origins, session duration, email-code policy, account-status mapping, route-path overrides, and response/error shape policy aligned with BR-39a.
   - [ ] Export a `createAuthRouter(options)` Hono factory that mounts registration, login, session, credentials, magic-link, email, and health routes.
   - [ ] Export `createRequireAuth(options)` and `createOptionalAuth(options)` middleware factories that do not assume Sentropic workspaces.
