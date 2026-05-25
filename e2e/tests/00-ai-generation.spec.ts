@@ -92,24 +92,25 @@ test.describe('Génération IA', () => {
     await page.waitForURL('/organizations/new', { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
 
+    const draftResPromise = page.waitForResponse((res) => {
+      const req = res.request();
+      return req.method() === 'POST' && /\/api\/v1\/organizations\/draft/.test(res.url());
+    }, { timeout: 15_000 });
+
     // Remplir le nom de l'entreprise (EditableInput)
     const nameInput = page.locator('h1 textarea.editable-textarea, h1 input.editable-input').first();
     await expect(nameInput).toBeVisible();
     await nameInput.fill('BRP (Bombardier)');
-    
-    // Attendre que la valeur soit propagée (réactivité Svelte)
-    await page.waitForTimeout(500);
-    
+
+    const draftRes = await draftResPromise;
+    if (!draftRes.ok()) {
+      const body = await draftRes.text().catch(() => '');
+      throw new Error(`Erreur creation brouillon organisation: ${draftRes.status()} ${body.slice(0, 200)}`);
+    }
+
     // Bouton IA (icône)
     const aiButton = page.locator('[data-testid="enrich-organization"], button[aria-label="IA"]').first();
     await expect(aiButton).toBeEnabled({ timeout: 30_000 });
-
-    const draftResPromise = page
-      .waitForResponse((res) => {
-        const req = res.request();
-        return req.method() === 'POST' && /\/api\/v1\/organizations\/draft/.test(res.url());
-      }, { timeout: 15_000 })
-      .catch(() => null);
 
     const enrichResPromise = page.waitForResponse((res) => {
       const req = res.request();
@@ -117,11 +118,6 @@ test.describe('Génération IA', () => {
     }, { timeout: 60_000 });
 
     await aiButton.click();
-    const draftRes = await draftResPromise;
-    if (draftRes && !draftRes.ok()) {
-      const body = await draftRes.text().catch(() => '');
-      throw new Error(`Erreur creation brouillon organisation: ${draftRes.status()} ${body.slice(0, 200)}`);
-    }
     const enrichRes = await enrichResPromise;
     const enrichJson = await enrichRes.json().catch(() => null);
     const enrichJobId = String((enrichJson as any)?.jobId ?? '').trim();
@@ -322,19 +318,33 @@ test.describe('Génération IA', () => {
     
     const composer = page.locator('[role="textbox"][aria-label="Composer"]');
     await expect(composer).toBeVisible({ timeout: 5000 });
+    const matchesNewChatMessage = (url: string) => {
+      try {
+        return new URL(url).pathname.endsWith('/api/v1/chat/messages');
+      } catch {
+        return false;
+      }
+    };
     const sendChatAndWaitApi = async (message: string) => {
       const editable = composer.locator('[contenteditable="true"]');
       await editable.click();
       await page.keyboard.press('Control+A');
       await page.keyboard.press('Backspace');
       await page.keyboard.type(message);
-      await Promise.all([
+      const sendButton = page.getByTestId('chat-composer-send-button');
+      await expect(sendButton).toBeEnabled({ timeout: 60_000 });
+      const response = await Promise.all([
         page.waitForResponse((res) => {
           const req = res.request();
-          return req.method() === 'POST' && res.url().includes('/api/v1/chat/messages');
+          return req.method() === 'POST' && matchesNewChatMessage(res.url());
         }, { timeout: 30_000 }),
-        page.keyboard.press('Enter')
-      ]);
+        sendButton.click()
+      ]).then(([res]) => res);
+      expect(response.ok()).toBeTruthy();
+      const body = await response.json().catch(() => null);
+      const jobId = String((body as any)?.jobId ?? '');
+      expect(jobId).toBeTruthy();
+      await waitForJobTerminal(page, jobId, { timeoutMs: 6 * 60_000, intervalMs: 1000 });
     };
     
     const message1 = 'Quel est le nom de ce cas d\'usage ?';
