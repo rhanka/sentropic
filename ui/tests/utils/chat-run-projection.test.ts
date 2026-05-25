@@ -75,7 +75,7 @@ describe('chat run projection', () => {
     ]);
   });
 
-  it('merges authoritative history over overlapping live replay and appends future live events', () => {
+  it('merges authoritative history over overlapping live replay and compacts future live deltas', () => {
     const replay = [
       { eventType: 'content_delta', sequence: 2, data: { delta: 'AB' } },
     ];
@@ -86,8 +86,7 @@ describe('chat run projection', () => {
 
     const merged = mergeProjectionHistoryEvents(replay, history);
     expect(merged.map((event) => [event.sequence, event.data.delta])).toEqual([
-      [1, 'A'],
-      [2, 'B'],
+      [2, 'AB'],
     ]);
 
     const next = appendLiveProjectionEvent(merged, {
@@ -96,9 +95,7 @@ describe('chat run projection', () => {
       data: { delta: 'C' },
     });
     expect(next.map((event) => [event.sequence, event.data.delta])).toEqual([
-      [1, 'A'],
-      [2, 'B'],
-      [3, 'C'],
+      [3, 'ABC'],
     ]);
   });
 

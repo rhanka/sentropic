@@ -61,6 +61,10 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
   - `.github/workflows/**`
   - `api/src/services/llm-runtime/**`
   - `api/src/routes/**`
+  - `api/tests/ai/initiative-generation-async.test.ts` (`CLG-EX1`, test-only AI validation contract alignment)
+  - `api/tests/api/locks.test.ts` (`CLG-EX2`, test-only endpoint validation fixture stabilization)
+  - `api/tests/api/workspace-types.test.ts` (`CLG-EX2`, test-only endpoint validation fixture stabilization)
+  - `api/tests/api/workspaces.test.ts` (`CLG-EX2`, test-only endpoint validation fixture stabilization)
   - `ui/src/lib/i18n/**`
   - `spec/**`
 - **Exception process**:
@@ -70,9 +74,11 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
 ## Feedback Loop
 - [x] `attention`: Reproduced failure signature recorded. Backend root cause was repeated identical tool errors being fed back into the assistant loop until the outer max-iteration fallback; returned `{ status: "error" }` tool envelopes were especially important because they did not throw. Frontend root cause was unbounded live projection churn for repeated status/tool events during the same assistant turn. The focused API regression initially observed 11 LLM calls before the loop guard/sync fix reduced this to three tool-enabled attempts plus the existing pass-2 fallback.
 - [x] `review`: Added explicit regression coverage for thrown tool exceptions whose request/trace IDs vary between attempts; signature normalization still trips the same repeated-error breaker.
+- [x] `CLG-EX1`: Scope exception for `api/tests/ai/initiative-generation-async.test.ts`. Reason: final API validation exposed an over-constrained AI fixture unrelated to chat loop production code; the multi-org prompt contract allows empty `organizationIds` when no provided organization confidently matches. Impact: test-only contract alignment plus outer timeout alignment with existing internal waits. Rollback: revert the test-only hunk and rerun `make test-api-ai SCOPE=tests/ai/initiative-generation-async.test.ts`.
+- [x] `CLG-EX2`: Scope exception for endpoint auth fixtures in `locks`, `workspace-types`, and `workspaces` API tests. Reason: final endpoint validation exposed fixed-email fixture collisions unrelated to chat loop production code. Impact: test-only fixture isolation using unique emails while preserving endpoint behavior coverage. Rollback: revert the three endpoint test hunks and rerun the scoped endpoint suite.
 
 ## AI Flaky tests
-- [ ] No AI flaky accepted yet.
+- [x] No AI flaky accepted. `CLG-EX1` is a test contract alignment validated by the full AI suite, not an accepted flaky waiver.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -146,8 +152,11 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
   - [x] `make test-pkg-chat-core API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
   - [x] `make test-chat-ui API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
   - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
-  - [ ] `make test-api API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
-  - [ ] `make test-ui API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
+  - [ ] `make test-api API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (literal wrapper rerun pending; previous wrapper attempt hit a setup health-check false negative before tests)
+  - [x] `make test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-security API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (smoke 6 tests; unit 496 passed, 1 skipped; endpoints 440 tests; queue 20 tests; security 49 tests)
+  - [x] `make test-api-ai API_TEST_WORKERS=1 API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (9 files, 30 tests)
+  - [x] `make test-api-limit API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (1 file, 4 tests)
+  - [x] `make test-ui API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (68 files, 403 tests)
   - [x] Bump `packages/chat-core/package.json` if `packages/chat-core/src/**` changes.
   - [x] Bump `packages/chat-ui/package.json` if `packages/chat-ui/src/**` changes.
   - [ ] Build before e2e: `make build-api build-ui-image API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=e2e-fix-chat-loop-guard-analysis`

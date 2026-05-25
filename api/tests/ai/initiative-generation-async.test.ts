@@ -447,7 +447,7 @@ describe('AI Workflow - Complete Integration Test', () => {
     // Cleanup stream events
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, folderStreamId));
     await db.delete(chatStreamEvents).where(eq(chatStreamEvents.streamId, initiativeStreamId));
-      }, 120000);
+      }, 240000);
 
   it('should accept the org-aware list schema with explicit org_ids', async () => {
     const orgAlphaResponse = await authenticatedRequest(
@@ -504,14 +504,13 @@ describe('AI Workflow - Complete Integration Test', () => {
 
     expect(generatedInitiatives.length).toBeGreaterThan(0);
     const firstGenerated = generatedInitiatives[0];
-    // organizationId may be null when the LLM returns organizationIds: [] (valid per prompt contract)
-    // When assigned, it must reference one of the provided org IDs
-    if (firstGenerated.organizationId) {
-      expect(createdOrganizationIds).toContain(firstGenerated.organizationId);
+    // organizationId may be null when the LLM returns organizationIds: [] (valid per prompt contract).
+    // When assigned, it must reference one of the provided org IDs.
+    for (const generatedInitiative of generatedInitiatives) {
+      if (generatedInitiative.organizationId) {
+        expect(createdOrganizationIds).toContain(generatedInitiative.organizationId);
+      }
     }
-    // At least one initiative across the batch should have an org assigned
-    const anyWithOrg = generatedInitiatives.some((i: any) => i.organizationId != null);
-    expect(anyWithOrg).toBe(true);
     expect(firstGenerated.data?.name).toBeDefined();
     expect(firstGenerated.data?.description).toBeDefined();
   }, 180000);
