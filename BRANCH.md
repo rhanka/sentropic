@@ -1,65 +1,112 @@
-# Fix: bump Playwright to ^1.60.0 to fix recurring `build-e2e` hang
+# Feature: BR-40a Prioritization Matrix at Scale
 
 ## Objective
-Unblock CI by bumping `@playwright/test` from `^1.55.1` (resolved 1.58.1) to `^1.60.0`
-so the e2e Docker image build no longer hangs on the Playwright browser/CDN step
-that has started failing intermittently against the older client.
+Raise the per-folder use-case cap to 50 and keep the prioritization-matrix chart legible at that
+scale: label only the top-10 use cases (by value/complexity priority), add a "hide bubbles" toggle
+that keeps the chart usable via hover alone, and add a business-domain-filterable legend with
+hover-driven emphasis (hovering a point or a domain enlarges the points of that business domain).
 
 ## Scope / Guardrails
-- Scope limited to `e2e/package.json`, `e2e/package-lock.json`, and `Makefile` (new `lock-e2e` target).
-- Make-only workflow, no direct Docker commands on host.
-- Root workspace is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in worktree `tmp/fix-playwright-bump`.
-- No service stack started by this branch (lock regen + CI only).
+- Scope limited to: per-folder use-case cap, the scatter-plot chart UX (labels, bubbles toggle,
+  domain legend/filter, hover emphasis), and the executive-synthesis chart rendering parity.
+- Make-only workflow, no direct Docker commands.
+- Root workspace `/home/antoinefa/src/sentropic` reserved for user dev/UAT (`ENV=dev`); stays stable.
+- Branch development in isolated worktree `tmp/feat-prioritization-matrix-scale`.
+- Automated tests run on `ENV=test-feat-prioritization-matrix-scale` / `ENV=e2e-feat-prioritization-matrix-scale`.
+- `ENV=<env>` passed last in every `make` command.
+- All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `e2e/package.json`
-  - `e2e/package-lock.json`
   - `BRANCH.md`
-- **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `api/**`, `ui/**`, `packages/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-- **Conditional Paths (allowed only with explicit `FIX-PWB-EXn` exception)**:
-  - `Makefile`
+  - `plan/40a-BRANCH_feat-prioritization-matrix-scale.md`
+  - `ui/src/lib/components/InitiativeScatterPlot.svelte`
+  - `ui/src/lib/utils/scoring.ts`
+  - `ui/src/locales/en.json`
+  - `ui/src/locales/fr.json`
+  - `ui/tests/**` (scatter-plot / scoring specs)
+  - `api/src/services/executive-summary.ts` (use-case cap + top-cases selection)
+  - `api/src/services/docx-service.ts` (executive-synthesis chart context parity, if needed)
+  - `api/tests/**` (executive-summary specs)
+  - `e2e/tests/**` (folder / prioritization specs)
+- **Forbidden Paths**:
+  - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` except this branch file
+  - `api/src/db/schema.ts` (no schema change expected)
+- **Conditional Paths (explicit `BR40a-EXn` exception required)**:
+  - `api/drizzle/*.sql` (max 1 file) — only if the cap is enforced via a DB constraint rather than service validation.
   - `.github/workflows/**`
-- **Exception process**:
-  - `FIX-PWB-EX1` — `Makefile`: add `lock-e2e` target (mirror of `lock-root`) so e2e lock can be regenerated through `make` without bypassing the make-only rule. Risk: minimal (new target, no change to existing); rollback: revert the added block.
+  - `api/src/routes/api/initiatives.ts` (generation `initiative_count` soft cap) — covered by **BR40a-EX1**.
+  - `ui/src/routes/folder/new/+page.svelte` (generation count form clamp/attr) — covered by **BR40a-EX1**.
+- **Exception process**: declare `BR40a-EXn` in `## Feedback Loop` with reason, impact, rollback.
 
-## Feedback Loop
-- `FIX-PWB-EX1` `acknowledge` — `Makefile` `lock-e2e` target added, rationale above.
+## Feedback Loop (framing questions — RESOLVED 2026-05-25)
+- **BR40a-Q1** `acknowledge`: top-10 ranking metric = **ratio `value / (complexity + ε)` with a cap**.
+  Verified context: value and complexity are both normalized to the SAME 0-100 scale (weighted mean of
+  Fibonacci-point ratings; API also exposes `ease = 100 − complexity`), and complexity CAN be 0. User
+  chose the ratio (their usual "value per unit effort"); implementation MUST add an ε guard
+  (e.g. `complexity + 1`) plus an upper cap so complexity≈0 cases do not explode/divide-by-zero.
+  Document the exact ε and cap in code + tests.
+- **BR40a-Q2** `acknowledge`: bubble color = **business domain** (`initiative.data.domain`). Status
+  (currently `STATUS_COLORS` at `InitiativeScatterPlot.svelte:145`) moves to the tooltip and/or marker
+  shape/border. The legend is the domain legend, filterable. Keep DOCX bitmap parity (Lot 4).
+- **BR40a-Q3** `acknowledge`: cap = 50 is a **soft target** (generate/query up to 50; UI handles ≤50
+  gracefully). No hard block, no DB constraint.
+- **BR40a-EX1** `attention`: the per-folder generation cap is NOT in `executive-summary.ts` (verified:
+  that service has no use-case cap, it processes all initiatives of a folder). The real soft cap lives
+  in `api/src/routes/api/initiatives.ts:655` (`initiative_count` Zod `.max(25)`) and the UI generation
+  form `ui/src/routes/folder/new/+page.svelte` (`max="25"`, clamp `25`). Both are outside the declared
+  Allowed Paths. Reason: raising the soft cap to 50 (Lot 1, core objective) requires editing exactly
+  these two files. Impact: minimal — single Zod bound + single UI clamp/attr; no schema/migration, no
+  DB constraint (consistent with BR40a-Q3). Rollback: revert `.max(50)`→`.max(25)` and `max="50"`/
+  clamp `50`→`25`. No other behavior touched.
 
 ## AI Flaky tests
-- Not applicable: no AI tests modified.
+- Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted`;
+  at least one success on the same commit + command; never add timeouts; record signature + user sign-off.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single-file capability fix).
+- [x] **Mono-branch + cherry-pick** (single frontend-centric capability + small backend cap change).
 - [ ] Multi-branch
-- Rationale: 3-file orthogonal fix.
+- Rationale: one chart/UX capability plus a bounded executive-summary cap change; one final test cycle.
 
-## UAT Management
-- Not applicable: no user-facing change.
+## UAT Management (in orchestration context)
+- Development worktree: `tmp/feat-prioritization-matrix-scale`.
+- Branch ports (slot 0): `API_PORT=9200`, `UI_PORT=5400`, `MAILDEV_UI_PORT=1300`.
+- Test envs: `ENV=test-feat-prioritization-matrix-scale`, `ENV=e2e-feat-prioritization-matrix-scale`.
+- Root UAT env: `ENV=dev` on `/home/antoinefa/src/sentropic`, commit-identical to branch HEAD.
 
-## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`.
-  - [x] Worktree `tmp/fix-playwright-bump` created from `origin/main` (HEAD `a817aed8`).
-  - [x] Confirm scope and `FIX-PWB-EX1` exception for `Makefile`.
+## Plan / Todo (lot-based) — framing RESOLVED, ready to execute
+- [ ] **Lot 0 — Baseline & constraints**
+  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `TODO.md`, `PLAN.md`, this branch file.
+  - [ ] Create isolated worktree `tmp/feat-prioritization-matrix-scale` from `main`.
+  - [ ] Confirm command style with slot-0 ports and `ENV=...` last.
+  - [ ] Framing resolved (BR40a-Q1 ratio+ε, BR40a-Q2 color=domain, BR40a-Q3 soft cap) — see Feedback Loop.
 
-- [x] **Lot 1 — Add `make lock-e2e` target**
-  - [x] Add `.PHONY: lock-e2e` target in `Makefile` after `lock-root`, mirroring its pattern.
-  - [x] Uses `node:24-slim` (matches `e2e/Dockerfile` base) with `--legacy-peer-deps --package-lock-only --ignore-scripts`.
+- [x] **Lot 1 — Use-case cap to 50**
+  - [x] Raise the per-folder cap to 50 in the generation path: `initiatives.ts` Zod `.max(50)` + `folder/new` form clamp/attr `50` (see BR40a-EX1; `executive-summary.ts` has no cap).
+  - [x] Confirm no schema/migration needed; soft cap via Zod validation only (BR40a-Q3) — declared `BR40a-EX1` for the two out-of-Allowed-Paths files.
+  - [x] Lot gate: `make typecheck-api` + `make lint-api` (0 errors); API test `initiatives-generate-matrix.test.ts` (12 passed, incl. accept-50 / reject-51).
 
-- [x] **Lot 2 — Bump Playwright to `^1.60.0`**
-  - [x] Edit `e2e/package.json` `devDependencies."@playwright/test"`: `^1.55.1` -> `^1.60.0`.
-  - [x] Run `make lock-e2e` to regenerate `e2e/package-lock.json`.
-  - [x] Verify lock: `@playwright/test 1.60.0` and `playwright-core 1.60.0`.
+- [ ] **Lot 2 — Chart legibility at scale (labels + hide-bubbles)**
+  - [ ] Label only the top-10 use cases by ratio `value / (complexity + ε)` with cap (BR40a-Q1); ties broken by value.
+  - [ ] Add a "hide bubbles" toggle: when on, hide point markers but keep hover hit-areas + tooltip.
+  - [ ] When bubbles shown and ≤10 cases, all bubbles + labels render normally.
+  - [ ] Lot gate: `make typecheck-ui` + `make lint-ui`; UI specs for top-10 selection + toggle.
 
-- [ ] **Lot N-2 — CI gate**
-  - [ ] Push branch, open PR, wait for full CI green (especially `build-e2e` no longer hangs).
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] N/A (self-documenting Makefile target + this BRANCH.md).
-- [ ] **Lot N — Final validation & merge**
-  - [ ] Remove `BRANCH.md`, merge via merge commit (repo policy §0).
+- [ ] **Lot 3 — Business-domain legend, filter & hover emphasis**
+  - [ ] Add a legend grouped by `initiative.data.domain`, filterable (toggle domains on/off).
+  - [ ] On hover (point or legend entry), enlarge points sharing the hovered point's business domain
+        — in both bubbles-shown and bubbles-hidden modes.
+  - [ ] Color bubbles by business domain (BR40a-Q2); move status to tooltip + marker shape/border.
+  - [ ] Lot gate: `make typecheck-ui` + `make lint-ui`; UI specs for legend filter + hover emphasis.
+
+- [ ] **Lot 4 — Executive-synthesis (DOCX) chart parity**
+  - [ ] Ensure the DOCX bitmap snapshot reflects the new label/legend rules (or document deferral).
+  - [ ] Lot gate: API tests for synthesis context.
+
+- [ ] **Lot N-2 — UAT** (web app: cap to 50, top-10 labels, hide-bubbles, domain filter, hover emphasis;
+      non-reg: existing folder chart, DOCX export).
+- [ ] **Lot N-1 — Docs consolidation** (update relevant spec; remove `spec/BRANCH_SPEC_EVOL.md` if added).
+- [ ] **Lot N — Final validation** (typecheck/lint, UI/API/E2E retests, package bumps if any, PR → CI →
+      remove `BRANCH.md` → merge via merge commit).
