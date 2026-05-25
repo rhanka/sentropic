@@ -145,3 +145,75 @@ This removes the workload (Deployments, Services, Secrets created here,
 StatefulSet, ConfigMaps, and any legacy Maildev resources). The namespace,
 ResourceQuota, LimitRange and
 NetworkPolicy stay (owned by poc-k8s).
+
+## Sealed Secrets
+
+[Bitnami Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets) makes
+cluster Secrets git-as-source-of-truth: the operator encrypts a plaintext
+`Secret` into a `SealedSecret` resource that is safe to commit, and the
+in-cluster controller decrypts it back into a real `Secret` only inside the
+target cluster. The controller manifest is
+`deploy/scw/01-sealed-secrets-controller.yaml`, pinned to upstream **v0.37.0**
+and retargeted to the dedicated `sealed-secrets` namespace (controller name
+`sealed-secrets-controller`).
+
+### Install the controller (once per cluster)
+
+```bash
+make scw-sealed-secrets-install KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37b
+```
+
+This applies the pinned manifest and waits for the controller rollout.
+
+### Seal a secret (operator workflow)
+
+`kubeseal` runs inside the pinned `docker.io/bitnami/sealed-secrets-kubeseal:0.37.0`
+image (no host install needed) and fetches the controller's public certificate
+from the live kube API via the mounted `KUBECONFIG`. The `make scw-seal-secret`
+target only transforms a plaintext Secret yaml into a SealedSecret yaml — it
+never reads or hardcodes a secret value.
+
+1. Build a plaintext `Secret` manifest from the values in root `.env` (do **not**
+   commit this plaintext file; keep it out of the repo, e.g. under `/tmp`):
+
+   ```bash
+   kubectl -n sentropic create secret generic sentropic-api \
+     --from-literal=SCW_TEM_SECRET_KEY="<value from .env>" \
+     ... \
+     --dry-run=client -o yaml > /tmp/plain-sentropic-api.yaml
+   ```
+
+2. Seal it into a committable SealedSecret:
+
+   ```bash
+   make scw-seal-secret \
+     SEAL_SRC=/tmp/plain-sentropic-api.yaml \
+     SEAL_OUT=deploy/scw/05-sealed-sentropic-api.yaml \
+     KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37b
+   ```
+
+3. Delete the plaintext file (`shred -u /tmp/plain-sentropic-api.yaml`) and commit
+   only the resulting `deploy/scw/05-*` / `deploy/scw/06-*` SealedSecret yaml.
+
+The `05-*` (`sentropic-api`) and `06-*` (`sentropic-postgres` / pgbackup)
+SealedSecret resource files are produced by the operator from the real secret
+values after the controller is installed; they are intentionally **not**
+authored as part of this manifest/tooling change.
+
+### Disaster recovery — back up the controller sealing key
+
+The controller stores its master sealing key as a labelled Secret in the
+`sealed-secrets` namespace. If the cluster (or that key) is lost, every committed
+SealedSecret becomes undecryptable. Back the key up out-of-band:
+
+```bash
+make scw-sealed-secrets-backup-key \
+  SEAL_KEY_OUT=/secure/offline/sealed-secrets-key-backup.yaml \
+  KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37b
+```
+
+**The backup file contains the master private key.** Store it offline or in a
+secret manager, restrict its permissions, and **never commit it**. To restore on
+a rebuilt cluster, `kubectl apply -f` the backup before installing the
+controller, then re-run `make scw-sealed-secrets-install`; the controller adopts
+the restored key and can decrypt the existing committed SealedSecrets.

@@ -1,0 +1,14 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: sentropic-postgres
+  namespace: sentropic
+spec:
+  encryptedData:
+    POSTGRES_PASSWORD: AgCunKRLybLEbTQqzECla9VOTW1Z3sTV9USVlzF0/hTWcY2kyel/p5x8YHXpEqHvFIGmUjY2ssz9HCZTWUSgbcgciaK5PWbbSEmHXEi2xFri3oYuhXs39Gw1SlJ+xVcAjKLbHb6P2kOcddD4C3BocaKz1SLAOI5vdDfnyIBCVF848hlNqX54/KvK40hAEaUfvZS/qj78MwqX8G2Yjsm5hc6rGlhSeUoKsEJveDmPneOcZMxdOjrqfBUez/IF+RbwLm6zYA8fcLbde2UT8BWxjE0xyF+VdgDXFOypYzvHxRJIsvlnpsW4CcAiPc3qNZTknFt8d50vUHPPSJvJFx4MSllgH5hfb/b+hzJ8mjv80qmEMWUw4u58VUmyAf1ThpmSUXYqgXrKlw2/f8YskfIBCeqHbMH+pUo8szjjcz0XphPkg0YkKhuramZ2VfK5Kio12NSxWVs1fKj3j1KxjkVAl/bgcgI8gtnAIRA4HuP8FIdU5/kxlHWtDmfWmZLS9SqhmouUiQ+fx1xDVaVo0bXAMlL1kBcwqC1VD+Kpz857kr/9cxOdVeg8M5bKgLtYXlZQgiMz/9aJOL78Uj1pnTI28vTYcOkmQLGFGZ1eG4Y3eEtlz22iq4acijs5HjzZQiJyyqCIOkI3QbfUn5xcXHSQviaLwrGl4BNZq1BDWo5dDv7PRxmuMnh9fOqD0IhA8hvpO61Hje8=
+  template:
+    metadata:
+      name: sentropic-postgres
+      namespace: sentropic
+    type: Opaque

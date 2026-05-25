@@ -19,12 +19,14 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
       - DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
       - DISABLE_AUTH=${DISABLE_AUTH:-0}
-      - MAIL_HOST=${MAIL_HOST:-maildev}
-      - MAIL_PORT=${MAIL_PORT:-1025}
-      - MAIL_SECURE=${MAIL_SECURE:-false}
-      - MAIL_USERNAME=${MAIL_USERNAME}
-      - MAIL_PASSWORD=${MAIL_PASSWORD}
-      - MAIL_FROM=${MAIL_FROM:-no-reply@top-ai-ideas.local}
+      # Outbound email via the Scaleway TEM HTTP API. In dev the api targets the
+      # local scw-tem-mock service, which forwards to maildev over SMTP.
+      - SCW_TEM_API_BASE_URL=${SCW_TEM_API_BASE_URL:-http://scw-tem-mock:7700}
+      - SCW_TEM_REGION=${SCW_TEM_REGION:-fr-par}
+      - SCW_TEM_PROJECT_ID=${SCW_TEM_PROJECT_ID:-dev-mock-project}
+      - SCW_TEM_SECRET_KEY=${SCW_TEM_SECRET_KEY:-dev-mock-token}
+      - SCW_TEM_FROM_EMAIL=${SCW_TEM_FROM_EMAIL:-no-reply@sent-tech.ca}
+      - SCW_TEM_FROM_NAME=${SCW_TEM_FROM_NAME:-Sentropic}
       - AUTH_CALLBACK_BASE_URL=${AUTH_CALLBACK_BASE_URL}
       - GOOGLE_DRIVE_CLIENT_ID=${GOOGLE_DRIVE_CLIENT_ID}
       - GOOGLE_DRIVE_CLIENT_SECRET=${GOOGLE_DRIVE_CLIENT_SECRET}
@@ -40,6 +42,8 @@ services:
       postgres:
         condition: service_healthy
       maildev:
+        condition: service_started
+      scw-tem-mock:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8787/api/v1/health >/dev/null 2>&1 || exit 1"]
@@ -92,6 +96,17 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # Dev-only mock of the Scaleway TEM HTTP API; forwards each accepted payload
+  # to maildev over SMTP so outgoing mail stays visible in the maildev UI.
+  scw-tem-mock:
+    build: ./tools/scw-tem-mock
+    environment:
+      - MAILDEV_HOST=maildev
+      - MAILDEV_SMTP_PORT=1025
+    depends_on:
+      maildev:
+        condition: service_started
 
 volumes:
   pg_data:
