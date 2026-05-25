@@ -61,6 +61,15 @@ hover-driven emphasis (hovering a point or a domain enlarges the points of that 
   DB constraint (consistent with BR40a-Q3). Rollback: revert `.max(50)`→`.max(25)` and `max="50"`/
   clamp `50`→`25`. No other behavior touched.
 
+## UAT Feedback
+- **BR40a-UAT1** `fixed`: the "hide bubbles" toggle hid the data POINTS instead of the top-N TEXT
+  label callouts. Fixed in `InitiativeScatterPlot.svelte`: points always render (subject to legend
+  filter + hover emphasis); the toggle now suppresses only the label callouts (clean point cloud for
+  hover-simple). DOCX snapshot forces labels on so the export keeps the top-N labels.
+- **BR40a-UAT2** `attention` (separate brainstorm, conductor-owned): business `domain` is free-text
+  from generation → ~45 distinct values, legend unusable. Needs a normalized business-domain taxonomy
+  at generation time. Proposal handled outside this branch.
+
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted`;
   at least one success on the same commit + command; never add timeouts; record signature + user sign-off.
