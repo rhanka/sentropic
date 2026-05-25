@@ -20,6 +20,10 @@
       "types": "./dist/contracts.d.ts",
       "import": "./dist/contracts.js"
     },
+    "./credential-route-handlers": {
+      "types": "./dist/credential-route-handlers.d.ts",
+      "import": "./dist/credential-route-handlers.js"
+    },
     "./email-verification": {
       "types": "./dist/email-verification.d.ts",
       "import": "./dist/email-verification.js"
