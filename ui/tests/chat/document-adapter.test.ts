@@ -109,6 +109,53 @@ describe('chat document adapter', () => {
     ]);
   });
 
+  it('extracts generated cards from completed image_generate tool events', () => {
+    expect(
+      extractGeneratedFileCardsFromEvents([
+        {
+          eventType: 'tool_call_start',
+          data: { tool_call_id: 'img_1', name: 'image_generate' },
+        },
+        {
+          eventType: 'tool_call_result',
+          data: {
+            tool_call_id: 'img_1',
+            result: {
+              status: 'completed',
+              media: [
+                {
+                  documentId: 'doc_1',
+                  fileName: 'generated-image-1.png',
+                  mimeType: 'image/png',
+                  width: 1024,
+                  height: 1024,
+                  providerId: 'openai',
+                  modelId: 'gpt-image-2',
+                  prompt: 'A concise mockup',
+                  downloadUrl: '/documents/doc_1/content',
+                },
+              ],
+            },
+          },
+        },
+      ]),
+    ).toEqual([
+      {
+        jobId: 'doc_1',
+        fileName: 'generated-image-1.png',
+        format: undefined,
+        mimeType: 'image/png',
+        downloadUrl: '/documents/doc_1/content',
+        kind: 'image',
+        documentId: 'doc_1',
+        previewUrl: '/documents/doc_1/content',
+        providerId: 'openai',
+        modelId: 'gpt-image-2',
+        prompt: 'A concise mockup',
+      },
+    ]);
+  });
+
   it('maps document UI labels without coupling the adapter to i18n', () => {
     expect(getGeneratedFileFormatLabel('pptx')).toBe('PPTX');
     expect(getGeneratedFileFormatLabel(undefined)).toBe('FILE');

@@ -35,4 +35,23 @@ describe('StreamMessage package boundary', () => {
     expect(source).toContain('labels(');
     expect(source).not.toContain('$_(');
   });
+
+  it('keeps document_generate completed tool results as generated file callbacks', () => {
+    const source = readComponent();
+    expect(source).toContain('toolName === \'document_generate\'');
+    expect(source).toContain('status === \'completed\'');
+    expect(source).toContain('onGeneratedFile?.(');
+    expect(source).toContain('format:');
+    expect(source).toContain('downloadUrl:');
+  });
+
+  it('also emits generated file cards for completed image_generate tool results', () => {
+    const source = readComponent();
+    expect(source).toContain('toolName === \'image_generate\'');
+    expect(source).toContain('media');
+    expect(source).toContain('kind: \'image\'');
+    expect(source).toContain('providerId');
+    expect(source).toContain('modelId');
+    expect(source).toContain('previewUrl');
+  });
 });

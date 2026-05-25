@@ -195,10 +195,10 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - [ ] Surface generation errors and refusals as recoverable chat tool results.
   - [ ] Keep `@sentropic/chat-ui` generic and app-specific document/download URLs in the host adapter.
   - [ ] Lot gate:
-    - [ ] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-image-generation-tool`
+    - [x] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-image-generation-tool`
     - [ ] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-image-generation-tool`
     - [ ] `make test-ui SCOPE=tests/components/ChatPanel-docx-cards.test.ts ENV=test-feat-image-generation-tool`
-    - [ ] `make test-ui SCOPE=tests/chat/document-adapter.test.ts ENV=test-feat-image-generation-tool`
+    - [x] `make test-ui SCOPE=tests/chat/document-adapter.test.ts ENV=test-feat-image-generation-tool`
     - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-image-generation-tool`
 
 - [ ] **Lot 4 - Generated media document integration**

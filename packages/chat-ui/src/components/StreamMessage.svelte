@@ -505,6 +505,55 @@
             typeof data?.result?.downloadUrl === 'string' ? data.result.downloadUrl : undefined,
         });
       }
+      // Notify parent of image_generate completed results with image cards.
+      if (
+        toolName === 'image_generate' &&
+        data?.result?.status === 'completed'
+      ) {
+        const media = Array.isArray(data?.result?.media)
+          ? data.result.media
+          : [];
+        for (const rawItem of media) {
+          if (!rawItem || typeof rawItem !== 'object') continue;
+          const item = rawItem as Record<string, unknown>;
+          const documentId = item?.documentId;
+          const fileName = item?.fileName;
+          if (typeof documentId !== 'string' || !documentId.trim() || typeof fileName !== 'string' || !fileName.trim()) {
+            continue;
+          }
+          const previewUrl =
+            typeof item.downloadUrl === 'string' && item.downloadUrl.trim().length > 0
+              ? item.downloadUrl.trim()
+              : undefined;
+          onGeneratedFile?.({
+            kind: 'image',
+            jobId: documentId.trim(),
+            documentId: documentId.trim(),
+            fileName: fileName.trim(),
+            mimeType:
+              typeof item.mimeType === 'string' && item.mimeType.trim().length > 0
+                ? item.mimeType.trim()
+                : undefined,
+            downloadUrl:
+              typeof item.downloadUrl === 'string' && item.downloadUrl.trim().length > 0
+                ? item.downloadUrl.trim()
+                : undefined,
+            previewUrl,
+            providerId:
+              typeof item.providerId === 'string' && item.providerId.trim().length > 0
+                ? item.providerId.trim()
+                : undefined,
+            modelId:
+              typeof item.modelId === 'string' && item.modelId.trim().length > 0
+                ? item.modelId.trim()
+                : undefined,
+            prompt:
+              typeof item.prompt === 'string' && item.prompt.trim().length > 0
+                ? item.prompt.trim()
+                : undefined,
+          });
+        }
+      }
     } else if (eventType === 'content_delta') {
       st.sawStarted = false;
       st.stepKind = 'content';

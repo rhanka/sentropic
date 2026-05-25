@@ -4,6 +4,12 @@ export type ChatGeneratedFileCard = {
   format?: string;
   mimeType?: string;
   downloadUrl?: string;
+  kind?: 'file' | 'image';
+  documentId?: string;
+  previewUrl?: string;
+  providerId?: string;
+  modelId?: string;
+  prompt?: string;
 };
 
 export type ChatRuntimeSummaryWithGeneratedFiles = {
@@ -57,9 +63,13 @@ export const normalizeGeneratedFileCard = (
   jobId: card.jobId,
   fileName: card.fileName,
   format:
-    typeof card.format === 'string' && card.format.trim().length > 0
-      ? card.format.trim().toLowerCase()
-      : 'docx',
+    card.kind === 'image'
+      ? typeof card.format === 'string' && card.format.trim().length > 0
+        ? card.format.trim().toLowerCase()
+        : undefined
+      : typeof card.format === 'string' && card.format.trim().length > 0
+        ? card.format.trim().toLowerCase()
+        : 'docx',
   mimeType:
     typeof card.mimeType === 'string' && card.mimeType.trim().length > 0
       ? card.mimeType.trim()
@@ -67,6 +77,27 @@ export const normalizeGeneratedFileCard = (
   downloadUrl:
     typeof card.downloadUrl === 'string' && card.downloadUrl.trim().length > 0
       ? card.downloadUrl.trim()
+      : undefined,
+  kind: card.kind === 'image' ? 'image' : undefined,
+  documentId:
+    typeof card.documentId === 'string' && card.documentId.trim().length > 0
+      ? card.documentId.trim()
+      : undefined,
+  previewUrl:
+    typeof card.previewUrl === 'string' && card.previewUrl.trim().length > 0
+      ? card.previewUrl.trim()
+      : undefined,
+  providerId:
+    typeof card.providerId === 'string' && card.providerId.trim().length > 0
+      ? card.providerId.trim()
+      : undefined,
+  modelId:
+    typeof card.modelId === 'string' && card.modelId.trim().length > 0
+      ? card.modelId.trim()
+      : undefined,
+  prompt:
+    typeof card.prompt === 'string' && card.prompt.trim().length > 0
+      ? card.prompt.trim()
       : undefined,
 });
 
@@ -85,6 +116,9 @@ export const extractGeneratedFileCardsFromRuntimeSummary = (
 export const extractGeneratedFileCardsFromEvents = (
   events: readonly { eventType: string; data: any }[],
 ): ChatGeneratedFileCard[] => {
+  const trim = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+
   const toolNames: Record<string, string> = {};
   const cards: ChatGeneratedFileCard[] = [];
 
@@ -99,25 +133,54 @@ export const extractGeneratedFileCardsFromEvents = (
 
     if (event.eventType !== 'tool_call_result') continue;
     const toolId = String(event.data?.tool_call_id ?? '');
-    if (toolNames[toolId] !== 'document_generate') continue;
     const result = event.data?.result;
-    if (
-      result?.status !== 'completed' ||
-      typeof result.jobId !== 'string' ||
-      typeof result.fileName !== 'string'
-    ) {
+    const toolName = toolNames[toolId];
+    if (toolName === 'document_generate') {
+      if (
+        result?.status !== 'completed' ||
+        !trim(result.jobId) ||
+        !trim(result.fileName)
+      ) {
+        continue;
+      }
+      cards.push(
+        normalizeGeneratedFileCard({
+          jobId: result.jobId,
+          fileName: result.fileName,
+          format: trim(result.format) ?? 'docx',
+          mimeType: trim(result.mimeType),
+          downloadUrl: trim(result.downloadUrl),
+        }),
+      );
       continue;
     }
-    cards.push(
-      normalizeGeneratedFileCard({
-        jobId: result.jobId,
-        fileName: result.fileName,
-        format: typeof result.format === 'string' ? result.format : 'docx',
-        mimeType: typeof result.mimeType === 'string' ? result.mimeType : undefined,
-        downloadUrl:
-          typeof result.downloadUrl === 'string' ? result.downloadUrl : undefined,
-      }),
-    );
+    if (toolName === 'image_generate') {
+      if (result?.status !== 'completed') continue;
+      const media = Array.isArray(result.media) ? result.media : [];
+      for (const rawItem of media) {
+        if (!rawItem || typeof rawItem !== 'object') continue;
+        const item = rawItem as Record<string, unknown>;
+        const documentId = trim(item.documentId);
+        const fileName = trim(item.fileName);
+        const downloadUrl = trim(item.downloadUrl);
+        if (!documentId || !fileName) continue;
+        cards.push(
+          normalizeGeneratedFileCard({
+            kind: 'image',
+            jobId: documentId,
+            documentId,
+            fileName,
+            format: trim(item.format),
+            mimeType: trim(item.mimeType),
+            downloadUrl,
+            previewUrl: downloadUrl,
+            providerId: trim(item.providerId),
+            modelId: trim(item.modelId),
+            prompt: trim(item.prompt),
+          }),
+        );
+      }
+    }
   }
 
   return cards;

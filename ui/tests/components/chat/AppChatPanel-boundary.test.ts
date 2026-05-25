@@ -25,4 +25,13 @@ describe('AppChatPanel boundary', () => {
     expect(source).not.toContain("import { apiFetch");
     expect(source).not.toContain('const sendMessage = async');
   });
+
+  it('allows inline generated image card rendering by AppChatPanel boundary logic', () => {
+    const source = readFileSync(appPanelPath, 'utf8');
+    expect(source).toContain("card.kind === 'image'");
+    expect(source).toContain('card.previewUrl');
+    expect(source).toContain('card.providerId');
+    expect(source).toContain('card.modelId');
+    expect(source).toContain('downloadGeneratedFile(card)');
+  });
 });

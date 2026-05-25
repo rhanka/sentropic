@@ -14,6 +14,7 @@ export type StreamHubEvent =
 export type StreamHubEventHandler = (event: StreamHubEvent) => void;
 
 export type GeneratedFileFormat = 'docx' | 'pptx';
+export type GeneratedFileKind = 'file' | 'image';
 
 export type GeneratedFileCard = {
   jobId: string;
@@ -21,6 +22,12 @@ export type GeneratedFileCard = {
   format?: GeneratedFileFormat | string;
   mimeType?: string;
   downloadUrl?: string;
+  kind?: GeneratedFileKind;
+  documentId?: string;
+  previewUrl?: string;
+  providerId?: string;
+  modelId?: string;
+  prompt?: string;
 };
 
 export type StreamHubSubscription = {

@@ -254,6 +254,14 @@
     generatedFileCards?: GeneratedFileCard[];
     docxCards?: Array<{ jobId: string; fileName: string }>;
   };
+  type AppGeneratedFileCard = GeneratedFileCard & {
+    kind?: 'file' | 'image';
+    documentId?: string;
+    previewUrl?: string;
+    providerId?: string;
+    modelId?: string;
+    prompt?: string;
+  };
   type ProjectedTimelineItem = ChatProjectedTimelineItem<
     LocalMessage,
     RuntimeSegmentSummary
@@ -658,7 +666,7 @@
   let historyHydrationSwapPending = false;
   let historyHydrationStickBottom = false;
   let optimisticSteerMessages: LocalMessage[] = [];
-  let generatedFileCardsByMessageId = new Map<string, GeneratedFileCard[]>();
+  let generatedFileCardsByMessageId = new Map<string, AppGeneratedFileCard[]>();
   let previousAiWorkspaceId: string | null | undefined = undefined;
   let workspaceSessionRescopeInFlight = false;
 
@@ -3099,11 +3107,26 @@
     }
   };
 
-  const handleGeneratedFileCard = (messageId: string, card: GeneratedFileCard) => {
+  const normalizeAppGeneratedFileCard = (card: AppGeneratedFileCard): AppGeneratedFileCard => {
+    const normalized = normalizeGeneratedFileCard(card) as AppGeneratedFileCard;
+    const trim = (value: string | undefined | null) =>
+      typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+    return {
+      ...normalized,
+      kind: card.kind === 'image' ? 'image' : undefined,
+      documentId: trim(card.documentId),
+      previewUrl: trim(card.previewUrl) ?? normalized.downloadUrl,
+      providerId: trim(card.providerId),
+      modelId: trim(card.modelId),
+      prompt: trim(card.prompt),
+    };
+  };
+
+  const handleGeneratedFileCard = (messageId: string, card: AppGeneratedFileCard) => {
     const existing = generatedFileCardsByMessageId.get(messageId) ?? [];
     if (existing.some(c => c.jobId === card.jobId)) return;
     generatedFileCardsByMessageId = new Map(generatedFileCardsByMessageId);
-    generatedFileCardsByMessageId.set(messageId, [...existing, normalizeGeneratedFileCard(card)]);
+    generatedFileCardsByMessageId.set(messageId, [...existing, normalizeAppGeneratedFileCard(card)]);
   };
 
   const extractGeneratedFileCardsFromRuntimeSummary = (
@@ -4834,21 +4857,68 @@
                   {#if item.isTerminal && item.isLastAssistantSegment}
                     {@const generatedFileCards = generatedFileCardsByMessageId.get(m.id) ?? []}
                     {#each generatedFileCards as card (card.jobId)}
-                      <div class="rounded border border-slate-200 bg-white px-2 py-1.5 flex items-center gap-2 max-w-[14rem] mt-1">
-                        <FileText class="w-4 h-4 text-primary shrink-0" />
-                        <div class="min-w-0 flex-1">
-                          <div class="text-xs font-medium text-slate-900 truncate">{card.fileName}</div>
-                          <div class="text-[10px] text-slate-500">{getGeneratedFileFormatLabel(card.format)}</div>
+                      {#if card.kind === 'image'}
+                        <div class="rounded border border-slate-200 bg-white mt-1 w-full max-w-[28rem]">
+                          <div class="flex gap-2 p-2">
+                            <div class="shrink-0 h-24 w-32 rounded border border-slate-200 bg-slate-100 overflow-hidden">
+                              {#if card.previewUrl || card.downloadUrl}
+                                <img
+                                  src={card.previewUrl ?? card.downloadUrl}
+                                  alt={card.fileName}
+                                  class="h-full w-full object-cover"
+                                  loading="lazy"
+                                />
+                              {:else}
+                                <div class="h-full w-full flex items-center justify-center text-[10px] text-slate-500 p-1 text-center">
+                                  No preview
+                                </div>
+                              {/if}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                              <div class="text-xs font-medium text-slate-900 truncate" title={card.fileName}>
+                                {card.fileName}
+                              </div>
+                              {#if card.prompt}
+                                <div class="mt-1 text-[10px] text-slate-500 truncate" title={card.prompt}>
+                                  Prompt: {card.prompt}
+                                </div>
+                              {/if}
+                              <div class="mt-1 flex flex-wrap gap-x-2 text-[10px] text-slate-500">
+                                {#if card.providerId}
+                                  <span>Provider: {card.providerId}</span>
+                                {/if}
+                                {#if card.modelId}
+                                  <span>Model: {card.modelId}</span>
+                                {/if}
+                              </div>
+                            </div>
+                            <button
+                              class="ml-auto text-primary hover:bg-slate-100 rounded p-1 shrink-0 self-start"
+                              type="button"
+                              aria-label={$_('common.download')}
+                              on:click={() => downloadGeneratedFile(card)}
+                            >
+                              <Download class="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <button
-                          class="ml-auto text-primary hover:bg-slate-100 rounded p-1"
-                          type="button"
-                          aria-label={$_('common.download')}
-                          on:click={() => downloadGeneratedFile(card)}
-                        >
-                          <Download class="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {:else}
+                        <div class="rounded border border-slate-200 bg-white px-2 py-1.5 flex items-center gap-2 max-w-[14rem] mt-1">
+                          <FileText class="w-4 h-4 text-primary shrink-0" />
+                          <div class="min-w-0 flex-1">
+                            <div class="text-xs font-medium text-slate-900 truncate">{card.fileName}</div>
+                            <div class="text-[10px] text-slate-500">{getGeneratedFileFormatLabel(card.format)}</div>
+                          </div>
+                          <button
+                            class="ml-auto text-primary hover:bg-slate-100 rounded p-1"
+                            type="button"
+                            aria-label={$_('common.download')}
+                            on:click={() => downloadGeneratedFile(card)}
+                          >
+                            <Download class="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      {/if}
                     {/each}
                   {/if}
                   {#if item.isTerminal && item.isLastAssistantSegment}
