@@ -863,8 +863,7 @@ export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = 
     description:
       'Generate a document from the current context (initiative, folder/dashboard, etc.). ' +
       'Formats: "docx" (default) or "pptx". ' +
-      'Before generating your first document in a conversation, call this tool with `action: "upskill"` (optionally with format) to learn best practices. ' +
-      'Then call with `action: "generate"`. ' +
+      'The DOCX/PPTX sandbox helper API is documented in the `document_generate` skill\'s SKILL.md (discoverable via `search_skills`). ' +
       'DOCX supports two sub-modes — (1) Template mode with templateId, (2) Freeform mode with code (mutually exclusive). ' +
       'PPTX supports freeform code only.',
     parameters: {
@@ -872,9 +871,9 @@ export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = 
       properties: {
         action: {
           type: 'string',
-          enum: ['upskill', 'generate'],
+          enum: ['generate'],
           description:
-            'Action to perform. Call "upskill" first to learn DOCX creation best practices, then "generate" with your code.',
+            'Action to perform. Only "generate" is supported. The helper API surface is discoverable via search_skills + SKILL.md.',
         },
         format: {
           type: 'string',
@@ -887,25 +886,25 @@ export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = 
           description:
             'Document template identifier. Examples: "usecase-onepage" for initiative one-pager, ' +
             '"executive-synthesis-multipage" for folder executive summary report. ' +
-            'Mutually exclusive with code. Only for action "generate" and format "docx".',
+            'Mutually exclusive with code. Only for action "generate" and format "docx". Template mode requires an initiative or folder target.',
         },
         entityType: {
           type: 'string',
-          enum: ['initiative', 'folder'],
+          enum: ['organization', 'initiative', 'folder'],
           description:
-            'Type of entity to generate the document for. Only for action "generate". Optional when the current chat context already focuses an initiative or folder.',
+            'Optional freeform target type. Omit in freeform mode when the current chat context already focuses an organization, initiative, or folder. Template mode only supports "initiative" or "folder".',
         },
         entityId: {
           type: 'string',
           description:
-            'ID of the entity (initiative ID or folder ID). Only for action "generate". Optional when the current chat context already focuses the target initiative/folder.',
+            'Optional freeform target ID. Omit in freeform mode when the current chat context already focuses the target. Template mode requires the ID of a template-compatible initiative or folder unless the current context already provides it.',
         },
         code: {
           type: 'string',
           description:
             'Freeform JavaScript code. For format "docx": use docx helpers (doc, h, p, bold, italic, list, table, pageBreak, hr) ' +
             'and return a Document object. For format "pptx": prefer pptx() plus the provided PptGenJS helpers and return a presentation object. ' +
-            'Available data: context.entity, context.initiatives, context.matrix, context.workspace. ' +
+            'Available data: context.entity, context.folders, context.initiatives, context.matrix, context.workspace. ' +
             'Mutually exclusive with templateId. Only for action "generate".',
         },
         title: {
