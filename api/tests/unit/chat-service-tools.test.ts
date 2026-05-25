@@ -272,27 +272,51 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     });
   });
 
-  it('should normalize image_generate provider refusals without storing media', async () => {
+  it.each([
+    {
+      expectedCode: 'unsupported_provider',
+      error: new Error('Image generation is unsupported for provider anthropic'),
+    },
+    {
+      expectedCode: 'planned_provider_runtime',
+      error: new Error('Image generation requires the Mistral Agents/Conversations adapter'),
+    },
+    {
+      expectedCode: 'missing_credentials',
+      error: new Error('Provider auth source is not configured'),
+    },
+    {
+      expectedCode: 'provider_refusal',
+      error: Object.assign(new Error('Prompt refused by image provider safety policy'), {
+        code: 'provider_refusal',
+      }),
+    },
+    {
+      expectedCode: 'quota_or_rate_limit',
+      error: Object.assign(new Error('Too many requests'), { status: 429 }),
+    },
+    {
+      expectedCode: 'provider_failure',
+      error: new Error('Image generation returned no images'),
+    },
+  ])('should normalize image_generate $expectedCode errors without storing media', async ({ expectedCode, error }) => {
     const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const generateImageMock = generateImage as unknown as ReturnType<typeof vi.fn>;
+    const toolCallId = `call_img_${expectedCode}`;
     await db
       .update(workspaces)
       .set({ type: 'ai-ideas', updatedAt: new Date() })
       .where(eq(workspaces.id, workspaceId));
-    generateImageMock.mockRejectedValue(
-      Object.assign(new Error('Prompt refused by image provider safety policy'), {
-        code: 'provider_refusal',
-      }),
-    );
+    generateImageMock.mockRejectedValue(error);
     mock
       .mockImplementationOnce(() =>
         stream([
           {
             type: 'tool_call_start',
             data: {
-              tool_call_id: 'call_img_refusal',
+              tool_call_id: toolCallId,
               name: 'image_generate',
-              args: JSON.stringify({ prompt: 'Unsafe image prompt' }),
+              args: JSON.stringify({ prompt: 'Image prompt' }),
             },
           },
           { type: 'done', data: {} },
@@ -309,7 +333,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
       await chatService.createUserMessageWithAssistantPlaceholder({
         userId,
         workspaceId,
-        content: 'Generate an unsafe image',
+        content: 'Generate an image',
         primaryContextType: 'folder',
         primaryContextId: folderId,
         model: 'gpt-4.1-nano',
@@ -334,12 +358,12 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     const resultEvent = events.find(
       (event) =>
         event.eventType === 'tool_call_result' &&
-        (event.data as any)?.tool_call_id === 'call_img_refusal',
+        (event.data as any)?.tool_call_id === toolCallId,
     );
     expect((resultEvent as any).data?.result).toEqual({
       status: 'error',
-      code: 'provider_refusal',
-      error: 'Prompt refused by image provider safety policy',
+      code: expectedCode,
+      error: error.message,
     });
   });
 

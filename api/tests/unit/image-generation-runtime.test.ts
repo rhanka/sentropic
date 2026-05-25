@@ -105,7 +105,11 @@ describe('image generation runtime', () => {
     });
 
     expect(openaiImagesGenerate).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'gpt-image-2', prompt: 'Logo' }),
+      expect.objectContaining({
+        model: 'gpt-image-2',
+        prompt: 'Logo',
+        response_format: 'b64_json',
+      }),
       expect.anything(),
     );
     expect(result.images[0]).toEqual(

@@ -397,6 +397,15 @@ describe('Documents API', () => {
         key: expect.stringContaining(`${docId}-generated-image.png`),
       }),
     );
+
+    const denied = await app.request(
+      `/api/v1/documents/${docId}/content?workspace_id=${encodeURIComponent(user.workspaceId!)}`,
+      {
+        method: 'GET',
+        headers: { Cookie: `session=${viewer.sessionToken}` },
+      },
+    );
+    expect(denied.status).toBe(404);
   });
 
   it('POST /documents/:id/resync requeues local documents without changing storage source', async () => {

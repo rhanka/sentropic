@@ -568,11 +568,13 @@ const buildOpenAIImageRequestOptions = (input: {
     'size',
     'quality',
     'background',
+    'response_format',
   ]);
   const requestOptions: Record<string, unknown> = {
     ...extensionOptions,
     model: input.model,
     prompt: input.prompt,
+    response_format: 'b64_json',
     ...(input.count ? { n: input.count } : {}),
     ...(isOpenAIImageSize(size) ? { size } : {}),
     ...(isOpenAIImageQuality(input.quality) ? { quality: input.quality } : {}),
