@@ -3,7 +3,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
 
 import type { AuthHonoEmailVerificationService } from './email-verification.js';
-import type { AuthHonoMagicLinkService } from './magic-link.js';
+import type { AuthHonoMagicLinkService, AuthHonoRequestMagicLinkResult } from './magic-link.js';
 import type { AuthHonoRouteHandlers } from './router.js';
 
 export interface CreateAuthEmailRouteHandlersOptions {
@@ -11,7 +11,15 @@ export interface CreateAuthEmailRouteHandlersOptions {
 }
 
 export interface CreateAuthMagicLinkRouteHandlersOptions {
+  formatRequestMagicLinkSuccess?: (
+    result: Extract<AuthHonoRequestMagicLinkResult, { success: true }>
+  ) => AuthHonoMagicLinkRequestSuccessResponse;
   service: AuthHonoMagicLinkService;
+}
+
+export interface AuthHonoMagicLinkRequestSuccessResponse {
+  success: true;
+  [key: string]: unknown;
 }
 
 interface AuthHonoHttpServiceError {
@@ -96,11 +104,7 @@ export const createAuthMagicLinkRouteHandlers = (
       return serviceError(c, result.error);
     }
 
-    return c.json({
-      delivery: 'magic_link',
-      expiresAt: result.expiresAt.toISOString(),
-      success: true,
-    });
+    return c.json(formatRequestMagicLinkSuccess(options, result));
   },
 
   async verifyMagicLink(c) {
@@ -127,6 +131,18 @@ export const createAuthMagicLinkRouteHandlers = (
     });
   },
 });
+
+const formatRequestMagicLinkSuccess = (
+  options: CreateAuthMagicLinkRouteHandlersOptions,
+  result: Extract<AuthHonoRequestMagicLinkResult, { success: true }>
+): AuthHonoMagicLinkRequestSuccessResponse =>
+  options.formatRequestMagicLinkSuccess
+    ? options.formatRequestMagicLinkSuccess(result)
+    : {
+        delivery: 'magic_link',
+        expiresAt: result.expiresAt.toISOString(),
+        success: true,
+      };
 
 const parseJson = async <T extends z.ZodTypeAny>(
   c: Context,
