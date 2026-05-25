@@ -13,6 +13,13 @@ data:
   CHAT_TRACE_ENABLED: "true"
   CHAT_TRACE_RETENTION_DAYS: "7"
   DISABLE_AUTH: "0"
+  # Outbound email via Scaleway TEM HTTP API (BR-37b; SMTP egress blocked at platform level).
+  # SCW_TEM_SECRET_KEY is provided by the sentropic-api SealedSecret; these are non-secret config.
+  SCW_TEM_API_BASE_URL: "https://api.scaleway.com"
+  SCW_TEM_REGION: "fr-par"
+  SCW_TEM_PROJECT_ID: "09ac728a-e3b9-4a5b-9749-664b0f147c70"
+  SCW_TEM_FROM_EMAIL: "no-reply@sent-tech.ca"
+  SCW_TEM_FROM_NAME: "Sentropic"
 ---
 apiVersion: v1
 kind: Service
