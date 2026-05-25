@@ -69,6 +69,7 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
 
 ## Feedback Loop
 - [x] `attention`: Reproduced failure signature recorded. Backend root cause was repeated identical tool errors being fed back into the assistant loop until the outer max-iteration fallback; returned `{ status: "error" }` tool envelopes were especially important because they did not throw. Frontend root cause was unbounded live projection churn for repeated status/tool events during the same assistant turn. The focused API regression initially observed 11 LLM calls before the loop guard/sync fix reduced this to three tool-enabled attempts plus the existing pass-2 fallback.
+- [x] `review`: Added explicit regression coverage for thrown tool exceptions whose request/trace IDs vary between attempts; signature normalization still trips the same repeated-error breaker.
 
 ## AI Flaky tests
 - [ ] No AI flaky accepted yet.
