@@ -188,6 +188,13 @@ Concern crosses three layers:
 
 The model never sees `renderHint`; it is metadata for the consumer.
 
+BR-38b concrete image-generation boundary:
+
+- `@sentropic/llm-mesh` owns provider/model image-generation capability metadata and the `generateImage()` provider call contract.
+- Chat orchestration owns the server tool `image_generate`, tool-result normalization, and generated-media document storage.
+- `@sentropic/chat-ui` owns generic generated-image card projection/rendering from document-backed metadata.
+- The Sentropic web app host adapter owns authenticated document preview/download URL construction and workspace access scope. Package renderers must rebuild URLs from encoded `documentId` values through host-provided callbacks and must not trust external URLs from stream payloads.
+
 ### 10.3 Canvas bidirectional editing (live diff round-trip)
 
 Pattern requires a `LiveDocument` abstraction beyond messages:

@@ -124,6 +124,7 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
 - Task 3 implementation 2026-05-25: `image_generate` is exposed for `ai-ideas` and `opportunity` workspaces only, dispatches through the API image runtime, stores generated image bytes as ready local chat-session `context_documents`, and returns document-backed media references.
 - Task 3 code review follow-up 2026-05-25: OpenAI image runtime requests now force `response_format: "b64_json"` for the chat storage path, chat-tool tests cover every deterministic image error code, and generated chat image documents have same-session download denial coverage.
 - Task 4 code review follow-up 2026-05-25: generated image cards now ignore untrusted stream URLs, rebuild document-backed download/preview targets from encoded `documentId` values, and use localized metadata copy.
+- Lot N-1 docs consolidation 2026-05-25: temporary branch image-generation spec was integrated into the permanent LLM mesh, chatbot, chat-ui SDK scope, and architecture-boundary specs, then deleted.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -230,12 +231,12 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
     - [ ] Existing uploaded/Drive document context flows still work.
     - [ ] Existing chat tool cards do not regress visually.
 
-- [ ] **Lot N-1 - Docs consolidation**
-  - [ ] Update `SPEC_EVOL_LLM_MESH.md` with the image generation mesh contract.
-  - [ ] Update `SPEC_CHATBOT.md` with the `image_generate` tool contract and generated media lifecycle.
-  - [ ] Update `SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` with generated-image renderer boundaries.
-  - [ ] Update `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` only if the package boundaries changed.
-  - [ ] Delete `spec/BRANCH_SPEC_EVOL_IMAGE_GENERATION.md` after integration if it was created.
+- [x] **Lot N-1 - Docs consolidation**
+  - [x] Update `SPEC_EVOL_LLM_MESH.md` with the image generation mesh contract.
+  - [x] Update `SPEC_CHATBOT.md` with the `image_generate` tool contract and generated media lifecycle.
+  - [x] Update `SPEC_STUDY_CHAT_UI_SDK_SCOPE.md` with generated-image renderer boundaries.
+  - [x] Update `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` only if the package boundaries changed.
+  - [x] Delete `spec/BRANCH_SPEC_EVOL_IMAGE_GENERATION.md` after integration if it was created.
 
 - [ ] **Lot N - Final validation**
   - [ ] Typecheck and lint:

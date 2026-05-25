@@ -58,6 +58,55 @@ BR-14c intentionally does not:
 - Modularize the full chat-service reasoning/tool loop. BR-14b owns chat-service core modularization above the mesh runtime.
 - Update GPT-5.4 / Claude Opus 4.6 catalog versions; BR-14g owns the GPT-5.5 / Opus 4.7 pivot.
 
+## BR-38b Image Generation Extension
+
+BR-38b extends `@sentropic/llm-mesh` with first-class image generation while preserving the text `generate()` and `stream()` contracts. Image generation is a separate facade operation:
+
+```ts
+const mesh = createLlmMesh({ registry, authResolver, hooks });
+
+await mesh.generateImage({
+  model: 'openai:gpt-image-2',
+  prompt: 'A product mockup on a clean desk',
+  count: 1,
+  size: '1024x1024',
+});
+```
+
+Public contract additions:
+
+- `LlmMesh.generateImage(request: ImageGenerationRequest): Promise<ImageGenerationResponse>`.
+- `ImageGenerationRequest` carries `model`, `providerId`, `modelId`, `prompt`, optional `aspectRatio`, `size`, `quality`, `background`, `count`, `referenceImages`, `providerOptions`, auth, signal, and request metadata.
+- `ImageGenerationResponse` carries `id`, `providerId`, `modelId`, `images[]`, optional `status`, `refusalReason`, text, and provider metadata.
+- Each generated image carries `mimeType`, optional base64 `data`, optional provider `url`, optional `width`/`height`, and provider metadata.
+- `ModalityCapabilities.output` includes `image`, but real support is governed by per-model `capabilities.imageGeneration`.
+- `ImageGenerationCapabilities` exposes `status: supported | unsupported | planned` and `kind: native-image-model | gemini-generate-content | provider-agent-tool | none`.
+
+Provider matrix:
+
+| Provider | Status | Default image model/runtime | Notes |
+| --- | --- | --- | --- |
+| OpenAI | supported | `gpt-image-2` | Direct native image model path. Older `gpt-image-1.5`, `gpt-image-1`, and `gpt-image-1-mini` remain explicit fallback profiles. |
+| Gemini | supported | `gemini-3.1-flash-image-preview` | Gemini Generate Content with `responseModalities: ['IMAGE']`; `gemini-2.5-flash-image` and `gemini-3-pro-image-preview` remain explicit fallback/pro profiles. |
+| Anthropic | unsupported | none | Claude image input/analysis does not imply a native Anthropic image output API. |
+| Mistral | planned | Agents/Conversations `image_generation` connector | Official support is exposed through Agents/Conversations, not the current chat-completions runtime. Mesh fails early until a dedicated adapter exists. |
+| Cohere | unsupported | none | Current Cohere public surfaces cover chat, embed, rerank, and image embeddings, not image output. |
+
+Runtime rules:
+
+- `generateImage()` uses the same provider/model selection, `provider:model` alias handling, auth resolver, redacted auth descriptor, and lifecycle hooks as text generation.
+- Feature validation fails before provider dispatch when the selected model has `imageGeneration.status` set to `unsupported` or `planned`.
+- Planned Mistral image generation fails with an error that names the missing Agents/Conversations adapter.
+- OpenAI requests force base64 image output for the Sentropic chat-storage path.
+- Gemini requests force `responseModalities: ['IMAGE']`; provider options cannot override selected model, prompt, contents, or required image response modality.
+- Reference images are represented in the public request contract but remain rejected by the current application runtime until BR-38a media input is wired into image generation.
+
+Required coverage:
+
+- `packages/llm-mesh/tests/facade.test.ts` covers supported OpenAI/Gemini image models, unsupported providers, planned Mistral, auth/hook redaction, and missing adapter behavior.
+- `api/tests/unit/provider-mesh-contract-proof.test.ts` proves application model catalog alignment for supported, unsupported, and planned image generation capabilities.
+- `api/tests/unit/image-generation-runtime.test.ts` covers OpenAI/Gemini runtime normalization, default image-capable model selection, deterministic provider errors, and no-image/safety responses.
+
 ## As-Is Runtime Contract Inventory and BR-14c Test Mapping
 
 This inventory is the BR-14c freeze point for the application model-access contract. The package contract must map the current application runtime behavior; it must not reinterpret provider semantics while extracting `@sentropic/llm-mesh`.

@@ -105,12 +105,12 @@ Package-owned:
 - `ChatComposer.svelte`: render-only composer shell with injected control snippets.
 - `ChatWidget.svelte`: active widget shell that can render the app-owned shell/panels through snippets.
 - `ChatPanel.svelte`: package shell boundary that accepts host, transport, stream, context, renderer, and snippet inputs; the full Sentropic session orchestration remains app-owned.
-- `createStreamHub(options)`, `StreamHubHistory`, stream event contracts, chat projection helpers, draft state, widget shell state, local-tools state, renderer registry, and web-host factory.
+- `createStreamHub(options)`, `StreamHubHistory`, stream event contracts, chat projection helpers, draft state, widget shell state, local-tools state, renderer registry, generated-file/image card projection helpers, and web-host factory.
 
 App-owned:
 
 - `ui/src/lib/components/ChatPanel.svelte`, `ChatWidget.svelte`, and `StreamMessage.svelte` remain compatibility wrappers that inject Sentropic app services into the package.
-- `ui/src/lib/components/chat/AppChatPanel.svelte` owns session orchestration, REST calls, comments, documents, generated files, local tool continuation, runtime details, and history hydration.
+- `ui/src/lib/components/chat/AppChatPanel.svelte` owns session orchestration, REST calls, comments, documents, generated files, generated-image preview/download URL resolution, local tool continuation, runtime details, and history hydration.
 - `ui/src/lib/chat/{context-provider,document-adapter,comment-adapter,session-adapter,web-host-adapter}.ts` own Sentropic-specific adapter wiring.
 - `ui/src/lib/components/QueueMonitor.svelte` and `ui/src/lib/stores/queue.ts` remain app-owned; jobs are integrated through widget badges and the app queue panel.
 - Chrome and VSCode runtime bridges remain host-owned and inject package local-tool adapters where needed.
@@ -252,6 +252,7 @@ Default package renderers:
 - Markdown/text fallback for unknown tool results.
 - JSON fallback with bounded depth.
 - Generated file cards when the stream exposes file metadata.
+- Generated image cards for `image_generate` tool results, projected from document-backed media metadata only; raw external URLs in stream payloads are not trusted as preview/download targets.
 - Todo/plan runtime cards for `plan` tool results.
 - Permission/local-tool prompt renderer shell.
 
@@ -286,7 +287,7 @@ export interface ChatUiHostAdapter {
 Web adapter:
 
 - Owns app auth/session wiring, workspace scope, REST fetch, native EventSource, navigation, local storage handoff, and app toasts.
-- Keeps Sentropic route context, comments, document upload, Google Drive picker, entity stores, and workspace RBAC outside the package unless passed through typed callbacks/renderers.
+- Keeps Sentropic route context, comments, document upload, generated-media document URLs/actions, Google Drive picker, entity stores, and workspace RBAC outside the package unless passed through typed callbacks/renderers.
 
 Chrome adapter:
 
