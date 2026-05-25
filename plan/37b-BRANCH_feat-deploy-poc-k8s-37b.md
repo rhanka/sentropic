@@ -67,8 +67,18 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
 - **BR37b-FL4** (severity: `attention`, status: `open`): Public DNS + Ingress + cert-manager. Confirmed POC public hostname: `sentropic.sent-tech.ca` (under the existing `sent-tech.ca` zone hosted on Cloudflare). cert-manager uses the **Cloudflare DNS-01 ACME challenge** (not HTTP-01), which allows wildcard certs for `*.sent-tech.ca` and works without exposing the Ingress on port 80 during the challenge. Cloudflare API token (scope: `Zone / DNS / Edit` on `sent-tech.ca`) is provisioned operator-side and stored in root `.env` as `CLOUDFLARE_API_TOKEN`, then sealed into the cluster via Sealed Secrets. ClusterIssuer staging is used first to validate the loop, then production after one successful issuance.
 
 ## AI Flaky tests
-- This branch does not change AI runtime behavior.
-- Carries forward the BR37 acceptance for `tests/03-chat.spec.ts` if rerun signature reappears on the branch PR; document in `## Feedback Loop` and request user sign-off only if observed.
+- This branch does not change AI runtime behavior (Lot 1 only swaps the outbound email transport; chat/SSE/tool-calling is untouched).
+- Carries forward the BR37 acceptance for `tests/03-chat.spec.ts` if rerun signature reappears on the branch PR; document here and request user sign-off only if observed.
+
+- **E2E flaky observed on PR #176 (commit `1ab59715`, run `26382665015`)**:
+  - Suite/job: `test-e2e (group-e, 05 07)`.
+  - Failing test: `e2e/tests/05-usecase-detail.spec.ts:185 › Détail des cas d'usage › devrait mettre à jour un champ liste via chat (SSE)`.
+  - Signature: `Test timeout of 30000ms exceeded` while `expect(constraintsSection).toContainText("E2E_CONSTRAINT_<ts>")` — the live LLM did not write the token into the constraints field via chat tool-calling within the window (observed value `"Contraintes     "`). Failed initial + retry #1 + retry #2.
+  - Classification: provider/model nondeterminism on a live-LLM chat-SSE tool-call path. Unrelated to the Lot 1 email migration (no chat/SSE/tool code touched).
+  - Non-systematic confirmation: re-ran the `test-e2e (group-e, 05 07)` job on the same commit `1ab59715` → **SUCCESS**. At least one success on the same commit + same command → meets the `flaky accepted` criterion.
+  - Allowlist gap: `e2e/tests/05-usecase-detail.spec.ts` is NOT currently in the E2E AI flaky allowlist of `rules/testing.md` (which lists `00-ai-generation`, `03-chat`, `03-chat-chrome-extension`, `07_comment_assistant`). The SSE-chat-field-update test in `05` is equally live-LLM-dependent. Proposal (deferred, not in this branch's scope): add `e2e/tests/05-usecase-detail.spec.ts` (SSE chat update case) to the allowlist via a dedicated rules change.
+  - Exact rerun evidence command (operator): `gh run rerun 26382665015` (job `test-e2e (group-e, 05 07)`) → green.
+  - User sign-off: `pending` — see `## User sign-off`.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick**
@@ -247,6 +257,16 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md` symlink (keep `plan/37b-BRANCH_feat-deploy-poc-k8s-37b.md` as roadmap pointer until BR-37b moves to `plan/done/` post-merge), push, and merge.
   - [ ] Post-merge: move `plan/37b-BRANCH_feat-deploy-poc-k8s-37b.md` to `plan/done/` and update `PLAN.md` status to `done`.
+
+## User sign-off
+- **E2E flaky `05-usecase-detail.spec.ts` SSE chat-update** (run `26382665015`, commit `1ab59715`):
+  - Status: `pending`.
+  - Subject: accept the live-LLM SSE chat-field-update test as `flaky accepted` (non-systematic: failed 3×, passed clean on rerun of the same job/commit). Unrelated to the Lot 1 email migration.
+  - Sign-off record (to fill after user confirmation):
+    - User: <name>
+    - Date: <YYYY-MM-DD>
+    - Decision: `flaky accepted` / `refuse`
+    - Notes: <free text>
 
 ## Deferred to BR-14d / future BR
 - [ ] Final production hostname (beyond `sentropic.sent-tech.ca`) and migration off the `poc-k8s` cluster name when a more solid cluster is provisioned. BR-37b runs on `poc-k8s` but treats the workload as production.
