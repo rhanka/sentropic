@@ -1,7 +1,10 @@
 /**
  * Text extraction helpers for document summarization.
- * MVP requirement: support pdf, docx, pptx, md.
+ * MVP requirement: support pdf, docx, pptx, xlsx, md.
  */
+import JSZip from 'jszip';
+import { DOMParser } from '@xmldom/xmldom';
+
 type ExtractedDocumentMetadata = {
   title?: string;
   author?: string;
@@ -41,6 +44,194 @@ function countWords(text: string): number {
   const t = (text || '').trim();
   if (!t) return 0;
   return t.split(/\s+/g).filter(Boolean).length;
+}
+
+const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+function isXlsxDocument(mimeType: string, fileName: string): boolean {
+  return mimeType === XLSX_MIME_TYPE || fileName.endsWith('.xlsx');
+}
+
+type XmlNodeListLike = {
+  length: number;
+  item(index: number): XmlElementLike | null;
+};
+
+type XmlElementLike = {
+  getAttribute?(name: string): string | null;
+  getElementsByTagName?(tagName: string): XmlNodeListLike;
+  textContent?: string | null;
+};
+
+function parseXml(xml: string): XmlElementLike {
+  return new DOMParser().parseFromString(xml, 'application/xml') as unknown as XmlElementLike;
+}
+
+function xmlElements(parent: XmlElementLike | null | undefined, tagName: string): XmlElementLike[] {
+  const nodes = parent?.getElementsByTagName?.(tagName);
+  if (!nodes || typeof nodes.length !== 'number') return [];
+  const out: XmlElementLike[] = [];
+  for (let i = 0; i < nodes.length; i += 1) {
+    const node = nodes.item(i);
+    if (node) out.push(node);
+  }
+  return out;
+}
+
+function xmlAttribute(node: XmlElementLike | null | undefined, name: string): string | null {
+  const value = node?.getAttribute?.(name);
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function xmlText(node: XmlElementLike | null | undefined): string {
+  const value = node?.textContent;
+  return typeof value === 'string' ? value : '';
+}
+
+function normalizeCellText(value: string): string {
+  return value.replace(/[\t\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeZipPath(input: string): string {
+  const parts: string[] = [];
+  for (const part of input.replace(/^\/+/, '').split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') parts.pop();
+    else parts.push(part);
+  }
+  return parts.join('/');
+}
+
+function resolveWorkbookTarget(target: string): string {
+  if (target.startsWith('/')) return normalizeZipPath(target);
+  if (target.startsWith('xl/')) return normalizeZipPath(target);
+  return normalizeZipPath(`xl/${target}`);
+}
+
+function columnIndexFromReference(reference: string | null): number | null {
+  if (!reference) return null;
+  const letters = reference.match(/^[A-Z]+/i)?.[0]?.toUpperCase();
+  if (!letters) return null;
+  let index = 0;
+  for (const ch of letters) {
+    index = index * 26 + (ch.charCodeAt(0) - 64);
+  }
+  return index > 0 ? index - 1 : null;
+}
+
+async function readZipText(zip: JSZip, path: string): Promise<string | null> {
+  const file = zip.file(path);
+  return file ? file.async('text') : null;
+}
+
+function readSharedStrings(xml: string | null): string[] {
+  if (!xml) return [];
+  const doc = parseXml(xml);
+  return xmlElements(doc, 'si').map((si) =>
+    xmlElements(si, 't')
+      .map((node) => xmlText(node))
+      .join(''),
+  );
+}
+
+function readWorkbookSheets(workbookXml: string | null, relationshipsXml: string | null): Array<{
+  name: string;
+  path: string;
+}> {
+  if (!workbookXml) return [];
+  const rels = new Map<string, string>();
+  if (relationshipsXml) {
+    for (const rel of xmlElements(parseXml(relationshipsXml), 'Relationship')) {
+      const id = xmlAttribute(rel, 'Id');
+      const target = xmlAttribute(rel, 'Target');
+      if (id && target) rels.set(id, resolveWorkbookTarget(target));
+    }
+  }
+
+  return xmlElements(parseXml(workbookXml), 'sheet')
+    .map((sheet) => {
+      const name = xmlAttribute(sheet, 'name') ?? 'Sheet';
+      const relationshipId = xmlAttribute(sheet, 'r:id');
+      const path = relationshipId ? rels.get(relationshipId) : null;
+      return path ? { name, path } : null;
+    })
+    .filter((sheet): sheet is { name: string; path: string } => Boolean(sheet));
+}
+
+function readCellValue(cell: XmlElementLike, sharedStrings: string[]): string {
+  const type = xmlAttribute(cell, 't');
+
+  if (type === 'inlineStr') {
+    return normalizeCellText(
+      xmlElements(cell, 't')
+        .map((node) => xmlText(node))
+        .join(''),
+    );
+  }
+
+  const raw = normalizeCellText(xmlText(xmlElements(cell, 'v')[0]));
+  if (!raw) return '';
+  if (type === 's') {
+    const index = Number.parseInt(raw, 10);
+    return Number.isFinite(index) ? normalizeCellText(sharedStrings[index] ?? raw) : raw;
+  }
+  if (type === 'b') return raw === '1' ? 'TRUE' : 'FALSE';
+  return raw;
+}
+
+function extractWorksheetRows(xml: string, sharedStrings: string[]): string[][] {
+  const rows: string[][] = [];
+  for (const row of xmlElements(parseXml(xml), 'row')) {
+    const values: string[] = [];
+    let nextColumnIndex = 0;
+    for (const cell of xmlElements(row, 'c')) {
+      const explicitColumnIndex = columnIndexFromReference(xmlAttribute(cell, 'r'));
+      const columnIndex = explicitColumnIndex ?? nextColumnIndex;
+      while (values.length < columnIndex) values.push('');
+      values[columnIndex] = readCellValue(cell, sharedStrings);
+      nextColumnIndex = columnIndex + 1;
+    }
+    while (values.length > 0 && !values[values.length - 1]) values.pop();
+    if (values.some((value) => value.trim().length > 0)) rows.push(values);
+  }
+  return rows;
+}
+
+async function extractXlsxDocumentInfo(params: {
+  bytes: Uint8Array;
+  filename?: string | null;
+}): Promise<ExtractedDocumentInfo> {
+  const zip = await JSZip.loadAsync(Buffer.from(params.bytes));
+  const workbookXml = await readZipText(zip, 'xl/workbook.xml');
+  const relationshipsXml = await readZipText(zip, 'xl/_rels/workbook.xml.rels');
+  const sharedStrings = readSharedStrings(await readZipText(zip, 'xl/sharedStrings.xml'));
+  const workbookSheets = readWorkbookSheets(workbookXml, relationshipsXml);
+  const sheets =
+    workbookSheets.length > 0
+      ? workbookSheets
+      : Object.keys(zip.files)
+          .filter((path) => /^xl\/worksheets\/[^/]+\.xml$/i.test(path))
+          .sort()
+          .map((path, index) => ({ name: `Sheet ${index + 1}`, path }));
+
+  const sections: string[] = [];
+  const headingsH1: string[] = [];
+  for (const sheet of sheets) {
+    const worksheetXml = await readZipText(zip, sheet.path);
+    if (!worksheetXml) continue;
+    const rows = extractWorksheetRows(worksheetXml, sharedStrings);
+    if (rows.length === 0) continue;
+    headingsH1.push(sheet.name);
+    sections.push([`Sheet: ${sheet.name}`, ...rows.map((row) => row.join('\t'))].join('\n'));
+  }
+
+  const text = sections.join('\n\n').trim();
+  const metadata: ExtractedDocumentMetadata = {};
+  const title = params.filename?.trim();
+  if (title) metadata.title = title;
+  const words = countWords(text);
+  if (words > 0) metadata.words = words;
+  return { text, metadata, headingsH1 };
 }
 
 function extractHeadingsH1FromAst(ast: unknown): string[] {
@@ -117,6 +308,10 @@ export async function extractDocumentInfoFromDocument(params: {
   const isMarkdown = mime === 'text/markdown' || name.endsWith('.md') || name.endsWith('.markdown');
   const isTextLike = mime.startsWith('text/') || mime.includes('json') || isMarkdown;
 
+  if (isXlsxDocument(mime, name)) {
+    return extractXlsxDocumentInfo(params);
+  }
+
   if (isTextLike) {
     const text = new TextDecoder('utf-8', { fatal: false }).decode(params.bytes);
     const metadata: ExtractedDocumentMetadata = {};
@@ -189,5 +384,3 @@ export async function extractTextFromDocument(params: {
   const { text } = await extractDocumentInfoFromDocument(params);
   return text;
 }
-
-

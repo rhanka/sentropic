@@ -17,6 +17,10 @@ describe('documents utils', () => {
   });
 
   it('includes archive formats in upload accept list', () => {
+    expect(DOCUMENT_UPLOAD_ACCEPT).toContain(
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.xlsx');
     expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.zip');
     expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.tar.gz');
     expect(DOCUMENT_UPLOAD_ACCEPT).toContain('.tgz');
@@ -26,6 +30,7 @@ describe('documents utils', () => {
     expect(getDocumentMimeLabel('application/vnd.google-apps.document')).toBe('Google Docs');
     expect(getDocumentMimeLabel('application/vnd.google-apps.spreadsheet')).toBe('Google Sheets');
     expect(getDocumentMimeLabel('application/vnd.google-apps.presentation')).toBe('Google Slides');
+    expect(getDocumentMimeLabel('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBe('Excel workbook');
     expect(getDocumentMimeLabel('application/pdf')).toBe('application/pdf');
   });
 
