@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { randomUUID } from 'crypto';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
 import { workspaceMemberships } from '../../src/db/schema';
@@ -6,6 +7,12 @@ import { workspaceMemberships } from '../../src/db/schema';
 async function importApp() {
   const mod = await import('../../src/app');
   return mod.app as any;
+}
+
+const ENDPOINT_HOOK_TIMEOUT_MS = 30000;
+
+function uniqueEmail(prefix: string): string {
+  return `${prefix}-${randomUUID()}@example.com`;
 }
 
 describe('Locks API', () => {
@@ -17,9 +24,9 @@ describe('Locks API', () => {
 
   beforeEach(async () => {
     app = await importApp();
-    userA = await createAuthenticatedUser('editor', 'usera@example.com');
-    userB = await createAuthenticatedUser('editor', 'userb@example.com');
-    viewer = await createAuthenticatedUser('viewer', 'viewer@example.com');
+    userA = await createAuthenticatedUser('editor', uniqueEmail('usera'));
+    userB = await createAuthenticatedUser('editor', uniqueEmail('userb'));
+    viewer = await createAuthenticatedUser('viewer', uniqueEmail('viewer'));
     workspaceId = userA.workspaceId;
 
     await db
@@ -30,7 +37,7 @@ describe('Locks API', () => {
       .insert(workspaceMemberships)
       .values({ workspaceId, userId: viewer.id, role: 'viewer', createdAt: new Date() })
       .onConflictDoNothing();
-  });
+  }, ENDPOINT_HOOK_TIMEOUT_MS);
 
   afterEach(async () => {
     await cleanupAuthData();

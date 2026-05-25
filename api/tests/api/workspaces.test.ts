@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import JSZip from 'jszip';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
 import { workspaces, workspaceMemberships, workspaceTypeWorkflows, workflowDefinitionTasks, workflowDefinitions, agentDefinitions, viewTemplates } from '../../src/db/schema';
@@ -10,6 +10,12 @@ import { createTestId } from '../utils/test-helpers';
 async function importApp() {
   const mod = await import('../../src/app');
   return mod.app as any;
+}
+
+const ENDPOINT_HOOK_TIMEOUT_MS = 30000;
+
+function uniqueEmail(prefix: string): string {
+  return `${prefix}-${randomUUID()}@example.com`;
 }
 
 function stableStringify(value: unknown): string {
@@ -80,11 +86,11 @@ describe('Workspaces API', () => {
 
   beforeEach(async () => {
     app = await importApp();
-    editor = await createAuthenticatedUser('editor', `editor-${Date.now()}@example.com`);
-    viewer = await createAuthenticatedUser('guest', `viewer-${Date.now()}@example.com`);
+    editor = await createAuthenticatedUser('editor', uniqueEmail('editor'));
+    viewer = await createAuthenticatedUser('guest', uniqueEmail('viewer'));
     if (editor.workspaceId) createdWorkspaceIds.push(editor.workspaceId);
     if (viewer.workspaceId) createdWorkspaceIds.push(viewer.workspaceId);
-  });
+  }, ENDPOINT_HOOK_TIMEOUT_MS);
 
   afterEach(async () => {
     for (const id of createdWorkspaceIds) {

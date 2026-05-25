@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { randomUUID } from 'crypto';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
 import {
@@ -18,6 +19,12 @@ async function importApp() {
   return mod.app as any;
 }
 
+const ENDPOINT_HOOK_TIMEOUT_MS = 30000;
+
+function uniqueEmail(prefix: string): string {
+  return `${prefix}-${randomUUID()}@example.com`;
+}
+
 describe('Workspace type system', () => {
   let app: any;
   let editor: any;
@@ -26,11 +33,11 @@ describe('Workspace type system', () => {
 
   beforeEach(async () => {
     app = await importApp();
-    editor = await createAuthenticatedUser('editor', `editor-wt-${Date.now()}@example.com`);
-    viewer = await createAuthenticatedUser('guest', `viewer-wt-${Date.now()}@example.com`);
+    editor = await createAuthenticatedUser('editor', uniqueEmail('editor-wt'));
+    viewer = await createAuthenticatedUser('guest', uniqueEmail('viewer-wt'));
     if (editor.workspaceId) createdWorkspaceIds.push(editor.workspaceId);
     if (viewer.workspaceId) createdWorkspaceIds.push(viewer.workspaceId);
-  });
+  }, ENDPOINT_HOOK_TIMEOUT_MS);
 
   afterEach(async () => {
     for (const id of createdWorkspaceIds) {
