@@ -5,7 +5,7 @@ import { createHash } from 'crypto';
 import { logger } from '../logger';
 import { SignJWT } from 'jose';
 import { env } from '../config/env';
-import nodemailer from 'nodemailer';
+import { sendTransactionalEmail } from './scw-tem-client';
 
 /**
  * Email Verification Code Service
@@ -27,79 +27,6 @@ interface VerifyCodeParams {
 
 const CODE_TTL = 10 * 60; // 10 minutes in seconds
 const VERIFICATION_TOKEN_TTL = 15 * 60; // 15 minutes in seconds
-
-let mailTransporter: nodemailer.Transporter | null = null;
-let transporterConfigHash: string | null = null;
-
-function getMailTransporter(): nodemailer.Transporter | null {
-  // Create a hash of the current config to detect changes
-  const currentConfigHash = `${env.MAIL_HOST}:${env.MAIL_PORT}:${env.MAIL_SECURE}:${env.MAIL_USERNAME || ''}`;
-  
-  // If config changed or transporter doesn't exist, recreate it
-  if (mailTransporter && transporterConfigHash === currentConfigHash) {
-    return mailTransporter;
-  }
-
-  // Reset transporter if config changed
-  if (transporterConfigHash !== currentConfigHash) {
-    mailTransporter = null;
-    transporterConfigHash = null;
-  }
-
-  if (!env.MAIL_HOST) {
-    logger.warn('MAIL_HOST not configured. Emails will not be sent.');
-    return null;
-  }
-
-  try {
-    const transporterConfig: {
-      host: string;
-      port: number;
-      secure: boolean;
-      requireTLS: boolean;
-      ignoreTLS: boolean;
-      tls?: { rejectUnauthorized: boolean };
-      auth?: { user: string; pass: string };
-    } = {
-      host: env.MAIL_HOST,
-      port: env.MAIL_PORT,
-      secure: env.MAIL_SECURE, // Use env var (false for maildev, true for production)
-      requireTLS: env.MAIL_SECURE, // Require TLS in production
-      ignoreTLS: !env.MAIL_SECURE, // Ignore TLS for maildev/dev
-    };
-
-    // Add TLS options if secure is enabled
-    if (env.MAIL_SECURE) {
-      transporterConfig.tls = {
-        rejectUnauthorized: true, // Reject self-signed certs in production
-      };
-    }
-
-    // Add auth only if credentials are provided
-    if (env.MAIL_USERNAME && env.MAIL_PASSWORD) {
-      transporterConfig.auth = {
-        user: env.MAIL_USERNAME,
-        pass: env.MAIL_PASSWORD,
-      };
-    }
-
-    mailTransporter = nodemailer.createTransport(transporterConfig);
-    transporterConfigHash = currentConfigHash;
-
-    logger.info({ 
-      host: env.MAIL_HOST, 
-      port: env.MAIL_PORT,
-      secure: env.MAIL_SECURE,
-      requireTLS: env.MAIL_SECURE,
-      ignoreTLS: !env.MAIL_SECURE
-    }, 'Mail transporter configured');
-
-    return mailTransporter;
-  } catch (error) {
-    logger.error({ err: error }, 'Failed to initialize mail transporter.');
-    return null;
-  }
-}
 
 /**
  * Hash a code for storage (SHA-256)
@@ -163,63 +90,40 @@ export async function generateEmailVerificationCode(
     createdAt: new Date(),
   });
 
-  // Send code via email
-  const transporter = getMailTransporter();
-  
-  if (transporter) {
-    try {
-      const mailOptions = {
-        from: env.MAIL_FROM,
-        to: normalizedEmail,
-        subject: 'Votre code de vérification Top AI Ideas',
-        text: `Bonjour,\n\nVotre code de vérification est : ${code}\n\nCe code est valide pendant 10 minutes.\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.\n\nL'équipe Top AI Ideas`,
-        html: `<p>Bonjour,</p>
-          <p>Votre code de vérification est : <strong style="font-size: 24px; letter-spacing: 4px; font-family: monospace;">${code}</strong></p>
-          <p>Ce code est valide pendant 10 minutes.</p>
-          <p>Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.</p>
-          <p style="margin-top:24px;">L'équipe Top AI Ideas</p>`,
-      };
-      
-      logger.debug({ 
-        host: env.MAIL_HOST, 
-        port: env.MAIL_PORT, 
-        secure: env.MAIL_SECURE,
-        from: mailOptions.from,
-        to: mailOptions.to 
-      }, 'Attempting to send email');
-      
-      await transporter.sendMail(mailOptions);
+  // Send code via the Scaleway TEM HTTP API
+  try {
+    await sendTransactionalEmail({
+      to: normalizedEmail,
+      subject: 'Votre code de vérification Top AI Ideas',
+      text: `Bonjour,\n\nVotre code de vérification est : ${code}\n\nCe code est valide pendant 10 minutes.\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.\n\nL'équipe Top AI Ideas`,
+      html: `<p>Bonjour,</p>
+        <p>Votre code de vérification est : <strong style="font-size: 24px; letter-spacing: 4px; font-family: monospace;">${code}</strong></p>
+        <p>Ce code est valide pendant 10 minutes.</p>
+        <p>Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.</p>
+        <p style="margin-top:24px;">L'équipe Top AI Ideas</p>`,
+    });
 
-      logger.info({ email: normalizedEmail }, 'Email verification code sent');
-    } catch (error: unknown) {
-      const errorDetails = error instanceof Error 
-        ? { errorCode: (error as { code?: string }).code, errorMessage: error.message }
-        : { errorCode: undefined, errorMessage: String(error) };
-      logger.error({ 
-        err: error, 
-        email: normalizedEmail,
-        ...errorDetails,
-        host: env.MAIL_HOST,
-        port: env.MAIL_PORT
-      }, 'Failed to send email verification code');
-      // In development, log the code and continue (don't fail)
-      if (env.NODE_ENV !== 'production') {
-        logger.info({
-          email: normalizedEmail,
-          code,
-        }, '[FALLBACK] Email verification code (email send failed, see code above)');
-        // Don't throw in dev - code is still valid and stored
-      } else {
-        // In production, throw the error
-        throw error;
-      }
-    }
-  } else {
-    // Fallback: log code in development
-    logger.info({
+    logger.info({ email: normalizedEmail }, 'Email verification code sent');
+  } catch (error: unknown) {
+    const errorDetails = error instanceof Error
+      ? { errorCode: (error as { code?: string }).code, errorMessage: error.message }
+      : { errorCode: undefined, errorMessage: String(error) };
+    logger.error({
+      err: error,
       email: normalizedEmail,
-      code,
-    }, '[FALLBACK] Email verification code (no transporter available)');
+      ...errorDetails,
+    }, 'Failed to send email verification code');
+    // In development, log the code and continue (don't fail)
+    if (env.NODE_ENV !== 'production') {
+      logger.info({
+        email: normalizedEmail,
+        code,
+      }, '[FALLBACK] Email verification code (email send failed, see code above)');
+      // Don't throw in dev - code is still valid and stored
+    } else {
+      // In production, throw the error
+      throw error;
+    }
   }
 
   return { success: true };
