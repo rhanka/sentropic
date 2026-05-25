@@ -97,7 +97,7 @@ document-generation pattern (DOCX/PPTX queue jobs) rather than inventing a new d
 - [x] **Lot 2 — Route + queue wiring**
   - [x] `routes/api/xlsx.ts` mirroring DOCX endpoints; registered in `routes/api/index.ts`.
   - [x] Queue job type `xlsx_generate` in `queue-manager.ts` (S3 result); publishing class via EX1.
-  - [ ] Lot gate: `make typecheck-api` (pass) + `make lint-api`; `api/tests/api/xlsx.test.ts`.
+  - [x] Lot gate: `make typecheck-api` (pass) + `make lint-api` (0 errors); `api/tests/api/xlsx.test.ts` (9 pass).
 
 - [ ] **Lot 3 — UI export entry point**
   - [x] Add the xlsx export action in `folders/[id]/+page.svelte` + `stores/folders.ts`; i18n labels.
