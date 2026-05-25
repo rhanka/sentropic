@@ -58,6 +58,7 @@ export interface ProviderRuntime {
   listModels(): ModelCatalogEntry[];
   generate(request: unknown): Promise<unknown>;
   streamGenerate(request: unknown): Promise<AsyncIterable<unknown>>;
+  generateImage?(request: unknown): Promise<unknown>;
   validateCredential(credential?: string): CredentialValidationResult;
   normalizeError(error: unknown): NormalizedProviderError;
 }

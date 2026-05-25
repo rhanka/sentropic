@@ -19,6 +19,29 @@ export type OpenAIGenerateRequest = {
   signal?: AbortSignal;
 };
 
+export type OpenAIImageGenerateRequest = {
+  mode: 'image-generation';
+  requestOptions: {
+    model: string;
+    prompt: string;
+    n?: number;
+    size?: 'auto' | '1024x1024' | '1536x1024' | '1024x1536' | '256x256' | '512x512' | '1792x1024' | '1024x1792';
+    quality?: 'standard' | 'auto' | 'low' | 'medium' | 'high' | 'hd';
+    background?: 'transparent' | 'opaque' | 'auto';
+    [key: string]: unknown;
+  };
+  credential?: string;
+  signal?: AbortSignal;
+};
+
+type OpenAIImage = {
+  mimeType: string;
+  data?: string;
+  url?: string;
+  width?: number;
+  height?: number;
+};
+
 export type OpenAIStreamGenerateRequest =
   | {
       mode: 'chat-completions';
@@ -140,6 +163,58 @@ export class OpenAIProviderRuntime implements ProviderRuntime {
     return await client.chat.completions.create(payload.requestOptions, {
       signal: payload.signal,
     });
+  }
+
+  async generateImage(request: unknown): Promise<{
+    images: Array<{ mimeType: string; data?: string; url?: string; width?: number; height?: number }>;
+  }> {
+    const payload = request as OpenAIImageGenerateRequest;
+    if (payload.mode !== 'image-generation') {
+      throw new Error('OpenAIProviderRuntime.generateImage: unsupported mode');
+    }
+
+    const client = this.getClient(payload.credential);
+    const response = await client.images.generate(payload.requestOptions, {
+      signal: payload.signal,
+    });
+    const rawImages = this.toImageList(response);
+    if (rawImages.length === 0) {
+      throw new Error('OpenAI image generation returned no images');
+    }
+    return { images: rawImages };
+  }
+
+  private toImageList(response: unknown): OpenAIImage[] {
+    const payload = response as { data?: unknown[] } | null;
+    const source = Array.isArray(payload?.data) ? payload.data : [];
+    const images: OpenAIImage[] = [];
+
+    for (const entry of source) {
+      const candidate = entry as Record<string, unknown> | null;
+      if (!candidate) continue;
+
+      const b64 = typeof candidate.b64_json === 'string' ? candidate.b64_json : undefined;
+      const url = typeof candidate.url === 'string' ? candidate.url : undefined;
+      const mimeType = this.toMimeType(
+        typeof candidate.mime_type === 'string'
+          ? candidate.mime_type
+          : undefined,
+      );
+      if (typeof b64 === 'string') {
+        images.push({ mimeType, data: b64 });
+        continue;
+      }
+
+      if (typeof url === 'string') {
+        images.push({ mimeType, url });
+      }
+    }
+
+    return images;
+  }
+
+  private toMimeType(value: unknown): string {
+    return typeof value === 'string' && value.trim().length > 0 ? value : 'image/png';
   }
 
   async streamGenerate(request: unknown): Promise<AsyncIterable<unknown>> {
