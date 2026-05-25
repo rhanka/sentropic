@@ -266,7 +266,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
 - **Track B - BR-39b `@sentropic/auth-hono`**
   - Done:
     - BR-39b worktree exists at `/home/antoinefa/src/sentropic/tmp/feat-auth-hono-kit` on `feat/auth-hono-kit`.
-    - Current inspected SHA before this credentials adapter commit: `e5fbcfd1`.
+    - Current inspected SHA before this magic-link request adapter commit: `1ff5d404`.
     - Lot 0 branch plan, backend inventory, scope decisions, npm/bootstrap anticipation, and `BR39b-EX1` are recorded.
     - Backend extraction inventory maps current Sentropic routes/services to package ports in `BR39b-INV1`; route-handler extraction matrix is recorded in `BR39b-INV2`.
     - `BR39b-EX1` is approved for narrow `Makefile` and `.github/workflows/ci.yml` edits required by package lifecycle automation.
@@ -297,6 +297,8 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - `createAuthSessionRouteHandlers` is exported and maps `refreshSession` plus `logout` route contracts to the reusable session service with injected cookie serialization, bearer/cookie session extraction, deterministic JSON validation errors, invalid refresh-token errors, and cookie clearing.
     - `createAuthCredentialRouteHandlers` is exported and maps `listCredentials`, `renameCredential`, and `revokeCredential` route contracts to the reusable credential port with injected session resolution, deterministic validation errors, 404 missing-credential errors, and 403 ownership errors.
     - Sentropic `api/src/routes/auth/credentials.ts` now consumes `createAuthCredentialRouteHandlers` through a Drizzle-backed `AuthHonoCredentialPort` and the existing `validateSession` resolver while preserving current credential-management API tests.
+    - `createAuthMagicLinkRouteHandlers` now allows host-specific success response formatting for magic-link request responses while preserving the default reusable `delivery/expiresAt/success` package response.
+    - Sentropic `api/src/routes/auth/magic-link.ts` now consumes `createAuthMagicLinkRouteHandlers` for `POST /magic-link/request` with legacy `{ success, message }` response parity; `POST /magic-link/verify` remains app-owned because it still owns workspace/session/cookie/device-activation policy.
     - Spark 5.3 xhigh subagents were launched in isolated worktrees for registration, authentication, and route-adapter inventory. They produced useful read context, but no implementation diff was integrated because Agents A/B exited without usable patches and Agent C produced only inline inventory notes.
     - Spark 5.3 xhigh read-only handler-matrix helper was launched from the main branch worktree; it produced useful route/status/cookie inventory but no repository diff.
     - Spark 5.3 xhigh implementation helper for credential handlers produced an adapted package diff and tests; the session helper produced no usable diff and was skipped.
@@ -318,8 +320,13 @@ Extract the reusable Hono-side authentication routes and server contracts into a
       - `make typecheck-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
       - `make up-api-test API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
       - `make test-api-endpoints SCOPE=tests/api/auth/credentials.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
+      - `make build-auth-hono ENV=test-feat-auth-hono-kit`
+      - `make test-auth-hono SCOPE=packages/auth-hono/tests/magic-link-route-handlers.test.ts ENV=test-feat-auth-hono-kit` (red before `formatRequestMagicLinkSuccess`, green after)
+      - `make test-api-endpoints SCOPE=tests/api/auth/magic-link.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit` (12 tests)
       - `make test-auth-hono ENV=test-feat-auth-hono-kit` (14 files, 41 tests)
+      - `make test-auth-hono ENV=test-feat-auth-hono-kit` (14 files, 42 tests)
       - `make pack-auth-hono ENV=test-feat-auth-hono-kit`
+      - Note: one `make up-api-test API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit` invocation returned `api unhealthy`; immediate `make ps ...` showed the API healthy and `make logs-api ...` showed migrations OK plus `/api/v1/health` 200, so the scoped API test proceeded successfully on the same stack.
   - To do:
     - Extract remaining Sentropic app-owned adapters for email-token acceptance, user creation/lookup, workspace bootstrap, session creation, cookie domain policy, and account-status rules.
     - Rewire remaining Sentropic API routes and middleware to consume `@sentropic/auth-hono` from the workspace package in the same branch.
@@ -408,6 +415,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [x] Add the Sentropic API workspace dependency on `@sentropic/auth-hono` and sync `package-lock.json`.
   - [x] Apply `BR39b-EX2` for clean API Docker image builds that compile `@sentropic/auth-hono` before API typecheck/runtime.
   - [x] Rewire `api/src/routes/auth/credentials.ts` to use `createAuthCredentialRouteHandlers` with a Sentropic Drizzle credential adapter and existing session validation.
+  - [x] Rewire `api/src/routes/auth/magic-link.ts` `POST /magic-link/request` to use `createAuthMagicLinkRouteHandlers` while preserving the Sentropic legacy success response body.
   - [ ] Rewire `api/src/routes/auth/index.ts` to mount `createAuthRouter` with Sentropic adapters.
   - [ ] Keep existing route paths and response shapes stable for the Sentropic UI and auth E2E tests.
   - [ ] Rewire `api/src/middleware/auth.ts` to use package session validation while keeping Sentropic workspace selection and hidden-workspace rules app-owned.
@@ -418,6 +426,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [x] `make typecheck-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
     - [x] `make up-api-test API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
     - [x] `make test-api-endpoints SCOPE=tests/api/auth/credentials.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
+    - [x] `make test-api-endpoints SCOPE=tests/api/auth/magic-link.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
     - [ ] `make lint-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
     - [ ] `make test-api SCOPE=tests/unit/auth/session-manager.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
     - [ ] `make test-api SCOPE=tests/unit/auth/webauthn-registration.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`

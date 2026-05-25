@@ -50,6 +50,40 @@ describe('createAuthMagicLinkRouteHandlers', () => {
     });
   });
 
+  it('allows hosts to format magic-link request success responses', async () => {
+    const service: AuthHonoMagicLinkService = {
+      requestMagicLink: async () => ({
+        expiresAt: new Date('2026-01-01T00:10:00.000Z'),
+        success: true,
+      }),
+      verifyMagicLink: async () => {
+        throw new Error('unexpected verify call');
+      },
+    };
+    const router = createAuthRouter({
+      handlers: createAuthMagicLinkRouteHandlers({
+        formatRequestMagicLinkSuccess: () => ({
+          message: 'Magic link sent to your email',
+          success: true,
+        }),
+        service,
+      }),
+      routePrefix: '/api/v1/auth',
+    });
+
+    const response = await router.request('/api/v1/auth/magic-link/request', {
+      body: JSON.stringify({ email: 'user@example.com' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      message: 'Magic link sent to your email',
+      success: true,
+    });
+  });
+
   it('maps verified magic links to a reusable user response', async () => {
     const service: AuthHonoMagicLinkService = {
       requestMagicLink: async () => {
