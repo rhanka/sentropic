@@ -62,14 +62,12 @@ Continuation of BR-37b (email egress + Sealed Secrets, merged PR #176). Close th
   - [x] `make scw-pgbackup-now` + `make scw-pgbackup-restore` (restore to scratch `restore_check` DB, label component=pgbackup) appended (BR37c-EX1).
   - [x] Lot gate PASSED: bucket listed; `scw-pgbackup-now` wrote pg/20260525T155806Z.sql.gz (12.1 KiB); `scw-pgbackup-restore` restored to scratch DB + `select count(*) organizations` ran OK.
 
-- [ ] **Lot 2 — Public Ingress + cert-manager via Cloudflare DNS-01 (BR37c-FL1)** _(STOP for user go-ahead before DNS/token ops)_
-  - [ ] Operator (gated): create Cloudflare API token (`Zone/DNS/Edit` on `sent-tech.ca`), add `CLOUDFLARE_API_TOKEN` to root `.env`, seal → `deploy/scw/04-sealed-cloudflare-api-token.yaml` (ns `cert-manager`).
-  - [ ] Add `deploy/scw/02-cert-manager.yaml` (pinned version, ns `cert-manager`) + `make scw-cert-manager-install`.
-  - [ ] Add `deploy/scw/03-clusterissuer-letsencrypt.yaml` (staging + prod, DNS-01 cloudflare solver).
-  - [ ] Update `deploy/scw/60-ingress.yaml` for host `sentropic.sent-tech.ca`, TLS via ClusterIssuer (staging first → prod).
-  - [ ] Operator (gated): create the Cloudflare DNS record → Ingress public IP.
-  - [ ] Add `make scw-dns-smoke` (resolve host, hit `https://sentropic.sent-tech.ca/api/v1/health` + `/`, print TLS issuer) (BR37c-EX1).
-  - [ ] Lot gate: cert issued (staging→prod); `make scw-dns-smoke` 200 + trusted cert.
+- [ ] **Lot 2 — Public Ingress for sentropic.sent-tech.ca** _(RESCOPED 2026-05-25: cluster-wide ingress stack DELEGATED to the `poc-k8s` repo per operator decision)_
+  - Decision (operator): the shared ingress-controller (traefik), the SCW **LoadBalancer LB-GP-S** (~11.68€/mo, mutualised across all cluster tenants), cert-manager, and the Cloudflare DNS-01 `ClusterIssuer` are **cluster-wide platform** concerns and are delivered by `~/src/poc-k8s` (`platform/`, applied via `make apply-platform`), NOT by this app repo. Cluster verified bare: `traefik` + `cert-manager` namespaces exist but are EMPTY (no controller); no LoadBalancer; no ingressclass. Cloudflare token reused (valid on zone `sent-tech.ca`, found in `spa-transpose-cv/.env`, now in root `.env` as `CLOUDFLARE_API_TOKEN`).
+  - BR-37c retains ONLY the app-level `Ingress` for `sentropic.sent-tech.ca` → `deploy/scw/60-ingress.yaml` (host + path routing to ui/api, `ingressClassName: traefik`, `cert-manager.io/cluster-issuer` annotation referencing the poc-k8s-provided issuer). This is GATED on poc-k8s delivering the platform ingress + ClusterIssuer first.
+  - [ ] (poc-k8s) Platform delivers traefik ingress-controller + Service type=LoadBalancer (SCW LB-GP-S), cert-manager (pinned), Cloudflare DNS-01 ClusterIssuer (+ sealed CF token, reusing the cluster-wide sealed-secrets controller).
+  - [ ] (BR-37c) Once platform is live: update `deploy/scw/60-ingress.yaml` for `sentropic.sent-tech.ca` (real host, TLS via ClusterIssuer), create the Cloudflare DNS record → LB IP, add `make scw-dns-smoke` (BR37c-EX1).
+  - [ ] Lot gate: cert issued; `make scw-dns-smoke` 200 + trusted cert for `https://sentropic.sent-tech.ca`.
 
 - [ ] **Lot 3 — End-to-end deploy validation**
   - [ ] Trigger main-path publish → deploy-k8s (extend `deploy-k8s` apply-set for the new manifests if needed, BR37c-EX2).
