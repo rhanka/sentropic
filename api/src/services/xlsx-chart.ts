@@ -33,7 +33,6 @@ export type ScatterChartSpec = {
   yCol: number;
 };
 
-const NS_CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const CHART_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.drawingml.chart+xml';
