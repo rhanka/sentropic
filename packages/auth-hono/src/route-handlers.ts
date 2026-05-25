@@ -2,11 +2,22 @@ import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { z } from 'zod';
 
-import type { AuthHonoServiceError, AuthHonoEmailVerificationService } from './email-verification.js';
+import type { AuthHonoEmailVerificationService } from './email-verification.js';
+import type { AuthHonoMagicLinkService } from './magic-link.js';
 import type { AuthHonoRouteHandlers } from './router.js';
 
 export interface CreateAuthEmailRouteHandlersOptions {
   service: AuthHonoEmailVerificationService;
+}
+
+export interface CreateAuthMagicLinkRouteHandlersOptions {
+  service: AuthHonoMagicLinkService;
+}
+
+interface AuthHonoHttpServiceError {
+  code: string;
+  message: string;
+  status: number;
 }
 
 const requestEmailCodeSchema = z.object({
@@ -16,6 +27,14 @@ const requestEmailCodeSchema = z.object({
 const verifyEmailCodeSchema = z.object({
   code: z.string().regex(/^\d{6}$/),
   email: z.string().email(),
+});
+
+const requestMagicLinkSchema = z.object({
+  email: z.string().email(),
+});
+
+const verifyMagicLinkSchema = z.object({
+  token: z.string().min(1),
 });
 
 export const createAuthEmailRouteHandlers = (
@@ -61,6 +80,54 @@ export const createAuthEmailRouteHandlers = (
   },
 });
 
+export const createAuthMagicLinkRouteHandlers = (
+  options: CreateAuthMagicLinkRouteHandlersOptions
+): AuthHonoRouteHandlers => ({
+  async requestMagicLink(c) {
+    const input = await parseJson(c, requestMagicLinkSchema);
+
+    if (!input.ok) {
+      return invalidRequest(c, input.error);
+    }
+
+    const result = await options.service.requestMagicLink(input.value);
+
+    if (!result.success) {
+      return serviceError(c, result.error);
+    }
+
+    return c.json({
+      delivery: 'magic_link',
+      expiresAt: result.expiresAt.toISOString(),
+      success: true,
+    });
+  },
+
+  async verifyMagicLink(c) {
+    const input = await parseJson(c, verifyMagicLinkSchema);
+
+    if (!input.ok) {
+      return invalidRequest(c, input.error);
+    }
+
+    const result = await options.service.verifyMagicLink(input.value);
+
+    if (!result.valid) {
+      return serviceError(c, result.error);
+    }
+
+    return c.json({
+      success: true,
+      user: {
+        displayName: result.user.displayName,
+        email: result.email,
+        id: result.user.id,
+        role: result.user.role,
+      },
+    });
+  },
+});
+
 const parseJson = async <T extends z.ZodTypeAny>(
   c: Context,
   schema: T
@@ -87,7 +154,7 @@ const invalidRequest = (c: Context, error: z.ZodError): Response =>
     400
   );
 
-const serviceError = (c: Context, error: AuthHonoServiceError): Response =>
+const serviceError = (c: Context, error: AuthHonoHttpServiceError): Response =>
   c.json(
     {
       error: {
