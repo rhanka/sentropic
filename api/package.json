@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:nodemailer --external:officeparser --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --external:buffer --external:gray-matter --external:isolated-vm --external:docx --external:pptxgenjs --external:zod --external:@aws-sdk/* --external:@smithy/* --sourcemap && esbuild src/workers/docx-render.worker.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/workers/docx-render.worker.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:nodemailer --external:officeparser --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap && esbuild tests/utils/seed-test-data.ts --bundle --platform=node --target=node20 --format=esm --outdir=dist/tests --outbase=tests --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:officeparser --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --external:buffer --external:gray-matter --external:isolated-vm --external:docx --external:pptxgenjs --external:zod --external:@aws-sdk/* --external:@smithy/* --sourcemap && esbuild src/workers/docx-render.worker.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/workers/docx-render.worker.js --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:officeparser --external:events --external:stream --external:util --external:url --external:net --external:tls --external:crypto --external:fs --external:path --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap && esbuild tests/utils/seed-test-data.ts --bundle --platform=node --target=node20 --format=esm --outdir=dist/tests --outbase=tests --external:pg --external:drizzle-orm --external:pino --external:pino-pretty --external:buffer --external:@aws-sdk/* --external:@smithy/* --sourcemap",
     "start": "node dist/index.js",
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\"",
@@ -60,7 +60,6 @@
     "jszip": "^3.10.1",
     "marked": "^17.0.1",
     "node-fetch": "^3.3.2",
-    "nodemailer": "^8.0.4",
     "officeparser": "6.1.0",
     "openai": "^6.1.0",
     "pg": "^8.12.0",
@@ -72,7 +71,6 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^20.14.2",
-    "@types/nodemailer": "^7.0.4",
     "@types/pg": "^8.15.5",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
