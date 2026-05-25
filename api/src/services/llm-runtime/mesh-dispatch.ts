@@ -4,6 +4,8 @@ import {
   createProviderRegistry,
   getSecretAuthMaterial,
   type AuthInput,
+  type ImageGenerationRequest,
+  type ImageGenerationResponse,
   type GenerateRequest,
   type GenerateResponse,
   type LlmMeshMessage,
@@ -24,6 +26,8 @@ import type { ResolvedProviderCredential } from '../provider-credentials';
 import { createId } from '../../utils/id';
 
 type RuntimeRequest = Record<string, unknown> & { mode: string };
+type MeshRuntimeImageRequest = Record<string, unknown> & { mode: string };
+type RuntimeEnvelope = { providerOptions?: unknown; auth?: unknown; signal?: AbortSignal };
 
 type StructuredOutput = {
   name: string;
@@ -201,15 +205,19 @@ const extractCredential = (auth?: AuthInput): string | undefined => {
 };
 
 const buildProviderRuntimeRequest = (
-  request: GenerateRequest | StreamRequest,
+  request: GenerateRequest | StreamRequest | ImageGenerationRequest | RuntimeEnvelope,
   context?: ProviderRuntimeContext,
 ): RuntimeRequest => {
-  const runtimeRequest = request.providerOptions?.runtimeRequest;
+  const providerOptions = isRecord(request.providerOptions)
+    ? request.providerOptions
+    : undefined;
+  const runtimeRequest = providerOptions?.runtimeRequest;
   if (!isRecord(runtimeRequest) || typeof runtimeRequest.mode !== 'string') {
     throw new Error('LLM mesh runtime request is missing providerOptions.runtimeRequest');
   }
 
-  const requestAuth = typeof request.auth === 'function' ? undefined : request.auth;
+  const requestAuth =
+    typeof request.auth === 'function' ? undefined : (request.auth as AuthInput | undefined);
   const auth = context?.auth ?? requestAuth;
   const credential = extractCredential(auth);
   return {
@@ -217,6 +225,29 @@ const buildProviderRuntimeRequest = (
     ...(credential ? { credential } : {}),
     ...(request.signal ? { signal: request.signal } : {}),
   } as RuntimeRequest;
+};
+
+const buildImageProviderRuntimeRequest = (
+  request: ImageGenerationRequest,
+  context?: ProviderRuntimeContext,
+): MeshRuntimeImageRequest => {
+  const providerOptions = isRecord(request.providerOptions)
+    ? request.providerOptions
+    : undefined;
+  const runtimeRequest = providerOptions?.runtimeRequest;
+  if (!isRecord(runtimeRequest) || typeof runtimeRequest.mode !== 'string') {
+    throw new Error('LLM mesh runtime request is missing providerOptions.runtimeRequest');
+  }
+
+  const requestAuth =
+    typeof request.auth === 'function' ? undefined : (request.auth as AuthInput | undefined);
+  const auth = context?.auth ?? requestAuth;
+  const credential = extractCredential(auth);
+  return {
+    ...runtimeRequest,
+    ...(credential ? { credential } : {}),
+    ...(request.signal ? { signal: request.signal } : {}),
+  } as MeshRuntimeImageRequest;
 };
 
 class ApplicationProviderMeshClient implements ProviderAdapterClient {
@@ -239,6 +270,38 @@ class ApplicationProviderMeshClient implements ProviderAdapterClient {
       text: '',
       toolCalls: [],
       finishReason: 'unknown',
+      providerMetadata: { raw },
+    };
+  }
+
+  async generateImage(
+    request: ImageGenerationRequest,
+    context?: ProviderRuntimeContext,
+  ): Promise<ImageGenerationResponse> {
+    const providerId = request.providerId as ProviderId;
+    const modelId =
+      request.modelId ??
+      (typeof request.model === 'string' ? request.model : request.model?.modelId) ??
+      '';
+    const provider = providerRegistry.requireProvider(providerId);
+    if (!provider.generateImage) {
+      throw new Error(`Provider ${providerId} provider runtime does not support image generation`);
+    }
+
+    const raw = await provider.generateImage(buildImageProviderRuntimeRequest(request, context));
+    const images = isRecord(raw) && Array.isArray(raw.images)
+      ? raw.images
+      : [];
+    if (!images.length) {
+      throw new Error(`No images were returned by ${providerId} image runtime`);
+    }
+
+    return {
+      id: `${providerId}_${createId()}`,
+      providerId,
+      modelId,
+      images,
+      status: 'completed',
       providerMetadata: { raw },
     };
   }
@@ -310,6 +373,43 @@ export const dispatchMeshGenerateRaw = async <Raw = unknown>(
 ): Promise<Raw> => {
   const response = await applicationLlmMesh.generate(buildMeshRequest(options));
   return response.providerMetadata?.raw as Raw;
+};
+
+export const dispatchMeshGenerateImageRaw = async <Raw = unknown>(
+  options: {
+    providerId: ProviderId;
+    model: string;
+    prompt: string;
+    credentialResolution: ResolvedProviderCredential;
+    authOverride?: AuthInput;
+    userId?: string;
+    workspaceId?: string;
+    runtimeRequest: MeshRuntimeImageRequest;
+    signal?: AbortSignal;
+  },
+): Promise<Raw> => {
+  const auth = toMeshAuthInput({
+    providerId: options.providerId,
+    credentialResolution: options.credentialResolution,
+    userId: options.userId,
+    workspaceId: options.workspaceId,
+    authOverride: options.authOverride,
+  });
+  const response = await applicationLlmMesh.generateImage({
+    providerId: options.providerId,
+    modelId: options.model,
+    prompt: options.prompt,
+    auth,
+    metadata: {
+      userId: options.userId,
+      workspaceId: options.workspaceId,
+    },
+    signal: options.signal,
+    providerOptions: {
+      runtimeRequest: options.runtimeRequest,
+    },
+  });
+  return response as Raw;
 };
 
 export const dispatchMeshStreamRaw = async (
