@@ -23,6 +23,17 @@ export type GeminiGenerateRequest = {
   signal?: AbortSignal;
 };
 
+export type GeminiImageGenerateRequest = {
+  mode: 'image-generation';
+  requestOptions: {
+    model: string;
+    body: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+  credential?: string;
+  signal?: AbortSignal;
+};
+
 export type GeminiStreamGenerateRequest = {
   mode: 'stream-generate-content';
   requestOptions: GeminiRequestOptions;
@@ -92,6 +103,27 @@ export class GeminiProviderRuntime implements ProviderRuntime {
       payload.credential,
       payload.signal
     );
+  }
+
+  async generateImage(request: unknown): Promise<{
+    images: Array<{ mimeType: string; data?: string; url?: string; width?: number; height?: number }>;
+  }> {
+    const payload = request as GeminiImageGenerateRequest;
+    if (payload.mode !== 'image-generation') {
+      throw new Error('GeminiProviderRuntime.generateImage: unsupported mode');
+    }
+
+    const response = await this.requestJson(
+      payload.requestOptions,
+      payload.credential,
+      payload.signal
+    );
+    const images = this.extractImageList(response);
+    if (images.length === 0) {
+      throw new Error('Gemini image generation returned no images');
+    }
+
+    return { images };
   }
 
   async streamGenerate(request: unknown): Promise<AsyncIterable<unknown>> {
@@ -185,6 +217,76 @@ export class GeminiProviderRuntime implements ProviderRuntime {
     }
 
     return this.readSse(response.body);
+  }
+
+  private extractImageList(
+    response: unknown,
+  ): Array<{ mimeType: string; data?: string; url?: string; width?: number; height?: number }> {
+    const record = response as Record<string, unknown> | null;
+    if (!record) return [];
+
+    const candidates = Array.isArray(record.candidates)
+      ? (record.candidates as Array<Record<string, unknown>>)
+      : [];
+
+    const images: Array<{
+      mimeType: string;
+      data?: string;
+      url?: string;
+      width?: number;
+      height?: number;
+    }> = [];
+
+    for (const candidate of candidates) {
+      const content = candidate.content as Record<string, unknown> | undefined;
+      const parts = Array.isArray(content?.parts)
+        ? (content.parts as Array<Record<string, unknown>>)
+        : [];
+      for (const part of parts) {
+        const inlineData =
+          (part.inlineData as Record<string, unknown> | undefined) ??
+          (part.inline_data as Record<string, unknown> | undefined);
+        if (!inlineData || typeof inlineData !== 'object') {
+          continue;
+        }
+
+        const data = typeof inlineData.data === 'string'
+          ? inlineData.data
+          : undefined;
+        const mimeType = this.toMimeType(inlineData.mimeType ?? inlineData.mime_type);
+        if (!data) {
+          continue;
+        }
+
+        const width =
+          typeof inlineData.width === 'number'
+            ? inlineData.width
+            : typeof inlineData.width === 'string'
+              ? Number.parseInt(inlineData.width, 10)
+              : undefined;
+        const height =
+          typeof inlineData.height === 'number'
+            ? inlineData.height
+            : typeof inlineData.height === 'string'
+              ? Number.parseInt(inlineData.height, 10)
+              : undefined;
+
+        images.push({
+          mimeType,
+          data,
+          ...(Number.isNaN(width as number) ? {} : width ? { width } : {}),
+          ...(Number.isNaN(height as number) ? {} : height ? { height } : {}),
+        });
+      }
+    }
+
+    return images;
+  }
+
+  private toMimeType(value: unknown): string {
+    return typeof value === 'string' && value.trim().length > 0
+      ? value.trim()
+      : 'image/png';
   }
 
   private async toProviderError(response: Response): Promise<Error> {
