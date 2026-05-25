@@ -277,24 +277,26 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - `createAuthWebAuthnRegistrationService` is exported with challenge creation, excluded credential mapping, user-verification policy delegation, SimpleWebAuthn registration verification, duplicate credential detection, credential creation, and challenge mark-used primitives backed only by package ports.
     - `createAuthWebAuthnAuthenticationService` is exported with discoverable and user-scoped option generation, allowed credential mapping, challenge validation, SimpleWebAuthn authentication verification, user-verification policy delegation, counter/last-used update, and challenge mark-used primitives backed only by package ports.
     - `createAuthEmailRouteHandlers` is exported and maps `requestEmailCode` plus `verifyEmailCode` route contracts to the reusable email service with deterministic JSON validation and service-error HTTP responses.
+    - `createAuthMagicLinkRouteHandlers` is exported and maps `requestMagicLink` plus reusable `verifyMagicLink` user verification to the reusable magic-link service; Sentropic session/cookie/device activation remains app-owned for Lot 3.
     - Spark 5.3 xhigh subagents were launched in isolated worktrees for registration, authentication, and route-adapter inventory. They produced useful read context, but no implementation diff was integrated because Agents A/B exited without usable patches and Agent C produced only inline inventory notes.
     - Spark 5.3 xhigh read-only handler-matrix helper was launched from the main branch worktree; it produced useful route/status/cookie inventory but no repository diff.
     - Latest package gates passed:
       - `make typecheck-auth-hono ENV=test-feat-auth-hono-kit`
       - `make test-auth-hono SCOPE=packages/auth-hono/tests/email-route-handlers.test.ts ENV=test-feat-auth-hono-kit`
+      - `make test-auth-hono SCOPE=packages/auth-hono/tests/magic-link-route-handlers.test.ts ENV=test-feat-auth-hono-kit`
       - `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-registration-service.test.ts ENV=test-feat-auth-hono-kit`
       - `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-authentication-service.test.ts ENV=test-feat-auth-hono-kit`
       - `make test-auth-hono SCOPE=packages/auth-hono/tests/router-factory.test.ts ENV=test-feat-auth-hono-kit`
-      - `make test-auth-hono ENV=test-feat-auth-hono-kit` (9 files, 26 tests)
+      - `make test-auth-hono ENV=test-feat-auth-hono-kit` (10 files, 28 tests)
       - `make pack-auth-hono ENV=test-feat-auth-hono-kit`
   - To do:
-    - Replace remaining `createAuthRouter` route stubs with extracted registration, login, session, credentials, and magic-link handlers.
+    - Replace remaining `createAuthRouter` route stubs with extracted registration, login, session, and credentials handlers.
     - Extract reusable Hono route factories and auth services from existing Sentropic backend routes/services.
     - Rewire Sentropic API routes and middleware to consume `@sentropic/auth-hono` from the workspace package in the same branch.
     - Remove duplicated app-local auth route/service logic after package/API tests pass; no dual auth paths.
     - Complete npm first-publish runbook and trusted publisher setup.
   - Action:
-    - Codex next action: continue Lot 2 by extracting magic-link, session, credential, and WebAuthn route handler composition and deterministic HTTP/error mapping around the package services, then begin Lot 3 Sentropic adapters.
+    - Codex next action: continue Lot 2 by extracting session, credential, and WebAuthn route handler composition and deterministic HTTP/error mapping around the package services, then begin Lot 3 Sentropic adapters.
     - User action: none until npm first-publish/2FA is requested during bootstrap publish readiness.
 
 ## Plan / Todo (lot-based)
@@ -348,6 +350,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [x] Add initial reusable JWT/session issue, validate, list, revoke, and revoke-all primitives with injected session storage, token, random, clock, and account-policy ports.
   - [x] Move reusable JWT/session issue, validate, refresh, revoke, and revoke-all logic into package services with injected session storage and secret providers.
   - [x] Add email-code route handlers that connect `requestEmailCode` and `verifyEmailCode` route contracts to the reusable email verification service with JSON validation and service-error status mapping.
+  - [x] Add magic-link route handlers that connect `requestMagicLink` and reusable `verifyMagicLink` route contracts to the magic-link service with JSON validation and service-error status mapping.
   - [x] Record route-handler extraction matrix for all BR-39a-aligned transport methods in `BR39b-INV2`.
   - [ ] Preserve deterministic error codes and HTTP status mapping for invalid request, expired challenge, duplicate credential, unverified email, disabled account, and invalid session paths.
   - [ ] Lot gate:
@@ -355,6 +358,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/email-verification-service.test.ts ENV=test-feat-auth-hono-kit`
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/email-route-handlers.test.ts ENV=test-feat-auth-hono-kit`
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/magic-link-service.test.ts ENV=test-feat-auth-hono-kit`
+    - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/magic-link-route-handlers.test.ts ENV=test-feat-auth-hono-kit`
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-registration-service.test.ts ENV=test-feat-auth-hono-kit`
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/webauthn-authentication-service.test.ts ENV=test-feat-auth-hono-kit`
     - [x] `make typecheck-auth-hono ENV=test-feat-auth-hono-kit`
