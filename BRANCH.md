@@ -118,6 +118,7 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
 - Main sync 2026-05-24: merged `origin/main` after root fast-forward from `85c679d7` to `146364eb`; no merge conflicts. Branch remained docs-only; implementation stayed blocked by BR-38a and the image-model design decision that was still open at the time.
 - Latest main sync 2026-05-24: merged `origin/main` again after `main` advanced from `146364eb` to `d5e3cddc`; no merge conflicts.
 - Image model decision 2026-05-24: user approved the BR-38b MVP provider matrix. OpenAI defaults to `gpt-image-2`; Gemini defaults to `gemini-3.1-flash-image-preview` (Nano Banana 2 Preview); Anthropic and Cohere are unsupported for native image generation; Mistral is planned only because official image generation support is exposed through the Agents/Conversations `image_generation` connector, not the current chat-completions runtime.
+- Implementation plan 2026-05-24: detailed execution plan saved at `docs/superpowers/plans/2026-05-24-image-generation-tool.md`.
 
 ## AI Flaky tests
 - Acceptance rule:
