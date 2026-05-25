@@ -94,12 +94,11 @@ hover-driven emphasis (hovering a point or a domain enlarges the points of that 
   - [x] When bubbles shown and ≤10 cases, all bubbles render; top-N labels cover all of them (N=10 ≥ count).
   - [x] Lot gate: `make typecheck-ui` (0 errors) + `make lint-ui` (clean); `scoring.test.ts` 23 passed (12 new for ratio/top-N).
 
-- [ ] **Lot 3 — Business-domain legend, filter & hover emphasis**
-  - [ ] Add a legend grouped by `initiative.data.domain`, filterable (toggle domains on/off).
-  - [ ] On hover (point or legend entry), enlarge points sharing the hovered point's business domain
-        — in both bubbles-shown and bubbles-hidden modes.
-  - [ ] Color bubbles by business domain (BR40a-Q2); move status to tooltip + marker shape/border.
-  - [ ] Lot gate: `make typecheck-ui` + `make lint-ui`; UI specs for legend filter + hover emphasis.
+- [x] **Lot 3 — Business-domain legend, filter & hover emphasis**
+  - [x] Legend grouped by `initiative.data.domain` (+ "No domain"), filterable (toggle domains on/off via `hiddenDomains` set; filtered domain points get radius 0).
+  - [x] On hover (point via `onHover`, legend entry via mouseenter/focus, or top-case label), enlarge points sharing the hovered domain (`pointRadii` × 1.8) — in both bubbles-shown and bubbles-hidden modes (hidden mode reveals only the emphasized domain).
+  - [x] Color bubbles by business domain (categorical palette); status moved to tooltip (`statusLine`) + marker border (`borderColor` = status color, `pointBorderWidth`).
+  - [x] Lot gate: `make typecheck-ui` (0 errors) + `make lint-ui` (clean). UI interactive behavior validated by E2E `e2e/tests/03-prioritization-matrix.spec.ts` (legend chips, hide-bubbles toggle, legend filter aria-pressed).
 
 - [ ] **Lot 4 — Executive-synthesis (DOCX) chart parity**
   - [ ] Ensure the DOCX bitmap snapshot reflects the new label/legend rules (or document deferral).
