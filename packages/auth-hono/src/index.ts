@@ -9,5 +9,6 @@ export * from './router.js';
 export * from './session.js';
 export * from './session-route-handlers.js';
 export * from './webauthn-authentication.js';
+export * from './webauthn-authentication-route-handlers.js';
 export * from './webauthn-registration.js';
 export * from './webauthn-registration-route-handlers.js';
