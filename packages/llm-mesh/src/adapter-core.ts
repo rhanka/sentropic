@@ -27,7 +27,7 @@ export interface ProviderAdapterClient {
     context?: ProviderRuntimeContext,
   ): Promise<GenerateResponse>;
   stream(request: StreamRequest, context?: ProviderRuntimeContext): Promise<StreamResult>;
-  generateImage(
+  generateImage?(
     request: ImageGenerationRequest,
     context?: ProviderRuntimeContext,
   ): Promise<ImageGenerationResponse>;
@@ -98,7 +98,7 @@ export abstract class BaseProviderAdapter<Client extends ProviderAdapterClient =
     request: ImageGenerationRequest,
     context?: ProviderRuntimeContext,
   ): Promise<ImageGenerationResponse> {
-    if (!this.client) {
+    if (!this.client || !this.client.generateImage) {
       throw new ProviderAdapterNotConfiguredError(this.provider.providerId, 'generateImage');
     }
     return await this.client.generateImage(request, context);

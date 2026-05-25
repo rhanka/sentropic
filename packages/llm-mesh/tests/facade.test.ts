@@ -4,10 +4,12 @@ import { createLlmMesh } from '../src/mesh.js';
 import { createProviderRegistry, type ProviderAdapter } from '../src/registry.js';
 import { getModelProfile, getProviderProfile } from '../src/catalog.js';
 import type { GenerateResponse, StreamResult } from '../src/generation.js';
+import { OpenAIAdapter } from '../src/adapters.js';
 import type {
   ImageGenerationRequest,
   ImageGenerationResponse,
 } from '../src/image-generation.js';
+import type { ProviderAdapterClient } from '../src/adapter-core.js';
 import type { ModelProfile } from '../src/catalog.js';
 import type { StreamEvent } from '../src/streaming.js';
 
@@ -159,6 +161,45 @@ describe('createLlmMesh', () => {
       expect.objectContaining({ providerId: 'gemini', modelId: 'gemini-3.1-flash-image-preview' }),
       expect.anything(),
     );
+  });
+
+  it('supports text-only clients for generate while image generation requires generateImage client', async () => {
+    const textOnlyClient: ProviderAdapterClient = {
+      generate: vi.fn(async () => ({
+        id: 'resp_1',
+        providerId: 'openai',
+        modelId: 'gpt-5.5',
+        message: { role: 'assistant', content: 'ok' },
+        text: 'ok',
+        toolCalls: [],
+        finishReason: 'stop',
+      })),
+      stream: vi.fn(async () => (async function* (): AsyncGenerator<StreamEvent> {
+        yield { type: 'done', data: { finishReason: 'stop', responseId: 'resp_1' } };
+      })()),
+    };
+
+    const adapter = new OpenAIAdapter({ client: textOnlyClient });
+    const mesh = createLlmMesh({ registry: createProviderRegistry([adapter]) });
+
+    await expect(
+      mesh.generate({
+        providerId: 'openai',
+        modelId: 'gpt-5.5',
+        auth: { type: 'environment-token', envVar: 'OPENAI_API_KEY' },
+        messages: userMessage,
+      }),
+    ).resolves.toMatchObject({ id: 'resp_1' });
+    expect(textOnlyClient.generate).toHaveBeenCalled();
+
+    await expect(
+      mesh.generateImage({
+        providerId: 'openai',
+        modelId: 'gpt-image-2',
+        auth: { type: 'environment-token', envVar: 'OPENAI_API_KEY' },
+        prompt: 'A calm dashboard',
+      }),
+    ).rejects.toThrow('openai adapter generateImage client is not configured');
   });
 
   it.each([
