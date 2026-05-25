@@ -44,6 +44,28 @@ describe('chat run projection', () => {
     expect(segments[3]).toEqual(expect.objectContaining({ kind: 'assistant', content: 'After' }));
   });
 
+  it('preserves steer runtime boundaries when live projection status churn is compacted', () => {
+    const churn: ProjectionStreamEvent[] = Array.from({ length: 220 }, (_, index) => ({
+      eventType: 'status',
+      sequence: index + 4,
+      data: { state: 'context_budget_update', occupancy_pct: index },
+    }));
+    const events: ProjectionStreamEvent[] = [
+      { eventType: 'reasoning_delta', sequence: 1, data: { delta: 'Before' } },
+      { eventType: 'status', sequence: 2, data: { state: 'run_interrupted_for_steer' } },
+      { eventType: 'status', sequence: 3, data: { state: 'run_resumed_with_steer', steer_count: 2 } },
+      ...churn,
+      { eventType: 'content_delta', sequence: 224, data: { delta: 'After' } },
+    ];
+
+    const segments = projectAssistantRunSegments(events);
+    expect(segments.map((segment) => segment.id)).toContain('runtime:2');
+    expect(segments.map((segment) => segment.id)).toContain('runtime:3');
+    expect(segments.find((segment) => segment.id === 'runtime:3')).toEqual(
+      expect.objectContaining({ steerCountBefore: 2 }),
+    );
+  });
+
   it('drops the trailing runtime segment once the run completed successfully', () => {
     const events: ProjectionStreamEvent[] = [
       { eventType: 'content_delta', sequence: 1, data: { delta: 'Visible answer' } },

@@ -126,11 +126,22 @@ const mergeDeltaEvent = (
   },
 });
 
+const isSteerProjectionStatus = (event: ProjectionStreamEvent): boolean => {
+  if (event.eventType !== 'status') return false;
+  const state = getStatusState(event);
+  return (
+    state === 'run_interrupted_for_steer' ||
+    state === 'run_resumed_with_steer' ||
+    state === 'steer_received'
+  );
+};
+
 const isCriticalProjectionEvent = (event: ProjectionStreamEvent): boolean =>
   event.eventType === 'content_delta' ||
   event.eventType === 'reasoning_delta' ||
   event.eventType === 'done' ||
-  event.eventType === 'error';
+  event.eventType === 'error' ||
+  isSteerProjectionStatus(event);
 
 const compactProjectionEvents = (
   events: readonly ProjectionStreamEvent[],

@@ -76,6 +76,7 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
 - [x] `review`: Added explicit regression coverage for thrown tool exceptions whose request/trace IDs vary between attempts; signature normalization still trips the same repeated-error breaker.
 - [x] `CLG-EX1`: Scope exception for `api/tests/ai/initiative-generation-async.test.ts`. Reason: final API validation exposed an over-constrained AI fixture unrelated to chat loop production code; the multi-org prompt contract allows empty `organizationIds` when no provided organization confidently matches. Impact: test-only contract alignment plus outer timeout alignment with existing internal waits. Rollback: revert the test-only hunk and rerun `make test-api-ai SCOPE=tests/ai/initiative-generation-async.test.ts`.
 - [x] `CLG-EX2`: Scope exception for endpoint auth fixtures in `locks`, `workspace-types`, and `workspaces` API tests. Reason: final endpoint validation exposed fixed-email fixture collisions unrelated to chat loop production code. Impact: test-only fixture isolation using unique emails while preserving endpoint behavior coverage. Rollback: revert the three endpoint test hunks and rerun the scoped endpoint suite.
+- [x] Lockfile review: `package-lock.json` also normalizes the existing `packages/skills` workspace snapshot while syncing `@sentropic/chat-core` and `@sentropic/chat-ui` versions; no `packages/skills/**` files changed on this branch. Retained because no-cache API/UI builds and package/UI test installs passed with this lockfile.
 
 ## AI Flaky tests
 - [x] No AI flaky accepted. `CLG-EX1` is a test contract alignment validated by the full AI suite, not an accepted flaky waiver.
@@ -148,19 +149,21 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
   - [x] `make typecheck-ui API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis` (0 errors, existing warnings only)
   - [x] `make lint-ui API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
   - [x] `make typecheck-chat-core API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
-  - [x] `make typecheck-chat-ui API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
+  - [x] `make typecheck-chat-ui API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2`
   - [x] `make test-pkg-chat-core API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
-  - [x] `make test-chat-ui API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
+  - [x] `make test-chat-ui API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (19 files, 84 tests)
   - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=test-fix-chat-loop-guard-analysis`
-  - [ ] `make test-api API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (literal wrapper rerun pending; previous wrapper attempt hit a setup health-check false negative before tests)
+  - [x] `make test-api API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (literal wrapper rerun passed: smoke 6 tests; unit 496 passed, 1 skipped; endpoints 440 tests; queue 20 tests; security 49 tests; AI 30 tests; limit 4 tests)
   - [x] `make test-api-smoke test-api-unit test-api-endpoints test-api-queue test-api-security API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (smoke 6 tests; unit 496 passed, 1 skipped; endpoints 440 tests; queue 20 tests; security 49 tests)
   - [x] `make test-api-ai API_TEST_WORKERS=1 API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (9 files, 30 tests)
   - [x] `make test-api-limit API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (1 file, 4 tests)
-  - [x] `make test-ui API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (68 files, 403 tests)
+  - [x] `make test-ui API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2` (68 files, 404 tests)
+  - [x] `make lint-ui API_PORT=9098 UI_PORT=5298 MAILDEV_UI_PORT=1198 ENV=test-fix-chat-loop-guard-analysis-full2`
+  - [x] `git diff --check`
   - [x] Bump `packages/chat-core/package.json` if `packages/chat-core/src/**` changes.
   - [x] Bump `packages/chat-ui/package.json` if `packages/chat-ui/src/**` changes.
-  - [ ] Build before e2e: `make build-api build-ui-image API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=e2e-fix-chat-loop-guard-analysis`
-  - [ ] E2E chat smoke: `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=e2e-fix-chat-loop-guard-analysis`
+  - [x] Build before e2e: `make build-api build-ui-image API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=e2e-fix-chat-loop-guard-analysis`
+  - [x] E2E chat smoke: `make test-e2e E2E_VERSION=d66824 E2E_SPEC=tests/03-chat.spec.ts WORKERS=1 RETRIES=0 API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=e2e-fix-chat-loop-guard-analysis` (12 tests, no retries; reused existing local E2E image because tests are bind-mounted and current-tag Playwright image rebuild stalled locally)
   - [ ] Record PR body failure signature and chosen guard semantics.
   - [ ] Create/update PR using `BRANCH.md` text as PR body.
   - [ ] Verify PR CI.
