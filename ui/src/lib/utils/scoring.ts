@@ -91,6 +91,59 @@ export function calculateUseCaseScores(
   };
 }
 
+// --- Top-N prioritization ranking (BR-40a) ---
+//
+// Value and complexity are both normalized to the SAME 0-100 scale (weighted mean
+// of Fibonacci-point ratings). Complexity CAN be 0, so the priority ratio uses an
+// epsilon guard on the denominator and an upper cap to keep complexity≈0 cases from
+// dividing by zero or dominating unboundedly.
+//
+// Exact constants (documented + unit-tested):
+//   PRIORITY_EPSILON   = 1   -> denominator is `complexity + 1`, never 0
+//   PRIORITY_RATIO_CAP = 100 -> max bound (value<=100 / (complexity+1)>=1 => natural max 100)
+export const PRIORITY_EPSILON = 1;
+export const PRIORITY_RATIO_CAP = 100;
+
+export interface PriorityCandidate {
+  value: number;
+  complexity: number;
+}
+
+/**
+ * Compute the prioritization ratio `value / (complexity + PRIORITY_EPSILON)`,
+ * clamped to PRIORITY_RATIO_CAP. Higher is better (more value per unit of effort).
+ */
+export function computePriorityRatio(value: number, complexity: number): number {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const safeComplexity = Number.isFinite(complexity) ? Math.max(0, complexity) : 0;
+  const ratio = safeValue / (safeComplexity + PRIORITY_EPSILON);
+  return Math.min(ratio, PRIORITY_RATIO_CAP);
+}
+
+/**
+ * Select the indices of the top-N candidates ranked by priority ratio
+ * `value / (complexity + PRIORITY_EPSILON)` (capped), ties broken by value desc,
+ * then by original index asc for stability. Returns indices into the input array.
+ */
+export function selectTopPriorityIndices<T extends PriorityCandidate>(
+  candidates: T[],
+  topN: number
+): number[] {
+  return candidates
+    .map((candidate, index) => ({
+      index,
+      value: Number.isFinite(candidate.value) ? candidate.value : 0,
+      ratio: computePriorityRatio(candidate.value, candidate.complexity)
+    }))
+    .sort((a, b) => {
+      if (b.ratio !== a.ratio) return b.ratio - a.ratio;
+      if (b.value !== a.value) return b.value - a.value;
+      return a.index - b.index;
+    })
+    .slice(0, Math.max(0, topN))
+    .map((entry) => entry.index);
+}
+
 /**
  * Génère les étoiles visuelles (dorées + grises)
  */
