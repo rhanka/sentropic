@@ -42,6 +42,40 @@ type OpenAIImage = {
   height?: number;
 };
 
+type ImageRuntimeErrorCode = 'provider_refusal' | 'provider_failure';
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+};
+
+const readString = (value: unknown): string | undefined => {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+};
+
+const isPolicyRefusalSignal = (value: string | undefined): boolean => {
+  if (!value) return false;
+  const normalized = value.toLowerCase();
+  return (
+    normalized.includes('policy') ||
+    normalized.includes('safety') ||
+    normalized.includes('refusal') ||
+    normalized.includes('content_filter')
+  );
+};
+
+const createOpenAIImageError = (
+  message: string,
+  code: ImageRuntimeErrorCode,
+): Error & { code: ImageRuntimeErrorCode; providerId: 'openai' } => {
+  const error = new Error(message) as Error & {
+    code: ImageRuntimeErrorCode;
+    providerId: 'openai';
+  };
+  error.code = code;
+  error.providerId = 'openai';
+  return error;
+};
+
 export type OpenAIStreamGenerateRequest =
   | {
       mode: 'chat-completions';
@@ -179,9 +213,44 @@ export class OpenAIProviderRuntime implements ProviderRuntime {
     });
     const rawImages = this.toImageList(response);
     if (rawImages.length === 0) {
-      throw new Error('OpenAI image generation returned no images');
+      const responseError = this.toImageResponseError(response);
+      if (responseError) throw responseError;
+      throw createOpenAIImageError(
+        'OpenAI image generation returned no images',
+        'provider_failure',
+      );
     }
     return { images: rawImages };
+  }
+
+  private toImageResponseError(response: unknown): Error | null {
+    if (!isRecord(response)) return null;
+
+    const errorRecord = isRecord(response.error) ? response.error : undefined;
+    if (errorRecord) {
+      const message = readString(errorRecord.message) ?? 'OpenAI image generation failed';
+      const providerCode = readString(errorRecord.code) ?? readString(errorRecord.type);
+      return createOpenAIImageError(
+        message,
+        isPolicyRefusalSignal(providerCode) || isPolicyRefusalSignal(message)
+          ? 'provider_refusal'
+          : 'provider_failure',
+      );
+    }
+
+    const data = Array.isArray(response.data) ? response.data : [];
+    const first = data.find(isRecord);
+    const refusal = readString(response.refusal) ?? readString(first?.refusal);
+    const finishReason = readString(response.finish_reason) ?? readString(first?.finish_reason);
+    const message = refusal ?? readString(response.message) ?? readString(first?.message);
+    if (refusal || isPolicyRefusalSignal(finishReason) || isPolicyRefusalSignal(message)) {
+      return createOpenAIImageError(
+        message ?? `OpenAI image generation was blocked: ${finishReason ?? 'policy'}`,
+        'provider_refusal',
+      );
+    }
+
+    return null;
   }
 
   private toImageList(response: unknown): OpenAIImage[] {

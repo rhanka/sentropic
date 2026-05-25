@@ -175,6 +175,29 @@ describe('image generation runtime', () => {
     );
   });
 
+  it('maps OpenAI policy refusals to deterministic image errors', async () => {
+    openaiImagesGenerate.mockResolvedValue({
+      data: [],
+      error: {
+        code: 'content_policy_violation',
+        message: 'The prompt was rejected by the image safety policy',
+      },
+    });
+
+    await expect(
+      generateImage({
+        providerId: 'openai',
+        model: 'gpt-image-2',
+        prompt: 'Disallowed prompt',
+        workspaceId: 'workspace-1',
+        userId: 'user-1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'provider_refusal',
+      message: 'The prompt was rejected by the image safety policy',
+    });
+  });
+
   it('fails when image path is unsupported for provider capability matrix', async () => {
     await expect(
       generateImage({
