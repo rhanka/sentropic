@@ -198,6 +198,35 @@ describe('image generation runtime', () => {
     });
   });
 
+  it('maps Gemini safety blocks to deterministic image errors', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        promptFeedback: {
+          blockReason: 'SAFETY',
+        },
+        candidates: [
+          {
+            finishReason: 'SAFETY',
+            content: { parts: [] },
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      generateImage({
+        providerId: 'gemini',
+        model: 'gemini-3.1-flash-image-preview',
+        prompt: 'Disallowed prompt',
+        workspaceId: 'workspace-1',
+        userId: 'user-1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'provider_refusal',
+      message: 'Gemini image generation was blocked: SAFETY',
+    });
+  });
+
   it('fails when image path is unsupported for provider capability matrix', async () => {
     await expect(
       generateImage({

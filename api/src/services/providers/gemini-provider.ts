@@ -41,6 +41,29 @@ export type GeminiStreamGenerateRequest = {
   signal?: AbortSignal;
 };
 
+type ImageRuntimeErrorCode = 'provider_refusal' | 'provider_failure';
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+};
+
+const readString = (value: unknown): string | undefined => {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+};
+
+const createGeminiImageError = (
+  message: string,
+  code: ImageRuntimeErrorCode,
+): Error & { code: ImageRuntimeErrorCode; providerId: 'gemini' } => {
+  const error = new Error(message) as Error & {
+    code: ImageRuntimeErrorCode;
+    providerId: 'gemini';
+  };
+  error.code = code;
+  error.providerId = 'gemini';
+  return error;
+};
+
 export class GeminiProviderRuntime implements ProviderRuntime {
   readonly provider: ProviderDescriptor;
 
@@ -120,7 +143,12 @@ export class GeminiProviderRuntime implements ProviderRuntime {
     );
     const images = this.extractImageList(response);
     if (images.length === 0) {
-      throw new Error('Gemini image generation returned no images');
+      const responseError = this.toImageResponseError(response);
+      if (responseError) throw responseError;
+      throw createGeminiImageError(
+        'Gemini image generation returned no images',
+        'provider_failure',
+      );
     }
 
     return { images };
@@ -281,6 +309,54 @@ export class GeminiProviderRuntime implements ProviderRuntime {
     }
 
     return images;
+  }
+
+  private toImageResponseError(response: unknown): Error | null {
+    const record = isRecord(response) ? response : undefined;
+    if (!record) return null;
+
+    const promptFeedback = isRecord(record.promptFeedback)
+      ? record.promptFeedback
+      : isRecord(record.prompt_feedback)
+        ? record.prompt_feedback
+        : undefined;
+    const blockReason =
+      readString(promptFeedback?.blockReason) ??
+      readString(promptFeedback?.block_reason);
+    if (blockReason) {
+      return createGeminiImageError(
+        `Gemini image generation was blocked: ${blockReason}`,
+        'provider_refusal',
+      );
+    }
+
+    const candidates = Array.isArray(record.candidates)
+      ? (record.candidates as unknown[])
+      : [];
+    for (const candidateValue of candidates) {
+      const candidate = isRecord(candidateValue) ? candidateValue : undefined;
+      const finishReason =
+        readString(candidate?.finishReason) ??
+        readString(candidate?.finish_reason);
+      if (this.isSafetyFinishReason(finishReason)) {
+        return createGeminiImageError(
+          `Gemini image generation was blocked: ${finishReason}`,
+          'provider_refusal',
+        );
+      }
+    }
+
+    return null;
+  }
+
+  private isSafetyFinishReason(value: string | undefined): boolean {
+    if (!value) return false;
+    const normalized = value.toLowerCase();
+    return (
+      normalized.includes('safety') ||
+      normalized.includes('block') ||
+      normalized.includes('prohibited')
+    );
   }
 
   private toMimeType(value: unknown): string {
