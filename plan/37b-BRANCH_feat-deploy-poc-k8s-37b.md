@@ -175,8 +175,8 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
     - [ ] Mark `BR37b-FL1` as `fixed` with evidence.
 
 - [ ] **Lot 2 — Sealed Secrets controller + sealing (BR37b-FL2)**
-  - [ ] Decide controller install method (manifest-only vs Helm). Preferred: official manifest install from `bitnami-labs/sealed-secrets` release pinned to a specific version, deployed into namespace `sealed-secrets` (or `kube-system` per project convention) without Helm dependency.
-  - [ ] Add `deploy/scw/01-sealed-secrets-controller.yaml` (or split files) for: namespace, ServiceAccount, RBAC, Deployment, Service. Pin the image tag explicitly.
+  - [x] Decide controller install method (manifest-only vs Helm). Decided: official manifest install from `bitnami-labs/sealed-secrets` release pinned to `v0.37.0`, retargeted to dedicated namespace `sealed-secrets`, no Helm dependency.
+  - [x] Add `deploy/scw/01-sealed-secrets-controller.yaml` for: namespace, ServiceAccount, RBAC, Deployment, Service. Image tag pinned to `docker.io/bitnami/sealed-secrets-controller:0.37.0`. Upstream URL + version + namespace retarget recorded in header comment; zero `kube-system` references remain.
   - [ ] Add `make scw-sealed-secrets-install` target (append-only) that applies the controller manifests and waits for controller readiness. (BR37b-EX1)
   - [ ] Generate `kubeseal` binding for existing `sentropic-api` and `sentropic-postgres` Secrets currently created by `make scw-bundle-secret`.
   - [ ] Replace the imperative `scw-bundle-secret` flow with sealed Secrets stored in `deploy/scw/`:
