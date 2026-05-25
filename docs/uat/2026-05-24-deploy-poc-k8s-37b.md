@@ -63,3 +63,20 @@ Operator: Fabien Antoine.
 - Lot 3: Postgres backup CronJob round-trip (bucket `sentropic-pgbackup`, mutualised DOC_STORAGE IAM).
 - Lot 4: `sentropic.sent-tech.ca` Ingress + cert-manager DNS-01 via Cloudflare API token.
 - Lot 5: end-to-end publish → deploy-k8s → rollout → smoke matrix.
+
+## Lot 2 + Lot 1.9 — Sealed Secrets live (2026-05-25)
+
+### Controller
+- Installed Bitnami Sealed Secrets v0.37.0 in namespace `sealed-secrets` via `make scw-sealed-secrets-install`. `deployment/sealed-secrets-controller` 1/1 Running; CRD `sealedsecrets.bitnami.com` present.
+
+### Sealing
+- Built plaintext `sentropic-api` Secret from the live secret: kept the 11 non-mail keys, added `SCW_TEM_SECRET_KEY` (reusing the existing IAM secret key value, formerly `MAIL_PASSWORD`), dropped the 6 `MAIL_*` keys. Sealed via `make scw-seal-secret` → `deploy/scw/05-sealed-sentropic-api.yaml` (committed, encrypted).
+- Sealed `sentropic-postgres` (POSTGRES_PASSWORD, value unchanged) → `deploy/scw/06-sealed-sentropic-postgres.yaml`.
+- First apply failed with `Resource already exists and is not managed by SealedSecret` (the live secrets were created by `scw-bundle-secret`, not the controller). Resolved by deleting the unmanaged secrets and re-applying the SealedSecrets; the controller then owns + reconciles them. No running pod impacted (env injected at pod start; live email was already broken via SMTP egress).
+- Reconciled state verified: `sentropic-api` = 12 keys incl. `SCW_TEM_SECRET_KEY`, **0** `MAIL_*`; `sentropic-postgres` = `POSTGRES_PASSWORD`.
+
+### Lot 1.9 — manifest wiring
+- `deploy/scw/30-api.yaml` ConfigMap `api` now sets non-secret `SCW_TEM_API_BASE_URL`, `SCW_TEM_REGION`, `SCW_TEM_PROJECT_ID` (`09ac728a-...`), `SCW_TEM_FROM_EMAIL`, `SCW_TEM_FROM_NAME`. `SCW_TEM_SECRET_KEY` flows from the `sentropic-api` SealedSecret via existing `envFrom: secretRef`. No `MAIL_*` anywhere.
+
+### Lot 1.10 — GATED on merge
+- The live api pod still runs image `:main` (pre-migration code expecting `MAIL_*`). The TEM HTTP API code only reaches the cluster once PR #176 merges to main and `publish-api-image` republishes `sentropic-api:main`, after which `deploy-k8s` rolls out the new pod consuming `SCW_TEM_SECRET_KEY`. Live `make scw-email-smoke` must be run POST-MERGE. Until then live email remains as-was (already non-functional via blocked SMTP). No regression introduced.
