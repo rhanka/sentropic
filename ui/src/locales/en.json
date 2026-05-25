@@ -896,6 +896,12 @@
       "loading": "Loading matrix…",
       "placingLabels": "Placing labels…",
       "clickHint": "Click a point to view details.",
+      "hideBubbles": "Hide bubbles",
+      "showBubbles": "Show bubbles",
+      "legend": {
+        "title": "Business domains",
+        "none": "No domain"
+      },
       "axis": {
         "value": "Value (0-100 pts)",
         "complexity": "Complexity (0-100 pts)"
@@ -903,7 +909,9 @@
       "tooltip": {
         "descriptionPrefix": "Description:",
         "valueLine": "Value: {pts} pts ({stars})",
-        "complexityLine": "Complexity: {pts} pts ({crosses})"
+        "complexityLine": "Complexity: {pts} pts ({crosses})",
+        "domainLine": "Domain: {domain}",
+        "statusLine": "Status: {status}"
       }
     }
   },
