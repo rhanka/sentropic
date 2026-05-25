@@ -1,7 +1,7 @@
 import vm from 'node:vm';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/client';
-import { folders, initiatives } from '../db/schema';
+import { folders, initiatives, organizations } from '../db/schema';
 import type { MatrixConfig } from '../types/matrix';
 import type { Initiative, InitiativeData, ScoreEntry } from '../types/initiative';
 import { parseMatrixConfig } from '../utils/matrix';
@@ -13,10 +13,11 @@ import {
 } from './pptx-freeform-helpers';
 
 export type PptxEntityType = 'initiative' | 'folder';
+export type FreeformPptxEntityType = PptxEntityType | 'organization';
 
 export type FreeformPptxRequest = {
   code: string;
-  entityType: PptxEntityType;
+  entityType: FreeformPptxEntityType;
   entityId: string;
   workspaceId: string;
   title?: string;
@@ -202,7 +203,7 @@ function parseExecutiveSummary(value: string | null): Record<string, unknown> {
 }
 
 async function loadFreeformContext(
-  entityType: PptxEntityType,
+  entityType: FreeformPptxEntityType,
   entityId: string,
   workspaceId: string,
 ): Promise<PptxFreeformContext> {
@@ -221,6 +222,48 @@ async function loadFreeformContext(
       entity: hydrated as unknown as Record<string, unknown>,
       initiatives: [],
       matrix: parseMatrixConfig(folder?.matrixConfig ?? null) as unknown as MatrixConfig,
+      workspace: { id: workspaceId },
+    };
+  }
+
+  if (entityType === 'organization') {
+    const [organization] = await db
+      .select()
+      .from(organizations)
+      .where(and(eq(organizations.id, entityId), eq(organizations.workspaceId, workspaceId)));
+    if (!organization) throw codedError('not_found', 'Organization not found');
+
+    const folderRows = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.organizationId, entityId), eq(folders.workspaceId, workspaceId)))
+      .orderBy(asc(folders.createdAt));
+    const folderIds = folderRows.map((folder) => folder.id);
+    const initiativeRows = folderIds.length > 0
+      ? await db
+          .select()
+          .from(initiatives)
+          .where(and(eq(initiatives.workspaceId, workspaceId), inArray(initiatives.folderId, folderIds)))
+          .orderBy(asc(initiatives.createdAt))
+      : [];
+    const hydratedInitiatives = await hydrateInitiatives(initiativeRows);
+
+    return {
+      entity: {
+        id: organization.id,
+        name: organization.name,
+        status: organization.status,
+        references: [],
+      },
+      folders: folderRows.map((folder) => ({
+        id: folder.id,
+        name: folder.name,
+        description: folder.description,
+        status: folder.status,
+        executiveSummary: parseExecutiveSummary(folder.executiveSummary ?? null),
+      })),
+      initiatives: hydratedInitiatives as unknown as Record<string, unknown>[],
+      matrix: null,
       workspace: { id: workspaceId },
     };
   }
