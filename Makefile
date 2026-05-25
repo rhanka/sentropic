@@ -1987,3 +1987,37 @@ scw-sealed-secrets-backup-key: ## Export the controller sealing key for DR (SEAL
 	  -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml > "$(SEAL_KEY_OUT)"
 	@echo "WARNING: $(SEAL_KEY_OUT) contains the controller master sealing key."
 	@echo "WARNING: store it out-of-band (offline/secret manager), NEVER commit it, and restrict file permissions."
+
+# --- Postgres backup (BR37c-EX1, append-only; operator-side, live cluster) ----
+# Manual trigger / restore helpers around deploy/scw/70-pgbackup-cronjob.yaml.
+# Backup S3 creds + bucket come from the sentropic-pgbackup SealedSecret; the
+# CronJob dumps with pg_dump (initContainer) and uploads via aws-cli. These
+# targets never hardcode a secret value.
+.PHONY: scw-pgbackup-now scw-pgbackup-restore
+
+scw-pgbackup-now: ## Trigger an immediate Postgres backup Job from the CronJob and wait for completion
+	@set -eu ; job="pgbackup-manual-$$(date -u +%Y%m%d%H%M%S)" ; \
+	echo "==> Creating Job $$job from cronjob/pgbackup" ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) create job "$$job" --from=cronjob/pgbackup ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) wait --for=condition=complete --timeout=180s "job/$$job" || { \
+	  echo "Job did not complete; recent logs:" >&2 ; \
+	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) logs "job/$$job" --all-containers --tail=40 >&2 || true ; exit 1 ; } ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) logs "job/$$job" -c upload --tail=10 ; \
+	echo "==> Backup Job $$job complete."
+
+scw-pgbackup-restore: ## Restore a dump from S3 into a scratch DB for verification (PG_BACKUP_KEY=pg/<ts>.sql.gz)
+	@test -n "$(PG_BACKUP_KEY)" || { echo "ERROR: set PG_BACKUP_KEY=pg/<timestamp>.sql.gz (see: make scw-pgbackup-list)" >&2; exit 1; }
+	@set -eu ; pod="pgbackup-restore-$$(date -u +%Y%m%d%H%M%S)" ; \
+	echo "==> Restoring $(PG_BACKUP_KEY) into scratch DB restore_check on postgres (non-destructive to app DB)" ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) run "$$pod" --rm -i --restart=Never --image=postgres:17-alpine \
+	  --labels="app.kubernetes.io/name=sentropic,app.kubernetes.io/component=pgbackup" \
+	  --env PGHOST=postgres --env PGPORT=5432 --env PGUSER=app --env PGDATABASE=app \
+	  --env PGPASSWORD="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d)" \
+	  --env AWS_ACCESS_KEY_ID="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_ACCESS_KEY}' | base64 -d)" \
+	  --env AWS_SECRET_ACCESS_KEY="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_SECRET_KEY}' | base64 -d)" \
+	  --command -- sh -c 'set -e; apk add --no-cache aws-cli >/dev/null 2>&1 || true; \
+	    aws s3 cp "s3://$(PG_BACKUP_BUCKET)/$(PG_BACKUP_KEY)" /tmp/d.sql.gz --endpoint-url https://s3.fr-par.scw.cloud --region fr-par; \
+	    psql -c "DROP DATABASE IF EXISTS restore_check;" -c "CREATE DATABASE restore_check;"; \
+	    gunzip -c /tmp/d.sql.gz | psql -d restore_check; \
+	    psql -d restore_check -c "SELECT count(*) AS organizations FROM organizations;" || true; \
+	    psql -c "DROP DATABASE restore_check;"; echo "restore verification OK"'
