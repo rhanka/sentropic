@@ -24,6 +24,7 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `PLAN.md`
+  - `docs/superpowers/plans/2026-05-24-image-generation-tool.md`
   - `plan/38b-BRANCH_feat-image-generation-tool.md`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/src/**`
@@ -44,6 +45,10 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - `api/src/routes/api/pptx.ts`
   - `api/src/services/chat-service.ts`
   - `api/src/services/llm-runtime/**`
+  - `api/src/services/provider-runtime.ts`
+  - `api/src/services/providers/openai-provider.ts`
+  - `api/src/services/providers/gemini-provider.ts`
+  - `api/src/services/tools.ts`
   - `api/src/services/tool-service.ts`
   - `api/src/services/document*.ts`
   - `api/src/services/context-document*.ts`
@@ -52,6 +57,7 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - `api/tests/api/documents.test.ts`
   - `api/tests/unit/chat-service-tools.test.ts`
   - `api/tests/unit/documents-tool-service.test.ts`
+  - `api/tests/unit/image-generation-runtime.test.ts`
   - `api/tests/unit/provider-mesh-contract-proof.test.ts`
   - `api/tests/unit/tool-service.test.ts`
   - `api/tests/ai/chat-tools.test.ts`
