@@ -3,6 +3,8 @@ import {
   listModelProfilesByProvider,
   providerIds as meshProviderIds,
   type CapabilitySupport,
+  type ImageGenerationKind,
+  type ImageGenerationStatus,
   type ModelProfile,
   type ProviderId as MeshProviderId,
   type ReasoningTier as MeshReasoningTier,
@@ -38,6 +40,8 @@ export interface ModelCatalogEntry {
   supportsTools: boolean;
   supportsStreaming: boolean;
   supportsReasoning?: boolean;
+  imageGenerationStatus: ImageGenerationStatus;
+  imageGenerationKind: ImageGenerationKind;
   defaultContexts: DefaultContext[];
 }
 
@@ -81,6 +85,8 @@ const toRuntimeModel = (profile: ModelProfile): ModelCatalogEntry => ({
   supportsTools: isAvailable(profile.capabilities.tools.support),
   supportsStreaming: isAvailable(profile.capabilities.streaming.support),
   supportsReasoning: isAvailable(profile.capabilities.reasoning.support),
+  imageGenerationStatus: profile.capabilities.imageGeneration.status,
+  imageGenerationKind: profile.capabilities.imageGeneration.kind,
   defaultContexts: [...profile.defaultTaskHints],
 });
 

@@ -30,6 +30,17 @@ type RuntimeSelection = {
   model: string;
 };
 
+const defaultImageModelByProvider: Partial<Record<ProviderId, string>> = {
+  openai: 'gpt-image-2',
+  gemini: 'gemini-3.1-flash-image-preview',
+};
+
+const createRuntimeError = (message: string, code: string): Error & { code: string } => {
+  const error = new Error(message) as Error & { code: string };
+  error.code = code;
+  return error;
+};
+
 const resolveRuntimeSelection = async (input: {
   providerId?: string | null;
   model?: string | null;
@@ -77,6 +88,56 @@ const resolveRuntimeSelection = async (input: {
   return {
     providerId: resolved.provider_id,
     model: resolved.model_id,
+  };
+};
+
+const resolveImageRuntimeSelection = async (input: {
+  providerId?: string | null;
+  model?: string | null;
+  userId?: string | null;
+}): Promise<RuntimeSelection> => {
+  const requestedModel = (input.model ?? '').trim();
+  if (requestedModel) {
+    return await resolveRuntimeSelection(input);
+  }
+
+  const [aiSettings, models] = await Promise.all([
+    settingsService.getAISettings({ userId: input.userId ?? null }),
+    Promise.resolve(providerRegistry.listModels()),
+  ]);
+
+  const requestedProvider = isProviderId(input.providerId ?? '')
+    ? (input.providerId as ProviderId)
+    : isProviderId(aiSettings.defaultProviderId) &&
+        defaultImageModelByProvider[aiSettings.defaultProviderId as ProviderId]
+      ? (aiSettings.defaultProviderId as ProviderId)
+      : 'openai';
+
+  const configuredDefault = defaultImageModelByProvider[requestedProvider];
+  const imageModel =
+    (configuredDefault &&
+      models.find(
+        (model) =>
+          model.providerId === requestedProvider &&
+          model.modelId === configuredDefault &&
+          model.imageGenerationStatus === 'supported',
+      )) ||
+    models.find(
+      (model) =>
+        model.providerId === requestedProvider &&
+        model.imageGenerationStatus === 'supported',
+    );
+
+  if (!imageModel) {
+    throw createRuntimeError(
+      `Image generation is unsupported for provider ${requestedProvider}`,
+      'unsupported_provider',
+    );
+  }
+
+  return {
+    providerId: imageModel.providerId,
+    model: imageModel.modelId,
   };
 };
 
@@ -468,21 +529,30 @@ const normalizeImageCount = (value: unknown): number | undefined => {
   return rounded > 0 ? rounded : undefined;
 };
 
+const openAIImageSizeForAspectRatio = (aspectRatio?: string): string | undefined => {
+  if (aspectRatio === '1:1') return '1024x1024';
+  if (aspectRatio === '3:2') return '1536x1024';
+  if (aspectRatio === '2:3') return '1024x1536';
+  return undefined;
+};
+
 const buildOpenAIImageRequestOptions = (input: {
   model: string;
   prompt: string;
   count?: number;
   size?: string;
+  aspectRatio?: string;
   quality?: string;
   background?: string;
   providerOptions?: Record<string, unknown>;
 }): Record<string, unknown> => {
+  const size = input.size ?? openAIImageSizeForAspectRatio(input.aspectRatio);
   const requestOptions: Record<string, unknown> = {
     model: input.model,
     prompt: input.prompt,
     ...(input.providerOptions ?? {}),
     ...(input.count ? { n: input.count } : {}),
-    ...(isOpenAIImageSize(input.size) ? { size: input.size } : {}),
+    ...(isOpenAIImageSize(size) ? { size } : {}),
     ...(isOpenAIImageQuality(input.quality) ? { quality: input.quality } : {}),
     ...(isOpenAIImageBackground(input.background)
       ? { background: input.background }
@@ -495,6 +565,7 @@ const buildOpenAIImageRequestOptions = (input: {
 const buildGeminiImageRequestBody = (input: {
   model: string;
   prompt: string;
+  aspectRatio?: string;
   providerOptions?: Record<string, unknown>;
 }): Record<string, unknown> => {
   const options = {
@@ -506,6 +577,9 @@ const buildGeminiImageRequestBody = (input: {
     ],
     generationConfig: {
       responseModalities: ['IMAGE'],
+      ...(input.aspectRatio
+        ? { responseFormat: { image: { aspectRatio: input.aspectRatio } } }
+        : {}),
     },
   };
 
@@ -523,7 +597,14 @@ const buildGeminiImageRequestBody = (input: {
 };
 
 export const generateImage = async (options: GenerateImageOptions) => {
-  const selection = await resolveRuntimeSelection({
+  if (options.referenceImages && options.referenceImages.length > 0) {
+    throw createRuntimeError(
+      'Reference images are not supported by the image generation runtime yet',
+      'invalid_generation_options',
+    );
+  }
+
+  const selection = await resolveImageRuntimeSelection({
     providerId: options.providerId,
     model: options.model ?? options.modelId,
     userId: options.userId,
@@ -545,6 +626,7 @@ export const generateImage = async (options: GenerateImageOptions) => {
             prompt: options.prompt,
             count: normalizeImageCount(options.count),
             size: options.size,
+            aspectRatio: options.aspectRatio,
             quality: options.quality,
             background: options.background,
             providerOptions:
@@ -561,6 +643,7 @@ export const generateImage = async (options: GenerateImageOptions) => {
             body: buildGeminiImageRequestBody({
               model: selection.model,
               prompt: options.prompt,
+              aspectRatio: options.aspectRatio,
               providerOptions: options.providerOptions,
             }),
           },

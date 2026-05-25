@@ -105,6 +105,28 @@ describe('image generation runtime', () => {
     );
   });
 
+  it('defaults OpenAI image generation to the provider image model when model is omitted', async () => {
+    openaiImagesGenerate.mockResolvedValue({
+      data: [
+        {
+          b64_json: 'U0FNUExFQl9CQVNFMjU2X0RBVEE=',
+        },
+      ],
+    });
+
+    await generateImage({
+      providerId: 'openai',
+      prompt: 'Logo',
+      workspaceId: 'workspace-1',
+      userId: 'user-1',
+    });
+
+    expect(openaiImagesGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-image-2', prompt: 'Logo' }),
+      expect.anything(),
+    );
+  });
+
   it('routes Gemini image generation and normalizes inlineData images', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
