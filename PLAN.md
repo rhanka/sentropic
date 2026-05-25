@@ -3,6 +3,7 @@
 Status: Updated 2026-05-14 — BR-14c (`feat/llm-mesh-sdk`) MERGED (PR #141, 2026-05-11), BR-14g (model catalog GPT-5.5 + Opus 4.7) MERGED (PR #146), BR-24 (`chore/node24-actions-upgrade`) MERGED (PR #147), `fix-mistral` MERGED (PR #145). BR-23 (`feat/multi-agent-framework-comparison`) scoping COMPLETED 2026-05-13 — PR #148 open, awaiting `SPEC_VOL` validation; architecture decisions closed in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` (single generic `CheckpointStore<T>`, single composable federated `ToolRegistry`, separate `@sentropic/marketplace`, façade-first `@sentropic/flow` extraction preserving agent templating invariant). BR-14b IN PROGRESS — Lot 1 contracts shipped (`16163ffc` = `@sentropic/contracts` skeleton), Lot 2 events shipped (`9cc76b61` = `@sentropic/events` skeleton); Lot 3 `@sentropic/chat-core` shell pending. BR-14a Lot 0 scoping complete (`c5cc6da1`); implementation blocked on BR-14b merge; target renamed `@sentropic/chat` → `@sentropic/chat-ui`. BR-25 (`chore/rules-skills-audit`) in study mode (17/46 checkboxes). BR-31 (`chore/make-to-nx-study`) STUDY CLOSED 2026-05-13 — recommendation REJECT (commits `681790fa` + `38d8f1d3`); no code change. BR-26 (`feat/openerp-runtime-requirements`) SCAFFOLDED 2026-05-14 (PR #151) — OpenERP project runtime requirements (MCP, OTel hooks, policy hooks, identity, marketplace primitives, sandbox); reserves slots BR-27..30 for OpenERP implementation follow-ups. Original BR-26..30 slots remapped to BR-32..36 to avoid collision. Forthcoming sentropic branches: BR-32 (flow-runtime-extract), BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers), BR-38a/BR-38b (vision/image), BR-39a/BR-39b (auth modules). Selected next execution order: BR-14b → BR-14a → BR-32 → BR-19 → BR-33 → BR-35 → BR-36 → BR-14e → BR-14d. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`.
 Status addendum 2026-05-24: BR-38a (`feat/multimodal-image-input`) and BR-38b (`feat/image-generation-tool`) are registered as the vision/image branch pair. BR-38a owns image upload/paste/attach from chat, documents, and Google Drive plus llm-mesh vision routing. BR-38b depends on BR-38a and owns image generation contract, storage, and chat rendering.
 Status addendum 2026-05-24: BR-39a (`feat/auth-ui-sdk`) and BR-39b (`feat/auth-hono-kit`) are registered as the auth-module extraction pair. BR-39a owns reusable frontend auth screens and browser passkey helpers as `@sentropic/auth-ui`, with `spa-transpose-cv` as the first documented consumer need. BR-39b depends on BR-39a's transport contract and owns the optional reusable Hono backend package, `@sentropic/auth-hono`.
+Status addendum 2026-05-25: BR-40a/b/c registered as the "prioritization & sheets" trio (multi-branch wave) via documentation chore `chore/priorization-sheets`. BR-40a (`feat/prioritization-matrix-scale`) raises the per-folder use-case cap to 50 and makes the prioritization-matrix chart legible at scale (top-10 labels, hide-bubbles toggle, business-domain-filterable legend with hover emphasis). BR-40b (`feat/xlsx-multitab-query`) handles multi-tab xlsx for indexing and the documentary query tool, building on the in-flight `feat/xlsx-gsheet-indexing` branch (disposition pending BR40b-Q1). BR-40c (`feat/folder-xlsx-export`) adds a multi-tab xlsx export of a folder (use cases / evaluation matrix / prioritization quadrant). Open framing questions tracked in each plan file (BR40a-Q1/Q2/Q3, BR40b-Q1/Q2, BR40c-Q1/Q2).
 Status addendum 2026-05-25: BR-37 (`feat/deploy-poc-k8s`, PR #160) MERGED — Sentropic on poc-k8s Kapsule; plan archived in `plan/done/37-BRANCH_feat-deploy-poc-k8s.md`. BR-37b (`feat/deploy-poc-k8s-37b`, PR #176) delivers the email-egress fix (Nodemailer SMTP → Scaleway TEM HTTP API; SMTP blocked at Kapsule platform level) + Bitnami Sealed Secrets (controller live, `sentropic-api`/`postgres` resealed with `SCW_TEM_SECRET_KEY`, no `MAIL_*`) — CI-green. BR-37b is SPLIT: postgres backup, public Ingress + cert-manager (Cloudflare DNS-01), end-to-end deploy validation, and the post-merge live email smoke move to continuation branch **BR-37c** (`feat/deploy-poc-k8s-37c`, `plan/37c-BRANCH_feat-deploy-poc-k8s-37c.md`), launched from main after BR-37b merges.
 
 ## 0) Repo merge policy (effective 2026-05-13)
@@ -273,6 +274,17 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 |        |                                                  | services, WebAuthn/email ports, and middleware as          |                      |                                |
 |        |                                                  | @sentropic/auth-hono without workspace coupling.           |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-40a | feat/prioritization-matrix-scale                 | Raise per-folder use-case cap to 50; chart legibility at   | plan                 | none                           |
+|        |                                                  | scale: top-10 labels, hide-bubbles toggle, domain-filter   |                      |                                |
+|        |                                                  | legend with hover emphasis.                                |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-40b | feat/xlsx-multitab-query                         | Multi-tab xlsx for indexing + documentary query tool       | plan                 | feat/xlsx-gsheet-indexing      |
+|        |                                                  | (list_sheets / get_sheet_content). Builds on in-flight     |                      | (disposition: BR40b-Q1)        |
+|        |                                                  | feat/xlsx-gsheet-indexing.                                 |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
+| BR-40c | feat/folder-xlsx-export                          | Multi-tab xlsx export of a folder: use cases / evaluation  | plan                 | none                           |
+|        |                                                  | matrix / prioritization quadrant. Mirrors DOCX async job.  |                      |                                |
++--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-31  | chore/make-to-nx-study                           | One-branch study assessing nx as a Make replacement.       | study closed         | none (doc-only)                |
 |        |                                                  | Deliverable: spec/SPEC_STUDY_MAKE_TO_NX_MIGRATION.md       | (recommend REJECT)   |                                |
 |        |                                                  | (status quo + nx simulation + CI before/after + transition |                      |                                |
@@ -327,6 +339,9 @@ graph TD
   BR38b[BR-38b image generation]
   BR39a[BR-39a auth UI SDK]
   BR39b[BR-39b auth Hono kit]
+  BR40a[BR-40a prioritization matrix scale]
+  BR40b[BR-40b xlsx multitab query]
+  BR40c[BR-40c folder xlsx export]
   BR31[BR-31 make to nx study ✗ REJECT]
 
   BR00 --> BR01
@@ -395,6 +410,7 @@ graph TD
   BR38a --> BR38b
   BR14f --> BR39a
   BR39a --> BR39b
+  BR16a -.->|xlsx indexing base| BR40b
 ```
 
 ## 5) Scheduling post-BR-04
@@ -408,6 +424,7 @@ graph TD
 - **Out of waves — backlog**: BR-34 (`feat/graphify-fusion`) standalone, scheduled on capacity.
 - **Out of waves — vision/image pair (registered 2026-05-24)**: BR-38a (`feat/multimodal-image-input`) then BR-38b (`feat/image-generation-tool`). BR-38a can be pulled forward after BR-14a/BR-14b/BR-14c/BR-14g and BR-16a contracts are stable enough to avoid duplicate chat/document wire changes. BR-38b waits for BR-38a because generated images reuse the media/storage/rendering contracts introduced for image input.
 - **Out of waves — auth module pair (registered 2026-05-24)**: BR-39a (`feat/auth-ui-sdk`) then BR-39b (`feat/auth-hono-kit`). BR-39a can run as soon as package publication capacity is available because it is frontend-only and host-adapter driven. BR-39b waits for BR-39a's transport contract so backend route extraction does not freeze a shape the reusable screens cannot consume.
+- **Out of waves — prioritization & sheets trio (registered 2026-05-25)**: BR-40a (`feat/prioritization-matrix-scale`) ∥ BR-40b (`feat/xlsx-multitab-query`) ∥ BR-40c (`feat/folder-xlsx-export`), one parallel wave of three orthogonal capabilities. BR-40a and BR-40c are independent. BR-40b depends on the disposition of `feat/xlsx-gsheet-indexing` (BR40b-Q1). Documentation registered via `chore/priorization-sheets`; implementation begins after framing questions (BR40a-Q1/Q2/Q3, BR40b-Q1/Q2, BR40c-Q1/Q2) are resolved.
 - **Out of waves — closed**: BR-31 (`chore/make-to-nx-study`) study closed, recommendation REJECT.
 
 **Wave in progress (2026-04-21)**: this transition branch (README pair, Sentropic URL, repo/DNS/SCW plan, BR-14 split, PR-117 transition TODO) ∥ BR-16a Lot 0 (gdrive SSO + document_summary indexing scoping). Planning-only.
@@ -446,6 +463,11 @@ Registered BR-39 slots:
 - BR-39a slot 0 uses `API_PORT=9195`, `UI_PORT=5395`, `MAILDEV_UI_PORT=1295`, `ENV=test-feat-auth-ui-sdk` or `ENV=e2e-feat-auth-ui-sdk`.
 - BR-39b slot 1 uses `API_PORT=9196`, `UI_PORT=5396`, `MAILDEV_UI_PORT=1296`, `ENV=test-feat-auth-hono-kit` or `ENV=e2e-feat-auth-hono-kit`.
 
+Registered BR-40 slots:
+- BR-40a slot 0 uses `API_PORT=9200`, `UI_PORT=5400`, `MAILDEV_UI_PORT=1300`, `ENV=test-feat-prioritization-matrix-scale` or `ENV=e2e-feat-prioritization-matrix-scale`.
+- BR-40b slot 1 uses `API_PORT=9201`, `UI_PORT=5401`, `MAILDEV_UI_PORT=1301`, `ENV=test-feat-xlsx-multitab-query` or `ENV=e2e-feat-xlsx-multitab-query`.
+- BR-40c slot 2 uses `API_PORT=9202`, `UI_PORT=5402`, `MAILDEV_UI_PORT=1302`, `ENV=test-feat-folder-xlsx-export` or `ENV=e2e-feat-folder-xlsx-export`.
+
 All active branch plans and new sub-agent launch packets must use this slot convention when multiple agents or OAuth callback registration are involved.
 User UAT on root workspace (`ENV=dev`). Branch development and automated tests run in isolated worktrees only.
 
@@ -469,6 +491,10 @@ User UAT on root workspace (`ENV=dev`). Branch development and automated tests r
 - `plan/38b-BRANCH_feat-image-generation-tool.md` (BR-38b branch pointer)
 - `plan/39a-BRANCH_feat-auth-ui-sdk.md` (BR-39a branch pointer)
 - `plan/39b-BRANCH_feat-auth-hono-kit.md` (BR-39b branch pointer)
+- `plan/40-BRANCH_chore-priorization-sheets.md` (BR-40 documentation umbrella)
+- `plan/40a-BRANCH_feat-prioritization-matrix-scale.md` (BR-40a branch pointer)
+- `plan/40b-BRANCH_feat-xlsx-multitab-query.md` (BR-40b branch pointer)
+- `plan/40c-BRANCH_feat-folder-xlsx-export.md` (BR-40c branch pointer)
 - `plan/31-BRANCH_chore-make-to-nx-study.md` (BR-31 branch pointer — study closed)
 - `spec/SPEC_EVOL_WORKSPACE_TYPES.md` (BR-04)
 - `spec/SPEC_EVOL_AGENTIC_WORKSPACE_TODO.md` (residual)
