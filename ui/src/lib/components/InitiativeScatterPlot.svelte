@@ -42,15 +42,39 @@
   export function getDocxBitmapSnapshot(): { dataUrl: string; widthPx: number; heightPx: number } | null {
     if (!chartContainer || chartContainer.width <= 0 || chartContainer.height <= 0) return null;
 
+    // BR-40a Lot 4: the DOCX bitmap is the live canvas captured as-is, so the new
+    // top-N labels + domain colors + status borders are embedded automatically.
+    // The hide-bubbles toggle / domain filter / hover emphasis are transient view
+    // state that must NOT leak into the export — temporarily force the full chart
+    // (every point shown at its base radius), redraw synchronously, then restore.
+    const needsFullChart =
+      !!chartInstance &&
+      (hideBubbles || hiddenDomains.size > 0 || hoveredDomain !== null);
+    if (needsFullChart && chartInstance) {
+      const dataset = chartInstance.data.datasets[0] as any;
+      const fullRadii = offsetData.map(() => POINT_RADIUS);
+      dataset.pointRadius = fullRadii;
+      dataset.pointHoverRadius = fullRadii.map((r) => r * 1.3);
+      dataset.pointBorderWidth = fullRadii.map(() => 1.5);
+      chartInstance.update('none');
+      chartInstance.draw();
+    }
+
     const offscreen = document.createElement('canvas');
     offscreen.width = chartContainer.width;
     offscreen.height = chartContainer.height;
     const ctx = offscreen.getContext('2d');
-    if (!ctx) return null;
+    if (!ctx) {
+      if (needsFullChart) updateChart();
+      return null;
+    }
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, offscreen.width, offscreen.height);
     ctx.drawImage(chartContainer, 0, 0, offscreen.width, offscreen.height);
+
+    // Restore the live chart to the user's current view state.
+    if (needsFullChart) updateChart();
 
     return {
       dataUrl: offscreen.toDataURL('image/png'),
