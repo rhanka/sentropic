@@ -5,9 +5,16 @@
   import { Chart, registerables } from 'chart.js';
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
-  import { calculateUseCaseScores } from '$lib/utils/scoring';
+  import { calculateUseCaseScores, selectTopPriorityIndices } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
-  import { BarChart3, MousePointerClick, Loader2 } from '@lucide/svelte';
+  import { BarChart3, MousePointerClick, Loader2, Eye, EyeOff } from '@lucide/svelte';
+
+  // BR-40a: only the top-N use cases (ranked by value / (complexity + ε)) get labels.
+  const TOP_LABEL_COUNT = 10;
+
+  // BR-40a: "hide bubbles" toggle. When true, point markers are hidden but the
+  // hover hit-areas + tooltip stay active (pointHitRadius preserved).
+  let hideBubbles = false;
 
   export let useCases: any[] = [];
   export let matrix: MatrixConfig | null = null;
@@ -1374,13 +1381,17 @@
       ctx.font = labelFont;
       ctx.textBaseline = 'top';
       const chartArea = chart.chartArea;
+      // BR-40a: label only the top-N use cases (raw.isTopCase). All points keep
+      // their hover hit-area + tooltip; only labels are restricted.
       const points = dataset.data
         .map((element: any, index: number) => ({
           element,
           index,
           raw: element?.$context?.raw
         }))
-        .filter((item: { raw?: { label?: string } }) => Boolean(item.raw?.label));
+        .filter((item: { raw?: { label?: string; isTopCase?: boolean } }) =>
+          Boolean(item.raw?.label) && item.raw?.isTopCase === true
+        );
 
       // Lire les seuils depuis les options du chart (toujours à jour)
       const thresholdValue = pluginOptions.valueThreshold ?? thresholdState.value ?? 0;
@@ -1700,12 +1711,14 @@
       const complexityScores = uc.data?.complexityScores || uc.complexityScores || [];
       const scores = calculateUseCaseScores(matrix!, valueScores, complexityScores);
       const colorInfo = getStatusColorInfo(uc.status);
+      const domain = (uc.data?.domain ?? uc.domain ?? '').toString().trim();
       return {
         x: scores.finalComplexityScore, // Complexité Fibonacci (0-100)
         y: scores.finalValueScore,      // Valeur Fibonacci (0-100)
         label: uc.data?.name || uc.name || 'Cas d\'usage sans nom',
         description: uc.data?.description || uc.description || '',
         status: uc.status,
+        domain, // BR-40a: business domain (used for legend, color, hover emphasis)
         id: uc.id,
         valueStars: scores.valueStars,      // Valeur normalisée (1-5)
         complexityStars: scores.complexityStars, // Complexité normalisée (1-5)
@@ -1713,6 +1726,15 @@
         color: colorInfo.solid
       };
     });
+
+  // BR-40a: indices (into rawData) of the top-N use cases that receive labels.
+  // Ranked by value / (complexity + ε) capped; ties broken by value (see scoring.ts).
+  $: topLabelIndices = new Set(
+    selectTopPriorityIndices(
+      rawData.map((point) => ({ value: point.y, complexity: point.x })),
+      TOP_LABEL_COUNT
+    )
+  );
 
   // Calculer les médianes pour le quadrant ROI
   $: valueScores = rawData.map(point => point.y);
@@ -1756,7 +1778,11 @@
     }
   }
 
-  $: offsetData = offsetOverlappingPoints(rawData);
+  // BR-40a: annotate each point with isTopCase (only the top-N receive labels).
+  $: offsetData = offsetOverlappingPoints(rawData).map((point, index) => ({
+    ...point,
+    isTopCase: topLabelIndices.has(index)
+  }));
   $: backgroundColors = offsetData.map(() => `rgba(${THEME_BLUE_RGB}, 0.85)`);
   $: borderColors = offsetData.map(() => `rgb(${THEME_BLUE_RGB})`);
 
@@ -1766,10 +1792,12 @@
       data: offsetData,
       backgroundColor: backgroundColors,
       borderColor: borderColors,
-      pointRadius: POINT_RADIUS,
-      pointHoverRadius: POINT_RADIUS * 1.6,
+      // BR-40a: when bubbles are hidden, the marker radius is 0 but pointHitRadius
+      // stays wide so hover hit-areas + tooltip keep working.
+      pointRadius: hideBubbles ? 0 : POINT_RADIUS,
+      pointHoverRadius: hideBubbles ? 0 : POINT_RADIUS * 1.6,
       // Zone de détection plus large pour faciliter le hover sur les points
-      pointHitRadius: 20, 
+      pointHitRadius: 20,
       pointBorderWidth: 0,
       pointHoverBackgroundColor: borderColors,
       pointHoverBorderColor: borderColors
@@ -2194,6 +2222,26 @@
     {/if}
   </div>
   
+  <!-- BR-40a: chart controls (hide-bubbles toggle) -->
+  {#if useCases.length > 0 && matrix}
+    <div class="mt-3 flex justify-center scatter-plot-controls print-hidden">
+      <button
+        type="button"
+        class="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+        aria-pressed={hideBubbles}
+        on:click={() => (hideBubbles = !hideBubbles)}
+      >
+        {#if hideBubbles}
+          <Eye class="w-4 h-4" />
+          {$_('usecase.scatterPlot.showBubbles')}
+        {:else}
+          <EyeOff class="w-4 h-4" />
+          {$_('usecase.scatterPlot.hideBubbles')}
+        {/if}
+      </button>
+    </div>
+  {/if}
+
   <!-- Indication de clic et chargement -->
   <div class="mt-4 flex justify-center scatter-plot-click-hint">
     <div class="flex items-center gap-2 text-slate-500 text-sm">
@@ -2210,7 +2258,7 @@
       {/if}
     </div>
   </div>
-  
+
 </div>
 
 <style>

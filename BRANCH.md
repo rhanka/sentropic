@@ -88,11 +88,11 @@ hover-driven emphasis (hovering a point or a domain enlarges the points of that 
   - [x] Confirm no schema/migration needed; soft cap via Zod validation only (BR40a-Q3) — declared `BR40a-EX1` for the two out-of-Allowed-Paths files.
   - [x] Lot gate: `make typecheck-api` + `make lint-api` (0 errors); API test `initiatives-generate-matrix.test.ts` (12 passed, incl. accept-50 / reject-51).
 
-- [ ] **Lot 2 — Chart legibility at scale (labels + hide-bubbles)**
-  - [ ] Label only the top-10 use cases by ratio `value / (complexity + ε)` with cap (BR40a-Q1); ties broken by value.
-  - [ ] Add a "hide bubbles" toggle: when on, hide point markers but keep hover hit-areas + tooltip.
-  - [ ] When bubbles shown and ≤10 cases, all bubbles + labels render normally.
-  - [ ] Lot gate: `make typecheck-ui` + `make lint-ui`; UI specs for top-10 selection + toggle.
+- [x] **Lot 2 — Chart legibility at scale (labels + hide-bubbles)**
+  - [x] Label only the top-10 use cases by ratio `value / (complexity + ε)` with cap (BR40a-Q1); ties broken by value. New pure helpers `computePriorityRatio` / `selectTopPriorityIndices` in `scoring.ts` (ε=1, cap=100); label plugin filters on `raw.isTopCase`.
+  - [x] Add a "hide bubbles" toggle: when on, `pointRadius`/`pointHoverRadius`=0 but `pointHitRadius`=20 kept (hover + tooltip stay).
+  - [x] When bubbles shown and ≤10 cases, all bubbles render; top-N labels cover all of them (N=10 ≥ count).
+  - [x] Lot gate: `make typecheck-ui` (0 errors) + `make lint-ui` (clean); `scoring.test.ts` 23 passed (12 new for ratio/top-N).
 
 - [ ] **Lot 3 — Business-domain legend, filter & hover emphasis**
   - [ ] Add a legend grouped by `initiative.data.domain`, filterable (toggle domains on/off).
