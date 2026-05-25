@@ -157,9 +157,10 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - [x] Implement provider adapter support for the selected first provider path and explicit unsupported-provider errors for the rest.
   - [x] Ensure provider auth resolution uses existing mesh auth material and does not create a new credential path.
   - [x] Preserve text chat generate/stream APIs without dual paths.
-  - [ ] Lot gate:
-    - [ ] `make test-packages SCOPE=packages/llm-mesh/tests/facade.test.ts ENV=test-feat-image-generation-tool`
-    - [ ] `make test-api SCOPE=tests/unit/provider-mesh-contract-proof.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+  - [x] Lot gate:
+    - [x] `make test-llm-mesh ENV=test-feat-image-generation-tool`
+    - [x] `make typecheck-llm-mesh ENV=test-feat-image-generation-tool`
+    - [x] `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
 
 - [ ] **Lot 2 - API image generation tool and storage**
   - [ ] Add a server-side chat tool contract, named `image_generate`, with JSON schema for prompt and generation controls.
