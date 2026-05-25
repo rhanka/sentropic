@@ -50,12 +50,15 @@
     const needsFullChart =
       !!chartInstance &&
       (hideBubbles || hiddenDomains.size > 0 || hoveredDomain !== null);
+    const labelOpts = (chartInstance?.options.plugins as any)?.useCaseLabels;
     if (needsFullChart && chartInstance) {
       const dataset = chartInstance.data.datasets[0] as any;
       const fullRadii = offsetData.map(() => POINT_RADIUS);
       dataset.pointRadius = fullRadii;
       dataset.pointHoverRadius = fullRadii.map((r) => r * 1.3);
       dataset.pointBorderWidth = fullRadii.map(() => 1.5);
+      // Force the top-N text labels on for the export even if "hide bubbles" is active.
+      if (labelOpts) labelOpts.hideBubbles = false;
       chartInstance.update('none');
       chartInstance.draw();
     }
@@ -65,6 +68,7 @@
     offscreen.height = chartContainer.height;
     const ctx = offscreen.getContext('2d');
     if (!ctx) {
+      if (labelOpts) labelOpts.hideBubbles = hideBubbles;
       if (needsFullChart) updateChart();
       return null;
     }
@@ -74,6 +78,7 @@
     ctx.drawImage(chartContainer, 0, 0, offscreen.width, offscreen.height);
 
     // Restore the live chart to the user's current view state.
+    if (labelOpts) labelOpts.hideBubbles = hideBubbles;
     if (needsFullChart) updateChart();
 
     return {
@@ -1452,7 +1457,7 @@
           raw: element?.$context?.raw
         }))
         .filter((item: { raw?: { label?: string; isTopCase?: boolean } }) =>
-          Boolean(item.raw?.label) && item.raw?.isTopCase === true
+          !pluginOptions.hideBubbles && Boolean(item.raw?.label) && item.raw?.isTopCase === true
         );
 
       // Lire les seuils depuis les options du chart (toujours à jour)
@@ -1909,10 +1914,9 @@
     // Legend filter: a toggled-off domain is fully hidden.
     if (hiddenDomains.has(domainKey)) return 0;
     const isEmphasized = hoveredDomain !== null && domainKey === hoveredDomain;
-    if (hideBubbles) {
-      // Bubbles hidden: only the emphasized domain's points appear.
-      return isEmphasized ? POINT_RADIUS * 1.8 : 0;
-    }
+    // Points always render (subject to legend filter + hover emphasis). The
+    // "hide bubbles" toggle hides the TEXT label callouts (see plugin), NOT the
+    // points — so hover stays usable on the clean point cloud.
     return isEmphasized ? POINT_RADIUS * 1.8 : POINT_RADIUS;
   });
 
@@ -2362,7 +2366,9 @@
         complexityThreshold: effectiveComplexityThreshold,
         scale: scale,
         labelStandardArea: LABEL_STANDARD_AREA_SCALED,
-        labelBorderRadius: LABEL_BORDER_RADIUS
+        labelBorderRadius: LABEL_BORDER_RADIUS,
+        // "Hide bubbles" hides the top-N text label callouts (points stay visible).
+        hideBubbles: hideBubbles
       };
     }
   }
