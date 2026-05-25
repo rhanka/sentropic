@@ -260,13 +260,13 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
 
 ## User sign-off
 - **E2E flaky `05-usecase-detail.spec.ts` SSE chat-update** (run `26382665015`, commit `1ab59715`):
-  - Status: `pending`.
+  - Status: `signed-off`.
   - Subject: accept the live-LLM SSE chat-field-update test as `flaky accepted` (non-systematic: failed 3×, passed clean on rerun of the same job/commit). Unrelated to the Lot 1 email migration.
-  - Sign-off record (to fill after user confirmation):
-    - User: <name>
-    - Date: <YYYY-MM-DD>
-    - Decision: `flaky accepted` / `refuse`
-    - Notes: <free text>
+  - Sign-off record:
+    - User: Fabien Antoine (fabien.antoine@gmail.com)
+    - Date: 2026-05-25
+    - Decision: `flaky accepted`
+    - Notes: Live-LLM chat-SSE tool-call nondeterminism, no chat/SSE/tool code changed in BR-37b. Rerun of `test-e2e (group-e, 05 07)` on the same commit `1ab59715` was green. Follow-up (deferred): add `e2e/tests/05-usecase-detail.spec.ts` SSE case to the `rules/testing.md` E2E AI flaky allowlist via a dedicated rules change.
 
 ## Deferred to BR-14d / future BR
 - [ ] Final production hostname (beyond `sentropic.sent-tech.ca`) and migration off the `poc-k8s` cluster name when a more solid cluster is provisioned. BR-37b runs on `poc-k8s` but treats the workload as production.
