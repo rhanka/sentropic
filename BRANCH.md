@@ -72,6 +72,7 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - `e2e/tests/00-ai-generation.spec.ts`
   - `e2e/tests/03-chat.spec.ts`
   - `e2e/tests/04-documents-ui-actions.spec.ts`
+  - `spec/BRANCH_SPEC_EVOL_IMAGE_GENERATION.md`
   - `spec/SPEC_CHATBOT.md`
   - `spec/SPEC_EVOL_LLM_MESH.md`
   - `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`
@@ -104,13 +105,13 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - Existing document generation tools store downloadable artifacts; generated image storage should reuse that pattern where practical.
 - Lot 0 decision brief from the parallel contract spike:
   - Use a separate mesh `generateImage()` contract instead of overloading text chat streaming.
-  - Start with OpenAI image generation (`openai:gpt-image-1`) and return deterministic unsupported-provider errors elsewhere.
+  - Start with OpenAI `openai:gpt-image-2` and Gemini `gemini:gemini-3.1-flash-image-preview`, then return deterministic unsupported-provider errors for Anthropic, Cohere, and unsupported Mistral runtime paths.
   - Store generated media through existing document/storage references, not inline chat text.
   - Render generated images through a generic media/tool-result registry so BR-38a attachment primitives can be reused.
   - Keep implementation Lots 1-4 blocked until BR-38a is merged into `main`.
-- Main sync 2026-05-24: merged `origin/main` after root fast-forward from `85c679d7` to `146364eb`; no merge conflicts. Branch remains docs-only and implementation is still blocked by BR-38a plus the pending image-model design decision.
+- Main sync 2026-05-24: merged `origin/main` after root fast-forward from `85c679d7` to `146364eb`; no merge conflicts. Branch remained docs-only; implementation stayed blocked by BR-38a and the image-model design decision that was still open at the time.
 - Latest main sync 2026-05-24: merged `origin/main` again after `main` advanced from `146364eb` to `d5e3cddc`; no merge conflicts.
-- OpenAI docs refresh 2026-05-24: official GPT Image docs now list `gpt-image-2` as the current GPT Image model, with `gpt-image-1` still available. Pending brainstorm decision: default to `gpt-image-2` with `gpt-image-1` as explicit fallback, or keep the branch locked to `gpt-image-1`.
+- Image model decision 2026-05-24: user approved the BR-38b MVP provider matrix. OpenAI defaults to `gpt-image-2`; Gemini defaults to `gemini-3.1-flash-image-preview` (Nano Banana 2 Preview); Anthropic and Cohere are unsupported for native image generation; Mistral is planned only because official image generation support is exposed through the Agents/Conversations `image_generation` connector, not the current chat-completions runtime.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -141,7 +142,7 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - [x] Capture Makefile targets needed for API, UI, package, AI, and E2E gates.
   - [x] Confirm command style with `API_PORT=9191`, `UI_PORT=5391`, `MAILDEV_UI_PORT=1291`, and the concrete `ENV=...` value last.
   - [x] Confirm scope boundaries and declare `BR38b-EXn` before touching conditional paths.
-  - [ ] Add `spec/BRANCH_SPEC_EVOL_IMAGE_GENERATION.md` only if the design cannot be integrated cleanly into existing specs in the same branch.
+  - [x] Add `spec/BRANCH_SPEC_EVOL_IMAGE_GENERATION.md` only if the design cannot be integrated cleanly into existing specs in the same branch.
 
 - [ ] **Lot 1 - Mesh image generation contract**
   - [ ] Extend `@sentropic/llm-mesh` capabilities with generated image output modality.
