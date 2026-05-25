@@ -2,11 +2,27 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../../src/services/llm-runtime', () => ({
   callLLMStream: vi.fn(),
-  callLLM: vi.fn()
+  callLLM: vi.fn(),
+  generateImage: vi.fn()
 }));
 
 vi.mock('../../src/services/context-comments', () => ({
   generateCommentResolutionProposal: vi.fn()
+}));
+
+const mockPutObject = vi.fn();
+const mockDeleteObject = vi.fn();
+const mockGetObjectBodyStream = vi.fn();
+const mockGetObjectBytes = vi.fn();
+const mockHeadObject = vi.fn();
+
+vi.mock('../../src/services/storage-s3', () => ({
+  getDocumentsBucketName: () => 'test-bucket',
+  putObject: (args: any) => mockPutObject(args),
+  deleteObject: (args: any) => mockDeleteObject(args),
+  getObjectBodyStream: (args: any) => mockGetObjectBodyStream(args),
+  getObjectBytes: (args: any) => mockGetObjectBytes(args),
+  headObject: (args: any) => mockHeadObject(args),
 }));
 
 import { app } from '../../src/app';
@@ -23,18 +39,21 @@ import {
   chatSessions,
   chatStreamEvents,
   comments,
+  contextDocuments,
   folders,
   organizations,
   workspaceMemberships,
+  workspaces,
   initiatives
 } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
-import { callLLMStream } from '../../src/services/llm-runtime';
+import { callLLMStream, generateImage } from '../../src/services/llm-runtime';
 import { generateCommentResolutionProposal } from '../../src/services/context-comments';
 import { queueManager } from '../../src/services/queue-manager';
 
 const llmStreamMock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+const generateImageMock = generateImage as unknown as ReturnType<typeof vi.fn>;
 const proposalMock = generateCommentResolutionProposal as unknown as ReturnType<typeof vi.fn>;
 
 const createStream = (events: Array<{ type: string; data?: Record<string, unknown> }>) =>
@@ -110,6 +129,12 @@ describe('Chat tools API - comment_assistant', () => {
         { type: 'done', data: {} }
       ])
     );
+    generateImageMock.mockReset();
+    mockPutObject.mockReset();
+    mockDeleteObject.mockReset();
+    mockGetObjectBodyStream.mockReset();
+    mockGetObjectBytes.mockReset();
+    mockHeadObject.mockReset();
   });
 
   afterEach(async () => {
@@ -118,6 +143,7 @@ describe('Chat tools API - comment_assistant', () => {
     }
     for (const sessionId of sessionIds) {
       await db.delete(chatContexts).where(eq(chatContexts.sessionId, sessionId));
+      await db.delete(contextDocuments).where(eq(contextDocuments.contextId, sessionId));
       await db.delete(chatMessages).where(eq(chatMessages.sessionId, sessionId));
       await db.delete(chatSessions).where(eq(chatSessions.id, sessionId));
     }
@@ -135,6 +161,103 @@ describe('Chat tools API - comment_assistant', () => {
     sessionIds.length = 0;
     vi.clearAllMocks();
   });
+
+  it('generates image media through the chat tool and stores a downloadable document', async () => {
+    await db
+      .update(workspaces)
+      .set({ type: 'ai-ideas', updatedAt: new Date() })
+      .where(eq(workspaces.id, user.workspaceId!));
+    generateImageMock.mockResolvedValue({
+      id: 'img_gen_api_1',
+      providerId: 'openai',
+      modelId: 'gpt-image-2',
+      images: [
+        {
+          mimeType: 'image/png',
+          data: Buffer.from('api generated image').toString('base64'),
+          width: 1024,
+          height: 1024,
+        },
+      ],
+    });
+    llmStreamMock
+      .mockImplementationOnce(() =>
+        createStream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: 'tool_image_1',
+              name: 'image_generate',
+              args: JSON.stringify({
+                prompt: 'A concise product mockup image',
+                size: '1024x1024',
+              }),
+            },
+          },
+          { type: 'done', data: {} },
+        ]),
+      )
+      .mockImplementationOnce(() =>
+        createStream([
+          { type: 'content_delta', data: { delta: 'Done.' } },
+          { type: 'done', data: {} },
+        ]),
+      );
+
+    const chatResponse = await authenticatedRequest(app, 'POST', '/api/v1/chat/messages', user.sessionToken!, {
+      content: 'Generate a product mockup image',
+      primaryContextType: 'folder',
+      primaryContextId: folderId,
+      model: getTestModel()
+    });
+    expect(chatResponse.status).toBe(200);
+    const chatData = await chatResponse.json();
+    assistantMessageIds.push(chatData.assistantMessageId);
+    sessionIds.push(chatData.sessionId);
+
+    await waitForJobCompletion(chatData.jobId, user.sessionToken!);
+
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: 'A concise product mockup image',
+        size: '1024x1024',
+        workspaceId: user.workspaceId,
+        userId: user.id,
+      }),
+    );
+    const docs = await db
+      .select()
+      .from(contextDocuments)
+      .where(eq(contextDocuments.contextId, chatData.sessionId));
+    expect(docs).toHaveLength(1);
+    expect(docs[0]).toEqual(
+      expect.objectContaining({
+        sourceType: 'local',
+        mimeType: 'image/png',
+        status: 'ready',
+        filename: 'generated-image.png',
+      }),
+    );
+
+    const resultEvent = (await fetchAssistantDetails(
+      chatData.sessionId,
+      chatData.assistantMessageId,
+      user.sessionToken!,
+    )).find(
+      (event: any) => event.eventType === 'tool_call_result' && event.data?.tool_call_id === 'tool_image_1',
+    );
+    expect(resultEvent?.data?.result).toEqual({
+      status: 'completed',
+      media: [
+        expect.objectContaining({
+          documentId: docs[0]!.id,
+          fileName: 'generated-image.png',
+          mimeType: 'image/png',
+          downloadUrl: `/documents/${docs[0]!.id}/content`,
+        }),
+      ],
+    });
+  }, 15000);
 
   async function waitForJobCompletion(
     jobId: string,

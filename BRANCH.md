@@ -121,6 +121,7 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
 - Implementation plan 2026-05-24: detailed execution plan saved at `docs/superpowers/plans/2026-05-24-image-generation-tool.md`.
 - Task 2 code review follow-up 2026-05-25: API image generation now defaults provider-only OpenAI/Gemini calls to image-capable models and maps OpenAI/Gemini safety/no-image responses to deterministic image error codes before Task 3 tool wiring.
 - Task 2 code review follow-up 2026-05-25: provider defaults now fail deterministically when the configured default provider has no image model, and image `providerOptions` cannot override selected model, prompt, contents, or required image response modality.
+- Task 3 implementation 2026-05-25: `image_generate` is exposed for `ai-ideas` and `opportunity` workspaces only, dispatches through the API image runtime, stores generated image bytes as ready local chat-session `context_documents`, and returns document-backed media references.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -168,21 +169,21 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - [x] Add the API provider runtime bridge for mesh `generateImage()` dispatch.
   - [x] Add OpenAI and Gemini image generation runtime normalization tests.
   - [x] Preserve provider capability proof coverage for supported, unsupported, and planned image generation providers.
-  - [ ] Add a server-side chat tool contract, named `image_generate`, with JSON schema for prompt and generation controls.
-  - [ ] Route `image_generate` through the mesh image generation contract.
-  - [ ] Store generated image artifacts through the existing document/storage pattern and create generated-media context references.
-  - [ ] Return tool results with stable media IDs, MIME type, filename, dimensions when available, and download URLs.
-  - [ ] Add audit/runtime details for prompt, provider, model, status, and generated media references without logging raw credentials.
-  - [ ] Preserve existing `document_generate`, DOCX, PPTX, and chat tool behavior.
+  - [x] Add a server-side chat tool contract, named `image_generate`, with JSON schema for prompt and generation controls.
+  - [x] Route `image_generate` through the mesh image generation contract.
+  - [x] Store generated image artifacts through the existing document/storage pattern and create generated-media context references.
+  - [x] Return tool results with stable media IDs, MIME type, filename, dimensions when available, and download URLs.
+  - [x] Add audit/runtime details for prompt, provider, model, status, and generated media references without logging raw credentials.
+  - [x] Preserve existing `document_generate`, DOCX, PPTX, and chat tool behavior.
   - [x] Runtime bridge gate:
     - [x] `make test-api-unit SCOPE=tests/unit/image-generation-runtime.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
     - [x] `make test-api-unit SCOPE=tests/unit/provider-mesh-contract-proof.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
     - [x] `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
     - [x] `make lint-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
   - [ ] Lot gate:
-    - [ ] `make test-api SCOPE=tests/api/chat-tools.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
-    - [ ] `make test-api SCOPE=tests/api/documents.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
-    - [ ] `make test-api SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-endpoints SCOPE=tests/api/documents.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
     - [ ] `make test-api SCOPE=tests/unit/tool-service.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
     - [ ] `make test-api SCOPE=tests/unit/documents-tool-service.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
 

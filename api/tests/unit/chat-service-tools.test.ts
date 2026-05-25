@@ -4,6 +4,8 @@ import {
   chatMessages,
   chatSessions,
   chatStreamEvents,
+  contextDocuments,
+  contextModificationHistory,
   executionEvents,
   executionRuns,
   folders,
@@ -24,10 +26,18 @@ import { todoOrchestrationService } from '../../src/services/todo-orchestration'
 vi.mock('../../src/services/llm-runtime', () => {
   return {
     callLLMStream: vi.fn(),
+    generateImage: vi.fn(),
   };
 });
 
-import { callLLMStream } from '../../src/services/llm-runtime';
+const mockPutObject = vi.fn();
+
+vi.mock('../../src/services/storage-s3', () => ({
+  getDocumentsBucketName: () => 'test-bucket',
+  putObject: (args: any) => mockPutObject(args),
+}));
+
+import { callLLMStream, generateImage } from '../../src/services/llm-runtime';
 import { chatService } from '../../src/services/chat-service';
 
 type StreamEvent = { type: string; data: unknown };
@@ -79,6 +89,8 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
   afterEach(async () => {
     // Cleanup stream events/messages/sessions created during tests
     await db.delete(chatStreamEvents);
+    await db.delete(contextModificationHistory);
+    await db.delete(contextDocuments).where(eq(contextDocuments.workspaceId, workspaceId));
     await db.delete(chatMessages);
     await db.delete(chatSessions).where(eq(chatSessions.userId, userId));
     await db.delete(executionEvents).where(eq(executionEvents.workspaceId, workspaceId));
@@ -91,6 +103,244 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
     await db.delete(users).where(eq(users.id, userId));
     vi.clearAllMocks();
+  });
+
+  it('should enable image_generate for ai-ideas and opportunity workspaces only', async () => {
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+    const seen: Array<{ workspaceType: string; names: string[] }> = [];
+    mock.mockImplementation((opts: any) => {
+      seen.push({
+        workspaceType: '',
+        names: toolNames(opts?.tools),
+      });
+      return stream([
+        { type: 'content_delta', data: { delta: 'OK' } },
+        { type: 'done', data: {} },
+      ]);
+    });
+
+    const workspaceTypes = ['ai-ideas', 'opportunity', 'neutral'] as const;
+    for (const type of workspaceTypes) {
+      await db
+        .update(workspaces)
+        .set({ type, updatedAt: new Date() })
+        .where(eq(workspaces.id, workspaceId));
+      const { sessionId, assistantMessageId, model } =
+        await chatService.createUserMessageWithAssistantPlaceholder({
+          userId,
+          workspaceId,
+          content: `tool list for ${type}`,
+          primaryContextType: 'folder',
+          primaryContextId: folderId,
+          model: 'gpt-4.1-nano',
+        });
+      await chatService.runAssistantGeneration({
+        userId,
+        sessionId,
+        assistantMessageId,
+        model,
+      });
+      seen[seen.length - 1]!.workspaceType = type;
+    }
+
+    expect(seen.find((entry) => entry.workspaceType === 'ai-ideas')?.names).toContain(
+      'image_generate',
+    );
+    expect(seen.find((entry) => entry.workspaceType === 'opportunity')?.names).toContain(
+      'image_generate',
+    );
+    expect(seen.find((entry) => entry.workspaceType === 'neutral')?.names).not.toContain(
+      'image_generate',
+    );
+  });
+
+  it('should execute image_generate and store generated images as ready chat session documents', async () => {
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+    const generateImageMock = generateImage as unknown as ReturnType<typeof vi.fn>;
+    await db
+      .update(workspaces)
+      .set({ type: 'ai-ideas', updatedAt: new Date() })
+      .where(eq(workspaces.id, workspaceId));
+    generateImageMock.mockResolvedValue({
+      id: 'img_gen_1',
+      providerId: 'openai',
+      modelId: 'gpt-image-2',
+      images: [
+        {
+          mimeType: 'image/png',
+          data: Buffer.from('generated image bytes').toString('base64'),
+          width: 1024,
+          height: 1024,
+        },
+      ],
+    });
+    mock
+      .mockImplementationOnce(() =>
+        stream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: 'call_img_1',
+              name: 'image_generate',
+              args: JSON.stringify({
+                prompt: 'A clean product mockup',
+                size: '1024x1024',
+                count: 1,
+              }),
+            },
+          },
+          { type: 'done', data: {} },
+        ]),
+      )
+      .mockImplementationOnce(() =>
+        stream([
+          { type: 'content_delta', data: { delta: 'Image generated.' } },
+          { type: 'done', data: {} },
+        ]),
+      );
+
+    const { sessionId, assistantMessageId, model } =
+      await chatService.createUserMessageWithAssistantPlaceholder({
+        userId,
+        workspaceId,
+        content: 'Generate an image',
+        primaryContextType: 'folder',
+        primaryContextId: folderId,
+        model: 'gpt-4.1-nano',
+      });
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId,
+      assistantMessageId,
+      model,
+    });
+
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: 'A clean product mockup',
+        size: '1024x1024',
+        count: 1,
+        workspaceId,
+        userId,
+      }),
+    );
+    expect(mockPutObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bucket: 'test-bucket',
+        key: expect.stringContaining(`documents/${workspaceId}/chat_session/${sessionId}/`),
+        contentType: 'image/png',
+        body: expect.any(Uint8Array),
+      }),
+    );
+
+    const docs = await db
+      .select()
+      .from(contextDocuments)
+      .where(eq(contextDocuments.contextId, sessionId));
+    expect(docs).toHaveLength(1);
+    expect(docs[0]).toEqual(
+      expect.objectContaining({
+        workspaceId,
+        contextType: 'chat_session',
+        contextId: sessionId,
+        filename: 'generated-image.png',
+        mimeType: 'image/png',
+        sourceType: 'local',
+        status: 'ready',
+      }),
+    );
+
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, assistantMessageId));
+    const resultEvent = events.find(
+      (event) =>
+        event.eventType === 'tool_call_result' &&
+        (event.data as any)?.tool_call_id === 'call_img_1',
+    );
+    expect((resultEvent as any).data?.result).toEqual({
+      status: 'completed',
+      media: [
+        expect.objectContaining({
+          documentId: docs[0]!.id,
+          fileName: 'generated-image.png',
+          mimeType: 'image/png',
+          downloadUrl: `/documents/${docs[0]!.id}/content`,
+        }),
+      ],
+    });
+  });
+
+  it('should normalize image_generate provider refusals without storing media', async () => {
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+    const generateImageMock = generateImage as unknown as ReturnType<typeof vi.fn>;
+    await db
+      .update(workspaces)
+      .set({ type: 'ai-ideas', updatedAt: new Date() })
+      .where(eq(workspaces.id, workspaceId));
+    generateImageMock.mockRejectedValue(
+      Object.assign(new Error('Prompt refused by image provider safety policy'), {
+        code: 'provider_refusal',
+      }),
+    );
+    mock
+      .mockImplementationOnce(() =>
+        stream([
+          {
+            type: 'tool_call_start',
+            data: {
+              tool_call_id: 'call_img_refusal',
+              name: 'image_generate',
+              args: JSON.stringify({ prompt: 'Unsafe image prompt' }),
+            },
+          },
+          { type: 'done', data: {} },
+        ]),
+      )
+      .mockImplementationOnce(() =>
+        stream([
+          { type: 'content_delta', data: { delta: 'Could not generate.' } },
+          { type: 'done', data: {} },
+        ]),
+      );
+
+    const { sessionId, assistantMessageId, model } =
+      await chatService.createUserMessageWithAssistantPlaceholder({
+        userId,
+        workspaceId,
+        content: 'Generate an unsafe image',
+        primaryContextType: 'folder',
+        primaryContextId: folderId,
+        model: 'gpt-4.1-nano',
+      });
+    await chatService.runAssistantGeneration({
+      userId,
+      sessionId,
+      assistantMessageId,
+      model,
+    });
+
+    expect(mockPutObject).not.toHaveBeenCalled();
+    const docs = await db
+      .select()
+      .from(contextDocuments)
+      .where(eq(contextDocuments.contextId, sessionId));
+    expect(docs).toHaveLength(0);
+    const events = await db
+      .select()
+      .from(chatStreamEvents)
+      .where(eq(chatStreamEvents.streamId, assistantMessageId));
+    const resultEvent = events.find(
+      (event) =>
+        event.eventType === 'tool_call_result' &&
+        (event.data as any)?.tool_call_id === 'call_img_refusal',
+    );
+    expect((resultEvent as any).data?.result).toEqual({
+      status: 'error',
+      code: 'provider_refusal',
+      error: 'Prompt refused by image provider safety policy',
+    });
   });
 
   it('should enable expected tools per primaryContextType and always include web_search/web_extract', async () => {

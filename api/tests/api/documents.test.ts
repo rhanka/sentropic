@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { app as sharedApp } from '../../src/app';
 import { createAuthenticatedUser, cleanupAuthData, authenticatedRequest } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { contextDocuments, jobQueue, workspaces, workspaceMemberships } from '../../src/db/schema';
+import { chatSessions, contextDocuments, jobQueue, workspaces, workspaceMemberships } from '../../src/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 const mockPutObject = vi.fn();
@@ -39,6 +39,7 @@ describe('Documents API', () => {
   let app: any;
   let createdDocId: string | null = null;
   let createdJobId: string | null = null;
+  let createdSessionId: string | null = null;
   let addJobSpy: any;
 
   beforeEach(async () => {
@@ -51,6 +52,7 @@ describe('Documents API', () => {
     mockGetObjectBodyStream.mockReset();
     createdJobId = null;
     createdDocId = null;
+    createdSessionId = null;
 
     if (user.workspaceId) {
       await db
@@ -89,6 +91,9 @@ describe('Documents API', () => {
     }
     if (createdJobId) {
       await db.delete(jobQueue).where(eq(jobQueue.id, createdJobId));
+    }
+    if (createdSessionId) {
+      await db.delete(chatSessions).where(eq(chatSessions.id, createdSessionId));
     }
     if (addJobSpy) addJobSpy.mockRestore();
     await cleanupAuthData(); // deletes users/sessions for both users
@@ -334,6 +339,64 @@ describe('Documents API', () => {
     expect(res.headers.get('content-disposition') || '').toContain('attachment; filename=');
     const bytes = new Uint8Array(await res.arrayBuffer());
     expect(bytes.length).toBeGreaterThan(0);
+  });
+
+  it('GET /documents/:id/content streams generated chat image documents', async () => {
+    const sessionId = `sess_${crypto.randomUUID()}`;
+    const docId = `doc_${crypto.randomUUID()}`;
+    createdSessionId = sessionId;
+    createdDocId = docId;
+    await db.insert(chatSessions).values({
+      id: sessionId,
+      userId: user.id,
+      workspaceId: user.workspaceId!,
+      title: 'Generated media chat',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(contextDocuments).values({
+      id: docId,
+      workspaceId: user.workspaceId!,
+      contextType: 'chat_session',
+      contextId: sessionId,
+      filename: 'generated-image.png',
+      mimeType: 'image/png',
+      sizeBytes: 3,
+      sourceType: 'local',
+      storageKey: `documents/${user.workspaceId}/chat_session/${sessionId}/${docId}-generated-image.png`,
+      status: 'ready',
+      data: {
+        summaryLang: 'fr',
+        indexingSkipped: true,
+        indexingSkipReason: 'generated_image',
+        generatedMedia: { kind: 'image', prompt: 'Logo' },
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      version: 1,
+    });
+    mockGetObjectBodyStream.mockResolvedValueOnce(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1, 2, 3]));
+          controller.close();
+        },
+      }),
+    );
+
+    const res = await app.request(`/api/v1/documents/${docId}/content`, {
+      method: 'GET',
+      headers: { Cookie: `session=${user.sessionToken}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+    expect(res.headers.get('content-disposition') || '').toContain('generated-image.png');
+    expect(mockGetObjectBodyStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bucket: 'test-bucket',
+        key: expect.stringContaining(`${docId}-generated-image.png`),
+      }),
+    );
   });
 
   it('POST /documents/:id/resync requeues local documents without changing storage source', async () => {

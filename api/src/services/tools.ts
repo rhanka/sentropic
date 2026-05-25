@@ -918,6 +918,61 @@ export const documentGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = 
   },
 };
 
+export const imageGenerateTool: OpenAI.Chat.Completions.ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'image_generate',
+    description:
+      'Generate one or more images from a text prompt. The generated image bytes are stored as chat session documents and the tool returns stable media references only.',
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: {
+          type: 'string',
+          description: 'Detailed image prompt describing the desired subject, scene, style, and constraints.',
+        },
+        providerId: {
+          type: 'string',
+          enum: ['openai', 'gemini', 'mistral', 'anthropic', 'cohere'],
+          description: 'Optional provider override. Defaults to the configured image-capable provider.',
+        },
+        model: {
+          type: 'string',
+          description:
+            'Optional provider image model override, such as "gpt-image-2" or "gemini-3.1-flash-image-preview".',
+        },
+        count: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 4,
+          description: 'Number of images to generate. Defaults to 1.',
+        },
+        size: {
+          type: 'string',
+          enum: ['1024x1024', '1536x1024', '1024x1536', '256x256', '512x512', '1792x1024', '1024x1792'],
+          description: 'Optional output image size when supported by the provider.',
+        },
+        aspectRatio: {
+          type: 'string',
+          enum: ['1:1', '3:2', '2:3', '16:9', '9:16', '4:3', '3:4'],
+          description: 'Optional output aspect ratio when supported by the provider.',
+        },
+        quality: {
+          type: 'string',
+          enum: ['low', 'medium', 'high', 'auto', 'standard', 'hd'],
+          description: 'Optional quality hint when supported by the provider.',
+        },
+        background: {
+          type: 'string',
+          enum: ['transparent', 'opaque', 'auto'],
+          description: 'Optional background handling when supported by the provider.',
+        },
+      },
+      required: ['prompt'],
+    },
+  },
+};
+
 /**
  * Tool for batch-creating organizations from a prompt description.
  */

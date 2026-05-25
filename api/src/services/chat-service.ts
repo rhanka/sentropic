@@ -27,7 +27,7 @@ import {
   type ContextBudgetZone as ChatCoreContextBudgetZone,
 } from '../../../packages/chat-core/src/context-budget';
 import { createId } from '../utils/id';
-import { callLLM, callLLMStream } from './llm-runtime';
+import { callLLM, callLLMStream, generateImage } from './llm-runtime';
 import {
   getModelCatalogPayload,
   inferProviderFromModelIdWithLegacy,
@@ -43,6 +43,7 @@ import {
   searchWeb,
   extractUrlContent,
   batchCreateOrganizationsTool,
+  imageGenerateTool,
 } from './tools';
 import {
   resolveFoundationChatTools,
@@ -59,6 +60,10 @@ import { writeChatGenerationTrace, type ChatTraceToolCall } from './chat-trace';
 import { generateCommentResolutionProposal } from './context-comments';
 import { generateFreeformDocx } from './docx-generation';
 import { generateFreeformPptx } from './pptx-generation';
+import {
+  storeGeneratedImageDocument,
+  type StoredGeneratedImageDocument,
+} from './document-generated-media';
 import { putObject, getDocumentsBucketName } from './storage-s3';
 import type { OrganizationEnrichJobData } from './queue-manager';
 import type { ProviderId } from './provider-runtime';
@@ -305,6 +310,91 @@ const getDataString = (data: unknown, key: string): string | null => {
 };
 
 const isValidToolName = (value: string): boolean => /^[a-zA-Z0-9_-]{1,64}$/.test(value);
+
+const IMAGE_GENERATION_ERROR_CODES = new Set([
+  'unsupported_provider',
+  'planned_provider_runtime',
+  'missing_credentials',
+  'provider_refusal',
+  'quota_or_rate_limit',
+  'provider_failure',
+]);
+
+const isImageProviderId = (value: unknown): value is ProviderId =>
+  value === 'openai' ||
+  value === 'gemini' ||
+  value === 'mistral' ||
+  value === 'anthropic' ||
+  value === 'cohere';
+
+const normalizeOptionalString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+
+const normalizeImageCount = (value: unknown): number | undefined => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const count = Math.floor(value);
+  if (count < 1) return undefined;
+  return Math.min(count, 4);
+};
+
+const normalizeImageGenerationError = (
+  error: unknown,
+): { code: string; error: string } => {
+  const record = asRecord(error);
+  const explicitCode = normalizeOptionalString(record?.code);
+  const status = typeof record?.status === 'number' ? record.status : undefined;
+  const message =
+    error instanceof Error
+      ? error.message
+      : normalizeOptionalString(record?.message) ?? 'Image generation failed';
+  const lowerMessage = message.toLowerCase();
+  let code =
+    explicitCode && IMAGE_GENERATION_ERROR_CODES.has(explicitCode)
+      ? explicitCode
+      : 'provider_failure';
+
+  if (
+    code === 'provider_failure' &&
+    (lowerMessage.includes('unsupported') || lowerMessage.includes('does not support'))
+  ) {
+    code = 'unsupported_provider';
+  } else if (
+    code === 'provider_failure' &&
+    (lowerMessage.includes('planned') ||
+      lowerMessage.includes('agents/conversations') ||
+      lowerMessage.includes('not executable'))
+  ) {
+    code = 'planned_provider_runtime';
+  } else if (
+    code === 'provider_failure' &&
+    (lowerMessage.includes('credential') ||
+      lowerMessage.includes('api key') ||
+      lowerMessage.includes('auth source') ||
+      lowerMessage.includes('token'))
+  ) {
+    code = 'missing_credentials';
+  } else if (
+    code === 'provider_failure' &&
+    (status === 429 ||
+      explicitCode?.includes('rate') ||
+      explicitCode?.includes('quota') ||
+      lowerMessage.includes('rate limit') ||
+      lowerMessage.includes('quota') ||
+      lowerMessage.includes('429'))
+  ) {
+    code = 'quota_or_rate_limit';
+  } else if (
+    code === 'provider_failure' &&
+    (lowerMessage.includes('refusal') ||
+      lowerMessage.includes('unsafe') ||
+      lowerMessage.includes('safety') ||
+      lowerMessage.includes('policy'))
+  ) {
+    code = 'provider_refusal';
+  }
+
+  return { code, error: message };
+};
 
 // BR14b Lot 21e-2 — `parseToolCallArgs` was the inline local-tool args
 // parser used by `runAssistantGeneration` for the local-tool short-circuit
@@ -2433,6 +2523,7 @@ export class ChatService {
         'product_get',
         'gate_review',
         'document_generate',
+        'image_generate',
         'batch_create_organizations'
       ]);
     } else if (wsType === 'ai-ideas') {
@@ -2445,6 +2536,7 @@ export class ChatService {
         'product_get',
         'gate_review',
         'document_generate',
+        'image_generate',
         'batch_create_organizations'
       ]);
     } else if (wsType === 'neutral') {
@@ -2522,6 +2614,9 @@ export class ChatService {
     );
     if (allowedSkillToolNames.has('batch_create_organizations')) {
       addResolvedTools([batchCreateOrganizationsTool]);
+    }
+    if (allowedSkillToolNames.has('image_generate')) {
+      addResolvedTools([imageGenerateTool]);
     }
     addResolvedTools(localTools);
     tools = toolSet.size > 0 ? Array.from(toolSet.values()) : undefined;
@@ -2820,6 +2915,10 @@ For DOCX freeform \`code\`, do not use \`require\`, \`import\`, \`await\`, \`doc
 If you need data from another tool, call that tool before \`document_generate\` and embed the returned values as literals in the generated \`code\`; sandbox code cannot call chat tools.
 For PPTX freeform \`code\`, use only the injected PPTX helpers: \`pptx\`, \`titleSlide\`, \`sectionSlide\`, \`textBox\`, \`bullets\`, \`table\`, \`statCallout\`, \`footer\`, and \`visualPlaceholder\`. Do not use DOCX helpers such as \`h\`, \`p\`, \`hr\`, or \`list\`; do not use a \`slide(...)\` helper; do not use raw constructors. Return the presentation handle synchronously, for example: \`const deck = pptx({ title: "Ellio" }); const slide = titleSlide(deck, "Ellio", "Monopage"); textBox(slide, "Summary", { x: 0.8, y: 4.2, w: 11.5, h: 0.5 }); return deck;\`.
 When generating JavaScript \`code\` for DOCX or PPTX, use double-quoted string literals for all human text and escape any embedded double quotes. This avoids syntax errors with apostrophes in French text such as \`l'innovation\`.`;
+    }
+    if (activeToolNames.includes('image_generate')) {
+      contextBlock += `\n\n## Image generation
+You have the tool \`image_generate\`. Use it when the user asks you to create, generate, design, or render an image. The tool stores generated bytes as chat-session documents and returns media references; never paste base64 image data in the chat response.`;
     }
 
     const vscodeCodeAgentPayload = this.normalizeVsCodeCodeAgentPayload(
@@ -4405,6 +4504,78 @@ When generating JavaScript \`code\` for DOCX or PPTX, use double-quoted string l
       // BR14b Lot 21d-2 Step 3 Group F — verbatim move of inline tool branches
       // from `runAssistantGeneration` (document_generate, batch_create_organizations).
       // Step 3 completed by F3 commit: 30/30 server-tool branches migrated.
+      case 'image_generate': {
+        const prompt = typeof args.prompt === 'string' ? args.prompt.trim() : '';
+        if (!prompt) {
+          result = {
+            status: 'error',
+            code: 'provider_failure',
+            error: 'image_generate: prompt is required',
+          };
+        } else {
+          try {
+            const providerId = isImageProviderId(args.providerId)
+              ? args.providerId
+              : undefined;
+            const model =
+              normalizeOptionalString(args.model) ??
+              normalizeOptionalString(args.modelId);
+            const response = await generateImage({
+              ...(providerId ? { providerId } : {}),
+              ...(model ? { model } : {}),
+              prompt,
+              count: normalizeImageCount(args.count),
+              size: normalizeOptionalString(args.size),
+              aspectRatio: normalizeOptionalString(args.aspectRatio),
+              quality: normalizeOptionalString(args.quality),
+              background: normalizeOptionalString(args.background),
+              workspaceId: sessionWorkspaceId,
+              userId: options.userId,
+              signal: options.signal,
+            });
+            const images = Array.isArray(response.images) ? response.images : [];
+            if (images.length === 0) {
+              throw Object.assign(
+                new Error('Image generation returned no images'),
+                { code: 'provider_failure' },
+              );
+            }
+
+            const media: StoredGeneratedImageDocument[] = [];
+            for (const [imageIndex, image] of images.entries()) {
+              media.push(
+                await storeGeneratedImageDocument({
+                  workspaceId: sessionWorkspaceId,
+                  sessionId: options.sessionId,
+                  userId: options.userId,
+                  toolCallId: toolCall.id,
+                  prompt,
+                  image,
+                  imageIndex,
+                  generationId: response.id,
+                  providerId: response.providerId,
+                  modelId: response.modelId,
+                }),
+              );
+            }
+            result = { status: 'completed', media };
+          } catch (error) {
+            result = {
+              status: 'error',
+              ...normalizeImageGenerationError(error),
+            };
+          }
+        }
+        await writeStreamEvent(
+          options.assistantMessageId,
+          'tool_call_result',
+          { tool_call_id: toolCall.id, result },
+          streamSeq,
+          options.assistantMessageId,
+        );
+        streamSeq += 1;
+        break;
+      }
       case 'document_generate': {
         const rawAction = typeof args.action === 'string' ? args.action : 'generate';
         if (rawAction !== 'generate') {
