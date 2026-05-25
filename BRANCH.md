@@ -107,7 +107,15 @@ hover-driven emphasis (hovering a point or a domain enlarges the points of that 
   - [x] Lot gate: `make typecheck-ui` (0 errors) + `make lint-ui` (clean). No API synthesis-context change needed (chart is a client bitmap).
 
 - [ ] **Lot N-2 — UAT** (web app: cap to 50, top-10 labels, hide-bubbles, domain filter, hover emphasis;
-      non-reg: existing folder chart, DOCX export).
-- [ ] **Lot N-1 — Docs consolidation** (update relevant spec; remove `spec/BRANCH_SPEC_EVOL.md` if added).
-- [ ] **Lot N — Final validation** (typecheck/lint, UI/API/E2E retests, package bumps if any, PR → CI →
-      remove `BRANCH.md` → merge via merge commit).
+      non-reg: existing folder chart, DOCX export). Awaiting user UAT on root `ENV=dev`.
+- [ ] **Lot N-1 — Docs consolidation** (no `spec/BRANCH_SPEC_EVOL.md` was added; no spec file touched —
+      chart UX behavior is self-documented in `InitiativeScatterPlot.svelte` + this BRANCH.md).
+- [ ] **Lot N — Final validation** (PR → CI → user UAT sign-off → remove `BRANCH.md` → merge). PR pushed for CI + UAT; merge deferred to user.
+
+## Verification (branch HEAD)
+- [x] `make typecheck-ui` — svelte-check 0 errors (6 pre-existing warnings, none in changed files).
+- [x] `make lint-ui` — eslint clean (exit 0).
+- [x] `make test-ui SCOPE=tests/utils/scoring.test.ts` — 23/23 passed (ratio/top-N helpers).
+- [x] `make test-api-endpoints SCOPE=tests/api/initiatives-generate-matrix.test.ts` — 12/12 passed (incl. accept-50 / reject-51 cap).
+- [ ] E2E `e2e/tests/03-prioritization-matrix.spec.ts` — runs in CI / final `make clean test-e2e` (legend chips, hide-bubbles toggle, domain filter aria-pressed).
+- Env note: the dev-target api container's startup (~36s: db:migrate → listening) exceeds the `up-api-test --wait` health window on this host, so `make test-api` reports the api "unhealthy" prematurely; the api is in fact healthy and tests pass when run via `test-api-endpoints` against the already-up stack. Re-running `make test-api` while the stack is live triggers `prepare-node-workspace`'s `npm ci` which unlinks node_modules under the running tsx watcher (tsx/preflight crash loop) — always `make down` before a fresh cold run. Infra timing, not a code regression.
