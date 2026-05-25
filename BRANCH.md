@@ -123,6 +123,7 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
 - Task 2 code review follow-up 2026-05-25: provider defaults now fail deterministically when the configured default provider has no image model, and image `providerOptions` cannot override selected model, prompt, contents, or required image response modality.
 - Task 3 implementation 2026-05-25: `image_generate` is exposed for `ai-ideas` and `opportunity` workspaces only, dispatches through the API image runtime, stores generated image bytes as ready local chat-session `context_documents`, and returns document-backed media references.
 - Task 3 code review follow-up 2026-05-25: OpenAI image runtime requests now force `response_format: "b64_json"` for the chat storage path, chat-tool tests cover every deterministic image error code, and generated chat image documents have same-session download denial coverage.
+- Task 4 code review follow-up 2026-05-25: generated image cards now ignore untrusted stream URLs, rebuild document-backed download/preview targets from encoded `documentId` values, and use localized metadata copy.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -196,10 +197,10 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - [ ] Keep `@sentropic/chat-ui` generic and app-specific document/download URLs in the host adapter.
   - [ ] Lot gate:
     - [x] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-image-generation-tool`
-    - [ ] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-image-generation-tool`
-    - [ ] `make test-ui SCOPE=tests/components/ChatPanel-docx-cards.test.ts ENV=test-feat-image-generation-tool`
+    - [x] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-image-generation-tool`
+    - [x] `make test-ui SCOPE=tests/components/ChatPanel-docx-cards.test.ts ENV=test-feat-image-generation-tool`
     - [x] `make test-ui SCOPE=tests/chat/document-adapter.test.ts ENV=test-feat-image-generation-tool`
-    - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-image-generation-tool`
+    - [x] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-image-generation-tool`
 
 - [ ] **Lot 4 - Generated media document integration**
   - [ ] Attach generated image records to the current chat session document context.

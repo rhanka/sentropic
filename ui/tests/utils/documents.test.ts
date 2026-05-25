@@ -119,6 +119,11 @@ describe('documents utils', () => {
       const url = getDownloadUrl({ documentId: 'doc_1', workspaceId: 'ws_1' });
       expect(url).toBe(`${API_BASE_URL}/documents/doc_1/content?workspace_id=ws_1`);
     });
+
+    it('should encode the document id path segment', () => {
+      const url = getDownloadUrl({ documentId: 'doc/unsafe?id' });
+      expect(url).toBe(`${API_BASE_URL}/documents/doc%2Funsafe%3Fid/content`);
+    });
   });
 
   describe('downloadDocument', () => {

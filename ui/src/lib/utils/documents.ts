@@ -97,7 +97,8 @@ export async function uploadDocument(params: {
 }
 
 export function getDownloadUrl(params: { documentId: string; workspaceId?: string | null }): string {
-  const url = new URL(`${getDocumentsApiBaseUrl()}/documents/${params.documentId}/content`, getUrlBaseForBrowser());
+  const documentId = encodeURIComponent(params.documentId);
+  const url = new URL(`${getDocumentsApiBaseUrl()}/documents/${documentId}/content`, getUrlBaseForBrowser());
   if (params.workspaceId) url.searchParams.set('workspace_id', params.workspaceId);
   return url.toString();
 }

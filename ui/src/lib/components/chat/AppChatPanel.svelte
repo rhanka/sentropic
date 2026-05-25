@@ -42,6 +42,7 @@
   import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import {
     deleteDocument,
+    getDownloadUrl,
     listDocuments,
     uploadDocument,
     type ContextDocumentItem,
@@ -3113,13 +3114,28 @@
       typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
     return {
       ...normalized,
-      kind: card.kind === 'image' ? 'image' : undefined,
-      documentId: trim(card.documentId),
-      previewUrl: trim(card.previewUrl) ?? normalized.downloadUrl,
+      kind: normalized.kind === 'image' ? 'image' : undefined,
+      documentId: trim(normalized.documentId),
+      previewUrl: normalized.kind === 'image'
+        ? normalized.previewUrl ?? normalized.downloadUrl
+        : trim(card.previewUrl) ?? normalized.downloadUrl,
       providerId: trim(card.providerId),
       modelId: trim(card.modelId),
       prompt: trim(card.prompt),
     };
+  };
+
+  const resolveGeneratedImagePreviewUrl = (card: AppGeneratedFileCard): string | undefined => {
+    if (card.kind !== 'image') return card.previewUrl ?? card.downloadUrl;
+    const documentId =
+      typeof card.documentId === 'string' && card.documentId.trim().length > 0
+        ? card.documentId.trim()
+        : card.jobId.trim();
+    if (!documentId) return undefined;
+    return getDownloadUrl({
+      documentId,
+      workspaceId: getScopedWorkspaceIdForUser(),
+    });
   };
 
   const handleGeneratedFileCard = (messageId: string, card: AppGeneratedFileCard) => {
@@ -4858,19 +4874,20 @@
                     {@const generatedFileCards = generatedFileCardsByMessageId.get(m.id) ?? []}
                     {#each generatedFileCards as card (card.jobId)}
                       {#if card.kind === 'image'}
+                        {@const imagePreviewUrl = resolveGeneratedImagePreviewUrl(card)}
                         <div class="rounded border border-slate-200 bg-white mt-1 w-full max-w-[28rem]">
                           <div class="flex gap-2 p-2">
                             <div class="shrink-0 h-24 w-32 rounded border border-slate-200 bg-slate-100 overflow-hidden">
-                              {#if card.previewUrl || card.downloadUrl}
+                              {#if imagePreviewUrl}
                                 <img
-                                  src={card.previewUrl ?? card.downloadUrl}
+                                  src={imagePreviewUrl}
                                   alt={card.fileName}
-                                  class="h-full w-full object-cover"
+                                  class="h-full w-full object-contain"
                                   loading="lazy"
                                 />
                               {:else}
                                 <div class="h-full w-full flex items-center justify-center text-[10px] text-slate-500 p-1 text-center">
-                                  No preview
+                                  {$_('chat.generatedImage.noPreview')}
                                 </div>
                               {/if}
                             </div>
@@ -4880,15 +4897,15 @@
                               </div>
                               {#if card.prompt}
                                 <div class="mt-1 text-[10px] text-slate-500 truncate" title={card.prompt}>
-                                  Prompt: {card.prompt}
+                                  {$_('chat.generatedImage.prompt', { values: { prompt: card.prompt } })}
                                 </div>
                               {/if}
                               <div class="mt-1 flex flex-wrap gap-x-2 text-[10px] text-slate-500">
                                 {#if card.providerId}
-                                  <span>Provider: {card.providerId}</span>
+                                  <span>{$_('chat.generatedImage.provider', { values: { provider: card.providerId } })}</span>
                                 {/if}
                                 {#if card.modelId}
-                                  <span>Model: {card.modelId}</span>
+                                  <span>{$_('chat.generatedImage.model', { values: { model: card.modelId } })}</span>
                                 {/if}
                               </div>
                             </div>

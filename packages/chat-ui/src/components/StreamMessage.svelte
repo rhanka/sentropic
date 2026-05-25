@@ -225,6 +225,26 @@
 
   const isTerminalStatus = (s?: string) => s === 'completed' || s === 'failed' || s === 'done' || s === 'cancelled';
 
+  const generatedImageDocumentUrl = (documentId: string): string =>
+    `/documents/${encodeURIComponent(documentId)}/content`;
+
+  const normalizeGeneratedImageDocumentUrl = (
+    documentId: string,
+    value: unknown,
+  ): string | undefined => {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    if (!raw) return undefined;
+    const expectedPath = generatedImageDocumentUrl(documentId);
+    try {
+      const url = new URL(raw, 'http://sentropic.local');
+      if (url.origin !== 'http://sentropic.local') return undefined;
+      if (url.pathname !== expectedPath) return undefined;
+      return expectedPath;
+    } catch {
+      return undefined;
+    }
+  };
+
   // Limite d'historique: sur les cartes/jobs on veut souvent un historique court,
   // tandis que sur le chat on garde davantage d'étapes.
   $: stepLimit = variant === 'job' ? Math.max(1, maxHistory) : 30;
@@ -521,23 +541,23 @@
           if (typeof documentId !== 'string' || !documentId.trim() || typeof fileName !== 'string' || !fileName.trim()) {
             continue;
           }
+          const normalizedDocumentId = documentId.trim();
+          const downloadUrl =
+            normalizeGeneratedImageDocumentUrl(normalizedDocumentId, item.downloadUrl) ??
+            generatedImageDocumentUrl(normalizedDocumentId);
           const previewUrl =
-            typeof item.downloadUrl === 'string' && item.downloadUrl.trim().length > 0
-              ? item.downloadUrl.trim()
-              : undefined;
+            normalizeGeneratedImageDocumentUrl(normalizedDocumentId, item.previewUrl) ??
+            downloadUrl;
           onGeneratedFile?.({
             kind: 'image',
-            jobId: documentId.trim(),
-            documentId: documentId.trim(),
+            jobId: normalizedDocumentId,
+            documentId: normalizedDocumentId,
             fileName: fileName.trim(),
             mimeType:
               typeof item.mimeType === 'string' && item.mimeType.trim().length > 0
                 ? item.mimeType.trim()
                 : undefined,
-            downloadUrl:
-              typeof item.downloadUrl === 'string' && item.downloadUrl.trim().length > 0
-                ? item.downloadUrl.trim()
-                : undefined,
+            downloadUrl,
             previewUrl,
             providerId:
               typeof item.providerId === 'string' && item.providerId.trim().length > 0

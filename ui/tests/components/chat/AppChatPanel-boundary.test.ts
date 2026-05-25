@@ -32,6 +32,10 @@ describe('AppChatPanel boundary', () => {
     expect(source).toContain('card.previewUrl');
     expect(source).toContain('card.providerId');
     expect(source).toContain('card.modelId');
+    expect(source).toContain('resolveGeneratedImagePreviewUrl(card)');
+    expect(source).toContain('getDownloadUrl({');
+    expect(source).toContain("$_('chat.generatedImage.noPreview')");
+    expect(source).toContain("$_('chat.generatedImage.prompt'");
     expect(source).toContain('downloadGeneratedFile(card)');
   });
 });

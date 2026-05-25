@@ -25,6 +25,12 @@ export type ChatSessionDocumentContext = {
   workspaceId?: string | null;
 };
 
+const trimNonEmpty = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+
+const generatedImageDownloadUrl = (documentId: string | undefined): string | undefined =>
+  documentId ? `/documents/${encodeURIComponent(documentId)}/content` : undefined;
+
 export const createChatSessionDocumentContext = (
   sessionId: string,
   workspaceId?: string | null,
@@ -59,47 +65,36 @@ export const createGoogleDriveChatAttachInput = (
 
 export const normalizeGeneratedFileCard = (
   card: Partial<ChatGeneratedFileCard> & Pick<ChatGeneratedFileCard, 'jobId' | 'fileName'>,
-): ChatGeneratedFileCard => ({
-  jobId: card.jobId,
-  fileName: card.fileName,
-  format:
-    card.kind === 'image'
-      ? typeof card.format === 'string' && card.format.trim().length > 0
-        ? card.format.trim().toLowerCase()
-        : undefined
-      : typeof card.format === 'string' && card.format.trim().length > 0
-        ? card.format.trim().toLowerCase()
-        : 'docx',
-  mimeType:
-    typeof card.mimeType === 'string' && card.mimeType.trim().length > 0
-      ? card.mimeType.trim()
-      : undefined,
-  downloadUrl:
-    typeof card.downloadUrl === 'string' && card.downloadUrl.trim().length > 0
-      ? card.downloadUrl.trim()
-      : undefined,
-  kind: card.kind === 'image' ? 'image' : undefined,
-  documentId:
-    typeof card.documentId === 'string' && card.documentId.trim().length > 0
-      ? card.documentId.trim()
-      : undefined,
-  previewUrl:
-    typeof card.previewUrl === 'string' && card.previewUrl.trim().length > 0
-      ? card.previewUrl.trim()
-      : undefined,
-  providerId:
-    typeof card.providerId === 'string' && card.providerId.trim().length > 0
-      ? card.providerId.trim()
-      : undefined,
-  modelId:
-    typeof card.modelId === 'string' && card.modelId.trim().length > 0
-      ? card.modelId.trim()
-      : undefined,
-  prompt:
-    typeof card.prompt === 'string' && card.prompt.trim().length > 0
-      ? card.prompt.trim()
-      : undefined,
-});
+): ChatGeneratedFileCard => {
+  const kind = card.kind === 'image' ? 'image' : undefined;
+  const documentId = kind === 'image'
+    ? trimNonEmpty(card.documentId) ?? trimNonEmpty(card.jobId)
+    : trimNonEmpty(card.documentId);
+  const rawDownloadUrl = trimNonEmpty(card.downloadUrl);
+  const downloadUrl = kind === 'image'
+    ? generatedImageDownloadUrl(documentId)
+    : rawDownloadUrl;
+  const previewUrl = kind === 'image'
+    ? downloadUrl
+    : trimNonEmpty(card.previewUrl);
+
+  return {
+    jobId: card.jobId,
+    fileName: card.fileName,
+    format:
+      kind === 'image'
+        ? trimNonEmpty(card.format)?.toLowerCase()
+        : trimNonEmpty(card.format)?.toLowerCase() ?? 'docx',
+    mimeType: trimNonEmpty(card.mimeType),
+    downloadUrl,
+    kind,
+    documentId,
+    previewUrl,
+    providerId: trimNonEmpty(card.providerId),
+    modelId: trimNonEmpty(card.modelId),
+    prompt: trimNonEmpty(card.prompt),
+  };
+};
 
 export const extractGeneratedFileCardsFromRuntimeSummary = (
   summary: ChatRuntimeSummaryWithGeneratedFiles | undefined,
@@ -116,9 +111,6 @@ export const extractGeneratedFileCardsFromRuntimeSummary = (
 export const extractGeneratedFileCardsFromEvents = (
   events: readonly { eventType: string; data: any }[],
 ): ChatGeneratedFileCard[] => {
-  const trim = (value: unknown): string | undefined =>
-    typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-
   const toolNames: Record<string, string> = {};
   const cards: ChatGeneratedFileCard[] = [];
 
@@ -138,8 +130,8 @@ export const extractGeneratedFileCardsFromEvents = (
     if (toolName === 'document_generate') {
       if (
         result?.status !== 'completed' ||
-        !trim(result.jobId) ||
-        !trim(result.fileName)
+        !trimNonEmpty(result.jobId) ||
+        !trimNonEmpty(result.fileName)
       ) {
         continue;
       }
@@ -147,9 +139,9 @@ export const extractGeneratedFileCardsFromEvents = (
         normalizeGeneratedFileCard({
           jobId: result.jobId,
           fileName: result.fileName,
-          format: trim(result.format) ?? 'docx',
-          mimeType: trim(result.mimeType),
-          downloadUrl: trim(result.downloadUrl),
+          format: trimNonEmpty(result.format) ?? 'docx',
+          mimeType: trimNonEmpty(result.mimeType),
+          downloadUrl: trimNonEmpty(result.downloadUrl),
         }),
       );
       continue;
@@ -160,9 +152,8 @@ export const extractGeneratedFileCardsFromEvents = (
       for (const rawItem of media) {
         if (!rawItem || typeof rawItem !== 'object') continue;
         const item = rawItem as Record<string, unknown>;
-        const documentId = trim(item.documentId);
-        const fileName = trim(item.fileName);
-        const downloadUrl = trim(item.downloadUrl);
+        const documentId = trimNonEmpty(item.documentId);
+        const fileName = trimNonEmpty(item.fileName);
         if (!documentId || !fileName) continue;
         cards.push(
           normalizeGeneratedFileCard({
@@ -170,13 +161,11 @@ export const extractGeneratedFileCardsFromEvents = (
             jobId: documentId,
             documentId,
             fileName,
-            format: trim(item.format),
-            mimeType: trim(item.mimeType),
-            downloadUrl,
-            previewUrl: downloadUrl,
-            providerId: trim(item.providerId),
-            modelId: trim(item.modelId),
-            prompt: trim(item.prompt),
+            format: trimNonEmpty(item.format),
+            mimeType: trimNonEmpty(item.mimeType),
+            providerId: trimNonEmpty(item.providerId),
+            modelId: trimNonEmpty(item.modelId),
+            prompt: trimNonEmpty(item.prompt),
           }),
         );
       }

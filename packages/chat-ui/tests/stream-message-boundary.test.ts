@@ -53,5 +53,6 @@ describe('StreamMessage package boundary', () => {
     expect(source).toContain('providerId');
     expect(source).toContain('modelId');
     expect(source).toContain('previewUrl');
+    expect(source).toContain('normalizeGeneratedImageDocumentUrl');
   });
 });

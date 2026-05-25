@@ -1157,6 +1157,12 @@
         "unknown": "Unknown"
       }
     },
+    "generatedImage": {
+      "noPreview": "No preview",
+      "prompt": "Prompt: {prompt}",
+      "provider": "Provider: {provider}",
+      "model": "Model: {model}"
+    },
     "contexts": {
       "title": "Context(s)",
       "none": "No active context."

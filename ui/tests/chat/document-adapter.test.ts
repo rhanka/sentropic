@@ -156,6 +156,41 @@ describe('chat document adapter', () => {
     ]);
   });
 
+  it('builds document download URLs for generated image cards that only carry a document id', () => {
+    expect(
+      normalizeGeneratedFileCard({
+        kind: 'image',
+        jobId: 'doc_2',
+        documentId: 'doc_2',
+        fileName: 'generated-image-2.png',
+        mimeType: 'image/png',
+      }),
+    ).toMatchObject({
+      kind: 'image',
+      documentId: 'doc_2',
+      downloadUrl: '/documents/doc_2/content',
+      previewUrl: '/documents/doc_2/content',
+    });
+  });
+
+  it('ignores untrusted generated image URLs and keeps the document endpoint', () => {
+    expect(
+      normalizeGeneratedFileCard({
+        kind: 'image',
+        jobId: 'doc_3',
+        documentId: 'doc_3',
+        fileName: 'generated-image-3.png',
+        downloadUrl: 'https://attacker.example/collect',
+        previewUrl: '//attacker.example/pixel.png',
+      }),
+    ).toMatchObject({
+      kind: 'image',
+      documentId: 'doc_3',
+      downloadUrl: '/documents/doc_3/content',
+      previewUrl: '/documents/doc_3/content',
+    });
+  });
+
   it('maps document UI labels without coupling the adapter to i18n', () => {
     expect(getGeneratedFileFormatLabel('pptx')).toBe('PPTX');
     expect(getGeneratedFileFormatLabel(undefined)).toBe('FILE');
