@@ -1,0 +1,325 @@
+# Feature: BR-19 Agent Sandbox and Skill Catalog
+
+## Objective
+Replace hardcoded foundation chat-tool exposure with a reusable skill catalog foundation layer backed by the `@sentropic/skills` package. BR-19 introduces the package format, sandbox boundary, authorization-aware registry/search, migrated foundation bundles, API catalog/executor bridges, and non-regressive chat-service routing.
+
+## Scope / Guardrails
+- Scope limited to `@sentropic/skills`, foundation skill bundles, sandbox runtime/host bridges, skill registry/search authorization, API skill catalog/executor bridge, chat-service tool routing, BR-19 specs/docs, and tests required for those surfaces.
+- No database migration is expected for BR-19.
+- Make-only workflow, no direct Docker/npm commands.
+- Root workspace `/home/antoinefa/src/sentropic` is reserved for user UAT on `uat/br19` with `ENV=dev` and must remain stable.
+- Branch development must happen in isolated worktree `tmp/feat-agent-sandbox-skills` on branch `feat/agent-sandbox-skills`.
+- Automated test campaigns must run on dedicated environment `ENV=test-feat-agent-sandbox-skills`, never on root `dev`.
+- Final BR-19 branch commit before merge: `92d657c9`. PR #166 was merged into `main` as merge commit `146364eb9f8bf4590f138d8b2f60c1dbf233b1b1`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+- `BRANCH.md` must remain a symlink to `plan/19-BRANCH_feat-agent-sandbox-skills.md` in root and in `tmp/feat-agent-sandbox-skills`.
+- PR #166 (merged): `https://github.com/rhanka/sentropic/pull/166`.
+- Latest green CI run: `https://github.com/rhanka/sentropic/actions/runs/26372519744`.
+- Root UAT was executed and user accepted checklist items 1-6 under BR19-UAT5.
+- Registry UI materialization was not specified in BR19 and is deferred to BR19B-MCP1 for the MCP/personal shared skill catalog.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `plan/19-BRANCH_feat-agent-sandbox-skills.md`
+  - `spec/SPEC_EVOL_BR19_SKILLS.md`
+  - `packages/skills/**`
+  - `api/src/services/skills/**`
+  - `api/src/services/chat-service.ts`
+  - `api/src/services/docx-freeform-helpers.ts`
+  - `api/tests/unit/foundation-executor.test.ts`
+  - `api/tests/unit/chat-service-tools.test.ts`
+  - `api/tests/unit/chat-service-batch-create-orgs.test.ts`
+  - `packages/skills/tests/**`
+- **Forbidden Paths (must not change in this branch)**:
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` except `plan/19-BRANCH_feat-agent-sandbox-skills.md`
+  - unrelated UI routes/components/tests
+  - unrelated API services/routes/tests
+  - unrelated specs and roadmap documents
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile`
+  - `api/Dockerfile`
+  - `api/package.json`
+  - `api/package-lock.json`
+  - `packages/skills/package.json`
+  - `packages/skills/package-lock.json`
+  - `spec/**`
+  - `.github/workflows/**`
+- **Exception process**:
+  - Declare exception ID `BR19-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop`.
+
+## Feedback Loop
+- [x] `decision` BR19-D1 — Introduce `@sentropic/skills` as the foundation package boundary instead of expanding hardcoded chat-service local tool descriptors.
+- [x] `decision` BR19-D2 — Foundation skill visibility is authorization/context driven through `AuthzContext` filtering.
+- [x] `decision` BR19-D3 — `search_skills` is a registry meta-tool, not a chat-service special case.
+- [x] `decision` BR19-D4 — Foundation bundles are shipped as package assets from `packages/skills` and loaded by API catalog bridge.
+- [x] `decision` BR19-D5 — Non-migrated legacy branches remain only where BR-19 did not yet port behavior.
+- [x] `decision` BR19-D6 — Remove the legacy `action=upskill` shortcut; discovery must use `search_skills` and skill metadata.
+- [x] `clarification` BR19-Q7 — `document_generate` sandbox invocation ambiguity was raised before Wave D freeform document generation work.
+- [x] `clarification` BR19-Q8 — DOCX dependency and invocation scope was resolved with Option B/B1: explicit package dependencies plus host bridges for byte-stable freeform generation.
+- [x] `attention` BR19-N2 — Package asset shipping closed by aligning `packages/skills/package.json` file globs so `.md` assets ship from `src` and `dist`.
+- [x] `attention` BR19-N3 — `TemplateRenderer` adapter contract introduced for `document_generate` template-path isolation.
+- [x] `attention` BR19-N4 — DOCX/PPTX helpers moved into foundation `SKILL.md` assets and glossary banned-synonym documentation updated.
+- [x] `attention` BR19-EX5 — `Makefile` additive changes allowed for package-level DOCX/PPTX dependency installation. Reason: `packages/skills` introduced generation dependencies. Impact: local install target behavior only. Rollback: remove additive install lines if dependency management moves elsewhere.
+- [x] `attention` BR19-EX6 — `api/Dockerfile` additive `COPY packages/skills/package.json` allowed. Reason: API production image `npm ci --workspaces` needed package metadata before workspace install. Impact: production build context only. Rollback: remove the copy once Docker workspace install is centralized differently.
+- [x] `attention` BR19-EX7 — DOCX/PPTX helpers allowed inside foundation `SKILL.md` assets. Reason: generation behavior belongs to the skill asset boundary for sandbox execution. Impact: skill asset content and packaging only. Rollback: move helpers behind host APIs if sandbox policy changes.
+- [x] `attention` BR19-EX8 — Glossary/spec banned-synonym documentation updated to anchor BR19-N4. Reason: terminology drift around upskill/action shortcuts needed explicit documentation. Impact: documentation only. Rollback: revert glossary/spec wording if terminology policy changes.
+- [x] `flaky accepted` BR19-F1 — AI flaky recorded on historical commit `b4128c1a`; same command passed on rerun and was documented in branch history.
+- [x] `validation` BR19-CI1 — GitHub CI run `26333936400` completed successfully on `131ce00ff5fd3baa7d417e7bfd41d6c9a75f7f27`.
+- [x] `attention` BR19-UAT1 — Root UAT executed and accepted by user for checklist items 1-6 under BR19-UAT5.
+- [x] `deferred` BR19-UI1 — Registry UI/catalog product specification was not included in BR19. Catalog materialization for personal/shared skill capitalization is deferred to BR19B-MCP1.
+- [x] `attention` BR19-UAT2 — User reported during BR-19 UAT prep that DOCX generation makes the UI enter a loop, and the same symptom is visible in production. Reproduced on isolated env `test-feat-agent-sandbox-skills` from Ellio organization context with session `a179bde6-6119-416c-9d29-1ecf76694af5`: stream initially hit 500 events without `done`, `document_generate` started 3 times, and tool errors were `document_generate: entityId is required` then `document_generate: entityType must be "initiative" | "folder"`. Root cause was not BR14a stream projection: organization context exposed `document_generate`, but the executor only accepted `initiative` or `folder`, causing the model to retry tool calls. Final fix decouples freeform generation from project folders: freeform targets may be `organization`, `folder`, or `initiative`, `entityType` / `entityId` can be omitted when the session context provides the target, and template mode remains restricted to template-compatible `initiative` / `folder` targets. DOCX freeform helpers also expose the expected `document` alias after repro `66ed8396-f3ac-43b5-946c-ac695cece24b` failed with `ReferenceError: document is not defined`. Final evidence after alignment with PPTX: session `e31632dd-619e-418a-96dd-275402d0ac0b`, assistant `643f0a77-b771-40d7-8e2b-c1d966ef9bcb`, chat job `b969f690-9adc-4dae-802f-b18b5adb31e7`, document job `833653f0-9eff-4977-bbf5-8ebdd4b6a9d5`, `documentGenerateStarts=1`, `toolErrors=0`, `doneEvents=1`, tool result `entityType="organization"`, and API download returns `200` with DOCX MIME type, 8815 bytes, first bytes `50 4b 03 04`. Root UAT checklist items 1-6 accepted under BR19-UAT5.
+- [x] `attention` BR19-EX9 — Temporary Playwright debug spec under `e2e/tests/dev/_scratch.br19-docgen-loop.spec.ts` allowed for BR19-UAT2 reproduction only. Reason: user requested a headless Playwright reproduction of the DOCX/PPTX loop from an Ellio-like organization view. Impact: uncommitted diagnostic test file only, with no product code path change. Rollback: delete the scratch spec after evidence capture and do not include it in a final commit unless promoted to an approved test with user validation.
+- [x] `attention` BR19-UAT3 — User reported the same loop class for PPTX from an organization context with multiple linked folders. Reproduced in isolated env by adding three synthetic Ellio folders and generating a one-page PPTX from organization context. First repro session `39d55d6c-0ead-4ae3-9dfc-5b24319368a0` completed without `done` loop but behaved incorrectly: the model saw four folders, called `document_generate` without an explicit folder target, received `document_generate: organization context has multiple folder targets`, retried `folders_list` with a typo in the organization id, then asked for another approach. Replying `1` triggered a second failure: generated PPTX code used DOCX-style helpers and single-quoted French text with apostrophes, producing `code_syntax_error: missing ) after argument list`. Final fix decouples freeform generation from project folders: freeform targets may be `organization`, `folder`, or `initiative`, `entityType` / `entityId` can be omitted when the session context provides the target, and template mode remains restricted to template-compatible `initiative` / `folder` targets. PPTX prompt guidance was also hardened to use only injected PPTX helpers plus double-quoted JS string literals. Final evidence: session `988f7743-4be1-4281-87f1-176a739074da`, assistant `bda642be-f549-4ebb-843a-65c7176388d2`, chat job `1cfa192d-d8df-4446-a904-6fe98906ced6`, document job `8e820a60-d224-4e60-a6a1-af9dc00f908a`, `documentGenerateStarts=1`, `toolErrors=0`, `doneEvents=1`, tool result `entityType="organization"`, and API download returns `200` with PPTX MIME type, 47221 bytes, first bytes `50 4b 03 04`. Root UAT checklist items 1-6 accepted under BR19-UAT5.
+- [x] `attention` BR19-UAT4 — Root handoff smoke exposed a 500 on chat history loading (`/api/v1/chat/sessions/:id/history`) with `ReferenceError: desc is not defined` in `ChatService.listSessionDocuments`. Root cause: the BR19 import cleanup removed `desc` from `drizzle-orm` while existing document ordering still needs it. Fix restores the import before continuing root UAT.
+- [x] `attention` BR19-UAT5 — Root UAT accepted by user for checklist items 1-6: chat panel opens without 500, organization DOCX generation completes, refresh/history keeps the generated card, organization PPTX generation completes, jobs reach completed, and DOCX/PPTX downloads are usable. Residual issue remains: DOCX and PPTX can still trigger a browser saturation loop while generation eventually completes. This is explicitly deferred to `BR19FIX-LOOP1`, not closed in BR19.
+- [x] `deferred` BR19B-MCP1 — Local branch `feat/mcp-tool-catalog-br19b` created from BR19 head for the next branch that revises tool-call targeting semantics while implementing the MCP-backed tool catalog. Scope candidate: make generic tool calls context-driven instead of requiring Sentropic-specific `entityType` / `entityId` parameters except where a tool explicitly needs them, and materialize a share/capitalization catalog for personal skills comparable to gems or an equivalent reusable asset catalog.
+- [x] `deferred` BR19FIX-LOOP1 — Local branch `fix/chat-loop-guard-analysis` created from BR19 head for a dedicated problem-analysis branch on generic chat loop guards. Scope candidate: backend repeated-tool-error breaker plus frontend stream projection compaction/bounds so tool-call loops cannot freeze the browser tab.
+
+## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+- [x] BR19-F1 recorded as accepted historical AI flaky after same-command rerun passed.
+- [ ] No new AI flaky acceptance is allowed without explicit user sign-off.
+
+## Orchestration Mode (AI-selected)
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: BR-19 is one capability slice around the skill package, foundation catalog, sandbox runtime, and API/chat integration. Work was split into lots/waves on `feat/agent-sandbox-skills`, then rebased/aligned for PR #166 and root UAT.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only, from root `uat/br19`.
+- **Multi-branch**: not selected for BR-19.
+- UAT checkpoints are listed as checkboxes inside Lot 10; there is no separate UAT section.
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/feat-agent-sandbox-skills`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace `/home/antoinefa/src/sentropic`, branch `uat/br19`, `ENV=dev`.
+  - Switch back to `tmp/feat-agent-sandbox-skills` after UAT for fixes, commits, and PR updates.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read branch workflow constraints and create BR-19 branch plan.
+  - [x] Create `spec/SPEC_EVOL_BR19_SKILLS.md` with `SKILL.md` format, sandbox decision, registry model, and migration plan.
+  - [x] Confirm isolated worktree `tmp/feat-agent-sandbox-skills` for branch development.
+  - [x] Define environment mapping: branch validation on `ENV=test-feat-agent-sandbox-skills`, root UAT on `ENV=dev`.
+  - [x] Confirm root UAT ports: `API_PORT=8787`, `UI_PORT=5173`, `MAILDEV_UI_PORT=1080`.
+  - [x] Confirm command style: `make ... ENV=<env>` with `ENV` last.
+  - [x] Confirm branch scope and guardrails.
+  - [x] Commit mapping: `51c6e55e docs: scope BR-19 skills package — BRANCH.md with lots and migration waves`.
+  - [x] Commit mapping: `78d71e24 docs: add SPEC_EVOL_BR19_SKILLS — SKILL.md format, sandbox decision, registry, migration plan`.
+
+- [x] **Lot 1 — Skills package shell, core contracts, and parser**
+  - [x] Scaffold `@sentropic/skills` package shell.
+  - [x] Define core types: `Skill`, `Metadata`, `ContextFilter`, `SandboxPolicy`, `SkillTool`, `SkillSearchHit`.
+  - [x] Implement strict `SKILL.md` parser with Zod validation and unit tests.
+  - [x] Lot gate:
+    - [x] Package-level parser/type coverage added under `packages/skills/tests/**`.
+    - [x] No API/UI/e2e surface required for this lot.
+  - [x] Commit mapping: `ac3ae1ab feat(skills): scaffold @sentropic/skills package shell (BR19 Lot 1 Step 1)`.
+  - [x] Commit mapping: `bbc57a6a feat(skills): define core types (Skill, Metadata, ContextFilter, SandboxPolicy, SkillTool, SkillSearchHit) (BR19 Lot 1 Step 2)`.
+  - [x] Commit mapping: `7b226fce feat(skills): SKILL.md parser with strict Zod validation + unit tests (BR19 Lot 1 Step 3)`.
+
+- [x] **Lot 2 — Sandbox runtime and host API boundary**
+  - [x] Scaffold `SandboxRuntime` and `SandboxPolicy` with `isolated-vm` dependency.
+  - [x] Implement sandbox API surface allowlist for `files.create`, `db.query`, and `fetch`.
+  - [x] Implement `SandboxRuntime.execute()` body and isolation tests.
+  - [x] Lot gate:
+    - [x] Package-level sandbox runtime tests added under `packages/skills/tests/**`.
+    - [x] No UI/e2e surface required for this lot.
+  - [x] Commit mapping: `c1edc719 feat(skills): scaffold SandboxRuntime + SandboxPolicy with isolated-vm dep (BR19 Lot 2 Step 1)`.
+  - [x] Commit mapping: `a162d0f4 feat(skills): implement sandbox API surface allowlist (files.create, db.query, fetch) (BR19 Lot 2 Step 2)`.
+  - [x] Commit mapping: `35a8dc02 feat(skills): SandboxRuntime.execute() body + isolation tests (BR19 Lot 2 Step 3)`.
+
+- [x] **Lot 3 — Skill registry, authorization filtering, and tool adapter**
+  - [x] Implement in-memory `SkillRegistry` store with register/list/get/search operations.
+  - [x] Implement `SkillRegistry.resolveTools` with `AuthzContext` filtering.
+  - [x] Implement `SkillsToolRegistry` adapter to `@sentropic/contracts` `ToolRegistry`.
+  - [x] Record persistence decision and close Lot 3 in branch notes.
+  - [x] Lot gate:
+    - [x] Registry/authz adapter tests added under `packages/skills/tests/**`.
+    - [x] No UI/e2e surface required for this lot.
+  - [x] Commit mapping: `59e20c90 feat(skills): SkillRegistry in-memory store + register/list/get/search (BR19 Lot 3 Step 1)`.
+  - [x] Commit mapping: `1ebc695b feat(skills): SkillRegistry resolveTools with AuthzContext filtering (BR19 Lot 3 Step 2)`.
+  - [x] Commit mapping: `55551f56 feat(skills): SkillsToolRegistry adapter to @sentropic/contracts ToolRegistry (BR19 Lot 3 Step 3)`.
+  - [x] Commit mapping: `a8c9af62 docs(br19): close Lot 3 + persistence decision (BR19 Lot 3 close)`.
+
+- [x] **Lot 4 — `search_skills` meta-tool**
+  - [x] Implement `SearchSkillsTool` meta-tool with authorization-aware ranking.
+  - [x] Auto-register `search_skills` meta-tool in `SkillsToolRegistry`.
+  - [x] Add ranking and filter tests for context-aware discovery.
+  - [x] Lot gate:
+    - [x] Search/ranking/filter coverage added under `packages/skills/tests/**`.
+    - [x] No UI/e2e surface required for this lot.
+  - [x] Commit mapping: `d1fd7990 feat(skills): SearchSkillsTool meta-tool with authz-aware ranking (BR19 Lot 4 Step 1)`.
+  - [x] Commit mapping: `a8e8f98e feat(skills): auto-register search_skills meta-tool in SkillsToolRegistry (BR19 Lot 4 Step 2)`.
+  - [x] Commit mapping: `7305722c feat(skills): close Lot 4 search_skills ranking + filter tests (BR19 Lot 4 Step 3)`.
+
+- [x] **Lot 5 — Foundation bundles Wave A/B/C**
+  - [x] Add foundation bundle scaffold and workspace skill.
+  - [x] Align authorization contract.
+  - [x] Add web foundation bundle.
+  - [x] Add object and structured foundation bundles.
+  - [x] Add history analyze and gate review bundles.
+  - [x] Add documents foundation bundle.
+  - [x] Add comment assistant foundation bundle.
+  - [x] Add plan foundation bundle.
+  - [x] Close Wave C step 3 and record BR19-D2 through BR19-D5 decisions.
+  - [x] Close package asset shipping issue BR19-N2 with `.md` assets shipped from `src` and `dist`.
+  - [x] Lot gate:
+    - [x] Foundation bundle coverage added under `packages/skills/tests/**`.
+    - [x] AI flaky BR19-F1 recorded after same-command rerun passed.
+  - [x] Commit mapping: `9012e438 feat(skills): foundation bundle scaffold + workspace skill (BR19 Lot 5 Wave A Step 1)`.
+  - [x] Commit mapping: `0e8916f6 fix(skills): align authz contract`.
+  - [x] Commit mapping: `e1c32ed9 feat(skills): add foundation web bundle`.
+  - [x] Commit mapping: `34a12a53 feat(skills): add foundation object bundles`.
+  - [x] Commit mapping: `b3c41e1d feat(skills): complete object foundation bundles`.
+  - [x] Commit mapping: `43714594 feat(skills): add structured foundation bundles`.
+  - [x] Commit mapping: `16b1d3e5 feat(skills): add history analyze and gate review bundles`.
+  - [x] Commit mapping: `201d31fa feat(skills): add documents foundation bundle`.
+  - [x] Commit mapping: `f805864f feat(skills): add comment_assistant foundation bundle`.
+  - [x] Commit mapping: `8973a63a feat(skills): add plan foundation bundle`.
+  - [x] Commit mapping: `cc6cba8d docs(br19): close Wave C step 3 + record BR19-D2..D5 decisions`.
+  - [x] Commit mapping: `7dfc6b5f docs(br19): record BR19-F1 ai-flaky on b4128c1a (re-run passed)`.
+  - [x] Commit mapping: `3176149c chore(skills): close BR19-N2 via package.json files glob (.md assets shipped from src + dist)`.
+
+- [x] **Lot 6 — `document_generate` sandbox execution and DOCX/PPTX host bridges**
+  - [x] Raise and close BR19-Q7 for `document_generate` sandbox invocation ambiguity.
+  - [x] Raise and close BR19-Q8 for DOCX dependency scope.
+  - [x] Declare BR19-EX5 for additive `Makefile` dependency install support.
+  - [x] Add DOCX dependency and DOCX host bridge for `SandboxRuntime`.
+  - [x] Route `document_generate` freeform DOCX through V8 sandbox path and tick Wave D step 1.A.
+  - [x] Declare BR19-EX6 for additive `api/Dockerfile` workspace package metadata copy.
+  - [x] Add PPTX dependency and PPTX host bridge for `SandboxRuntime`.
+  - [x] Route `document_generate` freeform PPTX through V8 sandbox path and tick Wave D step 1.B.
+  - [x] Add `TemplateRenderer` adapter interface and record BR19-N3.
+  - [x] Inline DOCX/PPTX helpers into `SKILL.md` per glossary and BR19-EX7.
+  - [x] Lot gate:
+    - [x] Byte-stable DOCX/PPTX package tests added/updated under `packages/skills/tests/**`.
+    - [x] Conditional path exceptions BR19-EX5, BR19-EX6, and BR19-EX7 recorded.
+  - [x] Commit mapping: `35b62b66 docs(br19): raise BR19-Q7 — document_generate sandbox-invocation ambiguity (blocks Wave D step 1)`.
+  - [x] Commit mapping: `22bbc717 docs(br19): close BR19-Q7 with Option B + raise BR19-Q8 (docx dep blocks Wave D step 1.A scope)`.
+  - [x] Commit mapping: `14a62807 docs(br19): close BR19-Q8 with B1 + declare BR19-EX5 (Makefile additive)`.
+  - [x] Commit mapping: `521b115c chore(skills): add docx dep + Makefile inline npm install (BR19-EX5)`.
+  - [x] Commit mapping: `88459c6c feat(skills): add docx-host-bridge for SandboxRuntime`.
+  - [x] Commit mapping: `6fcc60fa feat(skills): document_generate bundle with V8-bound freeform DOCX (Wave D step 1.A)`.
+  - [x] Commit mapping: `db0023a0 docs(br19): tick Wave D step 1.A (V8 freeform DOCX bound, byte-stable)`.
+  - [x] Commit mapping: `f0a8f640 docs(br19): declare BR19-EX6 (api/Dockerfile additive COPY for skills workspace)`.
+  - [x] Commit mapping: `3151427d fix(api): COPY packages/skills/package.json before npm ci --workspaces (BR19-EX6)`.
+  - [x] Commit mapping: `28b58bcd chore(skills): add pptxgenjs dep + Makefile inline npm install (BR19-EX5)`.
+  - [x] Commit mapping: `98ce198e feat(skills): add pptx-host-bridge for SandboxRuntime`.
+  - [x] Commit mapping: `00c8177c feat(skills): document_generate PPTX freeform routed to V8 sandbox (Wave D step 1.B)`.
+  - [x] Commit mapping: `ed322cfd docs(br19): tick Wave D step 1.B (V8 freeform PPTX bound, byte-stable)`.
+  - [x] Commit mapping: `72117ad8 docs(br19): record BR19-N3 (templateRenderer adapter contract introduced)`.
+  - [x] Commit mapping: `54d0b787 feat(skills): add TemplateRenderer adapter interface for document_generate template path`.
+  - [x] Commit mapping: `6919dfc8 chore(skills): inline DOCX/PPTX helpers into SKILL.md per glossary (BR19-N4, BR19-EX7)`.
+
+- [x] **Lot 7 — Remove legacy upskill shortcut and harden discovery semantics**
+  - [x] Remove `action=upskill` legacy hack.
+  - [x] Align `document_generate` and foundation tests with `action=upskill` removal.
+  - [x] Add banned synonyms section to glossary/spec documentation and record BR19-EX8.
+  - [x] Lot gate:
+    - [x] Package tests updated for `search_skills`-first discovery.
+    - [x] Conditional documentation exception BR19-EX8 recorded.
+  - [x] Commit mapping: `3fc2b032 feat(skills): remove action=upskill legacy hack (SOTA discovery via search_skills, BR19-D6)`.
+  - [x] Commit mapping: `a3461940 test(skills): align document_generate + foundation tests with action=upskill removal`.
+  - [x] Commit mapping: `56c0d2a4 docs(spec): add banned synonyms section to glossary (BR19-EX8, anchors BR19-N4)`.
+
+- [x] **Lot 8 — API foundation catalog bridge and chat-service routing**
+  - [x] Add API foundation catalog bridge under `api/src/services/skills/catalog.ts`.
+  - [x] Build in-memory foundation skill registry for chat.
+  - [x] Resolve foundation skill descriptors into OpenAI chat tools.
+  - [x] Execute `search_skills` through the skill registry.
+  - [x] Add foundation executor bridge under `api/src/services/skills/foundation-executor.ts`.
+  - [x] Route migrated foundation tool calls before the legacy local switch.
+  - [x] Preserve local descriptors and client-provided local tools.
+  - [x] Lot gate:
+    - [x] `make typecheck-api REGISTRY=local ENV=test-feat-agent-sandbox-skills`.
+    - [x] `make test-api-unit SCOPE=tests/unit/foundation-executor.test.ts REGISTRY=local ENV=test-feat-agent-sandbox-skills`.
+    - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts REGISTRY=local ENV=test-feat-agent-sandbox-skills`.
+    - [x] No UI/e2e surface directly changed in this lot.
+  - [x] Commit mapping: `2a5e7347 feat(skills): authorize foundation search catalog`.
+  - [x] Commit mapping: `5c22a248 refactor(api): route foundation chat tools through skills`.
+
+- [x] **Lot 9 — Rebase, CI stabilization, and production bundle startup**
+  - [x] Rebase/alignment performed against `origin/main` before PR CI.
+  - [x] Restore `batch_create_organizations` descriptor exposure for `opportunity` and `ai-ideas` contexts.
+  - [x] Keep `batch_create_organizations` hidden for neutral context.
+  - [x] Fix API production startup with bundled foundation skill dependencies.
+  - [x] Lot gate:
+    - [x] `make test-api-unit SCOPE=tests/unit/chat-service-batch-create-orgs.test.ts REGISTRY=local ENV=test-feat-agent-sandbox-skills`.
+    - [x] `make test-api-unit REGISTRY=local ENV=test-feat-agent-sandbox-skills` — 60 files passed, 495 tests passed, 1 skipped.
+    - [x] `make typecheck-skills ENV=test-feat-agent-sandbox-skills`.
+    - [x] `make test-skills ENV=test-feat-agent-sandbox-skills` — 136 tests passed.
+    - [x] API production startup smoke passed after bundled dependency externalization and fallback `SKILL.md` loading fix.
+    - [x] GitHub CI run `26333936400` completed successfully.
+  - [x] Commit mapping: `38870d2f fix(api): expose batch organization tool`.
+  - [x] Commit mapping: `131ce00f fix(api): support bundled foundation skills startup`.
+
+- [ ] **Lot 10 — UAT**
+  - [x] Prepare root UAT branch `uat/br19` at `131ce00ff5fd3baa7d417e7bfd41d6c9a75f7f27`.
+  - [x] Align feature worktree `tmp/feat-agent-sandbox-skills` and root UAT branch on the same HEAD SHA.
+  - [x] Prepare root UAT environment with `API_PORT=8787`, `UI_PORT=5173`, `MAILDEV_UI_PORT=1080`, `ENV=dev`.
+  - [ ] Open root UAT app at `http://localhost:5173`.
+  - [ ] Confirm root worktree is on `uat/br19` before user-facing checks.
+  - [ ] Confirm app loads with existing dev data.
+  - [ ] Web app — neutral workspace:
+    - [ ] Confirm chat starts normally.
+    - [ ] Ask the assistant to discover available skills and confirm `search_skills` is available.
+    - [ ] Confirm `search_skills` returns only context-allowed tools.
+    - [ ] Confirm opportunity-only tools are hidden.
+    - [ ] Confirm `batch_create_organizations` is hidden.
+  - [ ] Web app — opportunity workspace:
+    - [ ] Confirm chat starts normally.
+    - [ ] Confirm `search_skills` exposes opportunity-compatible foundation skills.
+    - [ ] Confirm solutions, proposals, products, gate review, document generation, and batch organization creation are exposed where applicable.
+    - [ ] Confirm `batch_create_organizations` is available.
+    - [ ] Confirm organization, folder, initiative, matrix, and executive summary behavior still works.
+  - [ ] Web app — `ai-ideas` workspace:
+    - [ ] Confirm chat starts normally.
+    - [ ] Confirm `search_skills` exposes expected opportunity-compatible foundation tools.
+    - [ ] Confirm `batch_create_organizations` is available.
+  - [ ] Web app — non-regression:
+    - [ ] Confirm existing web/search behavior still works where legacy branches remain.
+    - [ ] Confirm existing documents behavior still works where legacy branches remain.
+    - [ ] Confirm existing history analyze behavior still works where legacy branches remain.
+    - [ ] Confirm existing comment assistant behavior still works where legacy branches remain.
+    - [ ] Confirm existing task dispatch/document generation behavior has no visible regression where product flow exists.
+    - [ ] Reproduce BR19-UAT2 with the exact DOCX generation prompt and record whether the loop is a UI render loop, network retry loop, stream continuation loop, or API job retry loop.
+  - [ ] Registry/search UI:
+    - [ ] Inspect any registry/search UI surface present in the app.
+    - [ ] Record missing registry UI specification gaps as BR19-UI follow-up items in `## Feedback Loop`.
+  - [ ] Record every UAT anomaly in `## Feedback Loop` before fixing.
+  - [ ] Do not mark UAT complete until user accepts the root UAT result.
+
+- [ ] **Lot 11 — Docs consolidation**
+  - [x] Consolidate `spec/SPEC_EVOL_BR19_SKILLS.md` into `spec/SPEC_VOL_AGENT_SANDBOX_SKILLS.md` and delete the SPEC_EVOL file.
+  - [x] Record final BR-19 decisions and exceptions in `## Feedback Loop`.
+  - [x] Reconstruct this `BRANCH.md` from branch history with commit-to-lot mapping.
+  - [ ] Refresh PR #166 body from this `BRANCH.md` after user validates the reconstructed structure.
+  - [ ] Add UAT findings and any registry UI follow-up lots after Lot 10.
+
+- [ ] **Lot 12 — Final validation**
+  - [x] Typecheck API: `make typecheck-api REGISTRY=local ENV=test-feat-agent-sandbox-skills`.
+  - [x] Test API focused foundation executor: `make test-api-unit SCOPE=tests/unit/foundation-executor.test.ts REGISTRY=local ENV=test-feat-agent-sandbox-skills`.
+  - [x] Test API focused chat tools: `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts REGISTRY=local ENV=test-feat-agent-sandbox-skills`.
+  - [x] Test API focused batch create orgs: `make test-api-unit SCOPE=tests/unit/chat-service-batch-create-orgs.test.ts REGISTRY=local ENV=test-feat-agent-sandbox-skills`.
+  - [x] Test API unit broad: `make test-api-unit REGISTRY=local ENV=test-feat-agent-sandbox-skills`.
+  - [x] Typecheck skills: `make typecheck-skills ENV=test-feat-agent-sandbox-skills`.
+  - [x] Test skills: `make test-skills ENV=test-feat-agent-sandbox-skills`.
+  - [x] Verify API production startup smoke after bundle startup fixes.
+  - [x] Final gate step 1 partial: PR #166 exists.
+  - [x] Final gate step 2 partial: branch CI is green on run `26333936400`.
+  - [ ] Retest or re-check only if required after UAT fixes or further commits.
+  - [ ] Final gate step 1 remaining: update PR #166 using this `BRANCH.md` text as PR body after user validation.
+  - [ ] Final gate step 2 remaining: verify branch CI again if PR body refresh or UAT fixes create a new commit.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
