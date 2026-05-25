@@ -183,7 +183,7 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
     - [ ] `deploy/scw/05-sealed-sentropic-api.yaml` (SealedSecret resource, encrypted, safe to commit).
     - [ ] `deploy/scw/06-sealed-sentropic-postgres.yaml`.
     - [x] Add `make scw-seal-secret` helper that seals a given plaintext Secret yaml (`SEAL_SRC`) into a target SealedSecret yaml (`SEAL_OUT`) via the pinned `bitnami/sealed-secrets-kubeseal:0.37.0` image; reads the controller cert from the live kube API via `$(KUBECONFIG)`; hardcodes no secret value. Also added `make scw-sealed-secrets-backup-key` (DR export of the controller sealing key to `SEAL_KEY_OUT`, with sensitivity warnings). (BR37b-EX1)
-  - [ ] Document the disaster-recovery procedure for the controller's sealing key in `deploy/scw/README.md` (operator-side out-of-band backup, file path on operator host, restore steps).
+  - [x] Document the disaster-recovery procedure for the controller's sealing key in `deploy/scw/README.md` (operator-side out-of-band backup via `make scw-sealed-secrets-backup-key SEAL_KEY_OUT=...`, file path on operator host, restore steps). Added a full "Sealed Secrets" runbook section: install, seal workflow (plaintext Secret -> `make scw-seal-secret` -> committable `05-*`/`06-*`), DR backup/restore, and a note that `05-*`/`06-*` SealedSecret files are produced by the operator (conductor), not by this manifest/tooling change.
   - [ ] Deprecate or document the legacy `scw-bundle-secret` path (kept for emergency unseal, but no longer the primary mechanism for `sentropic-api` and `sentropic-postgres`).
   - [ ] Lot gate:
     - [ ] `make scw-deploy KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37b` applies controller + sealed secrets cleanly.
