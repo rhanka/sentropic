@@ -1,9 +1,25 @@
-import { getAuthDescriptor, type AuthDescriptor, type AuthInput, type AuthResolver } from './auth.js';
+import {
+  getAuthDescriptor,
+  type AuthDescriptor,
+  type AuthInput,
+  type AuthResolver,
+} from './auth.js';
 import type { ModelProfile } from './catalog.js';
-import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from './generation.js';
+import type {
+  GenerateRequest,
+  GenerateResponse,
+  StreamRequest,
+  StreamResult,
+} from './generation.js';
+import type {
+  ImageGenerationRequest,
+  ImageGenerationResponse,
+} from './image-generation.js';
 import type { FinishReason, StreamEvent, TokenUsage } from './streaming.js';
-import type { ProviderAdapter, ProviderRegistry } from './registry.js';
+import type { ProviderRegistry } from './registry.js';
 import { isProviderId, type ModelReference, type ProviderId } from './providers.js';
+
+type MeshOperation = 'generate' | 'stream' | 'generateImage';
 
 export interface LlmMeshHooks {
   onRequest?(event: LlmMeshRequestEvent): void | Promise<void>;
@@ -12,7 +28,7 @@ export interface LlmMeshHooks {
 }
 
 export interface LlmMeshRequestEvent {
-  operation: 'generate' | 'stream';
+  operation: MeshOperation;
   providerId: ProviderId;
   modelId: string;
   auth?: AuthDescriptor;
@@ -39,10 +55,11 @@ export interface LlmMesh {
   listModels: ProviderRegistry['listModels'];
   generate(request: GenerateRequest): Promise<GenerateResponse>;
   stream(request: StreamRequest): Promise<StreamResult>;
+  generateImage(request: ImageGenerationRequest): Promise<ImageGenerationResponse>;
 }
 
 const selectModel = (
-  request: GenerateRequest | StreamRequest,
+  request: GenerateRequest | StreamRequest | ImageGenerationRequest,
   registry: ProviderRegistry,
 ): { providerId: ProviderId; modelId: string; profile: ModelProfile } => {
   const alias = typeof request.model === 'string' ? request.model.split(':', 2) : null;
@@ -50,12 +67,14 @@ const selectModel = (
   const providerId = ref?.providerId ?? request.providerId ?? (alias && isProviderId(alias[0]) ? alias[0] : undefined);
   const modelId = ref?.modelId ?? request.modelId ?? alias?.[1];
   if (!providerId || !modelId) throw new Error('A provider/model selection is required');
-  const profile = registry.listModels().find((model) => model.providerId === providerId && model.modelId === modelId);
+  const profile = registry.listModels().find(
+    (model) => model.providerId === providerId && model.modelId === modelId,
+  );
   if (!profile) throw new Error(`Model not found: ${providerId}:${modelId}`);
   return { providerId, modelId, profile };
 };
 
-const validateFeatures = (
+const validateTextFeatures = (
   operation: 'generate' | 'stream',
   request: GenerateRequest | StreamRequest,
   profile: ModelProfile,
@@ -74,8 +93,26 @@ const validateFeatures = (
   }
 };
 
+const validateImageFeatures = (
+  profile: ModelProfile,
+): void => {
+  if (profile.capabilities.imageGeneration.status !== 'supported') {
+    if (profile.capabilities.imageGeneration.status === 'unsupported') {
+      throw new Error(`Image generation is unsupported for ${profile.providerId}:${profile.modelId}`);
+    }
+    if (profile.capabilities.imageGeneration.status === 'planned') {
+      if (profile.providerId === 'mistral') {
+        throw new Error(
+          `Image generation for ${profile.providerId}:${profile.modelId} requires the Mistral Agents/Conversations adapter`,
+        );
+      }
+      throw new Error(`Image generation is planned for ${profile.providerId}:${profile.modelId}`);
+    }
+  }
+};
+
 const resolveAuth = async (
-  request: GenerateRequest | StreamRequest,
+  request: GenerateRequest | StreamRequest | ImageGenerationRequest,
   selection: { providerId: ProviderId; modelId: string },
   authResolver?: AuthResolver,
 ): Promise<AuthInput | undefined> => {
@@ -90,7 +127,21 @@ const resolveAuth = async (
   });
 };
 
-const normalizeRequest = <T extends GenerateRequest | StreamRequest>(
+const normalizeGenerateRequest = <T extends GenerateRequest | StreamRequest>(
+  request: T,
+  selection: { providerId: ProviderId; modelId: string },
+  auth?: AuthInput,
+): T => {
+  const { model: _model, auth: _requestAuth, ...rest } = request;
+  return {
+    ...rest,
+    providerId: selection.providerId,
+    modelId: selection.modelId,
+    ...(auth ? { auth } : {}),
+  } as T;
+};
+
+const normalizeImageRequest = <T extends ImageGenerationRequest>(
   request: T,
   selection: { providerId: ProviderId; modelId: string },
   auth?: AuthInput,
@@ -109,9 +160,12 @@ export const createLlmMesh = ({ registry, authResolver, hooks }: CreateLlmMeshOp
     await hooks?.[type]?.(event as never);
   };
 
-  const prepare = async (operation: 'generate' | 'stream', request: GenerateRequest | StreamRequest) => {
+  const prepare = async <T extends GenerateRequest | StreamRequest>(
+    operation: 'generate' | 'stream',
+    request: T,
+  ) => {
     const selection = selectModel(request, registry);
-    validateFeatures(operation, request, selection.profile);
+    validateTextFeatures(operation, request, selection.profile);
     const auth = await resolveAuth(request, selection, authResolver);
     const adapter = registry.requireProvider(selection.providerId);
     const validation = adapter.validateAuth(auth);
@@ -123,7 +177,34 @@ export const createLlmMesh = ({ registry, authResolver, hooks }: CreateLlmMeshOp
       ...(auth ? { auth: getAuthDescriptor(auth) } : {}),
     };
     await emit(eventBase, 'onRequest');
-    return { adapter, auth, eventBase, request: normalizeRequest(request, selection, auth) };
+    return {
+      adapter,
+      auth,
+      eventBase,
+      request: normalizeGenerateRequest(request, selection, auth),
+    };
+  };
+
+  const prepareImage = async (request: ImageGenerationRequest) => {
+    const selection = selectModel(request, registry);
+    validateImageFeatures(selection.profile);
+    const auth = await resolveAuth(request, selection, authResolver);
+    const adapter = registry.requireProvider(selection.providerId);
+    const validation = adapter.validateAuth(auth);
+    if (!validation.ok) throw new Error(validation.message ?? 'Provider auth source is not configured');
+    const eventBase = {
+      operation: 'generateImage' as const,
+      providerId: selection.providerId,
+      modelId: selection.modelId,
+      ...(auth ? { auth: getAuthDescriptor(auth) } : {}),
+    };
+    await emit(eventBase, 'onRequest');
+    return {
+      adapter,
+      auth,
+      eventBase,
+      request: normalizeImageRequest(request, selection, auth),
+    };
   };
 
   return {
@@ -134,6 +215,20 @@ export const createLlmMesh = ({ registry, authResolver, hooks }: CreateLlmMeshOp
       try {
         const response = await prepared.adapter.generate(prepared.request, { auth: prepared.auth });
         await emit({ ...prepared.eventBase, finishReason: response.finishReason, responseId: response.id, usage: response.usage }, 'onResponse');
+        return response;
+      } catch (error) {
+        await emit({ ...prepared.eventBase, error }, 'onError');
+        throw error;
+      }
+    },
+    async generateImage(request) {
+      const prepared = await prepareImage(request);
+      try {
+        const response = await prepared.adapter.generateImage(
+          prepared.request,
+          { auth: prepared.auth },
+        );
+        await emit({ ...prepared.eventBase, responseId: response.id }, 'onResponse');
         return response;
       } catch (error) {
         await emit({ ...prepared.eventBase, error }, 'onError');

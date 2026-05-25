@@ -151,12 +151,12 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - [x] Confirm scope boundaries and declare `BR38b-EXn` before touching conditional paths.
   - [x] Add `spec/BRANCH_SPEC_EVOL_IMAGE_GENERATION.md` only if the design cannot be integrated cleanly into existing specs in the same branch.
 
-- [ ] **Lot 1 - Mesh image generation contract**
-  - [ ] Extend `@sentropic/llm-mesh` capabilities with generated image output modality.
-  - [ ] Add a typed image generation request/response contract that carries prompt, size/aspect ratio, count, quality/style when supported, provider options, and binary/url result references.
-  - [ ] Implement provider adapter support for the selected first provider path and explicit unsupported-provider errors for the rest.
-  - [ ] Ensure provider auth resolution uses existing mesh auth material and does not create a new credential path.
-  - [ ] Preserve text chat generate/stream APIs without dual paths.
+- [x] **Lot 1 - Mesh image generation contract**
+  - [x] Extend `@sentropic/llm-mesh` capabilities with generated image output modality.
+  - [x] Add a typed image generation request/response contract that carries prompt, size/aspect ratio, count, quality/style when supported, provider options, and binary/url result references.
+  - [x] Implement provider adapter support for the selected first provider path and explicit unsupported-provider errors for the rest.
+  - [x] Ensure provider auth resolution uses existing mesh auth material and does not create a new credential path.
+  - [x] Preserve text chat generate/stream APIs without dual paths.
   - [ ] Lot gate:
     - [ ] `make test-packages SCOPE=packages/llm-mesh/tests/facade.test.ts ENV=test-feat-image-generation-tool`
     - [ ] `make test-api SCOPE=tests/unit/provider-mesh-contract-proof.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`

@@ -10,3 +10,4 @@ export * from './providers.js';
 export * from './registry.js';
 export * from './streaming.js';
 export * from './tools.js';
+export * from './image-generation.js';

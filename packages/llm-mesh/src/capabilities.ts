@@ -2,6 +2,7 @@ import type {
   AccountTransportProviderId,
   TokenAuthSourceType,
 } from './auth.js';
+import type { ImageGenerationKind, ImageGenerationStatus } from './image-generation.js';
 import type { ReasoningTier } from './providers.js';
 
 export type CapabilitySupport = 'supported' | 'unsupported' | 'partial' | 'unknown';
@@ -55,12 +56,17 @@ export interface ReasoningCapabilities {
 
 export interface ModalityCapabilities {
   input: readonly ('text' | 'image' | 'audio' | 'file')[];
-  output: readonly ('text' | 'json' | 'tool-call')[];
+  output: readonly ('text' | 'json' | 'tool-call' | 'image')[];
 }
 
 export interface AuthCapabilities {
   tokenSources: readonly TokenAuthSourceType[];
   accountTransports: readonly AccountTransportProviderId[];
+}
+
+export interface ImageGenerationCapabilities {
+  status: ImageGenerationStatus;
+  kind: ImageGenerationKind;
 }
 
 export interface ProviderCapabilities {
@@ -70,6 +76,7 @@ export interface ProviderCapabilities {
   reasoning: ReasoningCapabilities;
   modalities: ModalityCapabilities;
   auth: AuthCapabilities;
+  imageGeneration: ImageGenerationCapabilities;
 }
 
 export interface ModelCapabilities extends ProviderCapabilities {

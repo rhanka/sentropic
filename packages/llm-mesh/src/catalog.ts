@@ -5,6 +5,10 @@ import {
   type ProviderCapabilities,
 } from './capabilities.js';
 import type { AccountTransportProviderId, TokenAuthSourceType } from './auth.js';
+import type {
+  ImageGenerationKind,
+  ImageGenerationStatus,
+} from './image-generation.js';
 import {
   type KnownModelId,
   type ModelId,
@@ -42,9 +46,26 @@ const tokenSources = [
 
 const toolChoice = ['auto', 'required', 'none'] as const;
 
+const defaultUnsupportedImageGeneration = {
+  status: 'unsupported' as const,
+  kind: 'none' as const,
+};
+const openaiImageGeneration = {
+  status: 'supported' as const,
+  kind: 'native-image-model' as const,
+};
+const geminiImageGeneration = {
+  status: 'supported' as const,
+  kind: 'gemini-generate-content' as const,
+};
+const mistralImageGeneration = {
+  status: 'planned' as const,
+  kind: 'provider-agent-tool' as const,
+};
+
 const textModalities = {
   input: ['text'] as const,
-  output: ['text', 'json', 'tool-call'] as const,
+  output: ['text', 'json', 'tool-call', 'image'] as const,
 };
 
 const auth = (
@@ -62,6 +83,10 @@ const capabilities = (input: {
   streamedArgumentDeltas?: CapabilitySupport;
   unsupportedKeywords?: readonly string[];
   stringEnumsOnly?: boolean;
+  imageGeneration?: {
+    status: ImageGenerationStatus;
+    kind: ImageGenerationKind;
+  };
 }): ProviderCapabilities => ({
   tools: {
     support: 'unknown',
@@ -121,6 +146,7 @@ const capabilities = (input: {
         : 'unknown',
   },
   modalities: textModalities,
+  imageGeneration: input.imageGeneration ?? defaultUnsupportedImageGeneration,
   auth: auth(input.accountTransports),
 });
 
@@ -134,6 +160,7 @@ export const providerProfiles = {
       reasoningTier: 'advanced',
       structuredOutputLevel: 'json-schema',
       accountTransports: ['codex'],
+      imageGeneration: openaiImageGeneration,
     }),
   },
   gemini: {
@@ -146,6 +173,7 @@ export const providerProfiles = {
       structuredOutputLevel: 'json-schema-subset',
       unsupportedKeywords: geminiUnsupportedJsonSchemaKeywords,
       stringEnumsOnly: true,
+      imageGeneration: geminiImageGeneration,
     }),
   },
   anthropic: {
@@ -156,6 +184,7 @@ export const providerProfiles = {
     capabilities: capabilities({
       reasoningTier: 'advanced',
       structuredOutputLevel: 'tool-input-schema',
+      imageGeneration: defaultUnsupportedImageGeneration,
     }),
   },
   mistral: {
@@ -166,6 +195,7 @@ export const providerProfiles = {
     capabilities: capabilities({
       reasoningTier: 'advanced',
       structuredOutputLevel: 'json-schema',
+      imageGeneration: mistralImageGeneration,
     }),
   },
   cohere: {
@@ -176,13 +206,24 @@ export const providerProfiles = {
     capabilities: capabilities({
       reasoningTier: 'advanced',
       structuredOutputLevel: 'tool-input-schema',
+      imageGeneration: defaultUnsupportedImageGeneration,
     }),
   },
 } as const satisfies Record<ProviderId, ProviderDescriptor>;
 
+const modelImageProfile = (
+  status: ImageGenerationStatus,
+  kind: ImageGenerationKind,
+) => ({
+  status,
+  kind,
+});
+
 const modelCapabilities = (
   providerId: ProviderId,
   reasoningTier: ReasoningTier,
+  imageGeneration: { status: ImageGenerationStatus; kind: ImageGenerationKind } = providerProfiles[providerId]
+    .capabilities.imageGeneration,
 ): ModelCapabilities => ({
   ...providerProfiles[providerId].capabilities,
   reasoning: {
@@ -214,6 +255,7 @@ const modelCapabilities = (
         ? 'unsupported'
         : 'unknown',
   },
+  imageGeneration: modelImageProfile(imageGeneration.status, imageGeneration.kind),
 });
 
 export const modelProfiles = [
@@ -223,7 +265,7 @@ export const modelProfiles = [
     label: 'GPT-5.5',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('openai', 'advanced'),
+    capabilities: modelCapabilities('openai', 'advanced', defaultUnsupportedImageGeneration),
   },
   {
     providerId: 'openai',
@@ -231,7 +273,7 @@ export const modelProfiles = [
     label: 'GPT-5.4 Nano',
     reasoningTier: 'standard',
     defaultTaskHints: ['chat'],
-    capabilities: modelCapabilities('openai', 'standard'),
+    capabilities: modelCapabilities('openai', 'standard', defaultUnsupportedImageGeneration),
   },
   {
     providerId: 'openai',
@@ -239,7 +281,39 @@ export const modelProfiles = [
     label: 'GPT-4.1 Nano',
     reasoningTier: 'none',
     defaultTaskHints: ['doc'],
-    capabilities: modelCapabilities('openai', 'none'),
+    capabilities: modelCapabilities('openai', 'none', defaultUnsupportedImageGeneration),
+  },
+  {
+    providerId: 'openai',
+    modelId: 'gpt-image-2',
+    label: 'GPT Image 2',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['doc'],
+    capabilities: modelCapabilities('openai', 'advanced', openaiImageGeneration),
+  },
+  {
+    providerId: 'openai',
+    modelId: 'gpt-image-1.5',
+    label: 'GPT Image 1.5',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['doc'],
+    capabilities: modelCapabilities('openai', 'advanced', openaiImageGeneration),
+  },
+  {
+    providerId: 'openai',
+    modelId: 'gpt-image-1',
+    label: 'GPT Image 1',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['doc'],
+    capabilities: modelCapabilities('openai', 'advanced', openaiImageGeneration),
+  },
+  {
+    providerId: 'openai',
+    modelId: 'gpt-image-1-mini',
+    label: 'GPT Image 1 Mini',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['doc'],
+    capabilities: modelCapabilities('openai', 'advanced', openaiImageGeneration),
   },
   {
     providerId: 'gemini',
@@ -247,7 +321,7 @@ export const modelProfiles = [
     label: 'Gemini 3.5 Flash',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('gemini', 'advanced'),
+    capabilities: modelCapabilities('gemini', 'advanced', defaultUnsupportedImageGeneration),
   },
   {
     providerId: 'gemini',
@@ -255,7 +329,31 @@ export const modelProfiles = [
     label: 'Gemini 3.5 Thinking',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('gemini', 'advanced'),
+    capabilities: modelCapabilities('gemini', 'advanced', defaultUnsupportedImageGeneration),
+  },
+  {
+    providerId: 'gemini',
+    modelId: 'gemini-3.1-flash-image-preview',
+    label: 'Gemini 3.1 Flash Image Preview',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['doc'],
+    capabilities: modelCapabilities('gemini', 'advanced', geminiImageGeneration),
+  },
+  {
+    providerId: 'gemini',
+    modelId: 'gemini-2.5-flash-image',
+    label: 'Gemini 2.5 Flash Image',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['doc'],
+    capabilities: modelCapabilities('gemini', 'advanced', geminiImageGeneration),
+  },
+  {
+    providerId: 'gemini',
+    modelId: 'gemini-3-pro-image-preview',
+    label: 'Gemini 3 Pro Image Preview',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['doc'],
+    capabilities: modelCapabilities('gemini', 'advanced', geminiImageGeneration),
   },
   {
     providerId: 'anthropic',
@@ -279,7 +377,7 @@ export const modelProfiles = [
     label: 'Mistral Small 4',
     reasoningTier: 'standard',
     defaultTaskHints: ['chat'],
-    capabilities: modelCapabilities('mistral', 'standard'),
+    capabilities: modelCapabilities('mistral', 'standard', mistralImageGeneration),
   },
   {
     providerId: 'mistral',
@@ -287,7 +385,23 @@ export const modelProfiles = [
     label: 'Magistral Medium',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('mistral', 'advanced'),
+    capabilities: modelCapabilities('mistral', 'advanced', mistralImageGeneration),
+  },
+  {
+    providerId: 'mistral',
+    modelId: 'mistral-medium-latest',
+    label: 'Mistral Medium Latest',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['doc'],
+    capabilities: modelCapabilities('mistral', 'advanced', mistralImageGeneration),
+  },
+  {
+    providerId: 'mistral',
+    modelId: 'mistral-large-latest',
+    label: 'Mistral Large Latest',
+    reasoningTier: 'advanced',
+    defaultTaskHints: ['doc'],
+    capabilities: modelCapabilities('mistral', 'advanced', mistralImageGeneration),
   },
   {
     providerId: 'cohere',

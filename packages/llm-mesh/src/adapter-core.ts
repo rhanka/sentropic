@@ -11,6 +11,7 @@ import type {
   StreamRequest,
   StreamResult,
 } from './generation.js';
+import type { ImageGenerationRequest, ImageGenerationResponse } from './image-generation.js';
 import type { ProviderId } from './providers.js';
 import type { ProviderAdapter, ProviderRuntimeContext } from './registry.js';
 import { validateAdapterAuthSource } from './adapter-auth.js';
@@ -26,6 +27,10 @@ export interface ProviderAdapterClient {
     context?: ProviderRuntimeContext,
   ): Promise<GenerateResponse>;
   stream(request: StreamRequest, context?: ProviderRuntimeContext): Promise<StreamResult>;
+  generateImage(
+    request: ImageGenerationRequest,
+    context?: ProviderRuntimeContext,
+  ): Promise<ImageGenerationResponse>;
 }
 
 export interface ProviderAdapterOptions<Client extends ProviderAdapterClient = ProviderAdapterClient> {
@@ -43,7 +48,7 @@ export class ProviderAdapterNotConfiguredError extends Error {
 
   constructor(
     readonly providerId: ProviderId,
-    readonly operation: 'generate' | 'stream',
+    readonly operation: 'generate' | 'stream' | 'generateImage',
   ) {
     super(`${providerId} adapter ${operation} client is not configured`);
     this.name = 'ProviderAdapterNotConfiguredError';
@@ -87,6 +92,16 @@ export abstract class BaseProviderAdapter<Client extends ProviderAdapterClient =
       throw new ProviderAdapterNotConfiguredError(this.provider.providerId, 'stream');
     }
     return await this.client.stream(request, context);
+  }
+
+  async generateImage(
+    request: ImageGenerationRequest,
+    context?: ProviderRuntimeContext,
+  ): Promise<ImageGenerationResponse> {
+    if (!this.client) {
+      throw new ProviderAdapterNotConfiguredError(this.provider.providerId, 'generateImage');
+    }
+    return await this.client.generateImage(request, context);
   }
 
   validateAuth(source?: AuthInput): { ok: boolean; message?: string } {

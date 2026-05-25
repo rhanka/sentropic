@@ -1,4 +1,5 @@
 import type { AuthInput } from './auth.js';
+import type { ImageGenerationRequest, ImageGenerationResponse } from './image-generation.js';
 import type { GenerateRequest, GenerateResponse, StreamRequest, StreamResult } from './generation.js';
 import type { ModelProfile, ProviderDescriptor } from './catalog.js';
 import type { ProviderId } from './providers.js';
@@ -18,6 +19,7 @@ export interface ProviderAdapter {
   readonly provider: ProviderDescriptor;
   listModels(): readonly ModelProfile[];
   generate(request: GenerateRequest, context?: ProviderRuntimeContext): Promise<GenerateResponse>;
+  generateImage(request: ImageGenerationRequest, context?: ProviderRuntimeContext): Promise<ImageGenerationResponse>;
   stream(request: StreamRequest, context?: ProviderRuntimeContext): Promise<StreamResult>;
   validateAuth(source?: AuthInput): CredentialValidationResult;
   normalizeError(error: unknown): NormalizedProviderError;
