@@ -57,6 +57,7 @@ vi.mock('../../src/services/provider-credentials', () => ({
 }));
 
 import { generateImage } from '../../src/services/llm-runtime';
+import { settingsService } from '../../src/services/settings';
 
 const originalFetch = globalThis.fetch;
 const fetchMock = vi.fn();
@@ -71,6 +72,13 @@ const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
 describe('image generation runtime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(settingsService.getAISettings).mockResolvedValue({
+      defaultProviderId: 'openai',
+      defaultModel: 'gpt-4.1-nano',
+      concurrency: 1,
+      publishingConcurrency: 1,
+      processingInterval: 1000,
+    });
     globalThis.fetch = fetchMock as unknown as typeof fetch;
   });
 
@@ -127,6 +135,55 @@ describe('image generation runtime', () => {
     );
   });
 
+  it('fails clearly when the default provider has no image model', async () => {
+    vi.mocked(settingsService.getAISettings).mockResolvedValueOnce({
+      defaultProviderId: 'anthropic',
+      defaultModel: 'claude-opus-4-7',
+      concurrency: 1,
+      publishingConcurrency: 1,
+      processingInterval: 1000,
+    });
+
+    await expect(
+      generateImage({
+        prompt: 'Logo',
+        workspaceId: 'workspace-1',
+        userId: 'user-1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'unsupported_provider',
+      message: 'Image generation is unsupported for provider anthropic',
+    });
+    expect(openaiImagesGenerate).not.toHaveBeenCalled();
+  });
+
+  it('does not let OpenAI providerOptions override selected model or prompt', async () => {
+    openaiImagesGenerate.mockResolvedValue({
+      data: [
+        {
+          b64_json: 'U0FNUExFQl9CQVNFMjU2X0RBVEE=',
+        },
+      ],
+    });
+
+    await generateImage({
+      providerId: 'openai',
+      model: 'gpt-image-2',
+      prompt: 'Logo',
+      providerOptions: {
+        model: 'gpt-image-1',
+        prompt: 'Override',
+      },
+      workspaceId: 'workspace-1',
+      userId: 'user-1',
+    });
+
+    expect(openaiImagesGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-image-2', prompt: 'Logo' }),
+      expect.anything(),
+    );
+  });
+
   it('routes Gemini image generation and normalizes inlineData images', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
@@ -173,6 +230,46 @@ describe('image generation runtime', () => {
     expect(result.images[0]).toEqual(
       expect.objectContaining({ mimeType: 'image/png', data: 'R0lGODlhZQ==' }),
     );
+  });
+
+  it('does not let Gemini providerOptions override required image request fields', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        candidates: [
+          {
+            content: {
+              parts: [{
+                inlineData: {
+                  mimeType: 'image/png',
+                  data: 'R0lGODlhZQ==',
+                },
+              }],
+            },
+          },
+        ],
+      }),
+    );
+
+    await generateImage({
+      providerId: 'gemini',
+      model: 'gemini-3.1-flash-image-preview',
+      prompt: 'Logo',
+      providerOptions: {
+        contents: [{ role: 'user', parts: [{ text: 'Override' }] }],
+        generationConfig: { responseModalities: ['TEXT'] },
+      },
+      workspaceId: 'workspace-1',
+      userId: 'user-1',
+    });
+
+    const [, fetchInit] = fetchMock.mock.calls[0] ?? [];
+    const fetchBody = JSON.parse((fetchInit as RequestInit).body as string) as {
+      contents: Array<{ parts: Array<{ text: string }> }>;
+      generationConfig: { responseModalities: string[] };
+    };
+
+    expect(fetchBody.contents[0]?.parts[0]?.text).toBe('Logo');
+    expect(fetchBody.generationConfig.responseModalities).toEqual(['IMAGE']);
   });
 
   it('maps OpenAI policy refusals to deterministic image errors', async () => {

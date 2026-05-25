@@ -41,6 +41,10 @@ const createRuntimeError = (message: string, code: string): Error & { code: stri
   return error;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+};
+
 const resolveRuntimeSelection = async (input: {
   providerId?: string | null;
   model?: string | null;
@@ -108,8 +112,7 @@ const resolveImageRuntimeSelection = async (input: {
 
   const requestedProvider = isProviderId(input.providerId ?? '')
     ? (input.providerId as ProviderId)
-    : isProviderId(aiSettings.defaultProviderId) &&
-        defaultImageModelByProvider[aiSettings.defaultProviderId as ProviderId]
+    : isProviderId(aiSettings.defaultProviderId)
       ? (aiSettings.defaultProviderId as ProviderId)
       : 'openai';
 
@@ -536,6 +539,17 @@ const openAIImageSizeForAspectRatio = (aspectRatio?: string): string | undefined
   return undefined;
 };
 
+const buildProviderExtensionOptions = (
+  providerOptions: Record<string, unknown> | undefined,
+  protectedKeys: readonly string[],
+): Record<string, unknown> => {
+  if (!providerOptions) return {};
+  const protectedSet = new Set(protectedKeys);
+  return Object.fromEntries(
+    Object.entries(providerOptions).filter(([key]) => !protectedSet.has(key)),
+  );
+};
+
 const buildOpenAIImageRequestOptions = (input: {
   model: string;
   prompt: string;
@@ -547,10 +561,18 @@ const buildOpenAIImageRequestOptions = (input: {
   providerOptions?: Record<string, unknown>;
 }): Record<string, unknown> => {
   const size = input.size ?? openAIImageSizeForAspectRatio(input.aspectRatio);
+  const extensionOptions = buildProviderExtensionOptions(input.providerOptions, [
+    'model',
+    'prompt',
+    'n',
+    'size',
+    'quality',
+    'background',
+  ]);
   const requestOptions: Record<string, unknown> = {
+    ...extensionOptions,
     model: input.model,
     prompt: input.prompt,
-    ...(input.providerOptions ?? {}),
     ...(input.count ? { n: input.count } : {}),
     ...(isOpenAIImageSize(size) ? { size } : {}),
     ...(isOpenAIImageQuality(input.quality) ? { quality: input.quality } : {}),
@@ -583,16 +605,25 @@ const buildGeminiImageRequestBody = (input: {
     },
   };
 
-  const providerOptions = input.providerOptions ?? {};
+  const providerOptions = buildProviderExtensionOptions(input.providerOptions, [
+    'contents',
+    'generationConfig',
+    'generation_config',
+  ]);
+  const providerGenerationConfig = isRecord(input.providerOptions?.generationConfig)
+    ? buildProviderExtensionOptions(input.providerOptions.generationConfig, [
+        'responseModalities',
+        'response_modalities',
+      ])
+    : {};
   return {
-    ...options,
     ...providerOptions,
-    ...(providerOptions.generationConfig
-      ? { generationConfig: {
-          ...(options.generationConfig as Record<string, unknown>),
-          ...(providerOptions.generationConfig as Record<string, unknown>),
-        } }
-      : {}),
+    ...options,
+    generationConfig: {
+      ...providerGenerationConfig,
+      ...(options.generationConfig as Record<string, unknown>),
+      responseModalities: ['IMAGE'],
+    },
   };
 };
 
