@@ -100,9 +100,11 @@ hover-driven emphasis (hovering a point or a domain enlarges the points of that 
   - [x] Color bubbles by business domain (categorical palette); status moved to tooltip (`statusLine`) + marker border (`borderColor` = status color, `pointBorderWidth`).
   - [x] Lot gate: `make typecheck-ui` (0 errors) + `make lint-ui` (clean). UI interactive behavior validated by E2E `e2e/tests/03-prioritization-matrix.spec.ts` (legend chips, hide-bubbles toggle, legend filter aria-pressed).
 
-- [ ] **Lot 4 — Executive-synthesis (DOCX) chart parity**
-  - [ ] Ensure the DOCX bitmap snapshot reflects the new label/legend rules (or document deferral).
-  - [ ] Lot gate: API tests for synthesis context.
+- [x] **Lot 4 — Executive-synthesis (DOCX) chart parity**
+  - [x] DOCX embeds the live chart canvas as an opaque PNG (`dashboardImage` -> `docx-service.ts` image patch; the server never re-renders/re-ranks the chart), so the new top-N labels (Lot 2) + domain colors + status borders (Lot 3) are captured automatically. No server-side label/legend logic to change.
+  - [x] Hardened `getDocxBitmapSnapshot()` so the transient view state (hide-bubbles / domain filter / hover emphasis) never leaks into the export: it temporarily forces the full chart (every point at base radius), redraws synchronously, captures, then restores the user's view.
+  - [x] Server narrative `top_cases` (executive-summary.ts ROI-quadrant filter, value>=thr & complexity<=thr) is the AI-prompt/DOCX-text priority list — a separate, pre-existing concern from the chart's ratio-based top-N labels; out of BR-40a scope (chart legibility/scale only). Documented, not changed.
+  - [x] Lot gate: `make typecheck-ui` (0 errors) + `make lint-ui` (clean). No API synthesis-context change needed (chart is a client bitmap).
 
 - [ ] **Lot N-2 — UAT** (web app: cap to 50, top-10 labels, hide-bubbles, domain filter, hover emphasis;
       non-reg: existing folder chart, DOCX export).
