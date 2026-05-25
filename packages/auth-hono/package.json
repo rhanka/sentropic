@@ -60,6 +60,10 @@
       "types": "./dist/webauthn-authentication.d.ts",
       "import": "./dist/webauthn-authentication.js"
     },
+    "./webauthn-authentication-route-handlers": {
+      "types": "./dist/webauthn-authentication-route-handlers.d.ts",
+      "import": "./dist/webauthn-authentication-route-handlers.js"
+    },
     "./webauthn-registration": {
       "types": "./dist/webauthn-registration.d.ts",
       "import": "./dist/webauthn-registration.js"
