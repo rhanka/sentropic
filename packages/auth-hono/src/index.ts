@@ -3,6 +3,7 @@ export * from './email-verification.js';
 export * from './magic-link.js';
 export * from './middleware.js';
 export * from './ports.js';
+export * from './route-handlers.js';
 export * from './router.js';
 export * from './session.js';
 export * from './webauthn-authentication.js';

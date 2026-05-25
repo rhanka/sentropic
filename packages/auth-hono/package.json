@@ -36,6 +36,10 @@
       "types": "./dist/ports.d.ts",
       "import": "./dist/ports.js"
     },
+    "./route-handlers": {
+      "types": "./dist/route-handlers.d.ts",
+      "import": "./dist/route-handlers.js"
+    },
     "./router": {
       "types": "./dist/router.d.ts",
       "import": "./dist/router.js"
