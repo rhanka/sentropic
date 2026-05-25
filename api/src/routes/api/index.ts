@@ -28,6 +28,7 @@ import { commentsRouter } from './comments';
 import { exportsRouter, importsRouter } from './import-export';
 import { docxRouter } from './docx';
 import { pptxRouter } from './pptx';
+import { xlsxRouter } from './xlsx';
 import { googleDriveRouter } from './google-drive';
 import { chromeExtensionRouter } from './chrome-extension';
 import { vscodeExtensionRouter } from './vscode-extension';
@@ -83,6 +84,10 @@ apiRouter.route('/', docxRouter);
 // PPTX export routes (BR-21a: generated via chat tool)
 apiRouter.use('/pptx/*', requireAuth);
 apiRouter.route('/', pptxRouter);
+
+// XLSX export routes (BR-40c: async folder multi-tab workbook)
+apiRouter.use('/xlsx/*', requireAuth);
+apiRouter.route('/', xlsxRouter);
 
 apiRouter.use('/analytics/*', requireAuth);
 apiRouter.route('/analytics', analyticsRouter);
