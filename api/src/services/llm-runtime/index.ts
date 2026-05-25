@@ -15,6 +15,7 @@ import { createId } from '../../utils/id';
 import {
   createCodexAccountAuthInput,
   dispatchMeshGenerateRaw,
+  dispatchMeshGenerateImageRaw,
   dispatchMeshStreamRaw,
 } from './mesh-dispatch';
 
@@ -108,6 +109,24 @@ export interface CallLLMOptions {
    * If not set, OpenAI may use a small default which can truncate long outputs.
    */
   maxOutputTokens?: number;
+  signal?: AbortSignal;
+}
+
+export interface GenerateImageOptions {
+  providerId?: ProviderId;
+  model?: string;
+  modelId?: string;
+  prompt: string;
+  count?: number;
+  aspectRatio?: string;
+  size?: string;
+  quality?: string;
+  background?: 'transparent' | 'opaque' | (string & {});
+  referenceImages?: readonly string[];
+  providerOptions?: Record<string, unknown>;
+  credential?: string;
+  userId?: string;
+  workspaceId?: string;
   signal?: AbortSignal;
 }
 
@@ -411,6 +430,159 @@ const extractGeminiText = (payload: unknown): string => {
     .map((part) => (typeof part.text === 'string' ? part.text : ''))
     .filter((value) => value.length > 0);
   return texts.join('');
+};
+
+const isOpenAIImageQuality = (
+  value: unknown,
+): value is 'standard' | 'auto' | 'low' | 'medium' | 'high' | 'hd' => {
+  return (
+    value === 'standard' ||
+    value === 'auto' ||
+    value === 'low' ||
+    value === 'medium' ||
+    value === 'high' ||
+    value === 'hd'
+  );
+};
+
+const isOpenAIImageBackground = (value: unknown): value is 'transparent' | 'opaque' | 'auto' => {
+  return value === 'transparent' || value === 'opaque' || value === 'auto';
+};
+
+const isOpenAIImageSize = (value: unknown): value is 'auto' | '1024x1024' | '1536x1024' | '1024x1536' | '256x256' | '512x512' | '1792x1024' | '1024x1792' => {
+  return (
+    value === 'auto' ||
+    value === '1024x1024' ||
+    value === '1536x1024' ||
+    value === '1024x1536' ||
+    value === '256x256' ||
+    value === '512x512' ||
+    value === '1792x1024' ||
+    value === '1024x1792'
+  );
+};
+
+const normalizeImageCount = (value: unknown): number | undefined => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const rounded = Math.floor(value);
+  return rounded > 0 ? rounded : undefined;
+};
+
+const buildOpenAIImageRequestOptions = (input: {
+  model: string;
+  prompt: string;
+  count?: number;
+  size?: string;
+  quality?: string;
+  background?: string;
+  providerOptions?: Record<string, unknown>;
+}): Record<string, unknown> => {
+  const requestOptions: Record<string, unknown> = {
+    model: input.model,
+    prompt: input.prompt,
+    ...(input.providerOptions ?? {}),
+    ...(input.count ? { n: input.count } : {}),
+    ...(isOpenAIImageSize(input.size) ? { size: input.size } : {}),
+    ...(isOpenAIImageQuality(input.quality) ? { quality: input.quality } : {}),
+    ...(isOpenAIImageBackground(input.background)
+      ? { background: input.background }
+      : {}),
+  };
+
+  return requestOptions;
+};
+
+const buildGeminiImageRequestBody = (input: {
+  model: string;
+  prompt: string;
+  providerOptions?: Record<string, unknown>;
+}): Record<string, unknown> => {
+  const options = {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: input.prompt }],
+      },
+    ],
+    generationConfig: {
+      responseModalities: ['IMAGE'],
+    },
+  };
+
+  const providerOptions = input.providerOptions ?? {};
+  return {
+    ...options,
+    ...providerOptions,
+    ...(providerOptions.generationConfig
+      ? { generationConfig: {
+          ...(options.generationConfig as Record<string, unknown>),
+          ...(providerOptions.generationConfig as Record<string, unknown>),
+        } }
+      : {}),
+  };
+};
+
+export const generateImage = async (options: GenerateImageOptions) => {
+  const selection = await resolveRuntimeSelection({
+    providerId: options.providerId,
+    model: options.model ?? options.modelId,
+    userId: options.userId,
+  });
+
+  const credentialResolution = await buildCredentialResolutionContext({
+    providerId: selection.providerId,
+    credential: options.credential,
+    userId: options.userId,
+    workspaceId: options.workspaceId,
+  });
+
+  const runtimeRequest =
+    selection.providerId === 'openai'
+      ? {
+          mode: 'image-generation',
+          requestOptions: buildOpenAIImageRequestOptions({
+            model: selection.model,
+            prompt: options.prompt,
+            count: normalizeImageCount(options.count),
+            size: options.size,
+            quality: options.quality,
+            background: options.background,
+            providerOptions:
+              options.providerOptions &&
+              typeof options.providerOptions === 'object'
+                ? (options.providerOptions as Record<string, unknown>)
+                : undefined,
+          }),
+        }
+      : {
+          mode: 'image-generation',
+          requestOptions: {
+            model: selection.model,
+            body: buildGeminiImageRequestBody({
+              model: selection.model,
+              prompt: options.prompt,
+              providerOptions: options.providerOptions,
+            }),
+          },
+        };
+
+  return await dispatchMeshGenerateImageRaw<{
+    id: string;
+    providerId: ProviderId;
+    modelId: string;
+    images: Array<{ mimeType: string; data?: string; url?: string; width?: number; height?: number }>;
+    status?: 'completed' | 'refused' | 'failed';
+    metadata?: Record<string, unknown>;
+  }>({
+    providerId: selection.providerId,
+    model: selection.model,
+    prompt: options.prompt,
+    credentialResolution,
+    userId: options.userId,
+    workspaceId: options.workspaceId,
+    runtimeRequest,
+    signal: options.signal,
+  });
 };
 
 const normalizeGeminiToolArgs = (
