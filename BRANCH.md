@@ -163,12 +163,20 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
     - [x] `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
 
 - [ ] **Lot 2 - API image generation tool and storage**
+  - [x] Add the API provider runtime bridge for mesh `generateImage()` dispatch.
+  - [x] Add OpenAI and Gemini image generation runtime normalization tests.
+  - [x] Preserve provider capability proof coverage for supported, unsupported, and planned image generation providers.
   - [ ] Add a server-side chat tool contract, named `image_generate`, with JSON schema for prompt and generation controls.
   - [ ] Route `image_generate` through the mesh image generation contract.
   - [ ] Store generated image artifacts through the existing document/storage pattern and create generated-media context references.
   - [ ] Return tool results with stable media IDs, MIME type, filename, dimensions when available, and download URLs.
   - [ ] Add audit/runtime details for prompt, provider, model, status, and generated media references without logging raw credentials.
   - [ ] Preserve existing `document_generate`, DOCX, PPTX, and chat tool behavior.
+  - [x] Runtime bridge gate:
+    - [x] `make test-api-unit SCOPE=tests/unit/image-generation-runtime.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-unit SCOPE=tests/unit/provider-mesh-contract-proof.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make lint-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
   - [ ] Lot gate:
     - [ ] `make test-api SCOPE=tests/api/chat-tools.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
     - [ ] `make test-api SCOPE=tests/api/documents.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`

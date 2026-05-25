@@ -41,4 +41,23 @@ describe('API LLM mesh contract proof', () => {
       }
     }
   });
+
+  it('tracks image-generation status across supported and unsupported providers', () => {
+    const proof = createApiMeshContractProof();
+    const models = new Map(
+      proof.mesh
+        .listModels()
+        .map((model) => [`${model.providerId}:${model.modelId}`, model]),
+    );
+
+    const openaiImage = models.get('openai:gpt-image-2');
+    const geminiImage = models.get('gemini:gemini-3.1-flash-image-preview');
+    const anthropicText = models.get('anthropic:claude-opus-4-7');
+    const mistralPlanned = models.get('mistral:mistral-large-latest');
+
+    expect(openaiImage?.capabilities.imageGeneration.status).toBe('supported');
+    expect(geminiImage?.capabilities.imageGeneration.status).toBe('supported');
+    expect(anthropicText?.capabilities.imageGeneration.status).toBe('unsupported');
+    expect(mistralPlanned?.capabilities.imageGeneration.status).toBe('planned');
+  });
 });
