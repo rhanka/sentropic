@@ -51,6 +51,16 @@ document-generation pattern (DOCX/PPTX queue jobs) rather than inventing a new d
   data tabs and a native chart, else fall back to `exceljs` + OOXML injection. No PNG image fallback.
 - **BR40c-Q2** `acknowledge`: use-cases tab columns confirmed — name, domain, status, description,
   problem, solution, total value score, total complexity score, quadrant.
+- **BR40c-Lot0** `acknowledge`: spike conclusion — `excelforge` does NOT exist on npm (404);
+  `@node-projects/excelforge` exists but makes no documented chart claim. exceljs (4.4.0, MIT) +
+  OOXML chart injection proven in a throwaway spike: native `<c:scatterChart>` referencing the
+  quadrant sheet ranges, content-types registered, exceljs re-reads all 3 sheets intact. Adopted
+  `exceljs` + OOXML injection as decided. No PNG fallback.
+- **BR40c-EX1** `acknowledge`: edit `api/src/services/flow/postgres-job-queue.ts` (not in Allowed
+  Paths) — one-line addition `WHEN 'xlsx_generate' THEN 'publishing'` to the queue-class CASE
+  expression. Reason: this in-repo adapter is the single source of truth that routes a job type to
+  the publishing queue class; there is no extension hook. Impact: one SQL CASE branch, mirrors the
+  existing `docx_generate` line, no behavior change for other types. Rollback: remove the line.
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network/model nondeterminism; one success on
@@ -68,29 +78,29 @@ document-generation pattern (DOCX/PPTX queue jobs) rather than inventing a new d
 - Root UAT env: `ENV=dev`, commit-identical to branch HEAD.
 
 ## Plan / Todo (lot-based) — framing RESOLVED (async + native chart), ready to execute
-- [ ] **Lot 0 — Baseline, async pattern & chart-lib spike**
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `TODO.md`, `PLAN.md`, this branch file.
-  - [ ] Study the DOCX/PPTX async pattern (`api/src/routes/api/docx.ts`, `services/docx-generation.ts`,
+- [x] **Lot 0 — Baseline, async pattern & chart-lib spike**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `TODO.md`, `PLAN.md`, this branch file.
+  - [x] Study the DOCX/PPTX async pattern (`api/src/routes/api/docx.ts`, `services/docx-generation.ts`,
         `services/queue-manager.ts`) to mirror it exactly.
-  - [ ] Confirm slot-2 ports + `ENV=...` last.
-  - [ ] **ExcelForge spike**: prove (or disprove) a native scatter/bubble chart + 3 data tabs in one
-        workbook. If clean, adopt ExcelForge; else fall back to `exceljs` + OOXML chart-part injection.
+  - [x] Confirm slot-2 ports + `ENV=...` last.
+  - [x] **ExcelForge spike**: disproved (`excelforge` is 404 on npm). Adopted `exceljs` + OOXML
+        chart-part injection; proven by throwaway spike (see BR40c-Lot0). No PNG fallback.
 
-- [ ] **Lot 1 — XLSX generation service (3 tabs + native quadrant chart)**
-  - [ ] Add the chosen writer via `make install-api <lib>` (default `exceljs`); bump nothing else.
-  - [ ] `services/xlsx-generation.ts`: fetch folder + initiatives + matrix; build workbook with 3 tabs
+- [x] **Lot 1 — XLSX generation service (3 tabs + native quadrant chart)**
+  - [x] Add the chosen writer via `make install-api exceljs`; `--external:exceljs` in api build.
+  - [x] `services/xlsx-generation.ts`: fetch folder + initiatives + matrix; build workbook with 3 tabs
         (use cases / evaluation matrix / prioritization quadrant). Use-cases columns per BR40c-Q2.
-  - [ ] Quadrant tab: data rows (value/complexity + computed quadrant label, sorted by priority) PLUS a
-        NATIVE XY scatter/bubble chart referencing those cell ranges (OOXML chart part if on exceljs).
-  - [ ] Lot gate: `make typecheck-api` + `make lint-api`; unit test on workbook structure + chart part presence.
+  - [x] Quadrant tab: data rows (value/complexity + computed quadrant label, sorted by priority) PLUS a
+        NATIVE XY scatter chart referencing those cell ranges via OOXML injection (`services/xlsx-chart.ts`).
+  - [x] Lot gate: `make typecheck-api` (pass); `make lint-api` + unit test in Lot 2 gate.
 
-- [ ] **Lot 2 — Route + queue wiring**
-  - [ ] `routes/api/xlsx.ts` mirroring DOCX endpoints; register in `routes/api/index.ts`.
-  - [ ] Queue job type `xlsx_generate` in `queue-manager.ts` (S3 result if async chosen).
-  - [ ] Lot gate: `make typecheck-api` + `make lint-api`; `api/tests/api/xlsx.test.ts`.
+- [x] **Lot 2 — Route + queue wiring**
+  - [x] `routes/api/xlsx.ts` mirroring DOCX endpoints; registered in `routes/api/index.ts`.
+  - [x] Queue job type `xlsx_generate` in `queue-manager.ts` (S3 result); publishing class via EX1.
+  - [ ] Lot gate: `make typecheck-api` (pass) + `make lint-api`; `api/tests/api/xlsx.test.ts`.
 
 - [ ] **Lot 3 — UI export entry point**
-  - [ ] Add the xlsx export action in `folders/[id]/+page.svelte` + `stores/folders.ts`; i18n labels.
+  - [x] Add the xlsx export action in `folders/[id]/+page.svelte` + `stores/folders.ts`; i18n labels.
   - [ ] Lot gate: `make typecheck-ui` + `make lint-ui`; UI store spec.
 
 - [ ] **Lot 4 — E2E**
