@@ -52,6 +52,10 @@
       "types": "./dist/session.d.ts",
       "import": "./dist/session.js"
     },
+    "./session-route-handlers": {
+      "types": "./dist/session-route-handlers.d.ts",
+      "import": "./dist/session-route-handlers.js"
+    },
     "./webauthn-authentication": {
       "types": "./dist/webauthn-authentication.d.ts",
       "import": "./dist/webauthn-authentication.js"
