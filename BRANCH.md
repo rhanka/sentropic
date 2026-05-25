@@ -209,6 +209,18 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - Impact: permits scoped edits to `Makefile` and `.github/workflows/ci.yml` for `auth-hono` targets, filters, validation, publish, and bootstrap-publish only.
   - Rollback: revert the `auth-hono` Make targets and CI workflow entries; package source and API adapter changes remain separable.
   - Recommendation: keep the exception narrow. Do not use it for unrelated Make/CI cleanup.
+- `BR39b-EX2`
+  - Branch: BR-39b `feat/auth-hono-kit`
+  - Owner: implementation worker
+  - Severity: blocking for clean API build
+  - Status: applied
+  - Repro steps: replace `api/src/routes/auth/credentials.ts` with an import from `@sentropic/auth-hono`, then run `make typecheck-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`.
+  - Expected: the API Docker image builds every workspace package consumed by API source before API typecheck/runtime.
+  - Actual: `api/Dockerfile` only copies/builds `packages/llm-mesh` and `packages/flow`; `@sentropic/auth-hono` package exports point to `dist`, so a clean build without a pre-existing local `packages/auth-hono/dist` would fail after the API starts consuming the package.
+  - Reason: Lot 3 app replacement requires the API to consume the workspace package directly, and Docker build parity must include that package.
+  - Impact: permits a narrow `api/Dockerfile` edit to copy `packages/auth-hono/package.json` before workspace install and run `npm --workspace @sentropic/auth-hono run build` after source copy.
+  - Rollback: revert the `api/Dockerfile` auth-hono copy/build lines and remove API imports of `@sentropic/auth-hono`.
+  - Recommendation: keep the exception narrow; do not use it for Docker image refactors or unrelated dependency changes.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -254,7 +266,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
 - **Track B - BR-39b `@sentropic/auth-hono`**
   - Done:
     - BR-39b worktree exists at `/home/antoinefa/src/sentropic/tmp/feat-auth-hono-kit` on `feat/auth-hono-kit`.
-    - Current inspected SHA at status update before this commit: `3a806836`.
+    - Current inspected SHA before this credentials adapter commit: `e5fbcfd1`.
     - Lot 0 branch plan, backend inventory, scope decisions, npm/bootstrap anticipation, and `BR39b-EX1` are recorded.
     - Backend extraction inventory maps current Sentropic routes/services to package ports in `BR39b-INV1`; route-handler extraction matrix is recorded in `BR39b-INV2`.
     - `BR39b-EX1` is approved for narrow `Makefile` and `.github/workflows/ci.yml` edits required by package lifecycle automation.
@@ -266,6 +278,8 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Package lifecycle Make targets exist: `typecheck-auth-hono`, `test-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`.
     - CI/CD package wiring exists for `auth_hono`, `auth_hono_publish`, `validate-auth-hono`, `publish-auth-hono`, and `bootstrap_publish_target=auth-hono`.
     - Root workspace lockfile was synced through `make lock-root ENV=test-feat-auth-hono-kit`.
+    - Sentropic API now declares `@sentropic/auth-hono` as a workspace dependency for the first app replacement slice.
+    - `BR39b-EX2` is applied for a narrow `api/Dockerfile` update so clean API image builds compile `@sentropic/auth-hono` before API typecheck/runtime.
     - Pure package port contracts are exported from `packages/auth-hono/src/ports.ts` and re-exported from the package root and `./ports` subpath.
     - `AUTH_HONO_REQUIRED_PORTS` is type-checked against `keyof AuthHonoPorts` to keep runtime inventory and adapter surface aligned.
     - `createAuthRouter` now accepts router options for route prefix, route overrides, cookie names, RP metadata, session policy, email-code policy, magic-link policy, and response policy.
@@ -282,6 +296,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - `createAuthMagicLinkRouteHandlers` is exported and maps `requestMagicLink` plus reusable `verifyMagicLink` user verification to the reusable magic-link service; Sentropic session/cookie/device activation remains app-owned for Lot 3.
     - `createAuthSessionRouteHandlers` is exported and maps `refreshSession` plus `logout` route contracts to the reusable session service with injected cookie serialization, bearer/cookie session extraction, deterministic JSON validation errors, invalid refresh-token errors, and cookie clearing.
     - `createAuthCredentialRouteHandlers` is exported and maps `listCredentials`, `renameCredential`, and `revokeCredential` route contracts to the reusable credential port with injected session resolution, deterministic validation errors, 404 missing-credential errors, and 403 ownership errors.
+    - Sentropic `api/src/routes/auth/credentials.ts` now consumes `createAuthCredentialRouteHandlers` through a Drizzle-backed `AuthHonoCredentialPort` and the existing `validateSession` resolver while preserving current credential-management API tests.
     - Spark 5.3 xhigh subagents were launched in isolated worktrees for registration, authentication, and route-adapter inventory. They produced useful read context, but no implementation diff was integrated because Agents A/B exited without usable patches and Agent C produced only inline inventory notes.
     - Spark 5.3 xhigh read-only handler-matrix helper was launched from the main branch worktree; it produced useful route/status/cookie inventory but no repository diff.
     - Spark 5.3 xhigh implementation helper for credential handlers produced an adapted package diff and tests; the session helper produced no usable diff and was skipped.
@@ -298,9 +313,16 @@ Extract the reusable Hono-side authentication routes and server contracts into a
       - `make test-auth-hono SCOPE=packages/auth-hono/tests/router-factory.test.ts ENV=test-feat-auth-hono-kit`
       - `make test-auth-hono ENV=test-feat-auth-hono-kit` (14 files, 41 tests)
       - `make pack-auth-hono ENV=test-feat-auth-hono-kit`
+    - Latest API adapter slice gates passed:
+      - `make lock-root ENV=test-feat-auth-hono-kit`
+      - `make typecheck-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
+      - `make up-api-test API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
+      - `make test-api-endpoints SCOPE=tests/api/auth/credentials.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
+      - `make test-auth-hono ENV=test-feat-auth-hono-kit` (14 files, 41 tests)
+      - `make pack-auth-hono ENV=test-feat-auth-hono-kit`
   - To do:
-    - Extract Sentropic app-owned adapters for email-token acceptance, user creation/lookup, workspace bootstrap, session creation, cookie domain policy, and account-status rules.
-    - Rewire Sentropic API routes and middleware to consume `@sentropic/auth-hono` from the workspace package in the same branch.
+    - Extract remaining Sentropic app-owned adapters for email-token acceptance, user creation/lookup, workspace bootstrap, session creation, cookie domain policy, and account-status rules.
+    - Rewire remaining Sentropic API routes and middleware to consume `@sentropic/auth-hono` from the workspace package in the same branch.
     - Remove duplicated app-local auth route/service logic after package/API tests pass; no dual auth paths.
     - Complete npm first-publish runbook and trusted publisher setup.
   - Action:
@@ -383,6 +405,9 @@ Extract the reusable Hono-side authentication routes and server contracts into a
 
 - [ ] **Lot 3 - Sentropic API adapters**
   - [ ] Implement Sentropic adapters for users, credentials, challenges, sessions, email verification, magic links, cookies, logger, clock, random IDs, token signing, and token hashing using the existing Drizzle schema and services.
+  - [x] Add the Sentropic API workspace dependency on `@sentropic/auth-hono` and sync `package-lock.json`.
+  - [x] Apply `BR39b-EX2` for clean API Docker image builds that compile `@sentropic/auth-hono` before API typecheck/runtime.
+  - [x] Rewire `api/src/routes/auth/credentials.ts` to use `createAuthCredentialRouteHandlers` with a Sentropic Drizzle credential adapter and existing session validation.
   - [ ] Rewire `api/src/routes/auth/index.ts` to mount `createAuthRouter` with Sentropic adapters.
   - [ ] Keep existing route paths and response shapes stable for the Sentropic UI and auth E2E tests.
   - [ ] Rewire `api/src/middleware/auth.ts` to use package session validation while keeping Sentropic workspace selection and hidden-workspace rules app-owned.
@@ -390,7 +415,9 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [ ] Remove duplicated app-local route/service logic only after equivalent package tests and API tests pass; no dual auth paths.
   - [ ] Confirm the Sentropic API consumes `@sentropic/auth-hono` from the workspace package in this same branch before handoff.
   - [ ] Lot gate:
-    - [ ] `make typecheck-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
+    - [x] `make typecheck-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
+    - [x] `make up-api-test API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
+    - [x] `make test-api-endpoints SCOPE=tests/api/auth/credentials.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
     - [ ] `make lint-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
     - [ ] `make test-api SCOPE=tests/unit/auth/session-manager.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
     - [ ] `make test-api SCOPE=tests/unit/auth/webauthn-registration.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`

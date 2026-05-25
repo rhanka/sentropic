@@ -107,7 +107,13 @@ const requireOwnedCredential = async (
   options: CreateAuthCredentialRouteHandlersOptions,
   userId: string
 ): Promise<{ credential: AuthHonoCredentialRecord; ok: true } | { ok: false; response: Response }> => {
-  const credential = await options.credentials.findById(c.req.param('id'));
+  const credentialId = c.req.param('id');
+
+  if (!credentialId) {
+    return { ok: false, response: credentialNotFound(c) };
+  }
+
+  const credential = await options.credentials.findById(credentialId);
 
   if (!credential) {
     return { ok: false, response: credentialNotFound(c) };
