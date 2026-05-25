@@ -77,6 +77,50 @@ function createPersistentFolderIdStore() {
 export const currentFolderId = createPersistentFolderIdStore();
 
 import { apiGet, apiPost, apiPut, apiDelete } from '$lib/utils/api';
+import {
+  downloadGeneratedFile,
+  waitForDocxJobCompletion,
+} from '$lib/utils/docx';
+
+type GenerateXlsxResponse = {
+  success: boolean;
+  jobId: string;
+  status: string;
+  queueClass: string;
+  streamId: string;
+};
+
+/**
+ * Start the async folder XLSX export (multi-tab workbook), wait for the
+ * publishing job to complete, then download the generated file.
+ * Mirrors the DOCX async generate -> poll -> download flow.
+ */
+export const generateFolderXlsxAndDownload = async (
+  folderId: string,
+  fallbackFileName = `folder-${folderId}.xlsx`
+): Promise<string> => {
+  const result = await apiPost<GenerateXlsxResponse>('/xlsx/generate', {
+    entityType: 'folder',
+    entityId: folderId,
+  });
+
+  if (!result?.jobId) {
+    throw new Error('XLSX generation job was not created');
+  }
+
+  const finalJob = await waitForDocxJobCompletion(result.jobId);
+  if (finalJob.status !== 'completed') {
+    throw new Error(finalJob.error || 'XLSX generation failed');
+  }
+
+  await downloadGeneratedFile({
+    jobId: result.jobId,
+    fileName: fallbackFileName,
+    downloadUrl: `/xlsx/jobs/${result.jobId}/download`,
+  });
+
+  return result.jobId;
+};
 
 // Fonctions API
 export const fetchFolders = async (options?: {

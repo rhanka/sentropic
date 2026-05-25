@@ -99,9 +99,9 @@ document-generation pattern (DOCX/PPTX queue jobs) rather than inventing a new d
   - [x] Queue job type `xlsx_generate` in `queue-manager.ts` (S3 result); publishing class via EX1.
   - [x] Lot gate: `make typecheck-api` (pass) + `make lint-api` (0 errors); `api/tests/api/xlsx.test.ts` (9 pass).
 
-- [ ] **Lot 3 — UI export entry point**
+- [x] **Lot 3 — UI export entry point**
   - [x] Add the xlsx export action in `folders/[id]/+page.svelte` + `stores/folders.ts`; i18n labels.
-  - [ ] Lot gate: `make typecheck-ui` + `make lint-ui`; UI store spec.
+  - [x] Lot gate: `make typecheck-ui` (0 errors) + `make lint-ui` (0 problems); UI store spec (17 pass).
 
 - [ ] **Lot 4 — E2E**
   - [ ] Create folder with scored use cases → export xlsx → download → verify 3 tabs.
