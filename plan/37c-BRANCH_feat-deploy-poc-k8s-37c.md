@@ -31,10 +31,10 @@ Continuation of BR-37b (email egress + Sealed Secrets, merged PR #176). Close th
   - `PLAN.md` (`BR37c-EX3`, roadmap status update only)
 
 ## Feedback Loop
-- **BR37c-EX1** (status: `pending`): append-only Makefile operator targets (pgbackup now/restore, dns smoke, cert-manager install). Rollback: remove appended targets.
+- **BR37c-EX1** (status: `used`): append-only Makefile operator targets (`scw-pgbackup-now`, `scw-pgbackup-restore`, `scw-dns-smoke` + `SCW_HOST` var). Rollback: remove appended targets.
 - **BR37c-EX2** (status: `pending`): `ci.yml` deploy-k8s apply-set extension if needed so a fresh cluster applies cert-manager/ingress/backup manifests. Rollback: revert ci.yml hunk.
 - **BR37c-EX3** (status: `pending`): PLAN.md status update (BR-37c progress/done). Rollback: revert hunk.
-- **BR37c-FL1** (severity: `attention`, status: `open`): Public hostname confirmed as `sentropic.sent-tech.ca` (Cloudflare zone `sent-tech.ca`). DNS record creation + Cloudflare API token (scope `Zone/DNS/Edit` on `sent-tech.ca`) are operator-side, irreversible/shared-infra → require explicit user go-ahead before execution.
+- **BR37c-FL1** (severity: `attention`, status: `open`): Public hostname `sentropic.sent-tech.ca`. Cloudflare API token RESOLVED (reused `onyxia/.env` `CF_API_TOKEN`, verified `dns_records:edit`+`zone:read` on `sent-tech.ca`, sealed in poc-k8s). REMAINING reserved action: creating the DNS A record → LB IP `51.159.11.157` + issuing the public `letsencrypt-prod` cert (makes the host publicly reachable — shared-infra/user-facing) requires explicit user go-ahead before execution.
 - **BR37c-FL2** (severity: `attention`, status: `open`): Postgres backup bucket `sentropic-pgbackup` provisioned once via SCW CLI in project `$SCW_DEFAULT_PROJECT_ID`; S3 creds mutualised with `DOC_STORAGE_*_PROD` (segmentation at bucket boundary). Backup creds go into a sealed `sentropic-pgbackup` SealedSecret.
 
 ## AI Flaky tests
@@ -65,8 +65,9 @@ Continuation of BR-37b (email egress + Sealed Secrets, merged PR #176). Close th
 - [ ] **Lot 2 — Public Ingress for sentropic.sent-tech.ca** _(RESCOPED 2026-05-25: cluster-wide ingress stack DELEGATED to the `poc-k8s` repo per operator decision)_
   - Decision (operator): the shared ingress-controller (traefik), the SCW **LoadBalancer LB-GP-S** (~11.68€/mo, mutualised across all cluster tenants), cert-manager, and the Cloudflare DNS-01 `ClusterIssuer` are **cluster-wide platform** concerns and are delivered by `~/src/poc-k8s` (`platform/`, applied via `make apply-platform`), NOT by this app repo. Cluster verified bare: `traefik` + `cert-manager` namespaces exist but are EMPTY (no controller); no LoadBalancer; no ingressclass. Cloudflare token reused (valid on zone `sent-tech.ca`, found in `spa-transpose-cv/.env`, now in root `.env` as `CLOUDFLARE_API_TOKEN`).
   - BR-37c retains ONLY the app-level `Ingress` for `sentropic.sent-tech.ca` → `deploy/scw/60-ingress.yaml` (host + path routing to ui/api, `ingressClassName: traefik`, `cert-manager.io/cluster-issuer` annotation referencing the poc-k8s-provided issuer). This is GATED on poc-k8s delivering the platform ingress + ClusterIssuer first.
-  - [ ] (poc-k8s) Platform delivers traefik ingress-controller + Service type=LoadBalancer (SCW LB-GP-S), cert-manager (pinned), Cloudflare DNS-01 ClusterIssuer (+ sealed CF token, reusing the cluster-wide sealed-secrets controller).
-  - [ ] (BR-37c) Once platform is live: update `deploy/scw/60-ingress.yaml` for `sentropic.sent-tech.ca` (real host, TLS via ClusterIssuer), create the Cloudflare DNS record → LB IP, add `make scw-dns-smoke` (BR37c-EX1).
+  - [x] (poc-k8s) Platform delivers traefik ingress-controller + Service type=LoadBalancer (**SCW LB-S** — `lb-gp-s` is not provisionable in fr-par; user-approved lb-s 100 Mbit/s), cert-manager v1.20.2 (pinned URL), Cloudflare DNS-01 ClusterIssuers staging+prod (+ sealed CF token, reusing the cluster-wide sealed-secrets controller). _Delivered in repo `poc-k8s` branch `platform/ingress-traefik-lb-cert-manager` (pushed). Live 2026-05-25: LB public IP **51.159.11.157** (type confirmed lb-s), cert-manager 3/3 rolled out, secret `cloudflare-api-token` decrypted in ns cert-manager, ClusterIssuers letsencrypt-staging+prod Ready=True (ACME account registered)._
+  - [x] (BR-37c) `deploy/scw/60-ingress.yaml` rewritten for `sentropic.sent-tech.ca` (single host → `ui` Service; nginx proxies `/api`→api:8787; TLS via `letsencrypt-prod`). `make scw-dns-smoke` added (BR37c-EX1, `SCW_HOST` var; HTTPS 200 + trusted cert on `/` and `/api/v1/health`).
+  - [ ] (BR-37c, RESERVED user go-ahead — BR37c-FL1) Create Cloudflare DNS A record `sentropic.sent-tech.ca` → `51.159.11.157`, then `make scw-deploy SCW_INGRESS=1` and watch cert-manager issue the `sentropic-tls` Certificate (DNS-01).
   - [ ] Lot gate: cert issued; `make scw-dns-smoke` 200 + trusted cert for `https://sentropic.sent-tech.ca`.
 
 - [ ] **Lot 3 — End-to-end deploy validation**

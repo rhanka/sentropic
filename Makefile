@@ -2021,3 +2021,21 @@ scw-pgbackup-restore: ## Restore a dump from S3 into a scratch DB for verificati
 	    gunzip -c /tmp/d.sql.gz | psql -d restore_check; \
 	    psql -d restore_check -c "SELECT count(*) AS organizations FROM organizations;" || true; \
 	    psql -c "DROP DATABASE restore_check;"; echo "restore verification OK"'
+
+# --- Public DNS/TLS smoke (BR37c-EX1, append-only; operator-side) --------------
+# Verify the public host reaches the cluster through the shared Traefik LB with a
+# browser-trusted certificate. No -k: a self-signed/staging cert makes curl fail,
+# which is what we want (the gate is a trusted letsencrypt-prod cert). Also checks
+# /api/v1/health, proxied by the UI nginx to api:8787.
+SCW_HOST ?= sentropic.sent-tech.ca
+.PHONY: scw-dns-smoke
+
+scw-dns-smoke: ## Smoke-test the public host: HTTPS 200 + trusted cert on / and /api/v1/health (SCW_HOST=...)
+	@set -eu ; host="$(SCW_HOST)" ; \
+	echo "==> Resolving $$host" ; getent hosts "$$host" || { echo "ERROR: $$host does not resolve" >&2; exit 1; } ; \
+	for path in / /api/v1/health ; do \
+	  status="$$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "https://$$host$$path")" ; \
+	  if [ "$$status" != "200" ]; then echo "ERROR: https://$$host$$path returned HTTP $$status (or untrusted cert)" >&2; exit 1; fi ; \
+	  echo "OK: https://$$host$$path -> 200 (trusted cert)" ; \
+	done ; \
+	echo "==> Public DNS/TLS smoke passed for $$host"
