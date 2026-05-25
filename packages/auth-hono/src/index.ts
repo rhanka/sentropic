@@ -1,4 +1,5 @@
 export * from './contracts.js';
+export * from './credential-route-handlers.js';
 export * from './email-verification.js';
 export * from './magic-link.js';
 export * from './middleware.js';
