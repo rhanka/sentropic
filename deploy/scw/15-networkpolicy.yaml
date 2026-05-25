@@ -47,3 +47,29 @@ spec:
       ports:
         - protocol: TCP
           port: 8787
+---
+# BR-37c: allow the pgbackup CronJob/restore pods to reach postgres for pg_dump/psql.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-pgbackup-to-postgres
+  namespace: sentropic
+  labels:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: postgres
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sentropic
+              app.kubernetes.io/component: pgbackup
+      ports:
+        - protocol: TCP
+          port: 5432

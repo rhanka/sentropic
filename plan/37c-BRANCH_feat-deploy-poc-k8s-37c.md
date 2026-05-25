@@ -55,12 +55,12 @@ Continuation of BR-37b (email egress + Sealed Secrets, merged PR #176). Close th
   - [x] Archive `plan/done/37-BRANCH_feat-deploy-poc-k8s.md` (from `f0352c5e:BRANCH.md`) + move BR-37b plan to `plan/done/`.
   - [ ] Author this plan + `BRANCH.md` symlink; open draft PR; verify Sealed Secrets controller still live (`kubectl -n sealed-secrets get deploy`).
 
-- [ ] **Lot 1 — Postgres backup CronJob to SCW Object Storage (BR37c-FL2)**
-  - [ ] Operator: `scw object bucket create name=sentropic-pgbackup region="$DOC_STORAGE_REGION_PROD" project-id="$SCW_DEFAULT_PROJECT_ID"`; record in UAT doc.
-  - [ ] Add `PG_BACKUP_BUCKET=sentropic-pgbackup` (+ optional region/endpoint) to root `.env`; seal a `sentropic-pgbackup` Secret (`S3_ACCESS_KEY`/`S3_SECRET_KEY` = `DOC_STORAGE_*_PROD`, `S3_BUCKET`/`S3_REGION`/`S3_ENDPOINT`) → `deploy/scw/07-sealed-sentropic-pgbackup.yaml` via `make scw-seal-secret`.
-  - [ ] Add `deploy/scw/70-pgbackup-cronjob.yaml`: nightly `pg_dump | aws s3 cp` to `s3://$S3_BUCKET/<ts>`, pinned alpine+postgresql-client+aws-cli image, `OnFailure`, history limits 3/3, resources within quota; bucket from SealedSecret env (not hardcoded).
-  - [ ] Add `make scw-pgbackup-now` + `make scw-pgbackup-restore` (restore to scratch DB) operator targets (BR37c-EX1).
-  - [ ] Lot gate: bucket listed via `scw object bucket list`; `make scw-pgbackup-now` writes a dump; `make scw-pgbackup-restore` restores to scratch + sanity `select count(*)`; tenant quota OK.
+- [x] **Lot 1 — Postgres backup CronJob to SCW Object Storage (BR37c-FL2)** _(done 2026-05-25: round-trip green — dump 12.1 KiB, restore OK; needed allow-pgbackup-to-postgres NetworkPolicy + non-masked dump)_
+  - [x] Bucket `sentropic-pgbackup` created via `aws s3 mb` (DOC_STORAGE S3 creds, endpoint https://s3.fr-par.scw.cloud).
+  - [x] `PG_BACKUP_BUCKET` added to root `.env`; sealed `deploy/scw/07-sealed-sentropic-pgbackup.yaml`.
+  - [x] `deploy/scw/70-pgbackup-cronjob.yaml`: nightly `15 2 * * *`, initContainer postgres:17-alpine (pg_dump→file→gzip, `test -s`), container amazon/aws-cli:2.34.53 upload to `s3://$S3_BUCKET/pg/<ts>.sql.gz`; bucket from SealedSecret. Added `allow-pgbackup-to-postgres` NetworkPolicy in 15-networkpolicy.yaml.
+  - [x] `make scw-pgbackup-now` + `make scw-pgbackup-restore` (restore to scratch `restore_check` DB, label component=pgbackup) appended (BR37c-EX1).
+  - [x] Lot gate PASSED: bucket listed; `scw-pgbackup-now` wrote pg/20260525T155806Z.sql.gz (12.1 KiB); `scw-pgbackup-restore` restored to scratch DB + `select count(*) organizations` ran OK.
 
 - [ ] **Lot 2 — Public Ingress + cert-manager via Cloudflare DNS-01 (BR37c-FL1)** _(STOP for user go-ahead before DNS/token ops)_
   - [ ] Operator (gated): create Cloudflare API token (`Zone/DNS/Edit` on `sent-tech.ca`), add `CLOUDFLARE_API_TOKEN` to root `.env`, seal → `deploy/scw/04-sealed-cloudflare-api-token.yaml` (ns `cert-manager`).
