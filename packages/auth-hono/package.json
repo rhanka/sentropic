@@ -63,6 +63,10 @@
     "./webauthn-registration": {
       "types": "./dist/webauthn-registration.d.ts",
       "import": "./dist/webauthn-registration.js"
+    },
+    "./webauthn-registration-route-handlers": {
+      "types": "./dist/webauthn-registration-route-handlers.d.ts",
+      "import": "./dist/webauthn-registration-route-handlers.js"
     }
   },
   "files": [
