@@ -79,6 +79,9 @@ const validateTextFeatures = (
   request: GenerateRequest | StreamRequest,
   profile: ModelProfile,
 ): void => {
+  if (!profile.capabilities.modalities.output.includes('text')) {
+    throw new Error(`Text generation is unsupported for ${profile.providerId}:${profile.modelId}`);
+  }
   if (operation === 'stream' && profile.capabilities.streaming.support === 'unsupported') {
     throw new Error(`Streaming is unsupported for ${profile.providerId}:${profile.modelId}`);
   }

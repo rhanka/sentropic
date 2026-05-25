@@ -847,12 +847,14 @@ describe('LLM stream event normalization', () => {
     vi.clearAllMocks();
   });
 
-  it('has a stream fixture for every advertised model capability', async () => {
+  it('has a stream fixture for every advertised text streaming model capability', async () => {
     const { providerRegistry } = await import('../../src/services/provider-registry');
     const matrixByKey = new Map(
       STREAM_TEST_MATRIX.map((config) => [`${config.providerId}:${config.model}`, config]),
     );
-    const catalogModels = providerRegistry.listModels();
+    const catalogModels = providerRegistry
+      .listModels()
+      .filter((model) => model.supportsStreaming);
 
     expect([...matrixByKey.keys()].sort()).toEqual(
       catalogModels.map((model) => `${model.providerId}:${model.modelId}`).sort(),

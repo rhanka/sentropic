@@ -73,17 +73,26 @@ describe('MistralProviderRuntime', () => {
   describe('listModels', () => {
     it('should return Mistral model catalog entries', () => {
       const models = runtime.listModels();
-      expect(models).toHaveLength(2);
+      expect(models).toHaveLength(4);
 
       const mistralSmall = models.find((m) => m.modelId === 'mistral-small-2603');
       expect(mistralSmall).toBeDefined();
       expect(mistralSmall!.providerId).toBe('mistral');
       expect(mistralSmall!.reasoningTier).toBe('standard');
       expect(mistralSmall!.supportsTools).toBe(true);
+      expect(mistralSmall!.imageGenerationStatus).toBe('unsupported');
 
       const large = models.find((m) => m.modelId === 'magistral-medium-2509');
       expect(large).toBeDefined();
       expect(large!.reasoningTier).toBe('advanced');
+      expect(large!.supportsStreaming).toBe(true);
+
+      const plannedImageModels = models.filter((m) => m.imageGenerationStatus === 'planned');
+      expect(plannedImageModels.map((m) => m.modelId).sort()).toEqual([
+        'mistral-large-latest',
+        'mistral-medium-latest',
+      ]);
+      expect(plannedImageModels.every((m) => !m.supportsStreaming)).toBe(true);
     });
   });
 

@@ -15,6 +15,8 @@ export default defineConfig({
     },
     // Increase timeout for database operations and AI API calls
     testTimeout: 60000,
+    // Endpoint suites can spend more than Vitest's 10s default inside cold app imports.
+    hookTimeout: 60000,
     // Setup files
     setupFiles: [],
   },

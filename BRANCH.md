@@ -125,6 +125,12 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
 - Task 3 code review follow-up 2026-05-25: OpenAI image runtime requests now force `response_format: "b64_json"` for the chat storage path, chat-tool tests cover every deterministic image error code, and generated chat image documents have same-session download denial coverage.
 - Task 4 code review follow-up 2026-05-25: generated image cards now ignore untrusted stream URLs, rebuild document-backed download/preview targets from encoded `documentId` values, and use localized metadata copy.
 - Lot N-1 docs consolidation 2026-05-25: temporary branch image-generation spec was integrated into the permanent LLM mesh, chatbot, chat-ui SDK scope, and architecture-boundary specs, then deleted.
+- Final validation follow-up 2026-05-25: image-only and planned image-generation catalog profiles no longer advertise text streaming/tool/reasoning capabilities; the mesh rejects text generation for image-only models before provider dispatch.
+- Final validation follow-up 2026-05-25: `make test-packages` is not a Makefile target on this branch; final package validation uses the concrete `make test-llm-mesh` and `make test-chat-ui` targets.
+- `BR38b-EX1` test infrastructure exception 2026-05-25: changed `api/vitest.config.ts` to set `hookTimeout: 60000` because cold API endpoint imports in `beforeEach` exceeded Vitest's 10s default under Docker while `testTimeout` was already 60000. Impact is test-runner timeout alignment only; runtime code is unaffected. Rollback by removing the config line if endpoint hooks are moved out of cold import paths.
+- Final validation follow-up 2026-05-25: full `make test-api` was decomposed because `up-api --wait` can report `unhealthy` before the API finishes its slow cold start; `make ps` and `make wait-ready-api` showed the API healthy afterward. Smoke, unit, endpoint, queue, security, AI, and rate-limit subtargets all passed individually.
+- Final validation follow-up 2026-05-25: `e2e/tests/00-ai-generation.spec.ts` was updated to follow the current neutral dashboard -> workspace -> folders -> new-folder flow, the multi-organization selector, `/api/v1/initiatives/generate`, and `/initiative/:id`.
+- E2E validation note 2026-05-25: `make test-e2e E2E_SPEC=tests/03-chat.spec.ts E2E_VERSION=d66824 API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool` exited 0 with two first-attempt flakies that passed on retry: missing `Raisonnement|Reasoning` header in the reload/history scenario, and a missed chat-message request in the delete-session scenario. Both signatures are pre-existing chat UI timing expectations and unrelated to image generation; explicit user sign-off is required before merge if accepting these flakies.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -147,9 +153,9 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
 - Root UAT env: `ENV=dev` on `/home/antoinefa/src/sentropic`, same HEAD as the branch under qualification.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 - Baseline & constraints**
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `TODO.md`, `PLAN.md`, this branch file, BR-38a final PR, and the four source specs listed in Allowed Paths.
-  - [ ] Confirm BR-38a is merged into `main`.
+- [x] **Lot 0 - Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `TODO.md`, `PLAN.md`, this branch file, BR-38a final PR, and the four source specs listed in Allowed Paths.
+  - [x] Confirm BR-38a is merged into `main`.
   - [x] Create isolated worktree `tmp/feat-image-generation-tool` from `main`.
   - [x] Copy `.env` into the worktree only if local service execution is needed; override branch ports and never use root `ENV=dev` for tests.
   - [x] Capture Makefile targets needed for API, UI, package, AI, and E2E gates.
@@ -168,7 +174,7 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
     - [x] `make typecheck-llm-mesh ENV=test-feat-image-generation-tool`
     - [x] `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
 
-- [ ] **Lot 2 - API image generation tool and storage**
+- [x] **Lot 2 - API image generation tool and storage**
   - [x] Add the API provider runtime bridge for mesh `generateImage()` dispatch.
   - [x] Add OpenAI and Gemini image generation runtime normalization tests.
   - [x] Preserve provider capability proof coverage for supported, unsupported, and planned image generation providers.
@@ -183,35 +189,35 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
     - [x] `make test-api-unit SCOPE=tests/unit/provider-mesh-contract-proof.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
     - [x] `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
     - [x] `make lint-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make test-api-endpoints SCOPE=tests/api/chat-tools.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
     - [x] `make test-api-endpoints SCOPE=tests/api/documents.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
     - [x] `make test-api-unit SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
-    - [ ] `make test-api SCOPE=tests/unit/tool-service.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
-    - [ ] `make test-api SCOPE=tests/unit/documents-tool-service.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-unit SCOPE=tests/unit/tool-service.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-unit SCOPE=tests/unit/documents-tool-service.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
 
-- [ ] **Lot 3 - Chat UI generated image rendering**
-  - [ ] Register a generated image renderer through the existing chat-ui renderer registry/host adapter boundary.
-  - [ ] Render generated image cards inline with preview, prompt/title, status, provider/model metadata, download, and attach-to-documents actions.
-  - [ ] Keep generated image cards responsive with stable dimensions and no text overlap on mobile or desktop.
-  - [ ] Surface generation errors and refusals as recoverable chat tool results.
-  - [ ] Keep `@sentropic/chat-ui` generic and app-specific document/download URLs in the host adapter.
-  - [ ] Lot gate:
+- [x] **Lot 3 - Chat UI generated image rendering**
+  - [x] Register a generated image renderer through the existing chat-ui renderer registry/host adapter boundary.
+  - [x] Render generated image cards inline with preview, prompt/title, status, provider/model metadata, download, and attach-to-documents actions.
+  - [x] Keep generated image cards responsive with stable dimensions and no text overlap on mobile or desktop.
+  - [x] Surface generation errors and refusals as recoverable chat tool results.
+  - [x] Keep `@sentropic/chat-ui` generic and app-specific document/download URLs in the host adapter.
+  - [x] Lot gate:
     - [x] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-image-generation-tool`
     - [x] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-image-generation-tool`
     - [x] `make test-ui SCOPE=tests/components/ChatPanel-docx-cards.test.ts ENV=test-feat-image-generation-tool`
     - [x] `make test-ui SCOPE=tests/chat/document-adapter.test.ts ENV=test-feat-image-generation-tool`
     - [x] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-image-generation-tool`
 
-- [ ] **Lot 4 - Generated media document integration**
-  - [ ] Attach generated image records to the current chat session document context.
-  - [ ] Add download behavior using the same document access controls as uploaded documents.
-  - [ ] Allow generated image reuse as a BR-38a image attachment in later turns.
-  - [ ] Keep Drive export out of scope unless `BR38b-EXn` is declared.
-  - [ ] Lot gate:
-    - [ ] `make test-api SCOPE=tests/api/chat.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
-    - [ ] `make test-api SCOPE=tests/api/documents.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
-    - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-image-generation-tool`
+- [x] **Lot 4 - Generated media document integration**
+  - [x] Attach generated image records to the current chat session document context.
+  - [x] Add download behavior using the same document access controls as uploaded documents.
+  - [x] Allow generated image reuse as a BR-38a image attachment in later turns.
+  - [x] Keep Drive export out of scope unless `BR38b-EXn` is declared.
+  - [x] Lot gate:
+    - [x] `make test-api-endpoints SCOPE=tests/api/chat.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-endpoints SCOPE=tests/api/documents.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-image-generation-tool`
 
 - [ ] **Lot N-2 - UAT**
   - [ ] Web app setup:
@@ -239,26 +245,33 @@ Add image generation as a first-class chat/tool capability after BR-38a lands: u
   - [x] Delete `spec/BRANCH_SPEC_EVOL_IMAGE_GENERATION.md` after integration if it was created.
 
 - [ ] **Lot N - Final validation**
-  - [ ] Typecheck and lint:
-    - [ ] `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
-    - [ ] `make lint-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
-    - [ ] `make typecheck-ui ENV=test-feat-image-generation-tool`
-    - [ ] `make lint-ui ENV=test-feat-image-generation-tool`
-  - [ ] Retest packages:
-    - [ ] `make test-packages ENV=test-feat-image-generation-tool`
-  - [ ] Retest API:
-    - [ ] `make test-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
-  - [ ] Retest UI:
-    - [ ] `make test-ui ENV=test-feat-image-generation-tool`
-  - [ ] Retest E2E:
-    - [ ] `make build-api build-ui-image API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool`
-    - [ ] `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool`
-    - [ ] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool`
-    - [ ] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool`
-  - [ ] Retest AI flaky tests under acceptance rule:
-    - [ ] `make test-api-ai SCOPE=tests/ai/chat-tools.test.ts API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
-  - [ ] Record explicit user sign-off if any AI flaky test is accepted.
-  - [ ] Bump affected package versions for every touched package `src/**`.
+  - [x] Typecheck and lint:
+    - [x] `make typecheck-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make lint-api API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make typecheck-ui ENV=test-feat-image-generation-tool`
+    - [x] `make lint-ui ENV=test-feat-image-generation-tool`
+  - [x] Retest packages:
+    - [x] `make test-llm-mesh ENV=test-feat-image-generation-tool`
+    - [x] `make test-chat-ui ENV=test-feat-image-generation-tool`
+  - [x] Retest API:
+    - [x] `make test-api-smoke API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-unit API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-endpoints API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-queue API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-security API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-ai API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+    - [x] `make test-api-limit API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+  - [x] Retest UI:
+    - [x] `make test-ui ENV=test-feat-image-generation-tool`
+  - [x] Retest E2E:
+    - [x] `make build-api build-ui-image API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool`
+    - [x] `make test-e2e E2E_SPEC=tests/00-ai-generation.spec.ts E2E_VERSION=d66824 API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool`
+    - [x] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts E2E_VERSION=d66824 API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool`
+    - [x] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts E2E_VERSION=d66824 API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=e2e-feat-image-generation-tool`
+  - [x] Retest AI tests under acceptance rule:
+    - [x] `make test-api-ai API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-image-generation-tool`
+  - [ ] Record explicit user sign-off if any AI/E2E flaky test is accepted before merge.
+  - [x] Bump affected package versions for every touched package `src/**`.
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.

@@ -68,6 +68,43 @@ const textModalities = {
   output: ['text', 'json', 'tool-call', 'image'] as const,
 };
 
+const imageOutputModalities = {
+  input: ['text', 'image'] as const,
+  output: ['image'] as const,
+};
+
+const unsupportedTools = {
+  support: 'unsupported' as const,
+  parallelCalls: 'unsupported' as const,
+  streamedArgumentDeltas: 'unsupported' as const,
+  resultContinuation: 'unsupported' as const,
+  toolChoice: ['none'] as const,
+};
+
+const unsupportedStreaming = {
+  support: 'unsupported' as const,
+  nativeProviderChunks: 'unsupported' as const,
+};
+
+const unsupportedStructuredOutput = {
+  support: 'unsupported' as const,
+  strategies: [] as const,
+  jsonSchema: {
+    support: 'unsupported' as const,
+    level: 'none' as const,
+    strict: false,
+  },
+};
+
+const unsupportedReasoning = {
+  support: 'unsupported' as const,
+  tier: 'none' as const,
+  controls: 'unsupported' as const,
+  visibleSummaries: 'unsupported' as const,
+  hiddenSignatures: 'unsupported' as const,
+  tokenUsageAccounting: 'unsupported' as const,
+};
+
 const auth = (
   accountTransports: readonly AccountTransportProviderId[] = [],
 ) => ({
@@ -258,6 +295,19 @@ const modelCapabilities = (
   imageGeneration: modelImageProfile(imageGeneration.status, imageGeneration.kind),
 });
 
+const imageGenerationOnlyCapabilities = (
+  providerId: ProviderId,
+  imageGeneration: { status: ImageGenerationStatus; kind: ImageGenerationKind },
+): ModelCapabilities => ({
+  ...modelCapabilities(providerId, 'none', imageGeneration),
+  tools: unsupportedTools,
+  streaming: unsupportedStreaming,
+  structuredOutput: unsupportedStructuredOutput,
+  reasoning: unsupportedReasoning,
+  modalities: imageOutputModalities,
+  imageGeneration: modelImageProfile(imageGeneration.status, imageGeneration.kind),
+});
+
 export const modelProfiles = [
   {
     providerId: 'openai',
@@ -287,33 +337,33 @@ export const modelProfiles = [
     providerId: 'openai',
     modelId: 'gpt-image-2',
     label: 'GPT Image 2',
-    reasoningTier: 'advanced',
+    reasoningTier: 'none',
     defaultTaskHints: ['doc'],
-    capabilities: modelCapabilities('openai', 'advanced', openaiImageGeneration),
+    capabilities: imageGenerationOnlyCapabilities('openai', openaiImageGeneration),
   },
   {
     providerId: 'openai',
     modelId: 'gpt-image-1.5',
     label: 'GPT Image 1.5',
-    reasoningTier: 'advanced',
+    reasoningTier: 'none',
     defaultTaskHints: ['doc'],
-    capabilities: modelCapabilities('openai', 'advanced', openaiImageGeneration),
+    capabilities: imageGenerationOnlyCapabilities('openai', openaiImageGeneration),
   },
   {
     providerId: 'openai',
     modelId: 'gpt-image-1',
     label: 'GPT Image 1',
-    reasoningTier: 'advanced',
+    reasoningTier: 'none',
     defaultTaskHints: ['doc'],
-    capabilities: modelCapabilities('openai', 'advanced', openaiImageGeneration),
+    capabilities: imageGenerationOnlyCapabilities('openai', openaiImageGeneration),
   },
   {
     providerId: 'openai',
     modelId: 'gpt-image-1-mini',
     label: 'GPT Image 1 Mini',
-    reasoningTier: 'advanced',
+    reasoningTier: 'none',
     defaultTaskHints: ['doc'],
-    capabilities: modelCapabilities('openai', 'advanced', openaiImageGeneration),
+    capabilities: imageGenerationOnlyCapabilities('openai', openaiImageGeneration),
   },
   {
     providerId: 'gemini',
@@ -335,25 +385,25 @@ export const modelProfiles = [
     providerId: 'gemini',
     modelId: 'gemini-3.1-flash-image-preview',
     label: 'Gemini 3.1 Flash Image Preview',
-    reasoningTier: 'advanced',
+    reasoningTier: 'none',
     defaultTaskHints: ['doc'],
-    capabilities: modelCapabilities('gemini', 'advanced', geminiImageGeneration),
+    capabilities: imageGenerationOnlyCapabilities('gemini', geminiImageGeneration),
   },
   {
     providerId: 'gemini',
     modelId: 'gemini-2.5-flash-image',
     label: 'Gemini 2.5 Flash Image',
-    reasoningTier: 'advanced',
+    reasoningTier: 'none',
     defaultTaskHints: ['doc'],
-    capabilities: modelCapabilities('gemini', 'advanced', geminiImageGeneration),
+    capabilities: imageGenerationOnlyCapabilities('gemini', geminiImageGeneration),
   },
   {
     providerId: 'gemini',
     modelId: 'gemini-3-pro-image-preview',
     label: 'Gemini 3 Pro Image Preview',
-    reasoningTier: 'advanced',
+    reasoningTier: 'none',
     defaultTaskHints: ['doc'],
-    capabilities: modelCapabilities('gemini', 'advanced', geminiImageGeneration),
+    capabilities: imageGenerationOnlyCapabilities('gemini', geminiImageGeneration),
   },
   {
     providerId: 'anthropic',
@@ -377,7 +427,7 @@ export const modelProfiles = [
     label: 'Mistral Small 4',
     reasoningTier: 'standard',
     defaultTaskHints: ['chat'],
-    capabilities: modelCapabilities('mistral', 'standard', mistralImageGeneration),
+    capabilities: modelCapabilities('mistral', 'standard', defaultUnsupportedImageGeneration),
   },
   {
     providerId: 'mistral',
@@ -385,23 +435,23 @@ export const modelProfiles = [
     label: 'Magistral Medium',
     reasoningTier: 'advanced',
     defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('mistral', 'advanced', mistralImageGeneration),
+    capabilities: modelCapabilities('mistral', 'advanced', defaultUnsupportedImageGeneration),
   },
   {
     providerId: 'mistral',
     modelId: 'mistral-medium-latest',
     label: 'Mistral Medium Latest',
-    reasoningTier: 'advanced',
+    reasoningTier: 'none',
     defaultTaskHints: ['doc'],
-    capabilities: modelCapabilities('mistral', 'advanced', mistralImageGeneration),
+    capabilities: imageGenerationOnlyCapabilities('mistral', mistralImageGeneration),
   },
   {
     providerId: 'mistral',
     modelId: 'mistral-large-latest',
     label: 'Mistral Large Latest',
-    reasoningTier: 'advanced',
+    reasoningTier: 'none',
     defaultTaskHints: ['doc'],
-    capabilities: modelCapabilities('mistral', 'advanced', mistralImageGeneration),
+    capabilities: imageGenerationOnlyCapabilities('mistral', mistralImageGeneration),
   },
   {
     providerId: 'cohere',

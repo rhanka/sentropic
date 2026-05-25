@@ -11,7 +11,7 @@ test.setTimeout(8 * 60_000);
 test.describe('Génération IA', () => {
   // Ces tests sont coûteux (jobs async, appels externes mockés/ratelimités). Les retries globales (retries: 2)
   // triplent inutilement la durée et masquent les flakys. On les désactive pour ce fichier.
-  test.describe.configure({ retries: 0 });
+  test.describe.configure({ mode: 'serial', retries: 0 });
 
   const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -177,7 +177,25 @@ test.describe('Génération IA', () => {
     await expect(commencerLink).toBeVisible({ timeout: 30_000 });
     debug('Lien Commencer trouvé, clic...');
     await commencerLink.click();
-    // /home redirige désormais vers /folder/new
+    // /home redirige vers le dashboard neutre; on sélectionne ensuite le workspace
+    // admin puis on crée un nouveau dossier depuis le menu Dossiers.
+    await page.waitForURL(/\/neutral$/, { timeout: 30_000 });
+    debug(`Après clic + redirection dashboard - URL: ${page.url()}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    const workspaceCard = page.locator('article').filter({ hasText: 'Admin Workspace' }).first();
+    await expect(workspaceCard).toBeVisible({ timeout: 30_000 });
+    await workspaceCard.click();
+    await page.waitForURL('/folders', { timeout: 30_000 });
+    debug(`Workspace sélectionné, URL: ${page.url()}`);
+    await page.waitForLoadState('domcontentloaded');
+
+    const folderActionsButton = page.locator('button[aria-label="Actions dossier"]');
+    await expect(folderActionsButton).toBeVisible({ timeout: 30_000 });
+    await folderActionsButton.click();
+    const newFolderAction = page.locator('button:has-text("Nouveau")').first();
+    await expect(newFolderAction).toBeVisible({ timeout: 30_000 });
+    await newFolderAction.click();
     await page.waitForURL(/\/folder\/new$/, { timeout: 30_000 });
     debug(`Après clic + redirection - URL: ${page.url()}`);
     await page.waitForLoadState('domcontentloaded');
@@ -193,59 +211,26 @@ test.describe('Génération IA', () => {
     
     // Attendre que les organisations soient chargées (le select n'est visible que quand isLoading = false)
     debug('Recherche de l’éditeur Contexte (TipTap / ProseMirror)...');
-    const contextSection = page.locator('div.space-y-2').filter({ hasText: 'Contexte' }).first();
-    const proseMirror = contextSection.locator('.ProseMirror').first();
-    await expect(proseMirror).toBeVisible({ timeout: 30_000 });
+    const contextEditor = page.locator('.markdown-input-wrapper [contenteditable="true"]').first();
+    await expect(contextEditor).toBeVisible({ timeout: 30_000 });
     debug('Éditeur trouvé, remplissage...');
-    await proseMirror.click();
+    await contextEditor.click();
     // TipTap utilise contenteditable; fill peut être capricieux selon le navigateur => keyboard.
     await page.keyboard.press('Control+A');
     await page.keyboard.type("Génère 3 cas d'usage pour l'extension de l'usine de Boucherville");
     debug('Contexte rempli');
     
-    // Sélectionner l'organisation contenant Delpharm
-    // Le select n'est visible que quand isLoading = false, donc attendre qu'il soit visible
-    debug('Recherche du select organisation...');
-    // /folder/new: label visuel (div) + select dans le même bloc
-    const organizationSelect = page
-      .locator('div.space-y-2')
-      .filter({ hasText: 'Organisation (optionnel)' })
-      .locator('select')
-      .first();
-    await expect(organizationSelect).toBeVisible({ timeout: 15000 }); // CI can be slower when loading organizations
-    debug('Select trouvé');
-    
-    // Afficher toutes les options disponibles pour debug
-    const allOptions = await organizationSelect.locator('option').all();
-    debug(`Nombre d'options trouvées: ${allOptions.length}`);
-    for (let i = 0; i < allOptions.length; i++) {
-      const optionText = await allOptions[i].textContent();
-      const optionValue = await allOptions[i].getAttribute('value');
-      debug(`Option ${i}: text="${optionText}", value="${optionValue}"`);
-    }
-    
-    // Trouver l'option contenant Delpharm
-    debug('Recherche de l\'option Delpharm...');
-    const orgOptionCount = await organizationSelect.locator('option').filter({ hasText: 'Delpharm' }).count();
-    debug(`Nombre d'options contenant "Delpharm": ${orgOptionCount}`);
-    
-    if (orgOptionCount === 0) {
-      debug('ERROR: Aucune option contenant "Delpharm" trouvée');
-      const allOptionsText = await organizationSelect.locator('option').allTextContents();
-      debug(`ERROR: Options disponibles: ${JSON.stringify(allOptionsText)}`);
-      throw new Error('Entreprise Delpharm non trouvée dans la liste');
-    }
-    
-    const orgOption = organizationSelect.locator('option').filter({ hasText: 'Delpharm' }).first();
-    const optionValue = await orgOption.getAttribute('value');
-    debug(`Option Delpharm trouvée, value: ${optionValue}`);
-    if (optionValue) {
-      await organizationSelect.selectOption(optionValue);
-      debug('Organisation Delpharm sélectionnée');
-    } else {
-      debug('ERROR: Option Delpharm trouvée mais pas de valeur');
-      throw new Error('Option Delpharm trouvée mais sans valeur');
-    }
+    // Sélectionner l'organisation contenant Delpharm via le menu multi-organisations.
+    debug('Recherche du menu organisations ciblées...');
+    const organizationMenuButton = page.getByRole('button', { name: 'Organisations ciblées (optionnel)' });
+    await expect(organizationMenuButton).toBeVisible({ timeout: 15_000 });
+    await organizationMenuButton.click();
+    debug('Menu organisations ouvert, recherche Delpharm...');
+    const delpharmOption = page.getByRole('menuitemcheckbox', { name: /Delpharm/ }).first();
+    await expect(delpharmOption).toBeVisible({ timeout: 15_000 });
+    await delpharmOption.click();
+    await expect(organizationMenuButton).toContainText('Delpharm', { timeout: 15_000 });
+    debug('Organisation Delpharm sélectionnée');
     
     // Démarrer la génération via le bouton IA (icône)
     debug('Recherche du bouton "IA"...');
@@ -256,7 +241,7 @@ test.describe('Génération IA', () => {
 
     const generateResPromise = page.waitForResponse((res) => {
       const req = res.request();
-      return req.method() === 'POST' && res.url().includes('/api/v1/use-cases/generate');
+      return req.method() === 'POST' && res.url().includes('/api/v1/initiatives/generate');
     }, { timeout: 60_000 });
 
     debug('Bouton trouvé, clic...');
@@ -268,7 +253,7 @@ test.describe('Génération IA', () => {
     const genJson = await generateRes.json().catch(() => null);
     const genJobId = String((genJson as any)?.jobId ?? '').trim();
     const folderId = String((genJson as any)?.folder_id ?? (genJson as any)?.created_folder_id ?? '').trim();
-    debug(`Réponse /use-cases/generate: jobId=${genJobId} folderId=${folderId}`);
+    debug(`Réponse /initiatives/generate: jobId=${genJobId} folderId=${folderId}`);
     if (!genJobId || !folderId) throw new Error(`Réponse generate invalide: ${JSON.stringify(genJson)}`);
     
     // Vérifier la redirection vers /folders (comportement après génération avec nouveau dossier)
@@ -292,7 +277,7 @@ test.describe('Génération IA', () => {
     const firstUseCaseCard = page.locator('.grid.gap-4 > article').filter({ hasText: 'Valeur:' }).first();
     await expect(firstUseCaseCard).toBeVisible({ timeout: 60_000 });
     await firstUseCaseCard.click();
-    await page.waitForURL(/\/usecase\/[a-zA-Z0-9-]+/, { timeout: 30_000 });
+    await page.waitForURL(/\/initiative\/[a-zA-Z0-9-]+/, { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
     
     // Vérifier la section Références

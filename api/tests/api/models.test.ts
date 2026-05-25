@@ -43,13 +43,49 @@ describe('Models API', () => {
         .filter((m: { provider_id: string }) => m.provider_id === pid)
         .map((m: { model_id: string }) => m.model_id)
         .sort();
+    const modelByPair = (providerId: string, modelId: string) =>
+      data.models.find(
+        (m: { provider_id: string; model_id: string }) =>
+          m.provider_id === providerId && m.model_id === modelId
+      );
 
-    expect(modelsByProvider('openai')).toEqual(['gpt-4.1-nano', 'gpt-5.4-nano', 'gpt-5.5']);
-    expect(modelsByProvider('gemini')).toEqual(['gemini-3.5-flash', 'gemini-3.5-thinking']);
+    expect(modelsByProvider('openai')).toEqual([
+      'gpt-4.1-nano',
+      'gpt-5.4-nano',
+      'gpt-5.5',
+      'gpt-image-1',
+      'gpt-image-1-mini',
+      'gpt-image-1.5',
+      'gpt-image-2',
+    ]);
+    expect(modelsByProvider('gemini')).toEqual([
+      'gemini-2.5-flash-image',
+      'gemini-3-pro-image-preview',
+      'gemini-3.1-flash-image-preview',
+      'gemini-3.5-flash',
+      'gemini-3.5-thinking',
+    ]);
     expect(modelsByProvider('anthropic')).toEqual(['claude-opus-4-7', 'claude-sonnet-4-6']);
-    expect(modelsByProvider('mistral')).toEqual(['magistral-medium-2509', 'mistral-small-2603']);
+    expect(modelsByProvider('mistral')).toEqual([
+      'magistral-medium-2509',
+      'mistral-large-latest',
+      'mistral-medium-latest',
+      'mistral-small-2603',
+    ]);
     expect(modelsByProvider('cohere')).toEqual(['command-a-03-2025', 'command-a-reasoning-08-2025']);
-    expect(data.models).toHaveLength(11);
+    expect(data.models).toHaveLength(20);
+
+    for (const imageModel of [
+      modelByPair('openai', 'gpt-image-2'),
+      modelByPair('gemini', 'gemini-2.5-flash-image'),
+      modelByPair('mistral', 'mistral-large-latest'),
+    ]) {
+      expect(imageModel).toMatchObject({
+        reasoning_tier: 'none',
+        supports_tools: false,
+        supports_streaming: false,
+      });
+    }
 
     expect(data.defaults).toBeDefined();
     expect(typeof data.defaults.provider_id).toBe('string');
