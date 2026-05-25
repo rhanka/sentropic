@@ -1,5 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
+
+const waitForDocxJobCompletion = vi.fn();
+const downloadGeneratedFile = vi.fn();
+vi.mock('../../src/lib/utils/docx', () => ({
+  waitForDocxJobCompletion: (...args: unknown[]) => waitForDocxJobCompletion(...args),
+  downloadGeneratedFile: (...args: unknown[]) => downloadGeneratedFile(...args),
+}));
+
 import {
   foldersStore,
   currentFolderId,
@@ -11,6 +19,7 @@ import {
   folderExportState,
   openFolderExport,
   closeFolderExport,
+  generateFolderXlsxAndDownload,
 } from '../../src/lib/stores/folders';
 import { resetFetchMock, mockFetchJsonOnce } from '../../tests/test-setup';
 
@@ -220,6 +229,53 @@ describe('Folders Store', () => {
 
       closeFolderExport();
       expect(get(folderExportState)).toEqual({ open: false, folderId: null });
+    });
+  });
+
+  describe('generateFolderXlsxAndDownload', () => {
+    beforeEach(() => {
+      waitForDocxJobCompletion.mockReset();
+      downloadGeneratedFile.mockReset();
+    });
+
+    it('enqueues, waits for completion, and downloads the workbook', async () => {
+      mockFetchJsonOnce({
+        success: true,
+        jobId: 'job-xlsx-1',
+        status: 'pending',
+        queueClass: 'publishing',
+        streamId: 'job_job-xlsx-1',
+      });
+      waitForDocxJobCompletion.mockResolvedValueOnce({ id: 'job-xlsx-1', status: 'completed' });
+      downloadGeneratedFile.mockResolvedValueOnce(undefined);
+
+      const jobId = await generateFolderXlsxAndDownload('folder-9', 'My Folder.xlsx');
+
+      expect(jobId).toBe('job-xlsx-1');
+      expect(waitForDocxJobCompletion).toHaveBeenCalledWith('job-xlsx-1');
+      expect(downloadGeneratedFile).toHaveBeenCalledWith({
+        jobId: 'job-xlsx-1',
+        fileName: 'My Folder.xlsx',
+        downloadUrl: '/xlsx/jobs/job-xlsx-1/download',
+      });
+    });
+
+    it('throws when the job fails and does not download', async () => {
+      mockFetchJsonOnce({
+        success: true,
+        jobId: 'job-xlsx-2',
+        status: 'pending',
+        queueClass: 'publishing',
+        streamId: 'job_job-xlsx-2',
+      });
+      waitForDocxJobCompletion.mockResolvedValueOnce({
+        id: 'job-xlsx-2',
+        status: 'failed',
+        error: 'boom',
+      });
+
+      await expect(generateFolderXlsxAndDownload('folder-9')).rejects.toThrow('boom');
+      expect(downloadGeneratedFile).not.toHaveBeenCalled();
     });
   });
 });
