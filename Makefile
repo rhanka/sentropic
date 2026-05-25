@@ -1939,3 +1939,51 @@ gh-k8s-rerun-deploy: ## Rerun failed jobs of a GitHub Actions deploy run (GH_DEP
 gh-k8s-watch: ## Watch a GitHub Actions deploy run until completion (GH_DEPLOY_RUN_ID=...)
 	@test -n "$(GH_DEPLOY_RUN_ID)" || (echo "ERROR: GH_DEPLOY_RUN_ID is required, for example GH_DEPLOY_RUN_ID=26159456218" >&2; exit 1)
 	gh run watch "$(GH_DEPLOY_RUN_ID)" --repo "$(GH_REPO)" --interval 30 --exit-status
+
+# --- Sealed Secrets (BR37b-EX1, append-only; operator-side, live cluster) -----
+# Bitnami Sealed Secrets controller install + sealing helpers. The controller
+# manifest is deploy/scw/01-sealed-secrets-controller.yaml (pinned v0.37.0,
+# namespace `sealed-secrets`). kubeseal is run from the pinned official image
+# docker.io/bitnami/sealed-secrets-kubeseal:0.37.0 (kubeseal is its entrypoint),
+# so no host install of kubeseal is required. kubeseal fetches the controller's
+# public cert from the live kube API using the mounted $(KUBECONFIG); no secret
+# value is ever hardcoded in a target — `scw-seal-secret` only transforms
+# SEAL_SRC (plaintext Secret yaml) into SEAL_OUT (SealedSecret yaml).
+SEALED_SECRETS_NAMESPACE  ?= sealed-secrets
+SEALED_SECRETS_CONTROLLER ?= sealed-secrets-controller
+SEALED_SECRETS_MANIFEST   ?= deploy/scw/01-sealed-secrets-controller.yaml
+KUBESEAL_IMAGE            ?= docker.io/bitnami/sealed-secrets-kubeseal:0.37.0
+SEAL_SRC ?=
+SEAL_OUT ?=
+SEAL_KEY_OUT ?=
+
+.PHONY: scw-sealed-secrets-install scw-seal-secret scw-sealed-secrets-backup-key
+
+scw-sealed-secrets-install: ## Install the Sealed Secrets controller (v0.37.0) and wait for rollout
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f $(SEALED_SECRETS_MANIFEST)
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SEALED_SECRETS_NAMESPACE) rollout status deploy/$(SEALED_SECRETS_CONTROLLER) --timeout=120s
+	@echo "==> Sealed Secrets controller $(SEALED_SECRETS_CONTROLLER) ready in namespace $(SEALED_SECRETS_NAMESPACE)."
+
+scw-seal-secret: ## Seal a plaintext Secret yaml into a SealedSecret yaml (SEAL_SRC=... SEAL_OUT=...)
+	@test -n "$(SEAL_SRC)" || { echo "ERROR: set SEAL_SRC=<path to plaintext Secret yaml>" >&2; exit 1; }
+	@test -n "$(SEAL_OUT)" || { echo "ERROR: set SEAL_OUT=<path to write the SealedSecret yaml>" >&2; exit 1; }
+	@test -f "$(SEAL_SRC)" || { echo "ERROR: SEAL_SRC=$(SEAL_SRC) not found" >&2; exit 1; }
+	@test -s "$(KUBECONFIG)" || { echo "ERROR: missing or empty KUBECONFIG=$(KUBECONFIG)" >&2; exit 1; }
+	@command -v docker >/dev/null 2>&1 || { echo "ERROR: docker is required to run $(KUBESEAL_IMAGE)" >&2; exit 1; }
+	@docker run --rm -i \
+	  -v "$(KUBECONFIG)":/tmp/kubeconfig:ro \
+	  -e KUBECONFIG=/tmp/kubeconfig \
+	  $(KUBESEAL_IMAGE) \
+	  --controller-name=$(SEALED_SECRETS_CONTROLLER) \
+	  --controller-namespace=$(SEALED_SECRETS_NAMESPACE) \
+	  --format=yaml \
+	  < "$(SEAL_SRC)" > "$(SEAL_OUT)"
+	@echo "==> Sealed $(SEAL_SRC) -> $(SEAL_OUT) (controller $(SEALED_SECRETS_CONTROLLER)/$(SEALED_SECRETS_NAMESPACE))."
+
+scw-sealed-secrets-backup-key: ## Export the controller sealing key for DR (SEAL_KEY_OUT=...). HIGHLY SENSITIVE.
+	@test -n "$(SEAL_KEY_OUT)" || { echo "ERROR: set SEAL_KEY_OUT=<path to write the sealing key backup>" >&2; exit 1; }
+	@test -s "$(KUBECONFIG)" || { echo "ERROR: missing or empty KUBECONFIG=$(KUBECONFIG)" >&2; exit 1; }
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SEALED_SECRETS_NAMESPACE) get secret \
+	  -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml > "$(SEAL_KEY_OUT)"
+	@echo "WARNING: $(SEAL_KEY_OUT) contains the controller master sealing key."
+	@echo "WARNING: store it out-of-band (offline/secret manager), NEVER commit it, and restrict file permissions."

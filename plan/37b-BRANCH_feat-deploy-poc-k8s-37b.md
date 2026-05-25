@@ -177,12 +177,12 @@ Take the live Sentropic deployment on the shared `poc-k8s` Scaleway Kapsule clus
 - [ ] **Lot 2 — Sealed Secrets controller + sealing (BR37b-FL2)**
   - [x] Decide controller install method (manifest-only vs Helm). Decided: official manifest install from `bitnami-labs/sealed-secrets` release pinned to `v0.37.0`, retargeted to dedicated namespace `sealed-secrets`, no Helm dependency.
   - [x] Add `deploy/scw/01-sealed-secrets-controller.yaml` for: namespace, ServiceAccount, RBAC, Deployment, Service. Image tag pinned to `docker.io/bitnami/sealed-secrets-controller:0.37.0`. Upstream URL + version + namespace retarget recorded in header comment; zero `kube-system` references remain.
-  - [ ] Add `make scw-sealed-secrets-install` target (append-only) that applies the controller manifests and waits for controller readiness. (BR37b-EX1)
+  - [x] Add `make scw-sealed-secrets-install` target (append-only) that applies the controller manifests and waits for controller readiness. (BR37b-EX1)
   - [ ] Generate `kubeseal` binding for existing `sentropic-api` and `sentropic-postgres` Secrets currently created by `make scw-bundle-secret`.
   - [ ] Replace the imperative `scw-bundle-secret` flow with sealed Secrets stored in `deploy/scw/`:
     - [ ] `deploy/scw/05-sealed-sentropic-api.yaml` (SealedSecret resource, encrypted, safe to commit).
     - [ ] `deploy/scw/06-sealed-sentropic-postgres.yaml`.
-    - [ ] Add `make scw-seal-secret` helper that seals a given source secret from `SCW_ENV_FILE` into a target SealedSecret yaml. (BR37b-EX1)
+    - [x] Add `make scw-seal-secret` helper that seals a given plaintext Secret yaml (`SEAL_SRC`) into a target SealedSecret yaml (`SEAL_OUT`) via the pinned `bitnami/sealed-secrets-kubeseal:0.37.0` image; reads the controller cert from the live kube API via `$(KUBECONFIG)`; hardcodes no secret value. Also added `make scw-sealed-secrets-backup-key` (DR export of the controller sealing key to `SEAL_KEY_OUT`, with sensitivity warnings). (BR37b-EX1)
   - [ ] Document the disaster-recovery procedure for the controller's sealing key in `deploy/scw/README.md` (operator-side out-of-band backup, file path on operator host, restore steps).
   - [ ] Deprecate or document the legacy `scw-bundle-secret` path (kept for emergency unseal, but no longer the primary mechanism for `sentropic-api` and `sentropic-postgres`).
   - [ ] Lot gate:
