@@ -164,7 +164,7 @@ Prevent repeated tool-call and tool-error loops from freezing or saturating the 
   - [x] Bump `packages/chat-ui/package.json` if `packages/chat-ui/src/**` changes.
   - [x] Build before e2e: `make build-api build-ui-image API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=e2e-fix-chat-loop-guard-analysis`
   - [x] E2E chat smoke: `make test-e2e E2E_VERSION=d66824 E2E_SPEC=tests/03-chat.spec.ts WORKERS=1 RETRIES=0 API_PORT=9096 UI_PORT=5296 MAILDEV_UI_PORT=1196 ENV=e2e-fix-chat-loop-guard-analysis` (12 tests, no retries; reused existing local E2E image because tests are bind-mounted and current-tag Playwright image rebuild stalled locally)
-  - [ ] Record PR body failure signature and chosen guard semantics.
-  - [ ] Create/update PR using `BRANCH.md` text as PR body.
+  - [x] Record PR body failure signature and chosen guard semantics.
+  - [x] Create/update PR using `BRANCH.md` text as PR body: https://github.com/rhanka/sentropic/pull/183
   - [ ] Verify PR CI.
   - [ ] Once UAT + CI are both OK, commit removal of `BRANCH.md`, push, and merge.
