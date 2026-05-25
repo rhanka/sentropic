@@ -38,12 +38,18 @@ const envSchema = z.object({
   VSCODE_EXTENSION_DOWNLOAD_URL: z.string().optional(),
   VSCODE_EXTENSION_VERSION: z.string().optional(),
   VSCODE_EXTENSION_SOURCE: z.string().optional(),
-  MAIL_HOST: z.string().default('maildev'),
-  MAIL_PORT: z.coerce.number().default(1025),
-  MAIL_SECURE: z.string().transform((val) => val === 'true' || val === '1').default('false'),
-  MAIL_USERNAME: z.string().optional(),
-  MAIL_PASSWORD: z.string().optional(),
-  MAIL_FROM: z.string().default('no-reply@top-ai-ideas.local'),
+  // ---------------------------------------------------------------------------
+  // Outbound email — Scaleway Transactional Email (TEM) HTTP API.
+  // SMTP egress is blocked at the Kapsule platform level (BR37b-FL1), so mail
+  // is sent via the TEM HTTP API. In dev/test the api targets the local
+  // scw-tem-mock service which forwards to maildev over SMTP.
+  // ---------------------------------------------------------------------------
+  SCW_TEM_API_BASE_URL: z.string().default('https://api.scaleway.com'),
+  SCW_TEM_REGION: z.string().default('fr-par'),
+  SCW_TEM_PROJECT_ID: z.string().optional(),
+  SCW_TEM_SECRET_KEY: z.string(),
+  SCW_TEM_FROM_EMAIL: z.string().default('no-reply@sent-tech.ca'),
+  SCW_TEM_FROM_NAME: z.string().default('Sentropic'),
   // WebAuthn Configuration
   WEBAUTHN_RP_ID: z.string().optional(),
   WEBAUTHN_RP_NAME: z.string().optional(),
@@ -69,6 +75,10 @@ export type AppEnv = z.infer<typeof envSchema>;
 
 export const env: AppEnv = (() => {
   const parsed = envSchema.parse(process.env);
+  // TEM project id falls back to the shared Scaleway default project when unset.
+  if (!parsed.SCW_TEM_PROJECT_ID && parsed.SCW_DEFAULT_PROJECT_ID) {
+    parsed.SCW_TEM_PROJECT_ID = parsed.SCW_DEFAULT_PROJECT_ID;
+  }
   // Tests execute a lot of auth requests quickly; default to disabling auth rate limiting in test env
   // unless explicitly overridden.
   if (parsed.NODE_ENV === 'test' && !parsed.DISABLE_RATE_LIMIT) {
