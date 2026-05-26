@@ -15,7 +15,13 @@ Apply them first; the Makefile in this repo will not create them.
   `imagePullSecrets: [{ name: sentropic-registry }]` so every Pod can pull
   from the SCW Container Registry.
 - `15-networkpolicy.yaml` — workload-scoped ingress allowances for the
-  tenant default-deny baseline: api -> postgres, ui -> api.
+  tenant default-deny baseline: api -> postgres, ui -> api, pgbackup -> postgres,
+  and the cluster Traefik namespace -> ui (public ingress).
+- `07-sealed-sentropic-pgbackup.yaml` — SealedSecret `sentropic-pgbackup`
+  (`S3_ACCESS_KEY`/`S3_SECRET_KEY` reused from DOC_STORAGE, `S3_BUCKET`,
+  `S3_REGION`, `S3_ENDPOINT`) for the Postgres backup CronJob.
+- `70-pgbackup-cronjob.yaml` — nightly `pg_dump` CronJob uploading a gzip to
+  `s3://$S3_BUCKET/pg/<ts>.sql.gz` (see "Postgres backup" below).
 - `20-postgres.yaml` — Postgres 17 StatefulSet + headless Service + 1Gi PVC on
   `scw-bssd` + ConfigMap (`POSTGRES_DB`, `POSTGRES_USER`).
 - `30-api.yaml` — `sentropic-api` SCW Container Registry image + ClusterIP
@@ -24,8 +30,9 @@ Apply them first; the Makefile in this repo will not create them.
   DNS path honors the option on this IPv4-only POC egress path.
 - `40-ui.yaml` — `sentropic-ui` SCW Container Registry image + ClusterIP
   Service (port 5173) + placeholder ConfigMap for future overlays.
-- `60-ingress.yaml` — optional Traefik Ingress with cert-manager TLS. Replace
-  the placeholder hosts and apply with `SCW_INGRESS=1`.
+- `60-ingress.yaml` — public Traefik Ingress for `sentropic.sent-tech.ca`
+  (single host → `ui`; nginx proxies `/api`→api:8787) with cert-manager TLS via
+  the platform `letsencrypt-prod` ClusterIssuer. Apply with `SCW_INGRESS=1`.
 
 ## Prerequisites (cluster operator side, in `~/src/poc-k8s/`)
 
@@ -145,6 +152,44 @@ This removes the workload (Deployments, Services, Secrets created here,
 StatefulSet, ConfigMaps, and any legacy Maildev resources). The namespace,
 ResourceQuota, LimitRange and
 NetworkPolicy stay (owned by poc-k8s).
+
+## Postgres backup (operator side)
+
+Nightly `pg_dump` to SCW Object Storage via the `70-pgbackup-cronjob.yaml`
+CronJob (`15 2 * * *`). S3 creds + bucket come from the `sentropic-pgbackup`
+SealedSecret (`07-*`); the dump is written to a file, `test -s`-checked (no
+empty-dump masking), gzipped, then uploaded to `s3://$S3_BUCKET/pg/<ts>.sql.gz`.
+The `allow-pgbackup-to-postgres` NetworkPolicy lets the job reach postgres.
+
+```bash
+# Trigger an immediate backup Job and wait for completion:
+make scw-pgbackup-now KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37c
+# Restore a chosen dump into a scratch DB (non-destructive to the app DB):
+make scw-pgbackup-restore PG_BACKUP_KEY=pg/<ts>.sql.gz \
+  KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37c
+```
+
+`scw-pgbackup-restore` runs a throwaway pod that reads `S3_BUCKET`/`S3_ENDPOINT`/
+`S3_REGION` + creds from the SealedSecret (no host env dependency), downloads the
+dump, restores it into a scratch `restore_check` DB, runs a sanity `SELECT`, then
+drops the scratch DB.
+
+## Public ingress / TLS
+
+The cluster-wide ingress (Traefik + a shared SCW LoadBalancer + cert-manager +
+the `letsencrypt-staging`/`letsencrypt-prod` Cloudflare DNS-01 ClusterIssuers)
+is delivered by the **poc-k8s** repo (`platform/`, `make apply-platform`), not
+here. This tenant only ships `60-ingress.yaml`. To (re)apply it:
+
+```bash
+make scw-deploy SCW_INGRESS=1 KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37c
+make scw-dns-smoke KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37c
+```
+
+cert-manager issues `sentropic-tls` via a DNS-01 challenge (no public HTTP-01
+needed). A Cloudflare `A` record `sentropic.sent-tech.ca` → the Traefik LB IP
+must exist. `scw-dns-smoke` asserts HTTPS 200 + a browser-trusted cert on `/`
+and `/api/v1/health`.
 
 ## Sealed Secrets
 

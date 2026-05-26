@@ -43,6 +43,15 @@ Cluster: Scaleway Kapsule `poc-k8s`, namespace `sentropic`. Operator: Fabien Ant
   2. **HTTPS then timed out post-handshake** (TLS OK, no HTTP response). Root cause: `sentropic` `default-deny-ingress` had no rule for Traefik→ui. Fixed by adding NetworkPolicy `allow-traefik-to-ui` (ns `traefik` → ui:5173) in `deploy/scw/15-networkpolicy.yaml`. ui→api hop already covered by `allow-ui-to-api`; nginx in the ui image proxies `/api`→api:8787.
 - **Final smoke GREEN** (`make scw-dns-smoke`): `https://sentropic.sent-tech.ca/` → 200, `https://sentropic.sent-tech.ca/api/v1/health` → 200, both with a browser-trusted cert (`ssl_verify_result=0`).
 
-## Lot 3 — End-to-end deploy validation — partially covered, dns-smoke pending Lot 2
-- Already proven elsewhere: live TEM email smoke (BR-37b Lot 1.10, post-merge), Sealed Secrets reconciliation (BR-37b Lot 2), pg backup round-trip (above).
-- Pending: `scw-dns-smoke` (public host TLS) — needs Lot 2 ingress.
+## Lot 3 — End-to-end deploy validation — DONE 2026-05-25
+- **`make scw-deploy SCW_INGRESS=1` idempotent**: re-apply reported every manifest `unchanged`/`configured` (rbac, netpol incl. `allow-traefik-to-ui`, postgres, api, ui, ingress) — no new creates; api+ui rollout-restarted and reached Ready.
+- **Live smoke matrix GREEN**:
+  - `scw-smoke` → api `/api/v1/health` OK, ui `/` OK (in-cluster port-forward).
+  - `scw-dns-smoke` → `https://sentropic.sent-tech.ca/` + `/api/v1/health` both 200, trusted cert.
+  - `scw-email-smoke` → live TEM verification email accepted for fabien.antoine@gmail.com.
+  - `scw-pgbackup-now` → uploaded `pg/20260526T011304Z.sql.gz` (12.2 KiB); `scw-pgbackup-restore` → schema restored into scratch `restore_check`, `organizations` count read, scratch DB dropped, "restore verification OK".
+- **Fix during Lot 3**: `scw-pgbackup-restore` initially failed `Invalid bucket name ""` (it used the host `PG_BACKUP_BUCKET` make var, empty in the CI-like script env). Hardened to read `S3_BUCKET`/`S3_ENDPOINT`/`S3_REGION` from the `sentropic-pgbackup` SealedSecret (consistent with `scw-pgbackup-now`); re-run green.
+- **deploy-k8s CI apply-set**: unchanged (BR37c-EX2 not used). The job is the rolling app deploy; one-time infra (sealed secrets, pgbackup CronJob, ingress) is applied operator-side once, same model as the BR-37b sealed-secrets controller.
+
+## CI status (PR #186)
+- Branch diff is deploy-only (`deploy/scw/**`, `Makefile` operator targets, `plan/`, `docs/`) — zero app/AI code. CI failures seen are AI-shard flakiness, a different shard each run (run 26419816448: `test-e2e (group-c,03)` chat/SSE `runtimeHeader` timeout after a digest-mismatch image rebuild; run 26426564167: `test-api-unit-integration (ai, chat-tools,…)`). Matches the documented AI flaky-accepted signature (BR-37b); rerun on the same commit. Final CI sign-off recorded at branch close.

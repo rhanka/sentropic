@@ -32,7 +32,7 @@ Continuation of BR-37b (email egress + Sealed Secrets, merged PR #176). Close th
 
 ## Feedback Loop
 - **BR37c-EX1** (status: `used`): append-only Makefile operator targets (`scw-pgbackup-now`, `scw-pgbackup-restore`, `scw-dns-smoke` + `SCW_HOST` var). Rollback: remove appended targets.
-- **BR37c-EX2** (status: `pending`): `ci.yml` deploy-k8s apply-set extension if needed so a fresh cluster applies cert-manager/ingress/backup manifests. Rollback: revert ci.yml hunk.
+- **BR37c-EX2** (status: `not used` 2026-05-25): `ci.yml` deploy-k8s left unchanged. The deploy-k8s job is the rolling app deploy (`make scw-deploy`); cluster-wide ingress (cert-manager/traefik/LB) lives in the poc-k8s repo, and one-time tenant infra (sealed secrets, pgbackup CronJob, ingress) is applied operator-side once — same model as the BR-37b sealed-secrets controller. No fresh-cluster gap that warrants a CI change for this POC.
 - **BR37c-EX3** (status: `pending`): PLAN.md status update (BR-37c progress/done). Rollback: revert hunk.
 - **BR37c-FL1** (severity: `attention`, status: `resolved` 2026-05-25): Public hostname `sentropic.sent-tech.ca` LIVE. Cloudflare token reused from `onyxia/.env` `CF_API_TOKEN` (verified `dns_records:edit`+`zone:read`, sealed in poc-k8s). User approved "Go direct en prod"; DNS A record → `51.159.11.157` created, `sentropic-tls` issued (letsencrypt-prod), `scw-dns-smoke` green (200 + trusted cert on `/` and `/api/v1/health`).
 - **BR37c-FL2** (severity: `attention`, status: `open`): Postgres backup bucket `sentropic-pgbackup` provisioned once via SCW CLI in project `$SCW_DEFAULT_PROJECT_ID`; S3 creds mutualised with `DOC_STORAGE_*_PROD` (segmentation at bucket boundary). Backup creds go into a sealed `sentropic-pgbackup` SealedSecret.
@@ -70,15 +70,15 @@ Continuation of BR-37b (email egress + Sealed Secrets, merged PR #176). Close th
   - [x] (BR-37c, user-approved "Go direct en prod" 2026-05-25) Cloudflare DNS A record `sentropic.sent-tech.ca` → `51.159.11.157` created; ingress applied; cert-manager issued `sentropic-tls` (letsencrypt-prod, DNS-01, valid to 2026-08-23). Added NetworkPolicy `allow-traefik-to-ui` (ns `traefik` → ui:5173) in `15-networkpolicy.yaml` — the default-deny was dropping Traefik→ui (HTTPS timed out post-handshake). Also fixed the poc-k8s traefik manifest (missing nodes+configmaps RBAC + stray kubernetescrd provider) so it serves the Ingress + its TLS secret.
   - [x] Lot gate PASSED: `make scw-dns-smoke` → `https://sentropic.sent-tech.ca/` and `/api/v1/health` both 200 with a trusted Let's Encrypt cert (`ssl_verify=0`, issuer O=Let's Encrypt).
 
-- [ ] **Lot 3 — End-to-end deploy validation**
-  - [ ] Trigger main-path publish → deploy-k8s (extend `deploy-k8s` apply-set for the new manifests if needed, BR37c-EX2).
-  - [ ] Re-run smoke matrix: `scw-smoke`, `scw-email-smoke`, `scw-dns-smoke`, `scw-pgbackup-now`→`scw-pgbackup-restore`.
-  - [ ] Record evidence in `docs/uat/2026-05-25-deploy-poc-k8s-37c.md`.
-  - [ ] Lot gate: `scw-deploy` idempotent (re-apply no churn); all smokes green.
+- [x] **Lot 3 — End-to-end deploy validation** _(done 2026-05-25)_
+  - [x] `deploy-k8s` apply-set reviewed: the CI job runs `make scw-deploy` (rbac, netpol incl. new `allow-traefik-to-ui`, postgres, api, ui) — the rolling app deploy. One-time infra (sealed secrets `01/05/06/07`, pgbackup CronJob `70`, ingress `60`) is applied operator-side once, identical to the BR-37b sealed-secrets model → **BR37c-EX2 not needed** (no `ci.yml` change). Documented in the runbook.
+  - [x] Smoke matrix GREEN on the live cluster (`/tmp/lot3-smoke-matrix.out`): `scw-smoke` (api+ui), `scw-dns-smoke` (public host trusted TLS), `scw-email-smoke` (live TEM, accepted for fabien.antoine@gmail.com), `scw-pgbackup-now`→`scw-pgbackup-restore` (round-trip OK). Hardened `scw-pgbackup-restore` to read `S3_BUCKET`/`S3_ENDPOINT`/`S3_REGION` from the SealedSecret (was depending on a host `PG_BACKUP_BUCKET` env var → empty-bucket failure).
+  - [x] Evidence recorded in `docs/uat/2026-05-25-deploy-poc-k8s-37c.md`.
+  - [x] Lot gate PASSED: `make scw-deploy SCW_INGRESS=1` idempotent (every manifest `unchanged`/`configured`, no new creates); all smokes green.
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Update `deploy/scw/README.md` runbook (pg backup operate/restore, ingress/cert-manager).
-  - [ ] PLAN.md status → BR-37c done (BR37c-EX3).
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Updated `deploy/scw/README.md` runbook: new file list entries (07/70, updated 15/60), a "Postgres backup" section (now/restore) and a "Public ingress / TLS" section (poc-k8s platform split + DNS-01 + scw-dns-smoke).
+  - [ ] PLAN.md status → BR-37c done (BR37c-EX3) — at branch close.
 
 - [ ] **Lot N — Final validation**
   - [ ] Confirm `make typecheck/lint` unaffected; CI green on PR.
