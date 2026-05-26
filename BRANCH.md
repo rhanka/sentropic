@@ -1,7 +1,7 @@
-# Feature: Revert erroneous `gemini-3.5-thinking` model to `gemini-3.1-flash-lite-preview`
+# Feature: Replace erroneous `gemini-3.5-thinking` model with `gemini-3.1-flash-lite`
 
 ## Objective
-Remove the non-existent `gemini-3.5-thinking` model (merged by error via commits 8e2ceee3 + 564d4cd5) and restore `gemini-3.1-flash-lite-preview`, which is also the internal evaluator/summary model for the gemini family — restoring `gemini-3.5-flash` to working order.
+Remove the non-existent `gemini-3.5-thinking` model (merged by error via commits 8e2ceee3 + 564d4cd5) and set the gemini slot-2 model to `gemini-3.1-flash-lite` (live GA id), which is also the internal evaluator/summary model for the gemini family — restoring `gemini-3.5-flash` to working order. The original pre-merge id `gemini-3.1-flash-lite-preview` is now 404 ("no longer available") on Google, superseded by the GA id without the `-preview` suffix.
 
 ## Scope / Guardrails
 - Scope limited to the gemini model catalog entry and its references (llm-mesh, api services, chat-core doc, aligned tests).
@@ -38,7 +38,9 @@ Remove the non-existent `gemini-3.5-thinking` model (merged by error via commits
   - Declare exception ID `BRGRT-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- none
+- BRGRT-N1 `acknowledge`: live Google API check (user GEMINI key) — `gemini-3.5-flash` 200, `gemini-3.1-flash-lite` 200, `gemini-3.1-flash-lite-preview` 404 (retired), `gemini-3.5-thinking` 404. User confirmed slot-2 target = `gemini-3.1-flash-lite` (GA successor of the retired preview id).
+- BRGRT-N2 `acknowledge`: scope widened to `spec/SPEC_CHATBOT.md` (model list) in addition to `spec/SPEC_EVOL_LLM_MESH.md`; both live under non-forbidden `spec/*.md`.
+- Legacy cutover migrations added for retired/erroneous ids (`gemini-3.1-flash-lite-preview`, `gemini-3.5-thinking`) → `gemini-3.1-flash-lite` so saved user/workspace defaults do not 404.
 
 ## AI Flaky tests
 - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
@@ -61,36 +63,29 @@ Remove the non-existent `gemini-3.5-thinking` model (merged by error via commits
   - [x] Confirm command style: `make ... ENV=<env>` with `ENV` last.
   - [x] Confirm scope and guardrails.
 
-- [ ] **Lot 1 — Revert model name across source + tests**
-  - [ ] `packages/llm-mesh/src/catalog.ts`: `gemini-3.5-thinking` → `gemini-3.1-flash-lite-preview`, label `Gemini 3.5 Thinking` → `Gemini 3.1 Flash Lite`, capability tier `advanced` → `standard` (this entry only).
-  - [ ] `packages/llm-mesh/src/providers.ts`: replace in `knownModelIds` and `knownModelIdsByProvider.gemini`.
-  - [ ] `api/src/services/chat-service.ts`: context-window map, summary model (line ~791), evaluator model (line ~2119).
-  - [ ] `api/src/services/model-selection-legacy.ts`: retarget `gemini-2.5-flash-lite` → `gemini-3.1-flash-lite-preview`; remove self-referential `gemini-3.1-flash-lite-preview` → `gemini-3.5-thinking` rule.
-  - [ ] `packages/chat-core/src/runtime.ts`: update doc-comment example.
-  - [ ] Bump `packages/llm-mesh/package.json` + `packages/chat-core/package.json` (patch).
-  - [ ] Align tests/spec referencing `gemini-3.5-thinking`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api lint-api ENV=test-gemini-revert`
-    - [ ] **API tests**
-      - [ ] Update: `api/tests/api/me.test.ts`, `api/tests/api/models.test.ts`, `api/tests/api/ai-settings.test.ts`, `api/tests/api/chat-message-actions.test.ts`, `api/tests/unit/model-selection-legacy.test.ts`, `api/tests/unit/chat-service-tools.test.ts`, `api/tests/unit/gemini-tool-handoff.test.ts`, `api/tests/unit/llm-runtime-stream.test.ts`.
-      - [ ] Sub-lot gate: `make test-api ENV=test-gemini-revert`
-    - [ ] **Package tests**
-      - [ ] Update: `packages/llm-mesh/tests/facade.test.ts`, `packages/chat-core/tests/runtime-reasoning-effort.test.ts`.
-      - [ ] Sub-lot gate: `make test-packages ENV=test-gemini-revert` (or workspace test target)
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] Update: `ui/tests/utils/user-ai-settings-events.test.ts`.
-      - [ ] Sub-lot gate: `make test-ui ENV=test`
+- [x] **Lot 1 — Set gemini slot-2 model across source + tests**
+  - [x] `packages/llm-mesh/src/catalog.ts`: slot-2 → `gemini-3.1-flash-lite`, label `Gemini 3.1 Flash Lite`, `reasoningTier: 'standard'`, `defaultTaskHints: ['chat']`, capability tier `standard`.
+  - [x] `packages/llm-mesh/src/providers.ts`: replaced in `knownModelIds` and `knownModelIdsByProvider.gemini`.
+  - [x] `api/src/services/chat-service.ts`: context-window map, summary model (~791), evaluator model (~2119) → `gemini-3.1-flash-lite`.
+  - [x] `api/src/services/model-selection-legacy.ts`: `gemini-2.5-flash-lite` → `gemini-3.1-flash-lite`; added migrations `gemini-3.1-flash-lite-preview` → `gemini-3.1-flash-lite` and `gemini-3.5-thinking` → `gemini-3.1-flash-lite`.
+  - [x] `packages/chat-core/src/runtime.ts`: doc-comment example updated.
+  - [x] Bumped `packages/llm-mesh/package.json` + `packages/chat-core/package.json` to `0.1.2`.
+  - [x] Aligned tests/spec; zero residual `gemini-3.5-thinking` / `gemini-3.1-flash-lite-preview` outside legacy `fromModelId`s.
+  - [x] Lot gate (all on `ENV=test-gemini-revert`):
+    - [x] `typecheck-llm-mesh` + `typecheck-chat-core` + `typecheck-api` PASS; `build-llm-mesh` + `build-chat-core` PASS.
+    - [x] **Package tests**: `test-llm-mesh` PASS (facade), `test-pkg-chat-core` PASS (245).
+    - [x] **API tests (scoped to changed files)**: `test-api-unit` 77 passed (model-selection-legacy, chat-service-tools, gemini-tool-handoff, llm-runtime-stream); `test-api-endpoints` 25 passed (models, me, ai-settings, chat-message-actions).
+    - [x] **UI tests**: `test-ui SCOPE=tests/utils/user-ai-settings-events.test.ts` 2 passed.
 
-- [ ] **Lot 2 — Real-model verification (the core of this fix)**
-  - [ ] Verify `gemini-3.5-flash` returns a real completion (live API) — no `gemini-3.5-thinking` call in the path.
-  - [ ] Verify `gemini-3.1-flash-lite-preview` returns a real completion (live API).
-  - [ ] Confirm the old erroneous id `gemini-3.5-thinking` is fully absent from `src/**`.
-  - [ ] Record evidence in this file.
+- [x] **Lot 2 — Real-model verification (the core of this fix)**
+  - [x] `gemini-3.5-flash` → live `generateContent` HTTP 200 (works).
+  - [x] `gemini-3.1-flash-lite` → live `generateContent` HTTP 200 (works) — slot-2 model.
+  - [x] `gemini-3.5-thinking` → live HTTP 404 NOT_FOUND (confirms why it was broken) and fully absent from `src/**` (only legacy `fromModelId`).
+  - [x] `gemini-3.1-flash-lite-preview` → live HTTP 404 "no longer available" (justifies GA id choice).
 
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest API + packages + UI
-  - [ ] Confirm package version bumps (CI `enforce-package-bump`)
-  - [ ] PR using `BRANCH.md` as body
-  - [ ] CI green
-  - [ ] On UAT + CI OK: remove `BRANCH.md`, push, merge
+  - [x] Typecheck + package/api/ui tests green (see Lot 1 gate).
+  - [x] Package version bumps done (`@sentropic/llm-mesh` 0.1.2, `@sentropic/chat-core` 0.1.2).
+  - [ ] PR using `BRANCH.md` as body.
+  - [ ] CI green.
+  - [ ] On UAT + CI OK: remove `BRANCH.md`, push, merge.
