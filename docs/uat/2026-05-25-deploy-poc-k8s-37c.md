@@ -35,9 +35,13 @@ Cluster: Scaleway Kapsule `poc-k8s`, namespace `sentropic`. Operator: Fabien Ant
 - `deploy/scw/60-ingress.yaml`: single host `sentropic.sent-tech.ca` → `ui` Service (port `http`/5173); nginx in the UI image proxies `/api`→api:8787 so no API subdomain. TLS `sentropic-tls` via `cert-manager.io/cluster-issuer: letsencrypt-prod`, `ingressClassName: traefik`, websecure entrypoint.
 - `make scw-dns-smoke` (BR37c-EX1): `SCW_HOST` var; asserts `https://sentropic.sent-tech.ca/` and `/api/v1/health` return 200 with a browser-trusted cert (no `-k`).
 
-### RESERVED for operator go-ahead (BR37c-FL1)
-- Create Cloudflare DNS A record `sentropic.sent-tech.ca` → `51.159.11.157` (makes the host publicly reachable — shared-infra/user-facing).
-- Then `make scw-deploy SCW_INGRESS=1` → cert-manager issues the `sentropic-tls` Certificate via DNS-01 → run `make scw-dns-smoke`.
+### Go-public — DONE 2026-05-25 (operator approved "Go direct en prod")
+- Cloudflare DNS A record `sentropic.sent-tech.ca` → `51.159.11.157` created (proxied=false, TTL 300) via CF API.
+- Ingress applied; cert-manager issued `sentropic-tls` via DNS-01 in ~80s (CertificateRequest approved, Order valid, Certificate Ready=True; issuer letsencrypt-prod; Not After 2026-08-23). DNS-01 challenge `Presented=true` proved the sealed CF token works.
+- Two defects found + fixed before the host served correctly:
+  1. **Traefik served its default self-signed cert and 404'd** every route. Root cause in the poc-k8s platform manifest: traefik ClusterRole missing `nodes`+`configmaps` (kubernetesingress informers never synced → no config produced) AND `--providers.kubernetescrd` enabled without Traefik CRDs installed. Fixed in `poc-k8s/platform/20-traefik.yaml` (commit e0d5fa9): added the RBAC, dropped the CRD provider + its traefik.io rules. After rollout, traefik served the real `O=Let's Encrypt CN=R12` cert.
+  2. **HTTPS then timed out post-handshake** (TLS OK, no HTTP response). Root cause: `sentropic` `default-deny-ingress` had no rule for Traefik→ui. Fixed by adding NetworkPolicy `allow-traefik-to-ui` (ns `traefik` → ui:5173) in `deploy/scw/15-networkpolicy.yaml`. ui→api hop already covered by `allow-ui-to-api`; nginx in the ui image proxies `/api`→api:8787.
+- **Final smoke GREEN** (`make scw-dns-smoke`): `https://sentropic.sent-tech.ca/` → 200, `https://sentropic.sent-tech.ca/api/v1/health` → 200, both with a browser-trusted cert (`ssl_verify_result=0`).
 
 ## Lot 3 — End-to-end deploy validation — partially covered, dns-smoke pending Lot 2
 - Already proven elsewhere: live TEM email smoke (BR-37b Lot 1.10, post-merge), Sealed Secrets reconciliation (BR-37b Lot 2), pg backup round-trip (above).
