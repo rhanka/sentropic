@@ -251,11 +251,11 @@ export const modelProfiles = [
   },
   {
     providerId: 'gemini',
-    modelId: 'gemini-3.5-thinking',
-    label: 'Gemini 3.5 Thinking',
-    reasoningTier: 'advanced',
-    defaultTaskHints: ['chat', 'structured', 'summary'],
-    capabilities: modelCapabilities('gemini', 'advanced'),
+    modelId: 'gemini-3.1-flash-lite',
+    label: 'Gemini 3.1 Flash Lite',
+    reasoningTier: 'standard',
+    defaultTaskHints: ['chat'],
+    capabilities: modelCapabilities('gemini', 'standard'),
   },
   {
     providerId: 'anthropic',
