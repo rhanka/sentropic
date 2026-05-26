@@ -43,25 +43,25 @@ Register and document two sequenced feature branches — BR-41a (`feat/cowork-de
 - N/A — no user-facing changes in this branch.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `PLAN.md`, `plan/BRANCH_TEMPLATE.md`.
-  - [ ] Confirm branch `chore/cowork`, worktree `tmp/chore-cowork` (`git -C tmp/chore-cowork branch --show-current`).
-  - [ ] Confirm scope and guardrails (docs-only).
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `PLAN.md`, `plan/BRANCH_TEMPLATE.md`.
+  - [x] Confirm branch `chore/cowork`, worktree `tmp/chore-cowork` (`git -C tmp/chore-cowork branch --show-current`).
+  - [x] Confirm scope and guardrails (docs-only).
 
-- [ ] **Lot 1 — Cowork study spec**
-  - [ ] Create `spec/SPEC_COWORK.md` (architecture, bridge, device-code enrollment, desktop tool protocol, portable-binary packaging, BR-41a/b split, risks).
-  - [ ] Lot gate: review the spec for internal consistency and alignment with the existing Chrome-plugin and packages conventions.
+- [x] **Lot 1 — Cowork study spec**
+  - [x] Create `spec/SPEC_COWORK.md` (architecture, bridge, device-code enrollment, desktop tool protocol, portable-binary packaging, BR-41a/b split, risks).
+  - [x] Lot gate: review the spec for internal consistency and alignment with the existing Chrome-plugin and packages conventions.
 
-- [ ] **Lot 2 — Branch plan files**
-  - [ ] Create `plan/41-BRANCH_chore-cowork.md` (umbrella registration, mirroring BR-40 pattern).
-  - [ ] Create `plan/41a-BRANCH_feat-cowork-desktop-tools.md` (detailed, from `plan/BRANCH_TEMPLATE.md`).
-  - [ ] Create `plan/41b-BRANCH_feat-cowork-local-webview.md` (detailed, from `plan/BRANCH_TEMPLATE.md`).
-  - [ ] Lot gate: review the three plan files for consistency, port allocation, and dependency direction (41b depends on 41a bridge).
+- [x] **Lot 2 — Branch plan files**
+  - [x] Create `plan/41-BRANCH_chore-cowork.md` (umbrella registration, mirroring BR-40 pattern).
+  - [x] Create `plan/41a-BRANCH_feat-cowork-desktop-tools.md` (detailed, from `plan/BRANCH_TEMPLATE.md`).
+  - [x] Create `plan/41b-BRANCH_feat-cowork-local-webview.md` (detailed, from `plan/BRANCH_TEMPLATE.md`).
+  - [x] Lot gate: review the three plan files for consistency, port allocation, and dependency direction (41b depends on 41a bridge).
 
-- [ ] **Lot 3 — PLAN.md registration**
-  - [ ] Add a status addendum (2026-05-25) summarizing BR-41a/b.
-  - [ ] Add catalog rows for BR-41a and BR-41b after BR-40c.
-  - [ ] Lot gate: review `PLAN.md` for table formatting and consistency.
+- [x] **Lot 3 — PLAN.md registration**
+  - [x] Add a status addendum (2026-05-25) summarizing BR-41a/b.
+  - [x] Add catalog rows for BR-41a and BR-41b after BR-40c.
+  - [x] Lot gate: review `PLAN.md` for table formatting and consistency.
 
 - [ ] **Lot N — Final validation**
   - [ ] Review all created/changed files for consistency and no contradictions.
