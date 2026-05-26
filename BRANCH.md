@@ -102,6 +102,18 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - Actual: branch plan now records the orchestration rule explicitly.
   - Evidence: BR-39a owns `@sentropic/auth-ui` package publication plus Sentropic UI route rewiring; BR-39b owns `@sentropic/auth-hono` package publication plus Sentropic API route/middleware rewiring.
   - Recommendation: do not split "publish package" and "replace in app" into separate branches unless implementation size forces a conductor-approved branch split. The extraction is only complete when the app consumes the new package and the replaced local implementation has been removed.
+- `BR39b-DEC2`
+  - Branch: BR-39b `feat/auth-hono-kit`
+  - Owner: User / implementation worker
+  - Severity: decision
+  - Status: approved 2026-05-26
+  - Repro steps: Lot 3 route rewiring must reconcile the package structured response/error contract (`{ delivery, expiresAt, success }`, `{ error: { code, message } }`) with the legacy Sentropic flat shapes (`{ success, message }`, `{ error: '<message>' }`).
+  - Expected: a single response/error contract across all extracted auth routes.
+  - Actual: the legacy API returned flat FR bodies the current UI/E2E tolerate; the package returns structured bodies aligned with the BR-39a end state.
+  - Decision: adopt the package structured contract as the API contract for all Lot 3 rewirings; do not add legacy formatter hooks. Rationale (user): sanitize toward the final BR-39a/BR-39b contract instead of carrying legacy shapes.
+  - Evidence: the current UI keeps working because it ignores `verify-request` bodies and reads only `verificationToken` on `verify-code`; only error-message rendering is transiently degraded until BR-39a migrates the UI to `@sentropic/auth-ui`. No auth E2E spec (`e2e/tests/02-auth-*.spec.ts`) asserts email response bodies or text.
+  - Impact: supersedes the earlier "keep existing response shapes stable" guidance for extracted routes; `api/src/routes/auth/magic-link.ts` `/request` must be harmonized from its interim legacy formatter to the structured default.
+  - Recommendation: keep app-supplied error `message` in FR to minimize transitional UX change; reusable package defaults stay structured for other consumers.
 - `BR39b-Q1`
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: Conductor / BR-39a implementer
@@ -299,6 +311,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Sentropic `api/src/routes/auth/credentials.ts` now consumes `createAuthCredentialRouteHandlers` through a Drizzle-backed `AuthHonoCredentialPort` and the existing `validateSession` resolver while preserving current credential-management API tests.
     - `createAuthMagicLinkRouteHandlers` now allows host-specific success response formatting for magic-link request responses while preserving the default reusable `delivery/expiresAt/success` package response.
     - Sentropic `api/src/routes/auth/magic-link.ts` now consumes `createAuthMagicLinkRouteHandlers` for `POST /magic-link/request` with legacy `{ success, message }` response parity; `POST /magic-link/verify` remains app-owned because it still owns workspace/session/cookie/device-activation policy.
+    - Sentropic `api/src/routes/auth/email.ts` now consumes `createAuthEmailRouteHandlers` for `POST /email/verify-request` and `POST /email/verify-code` through an app-owned `AuthHonoEmailVerificationService` adapter wrapping `generateEmailVerificationCode`/`verifyEmailCode`; per `BR39b-DEC2` the route adopts the package structured contract (no legacy formatter), maps the rate-limit throw to a structured 429, and keeps FR error messages. `generateEmailVerificationCode` now also returns `expiresAt` for the structured success body.
     - Spark 5.3 xhigh subagents were launched in isolated worktrees for registration, authentication, and route-adapter inventory. They produced useful read context, but no implementation diff was integrated because Agents A/B exited without usable patches and Agent C produced only inline inventory notes.
     - Spark 5.3 xhigh read-only handler-matrix helper was launched from the main branch worktree; it produced useful route/status/cookie inventory but no repository diff.
     - Spark 5.3 xhigh implementation helper for credential handlers produced an adapted package diff and tests; the session helper produced no usable diff and was skipped.
