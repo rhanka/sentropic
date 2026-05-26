@@ -15,12 +15,19 @@ const LEGACY_MODEL_CUTOVER_RULES: LegacyModelCutoverRule[] = [
   {
     providerId: 'gemini',
     fromModelId: 'gemini-2.5-flash-lite',
-    toModelId: 'gemini-3.5-thinking',
+    toModelId: 'gemini-3.1-flash-lite',
   },
   {
+    // Retired by Google ("no longer available"); succeeded by the GA id below.
     providerId: 'gemini',
     fromModelId: 'gemini-3.1-flash-lite-preview',
-    toModelId: 'gemini-3.5-thinking',
+    toModelId: 'gemini-3.1-flash-lite',
+  },
+  {
+    // Non-existent id merged by error; migrate any saved selection to the real lite model.
+    providerId: 'gemini',
+    fromModelId: 'gemini-3.5-thinking',
+    toModelId: 'gemini-3.1-flash-lite',
   },
   {
     providerId: 'gemini',
