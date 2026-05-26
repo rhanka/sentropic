@@ -57,10 +57,6 @@ const magicLinkRequestService: AuthHonoMagicLinkService = {
 };
 
 const magicLinkRequestHandlers = createAuthMagicLinkRouteHandlers({
-  formatRequestMagicLinkSuccess: () => ({
-    message: 'Magic link sent to your email',
-    success: true,
-  }),
   service: magicLinkRequestService,
 });
 
