@@ -2015,8 +2015,11 @@ scw-pgbackup-restore: ## Restore a dump from S3 into a scratch DB for verificati
 	  --env PGPASSWORD="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d)" \
 	  --env AWS_ACCESS_KEY_ID="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_ACCESS_KEY}' | base64 -d)" \
 	  --env AWS_SECRET_ACCESS_KEY="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_SECRET_KEY}' | base64 -d)" \
+	  --env S3_BUCKET="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_BUCKET}' | base64 -d)" \
+	  --env S3_ENDPOINT="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_ENDPOINT}' | base64 -d)" \
+	  --env S3_REGION="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_REGION}' | base64 -d)" \
 	  --command -- sh -c 'set -e; apk add --no-cache aws-cli >/dev/null 2>&1 || true; \
-	    aws s3 cp "s3://$(PG_BACKUP_BUCKET)/$(PG_BACKUP_KEY)" /tmp/d.sql.gz --endpoint-url https://s3.fr-par.scw.cloud --region fr-par; \
+	    aws s3 cp "s3://$$S3_BUCKET/$(PG_BACKUP_KEY)" /tmp/d.sql.gz --endpoint-url "$$S3_ENDPOINT" --region "$$S3_REGION"; \
 	    psql -c "DROP DATABASE IF EXISTS restore_check;" -c "CREATE DATABASE restore_check;"; \
 	    gunzip -c /tmp/d.sql.gz | psql -d restore_check; \
 	    psql -d restore_check -c "SELECT count(*) AS organizations FROM organizations;" || true; \
