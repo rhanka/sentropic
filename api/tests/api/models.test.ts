@@ -45,7 +45,7 @@ describe('Models API', () => {
         .sort();
 
     expect(modelsByProvider('openai')).toEqual(['gpt-4.1-nano', 'gpt-5.4-nano', 'gpt-5.5']);
-    expect(modelsByProvider('gemini')).toEqual(['gemini-3.5-flash', 'gemini-3.5-thinking']);
+    expect(modelsByProvider('gemini')).toEqual(['gemini-3.1-flash-lite', 'gemini-3.5-flash']);
     expect(modelsByProvider('anthropic')).toEqual(['claude-opus-4-7', 'claude-sonnet-4-6']);
     expect(modelsByProvider('mistral')).toEqual(['magistral-medium-2509', 'mistral-small-2603']);
     expect(modelsByProvider('cohere')).toEqual(['command-a-03-2025', 'command-a-reasoning-08-2025']);
@@ -84,30 +84,7 @@ describe('Models API', () => {
     expect(response.status).toBe(200);
     const data = await response.json();
     expect(data.defaults.provider_id).toBe('gemini');
-    expect(data.defaults.model_id).toBe('gemini-3.5-thinking');
-  });
-
-  it('migrates legacy Gemini Flash Lite defaults to Gemini 3.5 Thinking', async () => {
-    const updateResponse = await authenticatedRequest(
-      app,
-      'PUT',
-      '/api/v1/me/ai-settings',
-      user.sessionToken!,
-      { defaultModel: 'gemini-3.1-flash-lite-preview' }
-    );
-    expect(updateResponse.status).toBe(200);
-
-    const response = await authenticatedRequest(
-      app,
-      'GET',
-      '/api/v1/models/catalog',
-      user.sessionToken!
-    );
-
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.defaults.provider_id).toBe('gemini');
-    expect(data.defaults.model_id).toBe('gemini-3.5-thinking');
+    expect(data.defaults.model_id).toBe('gemini-3.1-flash-lite');
   });
 
   it('migrates legacy Gemini Pro defaults to Gemini 3.5 Flash', async () => {
