@@ -42,8 +42,20 @@ web app. See `spec/SPEC_COWORK.md`.
   before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- **BR41a-Q1** `attention`: device registry — extend `tab-registry.ts` to carry `source:
-  "desktop_cowork"` vs add a sibling `device-registry`. Default: extend (one targeting surface).
+- **BR41a-Q1** `acknowledge`: device registry — proto confirmed `POST /chrome-extension/tabs/register`
+  rejects `source:"desktop_cowork"` (HTTP 400; `VALID_TAB_SOURCES` in
+  `api/src/routes/api/chrome-extension.ts:46` + `TabSource` union in `tab-registry.ts:8`). Lot 3 will
+  extend both spots (default: extend the existing registry). Note: registry is NOT required for the
+  tool round-trip; it only drives UI targeting/presence.
+- **BR41a-F1** `attention` (proto finding): the server auto-injects `tab_read`/`tab_action` into
+  `localToolNames` when the user has a registered tab and the client did not send them
+  (`chat-service.ts:2497-2503`). A desktop device must NOT be offered browser-DOM tools → Lot 3/4
+  must gate tab-tool injection by device source/capabilities (or have the desktop client declare its
+  own tool set and skip tab-tool injection for non-browser sources).
+- **BR41a-F2** `attention` (proto finding): pausing generation for local tools requires
+  `previous_response_id` (`packages/chat-core/src/runtime-finalization.ts:267`), i.e. an OpenAI
+  Responses-style transport. The proto worked with `providerId:"openai"`. Lot 4 must pin the default
+  cowork provider/model to one that returns a response id.
 - **BR41a-Q2** `attention`: packaging — Node SEA vs pkg vs folder-zip fallback; decided at Lot 5.
 - **BR41-Q1** `attention`: code-signing strategy (unsigned → SmartScreen/AV); likely deferred.
 - **BR41a-EX1..EX4** declared here when the corresponding conditional path is first touched.
@@ -66,19 +78,25 @@ web app. See `spec/SPEC_COWORK.md`.
 - Env/ports (slot 0): `API_PORT=9205`, `UI_PORT=5405`, `MAILDEV_UI_PORT=1305`, `ENV=feat-cowork-desktop-tools`.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Create/confirm isolated worktree `tmp/feat-cowork-desktop-tools`; verify branch.
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `README.md`, `PLAN.md`,
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `PLAN.md`,
         `spec/SPEC_COWORK.md`, `spec/SPEC_CHROME_PLUGIN.md`, `plan/BRANCH_TEMPLATE.md`.
-  - [ ] Confirm env mapping + ports (slot 0: 9205 / 5405 / 1305) with `ENV` last.
-  - [ ] Confirm final package names (`@sentropic/cowork-bridge`, `@sentropic/cowork-desktop`).
-  - [ ] Validate scope boundaries; pre-declare `BR41a-EX1..EX4` as needed.
+  - [x] Confirm env mapping + ports (slot 0: 9205 / 5405 / 1305) with `ENV` last.
+  - [x] Confirm final package names (`@sentropic/cowork-bridge`, `@sentropic/cowork-desktop`).
+  - [x] Validate scope boundaries; pre-declare `BR41a-EX1..EX4` as needed.
 
-- [ ] **Lot 1 — Proto spike (throwaway)**
-  - [ ] Minimal Node script: enroll via a manually pasted token, register `source: "desktop_cowork"`,
-        execute one `screen_capture` driven from the Sentropic chat, return via `tool-results`.
-  - [ ] Success criterion: backend accepts a non-browser device + desktop tool round-trips.
-  - [ ] Lot gate: record proto result in this file; discard the spike code before Lot 2.
+- [x] **Lot 1 — Proto spike (throwaway)**
+  - [x] Minimal Node client: enroll via Bearer token (magic-link on a verified seed user — headless,
+        no browser cookie needed), register in the presence registry, execute one `screen_capture`
+        (stubbed image) driven from the Sentropic chat, return via `tool-results`.
+  - [x] Success criterion MET: round-trip works end-to-end (reproduced twice) — `POST /chat/messages`
+        with `localToolDefinitions:[screen_capture]` → SSE `status: awaiting_local_tool_results` with
+        `pending_local_tool_calls` → `POST /chat/messages/:id/tool-results` → `resumed:true` → `done`
+        with a non-empty assistant reply. `desktop_cowork` source rejected (used `chrome_plugin`
+        fallback; registry not needed for the round-trip). See `## Feedback Loop` BR41a-Q1/F1/F2.
+  - [x] Lot gate: result recorded; spike at `.proto-spike/cowork-proto.mjs` (untracked, to discard at
+        Lot 2 start); env down, no stale services.
 
 - [ ] **Lot 2 — `@sentropic/cowork-bridge` + chrome-ext refactor**
   - [ ] Create `packages/cowork-bridge/**`: extract `ui/src/lib/core/*`; portable auth (token math +
