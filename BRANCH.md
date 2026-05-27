@@ -66,9 +66,22 @@ hover-driven emphasis (hovering a point or a domain enlarges the points of that 
   label callouts. Fixed in `InitiativeScatterPlot.svelte`: points always render (subject to legend
   filter + hover emphasis); the toggle now suppresses only the label callouts (clean point cloud for
   hover-simple). DOCX snapshot forces labels on so the export keeps the top-N labels.
-- **BR40a-UAT2** `attention` (separate brainstorm, conductor-owned): business `domain` is free-text
-  from generation → ~45 distinct values, legend unusable. Needs a normalized business-domain taxonomy
-  at generation time. Proposal handled outside this branch.
+- **BR40a-UAT2** `fixed` (approach A — normalize at generation): business `domain` was free-text from
+  the detail prompt → ~1 unique verbose domain per case (legend unusable). Fixed by deriving a 5-8
+  normalized business-domain taxonomy in the LIST phase (ÉTAPE 1, grounded on the org profile) and
+  inheriting it in the DETAIL phase (single source of truth). See BR40a-EX2.
+- **BR40a-EX2** `attention`: BR-40a's business-domain legend (BR40a-Q2) is unusable without normalized
+  domains. Reason: the per-case free-text `domain` from `use_case_detail` produced ~20 distinct verbose
+  values per folder. Impact: list-phase prompts derive the taxonomy (`use_case_list`,
+  `use_case_list_with_orgs` via shared `buildOrgAwareListPrompt`, and the parallel `opportunity_list`
+  which shares the same `generateInitiativeList`/`processInitiativeList`/persistence path); the detail
+  phase (`use_case_detail`, `opportunity_detail`) no longer emits `domain`; `processInitiativeList`
+  resolves each item's `domainId` → label and persists `data.domain`; `processInitiativeDetail`
+  preserves it. Files beyond Allowed Paths: `api/src/config/default-agents-ai-ideas.ts`,
+  `api/src/config/default-org-aware-prompts.ts`, `api/src/config/default-agents-opportunity.ts`,
+  `api/src/services/context-initiative.ts`, `api/src/services/queue-manager.ts`, `api/tests/**`.
+  No schema/migration. Rollback: revert the prompt/schema/type/threading edits (no DB state changed;
+  existing folders are not retrofitted).
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted`;
@@ -114,6 +127,27 @@ hover-driven emphasis (hovering a point or a domain enlarges the points of that 
   - [x] Hardened `getDocxBitmapSnapshot()` so the transient view state (hide-bubbles / domain filter / hover emphasis) never leaks into the export: it temporarily forces the full chart (every point at base radius), redraws synchronously, captures, then restores the user's view.
   - [x] Server narrative `top_cases` (executive-summary.ts ROI-quadrant filter, value>=thr & complexity<=thr) is the AI-prompt/DOCX-text priority list — a separate, pre-existing concern from the chart's ratio-based top-N labels; out of BR-40a scope (chart legibility/scale only). Documented, not changed.
   - [x] Lot gate: `make typecheck-ui` (0 errors) + `make lint-ui` (clean). No API synthesis-context change needed (chart is a client bitmap).
+
+- [x] **Lot 5 — Normalized business domains at generation (approach A, BR40a-EX2)**
+  - [x] List phase derives a 5-8 normalized business-domain taxonomy grounded on the org profile
+    (ÉTAPE 1) and assigns each case a `domainId` (ÉTAPE 2): `use_case_list` + shared
+    `buildOrgAwareListPrompt` (`use_case_list_with_orgs`) + `opportunity_list` prompts/outputSchemas,
+    with explicit `{ domains[], initiatives[].domainId }` JSON examples (strict schema not enforced on
+    this path → keys pinned via example).
+  - [x] Types/schemas: `InitiativeList.domains[]` + `InitiativeListItem.domainId` added,
+    `USE_CASE_LIST_STRUCTURED_SCHEMA` + `ORG_AWARE_LIST_OUTPUT_SCHEMA` updated; `InitiativeDetail.domain`
+    + `USE_CASE_DETAIL_STRUCTURED_SCHEMA` domain + `use_case_detail`/`opportunity_detail` prompt domain
+    + fallback domain removed (zero dual path).
+  - [x] Single source of truth: `processInitiativeList` resolves `domainId` → label
+    (`buildDomainLabelMap`/`resolveDomainLabel`) and persists `data.domain` on the draft;
+    `buildGeneratedInitiativePayloadForPersistence` preserves the list-assigned `data.domain`
+    (detail cannot overwrite). No retrofit of existing folders, no migration.
+  - [x] Tests: `api/tests/unit/context-initiative-domain-normalization.test.ts` (3) — (a) list exposes
+    5-8 domains + valid domainId refs, (b) draft `data.domain` = resolved label, (c) detail preserves it;
+    regression updates to `queue-manager-contract.test.ts` + `context-initiative-detail-contract.test.ts`.
+  - [x] Lot gate: `make typecheck-api` (0 errors) + `make lint-api` (0 errors); scoped tests green
+    (domain-normalization 3/3, queue-manager-contract 3/3, detail-contract 2/2,
+    initiatives-workflow-runtime 4/4, gate-evaluation 18/18, prompts 1/1).
 
 - [ ] **Lot N-2 — UAT** (web app: cap to 50, top-10 labels, hide-bubbles, domain filter, hover emphasis;
       non-reg: existing folder chart, DOCX export). Awaiting user UAT on root `ENV=dev`.
