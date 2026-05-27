@@ -11,9 +11,9 @@ import {
 import type { ChatCoreTransport } from '@sentropic/chat-ui/client/transport';
 import { createRendererRegistry } from '@sentropic/chat-ui/renderers/registry';
 import type { LocalToolsAdapter } from '@sentropic/chat-ui/hosts/types';
-import type { ContextProvider } from '$lib/core/context-provider';
+import type { ContextProvider } from '@sentropic/cowork-bridge/core';
 import { API_BASE_URL } from '$lib/config';
-import { getApiBaseUrl } from '$lib/core/api-client';
+import { getApiBaseUrl } from '@sentropic/cowork-bridge/core';
 import { streamHub } from '$lib/stores/streamHub';
 import { loadJobs, queueStore } from '$lib/stores/queue';
 import { apiFetch, apiPost } from '$lib/utils/api';
