@@ -20,6 +20,11 @@ data:
   SCW_TEM_PROJECT_ID: "09ac728a-e3b9-4a5b-9749-664b0f147c70"
   SCW_TEM_FROM_EMAIL: "no-reply@sent-tech.ca"
   SCW_TEM_FROM_NAME: "Sentropic"
+  # WebAuthn/passkey: RP ID must equal the public host and origin the full https URL,
+  # otherwise the browser rejects auth ("The RP ID \"localhost\" is invalid for this domain").
+  WEBAUTHN_RP_ID: "sentropic.sent-tech.ca"
+  WEBAUTHN_RP_NAME: "Sentropic"
+  WEBAUTHN_ORIGIN: "https://sentropic.sent-tech.ca"
 ---
 apiVersion: v1
 kind: Service
