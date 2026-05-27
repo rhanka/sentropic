@@ -25,7 +25,9 @@ web app. See `spec/SPEC_COWORK.md`.
   - `packages/cowork-bridge/**` (new package)
   - `packages/cowork-desktop/**` (new binary package; final name confirmed at Lot 0)
   - `ui/chrome-ext/**` (refactor to consume the bridge — non-regression)
-  - `ui/src/lib/core/**` (re-point imports to the bridge)
+  - `ui/src/**` (move `lib/core` into the package, re-point ALL importers to the bridge, delete the
+    old `lib/core` — real extraction, no dual paths/shims)
+  - `ui/package.json` (add the `@sentropic/cowork-bridge` workspace dependency)
   - `api/src/routes/auth/**`, `api/src/services/**` (device-code flow + registry)
   - `api/src/routes/api/chrome-extension.ts` (registry source extension) or new device route
   - `spec/SPEC_COWORK.md`
