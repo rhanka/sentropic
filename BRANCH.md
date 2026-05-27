@@ -233,6 +233,18 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - Impact: permits a narrow `api/Dockerfile` edit to copy `packages/auth-hono/package.json` before workspace install and run `npm --workspace @sentropic/auth-hono run build` after source copy.
   - Rollback: revert the `api/Dockerfile` auth-hono copy/build lines and remove API imports of `@sentropic/auth-hono`.
   - Recommendation: keep the exception narrow; do not use it for Docker image refactors or unrelated dependency changes.
+- `BR39b-EX3`
+  - Branch: BR-39b `feat/auth-hono-kit`
+  - Owner: implementation worker
+  - Severity: attention
+  - Status: applied
+  - Repro steps: rewiring `api/src/routes/auth/session.ts` onto `createAuthSessionRouteHandlers` requires a full `AuthHonoSessionService` plus an `AuthHonoCookiePort`; inlining them keeps the route file large and pushes the commit past the 150-line limit, and the same adapters are needed by the upcoming auth-middleware and WebAuthn login/register rewirings.
+  - Expected: a single reusable Sentropic auth-hono session/cookie adapter module rather than per-route duplication.
+  - Actual: branch boundaries list new `api/src/services/auth/**` adapter modules as a Conditional Path.
+  - Reason: extraction is cleaner and reusable, and keeps route files and commits within size limits.
+  - Impact: adds `api/src/services/auth/session-adapter.ts` exporting `authHonoCookiePort` and `authHonoSessionService`; no behavior change versus the inline version validated against the auth endpoint suites.
+  - Rollback: inline the adapter back into `api/src/routes/auth/session.ts` and delete the module.
+  - Recommendation: reuse this module for the auth middleware and WebAuthn login/register slices instead of re-implementing cookie/session adapters.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -312,6 +324,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - `createAuthMagicLinkRouteHandlers` now allows host-specific success response formatting for magic-link request responses while preserving the default reusable `delivery/expiresAt/success` package response.
     - Sentropic `api/src/routes/auth/magic-link.ts` now consumes `createAuthMagicLinkRouteHandlers` for `POST /magic-link/request`; per `BR39b-DEC2` the interim legacy `{ success, message }` formatter was removed so the route returns the package structured default `{ delivery: 'magic_link', expiresAt, success }` (test assertions updated). `POST /magic-link/verify` remains app-owned because it still owns workspace/session/cookie/device-activation policy.
     - Sentropic `api/src/routes/auth/email.ts` now consumes `createAuthEmailRouteHandlers` for `POST /email/verify-request` and `POST /email/verify-code` through an app-owned `AuthHonoEmailVerificationService` adapter wrapping `generateEmailVerificationCode`/`verifyEmailCode`; per `BR39b-DEC2` the route adopts the package structured contract (no legacy formatter), maps the rate-limit throw to a structured 429, and keeps FR error messages. `generateEmailVerificationCode` now also returns `expiresAt` for the structured success body.
+    - Sentropic `api/src/routes/auth/session.ts` `POST /session/refresh` and `DELETE /session` now consume `createAuthSessionRouteHandlers` through the shared `api/src/services/auth/session-adapter.ts` module (`BR39b-EX3`), which exports `authHonoSessionService` (`refreshSession`/`validateSessionToken`/`revokeSession` mapped to `session-manager`; `createSession`/`listUserSessions`/`revokeAllSessions` throw app-owned, matching the magic-link precedent) and `authHonoCookiePort` (session + refresh cookies, `Secure` only in production). `GET /session`, `POST /session/extension-token`, `DELETE /session/all`, and `GET /session/list` stay app-owned (workspace/extension/role policy). `session.test.ts` refresh-error assertion updated to the structured `{ error: { code, message } }` shape per `BR39b-DEC2`.
     - Spark 5.3 xhigh subagents were launched in isolated worktrees for registration, authentication, and route-adapter inventory. They produced useful read context, but no implementation diff was integrated because Agents A/B exited without usable patches and Agent C produced only inline inventory notes.
     - Spark 5.3 xhigh read-only handler-matrix helper was launched from the main branch worktree; it produced useful route/status/cookie inventory but no repository diff.
     - Spark 5.3 xhigh implementation helper for credential handlers produced an adapted package diff and tests; the session helper produced no usable diff and was skipped.
