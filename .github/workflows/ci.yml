@@ -973,7 +973,7 @@ jobs:
 
   # Deploy Kubernetes tenant after api+ui images are published with the main alias.
   # Triggered on main. Requires GH secret KUBECONFIG_B64
-  # (base64 of ~/.kube/poc.yaml). See deploy/scw/README.md and BRANCH.md Lot 2.5.
+  # (base64 of ~/.kube/poc.yaml). See deploy/k8s/README.md and BRANCH.md Lot 2.5.
   deploy-k8s:
     runs-on: ubuntu-latest
     needs: [publish-api-image, publish-ui-image]
@@ -996,6 +996,6 @@ jobs:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig.yaml
         run: |
           set -eu
-          make scw-deploy KUBECONFIG="${KUBECONFIG}" ENV=ci-k8s
+          make k8s-deploy KUBECONFIG="${KUBECONFIG}" ENV=ci-k8s
           kubectl -n sentropic rollout status  deployment/api --timeout=300s
           kubectl -n sentropic rollout status  deployment/ui  --timeout=300s
