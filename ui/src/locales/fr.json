@@ -896,10 +896,10 @@
       "loading": "Chargement de la matrice…",
       "placingLabels": "Placement des labels en cours…",
       "clickHint": "Cliquez sur un point pour voir le détail.",
-      "hideBubbles": "Masquer les bulles",
-      "showBubbles": "Afficher les bulles",
+      "hideLabels": "Masquer les étiquettes",
+      "showLabels": "Afficher les étiquettes",
       "legend": {
-        "title": "Domaines métier",
+        "title": "Domaine",
         "none": "Sans domaine"
       },
       "axis": {

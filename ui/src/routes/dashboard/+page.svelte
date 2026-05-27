@@ -46,7 +46,7 @@
     reduceDashboardDocxState,
     type DashboardDocxEvent,
   } from '$lib/utils/dashboard-docx-state';
-  import { FileText, TrendingUp, Settings, X, Lock } from '@lucide/svelte';
+  import { FileText, TrendingUp, Settings, X, Lock, Tag } from '@lucide/svelte';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
 
@@ -968,6 +968,8 @@
   let showROIQuadrant = false;
   let medianValue = 0;
   let medianComplexity = 0;
+  // BR-40a: top-N label callouts toggle (icon-only control next to chart settings).
+  let hideLabels = false;
   
   // Configuration du quadrant ROI
   const CONFIG_KEY = 'dashboard-roi-config';
@@ -1328,7 +1330,8 @@
             </div>
             <div class="rounded-lg bg-white p-6 shadow-sm border border-slate-200 relative report-scatter-plot-container my-6">
               <div class="absolute top-4 right-4 z-10">
-                <div class="rounded-lg bg-white border border-slate-200 shadow-sm">
+                <div class="flex items-center rounded-lg bg-white border border-slate-200 shadow-sm">
+                  <button type="button" on:click={() => hideLabels = !hideLabels} class="flex items-center justify-center p-2 hover:bg-slate-50 transition-colors rounded" title={hideLabels ? $_('usecase.scatterPlot.showLabels') : $_('usecase.scatterPlot.hideLabels')} aria-label={hideLabels ? $_('usecase.scatterPlot.showLabels') : $_('usecase.scatterPlot.hideLabels')} aria-pressed={hideLabels}><Tag class="w-5 h-5 {hideLabels ? 'text-slate-300' : 'text-slate-500'}" /></button>
                   <button on:click={() => configOpen = !configOpen} class="flex items-center justify-center p-2 hover:bg-slate-50 transition-colors rounded" title={$_('dashboard.roiConfig.buttonTitle')}><Settings class="w-5 h-5 text-slate-500" />{#if valueThreshold !== null || complexityThreshold !== null}<span class="ml-1 w-2 h-2 bg-primary rounded-full"></span>{/if}</button>
                   {#if configOpen}
                     <div class="absolute z-50 mt-2 right-0 w-96 rounded-lg bg-white border border-slate-200 shadow-lg p-4 space-y-4">
@@ -1360,7 +1363,7 @@
                 </div>
               </div>
               <div class="flex justify-center">
-                <InitiativeScatterPlot bind:this={scatterPlotRef} useCases={completedUseCases} {matrix} bind:roiStats bind:showROIQuadrant bind:medianValue bind:medianComplexity {valueThreshold} {complexityThreshold} />
+                <InitiativeScatterPlot bind:this={scatterPlotRef} useCases={completedUseCases} {matrix} bind:roiStats bind:showROIQuadrant bind:medianValue bind:medianComplexity bind:hideBubbles={hideLabels} {valueThreshold} {complexityThreshold} />
               </div>
             </div>
           </div>
