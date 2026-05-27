@@ -1707,52 +1707,52 @@ down-maildev: ## Stop MailDev service
 # https://github.com/rhanka/poc-k8s/tree/main/tenants/sentropic — run
 # `make -C ~/src/poc-k8s apply-sentropic` first.
 # All targets honour KUBECONFIG (default ~/.kube/poc.yaml).
-SCW_NAMESPACE ?= sentropic
-SCW_ENV_FILE  ?= .env
+K8S_NAMESPACE ?= sentropic
+K8S_ENV_FILE  ?= .env
 KUBECONFIG    ?= $(HOME)/.kube/poc.yaml
 SCW_REGISTRY_SECRET ?= sentropic-registry
-SCW_LOG_SELECTOR ?= app.kubernetes.io/name=sentropic,app.kubernetes.io/component=api
-SCW_LOG_TAIL ?= 200
-SCW_LOG_PREVIOUS ?= 0
-SCW_API_SMOKE_PORT ?= 18787
-SCW_UI_SMOKE_PORT ?= 15173
-SCW_EMAIL_SMOKE_TO ?=
-SCW_EMAIL_SMOKE_TIMEOUT ?= 160
-SCW_NETCHECK_HOST ?= smtp.tem.scaleway.com
-SCW_NETCHECK_PORT ?= 465
-SCW_NETCHECK_TIMEOUT ?= 8000
+K8S_LOG_SELECTOR ?= app.kubernetes.io/name=sentropic,app.kubernetes.io/component=api
+K8S_LOG_TAIL ?= 200
+K8S_LOG_PREVIOUS ?= 0
+K8S_API_SMOKE_PORT ?= 18787
+K8S_UI_SMOKE_PORT ?= 15173
+K8S_EMAIL_SMOKE_TO ?=
+K8S_EMAIL_SMOKE_TIMEOUT ?= 160
+K8S_NETCHECK_HOST ?= smtp.tem.scaleway.com
+K8S_NETCHECK_PORT ?= 465
+K8S_NETCHECK_TIMEOUT ?= 8000
 GH_REPO ?= rhanka/sentropic
 GH_K8S_SECRET_NAME ?= KUBECONFIG_B64
 GH_DEPLOY_RUN_ID ?=
 
-.PHONY: scw-deploy scw-undeploy scw-bundle-secret scw-registry-secret scw-status scw-debug scw-logs scw-smoke scw-api-netcheck scw-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
+.PHONY: k8s-deploy k8s-undeploy k8s-bundle-secret k8s-registry-secret k8s-status k8s-debug k8s-logs k8s-smoke k8s-api-netcheck k8s-email-smoke gh-k8s-secret gh-k8s-secret-check gh-k8s-rerun-deploy gh-k8s-watch
 
-scw-deploy: ## Apply tenant manifests on the poc cluster (SCW_INGRESS=1 includes 60-ingress.yaml)
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/10-rbac.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/15-networkpolicy.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/20-postgres.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/30-api.yaml
-	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/40-ui.yaml
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
-	@if [ "$(SCW_INGRESS)" = "1" ]; then \
-	  KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/scw/60-ingress.yaml; \
+k8s-deploy: ## Apply tenant manifests on the poc cluster (K8S_INGRESS=1 includes 60-ingress.yaml)
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/10-rbac.yaml
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/15-networkpolicy.yaml
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/20-postgres.yaml
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/30-api.yaml
+	KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/40-ui.yaml
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
+	@if [ "$(K8S_INGRESS)" = "1" ]; then \
+	  KUBECONFIG=$(KUBECONFIG) kubectl apply -f deploy/k8s/60-ingress.yaml; \
 	fi
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) rollout restart deployment/api deployment/ui
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) rollout status deploy/api --timeout=300s
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) rollout status deploy/ui  --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout restart deployment/api deployment/ui
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/api --timeout=300s
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) rollout status deploy/ui  --timeout=300s
 
-scw-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s stay)
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/60-ingress.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/40-ui.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/30-api.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/20-postgres.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/15-networkpolicy.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete -f deploy/scw/10-rbac.yaml --ignore-not-found
-	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) delete secret sentropic-postgres sentropic-api --ignore-not-found
+k8s-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s stay)
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/60-ingress.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete deployment/maildev service/maildev networkpolicy/allow-api-to-maildev --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/40-ui.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/30-api.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/20-postgres.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/15-networkpolicy.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete -f deploy/k8s/10-rbac.yaml --ignore-not-found
+	-KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) delete secret sentropic-postgres sentropic-api --ignore-not-found
 
-scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (.env)
-	@test -f $(SCW_ENV_FILE) || { echo "missing $(SCW_ENV_FILE)" >&2; exit 1; }
+k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (.env)
+	@test -f $(K8S_ENV_FILE) || { echo "missing $(K8S_ENV_FILE)" >&2; exit 1; }
 	@set -eu ; \
 	get() { awk -v key="$$1" '\
 		BEGIN { value = "" } \
@@ -1768,7 +1768,7 @@ scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (
 				gsub(/"$$/, "", value); \
 			} \
 		} \
-		END { printf "%s", value }' "$(SCW_ENV_FILE)" ; } ; \
+		END { printf "%s", value }' "$(K8S_ENV_FILE)" ; } ; \
 	get_poc_export() { awk -v key="$$1" '\
 		BEGIN { value = "" } \
 		{ \
@@ -1783,9 +1783,9 @@ scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (
 				gsub(/"$$/, "", value); \
 			} \
 		} \
-		END { printf "%s", value }' "$(SCW_ENV_FILE)" ; } ; \
+		END { printf "%s", value }' "$(K8S_ENV_FILE)" ; } ; \
 	POSTGRES_PASSWORD=$$(get POSTGRES_PASSWORD) ; [ -n "$$POSTGRES_PASSWORD" ] || POSTGRES_PASSWORD=app ; \
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) create secret generic sentropic-postgres \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-postgres \
 	  --from-literal=POSTGRES_PASSWORD="$$POSTGRES_PASSWORD" \
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
 	OPENAI=$$(get OPENAI_API_KEY) ; ANTHROPIC=$$(get ANTHROPIC_API_KEY) ; GEMINI=$$(get GEMINI_API_KEY) ; \
@@ -1800,7 +1800,7 @@ scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (
 	[ -n "$$MAIL_HOST" ] || MAIL_HOST="" ; [ -n "$$MAIL_PORT" ] || MAIL_PORT=587 ; \
 	[ -n "$$MAIL_SECURE" ] || MAIL_SECURE=false ; [ -n "$$MAIL_FROM" ] || MAIL_FROM=no-reply@sent-tech.ca ; \
 	if [ -n "$$MAIL_HOST" ] && { [ -z "$$MAIL_USERNAME" ] || [ -z "$$MAIL_PASSWORD" ]; }; then \
-	  echo "ERROR: MAIL_USERNAME and MAIL_PASSWORD are required when MAIL_HOST is set in $(SCW_ENV_FILE)" >&2; exit 1; \
+	  echo "ERROR: MAIL_USERNAME and MAIL_PASSWORD are required when MAIL_HOST is set in $(K8S_ENV_FILE)" >&2; exit 1; \
 	fi ; \
 	MAIL_AUTH_STATUS=disabled ; \
 	if [ -n "$$MAIL_USERNAME" ] && [ -n "$$MAIL_PASSWORD" ]; then MAIL_AUTH_STATUS=configured ; fi ; \
@@ -1808,7 +1808,7 @@ scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (
 	GD_CS=$$(get GOOGLE_DRIVE_CLIENT_SECRET) ; GD_PK=$$(get GOOGLE_DRIVE_PICKER_API_KEY) ; \
 	GD_CID=$$(get GOOGLE_DRIVE_CLIENT_ID) ; GD_PID=$$(get GOOGLE_DRIVE_PICKER_APP_ID) ; \
 	DATABASE_URL="postgres://app:$${POSTGRES_PASSWORD}@postgres:5432/app" ; \
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) create secret generic sentropic-api \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-api \
 	  --from-literal=DATABASE_URL="$$DATABASE_URL" \
 	  --from-literal=OPENAI_API_KEY="$$OPENAI" \
 	  --from-literal=ANTHROPIC_API_KEY="$$ANTHROPIC" \
@@ -1827,54 +1827,54 @@ scw-bundle-secret: ## Create/update the namespace Secrets from $(SCW_ENV_FILE) (
 	  --from-literal=GOOGLE_DRIVE_PICKER_API_KEY="$$GD_PK" \
 	  --from-literal=GOOGLE_DRIVE_PICKER_APP_ID="$$GD_PID" \
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f -
-	@echo "==> Secrets sentropic-postgres + sentropic-api ready in $(SCW_NAMESPACE)."
+	@echo "==> Secrets sentropic-postgres + sentropic-api ready in $(K8S_NAMESPACE)."
 
-scw-registry-secret: ## Create/update the SCW Registry pull secret from $(SCW_ENV_FILE)
-	@test -f $(SCW_ENV_FILE) || { echo "missing $(SCW_ENV_FILE)" >&2; exit 1; }
+k8s-registry-secret: ## Create/update the SCW Registry pull secret from $(K8S_ENV_FILE)
+	@test -f $(K8S_ENV_FILE) || { echo "missing $(K8S_ENV_FILE)" >&2; exit 1; }
 	@set -eu ; \
-	set -a ; source "$(SCW_ENV_FILE)" ; set +a ; \
-	registry="$${REGISTRY:?missing REGISTRY in $(SCW_ENV_FILE)}" ; \
-	username="$${DOCKER_USERNAME:?missing DOCKER_USERNAME in $(SCW_ENV_FILE)}" ; \
+	set -a ; source "$(K8S_ENV_FILE)" ; set +a ; \
+	registry="$${REGISTRY:?missing REGISTRY in $(K8S_ENV_FILE)}" ; \
+	username="$${DOCKER_USERNAME:?missing DOCKER_USERNAME in $(K8S_ENV_FILE)}" ; \
 	password="$${SCW_REGISTRY_TOKEN:-$${DOCKER_PASSWORD:-}}" ; \
-	[ -n "$$password" ] || { echo "missing SCW_REGISTRY_TOKEN or DOCKER_PASSWORD in $(SCW_ENV_FILE)" >&2; exit 1; } ; \
+	[ -n "$$password" ] || { echo "missing SCW_REGISTRY_TOKEN or DOCKER_PASSWORD in $(K8S_ENV_FILE)" >&2; exit 1; } ; \
 	registry="$${registry#https://}" ; registry="$${registry#http://}" ; registry="$${registry%%/*}" ; \
-	echo "Creating/updating image pull secret $(SCW_REGISTRY_SECRET) in $(SCW_NAMESPACE) for $$registry." ; \
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) create secret docker-registry $(SCW_REGISTRY_SECRET) \
+	echo "Creating/updating image pull secret $(SCW_REGISTRY_SECRET) in $(K8S_NAMESPACE) for $$registry." ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret docker-registry $(SCW_REGISTRY_SECRET) \
 	  --docker-server="$$registry" \
 	  --docker-username="$$username" \
 	  --docker-password="$$password" \
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
-	echo "==> Image pull secret $(SCW_REGISTRY_SECRET) ready in $(SCW_NAMESPACE)."
+	echo "==> Image pull secret $(SCW_REGISTRY_SECRET) ready in $(K8S_NAMESPACE)."
 
-scw-status: ## Snapshot of the sentropic tenant on the poc cluster
-	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get deploy,statefulset,svc,ingress 2>/dev/null || true
-	@echo "" ; KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get pods -o wide 2>/dev/null || true
+k8s-status: ## Snapshot of the sentropic tenant on the poc cluster
+	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get deploy,statefulset,svc,ingress 2>/dev/null || true
+	@echo "" ; KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get pods -o wide 2>/dev/null || true
 
-scw-debug: ## Show pod descriptions and recent events for the sentropic tenant
+k8s-debug: ## Show pod descriptions and recent events for the sentropic tenant
 	@echo "==> Pods"
-	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get pods -o wide
+	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get pods -o wide
 	@echo ""
 	@echo "==> Network policies"
-	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get networkpolicy -o wide
+	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get networkpolicy -o wide
 	@echo ""
 	@echo "==> Pod descriptions"
-	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) describe pods -l app.kubernetes.io/name=sentropic
+	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) describe pods -l app.kubernetes.io/name=sentropic
 	@echo ""
 	@echo "==> Recent events"
-	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get events --sort-by=.lastTimestamp
+	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get events --sort-by=.lastTimestamp
 
-scw-logs: ## Show recent logs for a tenant pod selector (SCW_LOG_SELECTOR=..., SCW_LOG_TAIL=...)
-	@if [ "$(SCW_LOG_PREVIOUS)" = "1" ]; then \
-	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) logs -l "$(SCW_LOG_SELECTOR)" --tail="$(SCW_LOG_TAIL)" --all-containers=true --prefix=true --previous; \
+k8s-logs: ## Show recent logs for a tenant pod selector (K8S_LOG_SELECTOR=..., K8S_LOG_TAIL=...)
+	@if [ "$(K8S_LOG_PREVIOUS)" = "1" ]; then \
+	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) logs -l "$(K8S_LOG_SELECTOR)" --tail="$(K8S_LOG_TAIL)" --all-containers=true --prefix=true --previous; \
 	else \
-	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) logs -l "$(SCW_LOG_SELECTOR)" --tail="$(SCW_LOG_TAIL)" --all-containers=true --prefix=true; \
+	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) logs -l "$(K8S_LOG_SELECTOR)" --tail="$(K8S_LOG_TAIL)" --all-containers=true --prefix=true; \
 	fi
 
-scw-smoke: ## Smoke-test api and ui through temporary port-forwards
+k8s-smoke: ## Smoke-test api and ui through temporary port-forwards
 	@set -eu ; \
 	smoke() { \
 	  name="$$1"; local_port="$$2"; remote_port="$$3"; path="$$4"; log="$$(mktemp)"; \
-	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) port-forward "svc/$$name" "$$local_port:$$remote_port" >"$$log" 2>&1 & pid="$$!"; \
+	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) port-forward "svc/$$name" "$$local_port:$$remote_port" >"$$log" 2>&1 & pid="$$!"; \
 	  ok=0; \
 	  for _ in $$(seq 1 30); do \
 	    if curl -fsS "http://127.0.0.1:$$local_port$$path" >/dev/null 2>&1; then ok=1; break; fi; \
@@ -1885,18 +1885,18 @@ scw-smoke: ## Smoke-test api and ui through temporary port-forwards
 	  if [ "$$ok" != "1" ]; then echo "ERROR: $$name smoke failed"; cat "$$log"; rm -f "$$log"; exit 1; fi; \
 	  rm -f "$$log"; echo "OK: $$name $$path"; \
 	}; \
-	smoke api "$(SCW_API_SMOKE_PORT)" 8787 /api/v1/health; \
-	smoke ui "$(SCW_UI_SMOKE_PORT)" 5173 /
+	smoke api "$(K8S_API_SMOKE_PORT)" 8787 /api/v1/health; \
+	smoke ui "$(K8S_UI_SMOKE_PORT)" 5173 /
 
-scw-api-netcheck: ## Check TCP connectivity from the k8s api pod (SCW_NETCHECK_HOST=..., SCW_NETCHECK_PORT=...)
-	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) exec deploy/api -- env \
-	  SCW_NETCHECK_HOST="$(SCW_NETCHECK_HOST)" \
-	  SCW_NETCHECK_PORT="$(SCW_NETCHECK_PORT)" \
-	  SCW_NETCHECK_TIMEOUT="$(SCW_NETCHECK_TIMEOUT)" \
-	  node -e 'const net = require("node:net"); const host = process.env.SCW_NETCHECK_HOST; const port = Number(process.env.SCW_NETCHECK_PORT); const timeout = Number(process.env.SCW_NETCHECK_TIMEOUT); const started = Date.now(); const socket = net.createConnection({ host, port }); let finished = false; function finish(code, msg) { if (finished) return; finished = true; console.log(msg + " elapsed_ms=" + (Date.now() - started)); socket.destroy(); process.exit(code); } socket.setTimeout(timeout); socket.once("connect", () => finish(0, "OK: " + host + ":" + port + " reachable")); socket.once("timeout", () => finish(2, "ERROR: " + host + ":" + port + " timed out after " + timeout + "ms")); socket.once("error", (err) => finish(1, "ERROR: " + host + ":" + port + " " + (err.code || err.message)));'
+k8s-api-netcheck: ## Check TCP connectivity from the k8s api pod (K8S_NETCHECK_HOST=..., K8S_NETCHECK_PORT=...)
+	@KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) exec deploy/api -- env \
+	  K8S_NETCHECK_HOST="$(K8S_NETCHECK_HOST)" \
+	  K8S_NETCHECK_PORT="$(K8S_NETCHECK_PORT)" \
+	  K8S_NETCHECK_TIMEOUT="$(K8S_NETCHECK_TIMEOUT)" \
+	  node -e 'const net = require("node:net"); const host = process.env.K8S_NETCHECK_HOST; const port = Number(process.env.K8S_NETCHECK_PORT); const timeout = Number(process.env.K8S_NETCHECK_TIMEOUT); const started = Date.now(); const socket = net.createConnection({ host, port }); let finished = false; function finish(code, msg) { if (finished) return; finished = true; console.log(msg + " elapsed_ms=" + (Date.now() - started)); socket.destroy(); process.exit(code); } socket.setTimeout(timeout); socket.once("connect", () => finish(0, "OK: " + host + ":" + port + " reachable")); socket.once("timeout", () => finish(2, "ERROR: " + host + ":" + port + " timed out after " + timeout + "ms")); socket.once("error", (err) => finish(1, "ERROR: " + host + ":" + port + " " + (err.code || err.message)));'
 
-scw-email-smoke: ## Send a live email verification smoke via the k8s api (SCW_EMAIL_SMOKE_TO=...)
-	@test -n "$(SCW_EMAIL_SMOKE_TO)" || { echo "ERROR: set SCW_EMAIL_SMOKE_TO=<recipient email>" >&2; exit 1; }
+k8s-email-smoke: ## Send a live email verification smoke via the k8s api (K8S_EMAIL_SMOKE_TO=...)
+	@test -n "$(K8S_EMAIL_SMOKE_TO)" || { echo "ERROR: set K8S_EMAIL_SMOKE_TO=<recipient email>" >&2; exit 1; }
 	@set -eu ; \
 	log="$$(mktemp)" ; body="$$(mktemp)" ; pid="" ; \
 	cleanup() { \
@@ -1904,21 +1904,21 @@ scw-email-smoke: ## Send a live email verification smoke via the k8s api (SCW_EM
 	  rm -f "$$log" "$$body"; \
 	} ; \
 	trap cleanup EXIT ; \
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) port-forward svc/api "$(SCW_API_SMOKE_PORT):8787" >"$$log" 2>&1 & pid="$$!" ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) port-forward svc/api "$(K8S_API_SMOKE_PORT):8787" >"$$log" 2>&1 & pid="$$!" ; \
 	ok=0 ; \
 	for _ in $$(seq 1 30); do \
-	  if curl -fsS "http://127.0.0.1:$(SCW_API_SMOKE_PORT)/api/v1/health" >/dev/null 2>&1; then ok=1; break; fi; \
+	  if curl -fsS "http://127.0.0.1:$(K8S_API_SMOKE_PORT)/api/v1/health" >/dev/null 2>&1; then ok=1; break; fi; \
 	  sleep 1; \
 	done ; \
 	if [ "$$ok" != "1" ]; then echo "ERROR: api port-forward failed"; cat "$$log"; exit 1; fi ; \
 	status="$$(curl -sS -o "$$body" -w "%{http_code}" \
-	  --max-time "$(SCW_EMAIL_SMOKE_TIMEOUT)" \
+	  --max-time "$(K8S_EMAIL_SMOKE_TIMEOUT)" \
 	  -H "Content-Type: application/json" \
-	  --data '{"email":"$(SCW_EMAIL_SMOKE_TO)"}' \
-	  "http://127.0.0.1:$(SCW_API_SMOKE_PORT)/api/v1/auth/email/verify-request")" ; \
+	  --data '{"email":"$(K8S_EMAIL_SMOKE_TO)"}' \
+	  "http://127.0.0.1:$(K8S_API_SMOKE_PORT)/api/v1/auth/email/verify-request")" ; \
 	if [ "$$status" != "200" ]; then echo "ERROR: email smoke returned HTTP $$status"; cat "$$body"; exit 1; fi ; \
 	if ! grep -q '"success"[[:space:]]*:[[:space:]]*true' "$$body"; then echo "ERROR: email smoke response did not confirm success"; cat "$$body"; exit 1; fi ; \
-	echo "OK: verification email request accepted for $(SCW_EMAIL_SMOKE_TO)"
+	echo "OK: verification email request accepted for $(K8S_EMAIL_SMOKE_TO)"
 
 gh-k8s-secret: ## Create/update GH Actions secret KUBECONFIG_B64 from $(KUBECONFIG)
 	@test -s "$(KUBECONFIG)" || (echo "ERROR: missing or empty KUBECONFIG=$(KUBECONFIG)" >&2; exit 1)
@@ -1942,29 +1942,29 @@ gh-k8s-watch: ## Watch a GitHub Actions deploy run until completion (GH_DEPLOY_R
 
 # --- Sealed Secrets (BR37b-EX1, append-only; operator-side, live cluster) -----
 # Bitnami Sealed Secrets controller install + sealing helpers. The controller
-# manifest is deploy/scw/01-sealed-secrets-controller.yaml (pinned v0.37.0,
+# manifest is deploy/k8s/01-sealed-secrets-controller.yaml (pinned v0.37.0,
 # namespace `sealed-secrets`). kubeseal is run from the pinned official image
 # docker.io/bitnami/sealed-secrets-kubeseal:0.37.0 (kubeseal is its entrypoint),
 # so no host install of kubeseal is required. kubeseal fetches the controller's
 # public cert from the live kube API using the mounted $(KUBECONFIG); no secret
-# value is ever hardcoded in a target — `scw-seal-secret` only transforms
+# value is ever hardcoded in a target — `k8s-seal-secret` only transforms
 # SEAL_SRC (plaintext Secret yaml) into SEAL_OUT (SealedSecret yaml).
 SEALED_SECRETS_NAMESPACE  ?= sealed-secrets
 SEALED_SECRETS_CONTROLLER ?= sealed-secrets-controller
-SEALED_SECRETS_MANIFEST   ?= deploy/scw/01-sealed-secrets-controller.yaml
+SEALED_SECRETS_MANIFEST   ?= deploy/k8s/01-sealed-secrets-controller.yaml
 KUBESEAL_IMAGE            ?= docker.io/bitnami/sealed-secrets-kubeseal:0.37.0
 SEAL_SRC ?=
 SEAL_OUT ?=
 SEAL_KEY_OUT ?=
 
-.PHONY: scw-sealed-secrets-install scw-seal-secret scw-sealed-secrets-backup-key
+.PHONY: k8s-sealed-secrets-install k8s-seal-secret k8s-sealed-secrets-backup-key
 
-scw-sealed-secrets-install: ## Install the Sealed Secrets controller (v0.37.0) and wait for rollout
+k8s-sealed-secrets-install: ## Install the Sealed Secrets controller (v0.37.0) and wait for rollout
 	KUBECONFIG=$(KUBECONFIG) kubectl apply -f $(SEALED_SECRETS_MANIFEST)
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SEALED_SECRETS_NAMESPACE) rollout status deploy/$(SEALED_SECRETS_CONTROLLER) --timeout=120s
 	@echo "==> Sealed Secrets controller $(SEALED_SECRETS_CONTROLLER) ready in namespace $(SEALED_SECRETS_NAMESPACE)."
 
-scw-seal-secret: ## Seal a plaintext Secret yaml into a SealedSecret yaml (SEAL_SRC=... SEAL_OUT=...)
+k8s-seal-secret: ## Seal a plaintext Secret yaml into a SealedSecret yaml (SEAL_SRC=... SEAL_OUT=...)
 	@test -n "$(SEAL_SRC)" || { echo "ERROR: set SEAL_SRC=<path to plaintext Secret yaml>" >&2; exit 1; }
 	@test -n "$(SEAL_OUT)" || { echo "ERROR: set SEAL_OUT=<path to write the SealedSecret yaml>" >&2; exit 1; }
 	@test -f "$(SEAL_SRC)" || { echo "ERROR: SEAL_SRC=$(SEAL_SRC) not found" >&2; exit 1; }
@@ -1980,7 +1980,7 @@ scw-seal-secret: ## Seal a plaintext Secret yaml into a SealedSecret yaml (SEAL_
 	  < "$(SEAL_SRC)" > "$(SEAL_OUT)"
 	@echo "==> Sealed $(SEAL_SRC) -> $(SEAL_OUT) (controller $(SEALED_SECRETS_CONTROLLER)/$(SEALED_SECRETS_NAMESPACE))."
 
-scw-sealed-secrets-backup-key: ## Export the controller sealing key for DR (SEAL_KEY_OUT=...). HIGHLY SENSITIVE.
+k8s-sealed-secrets-backup-key: ## Export the controller sealing key for DR (SEAL_KEY_OUT=...). HIGHLY SENSITIVE.
 	@test -n "$(SEAL_KEY_OUT)" || { echo "ERROR: set SEAL_KEY_OUT=<path to write the sealing key backup>" >&2; exit 1; }
 	@test -s "$(KUBECONFIG)" || { echo "ERROR: missing or empty KUBECONFIG=$(KUBECONFIG)" >&2; exit 1; }
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SEALED_SECRETS_NAMESPACE) get secret \
@@ -1989,35 +1989,35 @@ scw-sealed-secrets-backup-key: ## Export the controller sealing key for DR (SEAL
 	@echo "WARNING: store it out-of-band (offline/secret manager), NEVER commit it, and restrict file permissions."
 
 # --- Postgres backup (BR37c-EX1, append-only; operator-side, live cluster) ----
-# Manual trigger / restore helpers around deploy/scw/70-pgbackup-cronjob.yaml.
+# Manual trigger / restore helpers around deploy/k8s/70-pgbackup-cronjob.yaml.
 # Backup S3 creds + bucket come from the sentropic-pgbackup SealedSecret; the
 # CronJob dumps with pg_dump (initContainer) and uploads via aws-cli. These
 # targets never hardcode a secret value.
-.PHONY: scw-pgbackup-now scw-pgbackup-restore
+.PHONY: k8s-pgbackup-now k8s-pgbackup-restore
 
-scw-pgbackup-now: ## Trigger an immediate Postgres backup Job from the CronJob and wait for completion
+k8s-pgbackup-now: ## Trigger an immediate Postgres backup Job from the CronJob and wait for completion
 	@set -eu ; job="pgbackup-manual-$$(date -u +%Y%m%d%H%M%S)" ; \
 	echo "==> Creating Job $$job from cronjob/pgbackup" ; \
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) create job "$$job" --from=cronjob/pgbackup ; \
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) wait --for=condition=complete --timeout=180s "job/$$job" || { \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create job "$$job" --from=cronjob/pgbackup ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) wait --for=condition=complete --timeout=180s "job/$$job" || { \
 	  echo "Job did not complete; recent logs:" >&2 ; \
-	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) logs "job/$$job" --all-containers --tail=40 >&2 || true ; exit 1 ; } ; \
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) logs "job/$$job" -c upload --tail=10 ; \
+	  KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) logs "job/$$job" --all-containers --tail=40 >&2 || true ; exit 1 ; } ; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) logs "job/$$job" -c upload --tail=10 ; \
 	echo "==> Backup Job $$job complete."
 
-scw-pgbackup-restore: ## Restore a dump from S3 into a scratch DB for verification (PG_BACKUP_KEY=pg/<ts>.sql.gz)
-	@test -n "$(PG_BACKUP_KEY)" || { echo "ERROR: set PG_BACKUP_KEY=pg/<timestamp>.sql.gz (see: make scw-pgbackup-list)" >&2; exit 1; }
+k8s-pgbackup-restore: ## Restore a dump from S3 into a scratch DB for verification (PG_BACKUP_KEY=pg/<ts>.sql.gz)
+	@test -n "$(PG_BACKUP_KEY)" || { echo "ERROR: set PG_BACKUP_KEY=pg/<timestamp>.sql.gz (see: make k8s-pgbackup-list)" >&2; exit 1; }
 	@set -eu ; pod="pgbackup-restore-$$(date -u +%Y%m%d%H%M%S)" ; \
 	echo "==> Restoring $(PG_BACKUP_KEY) into scratch DB restore_check on postgres (non-destructive to app DB)" ; \
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) run "$$pod" --rm -i --restart=Never --image=postgres:17-alpine \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) run "$$pod" --rm -i --restart=Never --image=postgres:17-alpine \
 	  --labels="app.kubernetes.io/name=sentropic,app.kubernetes.io/component=pgbackup" \
 	  --env PGHOST=postgres --env PGPORT=5432 --env PGUSER=app --env PGDATABASE=app \
-	  --env PGPASSWORD="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d)" \
-	  --env AWS_ACCESS_KEY_ID="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_ACCESS_KEY}' | base64 -d)" \
-	  --env AWS_SECRET_ACCESS_KEY="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_SECRET_KEY}' | base64 -d)" \
-	  --env S3_BUCKET="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_BUCKET}' | base64 -d)" \
-	  --env S3_ENDPOINT="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_ENDPOINT}' | base64 -d)" \
-	  --env S3_REGION="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(SCW_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_REGION}' | base64 -d)" \
+	  --env PGPASSWORD="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d)" \
+	  --env AWS_ACCESS_KEY_ID="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_ACCESS_KEY}' | base64 -d)" \
+	  --env AWS_SECRET_ACCESS_KEY="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_SECRET_KEY}' | base64 -d)" \
+	  --env S3_BUCKET="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_BUCKET}' | base64 -d)" \
+	  --env S3_ENDPOINT="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_ENDPOINT}' | base64 -d)" \
+	  --env S3_REGION="$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-pgbackup -o jsonpath='{.data.S3_REGION}' | base64 -d)" \
 	  --command -- sh -c 'set -e; apk add --no-cache aws-cli >/dev/null 2>&1 || true; \
 	    aws s3 cp "s3://$$S3_BUCKET/$(PG_BACKUP_KEY)" /tmp/d.sql.gz --endpoint-url "$$S3_ENDPOINT" --region "$$S3_REGION"; \
 	    psql -c "DROP DATABASE IF EXISTS restore_check;" -c "CREATE DATABASE restore_check;"; \
@@ -2030,11 +2030,11 @@ scw-pgbackup-restore: ## Restore a dump from S3 into a scratch DB for verificati
 # browser-trusted certificate. No -k: a self-signed/staging cert makes curl fail,
 # which is what we want (the gate is a trusted letsencrypt-prod cert). Also checks
 # /api/v1/health, proxied by the UI nginx to api:8787.
-SCW_HOST ?= sentropic.sent-tech.ca
-.PHONY: scw-dns-smoke
+K8S_HOST ?= sentropic.sent-tech.ca
+.PHONY: k8s-dns-smoke
 
-scw-dns-smoke: ## Smoke-test the public host: HTTPS 200 + trusted cert on / and /api/v1/health (SCW_HOST=...)
-	@set -eu ; host="$(SCW_HOST)" ; \
+k8s-dns-smoke: ## Smoke-test the public host: HTTPS 200 + trusted cert on / and /api/v1/health (K8S_HOST=...)
+	@set -eu ; host="$(K8S_HOST)" ; \
 	echo "==> Resolving $$host" ; getent hosts "$$host" || { echo "ERROR: $$host does not resolve" >&2; exit 1; } ; \
 	for path in / /api/v1/health ; do \
 	  status="$$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "https://$$host$$path")" ; \
