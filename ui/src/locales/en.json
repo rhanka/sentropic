@@ -896,10 +896,10 @@
       "loading": "Loading matrix…",
       "placingLabels": "Placing labels…",
       "clickHint": "Click a point to view details.",
-      "hideBubbles": "Hide bubbles",
-      "showBubbles": "Show bubbles",
+      "hideLabels": "Hide labels",
+      "showLabels": "Show labels",
       "legend": {
-        "title": "Business domains",
+        "title": "Domain",
         "none": "No domain"
       },
       "axis": {

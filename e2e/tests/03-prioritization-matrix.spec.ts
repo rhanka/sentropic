@@ -105,7 +105,7 @@ test.describe('Prioritization matrix at scale (BR-40a)', () => {
     }
   });
 
-  test('toggles the hide-bubbles control label', async ({ browser }) => {
+  test('toggles the hide-labels icon control', async ({ browser }) => {
     const context = await browser.newContext({
       storageState: await withWorkspaceAndFolderStorageState(USER_A_STATE, workspaceId, folderId),
     });
@@ -114,12 +114,15 @@ test.describe('Prioritization matrix at scale (BR-40a)', () => {
       await page.goto('/dashboard');
       await page.waitForLoadState('domcontentloaded');
 
-      const hideBtn = page.getByRole('button', { name: /Hide bubbles|Masquer les bulles/i });
+      // Icon-only button: accessible name comes from its aria-label (state-aware).
+      const hideBtn = page.getByRole('button', { name: /Hide labels|Masquer les étiquettes/i });
       await expect(hideBtn).toBeVisible({ timeout: 5_000 });
+      await expect(hideBtn).toHaveAttribute('aria-pressed', 'false');
       await hideBtn.click();
 
-      const showBtn = page.getByRole('button', { name: /Show bubbles|Afficher les bulles/i });
+      const showBtn = page.getByRole('button', { name: /Show labels|Afficher les étiquettes/i });
       await expect(showBtn).toBeVisible();
+      await expect(showBtn).toHaveAttribute('aria-pressed', 'true');
     } finally {
       await context.close();
     }

@@ -66,6 +66,35 @@ hover-driven emphasis (hovering a point or a domain enlarges the points of that 
   label callouts. Fixed in `InitiativeScatterPlot.svelte`: points always render (subject to legend
   filter + hover emphasis); the toggle now suppresses only the label callouts (clean point cloud for
   hover-simple). DOCX snapshot forces labels on so the export keeps the top-N labels.
+- **BR40a-UAT3** `fixed`: folder executive-summary sections (Introduction, Analyse, Recommandations,
+  Synthèse exécutive) rendered as EMPTY titled cards while generation was still running (once
+  `executiveSummary` existed partially but a section's text was still empty and folder `status` was
+  `generating`). Fixed in `TemplateRenderer.svelte`: for `executiveSummary.*` text fields, when the
+  folder is generating and the section content is empty, render an `animate-pulse` skeleton
+  (`print-hidden`, `aria-busy`) instead of an empty editable card. Use-case rendering untouched
+  (scoped to the `executiveSummary.` key prefix). See BR40a-EX3.
+- **BR40a-UAT4** `fixed`: UI wording "Domaines métier"/"Business domains" (chart legend title) changed
+  to just "Domaine"/"Domain". Locale-only edit (`legend.title` in `fr.json`/`en.json`); no other
+  user-facing "domaine d'affaire" strings existed (remaining matches are English code comments).
+- **BR40a-UAT5** `fixed`: the labels toggle was a text+icon secondary button below the chart. Fixed to
+  an ICON-ONLY button per `rules/design-system.md` (lucide `Tag`/`TagOff`, `w-5 h-5 text-slate-500`)
+  mirroring the chart settings button EXACTLY (`flex items-center justify-center p-2 hover:bg-slate-50
+  transition-colors rounded`), placed immediately to its LEFT in the chart header control cluster.
+  Visible text moved to a state-aware hover tooltip (`title` + `aria-label`): "Hide labels"/"Show labels"
+  (FR "Masquer les étiquettes"/"Afficher les étiquettes"); repurposed the `hideBubbles`/`showBubbles`
+  locale keys → `hideLabels`/`showLabels`. State exposed via `bind:hideBubbles` from
+  `InitiativeScatterPlot.svelte` into the dashboard; behavior unchanged (toggles top-N label callouts;
+  points + hover + DOCX export unchanged). E2E `03-prioritization-matrix.spec.ts` updated to the new
+  accessible name + `aria-pressed`. See BR40a-EX3.
+- **BR40a-EX3** `attention`: the three UAT fixes (BR40a-UAT3/4/5) touch files outside the declared
+  Allowed Paths. Reason: the executive-summary skeleton lives in the generic section renderer
+  (`ui/src/lib/components/TemplateRenderer.svelte`), and the icon-only labels toggle must be hosted
+  next to the chart settings button which lives in the report page
+  (`ui/src/routes/dashboard/+page.svelte`). Impact: minimal — one scoped skeleton branch in
+  TemplateRenderer gated on the `executiveSummary.` key prefix + folder `status==='generating'`; one
+  icon-only button + one `bind:hideBubbles` wiring + two lucide icon imports in the dashboard. No
+  schema/migration, no Makefile/compose change. Rollback: revert the TemplateRenderer skeleton branch
+  and the dashboard button/binding; restore the in-component toggle in `InitiativeScatterPlot.svelte`.
 - **BR40a-UAT2** `fixed` (approach A — normalize at generation): business `domain` was free-text from
   the detail prompt → ~1 unique verbose domain per case (legend unusable). Fixed by deriving a 5-8
   normalized business-domain taxonomy in the LIST phase (ÉTAPE 1, grounded on the org profile) and
