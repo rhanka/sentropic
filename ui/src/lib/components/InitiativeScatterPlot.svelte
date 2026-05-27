@@ -7,14 +7,16 @@
   import { get } from 'svelte/store';
   import { calculateUseCaseScores, selectTopPriorityIndices } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
-  import { BarChart3, MousePointerClick, Loader2, Eye, EyeOff } from '@lucide/svelte';
+  import { BarChart3, MousePointerClick, Loader2 } from '@lucide/svelte';
 
   // BR-40a: only the top-N use cases (ranked by value / (complexity + ε)) get labels.
   const TOP_LABEL_COUNT = 10;
 
-  // BR-40a: "hide bubbles" toggle. When true, point markers are hidden but the
-  // hover hit-areas + tooltip stay active (pointHitRadius preserved).
-  let hideBubbles = false;
+  // BR-40a: "hide labels" toggle. When true, the top-N text label callouts are
+  // suppressed (clean point cloud for hover-simple); data points, hover hit-areas
+  // and tooltip stay active. Bindable so the parent can host an icon-only control
+  // next to the chart settings button.
+  export let hideBubbles = false;
 
   // BR-40a: business-domain legend filter + hover emphasis state.
   // - hiddenDomains: domains toggled OFF in the legend (their points are hidden).
@@ -2396,25 +2398,8 @@
     {/if}
   </div>
   
-  <!-- BR-40a: chart controls (hide-bubbles toggle) -->
-  {#if useCases.length > 0 && matrix}
-    <div class="mt-3 flex justify-center scatter-plot-controls print-hidden">
-      <button
-        type="button"
-        class="inline-flex items-center gap-1.5 rounded border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-        aria-pressed={hideBubbles}
-        on:click={() => (hideBubbles = !hideBubbles)}
-      >
-        {#if hideBubbles}
-          <Eye class="w-4 h-4" />
-          {$_('usecase.scatterPlot.showBubbles')}
-        {:else}
-          <EyeOff class="w-4 h-4" />
-          {$_('usecase.scatterPlot.hideBubbles')}
-        {/if}
-      </button>
-    </div>
-  {/if}
+  <!-- BR-40a: the labels toggle is an icon-only control hosted by the parent,
+       immediately left of the chart settings button (see dashboard +page). -->
 
   <!-- BR-40a: business-domain legend (filterable + hover emphasis) -->
   {#if useCases.length > 0 && matrix && legendEntries.length > 0}
