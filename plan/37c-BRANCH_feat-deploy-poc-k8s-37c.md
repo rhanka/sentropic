@@ -37,6 +37,8 @@ Continuation of BR-37b (email egress + Sealed Secrets, merged PR #176). Close th
 - **BR37c-FL1** (severity: `attention`, status: `resolved` 2026-05-25): Public hostname `sentropic.sent-tech.ca` LIVE. Cloudflare token reused from `onyxia/.env` `CF_API_TOKEN` (verified `dns_records:edit`+`zone:read`, sealed in poc-k8s). User approved "Go direct en prod"; DNS A record → `51.159.11.157` created, `sentropic-tls` issued (letsencrypt-prod), `scw-dns-smoke` green (200 + trusted cert on `/` and `/api/v1/health`).
 - **BR37c-FL2** (severity: `attention`, status: `open`): Postgres backup bucket `sentropic-pgbackup` provisioned once via SCW CLI in project `$SCW_DEFAULT_PROJECT_ID`; S3 creds mutualised with `DOC_STORAGE_*_PROD` (segmentation at bucket boundary). Backup creds go into a sealed `sentropic-pgbackup` SealedSecret.
 
+- **BR37c-FL3** (severity: `blocker`, status: `fix deployed, awaiting user re-test`): live WebAuthn/passkey auth on `sentropic.sent-tech.ca` failed with `The RP ID "localhost" is invalid for this domain`. Root cause: `30-api.yaml` ConfigMap did not set `WEBAUTHN_RP_ID`/`WEBAUTHN_ORIGIN`, so the API fell back to the `webauthn-config.ts` defaults (`rpID='localhost'`, localhost origins). Fix: ConfigMap now sets `WEBAUTHN_RP_ID=sentropic.sent-tech.ca`, `WEBAUTHN_ORIGIN=https://sentropic.sent-tech.ca`, `WEBAUTHN_RP_NAME=Sentropic`; applied + api restarted (pod env verified). Needs in-browser passkey re-test by the operator.
+
 ## AI Flaky tests
 - This branch changes no AI runtime behavior. The `test-api-unit-integration (ai, initiative-generation-async,executive-summary-sync)` shard is a known flaky-accepted signature (documented in BR-37b, archived `plan/done/37b-*`); rerun on the same commit if it blocks publish/deploy.
 
