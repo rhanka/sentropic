@@ -169,6 +169,18 @@ Format JSON attendu:
         additionalProperties: false,
         properties: {
           dossier: { type: 'string' },
+          domains: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                id: { type: 'string' },
+                label: { type: 'string' },
+              },
+              required: ['id', 'label'],
+            },
+          },
           initiatives: {
             type: 'array',
             items: {
@@ -178,12 +190,13 @@ Format JSON attendu:
                 titre: { type: 'string' },
                 description: { type: 'string' },
                 ref: { type: 'string' },
+                domainId: { type: 'string' },
               },
-              required: ['titre', 'description', 'ref'],
+              required: ['titre', 'description', 'ref', 'domainId'],
             },
           },
         },
-        required: ['dossier', 'initiatives'],
+        required: ['dossier', 'domains', 'initiatives'],
       },
       promptTemplate: `Génère une liste d'opportunités business selon la demande suivante:
     - la demande utilisateur spécifique suivante: {{user_input}},
@@ -191,11 +204,21 @@ Format JSON attendu:
     - les informations de l'organisation: {{organization_info}},
     - les organisations disponibles dans le workspace: {{organizations_list}},
     - le nombre d'opportunités à générer: {{use_case_count}}
-Pour chaque opportunité, propose un titre court et explicite.
+
+ÉTAPE 1 — Taxonomie de domaines métier (OBLIGATOIRE, à produire AVANT la liste):
+- Dérive 5 à 8 domaines métier NORMALISÉS, mutuellement exclusifs, qui serviront de légende filtrable.
+- ANCRE EN PRIORITÉ ces domaines sur le profil de l'organisation {{organization_info}} (secteur, lignes de métier réelles, processus, offres, clients, enjeux) afin qu'ils reflètent LES lignes réelles de CETTE organisation et non des catégories génériques.
+- Si le profil est insuffisant pour dériver des domaines fiables, complète via le tool web_search sur l'organisation / le secteur.
+- Chaque domaine: "id" en snake_case (stable, sans accent, sans espace) et "label" lisible (court, sans markdown, sans "**").
+
+ÉTAPE 2 — Liste:
+Pour chaque opportunité, propose un titre court et explicite, et attribue un "domainId" qui DOIT être l'un des "id" définis à l'ÉTAPE 1.
+Répartis raisonnablement les opportunités entre les domaines.
 Format: JSON
 
 IMPORTANT:
 - Génère exactement {{use_case_count}} opportunités (ni plus, ni moins)
+- "domains" contient 5 à 8 entrées { "id", "label" }; chaque "domainId" d'opportunité référence un "id" existant.
 - Si {{folder_name}} est non vide, réutiliser ce nom tel quel dans le champ JSON "dossier" (ne pas inventer un autre nom)
 - Si {{folder_name}} est vide, générer un nom de dossier pertinent (ne jamais utiliser "Brouillon")
 - Fais une recherche avec le tool web_search pour trouver des informations récentes sur les tendances du marché et les opportunités business dans ce domaine. Utilise web_extract pour obtenir le contenu détaillé des URLs qui semblent pertinentes (et uniquement si tu as des URLs valides à extraire).
@@ -204,19 +227,25 @@ IMPORTANT:
 - La description doit être en markdown, avec mise en exergue en gras, et le cas échéant en liste bullet point pour être percutante
 - Pour chaque opportunité, numérote les références (1, 2, 3...) et utilise [1], [2], [3] dans la description pour référencer ces numéros
 
-Réponds UNIQUEMENT avec un JSON valide:
+Réponds UNIQUEMENT avec un JSON valide (respecte EXACTEMENT ces clés):
 {
   "dossier": "titre court du dossier",
+  "domains": [
+    { "id": "domaine_un", "label": "Domaine un" },
+    { "id": "domaine_deux", "label": "Domaine deux" }
+  ],
   "initiatives": [
     {
       "titre": "titre court 1",
       "description": "Description courte (60-100 mots) de l'opportunité business",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "domainId": "domaine_un"
     },
     {
       "titre": "titre court 2",
       "description": "Description courte (60-100 mots) de l'opportunité business",
-      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n..."
+      "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "domainId": "domaine_deux"
     },
     ...
   ]
@@ -269,7 +298,6 @@ Réponds UNIQUEMENT avec un JSON valide:
           description: { type: 'string' },
           problem: { type: 'string' },
           solution: { type: 'string' },
-          domain: { type: 'string' },
           technologies: { type: 'array', items: { type: 'string' } },
           leadtime: { type: 'string' },
           prerequisites: { type: 'string' },
@@ -328,7 +356,6 @@ Réponds UNIQUEMENT avec un JSON valide:
           'description',
           'problem',
           'solution',
-          'domain',
           'technologies',
           'leadtime',
           'prerequisites',
@@ -357,7 +384,6 @@ La réponse doit impérativement contenir tous les éléments suivants au format
   "description": "Description courte (60-100 mots) qui résume l'opportunité business.",
   "problem": "Le problème client ou marché que cette opportunité adresse (40-80 mots)",
   "solution": "La solution, le produit ou le service proposé (40-80 mots)",
-  "domain": "Le domaine d'application principal (industrie, marché ou segment)",
   "technologies": [
     "technologie ou compétence clé 1",
     "technologie ou compétence clé 2",
