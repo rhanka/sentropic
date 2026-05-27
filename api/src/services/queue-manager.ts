@@ -243,6 +243,34 @@ export function normalizeAutoGenerationSectionKeys(
   );
 }
 
+/**
+ * BR40a-EX2: build a stable lookup of normalized business-domain id -> label
+ * from the list-phase taxonomy. Used to persist `data.domain` as the resolved
+ * label (single source of truth for the prioritization-matrix legend filter).
+ */
+export function buildDomainLabelMap(
+  domains: ReadonlyArray<{ id?: unknown; label?: unknown }> | undefined,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const domain of Array.isArray(domains) ? domains : []) {
+    const id = typeof domain?.id === 'string' ? domain.id.trim() : '';
+    const label = typeof domain?.label === 'string' ? domain.label.trim() : '';
+    if (id && label) {
+      map.set(id, label);
+    }
+  }
+  return map;
+}
+
+/** BR40a-EX2: resolve an item's domainId to its taxonomy label (undefined when unknown). */
+export function resolveDomainLabel(
+  domainLabelById: Map<string, string>,
+  domainId: unknown,
+): string | undefined {
+  const id = typeof domainId === 'string' ? domainId.trim() : '';
+  return id ? domainLabelById.get(id) : undefined;
+}
+
 export function buildGeneratedInitiativePayloadForPersistence(
   existingData: Partial<InitiativeData>,
   initiativeDetail: InitiativeDetail
@@ -252,7 +280,9 @@ export function buildGeneratedInitiativePayloadForPersistence(
     description: existingData.description || initiativeDetail.description,
     problem: initiativeDetail.problem,
     solution: initiativeDetail.solution,
-    domain: initiativeDetail.domain,
+    // BR40a-EX2: business domain is the normalized label assigned in the list phase
+    // (single source of truth). The detail phase no longer emits `domain`; preserve it.
+    domain: existingData.domain,
     technologies: initiativeDetail.technologies,
     deadline: initiativeDetail.leadtime,
     contact: initiativeDetail.contact,
@@ -3106,8 +3136,12 @@ export class QueueManager {
     const allowedOrgIds = new Set(
       Array.from(new Set([...effectiveResolvedOrgIds, ...selectedOrgIdsFromState, ...effectiveOrgIdsFromState])),
     );
+    // BR40a-EX2: resolve each item's normalized domainId -> human-readable label
+    // (the list phase derives the taxonomy; it becomes the single source of truth for data.domain).
+    const domainLabelById = buildDomainLabelMap(initiativeList.domains);
     const normalizedListItems = initiativeList.initiatives.map((initiativeItem: InitiativeListItem) => {
       const title = initiativeItem.titre || String(initiativeItem);
+      const domainLabel = resolveDomainLabel(domainLabelById, initiativeItem.domainId);
       const mappedOrganizationIds = Array.from(
         new Set(
           readStringArray(initiativeItem.organizationIds).filter((organizationId) =>
@@ -3124,6 +3158,7 @@ export class QueueManager {
       return {
         title,
         description: initiativeItem.description || '',
+        domain: domainLabel || undefined,
         organizationIds: fallbackOrganizationIds,
         organizationName: normalizeOrganizationName(initiativeItem.organizationName) || undefined,
       };
@@ -3135,6 +3170,8 @@ export class QueueManager {
       const initiativeData: InitiativeData = {
         name: title, // Stocker name dans data
         description: initiativeItem.description || '', // Stocker description dans data
+        // BR40a-EX2: normalized business-domain label resolved from the list-phase taxonomy.
+        ...(initiativeItem.domain ? { domain: initiativeItem.domain } : {}),
         technologies: [],
         deadline: '',
         contact: '',
