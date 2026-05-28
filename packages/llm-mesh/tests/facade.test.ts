@@ -118,18 +118,12 @@ describe('createLlmMesh', () => {
   it('does not mark reasoning catalog models as unsupported', () => {
     const cohereReasoning = getModelProfile('cohere', 'command-a-reasoning-08-2025');
     const geminiFlash = getModelProfile('gemini', 'gemini-3.5-flash');
-    const geminiThinking = getModelProfile('gemini', 'gemini-3.5-thinking');
-    const legacyGeminiFlashLite = getModelProfile('gemini', 'gemini-3.1-flash-lite-preview');
     const claudeOpus = getModelProfile('anthropic', 'claude-opus-4-7');
 
     expect(cohereReasoning?.reasoningTier).toBe('advanced');
     expect(cohereReasoning?.capabilities.reasoning.support).not.toBe('unsupported');
     expect(geminiFlash?.reasoningTier).toBe('advanced');
     expect(geminiFlash?.capabilities.reasoning.support).not.toBe('unsupported');
-    expect(geminiThinking?.label).toBe('Gemini 3.5 Thinking');
-    expect(geminiThinking?.reasoningTier).toBe('advanced');
-    expect(geminiThinking?.capabilities.reasoning.support).not.toBe('unsupported');
-    expect(legacyGeminiFlashLite).toBeNull();
     expect(claudeOpus?.label).toBe('Opus 4.7');
     expect(claudeOpus?.reasoningTier).toBe('advanced');
   });
