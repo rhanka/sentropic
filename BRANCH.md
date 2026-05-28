@@ -23,6 +23,7 @@ Remove the non-existent `gemini-3.5-thinking` model (merged by error via commits
   - `packages/chat-core/tests/**`
   - `api/src/services/chat-service.ts`
   - `api/src/services/model-selection-legacy.ts`
+  - `api/src/services/llm-runtime/index.ts` (BRGRT-B1: Gemini tool-schema sanitization)
   - `api/tests/**`
   - `ui/tests/**`
   - `spec/SPEC_EVOL_LLM_MESH.md`
@@ -41,6 +42,7 @@ Remove the non-existent `gemini-3.5-thinking` model (merged by error via commits
 - BRGRT-N1 `acknowledge`: live Google API check (user GEMINI key) — `gemini-3.5-flash` 200, `gemini-3.1-flash-lite` 200, `gemini-3.1-flash-lite-preview` 404 (retired), `gemini-3.5-thinking` 404. User confirmed slot-2 target = `gemini-3.1-flash-lite` (GA successor of the retired preview id).
 - BRGRT-N2 `acknowledge`: scope widened to `spec/SPEC_CHATBOT.md` (model list) in addition to `spec/SPEC_EVOL_LLM_MESH.md`; both live under non-forbidden `spec/*.md`.
 - Legacy cutover migrations added for retired/erroneous ids (`gemini-3.1-flash-lite-preview`, `gemini-3.5-thinking`) → `gemini-3.1-flash-lite` so saved user/workspace defaults do not 404.
+- BRGRT-B1 `acknowledge`: 2nd Gemini bug found during UAT (present on `origin/main` too, independent of model id): `toGeminiToolDeclarations` sent tool `parameters` raw, so Gemini rejected `additionalProperties` (`Invalid JSON payload ... Unknown name "additionalProperties" at tools[0].function_declarations[].parameters`). Fix: apply the existing `sanitizeGeminiResponseSchema` to tool parameters (same sanitizer already used for `responseSchema`). User approved bundling on this branch. Scope widened to `api/src/services/llm-runtime/index.ts`.
 
 ## AI Flaky tests
 - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
@@ -82,6 +84,12 @@ Remove the non-existent `gemini-3.5-thinking` model (merged by error via commits
   - [x] `gemini-3.1-flash-lite` → live `generateContent` HTTP 200 (works) — slot-2 model.
   - [x] `gemini-3.5-thinking` → live HTTP 404 NOT_FOUND (confirms why it was broken) and fully absent from `src/**` (only legacy `fromModelId`).
   - [x] `gemini-3.1-flash-lite-preview` → live HTTP 404 "no longer available" (justifies GA id choice).
+
+- [x] **Lot 3 — Fix Gemini tool-schema sanitization (BRGRT-B1)**
+  - [x] `api/src/services/llm-runtime/index.ts`: `toGeminiToolDeclarations` now sanitizes tool `parameters` via `sanitizeGeminiResponseSchema` (strips `additionalProperties` and other Gemini-unsupported JSON Schema keywords).
+  - [x] Test added: `api/tests/unit/gemini-tool-handoff.test.ts` → "strips Gemini-unsupported JSON Schema keywords from tool parameter declarations".
+  - [x] Gate: `typecheck-api` + scoped unit tests (gemini-tool-handoff, gemini-response-schema, gemini-provider-sse, llm-runtime-stream, chat-service-tools).
+  - [ ] UAT: live Gemini chat with tools (3.5 Flash + 3.1 Flash Lite) returns without `additionalProperties` error.
 
 - [ ] **Lot N — Final validation**
   - [x] Typecheck + package/api/ui tests green (see Lot 1 gate).
