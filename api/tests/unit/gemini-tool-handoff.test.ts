@@ -102,6 +102,49 @@ describe('buildGeminiRequestBody', () => {
     ]);
   });
 
+  it('strips Gemini-unsupported JSON Schema keywords from tool parameter declarations', () => {
+    const body = buildGeminiRequestBody({
+      model: 'gemini-3.1-flash-lite',
+      messages: [{ role: 'user', content: 'Use the tool' }],
+      toolChoice: 'auto',
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'update_initiative_field',
+            description: 'Update an initiative field',
+            parameters: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                field: { type: 'string' },
+                value: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: { nested: { type: 'string' } },
+                },
+              },
+              required: ['field', 'value'],
+            },
+          },
+        },
+      ],
+    }) as {
+      tools: Array<{
+        functionDeclarations: Array<{ parameters: Record<string, unknown> }>;
+      }>;
+    };
+
+    const params = body.tools[0].functionDeclarations[0].parameters;
+    // Unsupported keyword stripped at every level (Gemini rejects it).
+    expect(params).not.toHaveProperty('additionalProperties');
+    const valueSchema = (params.properties as Record<string, Record<string, unknown>>).value;
+    expect(valueSchema).not.toHaveProperty('additionalProperties');
+    // Supported structure preserved.
+    expect((valueSchema.properties as Record<string, unknown>).nested).toEqual({ type: 'string' });
+    expect(params.required).toEqual(['field', 'value']);
+  });
+
   it('keeps textual fallback when function metadata is missing', () => {
     const body = buildGeminiRequestBody({
       messages: [{ role: 'user', content: 'Read the repo file' }],
