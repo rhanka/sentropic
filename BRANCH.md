@@ -60,7 +60,17 @@ web app. See `spec/SPEC_COWORK.md`.
   cowork provider/model to one that returns a response id.
 - **BR41a-Q2** `attention`: packaging — Node SEA vs pkg vs folder-zip fallback; decided at Lot 5.
 - **BR41-Q1** `attention`: code-signing strategy (unsigned → SmartScreen/AV); likely deferred.
-- **BR41a-EX1..EX4** declared here when the corresponding conditional path is first touched.
+- **BR41a-EX1** `acknowledge` (Makefile): add `build-cowork-bridge`, `pack-cowork-bridge`,
+  `publish-cowork-bridge` (OIDC), `publish-cowork-bridge-token` (bootstrap), mirroring the chat-ui
+  targets line-for-line. Reason: publish `@sentropic/cowork-bridge` from within this branch (the
+  in-situ refacto validates it; publishing an unconsumed package to main would be unvalidated).
+  Impact: additive targets only, no change to existing ones. Rollback: remove the four targets.
+- **BR41a-EX3** `acknowledge` (`.github/workflows/ci.yml`): add `cowork-bridge` to the
+  `bootstrap_publish_target` enum + a bootstrap step, a steady-state OIDC `publish-cowork-bridge`
+  job, and the package to the `changes`/path filter. Reason: steady-state automated publishing on
+  main after the first manual publish. Impact: additive CI jobs. Rollback: remove the added jobs/step.
+- **BR41a-EX2** (`docker-compose*`) and **BR41a-EX4** (`api/drizzle/*.sql`) to be declared at Lot 5 /
+  Lot 3 respectively if needed.
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network nondeterminism as `flaky accepted`
