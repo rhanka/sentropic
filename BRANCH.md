@@ -89,11 +89,13 @@ Remove the non-existent `gemini-3.5-thinking` model (merged by error via commits
   - [x] `api/src/services/llm-runtime/index.ts`: `toGeminiToolDeclarations` now sanitizes tool `parameters` via `sanitizeGeminiResponseSchema` (strips `additionalProperties` and other Gemini-unsupported JSON Schema keywords).
   - [x] Test added: `api/tests/unit/gemini-tool-handoff.test.ts` → "strips Gemini-unsupported JSON Schema keywords from tool parameter declarations".
   - [x] Gate: `typecheck-api` + scoped unit tests (gemini-tool-handoff, gemini-response-schema, gemini-provider-sse, llm-runtime-stream, chat-service-tools).
-  - [ ] UAT: live Gemini chat with tools (3.5 Flash + 3.1 Flash Lite) returns without `additionalProperties` error.
+  - [x] UAT: live Gemini chat with tools (3.5 Flash + 3.1 Flash Lite) returns without `additionalProperties` error. User UAT sign-off 2026-05-27.
 
-- [ ] **Lot N — Final validation**
+- [x] **Lot N — Final validation**
   - [x] Typecheck + package/api/ui tests green (see Lot 1 gate).
   - [x] Package version bumps done (`@sentropic/llm-mesh` 0.1.2, `@sentropic/chat-core` 0.1.2).
-  - [ ] PR using `BRANCH.md` as body.
-  - [ ] CI green.
-  - [ ] On UAT + CI OK: remove `BRANCH.md`, push, merge.
+  - [x] PR #189 using `BRANCH.md` as body.
+  - [x] CI green (run on `856f7c2c`: 30 pass / 0 fail).
+  - [x] AI flaky `chat-tools` (timeout, green on rerun same commit): user sign-off 2026-05-27.
+  - [x] UAT sign-off (both Gemini models + tools) 2026-05-27.
+  - [ ] Remove `BRANCH.md`, push, merge (executing now).
