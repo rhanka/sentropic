@@ -1568,7 +1568,7 @@ test-%-security-sca: ## Run SCA scan (Trivy) on service (usage: make test-api-se
 	@mkdir -p .security
 	@echo "  📋 Step 1: Executing SCA scan..."
 	@if [ "$*" = "api" ] || [ "$*" = "ui" ]; then \
-		$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -e TARGET=development $* sh -lc "npm audit --json || true" > .security/sca-$*.json; \
+		docker run --rm -v "${PWD}:/workspace" -w /workspace node:24-alpine3.23 sh -lc "npm audit --json || true" > .security/sca-$*.json; \
 	else \
 		docker run --rm -v "${PWD}/$*:/src" aquasec/trivy fs --security-checks vuln --severity HIGH,CRITICAL --format json --quiet /src > .security/sca-$*.json || true; \
 	fi
