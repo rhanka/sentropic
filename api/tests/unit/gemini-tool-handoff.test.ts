@@ -5,7 +5,7 @@ import { buildGeminiRequestBody } from '../../src/services/llm-runtime';
 describe('buildGeminiRequestBody', () => {
   it('does not request Gemini thoughts when reasoning is not requested', () => {
     const body = buildGeminiRequestBody({
-      model: 'gemini-3.5-thinking',
+      model: 'gemini-3.1-flash-lite',
       messages: [{ role: 'user', content: 'Say OK' }],
     }) as Record<string, unknown>;
 
@@ -14,7 +14,7 @@ describe('buildGeminiRequestBody', () => {
 
   it('requests Gemini thoughts when reasoning is requested', () => {
     const body = buildGeminiRequestBody({
-      model: 'gemini-3.5-thinking',
+      model: 'gemini-3.1-flash-lite',
       messages: [{ role: 'user', content: 'Analyze deeply' }],
       reasoningEffort: 'high',
     }) as {
@@ -34,7 +34,7 @@ describe('buildGeminiRequestBody', () => {
 
   it('preserves assistant history content without provider-specific rewriting', () => {
     const body = buildGeminiRequestBody({
-      model: 'gemini-3.5-thinking',
+      model: 'gemini-3.1-flash-lite',
       messages: [
         {
           role: 'assistant',
@@ -100,6 +100,49 @@ describe('buildGeminiRequestBody', () => {
         ],
       },
     ]);
+  });
+
+  it('strips Gemini-unsupported JSON Schema keywords from tool parameter declarations', () => {
+    const body = buildGeminiRequestBody({
+      model: 'gemini-3.1-flash-lite',
+      messages: [{ role: 'user', content: 'Use the tool' }],
+      toolChoice: 'auto',
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'update_initiative_field',
+            description: 'Update an initiative field',
+            parameters: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                field: { type: 'string' },
+                value: {
+                  type: 'object',
+                  additionalProperties: false,
+                  properties: { nested: { type: 'string' } },
+                },
+              },
+              required: ['field', 'value'],
+            },
+          },
+        },
+      ],
+    }) as {
+      tools: Array<{
+        functionDeclarations: Array<{ parameters: Record<string, unknown> }>;
+      }>;
+    };
+
+    const params = body.tools[0].functionDeclarations[0].parameters;
+    // Unsupported keyword stripped at every level (Gemini rejects it).
+    expect(params).not.toHaveProperty('additionalProperties');
+    const valueSchema = (params.properties as Record<string, Record<string, unknown>>).value;
+    expect(valueSchema).not.toHaveProperty('additionalProperties');
+    // Supported structure preserved.
+    expect((valueSchema.properties as Record<string, unknown>).nested).toEqual({ type: 'string' });
+    expect(params.required).toEqual(['field', 'value']);
   });
 
   it('keeps textual fallback when function metadata is missing', () => {

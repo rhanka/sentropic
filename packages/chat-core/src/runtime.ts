@@ -972,7 +972,7 @@ export interface ReasoningEffortEvaluation {
   readonly evaluatedBy: string;
   /**
    * Evaluator-side model name (e.g. `'gpt-4.1-nano'` or
-   * `'gemini-3.5-thinking'`). Populated whenever
+   * `'gemini-3.1-flash-lite'`). Populated whenever
    * `shouldEvaluate=true` regardless of success/failure — exposed so the
    * caller can emit the same console.error trace shape that the legacy
    * inline code produced (`{assistantMessageId, sessionId, model,
