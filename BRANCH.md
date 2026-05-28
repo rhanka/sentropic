@@ -60,12 +60,12 @@ Stop the `security-sast-sca` CI job from rebuilding the API/UI image from scratc
     - [ ] `make build-api-image` → succeeds, both npm audit gates pass.
     - [ ] `make build-ui-image` → succeeds.
 
-- [ ] **Lot 2 — SCA scan: audit lockfile, no app rebuild (`FIX-SCA-EX1`)**
-  - [ ] `Makefile` `test-%-security-sca` (api/ui branch): replace `docker compose run --rm api npm audit` with `docker run --rm -v "${PWD}:/src" -w /src node:24-alpine3.23 npm audit --json` against the lockfile.
-  - [ ] Verify output schema unchanged (parser + compliance still pass).
-  - [ ] Lot gate:
-    - [ ] `make test-api-security-sca` → passes, no app image build, `findings_count` unchanged.
-    - [ ] `make test-ui-security-sca` → passes.
+- [x] **Lot 2 — SCA scan: audit lockfile, no app rebuild (`FIX-SCA-EX1`)**
+  - [x] `Makefile` `test-%-security-sca` (api/ui branch): replace `docker compose run --rm api npm audit` (rebuilds app image) with `docker run --rm -v "${PWD}:/workspace" -w /workspace node:24-alpine3.23 npm audit --json` against the root lockfile.
+  - [x] Verify output schema unchanged (parser + compliance still pass): `npm audit --json` from lockfile (no node_modules) yields full report — 10 pkgs, `high: 0, critical: 0`, covering api+ui dev+prod deps (drizzle-kit, esbuild, @sveltejs/kit, svelte-i18n).
+  - [x] Lot gate:
+    - [x] `make test-api-security-sca ENV=test-fix-ci-sca` → passes, no app image build.
+    - [x] `make test-ui-security-sca ENV=test-fix-ci-sca` → passes.
 
 - [ ] **Lot N — Final validation**
   - [ ] `make build-api-image` + `make build-ui-image` (pinned npm).
