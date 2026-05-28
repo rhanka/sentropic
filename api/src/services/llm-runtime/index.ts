@@ -211,7 +211,15 @@ const toGeminiToolDeclarations = (
     .map((tool) => ({
       name: tool.function.name,
       description: tool.function?.description,
-      parameters: tool.function?.parameters ?? { type: 'object', properties: {} },
+      // Gemini rejects JSON Schema keywords it does not support (e.g.
+      // `additionalProperties`) inside function_declarations[].parameters,
+      // exactly like it does for responseSchema. Reuse the same sanitizer.
+      parameters: sanitizeGeminiResponseSchema(
+        (tool.function?.parameters as Record<string, unknown> | undefined) ?? {
+          type: 'object',
+          properties: {},
+        }
+      ),
     }))
     .filter((tool) => typeof tool.name === 'string' && tool.name.length > 0);
 };

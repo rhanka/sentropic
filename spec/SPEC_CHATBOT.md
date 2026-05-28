@@ -164,7 +164,7 @@ BR-14c adds the permanent runtime boundary for model access:
   - `/folder/new` can override model per run without mutating user defaults.
 - **5 active providers** with centralized model catalog (labels served from backend):
   - **OpenAI**: GPT-5.4, GPT-4.1, GPT-4.1 Nano.
-  - **Gemini**: Gemini 3.5 Flash, Gemini 3.5 Thinking.
+  - **Gemini**: Gemini 3.5 Flash, Gemini 3.1 Flash Lite.
   - **Anthropic Claude**: Sonnet 4.6, Opus 4.7 — extended thinking (thinking budget_tokens), 1M token context.
   - **Mistral**: Devstral 2, Magistral Medium — Magistral supports reasoning via thinking chunks.
   - **Cohere**: Command A, Command A Reasoning — thinking blocks in `content-delta` stream (field `thinking` vs `text`), `tool-plan-delta` for reasoning with tools.
@@ -176,7 +176,7 @@ BR-14c adds the permanent runtime boundary for model access:
   - provider-specific tool call ID formats are normalized at the adapter layer.
 - Per-model context budgets:
   - Claude (Sonnet/Opus) and GPT-5.4: 1M tokens,
-  - Gemini 3.5 Flash and Gemini 3.5 Thinking: 1M tokens,
+  - Gemini 3.5 Flash and Gemini 3.1 Flash Lite: 1M tokens,
   - Devstral 2 and Cohere Command A/A R.: 256k tokens,
   - Magistral Medium: 128k tokens,
   - GPT-4.1 / GPT-4.1 Nano: default budget.
