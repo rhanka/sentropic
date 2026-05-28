@@ -53,12 +53,12 @@ Stop the `security-sast-sca` CI job from rebuilding the API/UI image from scratc
   - [x] Confirm scope and guardrails; declare `FIX-SCA-EX1` for `Makefile`.
   - [x] Ports: not required (security scans use no published ports; no dev/e2e stack run).
 
-- [ ] **Lot 1 — Pin npm in Dockerfiles**
-  - [ ] `api/Dockerfile`: `npm install -g npm@latest` → `npm install -g npm@11.16.0`.
-  - [ ] `ui/Dockerfile`: same pin.
-  - [ ] Lot gate:
-    - [ ] `make build-api-image` → succeeds, both npm audit gates pass.
-    - [ ] `make build-ui-image` → succeeds.
+- [x] **Lot 1 — Pin npm in Dockerfiles**
+  - [x] `api/Dockerfile`: `npm install -g npm@latest` → `npm install -g npm@11.16.0`.
+  - [x] `ui/Dockerfile`: N/A — no global npm install (uses bundled npm from `node:24-alpine`).
+  - [x] Lot gate:
+    - [x] `make build-api-image ENV=test-fix-ci-sca` → exit 0, `npm@11.16.0` installed, both npm audit gates pass.
+    - [x] `make build-ui-image ENV=test-fix-ci-sca` → exit 0.
 
 - [x] **Lot 2 — SCA scan: audit lockfile, no app rebuild (`FIX-SCA-EX1`)**
   - [x] `Makefile` `test-%-security-sca` (api/ui branch): replace `docker compose run --rm api npm audit` (rebuilds app image) with `docker run --rm -v "${PWD}:/workspace" -w /workspace node:24-alpine3.23 npm audit --json` against the root lockfile.
