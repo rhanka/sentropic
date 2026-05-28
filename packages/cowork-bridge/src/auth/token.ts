@@ -53,7 +53,7 @@ export const isExpiringSoon = (
  */
 export const normalizeUser = (
     payload:
-        | (Partial<AuthUser> & { id?: string | null; role?: string | null })
+        | (Omit<Partial<AuthUser>, 'role'> & { id?: string | null; role?: string | null })
         | null
         | undefined,
 ): AuthUser | null => {
