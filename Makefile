@@ -681,7 +681,7 @@ publish-chat-ui-token: build-chat-ui ## Publish @sentropic/chat-ui using a token
 
 .PHONY: build-cowork-bridge
 build-cowork-bridge: ## Build @sentropic/cowork-bridge dist package
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-bridge $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-bridge $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-bridge $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 .PHONY: pack-cowork-bridge
