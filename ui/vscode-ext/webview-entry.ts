@@ -1,10 +1,10 @@
 import '../src/app.css';
 
 import ChatWidget from '$lib/components/ChatWidget.svelte';
-import { initApiClient } from '$lib/core/api-client';
-import { createExtensionContextProvider } from '$lib/core/context-provider';
-import { createExtensionNavigation, initNavigation } from '$lib/core/navigation-adapter';
-import type { ChatWidgetHandoffState } from '$lib/core/chatwidget-handoff';
+import { initApiClient } from '@sentropic/cowork-bridge/core';
+import { createExtensionContextProvider } from '@sentropic/cowork-bridge/core';
+import { createExtensionNavigation, initNavigation } from '@sentropic/cowork-bridge/core';
+import type { ChatWidgetHandoffState } from '@sentropic/cowork-bridge/core';
 import { initializeSession } from '$lib/stores/session';
 import { init as initI18n, register } from 'svelte-i18n';
 import { mount as mountSvelte } from 'svelte';
