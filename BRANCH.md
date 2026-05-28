@@ -100,17 +100,21 @@ web app. See `spec/SPEC_COWORK.md`.
   - [x] Lot gate: result recorded; spike at `.proto-spike/cowork-proto.mjs` (untracked, to discard at
         Lot 2 start); env down, no stale services.
 
-- [ ] **Lot 2 — `@sentropic/cowork-bridge` + chrome-ext refactor**
-  - [ ] Create `packages/cowork-bridge/**`: extract `ui/src/lib/core/*`; portable auth (token math +
+- [x] **Lot 2 — `@sentropic/cowork-bridge` + chrome-ext refactor**
+  - [x] Create `packages/cowork-bridge/**`: extracted `ui/src/lib/core/*`; portable auth (token math +
         `extension-token`/`refresh` contracts behind `StorageAdapter` + injected `fetch`); local-tool
-        protocol types + portable permission schema; depend on `@sentropic/chat-ui`.
-  - [ ] Re-point `ui/src/lib/core` consumers and refactor `ui/chrome-ext` to consume the bridge;
-        Chrome implements `StorageAdapter` with `chrome.storage`.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-ui` + `make lint-ui`
-    - [ ] **UI tests**: bridge unit tests (`packages/cowork-bridge/tests/*.spec.ts`); update moved-module tests.
-    - [ ] **Chrome-ext non-regression**: `make build-ext-chrome` + ext test suite green.
-    - [ ] Bump `packages/cowork-bridge/package.json` (new package: bootstrap publish documented).
+        protocol types + portable permission schema. (chat-ui SSE reuse deferred to Lot 4 — bridge has no chat-ui dep yet.)
+  - [x] Re-pointed ALL importers (`ui/src/**`, `ui/chrome-ext/**`, `ui/vscode-ext/webview-entry.ts`,
+        `ui/tests/stores/session.test.ts`) to `@sentropic/cowork-bridge/core`; DELETED old `ui/src/lib/core`
+        (real extraction, no dual path). Chrome implements `StorageAdapter` with `chrome.storage`.
+  - [x] Lot gate (all PASS, ports 9205/5405/1305, ENV=feat-cowork-desktop-tools):
+    - [x] `make typecheck-ui` ✅ + `make lint-ui` ✅
+    - [x] **Bridge**: `cowork-bridge` typecheck ✅ + vitest tests ✅ (`tests/{token,session-auth,permissions}.spec.ts`)
+    - [x] **UI tests**: `make test-ui` ✅ (383 tests)
+    - [x] **Non-regression**: `make build-ext-chrome` ✅ + `make build-ext-vscode` ✅
+    - [x] `packages/cowork-bridge/package.json` at `0.1.0`. First publish needs one-shot bootstrap
+          (`workflow_dispatch bootstrap_publish_target=cowork-bridge`, requires `github.ref==main`) +
+          OIDC trusted publisher on npmjs.com — plumbing tracked as BR41a-EX1 (Makefile) + BR41a-EX3 (ci.yml).
 
 - [ ] **Lot 3 — Backend device-code enrollment + device registry**
   - [ ] `POST /auth/device/code` + `POST /auth/device/poll` (short-lived single-use codes, throttled
