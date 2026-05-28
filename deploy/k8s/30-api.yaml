@@ -27,6 +27,10 @@ data:
   WEBAUTHN_RP_ID: "sent-tech.ca"
   WEBAUTHN_RP_NAME: "Sentropic"
   WEBAUTHN_ORIGIN: "https://sentropic.sent-tech.ca"
+  # Public base URL for user-facing callbacks. Builds magic-link login emails
+  # (auth/magic-link.ts, else defaults to http://localhost:5173) and the Google
+  # Drive OAuth redirect_uri base. Must be the public host.
+  AUTH_CALLBACK_BASE_URL: "https://sentropic.sent-tech.ca"
 ---
 apiVersion: v1
 kind: Service
