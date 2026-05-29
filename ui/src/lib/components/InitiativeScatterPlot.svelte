@@ -2207,7 +2207,20 @@
         devicePixelRatio: resolutionFactor,
         maintainAspectRatio: false
       };
-      
+      // Re-apply live label-plugin options BEFORE the redraw: chartOptions does not
+      // carry the live hide-labels/threshold/scale state, so without this the redraw
+      // would use stale options (caused the labels toggle to blink then reappear).
+      if ((chartInstance.options as any).plugins) {
+        (chartInstance.options as any).plugins.useCaseLabels = {
+          valueThreshold: effectiveValueThreshold,
+          complexityThreshold: effectiveComplexityThreshold,
+          scale: scale,
+          labelStandardArea: LABEL_STANDARD_AREA_SCALED,
+          labelBorderRadius: LABEL_BORDER_RADIUS,
+          hideBubbles: hideBubbles
+        };
+      }
+
       chartInstance.data = chartData;
       chartInstance.update('none'); // 'none' pour éviter les animations
     } else {
@@ -2357,22 +2370,16 @@
 
   // Mettre à jour le graphique quand les données ou les options changent
   $: if (chartInstance) {
-    // Ensure the reactive block reruns when data/options change (including locale).
+    // Re-run when data/options/label-toggle/thresholds/scale change. updateChart()
+    // applies the live useCaseLabels (incl. hideBubbles) and then redraws once, so a
+    // standalone hideBubbles toggle (which does NOT change chartData) is persisted.
     void chartData;
     void chartOptions;
+    void hideBubbles;
+    void effectiveValueThreshold;
+    void effectiveComplexityThreshold;
+    void scale;
     updateChart();
-    // Mettre à jour les options du chart pour que le plugin ait accès aux nouveaux seuils et au scale
-    if (chartInstance.options.plugins) {
-      (chartInstance.options.plugins as any).useCaseLabels = {
-        valueThreshold: effectiveValueThreshold,
-        complexityThreshold: effectiveComplexityThreshold,
-        scale: scale,
-        labelStandardArea: LABEL_STANDARD_AREA_SCALED,
-        labelBorderRadius: LABEL_BORDER_RADIUS,
-        // "Hide bubbles" hides the top-N text label callouts (points stay visible).
-        hideBubbles: hideBubbles
-      };
-    }
   }
   
 </script>
