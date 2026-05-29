@@ -153,6 +153,10 @@ jobs:
               - 'packages/cowork-bridge/**'
               - 'packages/chat-ui/**'
               - '.github/workflows/ci.yml'
+            cowork_desktop_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/cowork-desktop/**'
             chat_core:
               - 'Makefile'
               - 'package.json'
@@ -896,6 +900,20 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Publish Cowork Bridge
         run: make publish-cowork-bridge
+
+  publish-cowork-desktop:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-cowork-desktop, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    if: needs.changes.outputs.cowork_desktop_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish Cowork Desktop
+        run: make publish-cowork-desktop
 
   publish-contracts:
     runs-on: ubuntu-latest
