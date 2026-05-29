@@ -24,6 +24,7 @@
     "dist",
     "src",
     "bin",
+    "packaging",
     "README.md",
     "LICENSE"
   ],
