@@ -27,10 +27,12 @@ Decommission the pre-k8s "top-ai-ideas" stack now that Sentropic runs on poc-k8s
   - `PLAN.md` (`BR37d-EX2`, roadmap status update only)
 
 ## Feedback Loop
-- **BR37d-EX1** (status: `pending`): append-only Makefile operator targets for decommission/DNS. Rollback: remove appended targets.
+- **BR37d-EX1** (status: `used` 2026-05-29): Makefile — REMOVED the dead legacy serverless deploy targets (`check-scw`, `deploy-api-container-init`, `deploy-api-container`, `wait-for-container`, `deploy-api`) now that the serverless container is decommissioned (no make target added — the deletions were one-shot operator CLI, recorded in the runbook). Rollback: restore the block from git history.
 - **BR37d-EX2** (status: `pending`): PLAN.md status update (BR-37d). Rollback: revert hunk.
-- **BR37d-FL1** (severity: `blocker`, status: `open`): the managed DB delete is IRREVERSIBLE. CRITICAL pre-check — `DATABASE_URL_PROD` pointing at `top-ai-ideas-db` was also found in `onyxia/.env` and `mistral-ocr/.env`; must verify `top-ai-ideas-db` is NOT a live shared DB for another app before deletion (list databases on the instance + check active connections). Back up (fresh `scw rdb` snapshot or `pg_dump`) + explicit user go before `scw rdb instance delete`.
-- **BR37d-FL2** (severity: `attention`, status: `open`): DNS handling for `top-ai-ideas.sent-tech.ca` (CNAME→rhanka.github.io, old UI) + `top-ai-ideas-api.sent-tech.ca` (CNAME→old serverless). Operator decision: redirect to `https://sentropic.sent-tech.ca` (Cloudflare redirect rule) vs delete the records. Shared-infra/user-facing → confirm before applying.
+- **BR37d-EX3** (status: `used` 2026-05-29): `.github/workflows/ci.yml` — REMOVED the legacy deploy jobs `deploy-api` (serverless, was failing since the container was deleted), `deploy-ui-only` + `deploy-ui` (GitHub Pages, old top-ai-ideas UI). Kept `deploy-k8s` (needs only publish-{api,ui}-image) + build/publish. Rollback: revert the ci.yml hunk.
+- **BR37d-FL1** (severity: `blocker`, status: `resolved` 2026-05-29): managed DB delete IRREVERSIBLE. Pre-check cleared (instance hosted only `top-ai-ideas-db`; only the probe `psql` connected → onyxia/mistral `.env` refs were unused templates). Fresh `pg_dump` archived to S3 + verified, then deleted with user approval. Instance gone; sentropic (k8s DB) unaffected.
+- **BR37d-FL2** (severity: `attention`, status: `resolved` 2026-05-29): operator chose redirect UI → sentropic + delete API record. API record deleted. UI redirect tracked in BR37d-FL3.
+- **BR37d-FL3** (severity: `attention`, status: `open`): redirect `top-ai-ideas.sent-tech.ca` → `https://sentropic.sent-tech.ca` could not be created via API — the `CF_API_TOKEN` lacks Rulesets/Redirect perms (`dns_records:edit` only; auth error 10000). Options: (a) provide a ruleset-scoped CF token, (b) create the Single Redirect rule via the CF dashboard (Playwright), (c) accept and just leave/delete the UI record. Awaiting operator choice.
 
 ## AI Flaky tests
 - This branch changes no app/AI code; CI runs only on docs + appended Makefile targets. AI shards remain flaky-accepted (documented in BR-37c); rerun on the same commit if they block.
@@ -49,21 +51,22 @@ Decommission the pre-k8s "top-ai-ideas" stack now that Sentropic runs on poc-k8s
   - [x] Plan + `BRANCH.md` symlink; scope boundaries + exceptions declared.
   - [ ] Confirm the k8s deployment is the sole live consumer (sentropic no longer reads `top-ai-ideas-db`; k8s `DATABASE_URL`=in-cluster postgres — verified BR-37c).
 
-- [ ] **Lot 1 — Legacy DNS redirect/cleanup (BR37d-FL2)**
-  - [ ] Inventory current CF records for `top-ai-ideas*.sent-tech.ca`.
-  - [ ] Per operator decision: create a Cloudflare redirect (`top-ai-ideas[-api].sent-tech.ca` → `https://sentropic.sent-tech.ca`) OR delete the records. Add `make cf-dns-*` helper (BR37d-EX1).
-  - [ ] Lot gate: legacy hostnames resolve to the chosen target (redirect 30x to sentropic, or NXDOMAIN if deleted); `sentropic.sent-tech.ca` unaffected.
+- [ ] **Lot 1 — Legacy DNS redirect/cleanup (BR37d-FL2)** _(operator decision: redirect UI → sentropic, delete API record)_
+  - [x] Inventory: `top-ai-ideas.sent-tech.ca` (CNAME→rhanka.github.io, proxied, old UI) + `top-ai-ideas-api.sent-tech.ca` (CNAME→serverless, grey).
+  - [x] Deleted `top-ai-ideas-api.sent-tech.ca` CNAME (no longer resolves).
+  - [ ] BLOCKED: redirect `top-ai-ideas.sent-tech.ca` → `https://sentropic.sent-tech.ca` (Single Redirect rule) — the CF token (`onyxia/.env CF_API_TOKEN`) has `dns_records:edit` but NOT Rulesets/Redirect perms (API auth error 10000). Needs a ruleset-scoped token OR the CF dashboard (Playwright). See BR37d-FL3.
+  - [ ] Lot gate: `https://top-ai-ideas.sent-tech.ca/` → 30x to sentropic; `sentropic.sent-tech.ca` unaffected (verified still 200).
 
-- [ ] **Lot 2 — Decommission serverless container `top-ai-ideas-api`**
-  - [ ] Confirm the container is unused (status `error`, no live traffic after DNS handled).
-  - [ ] Delete the container custom-domain mapping `top-ai-ideas-api.sent-tech.ca`, then the container (ns `poc-containers`). Add `make legacy-decommission-container` (BR37d-EX1).
-  - [ ] Lot gate: `scw container container list` no longer shows `top-ai-ideas-api`; sentropic k8s unaffected.
+- [x] **Lot 2 — Decommission serverless container `top-ai-ideas-api`** _(done 2026-05-29)_
+  - [x] Deleted the custom-domain mapping `top-ai-ideas-api.sent-tech.ca` (`7fc883bb…`) + the container `923fde8d…` (ns `poc-containers`, was `error`). Remaining containers (`nc-chatbot-api`, `transpose-cv-api`) untouched.
+  - [x] Removed the dead legacy CI/make serverless-deploy machinery (BR37d-EX3 ci.yml jobs `deploy-api`/`deploy-ui-only`/`deploy-ui`; BR37d-EX1 Makefile `deploy-api*`/`wait-for-container`/`check-scw`) — they were deploying to the now-deleted container/GitHub-Pages.
+  - [x] Lot gate: `scw container container list` no longer shows `top-ai-ideas-api`; sentropic k8s unaffected (api pod 1/1).
 
-- [ ] **Lot 3 — Decommission managed DB `top-ai-ideas-db` (BR37d-FL1, IRREVERSIBLE)**
-  - [ ] PRE-CHECK: `scw rdb database list` + active connections; confirm NOT shared with onyxia/mistral-ocr (the `DATABASE_URL_PROD` references). If shared → STOP, escalate.
-  - [ ] Fresh backup before delete (snapshot or `pg_dump` archived out-of-band).
-  - [ ] Explicit user go → `scw rdb instance delete 3d04ec6c-e961-45d0-9427-01887fea3c23`. Add `make legacy-decommission-db` (BR37d-EX1, guarded).
-  - [ ] Lot gate: instance gone; `sentropic.sent-tech.ca` still serves (k8s DB independent).
+- [x] **Lot 3 — Decommission managed DB `top-ai-ideas-db`** _(done 2026-05-29, user-approved "backup frais puis delete")_
+  - [x] PRE-CHECK cleared: instance hosted only `top-ai-ideas-db` (no onyxia/mistral DB); active connections = only the probe `psql` (no live external consumer → the `DATABASE_URL_PROD` refs in onyxia/mistral-ocr `.env` were unused templates).
+  - [x] Fresh `pg_dump` (30.8 MiB gz) archived out-of-band to `s3://sentropic-pgbackup/legacy/top-ai-ideas-db-final-20260529T005644Z.sql.gz` (verified) — independent of the migration dump.
+  - [x] Backup-gated delete: `scw rdb instance delete 3d04ec6c-e961-45d0-9427-01887fea3c23`. Instance gone (`scw rdb instance list` empty).
+  - [x] Lot gate: `sentropic.sent-tech.ca` still serves 200 (k8s in-cluster postgres independent).
 
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Record decommission evidence in `docs/uat/2026-05-28-decommission-top-ai-ideas-37d.md`; note legacy stack removed in `deploy/k8s/README.md`. PLAN.md status (BR37d-EX2).
