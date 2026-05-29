@@ -87,17 +87,14 @@ web app. See `spec/SPEC_COWORK.md`.
   `app.ts` is not in the explicit Allowed Paths list — reviewed and ACCEPTED by conductor (minimal,
   required, reuses existing limiter, follows the surrounding login/register/magic-link pattern);
   `api/src/app.ts` added to Allowed Paths. Rollback: remove the single line.
-- **BR41a-Q4** `attention` (Lot 4, Makefile — conditional path, needs an exception): the new
-  `@sentropic/cowork-desktop` package has no make targets, and direct `docker run` is denied in the
-  sub-agent environment, so the Lot 4 typecheck/test could NOT be run by the sub-agent. Source + tests
-  are written and committed; a type-level review was done manually. Requested targets (mirror the
-  `cowork-bridge` ones, plus symlink `@sentropic/cowork-bridge` and `@sentropic/chat-ui` into
-  `node_modules/@sentropic` so tsc/vitest resolve the workspace `file:` deps):
-  `typecheck-cowork-desktop`, `test-cowork-desktop`, `build-cowork-desktop`, `pack-cowork-desktop`,
-  `publish-cowork-desktop` (OIDC), `publish-cowork-desktop-token` (bootstrap fallback). This extends
-  the BR41a-EX1 pattern (acknowledged for the bridge) to the desktop package. Decision deferred to the
-  conductor (the desktop package's first publish/packaging lands in Lot 5 with `BR41a-EX1`/`EX2`/`EX3`).
-  Rollback: remove the targets.
+- **BR41a-Q4** `acknowledge` — RESOLVED by conductor (extends BR41a-EX1). Added `typecheck-cowork-desktop`,
+  `test-cowork-desktop`, `build-cowork-desktop`, `pack-cowork-desktop` make targets (mirror cowork-bridge;
+  they symlink `@sentropic/cowork-bridge` + `@sentropic/chat-ui` + `@types` into the package node_modules
+  for standalone tsc/vitest) + a CI `validate-cowork-desktop` job + `cowork_desktop` path filter (EX3).
+  Conductor ran them: typecheck ✅, tests 37/37 ✅, build+pack ✅ (and fixed the DESKTOP_ORIGIN bug they
+  surfaced). The desktop binary's PUBLISH (npm publish vs `private:true` + Windows-zip distribution) is
+  deferred to **Lot 5** (packaging) — no `publish-cowork-desktop`/token target added yet; root lockfile
+  regenerated to include the package (`make lock-root`). Rollback: remove the targets/jobs.
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network nondeterminism as `flaky accepted`
@@ -215,15 +212,16 @@ web app. See `spec/SPEC_COWORK.md`.
   - [x] **BR41a-F1 gate**: the desktop runner advertises ONLY `screen_capture`/`input_action` and the
         Lot 3 `chat-service.ts` browser-only auto-injection means desktop devices are never offered
         `tab_read`/`tab_action`; the runner also ignores any non-desktop pending tool call.
-  - [ ] Lot gate:
-    - [ ] `make typecheck` + `make lint` for the binary package — **BLOCKED on BR41a-Q4** (no
-          `*-cowork-desktop` make target; Makefile is a conditional path; direct docker is denied).
-          Source/tests committed; type-level review done manually (verbatimModuleSyntax imports audited,
-          all bridge/chat-ui import paths verified against their `exports` maps).
-    - [ ] **Unit tests** (committed; run pending BR41a-Q4 target): `tests/consent.spec.ts`,
-          `tests/tools.spec.ts`, `tests/device-code-client.spec.ts`, `tests/file-store.spec.ts`,
-          `tests/registry-client.spec.ts`, `tests/cowork-runner.spec.ts` — all mock-based, headless,
-          no native libs, no display.
+  - [x] Lot gate (conductor added the `*-cowork-desktop` make targets per BR41a-Q4 → resolved):
+    - [x] `make typecheck-cowork-desktop` ✅ (exit 0). Build+pack ✅ (`make pack-cowork-desktop` →
+          `@sentropic/cowork-desktop@0.1.0`). Targets symlink `@sentropic/cowork-bridge` + `chat-ui` +
+          `@types` into the package node_modules for standalone tsc/vitest.
+    - [x] **Unit tests**: `make test-cowork-desktop` ✅ **37/37** (6 files: consent, tools,
+          device-code-client, file-store, registry-client, cowork-runner) — mock-based, headless.
+    - [x] **Bug found+fixed during conductor verification**: `DESKTOP_ORIGIN` was `'desktop'` (single
+          label) → the bridge `isValidHostname` rejects single-label hosts → `normalizeEntry` dropped
+          every persisted consent entry → all consent lookups fell back to default-deny (8 failing
+          tests). Fixed to `'desktop.cowork'` (multi-label). All tests green after the fix.
 
 - [ ] **Lot 5 — Portable Windows binary packaging**
   - [ ] `esbuild` bundle; package via Node SEA (fallback pkg; fallback folder-zip) cross-built from
