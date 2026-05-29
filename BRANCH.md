@@ -91,6 +91,16 @@ web app. See `spec/SPEC_COWORK.md`.
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network nondeterminism as `flaky accepted`
   (at least one success on same commit + command). Never add timeouts. Record signature in this file.
+- **Local-only env artifact (accepted, not a branch regression)** — `tests/api/workspace-types.test.ts >
+  creates a workspace with explicit type` failed locally with `Error: Hook timed out in 10000ms.` in the
+  `beforeEach` (cold-start `importApp()` + 2 `createAuthenticatedUser`, first test of the file). Command:
+  `make test-api SCOPE=tests/api/workspace-types.test.ts ENV=test-cowork-desktop-tools`. Root cause:
+  machine contention (dev stack `ENV=dev` + concurrent branch test stacks) inflated cold-start transform
+  (~8-9s vs ~3-5s) past the 10s hook on this loaded host. NOT a branch regression — the file/setup
+  (`workspace-types.test.ts`, `auth-helper`, `importApp`) are unchanged by this branch, and **CI is green
+  on the branch**: PR #192 run `26619930864` — all `test-api-unit-integration` shards (incl. `endpoints
+  1-4`) `success`. No timeout inflation applied. Signature: `Hook timed out in 10000ms` at
+  `workspace-types.test.ts:27:3`.
 
 ## Orchestration Mode (AI-selected)
 - [ ] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -165,7 +175,11 @@ web app. See `spec/SPEC_COWORK.md`.
           `tests/unit/device-code-store.test.ts` (9 cases); updated `tests/unit/tab-registry.test.ts`
           (+desktop_cowork +isBrowserSource) and `tests/unit/chat-service-tab-tools.test.ts` (+2 F1 cases).
     - [x] Sub-lot gate (ENV=test-cowork-desktop-tools): unit 36/36 ✅ (3 files); endpoints 12/12 ✅
-          (2 files). Full `make test-api` + UI gates left to conductor.
+          (2 files).
+    - [x] Conductor full gate: `typecheck-api`/`lint-api`/`typecheck-ui`/`lint-ui` ✅ local; full
+          `make test-api` + UI typecheck/lint green on **CI** (PR #192, all `test-api` shards `success`).
+          One local cold-start timeout in unrelated `workspace-types` = machine-contention artifact
+          (documented under `## AI Flaky tests`, CI proves it green).
 
 - [ ] **Lot 4 — Desktop tools (eyes + hands) + consent**
   - [ ] Implement `screen_capture` and `input_action` (`click`/`type`/`scroll`/`key`) as
