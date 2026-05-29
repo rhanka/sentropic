@@ -191,6 +191,24 @@ needed). A Cloudflare `A` record `sentropic.sent-tech.ca` → the Traefik LB IP
 must exist. `k8s-dns-smoke` asserts HTTPS 200 + a browser-trusted cert on `/`
 and `/api/v1/health`.
 
+## Legacy `top-ai-ideas` stack (decommissioned, BR-37d 2026-05-29)
+
+The pre-k8s stack was fully torn down once Sentropic went live on poc-k8s
+(see `docs/uat/2026-05-28-decommission-top-ai-ideas-37d.md`):
+
+- SCW Serverless Container `top-ai-ideas-api` (ns `poc-containers`) and its
+  custom domain `top-ai-ideas-api.sent-tech.ca` — **deleted**.
+- Managed PostgreSQL `top-ai-ideas-db` — **deleted** after a final backup-gated
+  dump to `s3://sentropic-pgbackup/legacy/` (data already migrated to the
+  in-cluster Postgres in BR-37c).
+- Cloudflare DNS: `top-ai-ideas-api.sent-tech.ca` record removed;
+  `top-ai-ideas.sent-tech.ca` kept and fronted by a **Single Redirect rule**
+  → `https://sentropic.sent-tech.ca` (301, path + query preserved).
+- The legacy deploy machinery was removed (no dual paths): `ci.yml` jobs
+  `deploy-api` / `deploy-ui` / `deploy-ui-only` and the `Makefile`
+  `deploy-api*` / `wait-for-container` / `check-scw` targets. The only deploy
+  path is now `deploy-k8s` (`make k8s-deploy`).
+
 ## Sealed Secrets
 
 [Bitnami Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets) makes

@@ -28,11 +28,11 @@ Decommission the pre-k8s "top-ai-ideas" stack now that Sentropic runs on poc-k8s
 
 ## Feedback Loop
 - **BR37d-EX1** (status: `used` 2026-05-29): Makefile — REMOVED the dead legacy serverless deploy targets (`check-scw`, `deploy-api-container-init`, `deploy-api-container`, `wait-for-container`, `deploy-api`) now that the serverless container is decommissioned (no make target added — the deletions were one-shot operator CLI, recorded in the runbook). Rollback: restore the block from git history.
-- **BR37d-EX2** (status: `pending`): PLAN.md status update (BR-37d). Rollback: revert hunk.
+- **BR37d-EX2** (status: `used` 2026-05-29): PLAN.md status update (BR-37d → merged/decommission done). Rollback: revert hunk.
 - **BR37d-EX3** (status: `used` 2026-05-29): `.github/workflows/ci.yml` — REMOVED the legacy deploy jobs `deploy-api` (serverless, was failing since the container was deleted), `deploy-ui-only` + `deploy-ui` (GitHub Pages, old top-ai-ideas UI). Kept `deploy-k8s` (needs only publish-{api,ui}-image) + build/publish. Rollback: revert the ci.yml hunk.
 - **BR37d-FL1** (severity: `blocker`, status: `resolved` 2026-05-29): managed DB delete IRREVERSIBLE. Pre-check cleared (instance hosted only `top-ai-ideas-db`; only the probe `psql` connected → onyxia/mistral `.env` refs were unused templates). Fresh `pg_dump` archived to S3 + verified, then deleted with user approval. Instance gone; sentropic (k8s DB) unaffected.
 - **BR37d-FL2** (severity: `attention`, status: `resolved` 2026-05-29): operator chose redirect UI → sentropic + delete API record. API record deleted. UI redirect tracked in BR37d-FL3.
-- **BR37d-FL3** (severity: `attention`, status: `open`): redirect `top-ai-ideas.sent-tech.ca` → `https://sentropic.sent-tech.ca` could not be created via API — the `CF_API_TOKEN` lacks Rulesets/Redirect perms (`dns_records:edit` only; auth error 10000). Options: (a) provide a ruleset-scoped CF token, (b) create the Single Redirect rule via the CF dashboard (Playwright), (c) accept and just leave/delete the UI record. Awaiting operator choice.
+- **BR37d-FL3** (severity: `attention`, status: `resolved` 2026-05-29): redirect `top-ai-ideas.sent-tech.ca` → `https://sentropic.sent-tech.ca` could not be created via API — the `CF_API_TOKEN` lacks Rulesets/Redirect perms (`dns_records:edit` only; auth error 10000). Operator chose option (b): created the Single Redirect rule via the CF dashboard (Playwright). Rule = wildcard `https://top-ai-ideas.sent-tech.ca/*` → `https://sentropic.sent-tech.ca/${1}`, 301, preserve query string. Verified live (root + deep path 301 to sentropic; sentropic still 200).
 
 ## AI Flaky tests
 - This branch changes no app/AI code; CI runs only on docs + appended Makefile targets. AI shards remain flaky-accepted (documented in BR-37c); rerun on the same commit if they block.
@@ -49,13 +49,13 @@ Decommission the pre-k8s "top-ai-ideas" stack now that Sentropic runs on poc-k8s
 - [x] **Lot 0 — Baseline & scope**
   - [x] Worktree `tmp/feat-deploy-poc-k8s-37d` from origin/main `967f9d4a`; branch verified.
   - [x] Plan + `BRANCH.md` symlink; scope boundaries + exceptions declared.
-  - [ ] Confirm the k8s deployment is the sole live consumer (sentropic no longer reads `top-ai-ideas-db`; k8s `DATABASE_URL`=in-cluster postgres — verified BR-37c).
+  - [x] Confirm the k8s deployment is the sole live consumer (sentropic no longer reads `top-ai-ideas-db`; k8s `DATABASE_URL`=in-cluster postgres — verified BR-37c).
 
-- [ ] **Lot 1 — Legacy DNS redirect/cleanup (BR37d-FL2)** _(operator decision: redirect UI → sentropic, delete API record)_
+- [x] **Lot 1 — Legacy DNS redirect/cleanup (BR37d-FL2)** _(operator decision: redirect UI → sentropic, delete API record)_ _(done 2026-05-29)_
   - [x] Inventory: `top-ai-ideas.sent-tech.ca` (CNAME→rhanka.github.io, proxied, old UI) + `top-ai-ideas-api.sent-tech.ca` (CNAME→serverless, grey).
   - [x] Deleted `top-ai-ideas-api.sent-tech.ca` CNAME (no longer resolves).
-  - [ ] BLOCKED: redirect `top-ai-ideas.sent-tech.ca` → `https://sentropic.sent-tech.ca` (Single Redirect rule) — the CF token (`onyxia/.env CF_API_TOKEN`) has `dns_records:edit` but NOT Rulesets/Redirect perms (API auth error 10000). Needs a ruleset-scoped token OR the CF dashboard (Playwright). See BR37d-FL3.
-  - [ ] Lot gate: `https://top-ai-ideas.sent-tech.ca/` → 30x to sentropic; `sentropic.sent-tech.ca` unaffected (verified still 200).
+  - [x] Redirect `top-ai-ideas.sent-tech.ca` → `https://sentropic.sent-tech.ca` created via the CF dashboard (Playwright) — the CF token lacks Rulesets/Redirect perms (BR37d-FL3 resolved). Single Redirect rule: wildcard `https://top-ai-ideas.sent-tech.ca/*` → `https://sentropic.sent-tech.ca/${1}`, 301, preserve query string.
+  - [x] Lot gate: `https://top-ai-ideas.sent-tech.ca/` → 301 to sentropic (root + deep path with query preserved); `sentropic.sent-tech.ca` unaffected (still 200).
 
 - [x] **Lot 2 — Decommission serverless container `top-ai-ideas-api`** _(done 2026-05-29)_
   - [x] Deleted the custom-domain mapping `top-ai-ideas-api.sent-tech.ca` (`7fc883bb…`) + the container `923fde8d…` (ns `poc-containers`, was `error`). Remaining containers (`nc-chatbot-api`, `transpose-cv-api`) untouched.
@@ -68,8 +68,8 @@ Decommission the pre-k8s "top-ai-ideas" stack now that Sentropic runs on poc-k8s
   - [x] Backup-gated delete: `scw rdb instance delete 3d04ec6c-e961-45d0-9427-01887fea3c23`. Instance gone (`scw rdb instance list` empty).
   - [x] Lot gate: `sentropic.sent-tech.ca` still serves 200 (k8s in-cluster postgres independent).
 
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Record decommission evidence in `docs/uat/2026-05-28-decommission-top-ai-ideas-37d.md`; note legacy stack removed in `deploy/k8s/README.md`. PLAN.md status (BR37d-EX2).
+- [x] **Lot N-1 — Docs consolidation** _(done 2026-05-29)_
+  - [x] Recorded decommission evidence in `docs/uat/2026-05-28-decommission-top-ai-ideas-37d.md`; noted legacy stack removed in `deploy/k8s/README.md`. PLAN.md status updated (BR37d-EX2).
 
 - [ ] **Lot N — Final validation**
   - [ ] Confirm no live consumer broke (sentropic E2E smoke still green); CI green on PR (flaky-accepted).
