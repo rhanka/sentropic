@@ -95,6 +95,16 @@
     </div>
   {/if}
 
+  <div class="mb-6 rounded-md bg-indigo-50 p-4 flex items-center justify-between">
+    <p class="text-sm text-indigo-900">{$_('auth.devices.pair.subtitle')}</p>
+    <a
+      href="/auth/devices/pair"
+      class="ml-4 shrink-0 inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90"
+    >
+      {$_('auth.devices.pair.title')}
+    </a>
+  </div>
+
   {#if loading}
     <div class="text-center py-12">
       <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>

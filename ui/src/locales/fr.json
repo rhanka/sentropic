@@ -146,6 +146,23 @@
         "load": "Erreur lors du chargement des appareils",
         "update": "Erreur lors de la mise à jour",
         "revoke": "Erreur lors de la révocation"
+      },
+      "pair": {
+        "title": "Appairer un appareil",
+        "subtitle": "Saisissez le code affiché par l'application Sentropic Cowork sur votre poste de travail.",
+        "codeLabel": "Code d'appairage",
+        "codePlaceholder": "PAIR-XXXX",
+        "deviceNameLabel": "Nom de l'appareil",
+        "deviceNamePlaceholder": "Mon poste de travail",
+        "confirm": "Appairer l'appareil",
+        "confirming": "Appairage…",
+        "success": "Appareil appairé. Vous pouvez retourner à l'application sur votre poste de travail.",
+        "back": "Retour aux appareils",
+        "errors": {
+          "codeRequired": "Le code d'appairage est requis.",
+          "notFound": "Code invalide ou expiré.",
+          "generic": "Échec de l'appairage de l'appareil."
+        }
       }
     },
     "magicLink": {
