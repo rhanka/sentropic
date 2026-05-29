@@ -73,6 +73,18 @@ web app. See `spec/SPEC_COWORK.md`.
   `private`). Needs: `publish-cowork-desktop[-token]` make targets + a CI OIDC `publish-cowork-desktop`
   job (EX1/EX3) + an npm **trusted publisher** for the package (set up via Playwright — **attendu**,
   Playwright MCP currently disconnected).
+- **BR41a-Q6** `acknowledge` (Lot 5 part A, single-exe method): single-exe is **feasible** — chose
+  **@yao-pkg/pkg@6.9.0** (the maintained pkg fork), NOT Node SEA. esbuild@0.25.10 bundles the entry
+  (`packaging/entry.mjs` → `src/index.ts` + bridge + chat-ui) to one CJS file with the native libs
+  external; pkg cross-compiles it to `node24-win-x64` (one `cowork.exe`, 85.3 MB, verified `PE32+ x86-64
+  MS Windows`). `make package-desktop-windows` ran green on Linux/Docker, unsigned (no cert), no SEA
+  fallback needed. Native libs shipped via `npm install --os=win32 --cpu=x64` into a stage dir, copied
+  into the zip under `node_modules/` next to the exe (`@nut-tree-fork/libnut-win32/.../libnut.node` +
+  win CRT DLLs; `screenshot-desktop/lib/win32`). NOTE: `@nut-tree-fork/nut-js` hard-depends on
+  `libnut-darwin` too, so a macOS `.node` also lands in the zip (harmless dead weight on Windows; not
+  loaded). RISK: the exe is built on Linux and NOT executed here — the runtime dynamic `import()` of the
+  win32 native modules must be validated on a real Windows host at UAT (Lot N-2). The signing RUN with
+  the user's OV `.pfx` is **attendu** (conductor runs once cert+password provided; step is wired+gated).
 - **BR41a-EX1** `acknowledge` (Makefile): add `typecheck-cowork-bridge`, `test-cowork-bridge`,
   `build-cowork-bridge`, `pack-cowork-bridge`, `publish-cowork-bridge` (OIDC),
   `publish-cowork-bridge-token` (bootstrap fallback), mirroring the chat-ui targets line-for-line.
@@ -235,12 +247,19 @@ web app. See `spec/SPEC_COWORK.md`.
           tests). Fixed to `'desktop.cowork'` (multi-label). All tests green after the fix.
 
 - [ ] **Lot 5 — Portable Windows binary packaging**
-  - [ ] `esbuild` bundle; package via Node SEA (fallback pkg; fallback folder-zip) cross-built from
-        Docker/Linux (`BR41a-EX1`/`EX2`).
-  - [ ] New `make build-desktop` / `make package-desktop-windows`; output `ui/static/desktop/` + a
-        download metadata endpoint analogous to the chrome-ext download.
+  - [x] `esbuild` bundle (`packaging/esbuild.config.mjs` → 35kb CJS, native libs external) + single
+        signable `.exe` via **@yao-pkg/pkg** (`node24-win-x64`, 85.3 MB PE32+ console exe) cross-built
+        from Docker/Linux. Win-x64 native prebuilds fetched on Linux via `npm install --os=win32
+        --cpu=x64` and shipped under `node_modules/` next to the exe. `osslsigncode` Authenticode step
+        gated on `COWORK_SIGN_PFX`+`COWORK_SIGN_PASS` (skipped+warned if absent). See BR41a-Q6.
+  - [x] New `make package-desktop-windows`; output `ui/static/cowork-desktop/` (gitignored, mirrors
+        chrome-ext): `cowork.exe` + `sentropic-cowork-windows-x64.zip` + `cowork-desktop-metadata.json`.
+        Download metadata endpoint `GET /cowork-desktop/download` (`api/src/routes/api/cowork-desktop.ts`).
   - [ ] CI cross-build/publish job mirroring the chrome-ext zip job (`BR41a-EX3`); bridge OIDC publish.
-  - [ ] Lot gate: artifact builds in CI; smoke-launch on Windows (manual UAT below).
+        (Conductor scope per Lot 5 launch packet — this sub-agent delivered only the EXE + download.)
+  - [ ] Lot gate: artifact builds in CI; smoke-launch on Windows (manual UAT below). Local
+        `make package-desktop-windows` ✅ (unsigned exe produced; signing skipped). Windows execution +
+        the signing RUN with a real `.pfx` = UAT/attendu.
 
 - [ ] **Lot N-2 — UAT**
   - [ ] Chrome plugin (non-regression): connect, run `tab_read`/`tab_action`, chat streaming unchanged.
