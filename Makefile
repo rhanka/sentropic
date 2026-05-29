@@ -503,56 +503,6 @@ publish-e2e-image: docker-login
 	@docker push $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION)
 
 
-# -----------------------------------------------------------------------------
-# Scaleway deployement helpers
-# -----------------------------------------------------------------------------
-check-scw:
-	@if ! command -v scw >/dev/null 2>&1; then \
-		echo "ℹ️ scw (Scaleway CLI) not found. Attempting to install..."; \
-		curl -sL https://raw.githubusercontent.com/scaleway/scaleway-cli/master/scripts/get.sh | sh && \
-		echo "✅ Scaleway CLI installed. You might need to start a new shell for it to be in your PATH."; \
-	fi
-
-deploy-api-container-init: check-scw
-	@echo "▶️ Creating container $(API_IMAGE_NAME) in namespace $(SCW_NAMESPACE_ID)..."
-	@API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
-	if [ -n "$${API_CONTAINER_ID}" ]; then \
-		echo "✅ Container $(API_IMAGE_NAME) already exists (ID: $${API_CONTAINER_ID})"; \
-	else \
-		scw container container create \
-			name=$(API_IMAGE_NAME) \
-			namespace-id=$(SCW_NAMESPACE_ID) \
-			registry-image=$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) \
-			port=8787 \
-			min-scale=0 \
-			max-scale=1 \
-			memory-limit=2048 \
-			cpu-limit=1000 \
-			timeout=5m \
-			privacy=public \
-			protocol=http1 && \
-		echo "✅ Container $(API_IMAGE_NAME) created successfully"; \
-	fi
-
-deploy-api-container: check-scw
-	@echo "▶️ Updating new container $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) to Scaleway..."
-	@API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
-	scw container container update $${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)" > .deploy_output.log
-	@echo "✅ New container deployment initiated."
-
-wait-for-container: check-scw
-	@printf "⌛ Waiting for container to become ready.."
-	@API_CONTAINER_STATUS="pending"; \
-	while [ "$${API_CONTAINER_STATUS}" != "ready" ]; do \
-		API_CONTAINER_STATUS=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$4}'); \
-		printf "."; \
-		sleep 1; \
-	done; \
-	printf "\n✅ New container is ready.\n"
-
-deploy-api: deploy-api-container wait-for-container
-
-
 .PHONY: typecheck
 typecheck: typecheck-ui typecheck-api ## Run all type checks
 
