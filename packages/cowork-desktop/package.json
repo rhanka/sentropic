@@ -1,0 +1,49 @@
+{
+  "name": "@sentropic/cowork-desktop",
+  "version": "0.1.0",
+  "description": "Sentropic Cowork desktop binary: device-code enrollment client, presence registry registration, and desktop tool executors (screen_capture = eyes, input_action = hands) behind an injectable capability provider with a per-tool consent model. Consumes @sentropic/cowork-bridge.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhanka/sentropic.git",
+    "directory": "packages/cowork-desktop"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "bin": {
+    "sentropic-cowork": "./bin/cowork.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests"
+  },
+  "dependencies": {
+    "@sentropic/cowork-bridge": "file:../cowork-bridge"
+  },
+  "optionalDependencies": {
+    "screenshot-desktop": "^1.15.0",
+    "@nut-tree-fork/nut-js": "^4.2.0"
+  },
+  "devDependencies": {
+    "typescript": "5.4.5"
+  }
+}
