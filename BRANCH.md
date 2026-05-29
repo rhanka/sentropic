@@ -127,7 +127,7 @@ Add first-class image input to Sentropic chat and document context flows: users 
   - Main sync 2026-05-24: merged `origin/main` after root fast-forward from `85c679d7` to `146364eb`; no merge conflicts. Verification below was rerun on the merged head.
   - Latest main sync 2026-05-24: merged `origin/main` again after `main` advanced from `146364eb` to `d5e3cddc`; no merge conflicts.
   - UAT remains pending. This branch must not be undrafted/merged until root UAT runs from a commit-identical root workspace and CI is green on the final pushed head.
-  - `BR38a-FB1` UI/UX anomaly 2026-05-26 (UAT). Owner: 38a-ui. Severity: medium. Status: in progress (Lot U1).
+  - `BR38a-FB1` UI/UX anomaly 2026-05-26 (UAT). Owner: 38a-ui. Severity: medium. Status: fixed in Lot U1 (awaiting root UAT re-check).
     - Repro: paste/upload an image into the chat composer.
     - Expected: one image-first attachment item, same box style/position as documents, thumbnail clickable to enlarge.
     - Actual: the same image shows twice — a "document summary row" (top, no thumbnail, summary affordance) and a "capture" tray box (below, with thumbnail); neither thumbnail is hoverable/clickable to enlarge.
@@ -165,6 +165,17 @@ Add first-class image input to Sentropic chat and document context flows: users 
   - Initial post-main `typecheck-chat-core` reruns hit local generated `node_modules` ownership issues (`api/node_modules/.vite`, `ui/node_modules/.bin`, and root `node_modules`). Generated artifacts were cleaned or ownership-corrected only after the package tests had finished; the same command then passed.
 - 2026-05-24 CI note:
   - GitHub run `26373930960` on superseded head `8b5005d3` failed only `test-e2e (group-c, 03)`: `tests/03-chat.spec.ts` could not find the `Reasoning/Raisonnement` runtime header after reload, while all compile/package/API/build/security jobs passed. The branch was then merged with the latest `origin/main` head `d5e3cddc` and needs a fresh CI run before UAT/merge.
+- 2026-05-26 GREEN (Lot U1 image attachment UX):
+  - `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input` (18 passed, incl. new `mergeAttachmentBand`/`isImageMimeType`)
+  - `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input` (3 passed)
+  - `make test-ui SCOPE=tests/components/chat/ChatComposer-wrapper.test.ts ENV=test-feat-multimodal-image-input` (2 passed)
+  - `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input` (2 passed)
+  - `make typecheck-ui ENV=test-feat-multimodal-image-input` (0 errors, 6 pre-existing warnings)
+  - `make lint-ui ENV=test-feat-multimodal-image-input` (clean)
+  - `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (ok)
+  - `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (3 passed, exit 0)
+  - `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input` (7 passed, exit 0; 5 flaky passed on retry)
+- 2026-05-26 E2E flaky note (Lot U1): `tests/03-chat.spec.ts` reported 5 first-attempt flakies that passed on retry (exit 0): `:203` reasoning/tools history after reload, `:401` provisional/persistent contexts, `:684` session persists after widget reopen, `:732` list sessions in selector, `:778` delete session. All signatures are `expect(...).toBeVisible` timeouts on assistant bubbles / session lifecycle (AI generation timing), unrelated to the attachment band (empty in these scenarios). `03-chat.spec.ts` is in the E2E flaky allowlist. Explicit user sign-off required before merge.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -255,23 +266,23 @@ Add first-class image input to Sentropic chat and document context flows: users 
     - [ ] `make test-ui SCOPE=tests/utils/google-drive-picker.test.ts ENV=test-feat-multimodal-image-input`
     - [ ] `make test-ui SCOPE=tests/utils/document-source-menu.test.ts ENV=test-feat-multimodal-image-input`
 
-- [ ] **Lot U1 - UAT fix: image attachment UX (BR38a-FB1)**
-  - [ ] Add a deduplicated attachment-merge helper in `ui/src/lib/utils/documents.ts` (merge session documents + pending composer attachments by `documentId`, classify image vs document).
-  - [ ] Unify the composer attachment band at the top of the edit surface: one shared box style (image preview thumbnail vs file-type icon, filename, status, remove); stop rendering the bottom `renderAttachmentTray`.
-  - [ ] Remove an item from the band by removing both the pending composer attachment and its session context document when present.
-  - [ ] Suppress the summary affordance for image context documents in the band.
-  - [ ] Make image thumbnails (band and sent message bubble) clickable with hover affordance, opening an app-level lightbox (full-size preview, download, close via Esc/backdrop/button, keyboard-focusable).
-  - [ ] Add i18n keys for the lightbox (open/enlarge, close, download) in `ui/src/locales/en.json` and `ui/src/locales/fr.json`.
-  - [ ] Keep `@sentropic/chat-ui` untouched (generic tray slot left unused; no package version bump required).
-  - [ ] Lot gate:
-    - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input`
-    - [ ] `make typecheck-ui ENV=test-feat-multimodal-image-input`
-    - [ ] `make lint-ui ENV=test-feat-multimodal-image-input`
-    - [ ] `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-    - [ ] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
-    - [ ] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
+- [x] **Lot U1 - UAT fix: image attachment UX (BR38a-FB1)**
+  - [x] Add a deduplicated attachment-merge helper in `ui/src/lib/utils/documents.ts` (merge session documents + pending composer attachments by `documentId`, classify image vs document).
+  - [x] Unify the composer attachment band at the top of the edit surface: one shared box style (image preview thumbnail vs file-type icon, filename, status, remove); stop rendering the bottom `renderAttachmentTray`.
+  - [x] Remove an item from the band by removing both the pending composer attachment and its session context document when present.
+  - [x] Suppress the summary affordance for image context documents in the band.
+  - [x] Make image thumbnails (band and sent message bubble) clickable with hover affordance, opening an app-level lightbox (full-size preview, download, close via Esc/backdrop/button, keyboard-focusable).
+  - [x] Add i18n keys for the lightbox (open/enlarge, close, download) in `ui/src/locales/en.json` and `ui/src/locales/fr.json`.
+  - [x] Keep `@sentropic/chat-ui` untouched (generic tray slot left unused; no package version bump required).
+  - [x] Lot gate:
+    - [x] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input`
+    - [x] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input`
+    - [x] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input`
+    - [x] `make typecheck-ui ENV=test-feat-multimodal-image-input`
+    - [x] `make lint-ui ENV=test-feat-multimodal-image-input`
+    - [x] `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
+    - [x] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
+    - [x] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
 
 - [ ] **Lot N-2 - UAT**
   - [ ] Web app setup:
