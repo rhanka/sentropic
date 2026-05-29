@@ -31,6 +31,7 @@ import { pptxRouter } from './pptx';
 import { googleDriveRouter } from './google-drive';
 import { chromeExtensionRouter } from './chrome-extension';
 import { vscodeExtensionRouter } from './vscode-extension';
+import { coworkDesktopRouter } from './cowork-desktop';
 import { solutionsRouter } from './solutions';
 import { productsRouter } from './products';
 import { bidsRouter } from './bids';
@@ -97,6 +98,10 @@ apiRouter.route('/chrome-extension', chromeExtensionRouter);
 // VSCode extension metadata route for authenticated users.
 apiRouter.use('/vscode-extension/*', requireAuth);
 apiRouter.route('/vscode-extension', vscodeExtensionRouter);
+
+// Cowork desktop binary metadata route for authenticated users.
+apiRouter.use('/cowork-desktop/*', requireAuth);
+apiRouter.route('/cowork-desktop', coworkDesktopRouter);
 
 // Workspace routes (authenticated; role checks are enforced per endpoint)
 apiRouter.use('/workspaces/*', requireAuth);
