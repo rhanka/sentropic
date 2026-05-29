@@ -431,6 +431,16 @@ lock-root: ## Update root package-lock.json using Node container (workspace root
 		node:24-alpine \
 		sh -lc "npm install --package-lock-only --workspaces --include-workspace-root"
 
+.PHONY: lock-e2e
+lock-e2e: ## Update e2e package-lock.json using Node container (no compose service)
+	@echo "🔒 Updating e2e package-lock.json..."
+	docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-v "$$(pwd):/workspace" \
+		-w /workspace/e2e \
+		node:24-slim \
+		sh -lc "npm install --legacy-peer-deps --package-lock-only --ignore-scripts --no-audit --no-fund"
+
 .PHONY: save-ui
 save-ui: ## Save UI Docker image as tar artifact
 	@echo "💾 Saving UI image as artifact..."
