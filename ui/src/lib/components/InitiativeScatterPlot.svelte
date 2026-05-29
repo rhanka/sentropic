@@ -1459,13 +1459,15 @@
           raw: element?.$context?.raw
         }))
         .filter((item: { raw?: { label?: string; isTopCase?: boolean } }) =>
-          !pluginOptions.hideBubbles && Boolean(item.raw?.label) && item.raw?.isTopCase === true
+          Boolean(item.raw?.label) && item.raw?.isTopCase === true
         );
 
       // Lire les seuils depuis les options du chart (toujours à jour)
       const thresholdValue = pluginOptions.valueThreshold ?? thresholdState.value ?? 0;
       const thresholdComplexity = pluginOptions.complexityThreshold ?? thresholdState.complexity ?? 0;
-      const showROIQuadrant = points.length > 2;
+      // Quadrant visibility depends on the DATA point count, NOT on how many labels are
+      // drawn — so hiding labels (toggle) or having >10 domains never removes the quadrant.
+      const showROIQuadrant = (dataset.data?.length ?? 0) > 2;
 
       // Convertir les seuils en coordonnées pixels
       const xScale = chart.scales.x;
@@ -1584,6 +1586,14 @@
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.font = labelFont;
+      }
+
+      // BR-40a: "hide labels" toggle suppresses ONLY the per-use-case text callouts.
+      // The quadrant (zones, threshold lines, quadrant labels) is already drawn above,
+      // and the data points are drawn by Chart.js — both stay visible.
+      if (pluginOptions.hideBubbles) {
+        ctx.restore();
+        return;
       }
 
       // Pour le recuit, on utilise toujours les médianes pour positionner les boîtes fixes
@@ -1798,12 +1808,16 @@
 
   // BR-40a: indices (into rawData) of the top-N use cases that receive labels.
   // Ranked by value / (complexity + ε) capped; ties broken by value (see scoring.ts).
-  $: topLabelIndices = new Set(
-    selectTopPriorityIndices(
-      rawData.map((point) => ({ value: point.y, complexity: point.x })),
-      TOP_LABEL_COUNT
-    )
-  );
+  // BR-40a legacy guard: with >10 distinct business domains (un-normalized legacy
+  // folders) suppress labels entirely to avoid an unreadable chart (see tooManyDomains).
+  $: topLabelIndices = tooManyDomains
+    ? new Set<number>()
+    : new Set(
+        selectTopPriorityIndices(
+          rawData.map((point) => ({ value: point.y, complexity: point.x })),
+          TOP_LABEL_COUNT
+        )
+      );
 
   // BR-40a: distinct non-empty business domains (in first-seen order) + color map.
   $: domainList = (() => {
@@ -1819,6 +1833,9 @@
     return ordered;
   })();
   $: domainColorMap = buildDomainColorMap(domainList);
+  // BR-40a legacy guard: >10 distinct domains = un-normalized legacy folder; suppress
+  // per-domain colors, labels and the legend to keep the chart readable.
+  $: tooManyDomains = domainList.length > 10;
   // Whether at least one point has no domain (drives the "No domain" legend row).
   $: hasUndomainedPoints = rawData.some((point) => !(point.domain ?? '').trim());
 
@@ -1904,7 +1921,9 @@
 
   // BR-40a: bubble color = business domain (status moved to tooltip + marker border).
   $: backgroundColors = offsetData.map(
-    (point) => `rgba(${domainRgbFor((point.domain ?? '').trim(), domainColorMap)}, 0.85)`
+    (point) => tooManyDomains
+      ? 'rgba(100, 116, 139, 0.85)'
+      : `rgba(${domainRgbFor((point.domain ?? '').trim(), domainColorMap)}, 0.85)`
   );
   // Marker border encodes status (shape/border carries the status that color used to).
   $: borderColors = offsetData.map((point) => getStatusColorInfo(point.status).solid);
@@ -2408,8 +2427,10 @@
   <!-- BR-40a: the labels toggle is an icon-only control hosted by the parent,
        immediately left of the chart settings button (see dashboard +page). -->
 
-  <!-- BR-40a: business-domain legend (filterable + hover emphasis) -->
-  {#if useCases.length > 0 && matrix && legendEntries.length > 0}
+  <!-- BR-40a: business-domain legend (filterable + hover emphasis).
+       Hidden when >10 distinct domains (legacy un-normalized folders): colors are
+       neutralized so a domain legend would be meaningless. -->
+  {#if useCases.length > 0 && matrix && legendEntries.length > 0 && !tooManyDomains}
     <div class="mt-3 scatter-plot-legend print-hidden">
       <p class="text-center text-xs font-medium text-slate-500 mb-1.5">
         {$_('usecase.scatterPlot.legend.title')}
