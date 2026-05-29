@@ -47,6 +47,90 @@ export type ContextDocumentItem = {
   job_id?: string;
 };
 
+export function isImageMimeType(mimeType: string | null | undefined): boolean {
+  return typeof mimeType === 'string' && mimeType.trim().toLowerCase().startsWith('image/');
+}
+
+/**
+ * Minimal structural shape of a pending composer attachment draft.
+ * Kept local so this util does not depend on `@sentropic/chat-ui` types.
+ */
+export type ComposerAttachmentLike = {
+  id: string;
+  documentId?: string;
+  fileName: string;
+  mimeType: string;
+  state: string;
+  previewUrl?: string;
+};
+
+export type UnifiedAttachmentKind = 'image' | 'document';
+
+export type UnifiedAttachmentItem = {
+  key: string;
+  kind: UnifiedAttachmentKind;
+  fileName: string;
+  mimeType: string;
+  status: string;
+  documentId?: string;
+  composerAttachmentId?: string;
+  previewUrl?: string;
+  isPending: boolean;
+};
+
+/**
+ * Build the single composer attachment band: session documents and pending
+ * composer attachments merged into one list, deduplicated by `documentId`.
+ * An uploaded image therefore appears once (enriched with its blob preview),
+ * never as both a "document row" and a separate "capture" tray box.
+ */
+export function mergeAttachmentBand(params: {
+  sessionDocs: ContextDocumentItem[];
+  composerAttachments: ComposerAttachmentLike[];
+}): UnifiedAttachmentItem[] {
+  const { sessionDocs, composerAttachments } = params;
+  const composerByDocId = new Map<string, ComposerAttachmentLike>();
+  for (const att of composerAttachments) {
+    if (att.documentId) composerByDocId.set(att.documentId, att);
+  }
+
+  const seenDocIds = new Set<string>();
+  const items: UnifiedAttachmentItem[] = [];
+
+  for (const doc of sessionDocs) {
+    seenDocIds.add(doc.id);
+    const att = composerByDocId.get(doc.id);
+    items.push({
+      key: `doc:${doc.id}`,
+      kind: isImageMimeType(doc.mime_type) ? 'image' : 'document',
+      fileName: doc.filename,
+      mimeType: doc.mime_type,
+      status: doc.status,
+      documentId: doc.id,
+      composerAttachmentId: att?.id,
+      previewUrl: att?.previewUrl,
+      isPending: false,
+    });
+  }
+
+  for (const att of composerAttachments) {
+    if (att.documentId && seenDocIds.has(att.documentId)) continue;
+    items.push({
+      key: `att:${att.id}`,
+      kind: isImageMimeType(att.mimeType) ? 'image' : 'document',
+      fileName: att.fileName,
+      mimeType: att.mimeType,
+      status: att.state,
+      documentId: att.documentId,
+      composerAttachmentId: att.id,
+      previewUrl: att.previewUrl,
+      isPending: true,
+    });
+  }
+
+  return items;
+}
+
 const GOOGLE_WORKSPACE_MIME_LABELS: Record<string, string> = {
   'application/vnd.google-apps.document': 'Google Docs',
   'application/vnd.google-apps.spreadsheet': 'Google Sheets',
