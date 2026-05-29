@@ -30,6 +30,8 @@ web app. See `spec/SPEC_COWORK.md`.
   - `ui/package.json` (add the `@sentropic/cowork-bridge` workspace dependency)
   - `api/src/routes/auth/**`, `api/src/services/**` (device-code flow + registry)
   - `api/src/routes/api/chrome-extension.ts` (registry source extension) or new device route
+  - `api/src/app.ts` (mount a permissive rate-limiter on `/auth/device/*` — BR41a-N1, accepted)
+  - `api/tests/**` (device-code + registry + F1 gate tests)
   - `spec/SPEC_COWORK.md`
   - `plan/41a-BRANCH_feat-cowork-desktop-tools.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -82,8 +84,9 @@ web app. See `spec/SPEC_COWORK.md`.
   before the general `/auth/*` limiter. Reason: device poll runs at the RFC8628 `interval` (5s) while
   pending; the general auth limiter (10 req/15 min) would make polling unusable. Impact: additive,
   reuses the existing permissive session limiter; per-code throttle still enforced in the store.
-  `app.ts` is not in the explicit Allowed Paths list — flagged here for the conductor. Rollback:
-  remove the single line.
+  `app.ts` is not in the explicit Allowed Paths list — reviewed and ACCEPTED by conductor (minimal,
+  required, reuses existing limiter, follows the surrounding login/register/magic-link pattern);
+  `api/src/app.ts` added to Allowed Paths. Rollback: remove the single line.
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network nondeterminism as `flaky accepted`
