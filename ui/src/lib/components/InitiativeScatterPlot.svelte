@@ -1808,16 +1808,12 @@
 
   // BR-40a: indices (into rawData) of the top-N use cases that receive labels.
   // Ranked by value / (complexity + ε) capped; ties broken by value (see scoring.ts).
-  // BR-40a legacy guard: with >10 distinct business domains (un-normalized legacy
-  // folders) suppress labels entirely to avoid an unreadable chart (see tooManyDomains).
-  $: topLabelIndices = tooManyDomains
-    ? new Set<number>()
-    : new Set(
-        selectTopPriorityIndices(
-          rawData.map((point) => ({ value: point.y, complexity: point.x })),
-          TOP_LABEL_COUNT
-        )
-      );
+  $: topLabelIndices = new Set(
+    selectTopPriorityIndices(
+      rawData.map((point) => ({ value: point.y, complexity: point.x })),
+      TOP_LABEL_COUNT
+    )
+  );
 
   // BR-40a: distinct non-empty business domains (in first-seen order) + color map.
   $: domainList = (() => {
@@ -1834,7 +1830,8 @@
   })();
   $: domainColorMap = buildDomainColorMap(domainList);
   // BR-40a legacy guard: >10 distinct domains = un-normalized legacy folder; suppress
-  // per-domain colors, labels and the legend to keep the chart readable.
+  // per-domain COLORS (points become neutral slate) and the LEGEND only. The top-N
+  // priority labels are kept (capped at 10, useful, not overwhelming).
   $: tooManyDomains = domainList.length > 10;
   // Whether at least one point has no domain (drives the "No domain" legend row).
   $: hasUndomainedPoints = rawData.some((point) => !(point.domain ?? '').trim());
