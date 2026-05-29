@@ -13,8 +13,14 @@ import type {
  * `DESKTOP_ORIGIN` so the bridge origin-matching machinery still applies.
  */
 
-/** Synthetic origin used for all desktop tool permission entries. */
-export const DESKTOP_ORIGIN = 'desktop';
+/**
+ * Synthetic origin used for all desktop tool permission entries. Must be a
+ * multi-label hostname so the bridge `isValidHostname`/`normalizeOriginPattern`
+ * accepts it (single-label names like `desktop` are rejected, which would make
+ * `normalizeEntry` drop every persisted consent entry). The manager resolves it
+ * as `http://<DESKTOP_ORIGIN>` for the bridge matcher.
+ */
+export const DESKTOP_ORIGIN = 'desktop.cowork';
 
 /** Outcome of a consent check, before running the executor. */
 export type ConsentVerdict =
