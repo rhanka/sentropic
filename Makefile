@@ -1248,29 +1248,21 @@ db-backup: backup-dir up ## Backup local database to file
 	echo "✅ Backup created: $${BACKUP_FILE}"
 
 .PHONY: db-backup-prod
-db-backup-prod: backup-dir up ## Backup production database from Scaleway to local file (uses DATABASE_URL_PROD from .env)
-	@echo "💾 Creating backup from Scaleway production database..."
-	@if [ -z "$$DATABASE_URL_PROD" ]; then \
-		echo "❌ Error: DATABASE_URL_PROD must be set in .env file"; \
+db-backup-prod: backup-dir ## Backup the k8s production database to a local dump (uses KUBECONFIG; feeds the pre-merge migration test)
+	@echo "💾 Creating backup from the k8s production database (namespace $(K8S_NAMESPACE))..."
+	@if [ -z "$(KUBECONFIG)" ]; then \
+		echo "❌ Error: KUBECONFIG must be set (path to the poc cluster kubeconfig)"; \
 		exit 1; \
 	fi
-	@if [ -z "$$DB_SSL_CA_PEM_B64" ]; then \
-		echo "❌ Error: DB_SSL_CA_PEM_B64 must be set (base64-encoded CA PEM)"; \
-		exit 1; \
-	fi
-	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
+	@set -eu ; TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
 	BACKUP_FILE="data/backup/prod-$${TIMESTAMP}.dump"; \
 	echo "▶ Backing up to $${BACKUP_FILE}..."; \
-	docker run --rm \
-		-v $(PWD)/data/backup:/backups \
-		-e DATABASE_URL_PROD="$$DATABASE_URL_PROD" \
-		-e DB_SSL_CA_PEM_B64="$$DB_SSL_CA_PEM_B64" \
-		postgres:17-alpine sh -lc " \
-			printf '%s' \"$$DB_SSL_CA_PEM_B64\" | base64 -d > /tmp/ca.pem && \
-			export PGSSLMODE=verify-full && \
-			export PGSSLROOTCERT=/tmp/ca.pem && \
-		pg_dump \"$$DATABASE_URL_PROD\" -F c -f /backups/prod-$${TIMESTAMP}.dump"; \
-	echo "✅ Backup created: $${BACKUP_FILE}"
+	POD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get pods -l app.kubernetes.io/name=sentropic,app.kubernetes.io/component=postgres -o jsonpath='{.items[0].metadata.name}'); \
+	test -n "$$POD" || { echo "❌ Error: no postgres pod found in namespace $(K8S_NAMESPACE)"; exit 1; }; \
+	PGPASSWORD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d); \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) exec -i "$$POD" -- env PGPASSWORD="$$PGPASSWORD" pg_dump -h 127.0.0.1 -U app -d app -F c > "$$BACKUP_FILE"; \
+	test -s "$$BACKUP_FILE" || { echo "❌ Error: backup is empty — k8s pg_dump failed"; rm -f "$$BACKUP_FILE"; exit 1; }; \
+	echo "✅ Backup created: $${BACKUP_FILE} ($$(wc -c < "$$BACKUP_FILE") bytes)"
 
 .PHONY: db-restore
 db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump] ⚠ approval [SKIP_CONFIRM=true to skip prompt]
