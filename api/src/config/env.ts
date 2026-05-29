@@ -38,6 +38,9 @@ const envSchema = z.object({
   VSCODE_EXTENSION_DOWNLOAD_URL: z.string().optional(),
   VSCODE_EXTENSION_VERSION: z.string().optional(),
   VSCODE_EXTENSION_SOURCE: z.string().optional(),
+  COWORK_DESKTOP_DOWNLOAD_URL: z.string().optional(),
+  COWORK_DESKTOP_VERSION: z.string().optional(),
+  COWORK_DESKTOP_SOURCE: z.string().optional(),
   // ---------------------------------------------------------------------------
   // Outbound email — Scaleway Transactional Email (TEM) HTTP API.
   // SMTP egress is blocked at the Kapsule platform level (BR37b-FL1), so mail
