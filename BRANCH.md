@@ -87,6 +87,17 @@ web app. See `spec/SPEC_COWORK.md`.
   `app.ts` is not in the explicit Allowed Paths list — reviewed and ACCEPTED by conductor (minimal,
   required, reuses existing limiter, follows the surrounding login/register/magic-link pattern);
   `api/src/app.ts` added to Allowed Paths. Rollback: remove the single line.
+- **BR41a-Q4** `attention` (Lot 4, Makefile — conditional path, needs an exception): the new
+  `@sentropic/cowork-desktop` package has no make targets, and direct `docker run` is denied in the
+  sub-agent environment, so the Lot 4 typecheck/test could NOT be run by the sub-agent. Source + tests
+  are written and committed; a type-level review was done manually. Requested targets (mirror the
+  `cowork-bridge` ones, plus symlink `@sentropic/cowork-bridge` and `@sentropic/chat-ui` into
+  `node_modules/@sentropic` so tsc/vitest resolve the workspace `file:` deps):
+  `typecheck-cowork-desktop`, `test-cowork-desktop`, `build-cowork-desktop`, `pack-cowork-desktop`,
+  `publish-cowork-desktop` (OIDC), `publish-cowork-desktop-token` (bootstrap fallback). This extends
+  the BR41a-EX1 pattern (acknowledged for the bridge) to the desktop package. Decision deferred to the
+  conductor (the desktop package's first publish/packaging lands in Lot 5 with `BR41a-EX1`/`EX2`/`EX3`).
+  Rollback: remove the targets.
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network nondeterminism as `flaky accepted`
@@ -181,15 +192,38 @@ web app. See `spec/SPEC_COWORK.md`.
           One local cold-start timeout in unrelated `workspace-types` = machine-contention artifact
           (documented under `## AI Flaky tests`, CI proves it green).
 
-- [ ] **Lot 4 — Desktop tools (eyes + hands) + consent**
-  - [ ] Implement `screen_capture` and `input_action` (`click`/`type`/`scroll`/`key`) as
-        `ToolExecutor`s; pure-JS/prebuilt libs where possible.
-  - [ ] Per-tool consent (`allow_once`/`allow_always`/`deny`, default deny) in the tray; revoke =
-        `DELETE /auth/session` + clear tokens.
-  - [ ] Replace the proto's paste-token with the device-code flow from Lot 3.
+- [x] **Lot 4 — Desktop tools (eyes + hands) + consent**
+  - [x] Created `packages/cowork-desktop/**`: package skeleton (package.json/tsconfig/LICENSE/README),
+        a `DesktopCapabilityProvider` seam (`captureScreen`/`mouseClick`/`type`/`scroll`/`key`) with a
+        headless mock provider (all tests) + a dynamic-import Windows provider (`screenshot-desktop` +
+        `@nut-tree-fork/nut-js` as **optionalDependencies**; loads cleanly on Linux, throws
+        `CapabilityUnavailableError` when native libs absent), a Node file-backed `StorageAdapter` +
+        `ConsentStore`, the device-code enrollment client, the presence registry client, the runner,
+        and a thin `bin/cowork.mjs`.
+  - [x] Implemented `screen_capture` (eyes) and `input_action` (`click`/`type`/`scroll`/`key`) (hands)
+        as bridge `ToolExecutor`s fed by the `DesktopCapabilityProvider` (no native libs at this lot;
+        real Windows capture/input verified at UAT — Lot N-2).
+  - [x] Per-tool consent (`allow_once`/`allow_always`/`deny`, default DENY) over the bridge permission
+        schema; persisted via the Node `StorageAdapter`; a consent-gating dispatcher
+        (`runDesktopToolCall`) returns structured denied/needs-consent results. Revoke clears persisted
+        consent (`ConsentManager.revokeAll`); session revoke (`DELETE /auth/session`) is the bridge
+        `SessionAuthClient.logout`. Tray UI deferred to Lot 5 (model + headless `ConsentPrompt` hook).
+  - [x] Device-code enrollment client (`DeviceCodeClient`) drives Lot 3 `/auth/device/code` + `/poll`
+        (respects `interval` + `slow_down`), stores the token pair via the `StorageAdapter`; refresh via
+        the bridge auth logic. Replaces the proto's pasted token. Default cowork provider/model pin
+        (BR41a-F2) is wired at the chat-request layer in Lot 5 packaging (runner is provider-agnostic).
+  - [x] **BR41a-F1 gate**: the desktop runner advertises ONLY `screen_capture`/`input_action` and the
+        Lot 3 `chat-service.ts` browser-only auto-injection means desktop devices are never offered
+        `tab_read`/`tab_action`; the runner also ignores any non-desktop pending tool call.
   - [ ] Lot gate:
-    - [ ] `make typecheck` + `make lint` for the binary package
-    - [ ] **Unit tests**: tool executors (mock capture/input), consent policy matching.
+    - [ ] `make typecheck` + `make lint` for the binary package — **BLOCKED on BR41a-Q4** (no
+          `*-cowork-desktop` make target; Makefile is a conditional path; direct docker is denied).
+          Source/tests committed; type-level review done manually (verbatimModuleSyntax imports audited,
+          all bridge/chat-ui import paths verified against their `exports` maps).
+    - [ ] **Unit tests** (committed; run pending BR41a-Q4 target): `tests/consent.spec.ts`,
+          `tests/tools.spec.ts`, `tests/device-code-client.spec.ts`, `tests/file-store.spec.ts`,
+          `tests/registry-client.spec.ts`, `tests/cowork-runner.spec.ts` — all mock-based, headless,
+          no native libs, no display.
 
 - [ ] **Lot 5 — Portable Windows binary packaging**
   - [ ] `esbuild` bundle; package via Node SEA (fallback pkg; fallback folder-zip) cross-built from
