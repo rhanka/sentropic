@@ -60,8 +60,19 @@ web app. See `spec/SPEC_COWORK.md`.
   `previous_response_id` (`packages/chat-core/src/runtime-finalization.ts:267`), i.e. an OpenAI
   Responses-style transport. The proto worked with `providerId:"openai"`. Lot 4 must pin the default
   cowork provider/model to one that returns a response id.
-- **BR41a-Q2** `attention`: packaging — Node SEA vs pkg vs folder-zip fallback; decided at Lot 5.
-- **BR41-Q1** `attention`: code-signing strategy (unsigned → SmartScreen/AV); likely deferred.
+- **BR41a-Q2** `acknowledge` — DECIDED (user, Lot 5): a single signable Windows `.exe` (pkg preferred for
+  native-module support + Linux→Windows cross-compile; Node SEA fallback). Folder-zip is dropped (it has
+  no Authenticode-signable artifact). The exe bundles the optional native libs (capture/input); native
+  single-exe bundling risk accepted — if it proves infeasible the build STOPS and reports (no silent
+  folder-zip fallback). Distributed via a download endpoint mirroring the chrome-ext one.
+- **BR41-Q1** `acknowledge` — DECIDED (user, Lot 5): sign the `.exe` in BR-41a via `osslsigncode`
+  (Linux/Docker) with the user's **OV `.pfx`** cert (an EV-on-hardware-token cert can't sign headless).
+  The packaging integrates a signing step gated on a provided cert file + password (skipped with a
+  warning if absent); the actual signing run is **attendu** (awaiting the user's `.pfx` + password).
+- **BR41a-Q5** `attention` — DECIDED (user, Lot 5): publish `@sentropic/cowork-desktop` on npm too (not
+  `private`). Needs: `publish-cowork-desktop[-token]` make targets + a CI OIDC `publish-cowork-desktop`
+  job (EX1/EX3) + an npm **trusted publisher** for the package (set up via Playwright — **attendu**,
+  Playwright MCP currently disconnected).
 - **BR41a-EX1** `acknowledge` (Makefile): add `typecheck-cowork-bridge`, `test-cowork-bridge`,
   `build-cowork-bridge`, `pack-cowork-bridge`, `publish-cowork-bridge` (OIDC),
   `publish-cowork-bridge-token` (bootstrap fallback), mirroring the chat-ui targets line-for-line.
