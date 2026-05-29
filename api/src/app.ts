@@ -158,6 +158,10 @@ if (!env.DISABLE_RATE_LIMIT) {
   app.use('/api/v1/auth/login/*', authLoginRateLimiter);
   app.use('/api/v1/auth/register/*', authRegisterRateLimiter);
   app.use('/api/v1/auth/magic-link/*', magicLinkRateLimiter);
+  // Device-code enrollment is polled at `interval` (default 5s) while pending,
+  // so it needs a permissive limiter (the general one is 10/15min). Per-code
+  // throttling/single-use/expiry is enforced in the device-code store.
+  app.use('/api/v1/auth/device/*', authSessionRateLimiter);
   // 2. General auth routes last (excludes already matched routes)
   app.use('/api/v1/auth/*', authRateLimiter);
 }

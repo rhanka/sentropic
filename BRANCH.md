@@ -74,6 +74,16 @@ web app. See `spec/SPEC_COWORK.md`.
   enforces 2FA-and-disallow-tokens default for new packages; trusted publishing is the clean path).
 - **BR41a-EX2** (`docker-compose*`) and **BR41a-EX4** (`api/drizzle/*.sql`) to be declared at Lot 5 /
   Lot 3 respectively if needed.
+- **BR41a-Q3** `acknowledge` (Lot 3, device-code store): chose IN-MEMORY store with TTL
+  (`api/src/services/device-code-store.ts`, mirrors `tab-registry.ts`) per launch-packet default →
+  **EX4 NOT needed** (no DB migration). Single-use codes, 10-min TTL, `slow_down` throttle.
+- **BR41a-N1** `acknowledge` (Lot 3, scope note on `api/src/app.ts`): added one additive
+  most-specific-first rate-limiter line `app.use('/api/v1/auth/device/*', authSessionRateLimiter)`
+  before the general `/auth/*` limiter. Reason: device poll runs at the RFC8628 `interval` (5s) while
+  pending; the general auth limiter (10 req/15 min) would make polling unusable. Impact: additive,
+  reuses the existing permissive session limiter; per-code throttle still enforced in the store.
+  `app.ts` is not in the explicit Allowed Paths list — flagged here for the conductor. Rollback:
+  remove the single line.
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network nondeterminism as `flaky accepted`
@@ -130,8 +140,12 @@ web app. See `spec/SPEC_COWORK.md`.
           OIDC trusted publisher on npmjs.com — plumbing tracked as BR41a-EX1 (Makefile) + BR41a-EX3 (ci.yml).
 
 - [ ] **Lot 3 — Backend device-code enrollment + device registry**
-  - [ ] `POST /auth/device/code` + `POST /auth/device/poll` (short-lived single-use codes, throttled
-        poll), minting the token pair via `session-manager.createSession` with device name.
+  - [x] `POST /auth/device/code` + `POST /auth/device/poll` + `POST /auth/device/approve` (auth);
+        short-lived (10 min) single-use codes, throttled poll (`slow_down`), minting the token pair
+        via `session-manager.createSession` with the approving user's role + device name. In-memory
+        store with TTL (`device-code-store.ts`, mirrors `tab-registry.ts`) — NO DB migration, EX4 NOT
+        needed. New `deviceRouter` mounted in `auth/index.ts`; permissive rate-limiter line added in
+        `app.ts` for `/auth/device/*` (device poll is 5s-interval; general auth limiter is 10/15min).
   - [ ] Minimal web "pair a device" page (enter `user_code` + confirm + device name).
   - [x] Extend the presence registry for `source: "desktop_cowork"` (BR41a-Q1 default: extend).
         `VALID_TAB_SOURCES` + `TabSource` union now accept `desktop_cowork`; `device_<uuid>` id pattern;
