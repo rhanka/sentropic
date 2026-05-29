@@ -115,6 +115,12 @@ hover-driven emphasis (hovering a point or a domain enlarges the points of that 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted`;
   at least one success on the same commit + command; never add timeouts; record signature + user sign-off.
+- **AI-flaky observed (run 26650988039, HEAD `e8bfa5df`, shard `ai,…initiative-gener…` job 78549458337)**:
+  `tests/ai/chat-tools.test.ts` ×3 (`update_initiative_field`, `web_extract` array URLs, `matrix_get`
+  folder ctx — 15s/30s/30s OpenAI timeouts + a `chat_stream_events` FK cascade) and
+  `tests/ai/company-enrichment-sync.test.ts` ×1 (single-model, 60s timeout). UNRELATED to BR-40a — in
+  the same shard `initiative-generation` + `documents-tool` PASSED, so the domain-normalization paths
+  are green. Resolution: re-run the shard for a clean pass on the same commit (no timeout inflation).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (single frontend-centric capability + small backend cap change).
@@ -128,11 +134,11 @@ hover-driven emphasis (hovering a point or a domain enlarges the points of that 
 - Root UAT env: `ENV=dev` on `/home/antoinefa/src/sentropic`, commit-identical to branch HEAD.
 
 ## Plan / Todo (lot-based) — framing RESOLVED, ready to execute
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `TODO.md`, `PLAN.md`, this branch file.
-  - [ ] Create isolated worktree `tmp/feat-prioritization-matrix-scale` from `main`.
-  - [ ] Confirm command style with slot-0 ports and `ENV=...` last.
-  - [ ] Framing resolved (BR40a-Q1 ratio+ε, BR40a-Q2 color=domain, BR40a-Q3 soft cap) — see Feedback Loop.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `TODO.md`, `PLAN.md`, this branch file.
+  - [x] Create isolated worktree `tmp/feat-prioritization-matrix-scale` from `main`.
+  - [x] Confirm command style with slot-0 ports and `ENV=...` last.
+  - [x] Framing resolved (BR40a-Q1 ratio+ε, BR40a-Q2 color=domain, BR40a-Q3 soft cap) — see Feedback Loop.
 
 - [x] **Lot 1 — Use-case cap to 50**
   - [x] Raise the per-folder cap to 50 in the generation path: `initiatives.ts` Zod `.max(50)` + `folder/new` form clamp/attr `50` (see BR40a-EX1; `executive-summary.ts` has no cap).
@@ -178,11 +184,15 @@ hover-driven emphasis (hovering a point or a domain enlarges the points of that 
     (domain-normalization 3/3, queue-manager-contract 3/3, detail-contract 2/2,
     initiatives-workflow-runtime 4/4, gate-evaluation 18/18, prompts 1/1).
 
-- [ ] **Lot N-2 — UAT** (web app: cap to 50, top-10 labels, hide-bubbles, domain filter, hover emphasis;
-      non-reg: existing folder chart, DOCX export). Awaiting user UAT on root `ENV=dev`.
-- [ ] **Lot N-1 — Docs consolidation** (no `spec/BRANCH_SPEC_EVOL.md` was added; no spec file touched —
-      chart UX behavior is self-documented in `InitiativeScatterPlot.svelte` + this BRANCH.md).
-- [ ] **Lot N — Final validation** (PR → CI → user UAT sign-off → remove `BRANCH.md` → merge). PR pushed for CI + UAT; merge deferred to user.
+- [x] **Lot N-2 — UAT** — user sign-off 2026-05-29 on root `ENV=dev`: cap to 50, top-10 ratio labels,
+      hide-labels toggle (keeps quadrant + points, persists, no blink), business-domain legend + filter +
+      hover emphasis, normalized domains (re-gen → 5-8 clean domains), >10-domains legacy guard (neutral
+      colors + legend hidden, top-N labels kept), "Domaine" wording, icon-only labels button, plus
+      print + DOCX export all validated. No regressions reported.
+- [x] **Lot N-1 — Docs consolidation** (no `spec/BRANCH_SPEC_EVOL.md` added; chart UX self-documented in
+      `InitiativeScatterPlot.svelte` + this BRANCH.md).
+- [ ] **Lot N — Final validation** — UAT signed off ✅; rebased on current `origin/main` (e8bfa5df);
+      pending CI green on PR #187, then remove `BRANCH.md` → merge (merge commit, §0).
 
 ## Verification (branch HEAD)
 - [x] `make typecheck-ui` — svelte-check 0 errors (6 pre-existing warnings, none in changed files).
