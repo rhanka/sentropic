@@ -259,6 +259,17 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - `git diff origin/main..HEAD -- api/tests/api/workspaces.test.ts` is empty and the branch never committed to `workspaces.test.ts`, `workspace-service.ts`, or `workspace-access.ts` — files are identical to `origin/main`.
     - Failure is in `beforeEach` (importApp + two `createAuthenticatedUser`), which does not pass through `requireAuth`/`optionalAuth`.
   - Recommendation: treat as a pre-existing/environment-specific timeout (local docker DB user/session creation exceeding the 10s hook timeout), unrelated to auth extraction. Do not raise the hook timeout (masks bugs). Investigate separately before branch close; not a blocker for the middleware slice.
+- `BR39b-Q7`
+  - Branch: BR-39b `feat/auth-hono-kit`
+  - Owner: implementation worker (contract owner)
+  - Severity: design (gates the WebAuthn register/login extraction)
+  - Status: open
+  - Repro steps: attempt to rewire `api/src/routes/auth/register.ts` and `login.ts` onto `createAuthWebAuthnRegistrationRouteHandlers` / `createAuthWebAuthnAuthenticationRouteHandlers`.
+  - Expected: package handlers preserve current Sentropic behavior.
+  - Actual: gaps in the package WebAuthn route-handler contract:
+    - `createPasskeyRegistrationOptions` calls `prepareRegistrationOptions` (returns a value, not a Response), so Sentropic's `403` early returns in `register/options` (invalid verification token, email-not-verified) cannot be expressed.
+    - `verifyPasskeyRegistration` and `verifyPasskeyAuthentication` return only `{ credentialId|success, userId }`; they do not create a session, set the session cookie, or return Sentropic's `sessionToken`/`refreshToken`/`expiresAt`/`isFirstDevice`/`otherDevices`/`requiresDeviceRegistration` response.
+  - Recommendation: extend the package WebAuthn route-handler contract before app rewiring — (1) let prepare/resolve hooks short-circuit with a typed `{ status, code, message }` error, and (2) add an optional post-verify success hook (`finalizeRegistration`/`finalizeAuthentication`) that receives the verified `userId` + context and returns the host response (session creation, cookie, body). Then extract `register`/`login` options + verify via those hooks (app-owned session/cookie/account-status policy stays in the hook). Add package tests + version bump per the publication rule. This is the next Lot 3 slice and is larger than the prior wires; `login/options` is the only sub-route wireable without contract changes.
 
 ## AI Flaky tests
 - Acceptance rule:
