@@ -655,6 +655,13 @@ const replay = await replayChatSession('session-789');
 4. **Notifications** → AI is notified on upload for acknowledgement; any use‑case processing depending on the doc waits for status ready only for explorable documents. Download-only archives do not enter indexing/exploration flows.
 5. **Traceability** → `context_modification_history` events `document_added` / `document_summarized` with `prompt_version_id` and `job_id`
 
+#### Chat image attachments (BR-38a)
+- Images pasted, dropped, uploaded, or picked from Drive in the chat composer are stored through the same `context_documents` path (chat-session context) so they can be sent as vision parts and reused in later turns.
+- Image context documents skip the auto-summary job: an image is not a summarized text document and carries no `summary` affordance.
+- Presentation is image-first and single-instance: each attached image is shown once in the composer attachment band (deduplicated by `documentId`), never simultaneously as a separate "document summary row" and a "capture thumbnail".
+- The composer attachment band lists session documents and pending composer attachments together at the top of the edit surface, using one shared item style: images render their preview thumbnail, non-image documents render a file-type icon.
+- Sent images render inline in the user message bubble as thumbnails. Image thumbnails (band and bubble) open a full-size preview (lightbox) on click; non-image documents keep their download/open behavior.
+
 ## Technical impact study (API/UI/DB/queue anchor)
 
 - [x] **Database**:

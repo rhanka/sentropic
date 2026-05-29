@@ -127,6 +127,13 @@ Add first-class image input to Sentropic chat and document context flows: users 
   - Main sync 2026-05-24: merged `origin/main` after root fast-forward from `85c679d7` to `146364eb`; no merge conflicts. Verification below was rerun on the merged head.
   - Latest main sync 2026-05-24: merged `origin/main` again after `main` advanced from `146364eb` to `d5e3cddc`; no merge conflicts.
   - UAT remains pending. This branch must not be undrafted/merged until root UAT runs from a commit-identical root workspace and CI is green on the final pushed head.
+  - `BR38a-FB1` UI/UX anomaly 2026-05-26 (UAT). Owner: 38a-ui. Severity: medium. Status: in progress (Lot U1).
+    - Repro: paste/upload an image into the chat composer.
+    - Expected: one image-first attachment item, same box style/position as documents, thumbnail clickable to enlarge.
+    - Actual: the same image shows twice — a "document summary row" (top, no thumbnail, summary affordance) and a "capture" tray box (below, with thumbnail); neither thumbnail is hoverable/clickable to enlarge.
+    - Root cause: a composer image is added both as a `composerAttachments` draft (bottom tray) and as a chat-session `context_document` (top doc chip via `loadSessionDocs`); the two surfaces use different styles/positions and there is no lightbox.
+    - Resolution: unify both surfaces into one deduplicated attachment band at the top (one shared box style; image preview vs file-type icon), drop the bottom tray usage, suppress summary for image context documents, and add an app-level click-to-enlarge lightbox for band and message thumbnails. Frozen in `spec/SPEC_CHATBOT.md` and `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`.
+    - Evidence: `ui/src/lib/components/chat/AppChatPanel.svelte` `renderComposerSurface` (sessionDocs chips) vs `renderAttachmentTray` (composer tray); `attachImageFileToComposer` dual write.
 
 ## Verification Ledger
 - 2026-05-24 RED: `make test-api-unit SCOPE="tests/unit/chat-service-tools.test.ts" API_TEST_WORKERS=1 API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input` failed as expected before the fix because `loadContextDocumentContent` was called 0 times.
@@ -248,6 +255,24 @@ Add first-class image input to Sentropic chat and document context flows: users 
     - [ ] `make test-ui SCOPE=tests/utils/google-drive-picker.test.ts ENV=test-feat-multimodal-image-input`
     - [ ] `make test-ui SCOPE=tests/utils/document-source-menu.test.ts ENV=test-feat-multimodal-image-input`
 
+- [ ] **Lot U1 - UAT fix: image attachment UX (BR38a-FB1)**
+  - [ ] Add a deduplicated attachment-merge helper in `ui/src/lib/utils/documents.ts` (merge session documents + pending composer attachments by `documentId`, classify image vs document).
+  - [ ] Unify the composer attachment band at the top of the edit surface: one shared box style (image preview thumbnail vs file-type icon, filename, status, remove); stop rendering the bottom `renderAttachmentTray`.
+  - [ ] Remove an item from the band by removing both the pending composer attachment and its session context document when present.
+  - [ ] Suppress the summary affordance for image context documents in the band.
+  - [ ] Make image thumbnails (band and sent message bubble) clickable with hover affordance, opening an app-level lightbox (full-size preview, download, close via Esc/backdrop/button, keyboard-focusable).
+  - [ ] Add i18n keys for the lightbox (open/enlarge, close, download) in `ui/src/locales/en.json` and `ui/src/locales/fr.json`.
+  - [ ] Keep `@sentropic/chat-ui` untouched (generic tray slot left unused; no package version bump required).
+  - [ ] Lot gate:
+    - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input`
+    - [ ] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input`
+    - [ ] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input`
+    - [ ] `make typecheck-ui ENV=test-feat-multimodal-image-input`
+    - [ ] `make lint-ui ENV=test-feat-multimodal-image-input`
+    - [ ] `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
+    - [ ] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
+    - [ ] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
+
 - [ ] **Lot N-2 - UAT**
   - [ ] Web app setup:
     - [ ] Push branch before UAT.
@@ -260,6 +285,8 @@ Add first-class image input to Sentropic chat and document context flows: users 
     - [ ] Attach an image from Documents to a chat session and verify it is visible in the session document list.
     - [ ] Pick an image from Google Drive and verify the image imports as a document and can be used in chat.
     - [ ] Select a text-only model with an image attached and verify the pre-dispatch error is clear and recoverable.
+    - [ ] (BR38a-FB1) Paste/upload an image and verify it appears once, top of the edit, same box style as documents (no duplicate summary row + capture box).
+    - [ ] (BR38a-FB1) Click the image thumbnail in the band and in the sent message and verify the lightbox opens, downloads, and closes (Esc/backdrop/button).
   - [ ] Web app non-regression tests:
     - [ ] Existing PDF/DOCX/PPTX/text document upload still processes.
     - [ ] Existing text-only chat send/retry/edit/stop flows still work.
