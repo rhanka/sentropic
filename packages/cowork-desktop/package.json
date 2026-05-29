@@ -37,6 +37,7 @@
     "test": "vitest run tests"
   },
   "dependencies": {
+    "@sentropic/chat-ui": "file:../chat-ui",
     "@sentropic/cowork-bridge": "file:../cowork-bridge"
   },
   "optionalDependencies": {
