@@ -754,6 +754,38 @@ build-cowork-desktop: ## Build @sentropic/cowork-desktop dist package
 pack-cowork-desktop: build-cowork-desktop ## Validate @sentropic/cowork-desktop npm package contents without publishing
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'npm pack --dry-run'
 
+.PHONY: package-desktop-windows
+package-desktop-windows: ## Build the signable single Windows .exe for @sentropic/cowork-desktop (BR41a Lot 5). Signing is gated on COWORK_SIGN_PFX (+ COWORK_SIGN_PASS); skipped with a warning if absent.
+	@echo "📦 Packaging @sentropic/cowork-desktop -> single Windows .exe (esbuild + @yao-pkg/pkg + osslsigncode)…"
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules build'
+	@docker run --rm \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e COWORK_SIGN_PFX="$${COWORK_SIGN_PFX:-}" \
+		-e COWORK_SIGN_PASS="$${COWORK_SIGN_PASS:-}" \
+		-e COWORK_SIGN_TS_URL="$${COWORK_SIGN_TS_URL:-}" \
+		$(if $(COWORK_SIGN_PFX),-v "$(COWORK_SIGN_PFX):$(COWORK_SIGN_PFX):ro",) \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/cowork-desktop \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+			export DEBIAN_FRONTEND=noninteractive; \
+			apt-get update -qq >/dev/null && apt-get install -y -qq --no-install-recommends osslsigncode zip ca-certificates >/dev/null; \
+			tool_dir="$$(mktemp -d)"; \
+			npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund esbuild@0.25.10 @yao-pkg/pkg@6.9.0 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; \
+			mkdir -p node_modules/@sentropic node_modules/.bin; \
+			ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; \
+			ln -sfn ../../../chat-ui node_modules/@sentropic/chat-ui; \
+			ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; \
+			ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; \
+			ln -sfn "$$tool_dir/node_modules/esbuild" node_modules/esbuild; \
+			ln -sfn "$$tool_dir/node_modules/.bin/pkg" node_modules/.bin/pkg; \
+			export PATH="$$PWD/node_modules/.bin:$$tool_dir/node_modules/.bin:$$PATH"; \
+			export NODE_PATH="$$tool_dir/node_modules"; \
+			node packaging/package-windows.mjs; \
+			rm -rf node_modules'
+	@docker run --rm -e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'chown -R "$$HOST_UID:$$HOST_GID" /workspace/packages/cowork-desktop/build /workspace/ui/static/cowork-desktop 2>/dev/null || true'
+	@echo "✅ Windows .exe packaged in ui/static/cowork-desktop/"
+
 .PHONY: install-internal-packages
 install-internal-packages: ## Install workspace deps and link @sentropic/{contracts,events,chat-core,flow} into node_modules (no api/ui)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'npm ci --workspace=packages/contracts --workspace=packages/events --workspace=packages/chat-core --workspace=packages/flow --include-workspace-root --ignore-scripts --no-audit --no-fund'
