@@ -146,15 +146,22 @@ web app. See `spec/SPEC_COWORK.md`.
         store with TTL (`device-code-store.ts`, mirrors `tab-registry.ts`) — NO DB migration, EX4 NOT
         needed. New `deviceRouter` mounted in `auth/index.ts`; permissive rate-limiter line added in
         `app.ts` for `/auth/device/*` (device poll is 5s-interval; general auth limiter is 10/15min).
-  - [ ] Minimal web "pair a device" page (enter `user_code` + confirm + device name).
+  - [x] Minimal web "pair a device" page (enter `user_code` + confirm + device name) at
+        `ui/src/routes/auth/devices/pair/+page.svelte` (auto-protected via `/auth/devices/*`); calls
+        `POST /auth/device/approve`; reuses existing components/styles; i18n FR+EN under
+        `auth.devices.pair`; linked from the existing `/auth/devices` page.
   - [x] Extend the presence registry for `source: "desktop_cowork"` (BR41a-Q1 default: extend).
         `VALID_TAB_SOURCES` + `TabSource` union now accept `desktop_cowork`; `device_<uuid>` id pattern;
         `isBrowserSource()` helper added. BR41a-F1 gate applied in `chat-service.ts` (auto-injection of
         `tab_read`/`tab_action` filtered to browser sources only).
   - [ ] Lot gate:
-    - [ ] `make typecheck-api` + `make lint-api`
-    - [ ] **API tests**: add `api/tests/api/auth-device-code.spec.ts`; update registry tests.
-    - [ ] Sub-lot gate: `make test-api ENV=test-cowork-desktop-tools`
+    - [x] `make typecheck-api` ✅ (exit 0)
+    - [ ] `make lint-api` (pending — run below)
+    - [x] **API tests**: added `api/tests/api/auth-device-code.spec.ts` (9 cases) +
+          `api/tests/api/chrome-extension-register.test.ts` (3 cases) + unit
+          `tests/unit/device-code-store.test.ts` (10 cases); updated `tests/unit/tab-registry.test.ts`
+          (+desktop_cowork +isBrowserSource) and `tests/unit/chat-service-tab-tools.test.ts` (+F1 gate).
+    - [ ] Sub-lot gate: scoped `make test-api-endpoints`/`test-api-unit` (run below; full suite by conductor)
 
 - [ ] **Lot 4 — Desktop tools (eyes + hands) + consent**
   - [ ] Implement `screen_capture` and `input_action` (`click`/`type`/`scroll`/`key`) as
