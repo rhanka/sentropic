@@ -60,15 +60,18 @@ web app. See `spec/SPEC_COWORK.md`.
   cowork provider/model to one that returns a response id.
 - **BR41a-Q2** `attention`: packaging — Node SEA vs pkg vs folder-zip fallback; decided at Lot 5.
 - **BR41-Q1** `attention`: code-signing strategy (unsigned → SmartScreen/AV); likely deferred.
-- **BR41a-EX1** `acknowledge` (Makefile): add `build-cowork-bridge`, `pack-cowork-bridge`,
-  `publish-cowork-bridge` (OIDC), `publish-cowork-bridge-token` (bootstrap), mirroring the chat-ui
-  targets line-for-line. Reason: publish `@sentropic/cowork-bridge` from within this branch (the
-  in-situ refacto validates it; publishing an unconsumed package to main would be unvalidated).
-  Impact: additive targets only, no change to existing ones. Rollback: remove the four targets.
-- **BR41a-EX3** `acknowledge` (`.github/workflows/ci.yml`): add `cowork-bridge` to the
-  `bootstrap_publish_target` enum + a bootstrap step, a steady-state OIDC `publish-cowork-bridge`
-  job, and the package to the `changes`/path filter. Reason: steady-state automated publishing on
-  main after the first manual publish. Impact: additive CI jobs. Rollback: remove the added jobs/step.
+- **BR41a-EX1** `acknowledge` (Makefile): add `typecheck-cowork-bridge`, `test-cowork-bridge`,
+  `build-cowork-bridge`, `pack-cowork-bridge`, `publish-cowork-bridge` (OIDC),
+  `publish-cowork-bridge-token` (bootstrap fallback), mirroring the chat-ui targets line-for-line.
+  Reason: validate + publish `@sentropic/cowork-bridge`; the in-situ refacto validates the package.
+  Impact: additive targets only. Rollback: remove the targets.
+- **BR41a-EX3** `acknowledge` (`.github/workflows/ci.yml`): add `cowork_bridge`/`cowork_bridge_publish`
+  path filters, a `validate-cowork-bridge` job, and a steady-state OIDC `publish-cowork-bridge` job
+  (fires on `github.ref == main`). Reason: trusted-publishing (OIDC) — the npm trusted publisher for
+  `@sentropic/cowork-bridge` is configured (repo `rhanka/sentropic`, workflow `ci.yml`, `npm publish`),
+  so the first and subsequent publishes happen via CI on merge to main, no token. Impact: additive CI
+  jobs. Rollback: remove the added jobs/filters. Note: the token bootstrap path was abandoned (org
+  enforces 2FA-and-disallow-tokens default for new packages; trusted publishing is the clean path).
 - **BR41a-EX2** (`docker-compose*`) and **BR41a-EX4** (`api/drizzle/*.sql`) to be declared at Lot 5 /
   Lot 3 respectively if needed.
 

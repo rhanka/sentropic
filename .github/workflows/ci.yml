@@ -135,6 +135,16 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'packages/chat-ui/**'
+            cowork_bridge:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/cowork-bridge/**'
+              - '.github/workflows/ci.yml'
+            cowork_bridge_publish:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/cowork-bridge/**'
             chat_core:
               - 'Makefile'
               - 'package.json'
@@ -269,6 +279,23 @@ jobs:
         run: make build-chat-ui
       - name: Pack Chat UI
         run: make pack-chat-ui
+
+  validate-cowork-bridge:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.cowork_bridge == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck Cowork Bridge
+        run: make typecheck-cowork-bridge
+      - name: Test Cowork Bridge
+        run: make test-cowork-bridge
+      - name: Build Cowork Bridge
+        run: make build-cowork-bridge
+      - name: Pack Cowork Bridge
+        run: make pack-cowork-bridge
 
   validate-contracts:
     runs-on: ubuntu-latest
@@ -830,6 +857,20 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Publish Chat UI
         run: make publish-chat-ui
+
+  publish-cowork-bridge:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-cowork-bridge, test-api-unit-integration, test-e2e, e2e-vscode, test-smoke-restore, security-container]
+    if: needs.changes.outputs.cowork_bridge_publish == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Publish Cowork Bridge
+        run: make publish-cowork-bridge
 
   publish-contracts:
     runs-on: ubuntu-latest
