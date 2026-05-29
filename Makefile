@@ -503,56 +503,6 @@ publish-e2e-image: docker-login
 	@docker push $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION)
 
 
-# -----------------------------------------------------------------------------
-# Scaleway deployement helpers
-# -----------------------------------------------------------------------------
-check-scw:
-	@if ! command -v scw >/dev/null 2>&1; then \
-		echo "ℹ️ scw (Scaleway CLI) not found. Attempting to install..."; \
-		curl -sL https://raw.githubusercontent.com/scaleway/scaleway-cli/master/scripts/get.sh | sh && \
-		echo "✅ Scaleway CLI installed. You might need to start a new shell for it to be in your PATH."; \
-	fi
-
-deploy-api-container-init: check-scw
-	@echo "▶️ Creating container $(API_IMAGE_NAME) in namespace $(SCW_NAMESPACE_ID)..."
-	@API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
-	if [ -n "$${API_CONTAINER_ID}" ]; then \
-		echo "✅ Container $(API_IMAGE_NAME) already exists (ID: $${API_CONTAINER_ID})"; \
-	else \
-		scw container container create \
-			name=$(API_IMAGE_NAME) \
-			namespace-id=$(SCW_NAMESPACE_ID) \
-			registry-image=$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) \
-			port=8787 \
-			min-scale=0 \
-			max-scale=1 \
-			memory-limit=2048 \
-			cpu-limit=1000 \
-			timeout=5m \
-			privacy=public \
-			protocol=http1 && \
-		echo "✅ Container $(API_IMAGE_NAME) created successfully"; \
-	fi
-
-deploy-api-container: check-scw
-	@echo "▶️ Updating new container $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) to Scaleway..."
-	@API_CONTAINER_ID=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$1}'); \
-	scw container container update $${API_CONTAINER_ID} registry-image="$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)" > .deploy_output.log
-	@echo "✅ New container deployment initiated."
-
-wait-for-container: check-scw
-	@printf "⌛ Waiting for container to become ready.."
-	@API_CONTAINER_STATUS="pending"; \
-	while [ "$${API_CONTAINER_STATUS}" != "ready" ]; do \
-		API_CONTAINER_STATUS=$$(scw container container list | awk '($$2=="$(API_IMAGE_NAME)"){print $$4}'); \
-		printf "."; \
-		sleep 1; \
-	done; \
-	printf "\n✅ New container is ready.\n"
-
-deploy-api: deploy-api-container wait-for-container
-
-
 .PHONY: typecheck
 typecheck: typecheck-ui typecheck-api ## Run all type checks
 
@@ -1298,29 +1248,21 @@ db-backup: backup-dir up ## Backup local database to file
 	echo "✅ Backup created: $${BACKUP_FILE}"
 
 .PHONY: db-backup-prod
-db-backup-prod: backup-dir up ## Backup production database from Scaleway to local file (uses DATABASE_URL_PROD from .env)
-	@echo "💾 Creating backup from Scaleway production database..."
-	@if [ -z "$$DATABASE_URL_PROD" ]; then \
-		echo "❌ Error: DATABASE_URL_PROD must be set in .env file"; \
+db-backup-prod: backup-dir ## Backup the k8s production database to a local dump (uses KUBECONFIG; feeds the pre-merge migration test)
+	@echo "💾 Creating backup from the k8s production database (namespace $(K8S_NAMESPACE))..."
+	@if [ -z "$(KUBECONFIG)" ]; then \
+		echo "❌ Error: KUBECONFIG must be set (path to the poc cluster kubeconfig)"; \
 		exit 1; \
 	fi
-	@if [ -z "$$DB_SSL_CA_PEM_B64" ]; then \
-		echo "❌ Error: DB_SSL_CA_PEM_B64 must be set (base64-encoded CA PEM)"; \
-		exit 1; \
-	fi
-	@TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
+	@set -eu ; TIMESTAMP=$$(date +%Y-%m-%dT%H-%M-%S); \
 	BACKUP_FILE="data/backup/prod-$${TIMESTAMP}.dump"; \
 	echo "▶ Backing up to $${BACKUP_FILE}..."; \
-	docker run --rm \
-		-v $(PWD)/data/backup:/backups \
-		-e DATABASE_URL_PROD="$$DATABASE_URL_PROD" \
-		-e DB_SSL_CA_PEM_B64="$$DB_SSL_CA_PEM_B64" \
-		postgres:17-alpine sh -lc " \
-			printf '%s' \"$$DB_SSL_CA_PEM_B64\" | base64 -d > /tmp/ca.pem && \
-			export PGSSLMODE=verify-full && \
-			export PGSSLROOTCERT=/tmp/ca.pem && \
-		pg_dump \"$$DATABASE_URL_PROD\" -F c -f /backups/prod-$${TIMESTAMP}.dump"; \
-	echo "✅ Backup created: $${BACKUP_FILE}"
+	POD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get pods -l app.kubernetes.io/name=sentropic,app.kubernetes.io/component=postgres -o jsonpath='{.items[0].metadata.name}'); \
+	test -n "$$POD" || { echo "❌ Error: no postgres pod found in namespace $(K8S_NAMESPACE)"; exit 1; }; \
+	PGPASSWORD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d); \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) exec -i "$$POD" -- env PGPASSWORD="$$PGPASSWORD" pg_dump -h 127.0.0.1 -U app -d app -F c > "$$BACKUP_FILE"; \
+	test -s "$$BACKUP_FILE" || { echo "❌ Error: backup is empty — k8s pg_dump failed"; rm -f "$$BACKUP_FILE"; exit 1; }; \
+	echo "✅ Backup created: $${BACKUP_FILE} ($$(wc -c < "$$BACKUP_FILE") bytes)"
 
 .PHONY: db-restore
 db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump] ⚠ approval [SKIP_CONFIRM=true to skip prompt]
