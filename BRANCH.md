@@ -139,7 +139,7 @@ web app. See `spec/SPEC_COWORK.md`.
           (`workflow_dispatch bootstrap_publish_target=cowork-bridge`, requires `github.ref==main`) +
           OIDC trusted publisher on npmjs.com — plumbing tracked as BR41a-EX1 (Makefile) + BR41a-EX3 (ci.yml).
 
-- [ ] **Lot 3 — Backend device-code enrollment + device registry**
+- [x] **Lot 3 — Backend device-code enrollment + device registry**
   - [x] `POST /auth/device/code` + `POST /auth/device/poll` + `POST /auth/device/approve` (auth);
         short-lived (10 min) single-use codes, throttled poll (`slow_down`), minting the token pair
         via `session-manager.createSession` with the approving user's role + device name. In-memory
@@ -154,14 +154,15 @@ web app. See `spec/SPEC_COWORK.md`.
         `VALID_TAB_SOURCES` + `TabSource` union now accept `desktop_cowork`; `device_<uuid>` id pattern;
         `isBrowserSource()` helper added. BR41a-F1 gate applied in `chat-service.ts` (auto-injection of
         `tab_read`/`tab_action` filtered to browser sources only).
-  - [ ] Lot gate:
-    - [x] `make typecheck-api` ✅ (exit 0)
-    - [ ] `make lint-api` (pending — run below)
+  - [x] Lot gate:
+    - [x] `make typecheck-api` ✅ (exit 0) + `make lint-api` ✅ (0 errors; 178 pre-existing warnings
+          in untouched files — no new warnings from device-code-store.ts / device.ts).
     - [x] **API tests**: added `api/tests/api/auth-device-code.spec.ts` (9 cases) +
           `api/tests/api/chrome-extension-register.test.ts` (3 cases) + unit
-          `tests/unit/device-code-store.test.ts` (10 cases); updated `tests/unit/tab-registry.test.ts`
-          (+desktop_cowork +isBrowserSource) and `tests/unit/chat-service-tab-tools.test.ts` (+F1 gate).
-    - [ ] Sub-lot gate: scoped `make test-api-endpoints`/`test-api-unit` (run below; full suite by conductor)
+          `tests/unit/device-code-store.test.ts` (9 cases); updated `tests/unit/tab-registry.test.ts`
+          (+desktop_cowork +isBrowserSource) and `tests/unit/chat-service-tab-tools.test.ts` (+2 F1 cases).
+    - [x] Sub-lot gate (ENV=test-cowork-desktop-tools): unit 36/36 ✅ (3 files); endpoints 12/12 ✅
+          (2 files). Full `make test-api` + UI gates left to conductor.
 
 - [ ] **Lot 4 — Desktop tools (eyes + hands) + consent**
   - [ ] Implement `screen_capture` and `input_action` (`click`/`type`/`scroll`/`key`) as
