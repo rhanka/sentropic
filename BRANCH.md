@@ -245,6 +245,20 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - Impact: adds `api/src/services/auth/session-adapter.ts` exporting `authHonoCookiePort` and `authHonoSessionService`; no behavior change versus the inline version validated against the auth endpoint suites.
   - Rollback: inline the adapter back into `api/src/routes/auth/session.ts` and delete the module.
   - Recommendation: reuse this module for the auth middleware and WebAuthn login/register slices instead of re-implementing cookie/session adapters.
+- `BR39b-Q6`
+  - Branch: BR-39b `feat/auth-hono-kit`
+  - Owner: Conductor / branch owner
+  - Severity: attention (blocks full `make test-api` at branch close; NOT blocking the middleware slice)
+  - Status: open
+  - Repro steps: `make test-api-endpoints SCOPE=tests/api/workspaces.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`.
+  - Expected: 7 tests pass.
+  - Actual: 4 fail — 3 with `beforeEach` "Hook timed out in 10000ms" and 1 cascading `users_email_unique` duplicate-key in `createTestUser`. `me`, `initiatives`, `settings`, and all auth suites pass.
+  - Evidence (not caused by BR-39b):
+    - Identical failure with the middleware change stashed (original `validateSession`-based middleware).
+    - Identical failure on a freshly restarted stack (`make down` + `make up-api-test`), so not stack degradation.
+    - `git diff origin/main..HEAD -- api/tests/api/workspaces.test.ts` is empty and the branch never committed to `workspaces.test.ts`, `workspace-service.ts`, or `workspace-access.ts` — files are identical to `origin/main`.
+    - Failure is in `beforeEach` (importApp + two `createAuthenticatedUser`), which does not pass through `requireAuth`/`optionalAuth`.
+  - Recommendation: treat as a pre-existing/environment-specific timeout (local docker DB user/session creation exceeding the 10s hook timeout), unrelated to auth extraction. Do not raise the hook timeout (masks bugs). Investigate separately before branch close; not a blocker for the middleware slice.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -325,6 +339,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Sentropic `api/src/routes/auth/magic-link.ts` now consumes `createAuthMagicLinkRouteHandlers` for `POST /magic-link/request`; per `BR39b-DEC2` the interim legacy `{ success, message }` formatter was removed so the route returns the package structured default `{ delivery: 'magic_link', expiresAt, success }` (test assertions updated). `POST /magic-link/verify` remains app-owned because it still owns workspace/session/cookie/device-activation policy.
     - Sentropic `api/src/routes/auth/email.ts` now consumes `createAuthEmailRouteHandlers` for `POST /email/verify-request` and `POST /email/verify-code` through an app-owned `AuthHonoEmailVerificationService` adapter wrapping `generateEmailVerificationCode`/`verifyEmailCode`; per `BR39b-DEC2` the route adopts the package structured contract (no legacy formatter), maps the rate-limit throw to a structured 429, and keeps FR error messages. `generateEmailVerificationCode` now also returns `expiresAt` for the structured success body.
     - Sentropic `api/src/routes/auth/session.ts` `POST /session/refresh` and `DELETE /session` now consume `createAuthSessionRouteHandlers` through the shared `api/src/services/auth/session-adapter.ts` module (`BR39b-EX3`), which exports `authHonoSessionService` (`refreshSession`/`validateSessionToken`/`revokeSession` mapped to `session-manager`; `createSession`/`listUserSessions`/`revokeAllSessions` throw app-owned, matching the magic-link precedent) and `authHonoCookiePort` (session + refresh cookies, `Secure` only in production). `GET /session`, `POST /session/extension-token`, `DELETE /session/all`, and `GET /session/list` stay app-owned (workspace/extension/role policy). `session.test.ts` refresh-error assertion updated to the structured `{ error: { code, message } }` shape per `BR39b-DEC2`.
+    - Sentropic `api/src/middleware/auth.ts` `requireAuth`/`optionalAuth` now read and validate the session through the shared `authHonoCookiePort` + `authHonoSessionService.validateSessionToken` adapter (`BR39b-EX3` reuse); workspace selection, stale-workspace recovery, hidden-workspace 409s, and app `user` context shape (incl. `workspaceId`) stay app-owned, and middleware error bodies stay app-owned. Rate limiting in `api/src/app.ts` left untouched. Follow-up: `validateSessionToken` runs extra session/user reads versus the legacy single `validateSession`; collapsible once the full `AuthHonoPorts` adapter lands.
     - Spark 5.3 xhigh subagents were launched in isolated worktrees for registration, authentication, and route-adapter inventory. They produced useful read context, but no implementation diff was integrated because Agents A/B exited without usable patches and Agent C produced only inline inventory notes.
     - Spark 5.3 xhigh read-only handler-matrix helper was launched from the main branch worktree; it produced useful route/status/cookie inventory but no repository diff.
     - Spark 5.3 xhigh implementation helper for credential handlers produced an adapted package diff and tests; the session helper produced no usable diff and was skipped.
@@ -444,8 +459,8 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [x] Rewire `api/src/routes/auth/magic-link.ts` `POST /magic-link/request` to use `createAuthMagicLinkRouteHandlers` while preserving the Sentropic legacy success response body.
   - [ ] Rewire `api/src/routes/auth/index.ts` to mount `createAuthRouter` with Sentropic adapters.
   - [ ] Keep existing route paths and response shapes stable for the Sentropic UI and auth E2E tests.
-  - [ ] Rewire `api/src/middleware/auth.ts` to use package session validation while keeping Sentropic workspace selection and hidden-workspace rules app-owned.
-  - [ ] Keep rate limiting in `api/src/app.ts` app-owned unless a later approved exception says otherwise.
+  - [x] Rewire `api/src/middleware/auth.ts` to use package session validation while keeping Sentropic workspace selection and hidden-workspace rules app-owned.
+  - [x] Keep rate limiting in `api/src/app.ts` app-owned unless a later approved exception says otherwise.
   - [ ] Remove duplicated app-local route/service logic only after equivalent package tests and API tests pass; no dual auth paths.
   - [ ] Confirm the Sentropic API consumes `@sentropic/auth-hono` from the workspace package in this same branch before handoff.
   - [ ] Lot gate:
