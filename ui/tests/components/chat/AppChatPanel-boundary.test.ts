@@ -31,8 +31,17 @@ describe('AppChatPanel boundary', () => {
     expect(source).toContain("@sentropic/chat-ui/state/chatAttachments");
     expect(source).toContain('let composerAttachments');
     expect(source).toContain('handleComposerPaste');
-    expect(source).toContain('renderAttachmentTray');
     expect(source).toContain('payload.attachments');
     expect(source).toContain('attachments: sentAttachments');
+  });
+
+  it('renders a single deduplicated attachment band with click-to-enlarge instead of a separate tray', () => {
+    const source = readFileSync(appPanelPath, 'utf8');
+    expect(source).toContain('mergeAttachmentBand');
+    expect(source).toContain('chat-composer-attachment-band');
+    expect(source).toContain('openLightbox');
+    expect(source).toContain('chat-image-lightbox');
+    // The separate bottom attachment tray is removed in favor of the unified band.
+    expect(source).not.toContain('chat-composer-attachment-tray');
   });
 });

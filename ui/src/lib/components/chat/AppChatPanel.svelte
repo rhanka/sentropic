@@ -44,8 +44,10 @@
     deleteDocument,
     getDownloadUrl,
     listDocuments,
+    mergeAttachmentBand,
     uploadDocument,
     type ContextDocumentItem,
+    type UnifiedAttachmentItem,
   } from '$lib/utils/documents';
   import {
     attachGoogleDriveDocuments,
@@ -612,6 +614,7 @@
   let input = draft;
   let composerAttachments: ChatComposerAttachmentDraft[] = [];
   let composerAttachmentSummary = summarizeComposerAttachments(composerAttachments);
+  let lightboxImage: { src: string; alt: string } | null = null;
   let commentInput = '';
   let commentMessages: CommentItem[] = [];
   export let commentLoading = false;
@@ -709,6 +712,7 @@
     composerSteerStreamId.trim().length > 0;
   $: composerRunInFlight = sending || composerSteerReady;
   $: composerAttachmentSummary = summarizeComposerAttachments(composerAttachments);
+  $: attachmentBand = mergeAttachmentBand({ sessionDocs, composerAttachments });
   $: composerPrimaryActionState = resolveComposerPrimaryAction({
     mode,
     input,
@@ -2638,14 +2642,6 @@
     );
   };
 
-  const getComposerAttachmentStatusLabel = (
-    attachment: ChatComposerAttachmentDraft,
-  ): string => {
-    if (attachment.state === 'ready') return attachment.mimeType;
-    if (attachment.state === 'failed') return attachment.error || $_('common.error');
-    return $_('common.loading');
-  };
-
   const getAttachmentImageSrc = (attachment: ChatMessageAttachment): string => {
     if (attachment.previewUrl) return attachment.previewUrl;
     if (attachment.url) return attachment.url;
@@ -2656,6 +2652,52 @@
       });
     }
     return '';
+  };
+
+  const getBandItemImageSrc = (item: UnifiedAttachmentItem): string => {
+    if (item.previewUrl) return item.previewUrl;
+    if (item.documentId) {
+      return getDownloadUrl({
+        documentId: item.documentId,
+        workspaceId: getScopedWorkspaceIdForUser(),
+      });
+    }
+    return '';
+  };
+
+  const getBandItemStatusLabel = (item: UnifiedAttachmentItem): string => {
+    if (item.isPending) {
+      if (item.status === 'failed') return $_('common.error');
+      if (item.status === 'ready') return item.mimeType;
+      return $_('common.loading');
+    }
+    // Images skip summarization, so show their type instead of a summary status.
+    if (item.kind === 'image') return item.mimeType;
+    return sessionDocStatusLabel(item.status);
+  };
+
+  const removeBandItem = async (item: UnifiedAttachmentItem) => {
+    if (item.composerAttachmentId) removeComposerAttachment(item.composerAttachmentId);
+    if (item.documentId) {
+      const doc = sessionDocs.find((d) => d.id === item.documentId);
+      if (doc) await removeSessionDoc(doc);
+    }
+  };
+
+  const openLightbox = (src: string, alt: string) => {
+    if (!src) return;
+    lightboxImage = { src, alt };
+  };
+
+  const closeLightbox = () => {
+    lightboxImage = null;
+  };
+
+  const handleLightboxKeydown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && lightboxImage) {
+      event.preventDefault();
+      closeLightbox();
+    }
   };
 
   const attachImageFileToComposer = async (
@@ -4949,12 +4991,21 @@
                     {@const imageSrc = getAttachmentImageSrc(attachment)}
                     <div class="overflow-hidden rounded border border-primary/20 bg-white/10">
                       {#if imageSrc}
-                        <img
-                          src={imageSrc}
-                          alt={attachment.fileName ?? 'image'}
-                          class="block h-24 w-24 object-cover"
-                          loading="lazy"
-                        />
+                        <button
+                          type="button"
+                          class="block cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                          aria-label={$_('chat.attachments.enlarge')}
+                          title={$_('chat.attachments.enlarge')}
+                          on:click={() =>
+                            openLightbox(imageSrc, attachment.fileName ?? 'image')}
+                        >
+                          <img
+                            src={imageSrc}
+                            alt={attachment.fileName ?? 'image'}
+                            class="block h-24 w-24 object-cover"
+                            loading="lazy"
+                          />
+                        </button>
                       {:else}
                         <div class="flex h-24 w-24 items-center justify-center bg-slate-100 text-slate-500">
                           <ImageIcon class="h-5 w-5" />
@@ -5472,22 +5523,54 @@
                 {googleDriveConnectionError}
               </div>
             {/if}
-            {#if sessionDocs.length > 0}
-              <div class="mb-2 flex flex-wrap gap-2">
-                {#each sessionDocs as doc (doc.id)}
+            {#if attachmentBand.length > 0}
+              <div
+                class="mb-2 flex flex-wrap gap-2"
+                data-testid="chat-composer-attachment-band"
+              >
+                {#each attachmentBand as item (item.key)}
+                  {@const imageSrc =
+                    item.kind === 'image' ? getBandItemImageSrc(item) : ''}
                   <div
-                    class="flex items-center gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700"
+                    class="flex h-14 min-w-0 max-w-[12rem] items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700"
                   >
-                    <div class="max-w-[220px] truncate">{doc.filename}</div>
-                    <span class="text-slate-400"
-                      >· {sessionDocStatusLabel(doc.status)}</span
-                    >
+                    {#if item.kind === 'image' && imageSrc}
+                      <button
+                        type="button"
+                        class="h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                        aria-label={$_('chat.attachments.enlarge')}
+                        title={$_('chat.attachments.enlarge')}
+                        on:click={() => openLightbox(imageSrc, item.fileName)}
+                      >
+                        <img
+                          src={imageSrc}
+                          alt={item.fileName}
+                          class="h-10 w-10 object-cover"
+                        />
+                      </button>
+                    {:else}
+                      <div
+                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500"
+                      >
+                        {#if item.kind === 'image'}
+                          <ImageIcon class="h-4 w-4" />
+                        {:else}
+                          <FileText class="h-4 w-4" />
+                        {/if}
+                      </div>
+                    {/if}
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate font-medium">{item.fileName}</div>
+                      <div class="truncate text-slate-400">
+                        {getBandItemStatusLabel(item)}
+                      </div>
+                    </div>
                     <button
-                      class="rounded p-0.5 text-slate-400 hover:text-slate-600 hover:bg-white"
+                      class="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                       type="button"
                       aria-label={$_('chat.documents.delete.ariaLabel')}
                       title={$_('common.delete')}
-                      on:click={() => void removeSessionDoc(doc)}
+                      on:click={() => void removeBandItem(item)}
                     >
                       <X class="w-3 h-3" />
                     </button>
@@ -5580,48 +5663,6 @@
                 {/each}
               </div>
             {/if}
-          </div>
-        {/if}
-  {/snippet}
-
-  {#snippet renderAttachmentTray()}
-        {#if mode === 'ai' && composerAttachments.length > 0}
-          <div
-            class="mt-2 flex gap-2 overflow-x-auto slim-scroll"
-            data-testid="chat-composer-attachment-tray"
-          >
-            {#each composerAttachments as attachment (attachment.id)}
-              <div
-                class="flex h-14 min-w-0 max-w-[12rem] items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700"
-              >
-                {#if attachment.previewUrl}
-                  <img
-                    src={attachment.previewUrl}
-                    alt={attachment.fileName}
-                    class="h-10 w-10 rounded object-cover"
-                  />
-                {:else}
-                  <div class="flex h-10 w-10 items-center justify-center rounded bg-slate-100 text-slate-500">
-                    <ImageIcon class="h-4 w-4" />
-                  </div>
-                {/if}
-                <div class="min-w-0 flex-1">
-                  <div class="truncate font-medium">{attachment.fileName}</div>
-                  <div class="truncate text-slate-400">
-                    {getComposerAttachmentStatusLabel(attachment)}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  class="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  aria-label={$_('common.delete')}
-                  title={$_('common.delete')}
-                  on:click={() => removeComposerAttachment(attachment.id)}
-                >
-                  <X class="h-3.5 w-3.5" />
-                </button>
-              </div>
-            {/each}
           </div>
         {/if}
   {/snippet}
@@ -5832,11 +5873,55 @@
     onPaste={handleComposerPaste}
     {renderComposerSurface}
     {renderFloatingLayer}
-    {renderAttachmentTray}
     {renderLeftControls}
     {renderRightActions}
   />
 </div>
+
+<svelte:window on:keydown={handleLightboxKeydown} />
+
+{#if lightboxImage}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+    data-testid="chat-image-lightbox"
+  >
+    <button
+      type="button"
+      class="absolute inset-0 h-full w-full cursor-default"
+      aria-label={$_('chat.attachments.lightbox.close')}
+      on:click={closeLightbox}
+    ></button>
+    <div class="relative z-10 flex max-h-full max-w-full flex-col items-center gap-2">
+      <div class="flex items-center gap-2 self-end">
+        <a
+          class="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+          href={lightboxImage.src}
+          download={lightboxImage.alt}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={$_('chat.attachments.lightbox.download')}
+          title={$_('chat.attachments.lightbox.download')}
+        >
+          <Download class="h-5 w-5" />
+        </a>
+        <button
+          type="button"
+          class="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+          aria-label={$_('chat.attachments.lightbox.close')}
+          title={$_('chat.attachments.lightbox.close')}
+          on:click={closeLightbox}
+        >
+          <X class="h-5 w-5" />
+        </button>
+      </div>
+      <img
+        src={lightboxImage.src}
+        alt={lightboxImage.alt}
+        class="max-h-[80vh] max-w-[90vw] rounded object-contain shadow-2xl"
+      />
+    </div>
+  </div>
+{/if}
 
 <style>
   .composer-rich :global(.markdown-input-wrapper),
