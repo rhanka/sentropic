@@ -146,6 +146,23 @@
         "load": "Error while loading devices",
         "update": "Error while updating device",
         "revoke": "Error while revoking device"
+      },
+      "pair": {
+        "title": "Pair a device",
+        "subtitle": "Enter the code shown by the Sentropic Cowork app on your workstation.",
+        "codeLabel": "Pairing code",
+        "codePlaceholder": "PAIR-XXXX",
+        "deviceNameLabel": "Device name",
+        "deviceNamePlaceholder": "My workstation",
+        "confirm": "Pair device",
+        "confirming": "Pairing…",
+        "success": "Device paired. You can return to the app on your workstation.",
+        "back": "Back to devices",
+        "errors": {
+          "codeRequired": "The pairing code is required.",
+          "notFound": "Invalid or expired code.",
+          "generic": "Failed to pair the device."
+        }
       }
     },
     "magicLink": {
