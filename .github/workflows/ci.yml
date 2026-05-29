@@ -700,11 +700,18 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
-      - name: Backup production database
+      - name: Backup production database (k8s in-cluster postgres)
         env:
-          DATABASE_URL_PROD: ${{ secrets.DATABASE_URL_PROD }}
-          DB_SSL_CA_PEM_B64: ${{ secrets.DB_SSL_CA_PEM_B64 }}
-        run: make db-backup-prod
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          set -eu
+          if [ -z "${KUBECONFIG_B64:-}" ]; then
+            echo "::error::GH secret KUBECONFIG_B64 is missing or empty."
+            exit 1
+          fi
+          printf '%s' "${KUBECONFIG_B64}" | base64 -d > kubeconfig.yaml
+          chmod 600 kubeconfig.yaml
+          make db-backup-prod KUBECONFIG="$PWD/kubeconfig.yaml"
       - name: Test restore and smoke tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

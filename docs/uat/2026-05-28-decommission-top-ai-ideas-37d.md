@@ -29,6 +29,15 @@ Operator: Fabien Antoine. All destructive ops were backup-gated + user-approved.
 - **Backup-gated delete**: fresh `pg_dump --no-owner --no-privileges | gzip` = **30.8 MiB** archived out-of-band to `s3://sentropic-pgbackup/legacy/top-ai-ideas-db-final-20260529T005644Z.sql.gz` and verified present (GATE) before any delete — independent of the BR-37c migration dump. Then `scw rdb instance delete`. `scw rdb instance list` now empty.
 - Lot gate: `https://sentropic.sent-tech.ca/` still `200` — the k8s in-cluster postgres is independent of the deleted managed instance (data was migrated in BR-37c).
 
+## CI migration test retargeted (BR37d-EX4 / FL4)
+
+The `test-smoke-restore` CI job (pre-merge migration test: back up real prod data → restore locally → run migrations → prod-mode smoke) was still backing up the deleted managed DB via `DATABASE_URL_PROD`, so the first PR CI failed (`pg_restore: input file is too short`). Fixed by retargeting the **source of truth** to the new prod:
+
+- `Makefile` `db-backup-prod` now dumps the **k8s in-cluster prod postgres** via `kubectl exec` (uses `KUBECONFIG`), with a `test -s` gate so an empty dump fails loudly (the old recipe swallowed `pg_dump` failures). `db-restore` (local restore + migrations + smoke) is unchanged.
+- `ci.yml` `test-smoke-restore` decodes `KUBECONFIG_B64` and runs `make db-backup-prod KUBECONFIG=…`.
+- Verified live: `make db-backup-prod` produced a 32 MB valid CUSTOM archive (Dumped from 17.10, 422 TOC entries); prod + local are both `postgres:17-alpine` (no version skew).
+- **Operator follow-up**: GitHub secrets `DATABASE_URL_PROD` and `DB_SSL_CA_PEM_B64` are now unused and can be deleted.
+
 ## Cost impact
 
 - Managed PostgreSQL instance + Serverless Container billing **stopped**. Remaining steady-state SCW spend for Sentropic: the Kapsule node pool + the shared `lb-s` LoadBalancer (cluster-wide platform, shared across tenants).
