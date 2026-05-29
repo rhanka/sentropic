@@ -298,6 +298,15 @@ VSCode adapter:
 - Owns `acquireVsCodeApi`, webview host bridge, extension activation, session token persistence, secrets, workspace mapping, code-agent prompt profile, stream proxy, local command/file/git tools, permission policy, and host messaging.
 - Package components mount inside the webview through the adapter; they never import VSCode APIs or Node modules.
 
+## Image Attachment Presentation (BR-38a)
+
+- The composer renders a single attachment band at the top of the edit surface for both session documents and pending image attachments; the generic `ChatComposer` tray slot is left unused by the web host to avoid a second, divergent attachment surface.
+- Attachment items share one box style: a 40x40 visual (image preview for images, file-type icon for documents), filename, status, and a remove control. Display is deduplicated by `documentId` so an image never appears twice.
+- Removing an item from the band removes both the pending composer attachment and its session context document when present.
+- Image preview/enlarge (lightbox) is an app-level chat presentation concern in `AppChatPanel`, co-located with the inline message thumbnail rendering; `@sentropic/chat-ui` stays presentation-agnostic about app document/download URLs.
+- Download/preview URLs are resolved by the web host adapter from `documentId`; the package never builds Sentropic document URLs.
+- Image MIME support for attachments: `image/png`, `image/jpeg`, `image/webp`, `image/gif` (see `chatAttachments` state).
+
 ## Non-Goals
 
 - No direct import from `@sentropic/llm-mesh`.
