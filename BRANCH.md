@@ -133,7 +133,10 @@ web app. See `spec/SPEC_COWORK.md`.
   - [ ] `POST /auth/device/code` + `POST /auth/device/poll` (short-lived single-use codes, throttled
         poll), minting the token pair via `session-manager.createSession` with device name.
   - [ ] Minimal web "pair a device" page (enter `user_code` + confirm + device name).
-  - [ ] Extend the presence registry for `source: "desktop_cowork"` (BR41a-Q1 default: extend).
+  - [x] Extend the presence registry for `source: "desktop_cowork"` (BR41a-Q1 default: extend).
+        `VALID_TAB_SOURCES` + `TabSource` union now accept `desktop_cowork`; `device_<uuid>` id pattern;
+        `isBrowserSource()` helper added. BR41a-F1 gate applied in `chat-service.ts` (auto-injection of
+        `tab_read`/`tab_action` filtered to browser sources only).
   - [ ] Lot gate:
     - [ ] `make typecheck-api` + `make lint-api`
     - [ ] **API tests**: add `api/tests/api/auth-device-code.spec.ts`; update registry tests.
