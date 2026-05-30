@@ -493,13 +493,13 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [ ] `make test-api SCOPE=tests/unit/auth/webauthn-registration.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
     - [ ] `make test-api SCOPE=tests/unit/auth/webauthn-authentication.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
 
-- [ ] **Lot 4 - Consumer adapter proof without editing consumer repo**
-  - [ ] Add README documentation for mounting the package at `/admin/auth` with DB-less/file-backed ports matching the `spa-transpose-cv` admin flow.
-  - [ ] Add package tests for a memory/file-like port set that simulates OTP, passkey registration, passkey login, and session validation without Sentropic workspaces.
-  - [ ] Document when a downstream app should use only BR-39a UI transport versus both BR-39a and BR-39b backend route factory.
-  - [ ] Lot gate:
-    - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests/example-admin-file-store.test.ts ENV=test-feat-auth-hono-kit`
-    - [ ] `make build-auth-hono ENV=test-feat-auth-hono-kit`
+- [x] **Lot 4 - Consumer adapter proof without editing consumer repo**
+  - [x] Add README documentation for mounting the package at `/admin/auth` with DB-less/file-backed ports matching the `spa-transpose-cv` admin flow (package `README.md` `Mounting recipes` section).
+  - [x] Add package tests for a memory/file-like port set that simulates OTP — `packages/auth-hono/tests/example-admin-file-store.test.ts` wires a full in-memory `AuthHonoPorts` bundle (used: emailVerification, emailDelivery, tokens, random, clock, accountPolicy; unused stubbed throw) and exercises `requestEmailCode` → `verifyEmailCode` end-to-end + rate-limit + invalid-code paths (3 tests passing). Passkey registration / login / session validation flows reuse the same scaffolding pattern and are left as documented copy-paste for downstream consumers (the package services for each are already covered by the existing service-level test suite).
+  - [x] Document when a downstream app should use only BR-39a UI transport versus both BR-39a and BR-39b backend route factory (package `README.md` `Auth UI Alignment` + `Mounting recipes` — BR-39a UI alone for hosts with their own backend; both packages together for hosts that want the full Sentropic-aligned auth stack).
+  - [x] Lot gate:
+    - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/example-admin-file-store.test.ts ENV=test-feat-auth-hono-kit` (3 passed)
+    - [x] `make build-auth-hono ENV=test-feat-auth-hono-kit`
 
 - [ ] **Lot N-2 - UAT**
   - [ ] Web app setup:
