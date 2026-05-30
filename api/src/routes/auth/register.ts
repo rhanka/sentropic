@@ -1,10 +1,11 @@
+import {
+  createAuthWebAuthnRegistrationRouteHandlers,
+  type AuthHonoPrepareRegistrationOptions,
+} from '@sentropic/auth-hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { logger } from '../../logger';
-import { 
-  generateWebAuthnRegistrationOptions,
-  verifyWebAuthnRegistration,
-} from '../../services/webauthn-registration';
+import { verifyWebAuthnRegistration } from '../../services/webauthn-registration';
 import { createSession } from '../../services/session-manager';
 import { verifyChallenge } from '../../services/challenge-manager';
 import { db } from '../../db/client';
@@ -12,6 +13,7 @@ import { users, webauthnCredentials } from '../../db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { env } from '../../config/env';
 import type { RegistrationResponseJSON } from '@simplewebauthn/server';
+import { authHonoWebAuthnRegistrationService } from '../../services/auth/webauthn-adapter';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 import { verifyValidationToken } from '../../services/email-verification';
 import { ensureWorkspaceForUser } from '../../services/workspace-service';
@@ -25,12 +27,7 @@ import { ensureWorkspaceForUser } from '../../services/workspace-service';
 
 export const registerRouter = new Hono();
 
-// Request schemas
-const registerOptionsSchema = z.object({
-  email: z.string().email(),
-  verificationToken: z.string().optional(), // Token from email code verification
-});
-
+// Verify schema retained for the app-owned /verify route (next slice: package handler + finalize hook)
 const registerVerifySchema = z.object({
   email: z.string().email(),
   verificationToken: z.string(), // Token from email code verification (required)
@@ -39,155 +36,160 @@ const registerVerifySchema = z.object({
   deviceName: z.string().max(100).optional(),
 });
 
-/**
- * POST /auth/register/options
- * Generate WebAuthn registration options
- */
-registerRouter.post('/options', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { email, verificationToken } = registerOptionsSchema.parse(body);
+const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = async ({
+  email,
+  verificationToken,
+}) => {
+  const normalizedEmail = email.trim().toLowerCase();
 
-    const normalizedEmail = email.trim().toLowerCase();
-    
-    // If verificationToken provided, verify it
-    if (verificationToken) {
-      const tokenValidation = await verifyValidationToken(verificationToken);
-      if (!tokenValidation.valid || tokenValidation.email !== normalizedEmail) {
-        logger.warn({ email: normalizedEmail }, 'Invalid verification token');
-        return c.json({ 
-          error: 'Invalid verification token',
-          message: 'Le token de vérification est invalide ou expiré'
-        }, 403);
-      }
-      logger.info({ email: normalizedEmail }, 'Verification token validated for registration');
+  if (verificationToken) {
+    const tokenValidation = await verifyValidationToken(verificationToken);
+    if (!tokenValidation.valid || tokenValidation.email !== normalizedEmail) {
+      logger.warn({ email: normalizedEmail }, 'Invalid verification token');
+      return {
+        error: {
+          code: 'invalid_verification_token',
+          message: 'Le token de vérification est invalide ou expiré',
+          status: 403,
+        },
+      };
     }
-    const emailLocalPart = normalizedEmail.split('@')[0] ?? normalizedEmail;
-    const defaultDisplayName = deriveDisplayNameFromEmail(normalizedEmail);
-    
-    // Check if user already exists
-    let existingUser;
-    const [emailUser] = await db
+    logger.info({ email: normalizedEmail }, 'Verification token validated for registration');
+  }
+
+  const emailLocalPart = normalizedEmail.split('@')[0] ?? normalizedEmail;
+  const defaultDisplayName = deriveDisplayNameFromEmail(normalizedEmail);
+
+  let existingUser;
+  const [emailUser] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, normalizedEmail))
+    .limit(1);
+  existingUser = emailUser;
+
+  // Backward compatibility: fallback on display name lookup if email missing
+  if (!existingUser) {
+    const [displayNameUser] = await db
       .select()
       .from(users)
-      .where(eq(users.email, normalizedEmail))
+      .where(eq(users.displayName, normalizedEmail))
       .limit(1);
-    existingUser = emailUser;
-
-    // Backward compatibility: fallback on display name lookup if email missing
-    if (!existingUser) {
-      const [displayNameUser] = await db
-        .select()
-        .from(users)
-        .where(eq(users.displayName, normalizedEmail))
-        .limit(1);
-      existingUser = displayNameUser;
-    }
-
-    if (!existingUser) {
-      const [legacyDisplayUser] = await db
-        .select()
-        .from(users)
-        .where(eq(users.displayName, emailLocalPart))
-        .limit(1);
-      existingUser = legacyDisplayUser;
-    }
-    
-    let userId: string;
-    let userRole: 'admin_app' | 'admin_org' | 'editor' | 'guest';
-    let isNewUser = false;
-    
-    if (existingUser) {
-      // Use existing user
-      userId = existingUser.id;
-      userRole = existingUser.role as 'admin_app' | 'admin_org' | 'editor' | 'guest';
-      
-      // Update email if missing
-      if (!existingUser.email && normalizedEmail) {
-        await db
-          .update(users)
-          .set({
-            email: normalizedEmail,
-            displayName: existingUser.displayName ?? defaultDisplayName,
-            updatedAt: new Date(),
-          })
-          .where(eq(users.id, existingUser.id));
-      }
-      
-      logger.info({ userId, email: existingUser.email ?? normalizedEmail }, 'Using existing user for registration');
-      
-      // Check if email has been verified (emailVerified flag in users table)
-      if (!existingUser.emailVerified) {
-        logger.warn({ email: normalizedEmail, userId }, 'Email not verified - registration blocked');
-        return c.json({ 
-          error: 'Email verification required', 
-          message: 'You must verify your email via magic link before registering a WebAuthn credential' 
-        }, 403);
-      }
-    } else {
-      // Determine user role for new user
-      userRole = 'editor';
-      if (env.ADMIN_EMAIL && normalizedEmail === env.ADMIN_EMAIL.toLowerCase()) {
-        const existingAdmins = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.role, 'admin_app'))
-          .limit(1);
-        
-        if (existingAdmins.length === 0) {
-          userRole = 'admin_app';
-          logger.info({ email: normalizedEmail }, 'Admin user registration detected');
-        } else {
-          logger.info({ email: normalizedEmail }, 'Admin email used but admin already exists, creating guest');
-        }
-      }
-      
-      // For new users, email verification is mandatory before WebAuthn registration
-      // Must provide valid verificationToken
-      if (!verificationToken) {
-        logger.warn({ email: normalizedEmail }, 'Email not verified - verification token required');
-        return c.json({ 
-          error: 'Email verification required', 
-          message: 'Vous devez vérifier votre email avec un code avant d\'enregistrer un device' 
-        }, 403);
-      }
-      
-      // Token already verified above, create user ID placeholder (will be used in verify)
-      // This userId will be used for the challenge, then reused in verify to create the user
-      userId = crypto.randomUUID();
-      isNewUser = true;
-      logger.info({ email: normalizedEmail, userId }, 'New user registration - temporary userId created for challenge');
-    }
-    
-    // Generate registration options
-    // For new users, pass null as userId to challenge (user doesn't exist yet)
-    // The userId will be set when the user is created in /verify
-    const options = await generateWebAuthnRegistrationOptions({
-      userId: isNewUser ? undefined : userId, // undefined for new users (will become null in challenge)
-      userName: normalizedEmail,
-      userDisplayName: defaultDisplayName,
-    });
-    
-    logger.info({ 
-      email: normalizedEmail,
-      userId, 
-      role: userRole,
-    }, 'Registration options generated');
-    
-    return c.json({
-      options,
-      userId, // Client must send this back with verification (will be used to verify challenge)
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      logger.warn({ error: error.errors }, 'Invalid registration options request');
-      return c.json({ error: 'Invalid request data', details: error.errors }, 400);
-    }
-    
-    logger.error({ err: error }, 'Error generating registration options');
-    return c.json({ error: 'Failed to generate registration options' }, 500);
+    existingUser = displayNameUser;
   }
+
+  if (!existingUser) {
+    const [legacyDisplayUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.displayName, emailLocalPart))
+      .limit(1);
+    existingUser = legacyDisplayUser;
+  }
+
+  if (existingUser) {
+    const userId = existingUser.id;
+    const userRole = existingUser.role as 'admin_app' | 'admin_org' | 'editor' | 'guest';
+
+    if (!existingUser.email && normalizedEmail) {
+      await db
+        .update(users)
+        .set({
+          email: normalizedEmail,
+          displayName: existingUser.displayName ?? defaultDisplayName,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, existingUser.id));
+    }
+
+    logger.info(
+      { userId, email: existingUser.email ?? normalizedEmail },
+      'Using existing user for registration'
+    );
+
+    if (!existingUser.emailVerified) {
+      logger.warn({ email: normalizedEmail, userId }, 'Email not verified - registration blocked');
+      return {
+        error: {
+          code: 'email_verification_required',
+          message:
+            'You must verify your email via magic link before registering a WebAuthn credential',
+          status: 403,
+        },
+      };
+    }
+
+    logger.info({ email: normalizedEmail, userId, role: userRole }, 'Registration options generated');
+    return {
+      serviceInput: {
+        userDisplayName: defaultDisplayName,
+        userId,
+        userName: normalizedEmail,
+      },
+      userId,
+    };
+  }
+
+  // New user path: email verification token mandatory
+  if (!verificationToken) {
+    logger.warn({ email: normalizedEmail }, 'Email not verified - verification token required');
+    return {
+      error: {
+        code: 'email_verification_required',
+        message: "Vous devez vérifier votre email avec un code avant d'enregistrer un device",
+        status: 403,
+      },
+    };
+  }
+
+  let userRole: 'admin_app' | 'admin_org' | 'editor' | 'guest' = 'editor';
+  if (env.ADMIN_EMAIL && normalizedEmail === env.ADMIN_EMAIL.toLowerCase()) {
+    const existingAdmins = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.role, 'admin_app'))
+      .limit(1);
+    if (existingAdmins.length === 0) {
+      userRole = 'admin_app';
+      logger.info({ email: normalizedEmail }, 'Admin user registration detected');
+    } else {
+      logger.info(
+        { email: normalizedEmail },
+        'Admin email used but admin already exists, creating guest'
+      );
+    }
+  }
+
+  const userId = crypto.randomUUID();
+  logger.info(
+    { email: normalizedEmail, userId, role: userRole },
+    'New user registration - temporary userId created for challenge'
+  );
+
+  return {
+    serviceInput: {
+      // undefined userId for new users: challenge is unbound, the user is created in /verify
+      userDisplayName: defaultDisplayName,
+      userName: normalizedEmail,
+    },
+    userId,
+  };
+};
+
+const registerHandlers = createAuthWebAuthnRegistrationRouteHandlers({
+  prepareRegistrationOptions: prepareSentropicRegistrationOptions,
+  resolveRegistrationUser: async () => ({
+    // Placeholder — /verify is still app-owned this slice; not invoked.
+    userId: '',
+  }),
+  service: authHonoWebAuthnRegistrationService,
 });
+
+/**
+ * POST /auth/register/options
+ * Generate WebAuthn registration options (@sentropic/auth-hono)
+ */
+registerRouter.post('/options', registerHandlers.createPasskeyRegistrationOptions!);
 
 /**
  * POST /auth/register/verify

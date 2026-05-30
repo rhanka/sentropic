@@ -1,16 +1,15 @@
+import { createAuthWebAuthnAuthenticationRouteHandlers } from '@sentropic/auth-hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { logger } from '../../logger';
-import {
-  generateWebAuthnAuthenticationOptions,
-  verifyWebAuthnAuthentication,
-} from '../../services/webauthn-authentication';
+import { verifyWebAuthnAuthentication } from '../../services/webauthn-authentication';
 import { createSession } from '../../services/session-manager';
 import { verifyChallenge } from '../../services/challenge-manager';
 import { users } from '../../db/schema';
 import { db } from '../../db/client';
 import { eq } from 'drizzle-orm';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
+import { authHonoWebAuthnAuthenticationService } from '../../services/auth/webauthn-adapter';
 import { ensureWorkspaceForUser } from '../../services/workspace-service';
 
 /**
@@ -22,63 +21,33 @@ import { ensureWorkspaceForUser } from '../../services/workspace-service';
 
 export const loginRouter = new Hono();
 
-// Request schemas
-const loginOptionsSchema = z.object({
-  email: z.string().email().optional(), // Optional for discoverable credentials
-});
-
+// Request schema (verify is owned by the @sentropic/auth-hono handler)
 const loginVerifySchema = z.object({
   credential: z.any(), // AuthenticationResponseJSON type
   deviceName: z.string().max(100).optional(),
 });
 
+const loginHandlers = createAuthWebAuthnAuthenticationRouteHandlers({
+  resolveAuthenticationOptions: async ({ email }) => {
+    if (!email) {
+      return { userId: undefined };
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
+    return { userId: user?.id };
+  },
+  service: authHonoWebAuthnAuthenticationService,
+});
+
 /**
  * POST /auth/login/options
- * Generate WebAuthn authentication options
+ * Generate WebAuthn authentication options (@sentropic/auth-hono)
  */
-loginRouter.post('/options', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { email } = loginOptionsSchema.parse(body);
-
-    let userId: string | undefined;
-
-    let normalizedEmail: string | undefined;
-
-    if (email) {
-      normalizedEmail = email.trim().toLowerCase();
-      const [user] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.email, normalizedEmail))
-        .limit(1);
-
-      if (user) {
-        userId = user.id;
-      }
-    }
-    
-    // Generate authentication options
-    const options = await generateWebAuthnAuthenticationOptions({ userId });
-    
-    logger.info({ 
-      email: normalizedEmail || email || 'discoverable',
-      userId: userId || 'discoverable',
-    }, 'Authentication options generated');
-    
-    return c.json({ 
-      options,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      logger.warn({ error: error.errors }, 'Invalid login options request');
-      return c.json({ error: 'Invalid request data', details: error.errors }, 400);
-    }
-    
-    logger.error({ err: error }, 'Error generating authentication options');
-    return c.json({ error: 'Failed to generate authentication options' }, 500);
-  }
-});
+loginRouter.post('/options', loginHandlers.createPasskeyAuthenticationOptions!);
 
 /**
  * POST /auth/login/verify
