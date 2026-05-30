@@ -41,6 +41,10 @@ const envSchema = z.object({
   COWORK_DESKTOP_DOWNLOAD_URL: z.string().optional(),
   COWORK_DESKTOP_VERSION: z.string().optional(),
   COWORK_DESKTOP_SOURCE: z.string().optional(),
+  // Prerelease channel (admin-selectable): the branch-built unsigned exe served
+  // for UAT, distinct from the official RELEASE url above.
+  COWORK_DESKTOP_PRERELEASE_URL: z.string().optional(),
+  COWORK_DESKTOP_PRERELEASE_VERSION: z.string().optional(),
   // ---------------------------------------------------------------------------
   // Outbound email — Scaleway Transactional Email (TEM) HTTP API.
   // SMTP egress is blocked at the Kapsule platform level (BR37b-FL1), so mail
