@@ -1,40 +1,29 @@
 import {
   createAuthWebAuthnRegistrationRouteHandlers,
+  type AuthHonoFinalizeRegistration,
   type AuthHonoPrepareRegistrationOptions,
+  type AuthHonoResolveRegistrationUser,
 } from '@sentropic/auth-hono';
+import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { z } from 'zod';
-import { logger } from '../../logger';
-import { verifyWebAuthnRegistration } from '../../services/webauthn-registration';
-import { createSession } from '../../services/session-manager';
-import { verifyChallenge } from '../../services/challenge-manager';
+import { env } from '../../config/env';
 import { db } from '../../db/client';
 import { users, webauthnCredentials } from '../../db/schema';
-import { eq, desc } from 'drizzle-orm';
-import { env } from '../../config/env';
-import type { RegistrationResponseJSON } from '@simplewebauthn/server';
+import { logger } from '../../logger';
 import { authHonoWebAuthnRegistrationService } from '../../services/auth/webauthn-adapter';
-import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 import { verifyValidationToken } from '../../services/email-verification';
+import { createSession } from '../../services/session-manager';
 import { ensureWorkspaceForUser } from '../../services/workspace-service';
+import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 
 /**
- * WebAuthn Registration Routes
- * 
+ * WebAuthn Registration Routes (`@sentropic/auth-hono`)
+ *
  * POST /auth/register/options - Generate registration options
- * POST /auth/register/verify - Verify registration response
+ * POST /auth/register/verify  - Verify registration response + create session
  */
 
 export const registerRouter = new Hono();
-
-// Verify schema retained for the app-owned /verify route (next slice: package handler + finalize hook)
-const registerVerifySchema = z.object({
-  email: z.string().email(),
-  verificationToken: z.string(), // Token from email code verification (required)
-  userId: z.string().uuid(), // Temporary userId from options (used for challenge verification)
-  credential: z.any(), // RegistrationResponseJSON type
-  deviceName: z.string().max(100).optional(),
-});
 
 const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = async ({
   email,
@@ -68,7 +57,6 @@ const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = 
     .limit(1);
   existingUser = emailUser;
 
-  // Backward compatibility: fallback on display name lookup if email missing
   if (!existingUser) {
     const [displayNameUser] = await db
       .select()
@@ -95,15 +83,15 @@ const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = 
       await db
         .update(users)
         .set({
-          email: normalizedEmail,
           displayName: existingUser.displayName ?? defaultDisplayName,
+          email: normalizedEmail,
           updatedAt: new Date(),
         })
         .where(eq(users.id, existingUser.id));
     }
 
     logger.info(
-      { userId, email: existingUser.email ?? normalizedEmail },
+      { email: existingUser.email ?? normalizedEmail, userId },
       'Using existing user for registration'
     );
 
@@ -119,7 +107,7 @@ const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = 
       };
     }
 
-    logger.info({ email: normalizedEmail, userId, role: userRole }, 'Registration options generated');
+    logger.info({ email: normalizedEmail, role: userRole, userId }, 'Registration options generated');
     return {
       serviceInput: {
         userDisplayName: defaultDisplayName,
@@ -130,7 +118,6 @@ const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = 
     };
   }
 
-  // New user path: email verification token mandatory
   if (!verificationToken) {
     logger.warn({ email: normalizedEmail }, 'Email not verified - verification token required');
     return {
@@ -162,13 +149,12 @@ const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = 
 
   const userId = crypto.randomUUID();
   logger.info(
-    { email: normalizedEmail, userId, role: userRole },
+    { email: normalizedEmail, role: userRole, userId },
     'New user registration - temporary userId created for challenge'
   );
 
   return {
     serviceInput: {
-      // undefined userId for new users: challenge is unbound, the user is created in /verify
       userDisplayName: defaultDisplayName,
       userName: normalizedEmail,
     },
@@ -176,319 +162,221 @@ const prepareSentropicRegistrationOptions: AuthHonoPrepareRegistrationOptions = 
   };
 };
 
+const resolveSentropicRegistrationUser: AuthHonoResolveRegistrationUser = async ({
+  email,
+  userId: tempUserId,
+  verificationToken,
+}) => {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const tokenValidation = await verifyValidationToken(verificationToken);
+  if (!tokenValidation.valid || tokenValidation.email !== normalizedEmail) {
+    logger.warn({ email: normalizedEmail }, 'Invalid verification token');
+    return {
+      error: {
+        code: 'invalid_verification_token',
+        message: 'Le token de vérification est invalide ou expiré',
+        status: 403,
+      },
+    };
+  }
+
+  const [existingUser] = await db
+    .select({
+      accountStatus: users.accountStatus,
+      approvalDueAt: users.approvalDueAt,
+      emailVerified: users.emailVerified,
+      id: users.id,
+      role: users.role,
+    })
+    .from(users)
+    .where(eq(users.email, normalizedEmail))
+    .limit(1);
+
+  if (existingUser) {
+    if (existingUser.id !== tempUserId) {
+      logger.warn(
+        { tempUserId, userId: existingUser.id },
+        'UserId mismatch between challenge and existing user'
+      );
+      return {
+        error: {
+          code: 'challenge_user_mismatch',
+          message: "Le challenge ne correspond pas à l'utilisateur",
+          status: 400,
+        },
+      };
+    }
+
+    if (!existingUser.emailVerified) {
+      await db
+        .update(users)
+        .set({ emailVerified: true, updatedAt: new Date() })
+        .where(eq(users.id, existingUser.id));
+    }
+
+    await ensureWorkspaceForUser(existingUser.id);
+    return { userId: existingUser.id };
+  }
+
+  // New user: create with appropriate role + account status, then proceed.
+  let userRole: 'admin_app' | 'admin_org' | 'editor' | 'guest' = 'editor';
+  if (env.ADMIN_EMAIL && normalizedEmail === env.ADMIN_EMAIL.toLowerCase()) {
+    const [admin] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.role, 'admin_app'))
+      .limit(1);
+    if (!admin) userRole = 'admin_app';
+  }
+
+  const accountStatus = userRole === 'admin_app' ? 'active' : 'pending_admin_approval';
+  const approvalDueAt =
+    userRole === 'admin_app' ? null : new Date(Date.now() + 48 * 60 * 60 * 1000);
+  const defaultDisplayName = deriveDisplayNameFromEmail(normalizedEmail);
+
+  await db.insert(users).values({
+    accountStatus,
+    approvalDueAt,
+    createdAt: new Date(),
+    displayName: defaultDisplayName,
+    email: normalizedEmail,
+    emailVerified: true,
+    id: tempUserId,
+    role: userRole,
+    updatedAt: new Date(),
+  });
+
+  logger.info({ email: normalizedEmail, userId: tempUserId }, 'New user created with verified email');
+
+  await ensureWorkspaceForUser(tempUserId);
+  return { userId: tempUserId };
+};
+
+const finalizeSentropicRegistration: AuthHonoFinalizeRegistration = async (
+  { credentialId, request, userId },
+  c
+) => {
+  const [user] = await db
+    .select({
+      accountStatus: users.accountStatus,
+      approvalDueAt: users.approvalDueAt,
+      displayName: users.displayName,
+      email: users.email,
+      emailVerified: users.emailVerified,
+      id: users.id,
+      role: users.role,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!user) {
+    logger.error({ userId }, 'User missing after registration');
+    return c.json(
+      { error: { code: 'user_not_found', message: 'User not found after registration.' } },
+      500
+    );
+  }
+
+  const otherDevices = await db
+    .select({
+      createdAt: webauthnCredentials.createdAt,
+      deviceName: webauthnCredentials.deviceName,
+      id: webauthnCredentials.id,
+    })
+    .from(webauthnCredentials)
+    .where(eq(webauthnCredentials.userId, userId))
+    .orderBy(desc(webauthnCredentials.createdAt));
+
+  const isFirstDevice = otherDevices.length === 0;
+
+  let effectiveRole: string = user.role;
+  const accountStatus = user.accountStatus ?? null;
+  const approvalDueAt = user.approvalDueAt ?? null;
+  if (accountStatus === 'approval_expired_readonly') effectiveRole = 'guest';
+  if (accountStatus === 'pending_admin_approval' && approvalDueAt && new Date() > approvalDueAt) {
+    effectiveRole = 'guest';
+  }
+
+  const session = await createSession(userId, effectiveRole, {
+    ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
+    name: request.deviceName,
+    userAgent: c.req.header('user-agent'),
+  });
+
+  const isProduction = process.env.NODE_ENV === 'production';
+  const origin = c.req.header('origin') || '';
+  let domainAttr = '';
+  try {
+    const { hostname } = new URL(origin);
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      domainAttr = 'Domain=localhost';
+    }
+  } catch {
+    // origin missing/malformed — skip Domain attribute
+  }
+
+  const cookieParts = [
+    `session=${session.sessionToken}`,
+    'HttpOnly',
+    isProduction ? 'Secure' : '',
+    'SameSite=Lax',
+    'Path=/',
+    domainAttr,
+    `Max-Age=${7 * 24 * 60 * 60}`,
+  ].filter(Boolean);
+  c.header('Set-Cookie', cookieParts.join('; '));
+
+  logger.info(
+    {
+      credentialId,
+      emailVerified: true,
+      isFirstDevice,
+      role: user.role,
+      userId,
+    },
+    'Registration successful'
+  );
+
+  return c.json({
+    expiresAt: session.expiresAt.toISOString(),
+    isFirstDevice,
+    otherDevices:
+      otherDevices.length > 0
+        ? otherDevices.map((d) => ({
+            createdAt: d.createdAt.toISOString(),
+            deviceName: d.deviceName,
+            id: d.id,
+          }))
+        : undefined,
+    refreshToken: session.refreshToken,
+    sessionToken: session.sessionToken,
+    success: true,
+    user: {
+      displayName: user.displayName || null,
+      email: user.email,
+      id: user.id,
+      role: user.role,
+    },
+  });
+};
+
 const registerHandlers = createAuthWebAuthnRegistrationRouteHandlers({
+  finalizeRegistration: finalizeSentropicRegistration,
   prepareRegistrationOptions: prepareSentropicRegistrationOptions,
-  resolveRegistrationUser: async () => ({
-    // Placeholder — /verify is still app-owned this slice; not invoked.
-    userId: '',
-  }),
+  resolveRegistrationUser: resolveSentropicRegistrationUser,
   service: authHonoWebAuthnRegistrationService,
 });
 
 /**
  * POST /auth/register/options
- * Generate WebAuthn registration options (@sentropic/auth-hono)
+ * Generate WebAuthn registration options.
  */
 registerRouter.post('/options', registerHandlers.createPasskeyRegistrationOptions!);
 
 /**
  * POST /auth/register/verify
- * Verify WebAuthn registration response
+ * Verify WebAuthn registration response + create session (via finalizeRegistration).
  */
-registerRouter.post('/verify', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { email, verificationToken, userId: tempUserId, credential, deviceName } = registerVerifySchema.parse(body);
-    
-    const normalizedEmail = email.trim().toLowerCase();
-    
-    // Verify validation token
-    const tokenValidation = await verifyValidationToken(verificationToken);
-    if (!tokenValidation.valid || tokenValidation.email !== normalizedEmail) {
-      logger.warn({ email: normalizedEmail }, 'Invalid verification token');
-      return c.json({ 
-        error: 'Invalid verification token',
-        message: 'Le token de vérification est invalide ou expiré'
-      }, 403);
-    }
-    
-    // Validate credential structure
-    if (!credential || !credential.response) {
-      logger.warn({ email: normalizedEmail }, 'Invalid credential structure');
-      return c.json({ 
-        error: 'Invalid credential',
-        message: 'La structure de la credential est invalide'
-      }, 400);
-    }
-    
-    const credentialResponse = credential as RegistrationResponseJSON;
-    
-    // Extract challenge and credential ID from clientDataJSON
-    if (!credentialResponse.response.clientDataJSON) {
-      logger.warn({ email: normalizedEmail }, 'Missing clientDataJSON in credential');
-      return c.json({ 
-        error: 'Invalid credential',
-        message: 'La credential ne contient pas les données nécessaires'
-      }, 400);
-    }
-    
-    let clientData;
-    try {
-      clientData = JSON.parse(
-      Buffer.from(credentialResponse.response.clientDataJSON, 'base64url').toString()
-    );
-    } catch (error) {
-      logger.warn({ email: normalizedEmail, err: error }, 'Failed to parse clientDataJSON');
-      return c.json({ 
-        error: 'Invalid credential',
-        message: 'Les données de la credential sont invalides'
-      }, 400);
-    }
-    
-    const challenge = clientData.challenge;
-    
-    // credentialResponse.id is always a Base64URLString (string) in RegistrationResponseJSON
-    // Same as AuthenticationResponseJSON.id - see @simplewebauthn/server types
-    const credentialIdBase64 = credentialResponse.id;
-    
-    logger.debug({ 
-      receivedChallenge: challenge.substring(0, 10) + '...',
-      credentialId: credentialIdBase64.substring(0, 10) + '...',
-      email: normalizedEmail,
-      tempUserId,
-    }, 'Extracted challenge and credential ID from clientDataJSON');
-    
-    // Check if this device is already registered
-    const [existingCredential] = await db
-      .select({ id: webauthnCredentials.id, userId: webauthnCredentials.userId })
-      .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.credentialId, credentialIdBase64))
-      .limit(1);
-    
-    if (existingCredential) {
-      logger.warn({ credentialId: credentialIdBase64.substring(0, 10) + '...' }, 'Device already registered');
-      return c.json({ 
-        error: 'Device already registered',
-        message: 'Ce device est déjà enregistré, utilisez-le pour vous connecter'
-      }, 400);
-    }
-    
-    // Verify challenge is valid (using tempUserId from options)
-    const challengeValid = await verifyChallenge(challenge, tempUserId, 'registration');
-    if (!challengeValid) {
-      logger.warn({ tempUserId }, 'Invalid or expired registration challenge');
-      return c.json({ error: 'Invalid or expired challenge' }, 400);
-    }
-    
-    // Check if user exists or create new one
-    let [user] = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        role: users.role,
-        emailVerified: users.emailVerified,
-        displayName: users.displayName,
-        accountStatus: users.accountStatus,
-        approvalDueAt: users.approvalDueAt,
-      })
-      .from(users)
-      .where(eq(users.email, normalizedEmail))
-      .limit(1);
-    
-    let userId: string;
-    let userRole: 'admin_app' | 'admin_org' | 'editor' | 'guest';
-    let accountStatus: string | null = null;
-    let approvalDueAt: Date | null = null;
-    
-    if (user) {
-      userId = user.id;
-      userRole = user.role as 'admin_app' | 'admin_org' | 'editor' | 'guest';
-      accountStatus = user.accountStatus ?? null;
-      approvalDueAt = user.approvalDueAt ?? null;
-      
-      // Verify challenge was for the correct user (or update if tempUserId matches)
-      if (userId !== tempUserId) {
-        logger.warn({ userId, tempUserId }, 'UserId mismatch between challenge and existing user');
-        return c.json({ 
-          error: 'Invalid challenge',
-          message: 'Le challenge ne correspond pas à l\'utilisateur'
-        }, 400);
-      }
-      
-      // Update email verified status if not already verified
-      if (!user.emailVerified) {
-        await db
-          .update(users)
-          .set({ 
-            emailVerified: true,
-            updatedAt: new Date(),
-          })
-          .where(eq(users.id, user.id));
-      }
-    } else {
-      // Create new user with email verified, using tempUserId from options
-      userId = tempUserId; // Reuse the userId from options/challenge
-      userRole = 'editor';
-      
-      if (env.ADMIN_EMAIL && normalizedEmail === env.ADMIN_EMAIL.toLowerCase()) {
-        const existingAdmins = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.role, 'admin_app'))
-          .limit(1);
-        
-        if (existingAdmins.length === 0) {
-          userRole = 'admin_app';
-        }
-      }
-      
-      const defaultDisplayName = deriveDisplayNameFromEmail(normalizedEmail);
-
-      if (userRole === 'admin_app') {
-        accountStatus = 'active';
-        approvalDueAt = null;
-      } else {
-        accountStatus = 'pending_admin_approval';
-        approvalDueAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
-      }
-
-      await db.insert(users).values({
-        id: userId,
-        email: normalizedEmail,
-        displayName: defaultDisplayName,
-        role: userRole,
-        accountStatus,
-        approvalDueAt,
-        emailVerified: true, // Email verified via code
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-      
-      logger.info({ userId, email: normalizedEmail }, 'New user created with verified email');
-    }
-
-    // Ensure workspace exists for this user (idempotent)
-    await ensureWorkspaceForUser(userId);
-    
-    // Verify registration and create device
-    const result = await verifyWebAuthnRegistration({
-      userId,
-      credential: credentialResponse,
-      expectedChallenge: challenge,
-      deviceName,
-    });
-    
-    if (!result.verified) {
-      logger.warn({ userId }, 'Registration verification failed');
-      return c.json({ error: 'Registration verification failed' }, 400);
-    }
-    
-    // Check if user has other existing devices
-    const otherDevices = await db
-      .select({
-        id: webauthnCredentials.id,
-        deviceName: webauthnCredentials.deviceName,
-        createdAt: webauthnCredentials.createdAt,
-      })
-      .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.userId, userId))
-      .orderBy(desc(webauthnCredentials.createdAt));
-    
-    const isFirstDevice = otherDevices.length === 0;
-    
-    // Create session (always for new registration flow)
-    // Effective role for session (approval expired => guest read-only)
-    let effectiveRole: string = userRole;
-    if (accountStatus === 'approval_expired_readonly') effectiveRole = 'guest';
-    if (accountStatus === 'pending_admin_approval' && approvalDueAt && new Date() > approvalDueAt) effectiveRole = 'guest';
-
-    const session = await createSession(
-      userId,
-      effectiveRole,
-      {
-        name: deviceName,
-        ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
-        userAgent: c.req.header('user-agent'),
-      }
-    );
-    
-    // Set session cookie
-    const origin = c.req.header('origin') || '';
-    let domainAttr = '';
-    try {
-      const { hostname } = new URL(origin);
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        domainAttr = 'Domain=localhost';
-      }
-    } catch {
-      // Ignore errors when accessing request URL (may not be available in all contexts)
-    }
-
-    const isProduction = process.env.NODE_ENV === 'production';
-    const cookieParts = [
-      `session=${session.sessionToken}`,
-      'HttpOnly',
-      isProduction ? 'Secure' : '',
-      'SameSite=Lax',
-      'Path=/',
-      domainAttr,
-      `Max-Age=${7 * 24 * 60 * 60}`
-    ].filter(Boolean);
-
-    c.header('Set-Cookie', cookieParts.join('; '));
-    
-    // Get full user info
-    if (!user) {
-      [user] = await db
-        .select({
-          id: users.id,
-          email: users.email,
-          displayName: users.displayName,
-          role: users.role,
-          emailVerified: users.emailVerified,
-          accountStatus: users.accountStatus,
-          approvalDueAt: users.approvalDueAt,
-        })
-        .from(users)
-        .where(eq(users.id, userId))
-        .limit(1);
-    }
-    
-    logger.info({ 
-      userId, 
-      credentialId: result.credentialId?.substring(0, 10) + '...',
-      role: userRole,
-      isFirstDevice,
-      emailVerified: true,
-    }, 'Registration successful');
-    
-    return c.json({
-      success: true,
-      user: user ? {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName || null,
-        role: user.role,
-      } : undefined,
-      sessionToken: session.sessionToken,
-      refreshToken: session.refreshToken,
-      expiresAt: session.expiresAt.toISOString(),
-      isFirstDevice,
-      otherDevices: otherDevices.length > 0 ? otherDevices.map(d => ({
-        id: d.id,
-        deviceName: d.deviceName,
-        createdAt: d.createdAt.toISOString(),
-      })) : undefined,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      logger.warn({ error: error.errors }, 'Invalid registration verify request');
-      return c.json({ error: 'Invalid request data', details: error.errors }, 400);
-    }
-    
-    logger.error({ err: error }, 'Error verifying registration');
-    return c.json({ error: 'Failed to verify registration' }, 500);
-  }
-});
-
-
+registerRouter.post('/verify', registerHandlers.verifyPasskeyRegistration!);
