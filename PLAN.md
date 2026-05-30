@@ -275,9 +275,9 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 |        |                                                  | services, WebAuthn/email ports, and middleware as          |                      |                                |
 |        |                                                  | @sentropic/auth-hono without workspace coupling.           |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-40a | feat/prioritization-matrix-scale                 | Raise per-folder use-case cap to 50; chart legibility at   | plan                 | none                           |
-|        |                                                  | scale: top-10 labels, hide-bubbles toggle, domain-filter   |                      |                                |
-|        |                                                  | legend with hover emphasis.                                |                      |                                |
+| BR-40a | feat/prioritization-matrix-scale                 | Raise per-folder use-case cap to 50; chart legibility at   | merged 2026-05-29    | none                           |
+|        |                                                  | scale: top-10 labels, hide-bubbles toggle, domain-filter   | (PR #187, merge      |                                |
+|        |                                                  | legend with hover emphasis.                                | commit 23f5169)      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-40b | feat/xlsx-multitab-query                         | Multi-tab xlsx for indexing + documentary query tool       | plan                 | feat/xlsx-gsheet-indexing      |
 |        |                                                  | (list_sheets / get_sheet_content). Builds on in-flight     |                      | (disposition: BR40b-Q1)        |
