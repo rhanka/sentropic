@@ -133,4 +133,58 @@ describe('createAuthWebAuthnAuthenticationRouteHandlers', () => {
       },
     });
   });
+
+  it('short-circuits with the host status/code when resolveAuthenticationOptions returns an error', async () => {
+    const response = await createAuthRouter({
+      handlers: createAuthWebAuthnAuthenticationRouteHandlers({
+        resolveAuthenticationOptions: async () => ({
+          error: {
+            code: 'account_disabled',
+            message: 'Account is disabled.',
+            status: 403,
+          },
+        }),
+        service: service(),
+      }),
+      routePrefix: '/api/v1/auth',
+    }).request('/api/v1/auth/login/options', {
+      body: JSON.stringify({ email: 'user@example.com' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'account_disabled',
+        message: 'Account is disabled.',
+      },
+    });
+  });
+
+  it('delegates verify success to finalizeAuthentication when provided', async () => {
+    const response = await createAuthRouter({
+      handlers: createAuthWebAuthnAuthenticationRouteHandlers({
+        finalizeAuthentication: async (input, c) =>
+          c.json(
+            { credentialId: input.credentialId, host: true, userId: input.userId },
+            200
+          ),
+        resolveAuthenticationOptions: async () => ({ userId: undefined }),
+        service: service(),
+      }),
+      routePrefix: '/api/v1/auth',
+    }).request('/api/v1/auth/login/verify', {
+      body: JSON.stringify({ credential }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      credentialId: 'credential-id',
+      host: true,
+      userId: 'user-1',
+    });
+  });
 });
