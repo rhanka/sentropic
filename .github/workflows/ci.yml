@@ -19,6 +19,8 @@ on:
           - chat-core
           - chat-ui
           - flow
+          - cowork-bridge
+          - cowork-desktop
           - all
 
 env:
@@ -1000,6 +1002,12 @@ jobs:
       - name: Bootstrap publish flow
         if: inputs.bootstrap_publish_target == 'flow' || inputs.bootstrap_publish_target == 'all'
         run: make publish-flow-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish cowork-bridge
+        if: inputs.bootstrap_publish_target == 'cowork-bridge' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-cowork-bridge-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish cowork-desktop
+        if: inputs.bootstrap_publish_target == 'cowork-desktop' || inputs.bootstrap_publish_target == 'all'
+        run: make publish-cowork-desktop-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
 
   # Deploy API
   deploy-api:
