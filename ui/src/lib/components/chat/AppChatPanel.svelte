@@ -41,10 +41,10 @@
   import { initiativesStore } from '$lib/stores/initiatives';
   import { getScopedWorkspaceIdForUser, workspaceCanComment, selectedWorkspace, selectedWorkspaceRole, workspaceScopeHydrated } from '$lib/stores/workspaceScope';
   import {
+    composerBandItems,
     deleteDocument,
     getDownloadUrl,
     listDocuments,
-    mergeAttachmentBand,
     uploadDocument,
     type ContextDocumentItem,
     type UnifiedAttachmentItem,
@@ -84,7 +84,6 @@
     extractGeneratedFileCardsFromEvents,
     extractGeneratedFileCardsFromRuntimeSummary as collectGeneratedFileCardsFromRuntimeSummary,
     getGeneratedFileFormatLabel,
-    getSessionDocumentStatusLabelKey,
     normalizeGeneratedFileCard,
   } from '$lib/chat/document-adapter';
   import {
@@ -712,7 +711,7 @@
     composerSteerStreamId.trim().length > 0;
   $: composerRunInFlight = sending || composerSteerReady;
   $: composerAttachmentSummary = summarizeComposerAttachments(composerAttachments);
-  $: attachmentBand = mergeAttachmentBand({ sessionDocs, composerAttachments });
+  $: attachmentBand = composerBandItems(composerAttachments);
   $: composerPrimaryActionState = resolveComposerPrimaryAction({
     mode,
     input,
@@ -2538,9 +2537,6 @@
     commentHubKey = '';
   }
 
-  const sessionDocStatusLabel = (s: string) => {
-    return $_(getSessionDocumentStatusLabelKey(s));
-  };
 
   const loadSessionDocs = async () => {
     if (!sessionId) return;
@@ -2666,21 +2662,25 @@
   };
 
   const getBandItemStatusLabel = (item: UnifiedAttachmentItem): string => {
-    if (item.isPending) {
-      if (item.status === 'failed') return $_('common.error');
-      if (item.status === 'ready') return item.mimeType;
-      return $_('common.loading');
-    }
-    // Images skip summarization, so show their type instead of a summary status.
-    if (item.kind === 'image') return item.mimeType;
-    return sessionDocStatusLabel(item.status);
+    if (item.status === 'failed') return $_('common.error');
+    if (item.status === 'ready') return item.mimeType;
+    return $_('common.loading');
   };
 
+  // Removing a pending attachment also deletes its just-uploaded context
+  // document so no orphaned (model-visible) session document is left behind.
   const removeBandItem = async (item: UnifiedAttachmentItem) => {
-    if (item.composerAttachmentId) removeComposerAttachment(item.composerAttachmentId);
-    if (item.documentId) {
-      const doc = sessionDocs.find((d) => d.id === item.documentId);
-      if (doc) await removeSessionDoc(doc);
+    removeComposerAttachment(item.composerAttachmentId);
+    const documentId = item.documentId;
+    if (!documentId) return;
+    try {
+      await deleteDocument({
+        documentId,
+        workspaceId: getScopedWorkspaceIdForUser(),
+      });
+      sessionDocs = sessionDocs.filter((d) => d.id !== documentId);
+    } catch (err) {
+      sessionDocsError = err instanceof Error ? err.message : String(err);
     }
   };
 
@@ -2818,23 +2818,41 @@
     }
   };
 
-  const uploadSessionDoc = async (file: File | null | undefined) => {
-    if (!file) return;
+  // Non-image documents follow the same per-message attachment model as
+  // images: attached as a pending composer chip (kind 'file'), uploaded as a
+  // chat-session context document, and sent with the next message.
+  const attachFileToComposer = async (file: File, source: 'upload' | 'drive') => {
     showComposerMenu = false;
+    const attachmentId = createComposerAttachmentId();
+    const draft: ChatComposerAttachmentDraft = {
+      id: attachmentId,
+      kind: 'file',
+      source,
+      fileName: file.name || 'document',
+      mimeType: file.type || 'application/octet-stream',
+      sizeBytes: file.size,
+      state: 'uploading',
+    };
+    composerAttachments = [...composerAttachments, draft];
 
     sessionDocsUploading = true;
     sessionDocsError = null;
     try {
       const targetSessionId = await ensureSessionDocumentTarget();
       const scopedWs = getScopedWorkspaceIdForUser();
-      await uploadDocument({
+      const uploaded = await uploadDocument({
         ...createChatSessionDocumentContext(targetSessionId, scopedWs),
         file,
+      });
+      updateComposerAttachment(attachmentId, {
+        state: 'ready',
+        documentId: uploaded.id,
       });
       await loadSessionDocs();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       sessionDocsError = msg;
+      updateComposerAttachment(attachmentId, { state: 'failed', error: msg });
     } finally {
       sessionDocsUploading = false;
     }
@@ -2846,19 +2864,9 @@
       await attachImageFileToComposer(file, 'upload');
       return;
     }
-    await uploadSessionDoc(file);
+    await attachFileToComposer(file, 'upload');
   };
 
-  const removeSessionDoc = async (doc: ContextDocumentItem) => {
-    try {
-      const scopedWs = getScopedWorkspaceIdForUser();
-      await deleteDocument({ documentId: doc.id, workspaceId: scopedWs });
-      sessionDocs = sessionDocs.filter((d) => d.id !== doc.id);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      sessionDocsError = msg;
-    }
-  };
 
   const startEditMessage = (m: ChatMessage) => {
     if (!m.id || m.role !== 'user') return;
@@ -4228,12 +4236,12 @@
       .filter(
         (attachment) =>
           attachment.state === 'ready' &&
-          attachment.kind === 'image' &&
+          (attachment.kind === 'image' || attachment.kind === 'file') &&
           typeof attachment.documentId === 'string' &&
           attachment.documentId.trim().length > 0,
       )
       .map((attachment) => ({
-        kind: 'image' as const,
+        kind: attachment.kind,
         source: 'context_document',
         documentId: attachment.documentId,
         fileName: attachment.fileName,
@@ -5012,6 +5020,19 @@
                         </div>
                       {/if}
                     </div>
+                  {:else if attachment.kind === 'file'}
+                    <a
+                      class="col-span-2 flex items-center gap-2 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
+                      href={getAttachmentImageSrc(attachment)}
+                      download={attachment.fileName ?? 'document'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={attachment.fileName ?? 'document'}
+                    >
+                      <FileText class="h-4 w-4 shrink-0 text-primary" />
+                      <span class="truncate">{attachment.fileName ?? 'document'}</span>
+                      <Download class="ml-auto h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    </a>
                   {/if}
                 {/each}
               </div>
