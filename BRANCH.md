@@ -75,10 +75,22 @@ web app. See `spec/SPEC_COWORK.md`.
   signing RUN is therefore **attendu** (user's scheduling). The packaging already ships a gated signing
   step (currently `osslsigncode` + `.pfx`, skipped when no cert); when the cloud-HSM cert is obtained,
   swap that step to **`jsign`** (cloud-HSM signing API). Until then the exe ships UNSIGNED (POC/UAT OK).
-- **BR41a-Q5** `attention` — DECIDED (user, Lot 5): publish `@sentropic/cowork-desktop` on npm too (not
-  `private`). Needs: `publish-cowork-desktop[-token]` make targets + a CI OIDC `publish-cowork-desktop`
-  job (EX1/EX3) + an npm **trusted publisher** for the package (set up via Playwright — **attendu**,
-  Playwright MCP currently disconnected).
+- **BR41a-Q5** `acknowledge` — DECIDED (user): publish `@sentropic/cowork-desktop` on npm (not
+  `private`). DONE: `publish-cowork-desktop[-token]` make targets + CI OIDC `publish-cowork-desktop`
+  job + `cowork_desktop_publish` filter (EX1/EX3) + `cowork-desktop` (and `cowork-bridge`) added to the
+  `bootstrap_publish_target` enum + bootstrap steps in `ci.yml`. PUBLISH FLOW per package:
+  - `@sentropic/cowork-bridge`: npm trusted publisher (OIDC) **already configured** via Playwright
+    (repo `rhanka/sentropic`, `ci.yml`, `npm publish`) — its access page existed pre-publish (name was
+    reserved by an earlier staged publish attempt). First publish can go via OIDC on merge to main.
+  - `@sentropic/cowork-desktop`: its npm access page returns **Not Found** pre-publish (name never
+    reserved/staged) → trusted publisher CANNOT be pre-configured. Per the documented flow, FIRST publish
+    goes via the CI **bootstrap** (`workflow_dispatch bootstrap_publish_target=cowork-desktop`, uses the
+    org `NPM_TOKEN` secret, `github.ref==main`), THEN attach its OIDC trusted publisher on npmjs.com
+    (now-existing access page) for steady-state. So the desktop trusted-publisher is **attendu**
+    (post-first-publish, at/after merge), NOT a pre-merge step.
+  - Token hygiene: 4 short-lived `cowork-bridge-bootstrap*` granular tokens (all expire 2026-06-04) +
+    the org `sentropic-bootstrap-publish` (do NOT touch). Conductor created 2 (`…ULEM`, `…Kf4W`); two
+    `…br41a`/`…br41a-2` were not created in-session. Decision: let them auto-expire (2026-06-04).
 - **BR41a-Q6** `acknowledge` (Lot 5 part A, single-exe method): single-exe is **feasible** — chose
   **@yao-pkg/pkg@6.9.0** (the maintained pkg fork), NOT Node SEA. esbuild@0.25.10 bundles the entry
   (`packaging/entry.mjs` → `src/index.ts` + bridge + chat-ui) to one CJS file with the native libs
