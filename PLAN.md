@@ -1,11 +1,12 @@
 # PLAN - Orchestrated Roadmap
 
-Status: Updated 2026-05-14 — BR-14c (`feat/llm-mesh-sdk`) MERGED (PR #141, 2026-05-11), BR-14g (model catalog GPT-5.5 + Opus 4.7) MERGED (PR #146), BR-24 (`chore/node24-actions-upgrade`) MERGED (PR #147), `fix-mistral` MERGED (PR #145). BR-23 (`feat/multi-agent-framework-comparison`) scoping COMPLETED 2026-05-13 — PR #148 open, awaiting `SPEC_VOL` validation; architecture decisions closed in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` (single generic `CheckpointStore<T>`, single composable federated `ToolRegistry`, separate `@sentropic/marketplace`, façade-first `@sentropic/flow` extraction preserving agent templating invariant). BR-14b IN PROGRESS — Lot 1 contracts shipped (`16163ffc` = `@sentropic/contracts` skeleton), Lot 2 events shipped (`9cc76b61` = `@sentropic/events` skeleton); Lot 3 `@sentropic/chat-core` shell pending. BR-14a Lot 0 scoping complete (`c5cc6da1`); implementation blocked on BR-14b merge; target renamed `@sentropic/chat` → `@sentropic/chat-ui`. BR-25 (`chore/rules-skills-audit`) in study mode (17/46 checkboxes). BR-31 (`chore/make-to-nx-study`) STUDY CLOSED 2026-05-13 — recommendation REJECT (commits `681790fa` + `38d8f1d3`); no code change. BR-26 (`feat/openerp-runtime-requirements`) SCAFFOLDED 2026-05-14 (PR #151) — OpenERP project runtime requirements (MCP, OTel hooks, policy hooks, identity, marketplace primitives, sandbox); reserves slots BR-27..30 for OpenERP implementation follow-ups. Original BR-26..30 slots remapped to BR-32..36 to avoid collision. Forthcoming sentropic branches: BR-32 (flow-runtime-extract), BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers), BR-38a/BR-38b (vision/image), BR-39a/BR-39b (auth modules). Selected next execution order: BR-14b → BR-14a → BR-32 → BR-19 → BR-33 → BR-35 → BR-36 → BR-14e → BR-14d. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`.
+Status: Updated 2026-05-30 (reconciled with merged PRs — see addenda below) — BR-14c (`feat/llm-mesh-sdk`) MERGED (PR #141, 2026-05-11), BR-14g (model catalog GPT-5.5 + Opus 4.7) MERGED (PR #146), BR-24 (`chore/node24-actions-upgrade`) MERGED (PR #147), `fix-mistral` MERGED (PR #145). BR-23 (`feat/multi-agent-framework-comparison`) study MERGED 2026-05-14 (PR #148, no runtime code); architecture decisions closed in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` (single generic `CheckpointStore<T>`, single composable federated `ToolRegistry`, separate `@sentropic/marketplace`, façade-first `@sentropic/flow` extraction preserving agent templating invariant). BR-14b MERGED 2026-05-16 (PR #158) — `@sentropic/chat-core` extracted (contracts + events absorbed via BR14b-EX1) and chat-service modularized above the mesh runtime. BR-14a MERGED 2026-05-23 (PR #164, relaunched as `feat/chat-ui-sdk-v2`) — `@sentropic/chat-ui` extracted across web/Chrome/VSCode; target renamed `@sentropic/chat` → `@sentropic/chat-ui`. BR-25 (`chore/rules-skills-audit`) in study mode (17/46 checkboxes). BR-31 (`chore/make-to-nx-study`) STUDY CLOSED 2026-05-13 — recommendation REJECT (commits `681790fa` + `38d8f1d3`); no code change. BR-26 (`feat/openerp-runtime-requirements`) SCAFFOLDED 2026-05-14 (PR #151) — OpenERP project runtime requirements (MCP, OTel hooks, policy hooks, identity, marketplace primitives, sandbox); reserves slots BR-27..30 for OpenERP implementation follow-ups. Original BR-26..30 slots remapped to BR-32..36 to avoid collision. Forthcoming sentropic branches: BR-32 (flow-runtime-extract), BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers), BR-38a/BR-38b (vision/image), BR-39a/BR-39b (auth modules). Execution order (BR-14b → BR-14a → BR-32 → BR-19 now all MERGED; remaining): BR-33 → BR-35 → BR-36 → BR-14e → BR-14d. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`.
 Status addendum 2026-05-24: BR-38a (`feat/multimodal-image-input`) and BR-38b (`feat/image-generation-tool`) are registered as the vision/image branch pair. BR-38a owns image upload/paste/attach from chat, documents, and Google Drive plus llm-mesh vision routing. BR-38b depends on BR-38a and owns image generation contract, storage, and chat rendering.
 Status addendum 2026-05-24: BR-39a (`feat/auth-ui-sdk`) and BR-39b (`feat/auth-hono-kit`) are registered as the auth-module extraction pair. BR-39a owns reusable frontend auth screens and browser passkey helpers as `@sentropic/auth-ui`, with `spa-transpose-cv` as the first documented consumer need. BR-39b depends on BR-39a's transport contract and owns the optional reusable Hono backend package, `@sentropic/auth-hono`.
 Status addendum 2026-05-25: BR-40a/b/c registered as the "prioritization & sheets" trio (multi-branch wave) via documentation chore `chore/priorization-sheets`. BR-40a (`feat/prioritization-matrix-scale`) raises the per-folder use-case cap to 50 and makes the prioritization-matrix chart legible at scale (top-10 labels, hide-bubbles toggle, business-domain-filterable legend with hover emphasis). BR-40b (`feat/xlsx-multitab-query`) handles multi-tab xlsx for indexing and the documentary query tool, building on the in-flight `feat/xlsx-gsheet-indexing` branch (disposition pending BR40b-Q1). BR-40c (`feat/folder-xlsx-export`) adds a multi-tab xlsx export of a folder (use cases / evaluation matrix / prioritization quadrant). Open framing questions tracked in each plan file (BR40a-Q1/Q2/Q3, BR40b-Q1/Q2, BR40c-Q1/Q2).
 Status addendum 2026-05-25: BR-37 (`feat/deploy-poc-k8s`, PR #160) MERGED — Sentropic on poc-k8s Kapsule; plan archived in `plan/done/37-BRANCH_feat-deploy-poc-k8s.md`. BR-37b (`feat/deploy-poc-k8s-37b`, PR #176) delivers the email-egress fix (Nodemailer SMTP → Scaleway TEM HTTP API; SMTP blocked at Kapsule platform level) + Bitnami Sealed Secrets (controller live, `sentropic-api`/`postgres` resealed with `SCW_TEM_SECRET_KEY`, no `MAIL_*`) — CI-green. BR-37b is SPLIT: postgres backup, public Ingress + cert-manager (Cloudflare DNS-01), end-to-end deploy validation, and the post-merge live email smoke move to continuation branch **BR-37c** (`feat/deploy-poc-k8s-37c`, `plan/37c-BRANCH_feat-deploy-poc-k8s-37c.md`), launched from main after BR-37b merges. Status addendum 2026-05-28: **BR-37c DONE** (PR #186) — pg backup CronJob (round-trip green), public Ingress `sentropic.sent-tech.ca` via the poc-k8s platform (traefik + LB-S + cert-manager DNS-01, trusted TLS), legacy data migrated from `top-ai-ideas-db` → k8s postgres, runtime config fixed (WEBAUTHN RP ID `sent-tech.ca`, `AUTH_CALLBACK_BASE_URL`, DOC_STORAGE creds), make targets renamed `scw-*`→`k8s-*` + dir `deploy/scw/`→`deploy/k8s/`. Live E2E green (passkey, docs S3, chat IA, Google Drive connector). Decommission of the legacy serverless container `top-ai-ideas-api` + managed DB `top-ai-ideas-db` + DNS cleanup → continuation **BR-37d**. Status addendum 2026-05-29: **BR-37d DONE** (`feat/deploy-poc-k8s-37d`) — legacy `top-ai-ideas` stack torn down: SCW Serverless Container `top-ai-ideas-api` + custom domain deleted, managed PostgreSQL `top-ai-ideas-db` deleted (backup-gated final dump to `s3://sentropic-pgbackup/legacy/`), Cloudflare DNS cleaned (`top-ai-ideas-api` record removed; `top-ai-ideas.sent-tech.ca` → 301 Single Redirect to `https://sentropic.sent-tech.ca`), legacy serverless/GitHub-Pages deploy machinery removed from `ci.yml` + `Makefile` (only `deploy-k8s` remains). sentropic.sent-tech.ca unaffected (200). Evidence: `docs/uat/2026-05-28-decommission-top-ai-ideas-37d.md`.
 Status addendum 2026-05-25: BR-41a/b registered as the "Sentropic Cowork" pair (sequenced multi-branch) via documentation chore `chore/cowork`. BR-41a (`feat/cowork-desktop-tools`) publishes `@sentropic/cowork-bridge` (shared client core + portable auth behind a StorageAdapter + local-tool protocol types, reusing `@sentropic/chat-ui` for SSE) and refactors the Chrome extension to consume it, adds a backend device-code enrollment flow + non-browser device registry, desktop tools (`screen_capture`=eyes, `input_action`=hands) with per-tool consent, and a portable Windows zip whose chat is driven from the Sentropic web app; it starts with a throwaway proto. BR-41b (`feat/cowork-local-webview`) depends on BR-41a and embeds a third-party webview hosting `@sentropic/chat-ui` locally (mini-browser / workspaces). Study in `spec/SPEC_COWORK.md`; open framing questions tracked in each plan file (BR41a-Q1/Q2, BR41-Q1, BR41b-Q1/Q2).
+Status addendum 2026-05-30: roadmap reconciled with merged PRs — the 2026-05-14 lead status above predates the merges listed here and must be read through this addendum. **Now MERGED/DONE:** BR-14b `refacto/chat-service-core` (PR #158, merged 2026-05-16) — `@sentropic/chat-core` extracted (27 `src/` modules; `ChatRuntime` split into tool-dispatch/finalization/checkpoint/session sub-classes) + chat-service modularization above the mesh runtime, UAT passed; BR-14a `feat/chat-ui-sdk`, relaunched as `feat/chat-ui-sdk-v2` (PR #164, merged 2026-05-23) — `@sentropic/chat-ui` extracted across web/Chrome/VSCode surfaces with publish lane; BR-32 `feat/flow-runtime-extract` (PR #165, merged 2026-05-22) — `@sentropic/flow`; BR-19 `feat/agent-sandbox-skills` (PR #166, merged 2026-05-24); BR-23 `feat/multi-agent-framework-comparison` study (PR #148, merged 2026-05-14, no code); BR-40a `feat/prioritization-matrix-scale` (PR #187, merged 2026-05-30); and the deploy quartet BR-37/37b/37c/37d (`feat/deploy-poc-k8s*`, PRs #160/#176/#186/#191) — Sentropic live on poc-k8s at `sentropic.sent-tech.ca`, legacy `top-ai-ideas` stack decommissioned (per addenda above). GitHub repo rename to `rhanka/sentropic` is effective (remote `origin`). **Still open in the BR-14 chain:** BR-14e (codebase finalization) then BR-14d (transition ops), both `plan`. **Newly unblocked product waves:** BR-33 / BR-35 / BR-36, the BR-38a/b vision pair (BR-38a in progress on `feat/multimodal-image-input`), the BR-39a/b auth pair, and the BR-40b/c sheets remainder. Per-branch status reconciled in §1 and §3 below.
 
 ## 0) Repo merge policy (effective 2026-05-13)
 
@@ -36,18 +37,24 @@ Every PR going forward must be merged via a merge commit and the source branch l
 - BR-14g `feat/model-catalog-gpt55-opus47` — **merged (PR #146)**. Model catalog defaults pivoted to GPT-5.5 + Claude Opus 4.7; GPT-5.4 Nano preserved.
 - BR-24 `chore/node24-actions-upgrade` — **merged (PR #147)**. GitHub Actions workflows + third-party actions upgraded for Node 24; CI/CD + Scaleway deploy lanes verified.
 - `fix-mistral` — **merged (PR #145)**. Mistral provider runtime fix on top of BR-14c mesh.
+- BR-14b `refacto/chat-service-core` — **merged 2026-05-16 (PR #158)**. `@sentropic/chat-core` extracted (27 `src/` modules; `ChatRuntime` split into tool-dispatch/finalization/checkpoint/session sub-classes) + chat-service modularization above the mesh runtime; UAT passed. Absorbed `@sentropic/contracts` + `@sentropic/events` via scope exception BR14b-EX1.
+- BR-14a `feat/chat-ui-sdk` (relaunched `feat/chat-ui-sdk-v2`) — **merged 2026-05-23 (PR #164)**. `@sentropic/chat-ui` extracted across web/Chrome/VSCode surfaces with npm publish lane; consumes the chat-core/mesh wire only.
+- BR-32 `feat/flow-runtime-extract` — **merged 2026-05-22 (PR #165)**. `@sentropic/flow` façade-first extraction from todo-orchestration/queue-manager/default-workflows; agent templating invariant preserved.
+- BR-19 `feat/agent-sandbox-skills` — **merged 2026-05-24 (PR #166)**. V8 sandbox for tool execution + skill catalog replacing hardcoded tool dispatch.
+- BR-23 `feat/multi-agent-framework-comparison` — **merged 2026-05-14 (PR #148)**. Study only (no runtime code); architecture decisions in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md`.
+- BR-26 `feat/openerp-runtime-requirements` — **merged 2026-05-14 (PR #151)**. OpenERP runtime requirements scaffold (spec only); reserves slots BR-27..30 for implementation follow-ups.
+- BR-37 / BR-37b / BR-37c / BR-37d `feat/deploy-poc-k8s*` — **merged (PRs #160 / #176 / #186 / #191)**. Sentropic deployed live on poc-k8s Kapsule at `sentropic.sent-tech.ca` (public Ingress + cert-manager TLS, pg backup CronJob, sealed secrets, TEM email egress); legacy `top-ai-ideas` serverless + managed DB + DNS decommissioned. See 2026-05-25..29 addenda for details.
+- BR-40a `feat/prioritization-matrix-scale` — **merged 2026-05-30 (PR #187)**. Per-folder use-case cap raised to 50; prioritization-matrix chart legible at scale (top-10 labels, hide-bubbles toggle, domain-filter legend).
 
 **Ready to merge:**
-- None. BR-23 PR is open for `SPEC_VOL` validation but no implementation to merge in this branch (study only).
+- None.
 
 **Active execution:**
-- BR-14b `refacto/chat-service-core` — **in progress**. Lot 1 `@sentropic/contracts` skeleton shipped (`16163ffc`), Lot 2 `@sentropic/events` skeleton shipped (`9cc76b61`); Lot 3 `@sentropic/chat-core` shell pending. Scope exception **BR14b-EX1** absorbs the contracts + events packages into the same branch (single wire-boundary commit per `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` §11 delivery cadence). Façade-first extraction; agent templating invariant preserved (§14 of architecture spec).
-- BR-23 `feat/multi-agent-framework-comparison` — **scoping completed 2026-05-13**. PR open. Awaiting `SPEC_VOL` validation. Decisions closed: 7-package cartography (+ `@sentropic/contracts`, `@sentropic/events`, `@sentropic/marketplace`, `@sentropic/graphify` overlays), single generic `CheckpointStore<T>` with lenient/strict strategy adapters, single federated `ToolRegistry`, façade-first `@sentropic/flow` extraction, harness ↔ skills separation, MCP as transport adapter only.
 - BR-25 `chore/rules-skills-audit` — **study mode**. 17/46 checkboxes; mechanical enforcement design over text rules.
-- BR-14a `feat/chat-ui-sdk` — **Lot 0 scoping complete** (`c5cc6da1`). Implementation blocked on BR-14b merge. Target package renamed `@sentropic/chat` → `@sentropic/chat-ui` per `SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` §1.
+- BR-38a `feat/multimodal-image-input` — **in progress**. Image upload/paste/attach UX (unified composer attachment band + click-to-enlarge lightbox); first of the vision/image pair, not yet merged.
 
 **Pending branches (unblocked or near-unblocked):**
-- BR-07, BR-10, BR-11, BR-12, BR-14e, BR-14d, BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-19, BR-20, BR-21, BR-22, BR-32 (flow-runtime-extract), BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers), BR-38a (multimodal-image-input), BR-38b (image-generation-tool), BR-39a (auth-ui-sdk), BR-39b (auth-hono-kit) — see §3 catalog for descriptions, dependencies, and priorities.
+- BR-07, BR-10, BR-11, BR-12, BR-14e, BR-14d, BR-15, BR-16b, BR-16c, BR-17, BR-18, BR-20, BR-21, BR-22, BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers), BR-38b (image-generation-tool), BR-39a (auth-ui-sdk), BR-39b (auth-hono-kit), BR-40b (xlsx-multitab-query), BR-40c (folder-xlsx-export), BR-41a (cowork-desktop-tools), BR-41b (cowork-local-webview) — see §3 catalog for descriptions, dependencies, and priorities.
 
 **Study closed (no code):**
 - BR-31 `chore/make-to-nx-study` — **study closed 2026-05-13**. Recommendation **REJECT** with sub-option (optional power-developer adapt). Deliverable: `spec/SPEC_STUDY_MAKE_TO_NX_MIGRATION.md`. Commits `681790fa` (BRANCH.md) + `38d8f1d3` (spec). No further lots; PR open for record.
@@ -146,16 +153,16 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-14g | feat/model-catalog-gpt55-opus47                  | Pivot model catalog defaults and compatibility rules to     | done (PR #146)       | BR-14c                         |
 |        |                                                  | GPT-5.5 and Claude Opus 4.7 while keeping GPT-5.4 Nano.    |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-14b | refacto/chat-service-core                        | Modularize chat-service core above @sentropic/llm-mesh:      | in progress (Lot 1+2 | BR-14c, BR-14g                 |
-|        |                                                  | reasoning loop, tool loop, continuation boundaries,         | done, Lot 3 in        |                                |
-|        |                                                  | reusable chat orchestration, no provider abstraction.       | flight)              |                                |
+| BR-14b | refacto/chat-service-core                        | Modularize chat-service core above @sentropic/llm-mesh:      | done (PR #158,       | BR-14c, BR-14g                 |
+|        |                                                  | reasoning loop, tool loop, continuation boundaries,         | 2026-05-16);         |                                |
+|        |                                                  | reusable chat orchestration, no provider abstraction.       | core extracted.      |                                |
 |        |                                                  | Also ships @sentropic/contracts (`16163ffc`) and            |                      |                                |
 |        |                                                  | @sentropic/events (`9cc76b61`) via scope exception          |                      |                                |
 |        |                                                  | BR14b-EX1 (single wire-boundary commit).                    |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-14a | feat/chat-ui-sdk                                 | Former BR-14. Extract @sentropic/chat-ui (renamed from      | Lot 0 done; impl     | BR-04 (low), BR-14c, BR-14b    |
-|        |                                                  | @sentropic/chat) from web, Chrome, and VSCode surfaces as  | blocked on BR-14b   |                                |
-|        |                                                  | publishable npm lib. Consumes chat-core wire only.          | merge                |                                |
+| BR-14a | feat/chat-ui-sdk                                 | Former BR-14. Extract @sentropic/chat-ui (renamed from      | done (PR #164,       | BR-04 (low), BR-14c, BR-14b    |
+|        |                                                  | @sentropic/chat) from web, Chrome, and VSCode surfaces as  | 2026-05-23).         |                                |
+|        |                                                  | publishable npm lib. Consumes chat-core wire only.          | chat-ui extracted.   |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-14e | chore/sentropic-codebase-finalization             | Final codebase naming sweep outside chat/LLM/ops: API/UI   | plan (mandatory)     | BR-14a, BR-14b, BR-14c         |
 |        |                                                  | packages, labels, tests, fixtures, exports, residual       |                      |                                |
@@ -190,7 +197,7 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-18  | feat/sortable-list-views                         | Sortable columns for all list views (folders, initiatives, | plan                 | none                           |
 |        |                                                  | workspaces).                                               |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-19  | feat/agent-sandbox-skills                        | V8 sandbox for tool execution + skill catalog replacing    | plan                 | BR-04                          |
+| BR-19  | feat/agent-sandbox-skills                        | V8 sandbox for tool execution + skill catalog replacing    | done (PR #166)       | BR-04                          |
 |        |                                                  | hardcoded tool dispatch.                                   |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-20  | refacto/entity-page-neutral-config               | Neutral entity route + config-driven view templates        | plan                 | BR-04                          |
@@ -207,9 +214,9 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 | BR-22  | fix/rich-markdown-list-stabilization             | Stabilize rich markdown list rendering/editing (freeze on  | plan                 | BR-04                          |
 |        |                                                  | initiative cc884370... in constraints field).              |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-23  | feat/multi-agent-framework-comparison            | Compare LangGraph / Agno / Temporal; recommendation +      | study complete; PR   | BR-04B                         |
-|        |                                                  | runtime extension plan. Decisions closed in                | open; SPEC_VOL       |                                |
-|        |                                                  | spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md.                | validation pending   |                                |
+| BR-23  | feat/multi-agent-framework-comparison            | Compare LangGraph / Agno / Temporal; recommendation +      | merged (PR #148);    | BR-04B                         |
+|        |                                                  | runtime extension plan. Decisions closed in                | 2026-05-14, study    |                                |
+|        |                                                  | spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md.                | only (no code).      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
 | BR-24  | chore/node24-actions-upgrade                     | Update GitHub Actions workflows and third-party actions    | done (PR #147)       | BR-00                          |
 |        |                                                  | to Node 24-compatible versions, then re-verify CI/CD       |                      |                                |
@@ -238,7 +245,7 @@ Full spec: `spec/SPEC_EVOL_WORKSPACE_TYPES.md`
 |        |                                                  | primitives (AgentDefinition, ApprovalPolicy, capability    |                      |                                |
 |        |                                                  | manifest) + Sandbox API follow-up from PR #151.            |                      |                                |
 +--------+--------------------------------------------------+------------------------------------------------------------+----------------------+--------------------------------+
-| BR-32  | feat/flow-runtime-extract                        | Extract @sentropic/flow from todo-orchestration.ts +       | plan                 | BR-14b (Lots 1-3), BR-23       |
+| BR-32  | feat/flow-runtime-extract                        | Extract @sentropic/flow from todo-orchestration.ts +       | done (PR #165)       | BR-14b (Lots 1-3), BR-23       |
 |        |                                                  | queue-manager.ts + default-workflows.ts via façade-first   |                      |                                |
 |        |                                                  | (no rewrite). Preserves agent templating invariant         |                      |                                |
 |        |                                                  | (SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md §14). Owns          |                      |                                |
@@ -323,8 +330,8 @@ graph TD
   BR14f[BR-14f node workspace monorepo ⚡]
   BR14c[BR-14c llm mesh sdk ⚡]
   BR14g[BR-14g model catalog GPT-5.5 + Opus 4.7]
-  BR14b[BR-14b chat service core]
-  BR14a[BR-14a chat ui sdk]
+  BR14b[BR-14b chat service core ✓]
+  BR14a[BR-14a chat ui sdk ✓]
   BR14e[BR-14e codebase finalization]
   BR14d[BR-14d transition ops]
   BR15[BR-15 spectral site tools]
@@ -333,13 +340,13 @@ graph TD
   BR16c[BR-16c gdrive shared edit sync]
   BR17[BR-17 RAG documents]
   BR18[BR-18 sortable list views]
-  BR19[BR-19 agent sandbox + skills]
+  BR19[BR-19 agent sandbox + skills ✓]
   BR20[BR-20 entity/config refactor]
   BR21a[BR-21a pptxgenjs tool]
   BR21[BR-21 cv transpose + profiles parked]
   BR22[BR-22 rich markdown list stabilization]
   BR24[BR-24 node24 actions upgrade]
-  BR32[BR-32 flow runtime extract]
+  BR32[BR-32 flow runtime extract ✓]
   BR33[BR-33 managed marketplace]
   BR34[BR-34 graphify fusion]
   BR35[BR-35 persistence git adapter]
@@ -348,7 +355,7 @@ graph TD
   BR38b[BR-38b image generation]
   BR39a[BR-39a auth UI SDK]
   BR39b[BR-39b auth Hono kit]
-  BR40a[BR-40a prioritization matrix scale]
+  BR40a[BR-40a prioritization matrix scale ✓]
   BR40b[BR-40b xlsx multitab query]
   BR40c[BR-40c folder xlsx export]
   BR31[BR-31 make to nx study ✗ REJECT]
@@ -424,11 +431,11 @@ graph TD
 
 ## 5) Scheduling post-BR-04
 
-**BR-14 / BR-23 successor waves (2026-05-14 mapping)**:
-- **W1 (in flight)**: BR-14b (`refacto/chat-service-core`) — Lot 3 chat-core shell pending.
-- **W2 (after BR-14b merge)**: BR-14a (`feat/chat-ui-sdk`) ∥ BR-32 (`feat/flow-runtime-extract`).
-- **W3 (after BR-14a/BR-32 merge)**: BR-19 (`feat/agent-sandbox-skills`).
-- **W4 (after BR-19 merge)**: BR-33 (`feat/managed-marketplace`) ∥ BR-35 (`feat/persistence-git-adapter`).
+**BR-14 / BR-23 successor waves (status as of 2026-05-30)**:
+- **W1 — DONE**: BR-14b (`refacto/chat-service-core`) merged 2026-05-16 (PR #158).
+- **W2 — DONE**: BR-14a (`feat/chat-ui-sdk`, relaunched `-v2`) merged 2026-05-23 (PR #164) ∥ BR-32 (`feat/flow-runtime-extract`) merged 2026-05-22 (PR #165).
+- **W3 — DONE**: BR-19 (`feat/agent-sandbox-skills`) merged 2026-05-24 (PR #166).
+- **W4 (current front, after BR-19 merge)**: BR-33 (`feat/managed-marketplace`) ∥ BR-35 (`feat/persistence-git-adapter`).
 - **W5 (after BR-32+BR-33 settle)**: BR-36 (`feat/external-triggers`).
 - **Out of waves — backlog**: BR-34 (`feat/graphify-fusion`) standalone, scheduled on capacity.
 - **Out of waves — vision/image pair (registered 2026-05-24)**: BR-38a (`feat/multimodal-image-input`) then BR-38b (`feat/image-generation-tool`). BR-38a can be pulled forward after BR-14a/BR-14b/BR-14c/BR-14g and BR-16a contracts are stable enough to avoid duplicate chat/document wire changes. BR-38b waits for BR-38a because generated images reuse the media/storage/rendering contracts introduced for image input.
