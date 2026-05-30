@@ -443,6 +443,18 @@
   const isSpanField = (f: any): boolean => f.span && f.span > 1;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isNotSpanField = (f: any): boolean => !f.span || f.span <= 1;
+
+  // BR-40a: while the folder executive-summary is still generating, an
+  // executiveSummary.* section whose content has not arrived yet must show a
+  // skeleton placeholder instead of an empty titled card. Scoped to the
+  // executive-summary text sections so use-case rendering is untouched.
+  const isExecutiveSummaryField = (key: string): boolean =>
+    typeof key === 'string' && key.startsWith('executiveSummary.');
+  $: isFolderGenerating = data?.status === 'generating';
+  const isSectionPending = (key: string): boolean =>
+    isExecutiveSummaryField(key) &&
+    isFolderGenerating &&
+    String(getFieldValue(key) || '').trim().length === 0;
 </script>
 
 {#if template}
@@ -626,6 +638,18 @@
                   {/if}
                 </FieldCard>
               {:else if field.type === 'text'}
+                {#if isSectionPending(field.key)}
+                  <!-- BR-40a: executive-summary section still generating — skeleton, not an empty card -->
+                  <div class="{field.span > 1 ? (colSpanClass[field.span] || '') : ''} h-full print-hidden">
+                    <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={shortKey(field.key)} commentCount={0} onOpenComments={null}>
+                      <div class="space-y-2 animate-pulse" aria-busy="true" aria-label={$_('dashboard.execSummaryGenerating')}>
+                        <div class="h-3 w-full rounded bg-slate-200"></div>
+                        <div class="h-3 w-11/12 rounded bg-slate-200"></div>
+                        <div class="h-3 w-4/5 rounded bg-slate-200"></div>
+                      </div>
+                    </FieldCard>
+                  </div>
+                {:else}
                 <div class="{field.span > 1 ? (colSpanClass[field.span] || '') : ''} h-full">
                   <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={shortKey(field.key)} commentCount={commentCounts[shortKey(field.key)] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(shortKey(field.key)) : null}>
                     <div class="{variant === 'bordered' ? 'prose prose-slate max-w-none' : 'text-slate-600 text-sm leading-relaxed prose prose-sm max-w-none'}" class:description-compact-print={isTextContentLong}>
@@ -639,6 +663,7 @@
                     </div>
                   </FieldCard>
                 </div>
+                {/if}
               {:else if field.type === 'list'}
                 <div class="{field.span > 1 ? (colSpanClass[field.span] || '') : ''} h-full">
                   <FieldCard variant={field.variant || variant} label={fieldLabel(field.key)} color={field.color || ''} commentSection={shortKey(field.key)} commentCount={commentCounts[shortKey(field.key)] ?? 0} onOpenComments={onOpenComments ? () => onOpenComments(shortKey(field.key)) : null}>

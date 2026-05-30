@@ -429,8 +429,8 @@
       nbUseCases = 10;
     } else if (n < 1) {
       nbUseCases = 1;
-    } else if (n > 25) {
-      nbUseCases = 25;
+    } else if (n > 50) {
+      nbUseCases = 50;
     }
   }
 
@@ -631,7 +631,7 @@
 	        id="nb-usecases"
 	        type="number"
         min="1"
-        max="25"
+        max="50"
         class="w-20 rounded border border-slate-300 p-2"
 	        bind:value={nbUseCases}
 	      />
