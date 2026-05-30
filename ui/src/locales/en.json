@@ -665,6 +665,19 @@
         "load": "Unable to load the Settings Chrome Plugin card. Set CHROME_EXTENSION_DOWNLOAD_URL in the API configuration, or ensure a local package is available at /chrome-extension/top-ai-ideas-chrome-extension.zip, then restart the API."
       }
     },
+    "coworkDesktop": {
+      "title": "Sentropic Cowork (Windows)",
+      "description": "Download the Sentropic Cowork Windows binary (eyes/hands on your workstation) configured for this instance, then pair it with a code.",
+      "experimentalWarning": "(experimental, POC — unsigned binary: SmartScreen may warn)",
+      "loading": "Loading Cowork binary…",
+      "downloadTooltip": "Download Sentropic Cowork (Windows)",
+      "retry": "Retry",
+      "versionLabel": "Version",
+      "sourceLabel": "Source",
+      "errors": {
+        "load": "Unable to load the Sentropic Cowork card. Set COWORK_DESKTOP_DOWNLOAD_URL in the API configuration (an http(s) URL served from the Sentropic domain), then restart the API."
+      }
+    },
     "vscodeExtension": {
       "title": "VSCode extension",
       "description": "Download the latest VSCode extension package configured for this instance.",
