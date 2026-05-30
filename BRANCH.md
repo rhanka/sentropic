@@ -517,11 +517,11 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [ ] Existing Chrome extension token exchange still works.
     - [ ] Existing account-disabled and approval-expired behavior still maps roles correctly.
 
-- [ ] **Lot N-1 - Docs consolidation**
-  - [ ] Update `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` with the `@sentropic/auth-hono` package boundary.
-  - [ ] Update `packages/auth-hono/README.md` with Sentropic and `spa-transpose-cv` mounting examples.
-  - [ ] Document bootstrap publish and trusted publisher setup for `@sentropic/auth-hono`.
-  - [ ] Document npm first-publish runbook: run `workflow_dispatch` with `bootstrap_publish_target=auth-hono`, handle any human npm 2FA/token requirement, then attach npm trusted publisher for `rhanka/sentropic` workflow `ci.yml`.
+- [x] **Lot N-1 - Docs consolidation**
+  - [x] Update `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` §1 with `@sentropic/auth-hono` package boundary (+ brief `@sentropic/auth-ui` row pointing to BR-39a).
+  - [x] Update `packages/auth-hono/README.md` with Sentropic and `spa-transpose-cv` mounting recipes + `Quick start` + `Hooks` (`AuthHonoRouteHandlerError` short-circuit + `finalize*` post-verify) + `Response contract` + `Versioning` (0.2.0/0.2.1).
+  - [x] Document bootstrap publish and trusted publisher setup for `@sentropic/auth-hono` (README `First Publish` referencing `rules/workflow.md`).
+  - [x] Document npm first-publish runbook (`workflow_dispatch` with `bootstrap_publish_target=auth-hono`, handle any human npm 2FA/token requirement, then attach npm trusted publisher for `rhanka/sentropic` workflow `ci.yml`) — same `First Publish` section.
 
 - [ ] **Lot N - Final validation**
   - [x] Typecheck and lint:
@@ -539,8 +539,8 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [x] `make test-e2e E2E_SPEC=tests/02-auth-workflow.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit` (11 passed)
     - [x] `make test-e2e E2E_SPEC=tests/02-auth-webauthn.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit` (10 passed)
     - [x] `make test-e2e E2E_SPEC=tests/02-auth-devices.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit` (3 passed)
-  - [ ] Bump affected package versions for every touched package `src/**`.
-  - [ ] Complete first-publish bootstrap documentation for `@sentropic/auth-hono`.
+  - [x] Bump affected package versions for every touched package `src/**` (`@sentropic/auth-hono` 0.1.0 → 0.2.1).
+  - [x] Complete first-publish bootstrap documentation for `@sentropic/auth-hono` (covered in package README + Lot N-1 above).
   - [ ] Verify CI/CD package automation exists before PR handoff:
     - [ ] Make targets: `typecheck-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`, `test-auth-hono`.
     - [ ] CI filters/outputs: `auth_hono`, `auth_hono_publish`.
