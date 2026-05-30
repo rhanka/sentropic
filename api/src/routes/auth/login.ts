@@ -1,33 +1,124 @@
 import { createAuthWebAuthnAuthenticationRouteHandlers } from '@sentropic/auth-hono';
-import { Hono } from 'hono';
-import { z } from 'zod';
-import { logger } from '../../logger';
-import { verifyWebAuthnAuthentication } from '../../services/webauthn-authentication';
-import { createSession } from '../../services/session-manager';
-import { verifyChallenge } from '../../services/challenge-manager';
-import { users } from '../../db/schema';
-import { db } from '../../db/client';
 import { eq } from 'drizzle-orm';
-import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
+import { Hono } from 'hono';
+import { db } from '../../db/client';
+import { users } from '../../db/schema';
+import { logger } from '../../logger';
 import { authHonoWebAuthnAuthenticationService } from '../../services/auth/webauthn-adapter';
+import { createSession } from '../../services/session-manager';
 import { ensureWorkspaceForUser } from '../../services/workspace-service';
 
 /**
- * WebAuthn Authentication Routes
- * 
+ * WebAuthn Authentication Routes (`@sentropic/auth-hono`)
+ *
  * POST /auth/login/options - Generate authentication options
- * POST /auth/login/verify - Verify authentication response
+ * POST /auth/login/verify  - Verify authentication response + finalize session
  */
 
 export const loginRouter = new Hono();
 
-// Request schema (verify is owned by the @sentropic/auth-hono handler)
-const loginVerifySchema = z.object({
-  credential: z.any(), // AuthenticationResponseJSON type
-  deviceName: z.string().max(100).optional(),
-});
-
 const loginHandlers = createAuthWebAuthnAuthenticationRouteHandlers({
+  finalizeAuthentication: async ({ credentialId, request, userId }, c) => {
+    const [user] = await db
+      .select({
+        accountStatus: users.accountStatus,
+        approvalDueAt: users.approvalDueAt,
+        displayName: users.displayName,
+        email: users.email,
+        emailVerified: users.emailVerified,
+        id: users.id,
+        role: users.role,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user) {
+      logger.error({ userId }, 'User not found after authentication');
+      return c.json(
+        {
+          error: {
+            code: 'user_not_found',
+            message: 'User not found.',
+          },
+        },
+        404
+      );
+    }
+
+    if (!user.emailVerified) {
+      logger.warn({ userId }, 'Login blocked - email not verified');
+      return c.json(
+        {
+          error: {
+            code: 'email_verification_required',
+            message:
+              'Your email must be verified before you can log in. Please check your email for the verification link.',
+          },
+        },
+        403
+      );
+    }
+
+    // Do not auto-create a workspace on login (user may have lost their last workspace).
+    await ensureWorkspaceForUser(user.id, { createIfMissing: false });
+
+    const status = user.accountStatus ?? 'active';
+    const due = user.approvalDueAt ?? null;
+    const now = new Date();
+
+    if (status === 'disabled_by_user' || status === 'disabled_by_admin') {
+      return c.json(
+        {
+          error: {
+            code: 'account_disabled',
+            message: 'Account is disabled.',
+          },
+        },
+        403
+      );
+    }
+
+    let effectiveRole: string = user.role;
+    if (status === 'approval_expired_readonly') effectiveRole = 'guest';
+    if (status === 'pending_admin_approval' && due && now > due) effectiveRole = 'guest';
+
+    const { expiresAt, refreshToken, sessionToken } = await createSession(user.id, effectiveRole, {
+      ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
+      name: request.deviceName,
+      userAgent: c.req.header('user-agent'),
+    });
+
+    const isProduction = process.env.NODE_ENV === 'production';
+    const origin = c.req.header('origin');
+    const cookieOptions = [
+      `session=${sessionToken}`,
+      'HttpOnly',
+      isProduction ? 'Secure' : '',
+      'SameSite=Lax',
+      'Path=/',
+      `Max-Age=${7 * 24 * 60 * 60}`,
+    ];
+    if (!isProduction && origin && origin.includes('localhost')) {
+      cookieOptions.push('Domain=localhost');
+    }
+    c.header('Set-Cookie', cookieOptions.filter(Boolean).join('; '));
+
+    logger.info({ credentialId, userId: user.id }, 'Authentication successful');
+
+    return c.json({
+      expiresAt: expiresAt.toISOString(),
+      refreshToken,
+      sessionToken,
+      success: true,
+      user: {
+        displayName: user.displayName,
+        email: user.email,
+        id: user.id,
+        role: user.role,
+      },
+    });
+  },
   resolveAuthenticationOptions: async ({ email }) => {
     if (!email) {
       return { userId: undefined };
@@ -45,166 +136,12 @@ const loginHandlers = createAuthWebAuthnAuthenticationRouteHandlers({
 
 /**
  * POST /auth/login/options
- * Generate WebAuthn authentication options (@sentropic/auth-hono)
+ * Generate WebAuthn authentication options.
  */
 loginRouter.post('/options', loginHandlers.createPasskeyAuthenticationOptions!);
 
 /**
  * POST /auth/login/verify
- * Verify WebAuthn authentication response
+ * Verify WebAuthn authentication response + create session (via finalizeAuthentication).
  */
-loginRouter.post('/verify', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { credential, deviceName } = loginVerifySchema.parse(body);
-    
-    const credentialResponse = credential as AuthenticationResponseJSON;
-    
-    // Validate credential structure
-    if (!credentialResponse || !credentialResponse.response || !credentialResponse.response.clientDataJSON) {
-      return c.json({ message: 'Invalid credential response' }, 400);
-    }
-    
-    // Extract challenge from clientDataJSON
-    let clientData;
-    try {
-      clientData = JSON.parse(
-      Buffer.from(credentialResponse.response.clientDataJSON, 'base64url').toString()
-    );
-    } catch (error) {
-      logger.warn({ err: error }, 'Failed to parse clientDataJSON');
-      return c.json({ message: 'Invalid credential data' }, 400);
-    }
-    
-    const challenge = clientData.challenge;
-    
-    // Verify challenge is valid (userId is optional for authentication)
-    const challengeValid = await verifyChallenge(challenge, undefined, 'authentication');
-    if (!challengeValid) {
-      logger.warn('Invalid or expired authentication challenge');
-      return c.json({ message: 'Invalid or expired challenge' }, 400);
-    }
-    
-    // Verify authentication
-    const result = await verifyWebAuthnAuthentication({
-      credential: credentialResponse,
-      expectedChallenge: challenge,
-    });
-    
-    if (!result.verified || !result.userId) {
-      logger.warn('Authentication verification failed');
-      return c.json({ message: 'Authentication verification failed' }, 401);
-    }
-    
-    // Get user info and verify email is verified
-    const [user] = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        displayName: users.displayName,
-        role: users.role,
-        emailVerified: users.emailVerified,
-        accountStatus: users.accountStatus,
-        approvalDueAt: users.approvalDueAt,
-      })
-      .from(users)
-      .where(eq(users.id, result.userId))
-      .limit(1);
-    
-    if (!user) {
-      logger.error({ userId: result.userId }, 'User not found after authentication');
-      return c.json({ error: 'User not found' }, 404);
-    }
-    
-    // Security: Block login if email is not verified
-    if (!user.emailVerified) {
-      logger.warn({ userId: result.userId }, 'Login blocked - email not verified');
-      return c.json({ 
-        error: 'Email verification required',
-        message: 'Your email must be verified before you can log in. Please check your email for the verification link.'
-      }, 403);
-    }
-
-    // Ne pas auto-créer de workspace à la connexion (cas limite: utilisateur retiré de son dernier workspace).
-    await ensureWorkspaceForUser(user.id, { createIfMissing: false });
-
-    // Compute effective role (approval expired => guest read-only)
-    const status = user.accountStatus ?? 'active';
-    const due = user.approvalDueAt ?? null;
-    const now = new Date();
-
-    if (status === 'disabled_by_user' || status === 'disabled_by_admin') {
-      return c.json({ error: 'Account disabled' }, 403);
-    }
-
-    let effectiveRole: string = user.role;
-    if (status === 'approval_expired_readonly') effectiveRole = 'guest';
-    if (status === 'pending_admin_approval' && due && now > due) effectiveRole = 'guest';
-    
-    // Create session for user
-    const { sessionToken, refreshToken, expiresAt } = await createSession(
-      user.id,
-      effectiveRole,
-      {
-        name: deviceName,
-        ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
-        userAgent: c.req.header('user-agent'),
-      }
-    );
-    
-    // Set session cookie (Secure only in production)
-    const isProduction = process.env.NODE_ENV === 'production';
-    const origin = c.req.header('origin');
-    
-    // Build cookie options
-    const cookieOptions = [
-      `session=${sessionToken}`,
-      'HttpOnly',
-      isProduction ? 'Secure' : '',
-      'SameSite=Lax',
-      'Path=/',
-      `Max-Age=${7 * 24 * 60 * 60}`
-    ];
-    
-    // In development, allow cookie sharing between localhost ports
-    if (!isProduction && origin && origin.includes('localhost')) {
-      cookieOptions.push('Domain=localhost');
-    }
-    
-    const cookieString = cookieOptions.join('; ');
-    logger.debug({ 
-      origin, 
-      isProduction, 
-      cookieString: cookieString.substring(0, 50) + '...' 
-    }, 'Setting session cookie');
-    
-    c.header('Set-Cookie', cookieString);
-    
-    logger.info({ 
-      userId: user.id,
-      credentialId: result.credentialId,
-    }, 'Authentication successful');
-    
-    return c.json({
-      success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        role: user.role,
-      },
-      sessionToken,
-      refreshToken,
-      expiresAt: expiresAt.toISOString(),
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      logger.warn({ error: error.errors }, 'Invalid login verify request');
-      return c.json({ error: 'Invalid request data', details: error.errors }, 400);
-    }
-    
-    logger.error({ err: error }, 'Error verifying authentication');
-    return c.json({ error: 'Failed to verify authentication' }, 500);
-  }
-});
-
+loginRouter.post('/verify', loginHandlers.verifyPasskeyAuthentication!);
