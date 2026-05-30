@@ -1815,7 +1815,12 @@ export class ChatService {
             attachment.source === 'context_document'),
       );
     });
-    if (userRowsWithVisionAttachments.length === 0) {
+    const hasFileAttachments = conversationRows.some(
+      (message) =>
+        message.role === 'user' &&
+        (message.attachments ?? []).some((attachment) => attachment.kind === 'file'),
+    );
+    if (userRowsWithVisionAttachments.length === 0 && !hasFileAttachments) {
       return options.currentMessages;
     }
 
@@ -1864,13 +1869,27 @@ export class ChatService {
       conversationIndex += 1;
       if (row.role !== 'user') continue;
 
-      const imageAttachments = (row.attachments ?? []).filter(
+      const attachmentsList = row.attachments ?? [];
+      const imageAttachments = attachmentsList.filter(
         (attachment) => attachment.kind === 'image',
       );
-      if (imageAttachments.length === 0) continue;
+      const fileNames = attachmentsList
+        .filter((attachment) => attachment.kind === 'file')
+        .map((attachment) =>
+          typeof attachment.fileName === 'string' ? attachment.fileName.trim() : '',
+        )
+        .filter((name) => name.length > 0);
+      if (imageAttachments.length === 0 && fileNames.length === 0) continue;
+
+      // Per-turn attention cue so the model notices documents attached to this
+      // message (it still reads their content on demand via the documents tool).
+      const attentionHint =
+        fileNames.length > 0
+          ? `\n\n[Attached document(s) for this message: ${fileNames.join(', ')}. Read them with the documents tool if relevant.]`
+          : '';
 
       const parts: ChatRuntimeContentPart[] = [];
-      const text = (row.content ?? '').trim();
+      const text = `${row.content ?? ''}${attentionHint}`.trim();
       if (text) parts.push({ type: 'text', text });
 
       for (const attachment of imageAttachments) {
@@ -1936,6 +1955,12 @@ export class ChatService {
         nextMessages[messageIndex] = {
           role: 'user',
           content: parts,
+        };
+        changed = true;
+      } else if (attentionHint) {
+        nextMessages[messageIndex] = {
+          role: 'user',
+          content: text,
         };
         changed = true;
       }
