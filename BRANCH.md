@@ -263,7 +263,8 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: implementation worker (contract owner)
   - Severity: design (gates the WebAuthn register/login extraction)
-  - Status: open
+  - Status: package contract resolved 2026-05-30 (`@sentropic/auth-hono@0.2.0`); host wiring pending
+  - Resolution: added `AuthHonoRouteHandlerError` short-circuit return for `prepareRegistrationOptions`/`resolveRegistrationUser`/`resolveAuthenticationOptions` (handler returns the host `{ status, code, message }`), and optional `finalizeRegistration`/`finalizeAuthentication` post-verify hooks that let the host build the success Response (session/cookie/rich body). Additive — existing callbacks remain valid; default verify response unchanged when no `finalize` hook is provided. Package gates: typecheck/test (14 files, 46 tests including 4 new hook tests)/build/pack all green.
   - Repro steps: attempt to rewire `api/src/routes/auth/register.ts` and `login.ts` onto `createAuthWebAuthnRegistrationRouteHandlers` / `createAuthWebAuthnAuthenticationRouteHandlers`.
   - Expected: package handlers preserve current Sentropic behavior.
   - Actual: gaps in the package WebAuthn route-handler contract:

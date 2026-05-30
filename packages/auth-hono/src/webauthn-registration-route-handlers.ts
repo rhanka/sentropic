@@ -10,6 +10,7 @@ import type {
 import type { AuthHonoRouteHandlers } from './router.js';
 
 export interface CreateAuthWebAuthnRegistrationRouteHandlersOptions {
+  finalizeRegistration?: AuthHonoFinalizeRegistration;
   prepareRegistrationOptions: AuthHonoPrepareRegistrationOptions;
   resolveRegistrationUser: AuthHonoResolveRegistrationUser;
   service: AuthHonoWebAuthnRegistrationService;
@@ -18,12 +19,29 @@ export interface CreateAuthWebAuthnRegistrationRouteHandlersOptions {
 export type AuthHonoPrepareRegistrationOptions = (
   input: AuthHonoRegistrationOptionsRequest,
   c: Context
-) => Promise<AuthHonoPreparedRegistrationOptions> | AuthHonoPreparedRegistrationOptions;
+) =>
+  | Promise<AuthHonoPreparedRegistrationOptions | AuthHonoRouteHandlerError>
+  | AuthHonoPreparedRegistrationOptions
+  | AuthHonoRouteHandlerError;
 
 export type AuthHonoResolveRegistrationUser = (
   input: AuthHonoRegistrationVerifyRequest,
   c: Context
-) => Promise<AuthHonoResolvedRegistrationUser> | AuthHonoResolvedRegistrationUser;
+) =>
+  | Promise<AuthHonoResolvedRegistrationUser | AuthHonoRouteHandlerError>
+  | AuthHonoResolvedRegistrationUser
+  | AuthHonoRouteHandlerError;
+
+export type AuthHonoFinalizeRegistration = (
+  result: AuthHonoFinalizeRegistrationInput,
+  c: Context
+) => Response | Promise<Response>;
+
+export interface AuthHonoFinalizeRegistrationInput {
+  credentialId: string;
+  request: AuthHonoRegistrationVerifyRequest;
+  userId: string;
+}
 
 export interface AuthHonoRegistrationOptionsRequest {
   deviceName?: string;
@@ -47,6 +65,23 @@ export interface AuthHonoPreparedRegistrationOptions {
 export interface AuthHonoResolvedRegistrationUser {
   userId: string;
 }
+
+export interface AuthHonoRouteHandlerError {
+  error: {
+    code: string;
+    message: string;
+    status: ContentfulStatusCode;
+  };
+}
+
+const isRouteHandlerError = (value: unknown): value is AuthHonoRouteHandlerError =>
+  Boolean(
+    value &&
+      typeof value === 'object' &&
+      'error' in (value as Record<string, unknown>) &&
+      typeof (value as { error?: unknown }).error === 'object' &&
+      (value as { error?: { code?: unknown } }).error?.code !== undefined
+  );
 
 const registrationOptionsSchema = z.object({
   deviceName: z.string().max(100).optional(),
@@ -75,6 +110,11 @@ export const createAuthWebAuthnRegistrationRouteHandlers = (
     }
 
     const prepared = await options.prepareRegistrationOptions(input.value, c);
+
+    if (isRouteHandlerError(prepared)) {
+      return simpleError(c, prepared.error.status, prepared.error.code, prepared.error.message);
+    }
+
     const registrationOptions = await options.service.generateRegistrationOptions(
       prepared.serviceInput
     );
@@ -99,6 +139,16 @@ export const createAuthWebAuthnRegistrationRouteHandlers = (
     }
 
     const registrationUser = await options.resolveRegistrationUser(input.value, c);
+
+    if (isRouteHandlerError(registrationUser)) {
+      return simpleError(
+        c,
+        registrationUser.error.status,
+        registrationUser.error.code,
+        registrationUser.error.message
+      );
+    }
+
     const result = await options.service.verifyRegistration({
       credential: input.value.credential,
       deviceName: input.value.deviceName,
@@ -108,6 +158,17 @@ export const createAuthWebAuthnRegistrationRouteHandlers = (
 
     if (!result.verified) {
       return serviceError(c, result.error);
+    }
+
+    if (options.finalizeRegistration) {
+      return options.finalizeRegistration(
+        {
+          credentialId: result.credentialId,
+          request: input.value,
+          userId: registrationUser.userId,
+        },
+        c
+      );
     }
 
     return c.json({
