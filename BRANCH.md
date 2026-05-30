@@ -532,13 +532,13 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests ENV=test-feat-auth-hono-kit` (14 files, 47 tests)
   - [x] Retest API:
     - [x] `make test-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit` (smoke+unit 500 + endpoints 439 + queue 20 + security 49 + ai 30 + limit 4 = 1042 tests; 0 failures)
-  - [ ] Retest E2E:
-    - [ ] `make build-api build-ui-image API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit`
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-simple.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit`
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-routes.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit`
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-workflow.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit`
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-webauthn.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit`
-    - [ ] `make test-e2e E2E_SPEC=tests/02-auth-devices.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit`
+  - [x] Retest E2E (35 specs passed across 5 files):
+    - [x] `make build-api build-ui-image API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit`
+    - [x] `make test-e2e E2E_SPEC=tests/02-auth-simple.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit` (8 passed)
+    - [x] `make test-e2e E2E_SPEC=tests/02-auth-routes.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit` (3 passed)
+    - [x] `make test-e2e E2E_SPEC=tests/02-auth-workflow.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit` (11 passed)
+    - [x] `make test-e2e E2E_SPEC=tests/02-auth-webauthn.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit` (10 passed)
+    - [x] `make test-e2e E2E_SPEC=tests/02-auth-devices.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit` (3 passed)
   - [ ] Bump affected package versions for every touched package `src/**`.
   - [ ] Complete first-publish bootstrap documentation for `@sentropic/auth-hono`.
   - [ ] Verify CI/CD package automation exists before PR handoff:
