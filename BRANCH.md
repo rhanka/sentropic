@@ -249,7 +249,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - Branch: BR-39b `feat/auth-hono-kit`
   - Owner: Conductor / branch owner
   - Severity: attention (blocks full `make test-api` at branch close; NOT blocking the middleware slice)
-  - Status: open
+  - Status: resolved 2026-05-30 — `workspaces.test.ts` passes in the canonical `make test-api` full pipeline (59 endpoint files / 439 tests all green); the earlier `beforeEach` timeout came from accumulated state across many ad-hoc per-file runs this session, not a code regression.
   - Repro steps: `make test-api-endpoints SCOPE=tests/api/workspaces.test.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`.
   - Expected: 7 tests pass.
   - Actual: 4 fail — 3 with `beforeEach` "Hook timed out in 10000ms" and 1 cascading `users_email_unique` duplicate-key in `createTestUser`. `me`, `initiatives`, `settings`, and all auth suites pass.
@@ -524,14 +524,14 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [ ] Document npm first-publish runbook: run `workflow_dispatch` with `bootstrap_publish_target=auth-hono`, handle any human npm 2FA/token requirement, then attach npm trusted publisher for `rhanka/sentropic` workflow `ci.yml`.
 
 - [ ] **Lot N - Final validation**
-  - [ ] Typecheck and lint:
-    - [ ] `make typecheck-auth-hono ENV=test-feat-auth-hono-kit`
-    - [ ] `make typecheck-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
-    - [ ] `make lint-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
-  - [ ] Retest packages:
-    - [ ] `make test-auth-hono SCOPE=packages/auth-hono/tests ENV=test-feat-auth-hono-kit`
-  - [ ] Retest API:
-    - [ ] `make test-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
+  - [x] Typecheck and lint:
+    - [x] `make typecheck-auth-hono ENV=test-feat-auth-hono-kit`
+    - [x] `make typecheck-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
+    - [x] `make lint-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit` (0 errors, pre-existing `no-console` warnings only)
+  - [x] Retest packages:
+    - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests ENV=test-feat-auth-hono-kit` (14 files, 47 tests)
+  - [x] Retest API:
+    - [x] `make test-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit` (smoke+unit 500 + endpoints 439 + queue 20 + security 49 + ai 30 + limit 4 = 1042 tests; 0 failures)
   - [ ] Retest E2E:
     - [ ] `make build-api build-ui-image API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit`
     - [ ] `make test-e2e E2E_SPEC=tests/02-auth-simple.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit`
