@@ -5,9 +5,25 @@
   import { Chart, registerables } from 'chart.js';
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
-  import { calculateUseCaseScores } from '$lib/utils/scoring';
+  import { calculateUseCaseScores, selectTopPriorityIndices } from '$lib/utils/scoring';
   import type { MatrixConfig } from '$lib/types/matrix';
   import { BarChart3, MousePointerClick, Loader2 } from '@lucide/svelte';
+
+  // BR-40a: only the top-N use cases (ranked by value / (complexity + ε)) get labels.
+  const TOP_LABEL_COUNT = 10;
+
+  // BR-40a: "hide labels" toggle. When true, the top-N text label callouts are
+  // suppressed (clean point cloud for hover-simple); data points, hover hit-areas
+  // and tooltip stay active. Bindable so the parent can host an icon-only control
+  // next to the chart settings button.
+  export let hideBubbles = false;
+
+  // BR-40a: business-domain legend filter + hover emphasis state.
+  // - hiddenDomains: domains toggled OFF in the legend (their points are hidden).
+  // - hoveredDomain: domain being emphasized (from hovering a point or a legend entry).
+  const DOMAIN_NONE_KEY = '__none__'; // legend key for points without a domain
+  let hiddenDomains = new Set<string>();
+  let hoveredDomain: string | null = null;
 
   export let useCases: any[] = [];
   export let matrix: MatrixConfig | null = null;
@@ -28,15 +44,44 @@
   export function getDocxBitmapSnapshot(): { dataUrl: string; widthPx: number; heightPx: number } | null {
     if (!chartContainer || chartContainer.width <= 0 || chartContainer.height <= 0) return null;
 
+    // BR-40a Lot 4: the DOCX bitmap is the live canvas captured as-is, so the new
+    // top-N labels + domain colors + status borders are embedded automatically.
+    // The hide-bubbles toggle / domain filter / hover emphasis are transient view
+    // state that must NOT leak into the export — temporarily force the full chart
+    // (every point shown at its base radius), redraw synchronously, then restore.
+    const needsFullChart =
+      !!chartInstance &&
+      (hideBubbles || hiddenDomains.size > 0 || hoveredDomain !== null);
+    const labelOpts = (chartInstance?.options.plugins as any)?.useCaseLabels;
+    if (needsFullChart && chartInstance) {
+      const dataset = chartInstance.data.datasets[0] as any;
+      const fullRadii = offsetData.map(() => POINT_RADIUS);
+      dataset.pointRadius = fullRadii;
+      dataset.pointHoverRadius = fullRadii.map((r) => r * 1.3);
+      dataset.pointBorderWidth = fullRadii.map(() => 1.5);
+      // Force the top-N text labels on for the export even if "hide bubbles" is active.
+      if (labelOpts) labelOpts.hideBubbles = false;
+      chartInstance.update('none');
+      chartInstance.draw();
+    }
+
     const offscreen = document.createElement('canvas');
     offscreen.width = chartContainer.width;
     offscreen.height = chartContainer.height;
     const ctx = offscreen.getContext('2d');
-    if (!ctx) return null;
+    if (!ctx) {
+      if (labelOpts) labelOpts.hideBubbles = hideBubbles;
+      if (needsFullChart) updateChart();
+      return null;
+    }
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, offscreen.width, offscreen.height);
     ctx.drawImage(chartContainer, 0, 0, offscreen.width, offscreen.height);
+
+    // Restore the live chart to the user's current view state.
+    if (labelOpts) labelOpts.hideBubbles = hideBubbles;
+    if (needsFullChart) updateChart();
 
     return {
       dataUrl: offscreen.toDataURL('image/png'),
@@ -100,6 +145,37 @@
   // Couleurs du thème
   const THEME_BLUE = '#475569'; // Bleu-gris foncé pour cadres, traits et points
   const THEME_BLUE_RGB = '71, 85, 105'; // RGB pour rgba()
+
+  // BR-40a: categorical palette for business-domain coloring (data-viz, not a
+  // design token). RGB triplets so we can build rgba() with variable alpha.
+  const DOMAIN_PALETTE_RGB: string[] = [
+    '37, 99, 235',   // blue-600
+    '22, 163, 74',   // green-600
+    '217, 119, 6',   // amber-600
+    '147, 51, 234',  // purple-600
+    '219, 39, 119',  // pink-600
+    '13, 148, 136',  // teal-600
+    '202, 138, 4',   // yellow-600
+    '79, 70, 229',   // indigo-600
+    '8, 145, 178',   // cyan-600
+    '101, 163, 13'   // lime-600
+  ];
+  const DOMAIN_FALLBACK_RGB = THEME_BLUE_RGB; // used for "no domain" points
+
+  // Deterministic domain -> palette color (stable across renders for a given
+  // domain ordering); empty domain -> fallback.
+  function buildDomainColorMap(domains: string[]): Map<string, string> {
+    const map = new Map<string, string>();
+    domains.forEach((domain, index) => {
+      map.set(domain, DOMAIN_PALETTE_RGB[index % DOMAIN_PALETTE_RGB.length]);
+    });
+    return map;
+  }
+
+  function domainRgbFor(domain: string, colorMap: Map<string, string>): string {
+    if (!domain) return DOMAIN_FALLBACK_RGB;
+    return colorMap.get(domain) ?? DOMAIN_FALLBACK_RGB;
+  }
 
   type LabelPlacement = 'left' | 'right' | 'top' | 'bottom';
 
@@ -1374,18 +1450,24 @@
       ctx.font = labelFont;
       ctx.textBaseline = 'top';
       const chartArea = chart.chartArea;
+      // BR-40a: label only the top-N use cases (raw.isTopCase). All points keep
+      // their hover hit-area + tooltip; only labels are restricted.
       const points = dataset.data
         .map((element: any, index: number) => ({
           element,
           index,
           raw: element?.$context?.raw
         }))
-        .filter((item: { raw?: { label?: string } }) => Boolean(item.raw?.label));
+        .filter((item: { raw?: { label?: string; isTopCase?: boolean } }) =>
+          Boolean(item.raw?.label) && item.raw?.isTopCase === true
+        );
 
       // Lire les seuils depuis les options du chart (toujours à jour)
       const thresholdValue = pluginOptions.valueThreshold ?? thresholdState.value ?? 0;
       const thresholdComplexity = pluginOptions.complexityThreshold ?? thresholdState.complexity ?? 0;
-      const showROIQuadrant = points.length > 2;
+      // Quadrant visibility depends on the DATA point count, NOT on how many labels are
+      // drawn — so hiding labels (toggle) or having >10 domains never removes the quadrant.
+      const showROIQuadrant = (dataset.data?.length ?? 0) > 2;
 
       // Convertir les seuils en coordonnées pixels
       const xScale = chart.scales.x;
@@ -1504,6 +1586,14 @@
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.font = labelFont;
+      }
+
+      // BR-40a: "hide labels" toggle suppresses ONLY the per-use-case text callouts.
+      // The quadrant (zones, threshold lines, quadrant labels) is already drawn above,
+      // and the data points are drawn by Chart.js — both stay visible.
+      if (pluginOptions.hideBubbles) {
+        ctx.restore();
+        return;
       }
 
       // Pour le recuit, on utilise toujours les médianes pour positionner les boîtes fixes
@@ -1700,12 +1790,14 @@
       const complexityScores = uc.data?.complexityScores || uc.complexityScores || [];
       const scores = calculateUseCaseScores(matrix!, valueScores, complexityScores);
       const colorInfo = getStatusColorInfo(uc.status);
+      const domain = (uc.data?.domain ?? uc.domain ?? '').toString().trim();
       return {
         x: scores.finalComplexityScore, // Complexité Fibonacci (0-100)
         y: scores.finalValueScore,      // Valeur Fibonacci (0-100)
         label: uc.data?.name || uc.name || 'Cas d\'usage sans nom',
         description: uc.data?.description || uc.description || '',
         status: uc.status,
+        domain, // BR-40a: business domain (used for legend, color, hover emphasis)
         id: uc.id,
         valueStars: scores.valueStars,      // Valeur normalisée (1-5)
         complexityStars: scores.complexityStars, // Complexité normalisée (1-5)
@@ -1713,6 +1805,66 @@
         color: colorInfo.solid
       };
     });
+
+  // BR-40a: indices (into rawData) of the top-N use cases that receive labels.
+  // Ranked by value / (complexity + ε) capped; ties broken by value (see scoring.ts).
+  $: topLabelIndices = new Set(
+    selectTopPriorityIndices(
+      rawData.map((point) => ({ value: point.y, complexity: point.x })),
+      TOP_LABEL_COUNT
+    )
+  );
+
+  // BR-40a: distinct non-empty business domains (in first-seen order) + color map.
+  $: domainList = (() => {
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    rawData.forEach((point) => {
+      const domain = point.domain ?? '';
+      if (domain && !seen.has(domain)) {
+        seen.add(domain);
+        ordered.push(domain);
+      }
+    });
+    return ordered;
+  })();
+  $: domainColorMap = buildDomainColorMap(domainList);
+  // BR-40a legacy guard: >10 distinct domains = un-normalized legacy folder; suppress
+  // per-domain COLORS (points become neutral slate) and the LEGEND only. The top-N
+  // priority labels are kept (capped at 10, useful, not overwhelming).
+  $: tooManyDomains = domainList.length > 10;
+  // Whether at least one point has no domain (drives the "No domain" legend row).
+  $: hasUndomainedPoints = rawData.some((point) => !(point.domain ?? '').trim());
+
+  // Legend entries: one per domain (+ optional "No domain"). filtered = toggled off.
+  $: legendEntries = [
+    ...domainList.map((domain) => ({
+      key: domain,
+      label: domain,
+      rgb: domainRgbFor(domain, domainColorMap),
+      filtered: hiddenDomains.has(domain)
+    })),
+    ...(hasUndomainedPoints
+      ? [{
+          key: DOMAIN_NONE_KEY,
+          label: t('usecase.scatterPlot.legend.none'),
+          rgb: DOMAIN_FALLBACK_RGB,
+          filtered: hiddenDomains.has(DOMAIN_NONE_KEY)
+        }]
+      : [])
+  ];
+
+  // The legend key for a given point domain ('' -> the "No domain" key).
+  function legendKeyForDomain(domain: string): string {
+    return domain ? domain : DOMAIN_NONE_KEY;
+  }
+
+  function toggleDomain(key: string) {
+    const next = new Set(hiddenDomains);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    hiddenDomains = next;
+  }
 
   // Calculer les médianes pour le quadrant ROI
   $: valueScores = rawData.map(point => point.y);
@@ -1756,9 +1908,35 @@
     }
   }
 
-  $: offsetData = offsetOverlappingPoints(rawData);
-  $: backgroundColors = offsetData.map(() => `rgba(${THEME_BLUE_RGB}, 0.85)`);
-  $: borderColors = offsetData.map(() => `rgb(${THEME_BLUE_RGB})`);
+  // BR-40a: annotate each point with isTopCase (only the top-N receive labels)
+  // and its domain legend key.
+  $: offsetData = offsetOverlappingPoints(rawData).map((point, index) => ({
+    ...point,
+    isTopCase: topLabelIndices.has(index),
+    domainKey: legendKeyForDomain((point.domain ?? '').trim())
+  }));
+
+  // BR-40a: bubble color = business domain (status moved to tooltip + marker border).
+  $: backgroundColors = offsetData.map(
+    (point) => tooManyDomains
+      ? 'rgba(100, 116, 139, 0.85)'
+      : `rgba(${domainRgbFor((point.domain ?? '').trim(), domainColorMap)}, 0.85)`
+  );
+  // Marker border encodes status (shape/border carries the status that color used to).
+  $: borderColors = offsetData.map((point) => getStatusColorInfo(point.status).solid);
+
+  // BR-40a: per-point radius array — handles hide-bubbles, legend filter, and hover
+  // emphasis (points sharing the hovered domain are enlarged, in both modes).
+  $: pointRadii = offsetData.map((point) => {
+    const domainKey = point.domainKey;
+    // Legend filter: a toggled-off domain is fully hidden.
+    if (hiddenDomains.has(domainKey)) return 0;
+    const isEmphasized = hoveredDomain !== null && domainKey === hoveredDomain;
+    // Points always render (subject to legend filter + hover emphasis). The
+    // "hide bubbles" toggle hides the TEXT label callouts (see plugin), NOT the
+    // points — so hover stays usable on the clean point cloud.
+    return isEmphasized ? POINT_RADIUS * 1.8 : POINT_RADIUS;
+  });
 
   $: chartData = {
     datasets: [{
@@ -1766,12 +1944,16 @@
       data: offsetData,
       backgroundColor: backgroundColors,
       borderColor: borderColors,
-      pointRadius: POINT_RADIUS,
-      pointHoverRadius: POINT_RADIUS * 1.6,
+      // BR-40a: per-point radius (hide-bubbles / legend filter / hover emphasis).
+      // When a marker is hidden (radius 0), pointHitRadius stays wide so hover
+      // hit-areas + tooltip keep working.
+      pointRadius: pointRadii,
+      pointHoverRadius: pointRadii.map((r) => (r > 0 ? r * 1.3 : POINT_RADIUS * 1.3)),
+      // Border encodes status; show a visible border only when the marker is drawn.
+      pointBorderWidth: pointRadii.map((r) => (r > 0 ? 1.5 : 0)),
       // Zone de détection plus large pour faciliter le hover sur les points
-      pointHitRadius: 20, 
-      pointBorderWidth: 0,
-      pointHoverBackgroundColor: borderColors,
+      pointHitRadius: 20,
+      pointHoverBackgroundColor: backgroundColors,
       pointHoverBorderColor: borderColors
     }]
   };
@@ -1911,10 +2093,18 @@
             const complexityXEmpty = '✕'.repeat(5 - (raw.complexityStars || 0));
             const complexityXDisplay = `${complexityXFull}${complexityXEmpty}`;
 
+            // BR-40a: domain + status now live in the tooltip (bubble color = domain).
+            const domainText = (raw.domain ?? '').trim();
+            const statusKey = raw.status ? `usecase.status.${raw.status}` : '';
+            const statusLabel = statusKey ? $_(statusKey) : '';
+            const statusText = statusLabel && statusLabel !== statusKey ? statusLabel : (raw.status ?? '');
+
             const lines = [
               ...descriptionLines,
               $_('usecase.scatterPlot.tooltip.valueLine', { values: { pts: raw.y, stars: valueStarsDisplay } }),
               $_('usecase.scatterPlot.tooltip.complexityLine', { values: { pts: raw.x, crosses: complexityXDisplay } }),
+              domainText ? $_('usecase.scatterPlot.tooltip.domainLine', { values: { domain: domainText } }) : '',
+              statusText ? $_('usecase.scatterPlot.tooltip.statusLine', { values: { status: statusText } }) : '',
             ];
             return lines.filter(line => line !== '');
           },
@@ -1972,14 +2162,30 @@
       if (elements.length > 0) {
         const dataIndex = elements[0].index;
         const useCase = chartData.datasets[0].data[dataIndex];
-        
+
         // Rediriger vers le cas d'usage
         if (useCase.id) {
           goto(`/usecase/${useCase.id}`);
         }
       }
+    },
+    // BR-40a: hovering a point emphasizes every point sharing its business domain.
+    onHover: (_event: any, elements: any) => {
+      if (elements.length > 0) {
+        const dataIndex = elements[0].index;
+        const point = chartData.datasets[0].data[dataIndex] as { domainKey?: string };
+        setHoveredDomain(point?.domainKey ?? null);
+      } else {
+        setHoveredDomain(null);
+      }
     }
   };
+
+  // BR-40a: update hovered domain without thrashing reactivity when unchanged.
+  function setHoveredDomain(key: string | null) {
+    if (hoveredDomain === key) return;
+    hoveredDomain = key;
+  }
 
 
   function createChart() {
@@ -2017,7 +2223,20 @@
         devicePixelRatio: resolutionFactor,
         maintainAspectRatio: false
       };
-      
+      // Re-apply live label-plugin options BEFORE the redraw: chartOptions does not
+      // carry the live hide-labels/threshold/scale state, so without this the redraw
+      // would use stale options (caused the labels toggle to blink then reappear).
+      if ((chartInstance.options as any).plugins) {
+        (chartInstance.options as any).plugins.useCaseLabels = {
+          valueThreshold: effectiveValueThreshold,
+          complexityThreshold: effectiveComplexityThreshold,
+          scale: scale,
+          labelStandardArea: LABEL_STANDARD_AREA_SCALED,
+          labelBorderRadius: LABEL_BORDER_RADIUS,
+          hideBubbles: hideBubbles
+        };
+      }
+
       chartInstance.data = chartData;
       chartInstance.update('none'); // 'none' pour éviter les animations
     } else {
@@ -2025,6 +2244,11 @@
     }
   }
   
+  // BR-40a: clear domain hover emphasis when the cursor leaves the chart canvas.
+  function handleChartMouseLeave() {
+    setHoveredDomain(null);
+  }
+
   // Fonction pour gérer le hover sur les labels
   function handleLabelHover(event: MouseEvent) {
     if (!chartInstance || !chartContainer) return;
@@ -2070,7 +2294,11 @@
           // Empêcher Chart.js de gérer cet événement pour éviter les conflits
           event.stopPropagation();
           event.stopImmediatePropagation();
-          
+
+          // BR-40a: hovering a top-case label also emphasizes its business domain.
+          const hoveredPoint = offsetData[pointIndex] as { domainKey?: string } | undefined;
+          setHoveredDomain(hoveredPoint?.domainKey ?? null);
+
           // Déclencher le tooltip en utilisant setActiveElements avec les coordonnées du point
           chartInstance.setActiveElements([{ datasetIndex: 0, index: pointIndex }]);
           
@@ -2102,6 +2330,8 @@
       if (chartContainer) {
         // Utiliser capture pour intercepter avant Chart.js
         chartContainer.addEventListener('mousemove', handleLabelHover, true);
+        // BR-40a: clear domain hover emphasis when leaving the chart.
+        chartContainer.addEventListener('mouseleave', handleChartMouseLeave);
       }
     });
     
@@ -2145,7 +2375,8 @@
 
     // Nettoyer le gestionnaire de hover
     if (chartContainer) {
-      chartContainer.removeEventListener('mousemove', handleLabelHover);
+      chartContainer.removeEventListener('mousemove', handleLabelHover, true);
+      chartContainer.removeEventListener('mouseleave', handleChartMouseLeave);
     }
     
     if (chartInstance) {
@@ -2155,20 +2386,16 @@
 
   // Mettre à jour le graphique quand les données ou les options changent
   $: if (chartInstance) {
-    // Ensure the reactive block reruns when data/options change (including locale).
+    // Re-run when data/options/label-toggle/thresholds/scale change. updateChart()
+    // applies the live useCaseLabels (incl. hideBubbles) and then redraws once, so a
+    // standalone hideBubbles toggle (which does NOT change chartData) is persisted.
     void chartData;
     void chartOptions;
+    void hideBubbles;
+    void effectiveValueThreshold;
+    void effectiveComplexityThreshold;
+    void scale;
     updateChart();
-    // Mettre à jour les options du chart pour que le plugin ait accès aux nouveaux seuils et au scale
-    if (chartInstance.options.plugins) {
-      (chartInstance.options.plugins as any).useCaseLabels = {
-        valueThreshold: effectiveValueThreshold,
-        complexityThreshold: effectiveComplexityThreshold,
-        scale: scale,
-        labelStandardArea: LABEL_STANDARD_AREA_SCALED,
-        labelBorderRadius: LABEL_BORDER_RADIUS
-      };
-    }
   }
   
 </script>
@@ -2194,6 +2421,43 @@
     {/if}
   </div>
   
+  <!-- BR-40a: the labels toggle is an icon-only control hosted by the parent,
+       immediately left of the chart settings button (see dashboard +page). -->
+
+  <!-- BR-40a: business-domain legend (filterable + hover emphasis).
+       Hidden when >10 distinct domains (legacy un-normalized folders): colors are
+       neutralized so a domain legend would be meaningless. -->
+  {#if useCases.length > 0 && matrix && legendEntries.length > 0 && !tooManyDomains}
+    <div class="mt-3 scatter-plot-legend print-hidden">
+      <p class="text-center text-xs font-medium text-slate-500 mb-1.5">
+        {$_('usecase.scatterPlot.legend.title')}
+      </p>
+      <div class="flex flex-wrap items-center justify-center gap-2">
+        {#each legendEntries as entry (entry.key)}
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            class:border-slate-300={!entry.filtered}
+            class:border-slate-200={entry.filtered}
+            class:opacity-40={entry.filtered}
+            aria-pressed={!entry.filtered}
+            on:click={() => toggleDomain(entry.key)}
+            on:mouseenter={() => setHoveredDomain(entry.filtered ? null : entry.key)}
+            on:mouseleave={() => setHoveredDomain(null)}
+            on:focus={() => setHoveredDomain(entry.filtered ? null : entry.key)}
+            on:blur={() => setHoveredDomain(null)}
+          >
+            <span
+              class="inline-block w-2.5 h-2.5 rounded-full"
+              style={`background-color: rgb(${entry.rgb}); ${entry.filtered ? 'opacity:0.4;' : ''}`}
+            ></span>
+            <span class="text-slate-700" class:line-through={entry.filtered}>{entry.label}</span>
+          </button>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
   <!-- Indication de clic et chargement -->
   <div class="mt-4 flex justify-center scatter-plot-click-hint">
     <div class="flex items-center gap-2 text-slate-500 text-sm">
@@ -2210,7 +2474,7 @@
       {/if}
     </div>
   </div>
-  
+
 </div>
 
 <style>
