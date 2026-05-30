@@ -665,6 +665,19 @@
         "load": "Impossible de charger la carte Paramètres Plugin Chrome. Configurez CHROME_EXTENSION_DOWNLOAD_URL dans l'API, ou assurez-vous qu'un package local est disponible à /chrome-extension/top-ai-ideas-chrome-extension.zip, puis redémarrez l'API."
       }
     },
+    "coworkDesktop": {
+      "title": "Sentropic Cowork (Windows)",
+      "description": "Téléchargez le binaire Windows Sentropic Cowork (yeux/mains sur le poste) configuré pour cette instance, puis appairez-le via un code.",
+      "experimentalWarning": "(expérimental, POC — binaire non signé : SmartScreen peut avertir)",
+      "loading": "Chargement du binaire Cowork…",
+      "downloadTooltip": "Télécharger Sentropic Cowork (Windows)",
+      "retry": "Réessayer",
+      "versionLabel": "Version",
+      "sourceLabel": "Source",
+      "errors": {
+        "load": "Impossible de charger la carte Sentropic Cowork. Configurez COWORK_DESKTOP_DOWNLOAD_URL dans l'API (URL http(s) servie sur le domaine Sentropic), puis redémarrez l'API."
+      }
+    },
     "vscodeExtension": {
       "title": "Extension VSCode",
       "description": "Téléchargez le dernier package de l'extension VSCode configuré pour cette instance.",

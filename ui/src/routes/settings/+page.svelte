@@ -19,6 +19,11 @@
     type VsCodeExtensionDownloadMetadata,
   } from '$lib/utils/vscode-extension-download';
   import {
+    fetchCoworkDesktopDownloadMetadata,
+    getCoworkDesktopDownloadErrorMessage,
+    type CoworkDesktopDownloadMetadata,
+  } from '$lib/utils/cowork-desktop-download';
+  import {
     completeCodexProviderEnrollment,
     disconnectCodexProviderEnrollment,
     startCodexProviderEnrollment,
@@ -99,6 +104,9 @@
   let vscodeExtensionDownloadMetadata: VsCodeExtensionDownloadMetadata | null = null;
   let vscodeExtensionDownloadError = '';
   let isLoadingVsCodeExtensionDownload = false;
+  let coworkDesktopDownloadMetadata: CoworkDesktopDownloadMetadata | null = null;
+  let coworkDesktopDownloadError = '';
+  let isLoadingCoworkDesktopDownload = false;
   let isLoadingVsCodeExtensionToken = false;
   let isIssuingVsCodeExtensionToken = false;
   let isRevokingVsCodeExtensionToken = false;
@@ -175,6 +183,7 @@
     await loadMe();
     await loadChromeExtensionDownloadMetadata();
     await loadVsCodeExtensionDownloadMetadata();
+    await loadCoworkDesktopDownloadMetadata();
     await loadModelCatalog();
     await loadUserAISettings();
     await syncGoogleDriveConnection();
@@ -368,6 +377,24 @@
       );
     } finally {
       isLoadingVsCodeExtensionDownload = false;
+    }
+  };
+
+  const loadCoworkDesktopDownloadMetadata = async () => {
+    isLoadingCoworkDesktopDownload = true;
+    coworkDesktopDownloadError = '';
+
+    try {
+      coworkDesktopDownloadMetadata = await fetchCoworkDesktopDownloadMetadata();
+    } catch (error) {
+      console.error('Failed to load cowork desktop metadata:', error);
+      coworkDesktopDownloadMetadata = null;
+      coworkDesktopDownloadError = getCoworkDesktopDownloadErrorMessage(
+        error,
+        get(_)('settings.coworkDesktop.errors.load')
+      );
+    } finally {
+      isLoadingCoworkDesktopDownload = false;
     }
   };
 
@@ -1130,6 +1157,66 @@
     {:else if chromeExtensionDownloadError}
       <p class="text-sm text-rose-700" data-testid="chrome-extension-download-error">
         {chromeExtensionDownloadError}
+      </p>
+    {/if}
+  </div>
+
+  <div class="space-y-4 rounded border border-slate-200 bg-white p-6" data-testid="cowork-desktop-download-card">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="space-y-1">
+        <h2 class="text-lg font-semibold text-slate-800">{$_('settings.coworkDesktop.title')}</h2>
+        <p class="text-sm text-slate-600">{$_('settings.coworkDesktop.description')}</p>
+        <p class="text-sm font-medium text-rose-700">
+          {$_('settings.coworkDesktop.experimentalWarning')}
+        </p>
+      </div>
+
+      {#if isLoadingCoworkDesktopDownload}
+        <span class="text-sm text-slate-600" data-testid="cowork-desktop-download-loading">
+          {$_('settings.coworkDesktop.loading')}
+        </span>
+      {:else if coworkDesktopDownloadMetadata}
+        <a
+          class="inline-flex items-center justify-center rounded p-2 transition text-primary hover:bg-slate-100"
+          href={coworkDesktopDownloadMetadata.downloadUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label={$_('settings.coworkDesktop.downloadTooltip')}
+          title={$_('settings.coworkDesktop.downloadTooltip')}
+          data-testid="cowork-desktop-download-cta"
+        >
+          <Download class="h-5 w-5" />
+        </a>
+      {:else}
+        <button
+          class="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          type="button"
+          on:click={loadCoworkDesktopDownloadMetadata}
+          data-testid="cowork-desktop-download-retry"
+        >
+          {$_('settings.coworkDesktop.retry')}
+        </button>
+      {/if}
+    </div>
+
+    {#if coworkDesktopDownloadMetadata}
+      <dl class="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+        <div class="rounded border border-slate-200 p-3">
+          <dt class="text-slate-500">{$_('settings.coworkDesktop.versionLabel')}</dt>
+          <dd class="font-medium text-slate-900" data-testid="cowork-desktop-version">
+            {coworkDesktopDownloadMetadata.version}
+          </dd>
+        </div>
+        <div class="rounded border border-slate-200 p-3">
+          <dt class="text-slate-500">{$_('settings.coworkDesktop.sourceLabel')}</dt>
+          <dd class="font-medium text-slate-900" data-testid="cowork-desktop-source">
+            {coworkDesktopDownloadMetadata.source}
+          </dd>
+        </div>
+      </dl>
+    {:else if coworkDesktopDownloadError}
+      <p class="text-sm text-rose-700" data-testid="cowork-desktop-download-error">
+        {coworkDesktopDownloadError}
       </p>
     {/if}
   </div>
