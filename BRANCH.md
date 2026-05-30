@@ -124,6 +124,13 @@ web app. See `spec/SPEC_COWORK.md`.
   surfaced). The desktop binary's PUBLISH (npm publish vs `private:true` + Windows-zip distribution) is
   deferred to **Lot 5** (packaging) — no `publish-cowork-desktop`/token target added yet; root lockfile
   regenerated to include the package (`make lock-root`). Rollback: remove the targets/jobs.
+- **BR41a-Q7** `acknowledge` (Lot 5C, two user decisions): (1) gate ALL THREE Settings download cards
+  (chrome+vscode+cowork) behind `{#if isAdmin()}` — today they are visible to every authenticated user,
+  a gap fixed here for all three together. (2) Prerelease admin channel — the branch-built unsigned exe
+  is served via Sentropic as a "prerelease" build (downloadable now for UAT), DISTINCT from the official
+  "release" build; an admin chooses which channel is exposed. Persisted as a GLOBAL `settings` row
+  (`cowork_desktop.channel`, default `release`) via the existing `settingsService`; release/prerelease
+  URLs from `COWORK_DESKTOP_DOWNLOAD_URL` / `COWORK_DESKTOP_PRERELEASE_URL`.
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network nondeterminism as `flaky accepted`
@@ -266,6 +273,20 @@ web app. See `spec/SPEC_COWORK.md`.
   - [ ] Lot gate: artifact builds in CI; smoke-launch on Windows (manual UAT below). Local
         `make package-desktop-windows` ✅ (unsigned exe produced; signing skipped). Windows execution +
         the signing RUN with a real `.pfx` = UAT/attendu.
+
+- [ ] **Lot 5C — Admin-gate downloads + cowork prerelease channel** (BR41a-Q7)
+  - [ ] Gate the 3 Settings download cards (chrome+cowork+vscode) behind `{#if isAdmin()}`
+        (`ui/src/routes/settings/+page.svelte`); non-admins no longer see them.
+  - [ ] Env: add `COWORK_DESKTOP_PRERELEASE_URL` + `COWORK_DESKTOP_PRERELEASE_VERSION`
+        (`api/src/config/env.ts`); reuse `COWORK_DESKTOP_DOWNLOAD_URL` as the RELEASE url.
+  - [ ] Persist active channel as a GLOBAL `settings` row `cowork_desktop.channel`
+        (default `release`) via the existing `settingsService` (no new table, no migration).
+  - [ ] `GET /cowork-desktop/download` returns `{ channel, version, source, downloadUrl }` for the
+        active channel; admin-only `GET/PUT /cowork-desktop/channel` guarded by `requireAdmin`.
+  - [ ] UI: admin channel toggle in the cowork card (PUT then refetch); i18n fr+en under
+        `settings.coworkDesktop.channel.*`.
+  - [ ] Lot gate: `typecheck-api`/`lint-api`/`typecheck-ui`/`lint-ui` ✅; scoped api test
+        `tests/api/cowork-desktop-download.test.ts` ✅ + `make test-ui` ✅.
 
 - [ ] **Lot N-2 — UAT**
   - [ ] Chrome plugin (non-regression): connect, run `tab_read`/`tab_action`, chat streaming unchanged.
