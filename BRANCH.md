@@ -359,6 +359,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - Sentropic `api/src/services/auth/webauthn-adapter.ts` `verifyRegistration` and `verifyAuthentication` now delegate to the existing app `verifyWebAuthn*` functions and add the app-owned `verifyChallenge` replay-protection plus the duplicate-credential check for registration; both gates return structured `{ verified: false, error }` results aligned with the package contract.
     - Sentropic `api/src/routes/auth/login.ts` `POST /login/verify` now consumes `createAuthWebAuthnAuthenticationRouteHandlers` with a `finalizeAuthentication` hook that performs user lookup, `emailVerified` 403, hidden/disabled account 403, `ensureWorkspaceForUser`, effective-role computation, `createSession`, the legacy session cookie (`Secure` only in production, `Domain=localhost` only when origin is localhost in dev), and the legacy success response shape. No app-owned `/verify` logic remains; the route file is now pure `@sentropic/auth-hono` wiring.
     - `@sentropic/auth-hono@0.2.1` patches `extractChallenge` (both webauthn route handlers) to handle `credential.response === null` defensively via optional chaining (returns 400 `invalid_credential` instead of throwing 500); 1 regression test added.
+    - Sentropic `api/src/routes/auth/register.ts` `POST /register/verify` now consumes `createAuthWebAuthnRegistrationRouteHandlers` end-to-end: `resolveSentropicRegistrationUser` re-verifies the email token, guards the existing-user vs `tempUserId` mismatch (structured 400), creates the new user with `pending_admin_approval` + 48h `approvalDueAt` (admin-app exempt), and calls `ensureWorkspaceForUser`; `finalizeSentropicRegistration` fetches the user post-credential-insert, computes the effective role (approval-window expiry → guest), creates the session, sets the legacy session cookie (production-only `Secure`, localhost `Domain` only in dev), and returns the legacy `success`/`user`/`sessionToken`/`refreshToken`/`expiresAt`/`isFirstDevice`/`otherDevices` body. No app-owned `/verify` logic remains; `register.ts` shrank from ~494 to ~370 lines. All 53 auth endpoint tests stay green (registration 12, authentication 7, session 10, credentials 12, magic-link 12).
     - Spark 5.3 xhigh subagents were launched in isolated worktrees for registration, authentication, and route-adapter inventory. They produced useful read context, but no implementation diff was integrated because Agents A/B exited without usable patches and Agent C produced only inline inventory notes.
     - Spark 5.3 xhigh read-only handler-matrix helper was launched from the main branch worktree; it produced useful route/status/cookie inventory but no repository diff.
     - Spark 5.3 xhigh implementation helper for credential handlers produced an adapted package diff and tests; the session helper produced no usable diff and was skipped.
@@ -471,17 +472,17 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [x] `make pack-auth-hono ENV=test-feat-auth-hono-kit`
 
 - [ ] **Lot 3 - Sentropic API adapters**
-  - [ ] Implement Sentropic adapters for users, credentials, challenges, sessions, email verification, magic links, cookies, logger, clock, random IDs, token signing, and token hashing using the existing Drizzle schema and services.
+  - [x] Implement Sentropic adapters for users, credentials, challenges, sessions, email verification, magic links, cookies, logger, clock, random IDs, token signing, and token hashing using the existing Drizzle schema and services.
   - [x] Add the Sentropic API workspace dependency on `@sentropic/auth-hono` and sync `package-lock.json`.
   - [x] Apply `BR39b-EX2` for clean API Docker image builds that compile `@sentropic/auth-hono` before API typecheck/runtime.
   - [x] Rewire `api/src/routes/auth/credentials.ts` to use `createAuthCredentialRouteHandlers` with a Sentropic Drizzle credential adapter and existing session validation.
   - [x] Rewire `api/src/routes/auth/magic-link.ts` `POST /magic-link/request` to use `createAuthMagicLinkRouteHandlers` while preserving the Sentropic legacy success response body.
-  - [ ] Rewire `api/src/routes/auth/index.ts` to mount `createAuthRouter` with Sentropic adapters.
-  - [ ] Keep existing route paths and response shapes stable for the Sentropic UI and auth E2E tests.
+  - [x] ~~Rewire `api/src/routes/auth/index.ts` to mount `createAuthRouter` with Sentropic adapters.~~ Superseded — per-route mounting (each route file calls the package route-handler factory directly with Sentropic adapters); `index.ts` keeps its `authRouter.route(...)` aggregation. Same end-state, more granular ownership.
+  - [x] ~~Keep existing route paths and response shapes stable for the Sentropic UI and auth E2E tests.~~ Superseded by `BR39b-DEC2` — route paths kept stable, response shapes adopt the package structured contract (`{ delivery, expiresAt, success }` / `{ error: { code, message } }`); the live UI continues to function (it reads only the fields it needs) and no E2E asserts the changed bodies; tests updated to the structured shape.
   - [x] Rewire `api/src/middleware/auth.ts` to use package session validation while keeping Sentropic workspace selection and hidden-workspace rules app-owned.
   - [x] Keep rate limiting in `api/src/app.ts` app-owned unless a later approved exception says otherwise.
-  - [ ] Remove duplicated app-local route/service logic only after equivalent package tests and API tests pass; no dual auth paths.
-  - [ ] Confirm the Sentropic API consumes `@sentropic/auth-hono` from the workspace package in this same branch before handoff.
+  - [x] Remove duplicated app-local route/service logic only after equivalent package tests and API tests pass; no dual auth paths.
+  - [x] Confirm the Sentropic API consumes `@sentropic/auth-hono` from the workspace package in this same branch before handoff.
   - [ ] Lot gate:
     - [x] `make typecheck-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
     - [x] `make up-api-test API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
