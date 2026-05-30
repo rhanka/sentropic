@@ -8,8 +8,10 @@ import type {
   AuthHonoWebAuthnAuthenticationService,
 } from './webauthn-authentication.js';
 import type { AuthHonoRouteHandlers } from './router.js';
+import type { AuthHonoRouteHandlerError } from './webauthn-registration-route-handlers.js';
 
 export interface CreateAuthWebAuthnAuthenticationRouteHandlersOptions {
+  finalizeAuthentication?: AuthHonoFinalizeAuthentication;
   resolveAuthenticationOptions: AuthHonoResolveAuthenticationOptions;
   service: AuthHonoWebAuthnAuthenticationService;
 }
@@ -17,11 +19,39 @@ export interface CreateAuthWebAuthnAuthenticationRouteHandlersOptions {
 export type AuthHonoResolveAuthenticationOptions = (
   input: AuthHonoAuthenticationOptionsRequest,
   c: Context
-) => Promise<AuthHonoGenerateAuthenticationOptionsInput> | AuthHonoGenerateAuthenticationOptionsInput;
+) =>
+  | Promise<AuthHonoGenerateAuthenticationOptionsInput | AuthHonoRouteHandlerError>
+  | AuthHonoGenerateAuthenticationOptionsInput
+  | AuthHonoRouteHandlerError;
+
+export type AuthHonoFinalizeAuthentication = (
+  result: AuthHonoFinalizeAuthenticationInput,
+  c: Context
+) => Response | Promise<Response>;
+
+export interface AuthHonoFinalizeAuthenticationInput {
+  credentialId: string;
+  request: AuthHonoAuthenticationVerifyRequest;
+  userId: string;
+}
 
 export interface AuthHonoAuthenticationOptionsRequest {
   email?: string;
 }
+
+export interface AuthHonoAuthenticationVerifyRequest {
+  credential: AuthenticationResponseJSON;
+  deviceName?: string;
+}
+
+const isRouteHandlerError = (value: unknown): value is AuthHonoRouteHandlerError =>
+  Boolean(
+    value &&
+      typeof value === 'object' &&
+      'error' in (value as Record<string, unknown>) &&
+      typeof (value as { error?: unknown }).error === 'object' &&
+      (value as { error?: { code?: unknown } }).error?.code !== undefined
+  );
 
 const authenticationOptionsSchema = z.object({
   email: z.string().email().optional(),
@@ -31,6 +61,7 @@ const authenticationVerifySchema = z.object({
   credential: z.custom<AuthenticationResponseJSON>(
     (value) => Boolean(value && typeof value === 'object' && 'response' in value)
   ),
+  deviceName: z.string().max(100).optional(),
 });
 
 export const createAuthWebAuthnAuthenticationRouteHandlers = (
@@ -44,6 +75,16 @@ export const createAuthWebAuthnAuthenticationRouteHandlers = (
     }
 
     const serviceInput = await options.resolveAuthenticationOptions(input.value, c);
+
+    if (isRouteHandlerError(serviceInput)) {
+      return simpleError(
+        c,
+        serviceInput.error.status,
+        serviceInput.error.code,
+        serviceInput.error.message
+      );
+    }
+
     const authenticationOptions = await options.service.generateAuthenticationOptions(serviceInput);
 
     return c.json({ options: authenticationOptions });
@@ -69,6 +110,17 @@ export const createAuthWebAuthnAuthenticationRouteHandlers = (
 
     if (!result.verified) {
       return serviceError(c, result.error);
+    }
+
+    if (options.finalizeAuthentication) {
+      return options.finalizeAuthentication(
+        {
+          credentialId: result.credentialId,
+          request: input.value,
+          userId: result.userId,
+        },
+        c
+      );
     }
 
     return c.json({

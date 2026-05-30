@@ -147,4 +147,68 @@ describe('createAuthWebAuthnRegistrationRouteHandlers', () => {
       },
     });
   });
+
+  it('short-circuits with the host status/code when prepareRegistrationOptions returns an error', async () => {
+    const response = await createAuthRouter({
+      handlers: createAuthWebAuthnRegistrationRouteHandlers({
+        prepareRegistrationOptions: async () => ({
+          error: {
+            code: 'verification_required',
+            message: 'Email verification is required before registration.',
+            status: 403,
+          },
+        }),
+        resolveRegistrationUser: async () => ({ userId: 'unused' }),
+        service: service(),
+      }),
+      routePrefix: '/api/v1/auth',
+    }).request('/api/v1/auth/register/options', {
+      body: JSON.stringify({ email: 'user@example.com' }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'verification_required',
+        message: 'Email verification is required before registration.',
+      },
+    });
+  });
+
+  it('delegates verify success to finalizeRegistration when provided', async () => {
+    const response = await createAuthRouter({
+      handlers: createAuthWebAuthnRegistrationRouteHandlers({
+        finalizeRegistration: async (input, c) =>
+          c.json(
+            { credentialId: input.credentialId, host: true, userId: input.userId },
+            201
+          ),
+        prepareRegistrationOptions: async (input) => ({
+          serviceInput: { userDisplayName: 'User', userName: input.email },
+          userId: 'temp-user-1',
+        }),
+        resolveRegistrationUser: async (input) => ({ userId: input.userId }),
+        service: service(),
+      }),
+      routePrefix: '/api/v1/auth',
+    }).request('/api/v1/auth/register/verify', {
+      body: JSON.stringify({
+        credential,
+        email: 'user@example.com',
+        userId: 'temp-user-1',
+        verificationToken: 'token',
+      }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({
+      credentialId: 'credential-id',
+      host: true,
+      userId: 'temp-user-1',
+    });
+  });
 });
