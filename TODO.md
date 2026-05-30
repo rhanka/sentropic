@@ -7,9 +7,9 @@
 - [x] Add `TRANSITION.md` for repo/DNS/redirect/Scaleway transition.
 - [x] Split BR-14 into BR-14a / BR-14b / BR-14c / BR-14d / BR-14e in `PLAN.md`.
 - [x] Add BR-14 orchestration spec with selected order and alternatives: `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`.
-- [ ] Rename GitHub repository `rhanka/top-ai-ideas-fullstack` -> `rhanka/sentropic`, or explicitly hand off execution to BR-14d with owner/date.
-- [ ] Configure `sentropic.sent-tech.ca` as canonical public site and verify redirects from old `top-ai-ideas` hostnames, or explicitly hand off execution to BR-14d with owner/date.
-- [ ] Decide whether Scaleway object rename runs in PR-117 release ops or in BR-14d; BR-14d is mandatory if any transition item remains.
+- [x] Rename GitHub repository `rhanka/top-ai-ideas-fullstack` -> `rhanka/sentropic` — **done** (remote `origin` is `https://github.com/rhanka/sentropic.git`).
+- [x] Configure `sentropic.sent-tech.ca` as canonical public site and verify redirects from old `top-ai-ideas` hostnames — **done via BR-37c/BR-37d** (live public Ingress at `sentropic.sent-tech.ca`; `top-ai-ideas.sent-tech.ca` → 301 redirect; legacy serverless container + DNS removed).
+- [ ] Residual non-deploy rename items (codebase labels/metadata, dashboards) remain with BR-14e then BR-14d. The deploy stack already moved off Scaleway serverless to poc-k8s in BR-37c/BR-37d, and `scw-*` make targets were renamed to `k8s-*`.
 
 ## Check-list de mise en place
 
@@ -211,17 +211,17 @@ Roadmap specifications:
   - [x] Template-driven rendering (TemplateRenderer), config UX alignment (ConfigItemCard), generic workflow runtime, freeform DOCX generation, chat tools wiring, multi-org folder creation. See `plan/done/04B-BRANCH_feat-workspace-template-catalog.md`.
 - [x] **BR-05** `feat/vscode-plugin-v1` — done, merged.
   - [x] Delivered VSCode plugin v1 (plan, tools, summary, checkpoint, Codex sign-in).
-- [ ] **BR-06** `feat/chrome-upstream-v1`
-  - [ ] Deliver upstream chrome control foundation (remote control + upstream sync, single-tab baseline).
+- [x] **BR-06** `feat/chrome-upstream-v1` — done, merged 2026-04-17.
+  - [x] Deliver upstream chrome control foundation (remote control + upstream sync, single-tab baseline).
 - [ ] **BR-07** `feat/release-ui-npm-and-pretest`
   - [ ] Publish Svelte UI package to npm via CI.
   - [ ] Integrate Playwright UI debug/pretest agent in build pipeline (usable during debugging, not only UAT).
 
 #### Week 2 target (deadline: 2026-03-08)
 
-- [ ] **BR-08** `feat/model-runtime-claude-mistral-cohere`
-  - [ ] Expand to 5 target model families (`OpenAI`, `Gemini`, `Claude`, `Mistral`, `Cohere`).
-  - [ ] Cohere embeddings capability as prerequisite for RAG (BR-17).
+- [x] **BR-08** `feat/model-runtime-claude-mistral-cohere` — done, merged.
+  - [x] Expand to 5 target model families (`OpenAI`, `Gemini`, `Claude`, `Mistral`, `Cohere`).
+  - [x] Cohere embeddings capability as prerequisite for RAG (BR-17).
 - [ ] **BR-09** `feat/sso-google`
   - [ ] Deliver Google SSO for admin and standard users.
 - [ ] **BR-10** `feat/vscode-plugin-v2-multi-agent`
@@ -230,17 +230,17 @@ Roadmap specifications:
   - [ ] Deliver multi-tab upstream and voice controls.
 - [ ] **BR-12** `feat/release-chrome-vscode-ci-publish`
   - [ ] Publish Chrome plugin and VSCode plugin automatically from CI.
-- [ ] **BR-14c** `feat/llm-mesh-sdk` — priority branch.
-  - [ ] Publish `@sentropic/llm-mesh` as the first standalone npm service.
-  - [ ] Support OpenAI, Claude, Gemini, Mistral, Cohere.
-  - [ ] Support direct token, user token, and Codex-account modes.
-  - [ ] Prepare later Gemini Code Assist and Claude Code account support.
-- [ ] **BR-14b** `refacto/llm-runtime-core`
-  - [ ] Migrate the application LLM runtime onto `@sentropic/llm-mesh`.
-  - [ ] Preserve quotas, retries, streaming, audit, and provider capability behavior.
-- [ ] **BR-14a** `feat/chat-ui-sdk`
-  - [ ] Extract `@sentropic/chat-ui` from web, Chrome, and VSCode surfaces.
-  - [ ] Reuse the LLM mesh contract; do not define a separate provider abstraction.
+- [x] **BR-14c** `feat/llm-mesh-sdk` — done, merged 2026-05-11 (PR #141).
+  - [x] Publish `@sentropic/llm-mesh` as the first standalone npm service.
+  - [x] Support OpenAI, Claude, Gemini, Mistral, Cohere.
+  - [x] Support direct token, user token, and Codex-account modes.
+  - [ ] Prepare later Gemini Code Assist and Claude Code account support. (deferred follow-up)
+- [x] **BR-14b** `refacto/chat-service-core` — done, merged 2026-05-16 (PR #158).
+  - [x] Modularize the chat-service core above `@sentropic/llm-mesh`: extract `@sentropic/chat-core` (`ChatRuntime` split into tool-dispatch/finalization/checkpoint/session sub-classes), reasoning/tool/continuation boundaries.
+  - [x] Preserve chat streaming, local-tool handoff, cancellation, retry, checkpoint, and API behavior; provider/model access stays in `@sentropic/llm-mesh` (no new abstraction).
+- [x] **BR-14a** `feat/chat-ui-sdk` (relaunched `feat/chat-ui-sdk-v2`) — done, merged 2026-05-23 (PR #164).
+  - [x] Extract `@sentropic/chat-ui` from web, Chrome, and VSCode surfaces.
+  - [x] Reuse the chat-core/LLM mesh contract; no separate provider abstraction.
 - [ ] **BR-14e** `chore/sentropic-codebase-finalization`
   - [ ] Finalize non-chat/non-LLM codebase naming across API, UI, tests, fixtures, reports, exports, and package metadata.
   - [ ] Produce residual-name allowlist before operational transition.
@@ -258,8 +258,8 @@ Roadmap specifications:
   - [ ] Semantic search mode for `documents` tool in chat.
   - [ ] Depends on BR-16 (optional, works with local docs) + BR-08 (Cohere embeddings).
 
-- [ ] **BR-23** `feat/multi-agent-framework-comparison`
-  - [ ] Compare LangGraph / Agno / Temporal for multi-agent orchestration. Lot 0 research + recommendation. See `plan/23-BRANCH_feat-multi-agent-framework-comparison.md`.
+- [x] **BR-23** `feat/multi-agent-framework-comparison` — done, merged 2026-05-14 (PR #148, study only — no runtime code).
+  - [x] Compare LangGraph / Agno / Temporal for multi-agent orchestration. Lot 0 research + recommendation. Decisions in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md`. See `plan/23-BRANCH_feat-multi-agent-framework-comparison.md`.
 - [ ] **BR-25** `chore/rules-skills-audit`
   - [ ] Absorb BR-04B audit learnings (400+ incidents) into rules and hooks. Mechanical enforcement. See `plan/25-BRANCH_chore-rules-skills-audit.md`.
 
