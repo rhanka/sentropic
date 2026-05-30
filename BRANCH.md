@@ -274,19 +274,23 @@ web app. See `spec/SPEC_COWORK.md`.
         `make package-desktop-windows` ✅ (unsigned exe produced; signing skipped). Windows execution +
         the signing RUN with a real `.pfx` = UAT/attendu.
 
-- [ ] **Lot 5C — Admin-gate downloads + cowork prerelease channel** (BR41a-Q7)
-  - [ ] Gate the 3 Settings download cards (chrome+cowork+vscode) behind `{#if isAdmin()}`
-        (`ui/src/routes/settings/+page.svelte`); non-admins no longer see them.
-  - [ ] Env: add `COWORK_DESKTOP_PRERELEASE_URL` + `COWORK_DESKTOP_PRERELEASE_VERSION`
+- [x] **Lot 5C — Admin-gate downloads + cowork prerelease channel** (BR41a-Q7)
+  - [x] Gate the 3 Settings download cards (chrome+cowork+vscode) behind `{#if isAdmin()}`
+        (`ui/src/routes/settings/+page.svelte`); non-admins no longer see them. Download-metadata
+        loads moved inside the `if (isAdmin())` onMount branch (no wasted fetch for non-admins).
+  - [x] Env: add `COWORK_DESKTOP_PRERELEASE_URL` + `COWORK_DESKTOP_PRERELEASE_VERSION`
         (`api/src/config/env.ts`); reuse `COWORK_DESKTOP_DOWNLOAD_URL` as the RELEASE url.
-  - [ ] Persist active channel as a GLOBAL `settings` row `cowork_desktop.channel`
+  - [x] Persist active channel as a GLOBAL `settings` row `cowork_desktop.channel`
         (default `release`) via the existing `settingsService` (no new table, no migration).
-  - [ ] `GET /cowork-desktop/download` returns `{ channel, version, source, downloadUrl }` for the
+  - [x] `GET /cowork-desktop/download` returns `{ channel, version, source, downloadUrl }` for the
         active channel; admin-only `GET/PUT /cowork-desktop/channel` guarded by `requireAdmin`.
-  - [ ] UI: admin channel toggle in the cowork card (PUT then refetch); i18n fr+en under
-        `settings.coworkDesktop.channel.*`.
-  - [ ] Lot gate: `typecheck-api`/`lint-api`/`typecheck-ui`/`lint-ui` ✅; scoped api test
-        `tests/api/cowork-desktop-download.test.ts` ✅ + `make test-ui` ✅.
+  - [x] UI: admin channel toggle in the cowork card (PUT then refetch, channel derived from the
+        download metadata); i18n fr+en under `settings.coworkDesktop.channel.*`.
+  - [x] Lot gate: `typecheck-api` ✅ / `lint-api` ✅ (0 errors) / `typecheck-ui` ✅ / `lint-ui` ✅;
+        scoped api test `tests/api/cowork-desktop-download.test.ts` (7 cases) + `make test-ui` —
+        see Checks. NOTE: repo-wide `make format-check` is broken by a pre-existing invalid
+        `ui/.prettierrc` `svelteSortOrder: "scripts-markup-styles"` (rejected by prettier-plugin-svelte
+        v3); CI does not run `format-check`, so this is not a merge gate. New code matches repo style.
 
 - [ ] **Lot N-2 — UAT**
   - [ ] Chrome plugin (non-regression): connect, run `tab_read`/`tab_action`, chat streaming unchanged.

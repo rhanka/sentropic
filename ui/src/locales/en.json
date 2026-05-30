@@ -674,6 +674,18 @@
       "retry": "Retry",
       "versionLabel": "Version",
       "sourceLabel": "Source",
+      "channel": {
+        "title": "Distribution channel",
+        "description": "Choose which build is exposed to users: Release (official signed build) or Prerelease (branch-built unsigned build for UAT).",
+        "label": "Active channel",
+        "release": "Release",
+        "prerelease": "Prerelease",
+        "updating": "Updating channel…",
+        "errors": {
+          "load": "Unable to load the active channel.",
+          "update": "Unable to update the channel."
+        }
+      },
       "errors": {
         "load": "Unable to load the Sentropic Cowork card. Set COWORK_DESKTOP_DOWNLOAD_URL in the API configuration (an http(s) URL served from the Sentropic domain), then restart the API."
       }

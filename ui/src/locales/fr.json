@@ -674,6 +674,18 @@
       "retry": "Réessayer",
       "versionLabel": "Version",
       "sourceLabel": "Source",
+      "channel": {
+        "title": "Canal de distribution",
+        "description": "Choisissez le binaire exposé aux utilisateurs : Release (build officiel signé) ou Préversion (build de branche non signé, pour l'UAT).",
+        "label": "Canal actif",
+        "release": "Release",
+        "prerelease": "Préversion",
+        "updating": "Mise à jour du canal…",
+        "errors": {
+          "load": "Impossible de charger le canal actif.",
+          "update": "Impossible de mettre à jour le canal."
+        }
+      },
       "errors": {
         "load": "Impossible de charger la carte Sentropic Cowork. Configurez COWORK_DESKTOP_DOWNLOAD_URL dans l'API (URL http(s) servie sur le domaine Sentropic), puis redémarrez l'API."
       }
