@@ -127,13 +127,17 @@ Add first-class image input to Sentropic chat and document context flows: users 
   - Main sync 2026-05-24: merged `origin/main` after root fast-forward from `85c679d7` to `146364eb`; no merge conflicts. Verification below was rerun on the merged head.
   - Latest main sync 2026-05-24: merged `origin/main` again after `main` advanced from `146364eb` to `d5e3cddc`; no merge conflicts.
   - UAT remains pending. This branch must not be undrafted/merged until root UAT runs from a commit-identical root workspace and CI is green on the final pushed head.
-  - `BR38a-FB1` UI/UX anomaly 2026-05-26 (UAT). Owner: 38a-ui. Severity: medium. Status: fixed in Lot U1 (awaiting root UAT re-check).
+  - `BR38a-FB1` UI/UX anomaly 2026-05-26 (UAT). Owner: 38a-ui. Severity: medium. Status: superseded by `BR38a-FB2` durable redesign (Lot U2).
     - Repro: paste/upload an image into the chat composer.
-    - Expected: one image-first attachment item, same box style/position as documents, thumbnail clickable to enlarge.
-    - Actual: the same image shows twice — a "document summary row" (top, no thumbnail, summary affordance) and a "capture" tray box (below, with thumbnail); neither thumbnail is hoverable/clickable to enlarge.
-    - Root cause: a composer image is added both as a `composerAttachments` draft (bottom tray) and as a chat-session `context_document` (top doc chip via `loadSessionDocs`); the two surfaces use different styles/positions and there is no lightbox.
-    - Resolution: unify both surfaces into one deduplicated attachment band at the top (one shared box style; image preview vs file-type icon), drop the bottom tray usage, suppress summary for image context documents, and add an app-level click-to-enlarge lightbox for band and message thumbnails. Frozen in `spec/SPEC_CHATBOT.md` and `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`.
-    - Evidence: `ui/src/lib/components/chat/AppChatPanel.svelte` `renderComposerSurface` (sessionDocs chips) vs `renderAttachmentTray` (composer tray); `attachImageFileToComposer` dual write.
+    - Actual: the same image showed twice (a "document summary row" + a "capture" tray box); neither thumbnail was clickable to enlarge.
+    - Root cause: a composer image was added both as a `composerAttachments` draft (bottom tray) and as a chat-session `context_document` (top doc chip via `loadSessionDocs`); two surfaces, two styles, no lightbox.
+    - Lot U1 resolution (shipped): unified band at top + dedup by `documentId` + no summary for images + app-level lightbox. Kept: lightbox, dedup helper, image-not-summarized. Superseded part: the persistent unified band is replaced by the per-message model below.
+  - `BR38a-FB2` vision/attachment durable model 2026-05-30 (UAT). Owner: 38a-ui. Severity: high. Status: in progress (Lot U2).
+    - Repro: an image present in the session band but not freshly attached to the sent message; ask the model to analyze it (vision-capable model, e.g. `gpt-5.4-nano`).
+    - Actual: model reports the image is "ready" but unreadable (no OCR/text). It only saw the image via the `documents` tool (text extraction → `tool-service.ts` "No text extracted… image-only"), never as a vision part.
+    - Root cause: `sendMessage` builds vision attachments only from `composerAttachments` (cleared after send); `hydrateVisionAttachmentMessages` injects image parts only for images carried by a message. A session-document image that is not a fresh per-message attachment is never sent as a vision part. Lot U1's persistent band displayed session-doc images as if attached, worsening the mismatch.
+    - Resolution (durable, ChatGPT/Claude/Gemini-aligned): per-message attachment model. Composer band = pending-only, cleared after send; sent attachments render inline in the message bubble (images with lightbox, non-image docs as file cards). Images are sent as vision parts on their message and persist via conversation history; documents stay available via the system-prompt counts + `documents` tool. First-attach injects a per-turn attention cue. Removing a pending attachment deletes its uploaded context document (no orphan). No per-document deletion inside the chat. Frozen in `spec/SPEC_CHATBOT.md` and `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`.
+    - Evidence: `api/src/services/chat-service.ts` `sendMessage` path / `hydrateVisionAttachmentMessages` (1789, called 3327); `ui/src/lib/components/chat/AppChatPanel.svelte` `sendMessage` (sentAttachments from composerAttachments only).
 
 ## Verification Ledger
 - 2026-05-24 RED: `make test-api-unit SCOPE="tests/unit/chat-service-tools.test.ts" API_TEST_WORKERS=1 API_PORT=9191 UI_PORT=5391 MAILDEV_UI_PORT=1291 ENV=test-feat-multimodal-image-input` failed as expected before the fix because `loadContextDocumentContent` was called 0 times.
@@ -284,6 +288,29 @@ Add first-class image input to Sentropic chat and document context flows: users 
     - [x] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
     - [x] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
 
+- [ ] **Lot U2 - Durable per-message attachment model (BR38a-FB2)**
+  - [ ] Composer band becomes pending-only: render the band from `composerAttachments` only (drop the `sessionDocs` merge); clear after send. Keep rich box + image lightbox + image-not-summarized.
+  - [ ] Removing a pending attachment also deletes its uploaded context document (`deleteDocument` by `documentId`) so no orphaned session document remains.
+  - [ ] Align documents with images on the `+` menu: a non-image upload becomes a pending composer attachment (kind `file`) sent with the next message, instead of a silent session-only upload.
+  - [ ] Persist and send non-image document attachments as message attachments (kind `file`, source `context_document`) without injecting them as runtime content parts (documents stay tool-driven).
+  - [ ] Render sent non-image document attachments inline in the user message bubble as file cards (filename, type icon, download/open); keep sent images as inline thumbnails with lightbox.
+  - [ ] Inject a per-turn attention cue when a document/image is first attached so the model considers it (server-side, `chat-service`).
+  - [ ] Confirm images are sent as vision parts on their message and persist across turns via conversation history (no per-turn re-send of all session images).
+  - [ ] No per-document deletion inside the chat after send; document management stays on document pages.
+  - [ ] Update `ui/src/locales/en.json` and `ui/src/locales/fr.json` for any new attachment/file-card copy.
+  - [ ] Lot gate:
+    - [ ] `make test-ui SCOPE=tests/utils/documents.test.ts ENV=test-feat-multimodal-image-input`
+    - [ ] `make test-ui SCOPE=tests/components/chat/AppChatPanel-boundary.test.ts ENV=test-feat-multimodal-image-input`
+    - [ ] `make test-ui SCOPE=tests/components/chat/ChatTimeline-wrapper.test.ts ENV=test-feat-multimodal-image-input`
+    - [ ] `make test-api SCOPE=tests/unit/chat-service-tools.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
+    - [ ] `make test-api SCOPE=tests/api/chat.test.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
+    - [ ] `make typecheck-ui ENV=test-feat-multimodal-image-input`
+    - [ ] `make typecheck-api API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=test-feat-multimodal-image-input`
+    - [ ] `make lint-ui ENV=test-feat-multimodal-image-input`
+    - [ ] `make build-api build-ui-image API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
+    - [ ] `make test-e2e E2E_SPEC=tests/03-chat.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
+    - [ ] `make test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts API_PORT=9190 UI_PORT=5390 MAILDEV_UI_PORT=1290 ENV=e2e-feat-multimodal-image-input`
+
 - [ ] **Lot N-2 - UAT**
   - [ ] Web app setup:
     - [ ] Push branch before UAT.
@@ -296,8 +323,12 @@ Add first-class image input to Sentropic chat and document context flows: users 
     - [ ] Attach an image from Documents to a chat session and verify it is visible in the session document list.
     - [ ] Pick an image from Google Drive and verify the image imports as a document and can be used in chat.
     - [ ] Select a text-only model with an image attached and verify the pre-dispatch error is clear and recoverable.
-    - [ ] (BR38a-FB1) Paste/upload an image and verify it appears once, top of the edit, same box style as documents (no duplicate summary row + capture box).
-    - [ ] (BR38a-FB1) Click the image thumbnail in the band and in the sent message and verify the lightbox opens, downloads, and closes (Esc/backdrop/button).
+    - [ ] (BR38a-FB2) Paste/upload an image: it shows once as a pending chip; after send it appears inline in the message bubble and the composer clears (no persistent band, no duplicate box).
+    - [ ] (BR38a-FB2) Attach an image and ask the model to describe it: the model actually sees and describes the image (vision part), not "ready but unreadable".
+    - [ ] (BR38a-FB2) Ask about the same image on a later turn without re-attaching: the model still sees it (persisted via history).
+    - [ ] (BR38a-FB2) Attach a non-image document: it shows as an inline file card in the bubble and the model considers it (attention cue) / can read it via the documents tool.
+    - [ ] (BR38a-FB2) Remove a pending attachment before send: it disappears and leaves no orphan session document (model no longer counts it).
+    - [ ] (BR38a-FB2) Click a sent image thumbnail: the lightbox opens, downloads, and closes (Esc/backdrop/button).
   - [ ] Web app non-regression tests:
     - [ ] Existing PDF/DOCX/PPTX/text document upload still processes.
     - [ ] Existing text-only chat send/retry/edit/stop flows still work.
