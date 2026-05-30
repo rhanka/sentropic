@@ -146,7 +146,7 @@ const parseJson = async <T extends z.ZodTypeAny>(
 };
 
 const extractChallenge = (credential: AuthenticationResponseJSON): string | null => {
-  const clientDataJson = credential.response.clientDataJSON;
+  const clientDataJson = credential.response?.clientDataJSON;
 
   if (!clientDataJson) {
     return null;
