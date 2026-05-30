@@ -5,6 +5,10 @@ import {
   calculateFinalScore,
   calculateUseCaseScores,
   generateStars,
+  computePriorityRatio,
+  selectTopPriorityIndices,
+  PRIORITY_EPSILON,
+  PRIORITY_RATIO_CAP,
   type ScoreEntry
 } from '../../src/lib/utils/scoring';
 import type { MatrixConfig } from '../../src/types/matrix';
@@ -181,6 +185,76 @@ describe('scoring utilities', () => {
 
     it('should use default max of 5', () => {
       expect(generateStars(3)).toEqual({ filled: 3, empty: 2 });
+    });
+  });
+
+  describe('computePriorityRatio (BR-40a)', () => {
+    it('uses value / (complexity + epsilon) with epsilon = 1', () => {
+      expect(PRIORITY_EPSILON).toBe(1);
+      // 50 / (9 + 1) = 5
+      expect(computePriorityRatio(50, 9)).toBe(5);
+    });
+
+    it('guards complexity = 0 with the epsilon denominator (no division by zero)', () => {
+      // 40 / (0 + 1) = 40, finite and not Infinity
+      expect(computePriorityRatio(40, 0)).toBe(40);
+      expect(Number.isFinite(computePriorityRatio(40, 0))).toBe(true);
+    });
+
+    it('caps the ratio at PRIORITY_RATIO_CAP', () => {
+      expect(PRIORITY_RATIO_CAP).toBe(100);
+      // 100 / (0 + 1) = 100, exactly at the cap (not above)
+      expect(computePriorityRatio(100, 0)).toBe(100);
+    });
+
+    it('treats non-finite or negative complexity safely', () => {
+      expect(computePriorityRatio(50, Number.NaN)).toBe(50); // complexity -> 0
+      expect(computePriorityRatio(50, -10)).toBe(50); // negative clamped to 0
+    });
+  });
+
+  describe('selectTopPriorityIndices (BR-40a)', () => {
+    it('returns indices ordered by priority ratio descending', () => {
+      const candidates = [
+        { value: 10, complexity: 90 }, // ratio ~0.11
+        { value: 80, complexity: 10 }, // ratio ~7.27
+        { value: 50, complexity: 5 }   // ratio ~8.33
+      ];
+      expect(selectTopPriorityIndices(candidates, 3)).toEqual([2, 1, 0]);
+    });
+
+    it('labels only the top-N (10) when more candidates exist', () => {
+      const candidates = Array.from({ length: 20 }, (_, i) => ({
+        value: i + 1, // increasing value
+        complexity: 0
+      }));
+      const top = selectTopPriorityIndices(candidates, 10);
+      expect(top).toHaveLength(10);
+      // Highest value (index 19) ranks first
+      expect(top[0]).toBe(19);
+      expect(top).not.toContain(0);
+    });
+
+    it('breaks ties by value descending then original index ascending', () => {
+      const candidates = [
+        { value: 20, complexity: 1 }, // ratio = 10
+        { value: 40, complexity: 3 }, // ratio = 10, higher value
+        { value: 10, complexity: 0 }  // ratio = 10, same ratio, lower value
+      ];
+      // All ratio 10: order by value desc -> idx1 (40), idx0 (20), idx2 (10)
+      expect(selectTopPriorityIndices(candidates, 3)).toEqual([1, 0, 2]);
+    });
+
+    it('returns all indices when fewer candidates than topN', () => {
+      const candidates = [
+        { value: 10, complexity: 1 },
+        { value: 20, complexity: 1 }
+      ];
+      expect(selectTopPriorityIndices(candidates, 10).sort()).toEqual([0, 1]);
+    });
+
+    it('returns an empty array for topN <= 0', () => {
+      expect(selectTopPriorityIndices([{ value: 10, complexity: 1 }], 0)).toEqual([]);
     });
   });
 });

@@ -1,3 +1,13 @@
+const ORG_AWARE_DOMAIN_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: { type: 'string' },
+    label: { type: 'string' },
+  },
+  required: ['id', 'label'],
+};
+
 const ORG_AWARE_LIST_ITEM_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -5,13 +15,14 @@ const ORG_AWARE_LIST_ITEM_SCHEMA = {
     titre: { type: 'string' },
     description: { type: 'string' },
     ref: { type: 'string' },
+    domainId: { type: 'string' },
     organizationIds: {
       type: 'array',
       items: { type: 'string' },
     },
     organizationName: { type: ['string', 'null'] },
   },
-  required: ['titre', 'description', 'ref', 'organizationIds', 'organizationName'],
+  required: ['titre', 'description', 'ref', 'domainId', 'organizationIds', 'organizationName'],
 };
 
 export const ORG_AWARE_LIST_OUTPUT_SCHEMA = {
@@ -19,12 +30,16 @@ export const ORG_AWARE_LIST_OUTPUT_SCHEMA = {
   additionalProperties: false,
   properties: {
     dossier: { type: 'string' },
+    domains: {
+      type: 'array',
+      items: ORG_AWARE_DOMAIN_SCHEMA,
+    },
     initiatives: {
       type: 'array',
       items: ORG_AWARE_LIST_ITEM_SCHEMA,
     },
   },
-  required: ['dossier', 'initiatives'],
+  required: ['dossier', 'domains', 'initiatives'],
 };
 
 type OrgAwareListPromptOptions = {
@@ -47,11 +62,20 @@ Contexte:
 Organisations sélectionnées (contexte détaillé):
 {{organizations_context}}
 
-Pour chaque ${options.itemLabelSingular}, produis le meilleur appariement métier possible avec une organisation réelle pertinente.
+ÉTAPE 1 — Taxonomie de domaines métier (OBLIGATOIRE, à produire AVANT la liste):
+- Dérive 5 à 8 domaines métier NORMALISÉS, mutuellement exclusifs, qui serviront de légende filtrable.
+- ANCRE EN PRIORITÉ ces domaines sur le profil de l'organisation {{organization_info}} (secteur, lignes de métier réelles, processus, offres, clients, enjeux) afin qu'ils reflètent LES lignes réelles de CETTE organisation et non des catégories génériques.
+- Si le profil est insuffisant pour dériver des domaines fiables, complète via le tool web_search sur l'organisation / le secteur.
+- Chaque domaine: "id" en snake_case (stable, sans accent, sans espace) et "label" lisible (court, sans markdown, sans "**").
+
+ÉTAPE 2 — Liste:
+Pour chaque ${options.itemLabelSingular}, produis le meilleur appariement métier possible avec une organisation réelle pertinente, et attribue un "domainId" qui DOIT être l'un des "id" définis à l'ÉTAPE 1.
+Répartis raisonnablement les ${options.itemDescriptionLabel} entre les domaines.
 Format: JSON
 
 IMPORTANT:
 - Génère exactement {{use_case_count}} ${options.itemDescriptionLabel} (ni plus, ni moins)
+- "domains" contient 5 à 8 entrées { "id", "label" }; chaque "domainId" d'item référence un "id" existant.
 - Si {{folder_name}} est non vide, réutiliser ce nom tel quel dans le champ JSON "dossier" (ne pas inventer un autre nom)
 - Si {{folder_name}} est vide, générer un nom de dossier pertinent (ne jamais utiliser "Brouillon")
 - Fais une recherche avec le tool web_search pour ${options.researchFocus}. Utilise web_extract uniquement pour approfondir des résultats déjà identifiés comme pertinents.
@@ -68,14 +92,19 @@ IMPORTANT:
 - Mieux vaut aucune organisation qu'une fausse organisation.
 - Préfère une organisation principale claire par item. N'utilise plusieurs IDs que si c'est vraiment central au même item.
 
-Réponds UNIQUEMENT avec un JSON valide:
+Réponds UNIQUEMENT avec un JSON valide (respecte EXACTEMENT ces clés):
 {
   "dossier": "titre court du dossier",
+  "domains": [
+    { "id": "domaine_un", "label": "Domaine un" },
+    { "id": "domaine_deux", "label": "Domaine deux" }
+  ],
   "initiatives": [
     {
       "titre": "titre court 1",
       "description": "Description courte (60-100 mots)",
       "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "domainId": "domaine_un",
       "organizationIds": ["org_id_1"],
       "organizationName": null
     },
@@ -83,6 +112,7 @@ Réponds UNIQUEMENT avec un JSON valide:
       "titre": "titre court 2",
       "description": "Description courte (60-100 mots)",
       "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "domainId": "domaine_deux",
       "organizationIds": [],
       "organizationName": "Nom d'une entreprise réelle"
     },
@@ -90,6 +120,7 @@ Réponds UNIQUEMENT avec un JSON valide:
       "titre": "titre court 3",
       "description": "Description courte (60-100 mots)",
       "ref": "1. [Titre référence 1](url1)\\n2. [Titre référence 2](url2)\\n...",
+      "domainId": "domaine_un",
       "organizationIds": [],
       "organizationName": null
     }
