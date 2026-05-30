@@ -65,10 +65,16 @@ web app. See `spec/SPEC_COWORK.md`.
   no Authenticode-signable artifact). The exe bundles the optional native libs (capture/input); native
   single-exe bundling risk accepted — if it proves infeasible the build STOPS and reports (no silent
   folder-zip fallback). Distributed via a download endpoint mirroring the chrome-ext one.
-- **BR41-Q1** `acknowledge` — DECIDED (user, Lot 5): sign the `.exe` in BR-41a via `osslsigncode`
-  (Linux/Docker) with the user's **OV `.pfx`** cert (an EV-on-hardware-token cert can't sign headless).
-  The packaging integrates a signing step gated on a provided cert file + password (skipped with a
-  warning if absent); the actual signing run is **attendu** (awaiting the user's `.pfx` + password).
+- **BR41-Q1** `acknowledge` — DECIDED (user): the `.exe` WILL be signed (in scope, BR-41a) with a
+  **resold OV** code-signing cert (OV tier is sufficient — Airbus-internal deployment, no public
+  SmartScreen-reputation need; EV would add nothing). Research summary: no free/Let's-Encrypt analogue
+  for code signing; no cloud combo (Cloudflare/SCW/OVH) issues a Windows-trusted cert; cheapest public
+  ≈ resold Sectigo OV ~$65/yr, Certum cloud ~$108/yr, Azure Trusted Signing ~$120/yr; the truly-free
+  path is Airbus's internal PKI (declined for now). 2026 reality: OV certs are HSM-backed (cloud HSM
+  like SimplySign/eSigner), NOT a local `.pfx`. The user will buy the resold OV cert **LATER**; the
+  signing RUN is therefore **attendu** (user's scheduling). The packaging already ships a gated signing
+  step (currently `osslsigncode` + `.pfx`, skipped when no cert); when the cloud-HSM cert is obtained,
+  swap that step to **`jsign`** (cloud-HSM signing API). Until then the exe ships UNSIGNED (POC/UAT OK).
 - **BR41a-Q5** `attention` — DECIDED (user, Lot 5): publish `@sentropic/cowork-desktop` on npm too (not
   `private`). Needs: `publish-cowork-desktop[-token]` make targets + a CI OIDC `publish-cowork-desktop`
   job (EX1/EX3) + an npm **trusted publisher** for the package (set up via Playwright — **attendu**,
