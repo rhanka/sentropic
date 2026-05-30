@@ -162,6 +162,18 @@ describe('createAuthWebAuthnAuthenticationRouteHandlers', () => {
     });
   });
 
+  it('rejects verify with 400 when credential.response is missing or null', async () => {
+    const response = await router(service()).request('/api/v1/auth/login/verify', {
+      body: JSON.stringify({ credential: { id: 'x', response: null, type: 'public-key' } }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: { code: 'invalid_credential', message: 'Credential challenge is missing or invalid.' },
+    });
+  });
+
   it('delegates verify success to finalizeAuthentication when provided', async () => {
     const response = await createAuthRouter({
       handlers: createAuthWebAuthnAuthenticationRouteHandlers({
