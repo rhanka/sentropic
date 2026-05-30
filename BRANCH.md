@@ -541,12 +541,12 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [x] `make test-e2e E2E_SPEC=tests/02-auth-devices.spec.ts API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=e2e-feat-auth-hono-kit` (3 passed)
   - [x] Bump affected package versions for every touched package `src/**` (`@sentropic/auth-hono` 0.1.0 → 0.2.1).
   - [x] Complete first-publish bootstrap documentation for `@sentropic/auth-hono` (covered in package README + Lot N-1 above).
-  - [ ] Verify CI/CD package automation exists before PR handoff:
-    - [ ] Make targets: `typecheck-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`, `test-auth-hono`.
-    - [ ] CI filters/outputs: `auth_hono`, `auth_hono_publish`.
-    - [ ] CI jobs: `validate-auth-hono`, `publish-auth-hono`.
-    - [ ] Bootstrap input: `bootstrap_publish_target=auth-hono`.
-    - [ ] Npm trusted publisher runbook recorded.
+  - [x] Verify CI/CD package automation exists before PR handoff:
+    - [x] Make targets present: `typecheck-auth-hono`, `build-auth-hono`, `pack-auth-hono`, `publish-auth-hono`, `publish-auth-hono-token`, `test-auth-hono`.
+    - [x] CI filters/outputs present: `auth_hono`, `auth_hono_publish`.
+    - [x] CI jobs present: `validate-auth-hono`, `publish-auth-hono`.
+    - [x] Bootstrap input present: `bootstrap_publish_target=auth-hono`.
+    - [x] Npm trusted publisher runbook recorded (package `README.md` `First Publish` section).
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
