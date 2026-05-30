@@ -35,13 +35,17 @@ describe('AppChatPanel boundary', () => {
     expect(source).toContain('attachments: sentAttachments');
   });
 
-  it('renders a single deduplicated attachment band with click-to-enlarge instead of a separate tray', () => {
+  it('renders a pending-only attachment band with click-to-enlarge, not a persistent session-doc band', () => {
     const source = readFileSync(appPanelPath, 'utf8');
-    expect(source).toContain('mergeAttachmentBand');
+    expect(source).toContain('composerBandItems');
     expect(source).toContain('chat-composer-attachment-band');
     expect(source).toContain('openLightbox');
     expect(source).toContain('chat-image-lightbox');
-    // The separate bottom attachment tray is removed in favor of the unified band.
+    // Documents follow the same per-message model as images.
+    expect(source).toContain('attachFileToComposer');
+    // The separate bottom attachment tray is removed.
     expect(source).not.toContain('chat-composer-attachment-tray');
+    // No persistent session-document merge in the composer band.
+    expect(source).not.toContain('mergeAttachmentBand');
   });
 });

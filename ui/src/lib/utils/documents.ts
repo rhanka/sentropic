@@ -57,6 +57,7 @@ export function isImageMimeType(mimeType: string | null | undefined): boolean {
  */
 export type ComposerAttachmentLike = {
   id: string;
+  kind?: 'image' | 'file';
   documentId?: string;
   fileName: string;
   mimeType: string;
@@ -73,62 +74,33 @@ export type UnifiedAttachmentItem = {
   mimeType: string;
   status: string;
   documentId?: string;
-  composerAttachmentId?: string;
+  composerAttachmentId: string;
   previewUrl?: string;
-  isPending: boolean;
 };
 
 /**
- * Build the single composer attachment band: session documents and pending
- * composer attachments merged into one list, deduplicated by `documentId`.
- * An uploaded image therefore appears once (enriched with its blob preview),
- * never as both a "document row" and a separate "capture" tray box.
+ * Build the composer attachment band for the per-message model: only the
+ * pending attachments being composed (images and files). Sent attachments
+ * move into the message bubble; session documents are not re-listed here.
  */
-export function mergeAttachmentBand(params: {
-  sessionDocs: ContextDocumentItem[];
-  composerAttachments: ComposerAttachmentLike[];
-}): UnifiedAttachmentItem[] {
-  const { sessionDocs, composerAttachments } = params;
-  const composerByDocId = new Map<string, ComposerAttachmentLike>();
-  for (const att of composerAttachments) {
-    if (att.documentId) composerByDocId.set(att.documentId, att);
-  }
-
-  const seenDocIds = new Set<string>();
-  const items: UnifiedAttachmentItem[] = [];
-
-  for (const doc of sessionDocs) {
-    seenDocIds.add(doc.id);
-    const att = composerByDocId.get(doc.id);
-    items.push({
-      key: `doc:${doc.id}`,
-      kind: isImageMimeType(doc.mime_type) ? 'image' : 'document',
-      fileName: doc.filename,
-      mimeType: doc.mime_type,
-      status: doc.status,
-      documentId: doc.id,
-      composerAttachmentId: att?.id,
-      previewUrl: att?.previewUrl,
-      isPending: false,
-    });
-  }
-
-  for (const att of composerAttachments) {
-    if (att.documentId && seenDocIds.has(att.documentId)) continue;
-    items.push({
-      key: `att:${att.id}`,
-      kind: isImageMimeType(att.mimeType) ? 'image' : 'document',
-      fileName: att.fileName,
-      mimeType: att.mimeType,
-      status: att.state,
-      documentId: att.documentId,
-      composerAttachmentId: att.id,
-      previewUrl: att.previewUrl,
-      isPending: true,
-    });
-  }
-
-  return items;
+export function composerBandItems(
+  composerAttachments: ComposerAttachmentLike[],
+): UnifiedAttachmentItem[] {
+  return composerAttachments.map((att) => ({
+    key: `att:${att.id}`,
+    kind:
+      att.kind === 'file'
+        ? 'document'
+        : att.kind === 'image' || isImageMimeType(att.mimeType)
+          ? 'image'
+          : 'document',
+    fileName: att.fileName,
+    mimeType: att.mimeType,
+    status: att.state,
+    documentId: att.documentId,
+    composerAttachmentId: att.id,
+    previewUrl: att.previewUrl,
+  }));
 }
 
 const GOOGLE_WORKSPACE_MIME_LABELS: Record<string, string> = {
