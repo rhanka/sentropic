@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { resetFetchMock, mockFetchJsonOnce } from '../test-setup';
 import {
   DOCUMENT_UPLOAD_ACCEPT,
+  composerBandItems,
   deleteDocument,
   downloadDocument,
   getDocumentMimeLabel,
   getDownloadUrl,
   isImageMimeType,
   listDocuments,
-  mergeAttachmentBand,
   uploadDocument,
 } from '../../src/lib/utils/documents';
 import { API_BASE_URL } from '../../src/lib/config';
@@ -195,83 +195,51 @@ describe('documents utils', () => {
     });
   });
 
-  describe('mergeAttachmentBand', () => {
-    const doc = (over: Partial<Record<string, unknown>> = {}) => ({
-      id: 'doc_1',
-      context_type: 'chat_session' as const,
-      context_id: 's_1',
-      filename: 'rapport.pdf',
-      mime_type: 'application/pdf',
-      size_bytes: 1234,
-      status: 'ready' as const,
-      ...over,
-    });
+  describe('composerBandItems', () => {
     const att = (over: Partial<Record<string, unknown>> = {}) => ({
       id: 'att_1',
+      kind: 'image' as const,
       fileName: 'capture.png',
       mimeType: 'image/png',
       state: 'uploading',
       ...over,
     });
 
-    it('classifies a session document as a document item with no preview', () => {
-      const items = mergeAttachmentBand({ sessionDocs: [doc()], composerAttachments: [] });
+    it('maps a pending image attachment to an image band item carrying its preview', () => {
+      const items = composerBandItems([att({ previewUrl: 'blob:preview-1' })]);
       expect(items).toHaveLength(1);
       expect(items[0]).toMatchObject({
+        key: 'att:att_1',
+        kind: 'image',
+        composerAttachmentId: 'att_1',
+        previewUrl: 'blob:preview-1',
+        status: 'uploading',
+      });
+    });
+
+    it('maps a file attachment to a document band item (no preview)', () => {
+      const items = composerBandItems([
+        att({ id: 'att_doc', kind: 'file', fileName: 'rapport.pdf', mimeType: 'application/pdf', state: 'ready' }),
+      ]);
+      expect(items[0]).toMatchObject({
         kind: 'document',
-        documentId: 'doc_1',
-        fileName: 'rapport.pdf',
-        isPending: false,
+        composerAttachmentId: 'att_doc',
+        documentId: undefined,
       });
       expect(items[0].previewUrl).toBeUndefined();
     });
 
-    it('classifies an image session document as an image item', () => {
-      const items = mergeAttachmentBand({
-        sessionDocs: [doc({ id: 'doc_img', filename: 'capture.png', mime_type: 'image/png' })],
-        composerAttachments: [],
-      });
-      expect(items[0]).toMatchObject({ kind: 'image', documentId: 'doc_img' });
+    it('falls back to MIME classification when kind is absent', () => {
+      const items = composerBandItems([
+        { id: 'a', fileName: 'x.webp', mimeType: 'image/webp', state: 'ready' },
+        { id: 'b', fileName: 'y.pdf', mimeType: 'application/pdf', state: 'ready' },
+      ]);
+      expect(items[0].kind).toBe('image');
+      expect(items[1].kind).toBe('document');
     });
 
-    it('shows a pending composer attachment with its preview while uploading', () => {
-      const items = mergeAttachmentBand({
-        sessionDocs: [],
-        composerAttachments: [att({ previewUrl: 'blob:preview-1' })],
-      });
-      expect(items).toHaveLength(1);
-      expect(items[0]).toMatchObject({
-        kind: 'image',
-        composerAttachmentId: 'att_1',
-        previewUrl: 'blob:preview-1',
-        isPending: true,
-      });
-      expect(items[0].documentId).toBeUndefined();
-    });
-
-    it('deduplicates by documentId: an uploaded image appears once, enriched with composer preview and id', () => {
-      const items = mergeAttachmentBand({
-        sessionDocs: [doc({ id: 'doc_img', filename: 'capture.png', mime_type: 'image/png' })],
-        composerAttachments: [
-          att({ id: 'att_9', documentId: 'doc_img', state: 'ready', previewUrl: 'blob:preview-9' }),
-        ],
-      });
-      expect(items).toHaveLength(1);
-      expect(items[0]).toMatchObject({
-        kind: 'image',
-        documentId: 'doc_img',
-        composerAttachmentId: 'att_9',
-        previewUrl: 'blob:preview-9',
-        isPending: false,
-      });
-    });
-
-    it('keeps documents and pending attachments together without duplication', () => {
-      const items = mergeAttachmentBand({
-        sessionDocs: [doc()],
-        composerAttachments: [att({ id: 'att_pending', previewUrl: 'blob:p' })],
-      });
-      expect(items.map((i) => i.key)).toEqual(['doc:doc_1', 'att:att_pending']);
+    it('returns an empty band when there are no pending attachments', () => {
+      expect(composerBandItems([])).toEqual([]);
     });
   });
 
