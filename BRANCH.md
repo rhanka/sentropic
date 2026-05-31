@@ -501,21 +501,21 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [x] `make test-auth-hono SCOPE=packages/auth-hono/tests/example-admin-file-store.test.ts ENV=test-feat-auth-hono-kit` (3 passed)
     - [x] `make build-auth-hono ENV=test-feat-auth-hono-kit`
 
-- [ ] **Lot N-2 - UAT**
-  - [ ] Web app setup:
-    - [ ] Push branch before UAT.
-    - [ ] Confirm root workspace is commit-identical to branch HEAD.
-    - [ ] Run user UAT from root with `API_PORT=8787`, `UI_PORT=5173`, `MAILDEV_UI_PORT=1080`, `ENV=dev`.
-  - [ ] Web app evolution tests:
-    - [ ] Complete passkey login with an existing account and verify session cookie plus JSON token response.
-    - [ ] Register a new account with email code verification and passkey registration.
-    - [ ] Verify magic-link login still creates a session.
-    - [ ] Refresh a session, revoke current session, and revoke all sessions.
-    - [ ] Rename and revoke a credential from `/auth/devices`.
-  - [ ] Web app non-regression tests:
-    - [ ] Existing protected API routes still receive `c.get('user')` with workspace context.
-    - [ ] Existing Chrome extension token exchange still works.
-    - [ ] Existing account-disabled and approval-expired behavior still maps roles correctly.
+- [x] **Lot N-2 - UAT** (user sign-off 2026-05-30: "tout est beau")
+  - [x] Web app setup:
+    - [x] Push branch before UAT.
+    - [x] Confirm root workspace is commit-identical to branch HEAD.
+    - [x] Run user UAT from root with `API_PORT=8787`, `UI_PORT=5173`, `MAILDEV_UI_PORT=1080`, `ENV=dev`.
+  - [x] Web app evolution tests — user confirmed:
+    - [x] Complete passkey login with an existing account and verify session cookie plus JSON token response.
+    - [x] Register a new account with email code verification and passkey registration.
+    - [x] Verify magic-link login still creates a session.
+    - [x] Refresh a session, revoke current session, and revoke all sessions.
+    - [x] Rename and revoke a credential from `/auth/devices`.
+  - [x] Web app non-regression tests — user confirmed:
+    - [x] Existing protected API routes still receive `c.get('user')` with workspace context.
+    - [x] Existing Chrome extension token exchange still works.
+    - [x] Existing account-disabled and approval-expired behavior still maps roles correctly.
 
 - [x] **Lot N-1 - Docs consolidation**
   - [x] Update `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` §1 with `@sentropic/auth-hono` package boundary (+ brief `@sentropic/auth-ui` row pointing to BR-39a).
@@ -523,7 +523,7 @@ Extract the reusable Hono-side authentication routes and server contracts into a
   - [x] Document bootstrap publish and trusted publisher setup for `@sentropic/auth-hono` (README `First Publish` referencing `rules/workflow.md`).
   - [x] Document npm first-publish runbook (`workflow_dispatch` with `bootstrap_publish_target=auth-hono`, handle any human npm 2FA/token requirement, then attach npm trusted publisher for `rhanka/sentropic` workflow `ci.yml`) — same `First Publish` section.
 
-- [ ] **Lot N - Final validation**
+- [x] **Lot N - Final validation**
   - [x] Typecheck and lint:
     - [x] `make typecheck-auth-hono ENV=test-feat-auth-hono-kit`
     - [x] `make typecheck-api API_PORT=9196 UI_PORT=5396 MAILDEV_UI_PORT=1296 ENV=test-feat-auth-hono-kit`
@@ -547,6 +547,6 @@ Extract the reusable Hono-side authentication routes and server contracts into a
     - [x] CI jobs present: `validate-auth-hono`, `publish-auth-hono`.
     - [x] Bootstrap input present: `bootstrap_publish_target=auth-hono`.
     - [x] Npm trusted publisher runbook recorded (package `README.md` `First Publish` section).
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body.
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+  - [x] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (PR #181).
+  - [x] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers (run 26698831980 green; two Makefile fixes wired `build-auth-hono` into `up-api-test-ci` + `prepare-node-workspace`).
+  - [x] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
