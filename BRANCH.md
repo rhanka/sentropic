@@ -1,84 +1,93 @@
 # Feature: BR-40c Folder XLSX Multi-Tab Export
 
 ## Objective
-Add a multi-tab xlsx export of a folder: one tab for the use cases, one tab for the evaluation
-matrix (scoring grid), and one tab for the prioritization quadrant. Mirror the existing async
-document-generation pattern (DOCX/PPTX queue jobs) rather than inventing a new delivery mechanism.
+Add a multi-tab xlsx export of a folder (use cases / evaluation matrix / prioritization quadrant),
+mirroring the existing async DOCX/PPTX queue-job delivery, with a NATIVE editable scatter chart and
+LIVE cross-sheet Excel formulas for the score and quadrant cells (matrix-driven, recompute on edit).
 
 ## Scope / Guardrails
-- Scope limited to: a new xlsx generation service + route, queue wiring, and a folder UI export entry
-  point. No changes to use-case/matrix data models.
-- Make-only workflow; root `ENV=dev` stays stable; work in `tmp/feat-folder-xlsx-export`.
-- Tests on `ENV=test-feat-folder-xlsx-export` / `ENV=e2e-feat-folder-xlsx-export`; `ENV` last.
-- One migration max in `api/drizzle/*.sql` — not expected; declare exception if needed.
+- Scope limited to a new xlsx generation service + route, queue wiring, and a folder UI export entry.
+- One migration max in `api/drizzle/*.sql` (none expected; declare exception if needed).
+- Make-only workflow, no direct Docker commands.
+- Root workspace reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development in isolated worktree `tmp/feat-folder-xlsx-export`.
+- Test campaigns run on `ENV=test-feat-folder-xlsx-export` / `ENV=e2e-feat-folder-xlsx-export`.
+- UAT worktree must be commit-identical (same HEAD SHA) to the branch under qualification.
+- In every `make` command, `ENV=<env>` is passed as the last argument.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `plan/40c-BRANCH_feat-folder-xlsx-export.md`
-  - `api/package.json` (+ `package-lock.json`) — add xlsx writer (`exceljs` recommended).
-  - `api/src/routes/api/xlsx.ts` (new)
-  - `api/src/routes/api/index.ts` (route registration)
-  - `api/src/services/xlsx-generation.ts` (new)
-  - `api/src/services/queue-manager.ts` (job type `xlsx_generate`)
-  - `api/src/utils/scoring.ts` (reuse only; read-only if possible)
-  - `api/tests/api/xlsx.test.ts` (new) + related test fixtures
+  - `api/package.json` (+ `package-lock.json`)
+  - `api/src/routes/api/xlsx.ts`
+  - `api/src/routes/api/index.ts`
+  - `api/src/services/xlsx-generation.ts`
+  - `api/src/services/xlsx-chart.ts`
+  - `api/src/services/queue-manager.ts`
+  - `api/src/utils/scoring.ts` (reuse only)
+  - `api/tests/api/xlsx.test.ts`
   - `ui/src/routes/folders/[id]/+page.svelte`
   - `ui/src/lib/stores/folders.ts`
   - `ui/src/lib/components/ImportExportDialog.svelte` (only if export entry reused there)
   - `ui/src/locales/en.json`, `ui/src/locales/fr.json`
-  - `ui/tests/**` (export store specs)
+  - `ui/tests/**`
   - `e2e/tests/07-import-export.spec.ts`
-- **Forbidden Paths**:
-  - `Makefile`, `docker-compose*.yml`, `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` except this branch file
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
   - `api/src/db/schema.ts`
-- **Conditional Paths (explicit `BR40c-EXn` exception required)**:
-  - `api/drizzle/*.sql` (max 1 file) — only if a new job type needs a schema/enum change.
-  - `.github/workflows/**` — only if a new dependency needs CI wiring.
+- **Conditional Paths (allowed only with explicit `BR40c-EXn` exception)**:
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `api/src/services/flow/postgres-job-queue.ts` (queue-class CASE) — see BR40c-EX1
+  - `spec/COLLAB.md` (export spec sync) — see BR40c-EX2
 - **Exception process**: declare `BR40c-EXn` in `## Feedback Loop` with reason, impact, rollback.
 
-## Feedback Loop (framing questions — RESOLVED 2026-05-25)
-- **BR40c-Q1** `acknowledge`: delivery = **async job mirroring DOCX** (`POST /xlsx/generate` → poll →
-  `GET /xlsx/jobs/:id/download`, S3-stored). Quadrant tab = **data + a NATIVE editable chart generated
-  inside the xlsx** (NOT a static image). Verified constraint: `exceljs` can read but cannot WRITE
-  charts (long-standing limitation, exceljs issues #141/#1569). Conductor-decided approach (user gave
-  autonomy on this point): use `exceljs` for all data/tabs, then **inject the chart OOXML part**
-  (`xl/charts/chart1.xml` + drawing relationships) for a native XY scatter / bubble chart referencing
-  the quadrant sheet's value/complexity cell ranges. Lot 0 does a short **ExcelForge spike** (a TS lib
-  that claims native scatter/bubble + multi-sheet data); adopt it only if it cleanly handles both our
-  data tabs and a native chart, else fall back to `exceljs` + OOXML injection. No PNG image fallback.
-- **BR40c-Q2** `acknowledge`: use-cases tab columns confirmed — name, domain, status, description,
+## Feedback Loop
+- **BR40c-Q1** `acknowledge`: delivery = async job mirroring DOCX (`POST /xlsx/generate` → poll →
+  `GET /xlsx/jobs/:id/download`, S3-stored). Quadrant tab keeps a NATIVE editable XY scatter chart
+  injected via raw OOXML (`xl/charts/chart1.xml` + drawing rels), not a static image. RESOLVED: keep
+  async + native chart (`api/src/services/xlsx-chart.ts`); do not simplify to data-only.
+- **BR40c-Q2** `acknowledge`: use-cases columns confirmed — name, domain, status, description,
   problem, solution, total value score, total complexity score, quadrant.
-- **BR40c-Lot0** `acknowledge`: spike conclusion — `excelforge` does NOT exist on npm (404);
-  `@node-projects/excelforge` exists but makes no documented chart claim. exceljs (4.4.0, MIT) +
-  OOXML chart injection proven in a throwaway spike: native `<c:scatterChart>` referencing the
-  quadrant sheet ranges, content-types registered, exceljs re-reads all 3 sheets intact. Adopted
-  `exceljs` + OOXML injection as decided. No PNG fallback.
-- **BR40c-EX1** `acknowledge`: edit `api/src/services/flow/postgres-job-queue.ts` (not in Allowed
-  Paths) — one-line addition `WHEN 'xlsx_generate' THEN 'publishing'` to the queue-class CASE
-  expression. Reason: this in-repo adapter is the single source of truth that routes a job type to
-  the publishing queue class; there is no extension hook. Impact: one SQL CASE branch, mirrors the
-  existing `docx_generate` line, no behavior change for other types. Rollback: remove the line.
-- **BR40c-EX2** `acknowledge`: edit `spec/COLLAB.md` (not in Allowed Paths) — add a "Folder XLSX
-  Export (BR-40c)" subsection under Import/Export (Lot N-1 docs consolidation: "update export
-  spec"). Reason: workflow rule requires keeping `spec/*.md` in sync with behavior changes. Impact:
+- **BR40c-REQ1a** `acknowledge`: score and quadrant cells are LIVE Excel formulas with cross-sheet
+  references to the matrix tab, replacing the static JS-computed values. Implemented via exceljs
+  `cell.value = { formula, result }`: value/complexity scores are ROUND weighted-mean formulas that
+  reference `'Evaluation matrix'!$B$<row>` weight cells; use-cases quadrant cells are IF/MEDIAN
+  formulas over the score columns; quadrant tab value/complexity cells are cross-sheet refs to the
+  use-cases score cells, and its quadrant label is an IF/MEDIAN formula. Cached results keep values
+  (and the chart) correct before any recalc.
+- **BR40c-REBASE** `acknowledge`: WIP (6 commits) rebased onto `origin/main` (`067f8ced`, PR #181) —
+  186 commits behind merge-base `1f7f1e11`. Conflicts resolved mechanically: `api/package.json`
+  build script took main's line (drops removed `nodemailer` external) + added `--external:exceljs`;
+  `package-lock.json` reset to main's base then regenerated via `make lock-root` (exceljs + uuid +
+  saxes + readable-stream resolved). Other predicted conflict files (queue-manager, index.ts,
+  locales) auto-merged cleanly. Post-rebase: `make typecheck-api` + `make lint-api` green.
+- **BR40c-EX1** `acknowledge`: edit `api/src/services/flow/postgres-job-queue.ts` (one-line
+  `WHEN 'xlsx_generate' THEN 'publishing'` in the queue-class CASE). Reason: single source of truth
+  routing job type → publishing queue class; no extension hook. Impact: one CASE branch mirroring
+  `docx_generate`. Rollback: remove the line.
+- **BR40c-EX2** `acknowledge`: edit `spec/COLLAB.md` — add a "Folder XLSX Export (BR-40c)" subsection
+  under Import/Export. Reason: workflow rule requires keeping `spec/*.md` in sync. Impact:
   documentation only, additive. Rollback: remove the subsection.
-- **BR40c-Sec1** `acknowledge`: `exceljs@4.4.0` pulls transitive MODERATE advisories
-  (`uuid` GHSA-w5hq-g745-h8pq via `exceljs>=3.5.0`, `ws` GHSA-58qx-3vcg-4xpx). The SCA/container
-  compliance parser selects only `high`/`critical` findings, so these do not gate; no
-  `vulnerability-register.yaml` entry required. Fixing would require `exceljs@3.4.0` (a breaking
-  downgrade), not adopted.
+- **BR40c-Sec1** `acknowledge`: `exceljs@4.4.0` pulls transitive MODERATE advisories (`uuid`
+  GHSA-w5hq-g745-h8pq, `ws` GHSA-58qx-3vcg-4xpx). The SCA/container compliance parser gates only
+  `high`/`critical`; no `vulnerability-register.yaml` entry required. Fixing needs `exceljs@3.4.0`
+  (breaking downgrade), not adopted.
 
 ## AI Flaky tests
-- Acceptance rule: accept only non-systematic provider/network/model nondeterminism; one success on
-  same commit + command; never add timeouts; record signature + user sign-off.
+- Acceptance rule: accept only non-systematic provider/network/model nondeterminism as
+  `flaky accepted`; at least one success on the same commit + command; never add timeouts; record
+  command + failing file + signature in `BRANCH.md`; capture user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick**.
-- [ ] Multi-branch
-- Rationale: one export capability (service + route + UI button); single final test cycle.
+- [x] **Mono-branch + cherry-pick** (single final test cycle)
+- [ ] **Multi-branch**
+- Rationale: one export capability (service + route + UI button).
 
 ## UAT Management (in orchestration context)
 - Development worktree: `tmp/feat-folder-xlsx-export`.
@@ -86,37 +95,72 @@ document-generation pattern (DOCX/PPTX queue jobs) rather than inventing a new d
 - Test envs: `ENV=test-feat-folder-xlsx-export`, `ENV=e2e-feat-folder-xlsx-export`.
 - Root UAT env: `ENV=dev`, commit-identical to branch HEAD.
 
-## Plan / Todo (lot-based) — framing RESOLVED (async + native chart), ready to execute
+## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline, async pattern & chart-lib spike**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `README.md`, `TODO.md`, `PLAN.md`, this branch file.
-  - [x] Study the DOCX/PPTX async pattern (`api/src/routes/api/docx.ts`, `services/docx-generation.ts`,
-        `services/queue-manager.ts`) to mirror it exactly.
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `rules/testing.md`,
+        `README.md`, `PLAN.md`, this branch file, `plan/BRANCH_TEMPLATE.md`.
+  - [x] Study the DOCX/PPTX async pattern (`docx.ts`, `docx-generation.ts`, `queue-manager.ts`).
   - [x] Confirm slot-2 ports + `ENV=...` last.
-  - [x] **ExcelForge spike**: disproved (`excelforge` is 404 on npm). Adopted `exceljs` + OOXML
-        chart-part injection; proven by throwaway spike (see BR40c-Lot0). No PNG fallback.
+  - [x] Adopt `exceljs` (4.4.0, MIT) + OOXML chart-part injection. No PNG fallback.
+
+- [x] **Lot R — Rebase onto origin/main**
+  - [x] `git fetch origin main`; rebase 6 WIP commits onto `067f8ced` (186 behind merge-base).
+  - [x] Resolve `api/package.json` (build script) + `package-lock.json` (via `make lock-root`).
+  - [x] Inspect/keep stale `spec/COLLAB.md` (genuine BR-40c export spec); `BRANCH.md` regenerated.
+  - [x] Validate: `make typecheck-api` (pass), `make lint-api` (0 errors), baseline xlsx test (pass).
 
 - [x] **Lot 1 — XLSX generation service (3 tabs + native quadrant chart)**
-  - [x] Add the chosen writer via `make install-api exceljs`; `--external:exceljs` in api build.
-  - [x] `services/xlsx-generation.ts`: fetch folder + initiatives + matrix; build workbook with 3 tabs
-        (use cases / evaluation matrix / prioritization quadrant). Use-cases columns per BR40c-Q2.
-  - [x] Quadrant tab: data rows (value/complexity + computed quadrant label, sorted by priority) PLUS a
-        NATIVE XY scatter chart referencing those cell ranges via OOXML injection (`services/xlsx-chart.ts`).
-  - [x] Lot gate: `make typecheck-api` (pass); `make lint-api` + unit test in Lot 2 gate.
+  - [x] `exceljs` dep + `--external:exceljs` in api build.
+  - [x] `xlsx-generation.ts`: fetch folder + initiatives + matrix; 3 tabs per BR40c-Q1/Q2.
+  - [x] Native XY scatter chart via OOXML injection (`xlsx-chart.ts`).
 
 - [x] **Lot 2 — Route + queue wiring**
-  - [x] `routes/api/xlsx.ts` mirroring DOCX endpoints; registered in `routes/api/index.ts`.
+  - [x] `routes/api/xlsx.ts` mirroring DOCX; registered in `routes/api/index.ts`.
   - [x] Queue job type `xlsx_generate` in `queue-manager.ts` (S3 result); publishing class via EX1.
-  - [x] Lot gate: `make typecheck-api` (pass) + `make lint-api` (0 errors); `api/tests/api/xlsx.test.ts` (9 pass).
 
 - [x] **Lot 3 — UI export entry point**
-  - [x] Add the xlsx export action in `folders/[id]/+page.svelte` + `stores/folders.ts`; i18n labels.
-  - [x] Lot gate: `make typecheck-ui` (0 errors) + `make lint-ui` (0 problems); UI store spec (17 pass).
+  - [x] xlsx export action in `folders/[id]/+page.svelte` + `stores/folders.ts`; i18n labels.
 
-- [ ] **Lot 4 — E2E**
-  - [ ] Create folder with scored use cases → export xlsx → download → verify 3 tabs.
-  - [ ] Lot gate: scoped `make test-e2e` on `07-import-export.spec.ts` with slot-2 ports.
+- [x] **Lot 4 — Live cross-sheet formulas (BR40c-REQ1a)**
+  - [x] `xlsx-generation.ts`: matrix sheet emits axis weight cell anchors; use-cases score cells =
+        ROUND weighted-mean cross-sheet formulas; use-cases + quadrant tab quadrant cells = IF/MEDIAN
+        formulas; quadrant value/complexity = cross-sheet refs to use-cases score cells; chart still
+        live via cached results.
+  - [x] Lot gate:
+    - [x] `make typecheck-api ENV=test-feat-folder-xlsx-export` (pass)
+    - [x] `make lint-api ENV=test-feat-folder-xlsx-export` (0 errors)
+    - [x] **API tests** — `api/tests/api/xlsx.test.ts`:
+      - [x] Existing: job enqueue/reuse/locale, 409/400/422 download, S3 bytes, 3-tab + native chart.
+      - [x] New read-back tests (reopen workbook with exceljs):
+        - [x] `writes live cross-sheet score formulas referencing the matrix tab`
+        - [x] `writes live quadrant formulas (IF/MEDIAN) on both score-bearing tabs`
+        - [x] `produces no formula-error tokens anywhere in the workbook` (#REF!/#DIV-0!/#VALUE!/…)
+      - [x] Sub-lot gate: `make test-api-endpoints SCOPE=tests/api/xlsx.test.ts ENV=test-feat-folder-xlsx-export` (12 passed)
 
-- [ ] **Lot N-2 — UAT** (export a folder, open xlsx, verify the 3 tabs; non-reg: existing ZIP/DOCX/PPTX export).
-- [ ] **Lot N-1 — Docs consolidation** (update export spec).
-- [ ] **Lot N — Final validation** (typecheck/lint, API/UI/E2E retests, package bumps if any, PR → CI →
-      remove `BRANCH.md` → merge via merge commit).
+- [ ] **Lot 5 — E2E**
+  - [ ] `e2e/tests/07-import-export.spec.ts`: create folder with scored use cases → export xlsx →
+        download → verify 3 tabs + score/quadrant cells carry `=` formulas.
+  - [ ] Lot gate:
+    - [ ] Build: `make build-api build-ui-image API_PORT=9202 UI_PORT=5402 MAILDEV_UI_PORT=1302 ENV=e2e-feat-folder-xlsx-export`
+    - [ ] Scoped: `make test-e2e E2E_SPEC=tests/07-import-export.spec.ts API_PORT=9202 UI_PORT=5402 MAILDEV_UI_PORT=1302 ENV=e2e-feat-folder-xlsx-export`
+    - [ ] `make clean ... ENV=e2e-feat-folder-xlsx-export` before/after the pass.
+
+- [ ] **Lot N-2 — UAT (web app)**
+  - [ ] Open the folder page; trigger the xlsx export; poll job; download the workbook.
+  - [ ] Evolution: open xlsx → 3 tabs present (use cases / evaluation matrix / prioritization
+        quadrant); score and quadrant cells contain `=` formulas that recompute when a matrix weight
+        is edited; native scatter chart renders and is editable.
+  - [ ] Non-reg: existing ZIP, DOCX, PPTX folder exports still work unchanged.
+
+- [ ] **Lot N-1 — Docs consolidation**
+  - [ ] `spec/COLLAB.md` "Folder XLSX Export (BR-40c)" subsection in sync with behavior (BR40c-EX2),
+        including the live-formula behavior.
+
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & Lint (api + ui).
+  - [ ] Retest API: `make test-api ENV=test-feat-folder-xlsx-export`.
+  - [ ] Retest UI: `make test-ui ENV=test`.
+  - [ ] Retest E2E: `make clean test-e2e ... ENV=e2e-feat-folder-xlsx-export`.
+  - [ ] Package bumps if any `packages/<pkg>/src/**` changed (none expected).
+  - [ ] Final gate (conductor): PR using `BRANCH.md` body → CI green + UAT → remove `BRANCH.md` →
+        merge via merge commit.
