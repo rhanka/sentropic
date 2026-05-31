@@ -89,19 +89,21 @@ keeps returning ALL sheets, each labelled `Sheet: <name>`.
         `tool-service.ts` `getDocumentContent`), and the #185 UI accept-list files.
   - [x] Confirm slot-1 ports + `ENV=...` last; record Q1/Q2/NEW-REQ/BR40b-EX1.
 
-- [ ] **Lot 1 — exceljs xlsx reader (formulas + values)**
-  - [ ] `make install-api exceljs`.
-  - [ ] In `document-text.ts`: replace the JSZip+xmldom xlsx path with an exceljs-based reader.
-        Add an exported structured extractor (per-sheet: `name`, `index`, `rowCount`, `text`) where each
-        formula cell renders as `=FORMULA → value` (raw value otherwise). Keep flattened `text`
-        (`Sheet: <name>` sections) + `headingsH1[]` for indexing/`get_content` parity.
-  - [ ] Lot gate: `make typecheck-api ENV=test-feat-xlsx-multitab-query` +
-        `make lint-api ENV=test-feat-xlsx-multitab-query`.
-  - [ ] **API tests**
-    - [ ] Update `api/tests/unit/document-text.test.ts`: build a workbook with a formula cell
-          (e.g. cross-sheet `=Sheet1!B2+Sheet1!B3`) using exceljs; assert flattened text still labels
-          each sheet AND surfaces formula text + computed value.
-    - [ ] Scoped run: `make test-api SCOPE=tests/unit/document-text.test.ts ENV=test-feat-xlsx-multitab-query`.
+- [x] **Lot 1 — exceljs xlsx reader (formulas + values)**
+  - [x] `make install-api NPM_LIB=exceljs` → exceljs `^4.4.0` (resolved 4.4.0 in root workspace lock).
+  - [x] In `document-text.ts`: replaced the JSZip+xmldom xlsx path with an exceljs-based reader.
+        Added an exported structured extractor `extractXlsxSheets` (per-sheet: `name`, `index`,
+        `rowCount`, `text`) where each formula cell renders as `=FORMULA → value` (raw value
+        otherwise). Kept flattened `text` (`Sheet: <name>` sections) + `headingsH1[]` for
+        indexing/`get_content` parity. Removed dead JSZip/xmldom xlsx helpers from this file.
+  - [x] Lot gate: `make typecheck-api ENV=test-feat-xlsx-multitab-query` (clean) +
+        `make lint-api ENV=test-feat-xlsx-multitab-query` (clean).
+  - [x] **API tests**
+    - [x] Updated `api/tests/unit/document-text.test.ts`: builds a workbook (exceljs) with a
+          cross-sheet formula cell `=Budget!B2+Budget!B3`; asserts flattened text still labels each
+          sheet, surfaces `=Budget!B2+Budget!B3 → 320`, and that `extractXlsxSheets` returns structured
+          per-sheet content. 3/3 passing.
+    - [x] Scoped run: `make test-api SCOPE=tests/unit/document-text.test.ts ENV=test-feat-xlsx-multitab-query` → 3 passed.
 
 - [ ] **Lot 2 — Query-tool sheet awareness (list_sheets / get_sheet_content)**
   - [ ] `tools.ts`: add `list_sheets` + `get_sheet_content` to the `documents` action enum; add
